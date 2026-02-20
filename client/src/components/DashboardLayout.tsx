@@ -26,6 +26,7 @@ import {
   ClipboardCheck, Vote, Clock, Star, Lock, Building2, FileText,
   ChevronDown, ChevronRight, AlertTriangle, Truck, FlameKindling,
   Droplets, Beaker, HardHat, BookOpen, Siren, Scale,
+  BarChart3, GraduationCap, ShieldAlert, ListChecks, TriangleAlert, Flame, AlertOctagon,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -60,6 +61,22 @@ const menuSections = [
       { icon: Wrench, label: "Gestão de Ativos", path: "/ativos" },
       { icon: ClipboardCheck, label: "Auditoria e Qualidade", path: "/auditoria-qualidade" },
       { icon: Vote, label: "CIPA", path: "/cipa" },
+    ],
+  },
+  {
+    title: "Dashboards",
+    items: [
+      { icon: BarChart3, label: "Todos os Dashboards", path: "/dashboards" },
+      { icon: Users, label: "Colaboradores", path: "/dashboards/colaboradores" },
+      { icon: AlertTriangle, label: "Pendências", path: "/dashboards/pendentes" },
+      { icon: GraduationCap, label: "Treinamentos", path: "/dashboards/treinamentos" },
+      { icon: HardHat, label: "EPI", path: "/dashboards/epi" },
+      { icon: ShieldAlert, label: "Acidentes", path: "/dashboards/acidentes" },
+      { icon: ClipboardCheck, label: "Auditorias", path: "/dashboards/auditorias" },
+      { icon: ListChecks, label: "5W2H", path: "/dashboards/5w2h" },
+      { icon: TriangleAlert, label: "Riscos", path: "/dashboards/riscos" },
+      { icon: Flame, label: "Extintores/Hidrantes", path: "/dashboards/extintores-hidrantes" },
+      { icon: AlertOctagon, label: "Desvios", path: "/dashboards/desvios" },
     ],
   },
   {

@@ -3,7 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, ShieldCheck, HardHat, Truck, ClipboardCheck, Activity, Clock } from "lucide-react";
+import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, ShieldCheck, HardHat, Truck, ClipboardCheck, Activity, Clock, BarChart3 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 
@@ -61,6 +61,7 @@ export default function Home() {
     { title: "Ativos", desc: "Frota e equipamentos", status: "Ativo", path: "/ativos" },
     { title: "Qualidade", desc: "Auditorias e desvios", status: "Ativo", path: "/auditoria-qualidade" },
     { title: "CIPA", desc: "Comissão interna", status: "Ativo", path: "/cipa" },
+    { title: "Dashboards", desc: "10 dashboards interativos", status: "Ativo", path: "/dashboards" },
     { title: "Avaliação", desc: "Desempenho de equipe", status: "Em breve", path: "#" },
   ];
 

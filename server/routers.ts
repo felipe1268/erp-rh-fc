@@ -43,6 +43,7 @@ import {
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import type { ProfileType } from "../shared/modules";
+import { dashboardsRouter } from "./routers/dashboards";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -374,5 +375,10 @@ export const appRouter = router({
     list: protectedProcedure.input(z.object({ companyId: z.number().optional() })).query(({ input }) => getBlacklistedEmployees(input.companyId)),
   }),
   searchByTraining: protectedProcedure.input(z.object({ companyId: z.number(), trainingName: z.string() })).query(({ input }) => searchEmployeesByTraining(input.companyId, input.trainingName)),
+
+  // ============================================================
+  // DASHBOARDS INTERATIVOS
+  // ============================================================
+  dashboards: dashboardsRouter,
 });
 export type AppRouter = typeof appRouter;

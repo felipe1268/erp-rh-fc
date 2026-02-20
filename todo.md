@@ -84,3 +84,20 @@
 - [x] BUG CRÍTICO: Erro removeChild persiste em produção - RESOLVIDO (import dinâmico do sonner no DashboardLayout convertido para estático, sonner.tsx corrigido para usar ThemeContext local ao invés de next-themes)
 - [x] BUG: Layout confuso e sobreposto em telas - RESOLVIDO (layout do Dashboard verificado e funcionando corretamente)
 - [x] BUG: Select com value vazio causando warnings - RESOLVIDO (corrigido para usar undefined)
+
+## Fase 4: 10 Dashboards Interativos
+- [x] Analisar planilha Excel original para mapear os 10 dashboards
+- [x] Criar rotas tRPC de dados agregados para dashboards
+- [x] Dashboard 1: Quadro de Pessoal (headcount por status, setor, cargo)
+- [x] Dashboard 2: Pendências (ASOs, treinamentos, auditorias, extintores vencidos)
+- [x] Dashboard 3: Treinamentos (realizados, vencidos por norma, evolução mensal)
+- [x] Dashboard 4: EPI (estoque, movimentação mensal, top EPIs)
+- [x] Dashboard 5: Acidentes (total, afastamentos, meta de dias, gravidade)
+- [x] Dashboard 6: Auditorias (status, NC, tipos, desvios)
+- [x] Dashboard 7: 5W2H (planos de ação, status, prioridades)
+- [x] Dashboard 8: Riscos (tipo, grau, setor, filtro por setor)
+- [x] Dashboard 9: Extintores e Hidrantes (status, validade, tipos)
+- [x] Dashboard 10: Desvios (status, tipos, setores, taxa resolução)
+- [x] Filtros dinâmicos por empresa e período em todos os dashboards
+- [x] Navegação integrada no menu lateral
+- [x] Testes unitários para rotas de dashboards (20 testes passando)
