@@ -14,6 +14,8 @@ import PontoFolha from "./pages/PontoFolha";
 import Ativos from "./pages/Ativos";
 import AuditoriaQualidade from "./pages/AuditoriaQualidade";
 import Cipa from "./pages/Cipa";
+import Login from "./pages/Login";
+import Configuracoes from "./pages/Configuracoes";
 // Dashboards
 import DashboardIndex from "./pages/dashboards/DashboardIndex";
 import DashColaboradores from "./pages/dashboards/DashColaboradores";
@@ -31,6 +33,7 @@ import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
 function Router() {
   return (
     <Switch>
+      <Route path={"/login"} component={Login} />
       <Route path={"/"} component={Home} />
       <Route path={"/empresas"} component={Empresas} />
       <Route path={"/colaboradores"} component={Colaboradores} />
@@ -41,6 +44,7 @@ function Router() {
       <Route path={"/ativos"} component={Ativos} />
       <Route path={"/auditoria-qualidade"} component={AuditoriaQualidade} />
       <Route path={"/cipa"} component={Cipa} />
+      <Route path={"/configuracoes"} component={Configuracoes} />
       {/* Dashboards */}
       <Route path={"/dashboards"} component={DashboardIndex} />
       <Route path={"/dashboards/colaboradores"} component={DashColaboradores} />

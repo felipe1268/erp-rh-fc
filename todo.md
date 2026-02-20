@@ -219,3 +219,30 @@
 - [x] Evolução mensal de HE (gráfico de linha)
 - [x] Filtros por empresa e período
 - [x] Integrar na navegação dos dashboards
+
+## Bugs Reportados - Produção (Fase 13)
+- [ ] BUG: Erro removeChild na página de Colaboradores em produção
+- [ ] BUG: Erro removeChild na página de Ponto e Folha em produção
+
+## Fase 14: Correção removeChild + Seed Massivo
+- [x] BUG CRÍTICO: Corrigir erro removeChild em TODAS as telas (produção)
+- [x] Seed massivo: 15 funcionários por empresa (60 total)
+- [x] Seed: treinamentos, ASOs, advertências, faltas, EPIs para todos
+- [x] Seed: acidentes, riscos, auditorias, desvios, 5W2H, DDS
+- [x] Seed: extintores, hidrantes, veículos, equipamentos
+- [x] Seed: horas extras, folha de pagamento, vales
+- [x] Seed: membros CIPA, eleições
+- [x] Validar todas as telas no navegador sem erro
+- [x] Validar todos os dashboards com dados populados
+
+## Fase 15: Login + Seed Massivo
+- [x] Corrigir erro removeChild (removido Portal do Select, Dialog e DropdownMenu)
+- [x] Criar tela de login com usuário e senha
+- [x] Senha padrão inicial para novos usuários (fc2026)
+- [x] Funcionalidade de troca de senha
+- [x] Seed massivo: 15 funcionários por empresa (60 total)
+- [x] Seed: dados completos em todos os módulos para teste (2068 pontos, 150 ASOs, 184 treinamentos, 244 EPIs, etc.)
+- [x] Criar opção de limpeza geral do banco de dados em Configurações
+- [x] Proteger limpeza com senha de confirmação (LIMPAR2026)
+- [x] Permitir limpeza seletiva por módulo (colaboradores, treinamentos, etc.)
+- [x] Testes unitários para settings e userManagement (87 testes passando)

@@ -26,7 +26,7 @@ import {
   ClipboardCheck, Vote, Clock, Star, Lock, Building2, FileText,
   ChevronDown, ChevronRight, AlertTriangle, Truck, FlameKindling,
   Droplets, Beaker, HardHat, BookOpen, Siren, Scale,
-  BarChart3, GraduationCap, ShieldAlert, ListChecks, TriangleAlert, Flame, AlertOctagon,
+  BarChart3, GraduationCap, ShieldAlert, ListChecks, TriangleAlert, Flame, AlertOctagon, Settings,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -85,6 +85,7 @@ const menuSections = [
     items: [
       { icon: Lock, label: "Usuários e Permissões", path: "/usuarios" },
       { icon: FileText, label: "Auditoria do Sistema", path: "/auditoria" },
+      { icon: Settings, label: "Configurações", path: "/configuracoes" },
     ],
   },
   {

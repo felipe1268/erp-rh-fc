@@ -423,5 +423,160 @@ export const appRouter = router({
   // FOLHA DE PAGAMENTO (parsers, vales, extras, VR)
   // ============================================================
   payrollParsers: payrollParsersRouter,
+
+  // ============================================================
+  // LOGIN COM SENHA & GERENCIAMENTO DE USUÁRIOS
+  // ============================================================
+  userManagement: router({
+    // Listar todos os usuários do sistema
+    listUsers: protectedProcedure.query(async () => {
+      const bcrypt = await import("bcryptjs");
+      const allUsers = await getAllUsers();
+      return allUsers.map((u: any) => ({ ...u, password: undefined }));
+    }),
+    // Criar usuário local com username/senha
+    createLocalUser: protectedProcedure.input(z.object({
+      username: z.string().min(3),
+      name: z.string().min(1),
+      email: z.string().email().optional(),
+      role: z.enum(["user", "admin"]).default("user"),
+      password: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const bcrypt = await import("bcryptjs");
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      // Verificar se username já existe
+      const existing = await db.select().from(users).where(eq(users.username, input.username));
+      if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Username já existe" });
+      const defaultPwd = input.password || "fc2026";
+      const hashed = bcrypt.hashSync(defaultPwd, 10);
+      const openId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const result = await db.insert(users).values({
+        openId, name: input.name, email: input.email || null,
+        username: input.username, password: hashed,
+        mustChangePassword: true, loginMethod: "local", role: input.role,
+      });
+      return { id: Number(result[0].insertId), username: input.username, defaultPassword: defaultPwd };
+    }),
+    // Login local com username/senha
+    loginLocal: publicProcedure.input(z.object({
+      username: z.string(), password: z.string(),
+    })).mutation(async ({ input, ctx }) => {
+      const bcrypt = await import("bcryptjs");
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const [user] = await db.select().from(users).where(eq(users.username, input.username));
+      if (!user || !user.password) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+      const valid = bcrypt.compareSync(input.password, user.password);
+      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+      // Criar sessão via cookie
+      const jwt = await import("jsonwebtoken");
+      const token = jwt.default.sign({ userId: user.id, openId: user.openId }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" });
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+      await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
+      return { success: true, mustChangePassword: !!user.mustChangePassword, user: { id: user.id, name: user.name, role: user.role } };
+    }),
+    // Trocar senha
+    changePassword: protectedProcedure.input(z.object({
+      currentPassword: z.string(), newPassword: z.string().min(4),
+    })).mutation(async ({ input, ctx }) => {
+      const bcrypt = await import("bcryptjs");
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const [user] = await db.select().from(users).where(eq(users.id, ctx.user.id));
+      if (!user || !user.password) throw new TRPCError({ code: "BAD_REQUEST", message: "Usuário não possui login local" });
+      const valid = bcrypt.compareSync(input.currentPassword, user.password);
+      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha atual incorreta" });
+      const hashed = bcrypt.hashSync(input.newPassword, 10);
+      await db.update(users).set({ password: hashed, mustChangePassword: false }).where(eq(users.id, ctx.user.id));
+      return { success: true };
+    }),
+    // Resetar senha de um usuário (admin)
+    resetPassword: protectedProcedure.input(z.object({
+      userId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode resetar senhas" });
+      const bcrypt = await import("bcryptjs");
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const defaultPwd = "fc2026";
+      const hashed = bcrypt.hashSync(defaultPwd, 10);
+      await db.update(users).set({ password: hashed, mustChangePassword: true }).where(eq(users.id, input.userId));
+      return { success: true, defaultPassword: defaultPwd };
+    }),
+  }),
+
+  // ============================================================
+  // CONFIGURAÇÕES: LIMPEZA GERAL DO BANCO
+  // ============================================================
+  settings: router({
+    cleanDatabase: protectedProcedure.input(z.object({
+      confirmPassword: z.string(),
+      modules: z.array(z.string()).min(1),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode limpar o banco" });
+      // Verificar senha de confirmação
+      const CLEAN_PASSWORD = "LIMPAR2026";
+      if (input.confirmPassword !== CLEAN_PASSWORD) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha de confirmação incorreta" });
+      }
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { sql } = await import("drizzle-orm");
+      const tableMap: Record<string, string> = {
+        colaboradores: "employees",
+        treinamentos: "trainings",
+        asos: "asos",
+        advertencias: "warnings",
+        epis: "epis",
+        epi_entregas: "epi_deliveries",
+        acidentes: "accidents",
+        riscos: "risks",
+        auditorias: "audits",
+        desvios: "deviations",
+        planos_acao: "action_plans",
+        dds: "dds",
+        cipa_eleicoes: "cipa_elections",
+        cipa_membros: "cipa_members",
+        folha_pagamento: "payroll",
+        registros_ponto: "time_records",
+        veiculos: "vehicles",
+        equipamentos: "equipments",
+        extintores: "extinguishers",
+        hidrantes: "hydrants",
+        quimicos: "chemicals",
+        uploads_folha: "payroll_uploads",
+        documentos_treinamento: "training_documents",
+        historico: "employee_history",
+        pagamentos_extras: "extra_payments",
+        adiantamentos: "advance_payments",
+        vr_beneficios: "vr_benefits",
+      };
+      let cleaned = 0;
+      for (const mod of input.modules) {
+        const tableName = tableMap[mod];
+        if (tableName) {
+          await db.execute(sql.raw(`DELETE FROM \`${tableName}\``));
+          cleaned++;
+        }
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "configuracoes", entityType: "database", entityId: 0, details: `Limpeza geral: ${input.modules.join(", ")} (${cleaned} tabelas)` });
+      return { success: true, tablesCleared: cleaned };
+    }),
+  }),
 });
 export type AppRouter = typeof appRouter;
