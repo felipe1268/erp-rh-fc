@@ -112,10 +112,16 @@ export default function Colaboradores() {
   const openEdit = (emp: any) => {
     setEditingId(emp.id);
     const f: Record<string, string> = {};
+    const skipFields = ["createdAt", "updatedAt"];
     Object.entries(emp).forEach(([k, v]) => {
-      if (v !== null && v !== undefined) {
-        if (v instanceof Date) f[k] = v.toISOString().split("T")[0];
-        else if (typeof v !== "object") f[k] = String(v);
+      if (v !== null && v !== undefined && !skipFields.includes(k)) {
+        if (v instanceof Date) {
+          f[k] = v.toISOString().split("T")[0];
+        } else if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+          f[k] = v.split("T")[0];
+        } else if (typeof v !== "object") {
+          f[k] = String(v);
+        }
       }
     });
     // Garantir que companyId está no form
@@ -136,7 +142,7 @@ export default function Colaboradores() {
     }
     const targetCompanyId = form.companyId ? parseInt(form.companyId) : companyId!;
     if (editingId) {
-      const { companyId: _cid, ...data } = form;
+      const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, ...data } = form;
       updateMut.mutate({ id: editingId, companyId: targetCompanyId, data });
     } else {
       createMut.mutate({ ...form, companyId: targetCompanyId } as any);

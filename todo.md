@@ -291,3 +291,8 @@
 - [x] Calcular valor da hora automaticamente ao digitar salário base (salário ÷ horas mensais)
 - [x] Campo valor da hora agora é somente leitura (calculado automaticamente)
 - [x] Alterar horas mensais também recalcula o valor da hora
+
+## Fase 22: Bug toISOString ao Editar Colaborador
+- [x] BUG: Erro "value.toISOString is not a function" ao salvar edição de colaborador (mudar empresa)
+- [x] Corrigido: openEdit agora trata datas como string e exclui createdAt/updatedAt
+- [x] Corrigido: handleSubmit remove id, createdAt, updatedAt antes de enviar ao backend
