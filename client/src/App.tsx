@@ -15,6 +15,11 @@ import Ativos from "./pages/Ativos";
 import Cipa from "./pages/Cipa";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
+import Obras from "./pages/Obras";
+import FechamentoPonto from "./pages/FechamentoPonto";
+import FolhaPagamento from "./pages/FolhaPagamento";
+import ControleDocumentos from "./pages/ControleDocumentos";
+import ValeAlimentacao from "./pages/ValeAlimentacao";
 // Dashboards
 import DashboardIndex from "./pages/dashboards/DashboardIndex";
 import DashColaboradores from "./pages/dashboards/DashColaboradores";
@@ -32,10 +37,15 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/empresas"} component={Empresas} />
       <Route path={"/colaboradores"} component={Colaboradores} />
+      <Route path={"/obras"} component={Obras} />
       <Route path={"/usuarios"} component={Usuarios} />
       <Route path={"/auditoria"} component={Auditoria} />
       <Route path={"/sst"} component={SST} />
       <Route path={"/ponto-folha"} component={PontoFolha} />
+      <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
+      <Route path={"/folha-pagamento"} component={FolhaPagamento} />
+      <Route path={"/controle-documentos"} component={ControleDocumentos} />
+      <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
       <Route path={"/ativos"} component={Ativos} />
       <Route path={"/cipa"} component={Cipa} />
       <Route path={"/configuracoes"} component={Configuracoes} />

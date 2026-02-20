@@ -64,6 +64,13 @@
       "when": 1771616995654,
       "tag": "0008_blue_mandroid",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1771626612169,
+      "tag": "0009_sharp_molecule_man",
+      "breakpoints": true
     }
   ]
 }

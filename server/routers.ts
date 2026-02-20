@@ -41,6 +41,9 @@ import {
   createDixiDevice, getDixiDevices, updateDixiDevice, deleteDixiDevice,
   checkBlacklist, getBlacklistedEmployees, searchEmployeesByTraining,
   checkDuplicateCpf,
+  // Obras
+  createObra, getObras, getObraById, updateObra, deleteObra, getObrasByCompanyActive,
+  getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import type { ProfileType } from "../shared/modules";
@@ -432,6 +435,67 @@ export const appRouter = router({
   // FOLHA DE PAGAMENTO (parsers, vales, extras, VR)
   // ============================================================
   payrollParsers: payrollParsersRouter,
+
+  // ============================================================
+  // OBRAS
+  // ============================================================
+  obras: router({
+    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObras(input.companyId)),
+    listActive: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObrasByCompanyActive(input.companyId)),
+    getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getObraById(input.id)),
+    create: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      nome: z.string().min(1),
+      codigo: z.string().optional(),
+      cliente: z.string().optional(),
+      responsavel: z.string().optional(),
+      endereco: z.string().optional(),
+      cidade: z.string().optional(),
+      estado: z.string().optional(),
+      cep: z.string().optional(),
+      dataInicio: z.string().optional(),
+      dataPrevisaoFim: z.string().optional(),
+      dataFimReal: z.string().optional(),
+      status: z.enum(["Planejamento", "Em_Andamento", "Paralisada", "Concluida", "Cancelada"]).optional(),
+      valorContrato: z.string().optional(),
+      observacoes: z.string().optional(),
+    })).mutation(({ input }) => createObra(input as any)),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      nome: z.string().optional(),
+      codigo: z.string().optional(),
+      cliente: z.string().optional(),
+      responsavel: z.string().optional(),
+      endereco: z.string().optional(),
+      cidade: z.string().optional(),
+      estado: z.string().optional(),
+      cep: z.string().optional(),
+      dataInicio: z.string().optional(),
+      dataPrevisaoFim: z.string().optional(),
+      dataFimReal: z.string().optional(),
+      status: z.enum(["Planejamento", "Em_Andamento", "Paralisada", "Concluida", "Cancelada"]).optional(),
+      valorContrato: z.string().optional(),
+      observacoes: z.string().optional(),
+      isActive: z.boolean().optional(),
+    })).mutation(({ input }) => { const { id, ...data } = input; return updateObra(id, data as any); }),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => deleteObra(input.id)),
+    // Funcionários alocados
+    funcionarios: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraFuncionarios(input.obraId)),
+    allocateEmployee: protectedProcedure.input(z.object({
+      obraId: z.number(),
+      employeeId: z.number(),
+      companyId: z.number(),
+      funcaoNaObra: z.string().optional(),
+      dataInicio: z.string().optional(),
+    })).mutation(({ input }) => allocateEmployeeToObra(input)),
+    removeEmployee: protectedProcedure.input(z.object({ employeeId: z.number() })).mutation(({ input }) => removeEmployeeFromObra(input.employeeId)),
+    // Rateio de horas
+    horasRateio: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      mesAno: z.string(),
+      obraId: z.number().optional(),
+    })).query(({ input }) => getObraHorasRateio(input.companyId, input.mesAno, input.obraId)),
+  }),
 
   // ============================================================
   // LOGIN COM SENHA & GERENCIAMENTO DE USUÁRIOS

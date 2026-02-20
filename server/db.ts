@@ -9,6 +9,7 @@ import {
   permissions, InsertPermission,
   auditLogs, InsertAuditLog,
   trainingDocuments, payrollUploads, dixiDevices,
+  obras, InsertObra, obraFuncionarios, obraHorasRateio,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -862,4 +863,94 @@ export async function searchEmployeesByTraining(companyId: number, trainingName:
     and(eq(trainings.companyId, companyId), like(trainings.nome, `%${trainingName}%`))
   );
   return trainingResults;
+}
+
+// ============================================================
+// OBRAS
+// ============================================================
+
+export async function createObra(data: InsertObra) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(obras).values(data);
+  return { id: result.insertId };
+}
+
+export async function getObras(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(obras).where(eq(obras.companyId, companyId)).orderBy(desc(obras.createdAt));
+}
+
+export async function getObraById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [result] = await db.select().from(obras).where(eq(obras.id, id));
+  return result || null;
+}
+
+export async function updateObra(id: number, data: Partial<InsertObra>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(obras).set(data).where(eq(obras.id, id));
+}
+
+export async function deleteObra(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(obras).where(eq(obras.id, id));
+}
+
+export async function getObrasByCompanyActive(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(obras).where(and(eq(obras.companyId, companyId), eq(obras.isActive, true))).orderBy(obras.nome);
+}
+
+// Funcionários alocados na obra
+export async function getObraFuncionarios(obraId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const allocs = await db.select().from(obraFuncionarios).where(and(eq(obraFuncionarios.obraId, obraId), eq(obraFuncionarios.isActive, true)));
+  if (allocs.length === 0) return [];
+  const empIds = allocs.map(a => a.employeeId);
+  const emps = await db.select().from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
+  const empMap = Object.fromEntries(emps.map(e => [e.id, e]));
+  return allocs.map(a => ({ ...a, employee: empMap[a.employeeId] || null }));
+}
+
+export async function allocateEmployeeToObra(data: { obraId: number; employeeId: number; companyId: number; funcaoNaObra?: string; dataInicio?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Desativar alocação anterior do funcionário
+  await db.update(obraFuncionarios).set({ isActive: false }).where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, true)));
+  // Criar nova alocação
+  const insertData: any = {
+    obraId: data.obraId,
+    employeeId: data.employeeId,
+    companyId: data.companyId,
+    funcaoNaObra: data.funcaoNaObra || null,
+    dataInicio: data.dataInicio || null,
+    isActive: true,
+  };
+  const [result] = await db.insert(obraFuncionarios).values(insertData);
+  // Atualizar obraAtualId do funcionário
+  await db.update(employees).set({ obraAtualId: data.obraId } as any).where(eq(employees.id, data.employeeId));
+  return { id: result.insertId };
+}
+
+export async function removeEmployeeFromObra(employeeId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(obraFuncionarios).set({ isActive: false, dataFim: sql`CURDATE()` } as any).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, true)));
+  await db.update(employees).set({ obraAtualId: null } as any).where(eq(employees.id, employeeId));
+}
+
+// Rateio de horas
+export async function getObraHorasRateio(companyId: number, mesAno: string, obraId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(obraHorasRateio.companyId, companyId), eq(obraHorasRateio.mesAno, mesAno)];
+  if (obraId) conditions.push(eq(obraHorasRateio.obraId, obraId));
+  return db.select().from(obraHorasRateio).where(and(...conditions));
 }

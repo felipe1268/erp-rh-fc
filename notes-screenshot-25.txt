@@ -1,0 +1,14 @@
+Screenshot Fase 25:
+- Menu lateral reorganizado corretamente:
+  - PRINCIPAL: Painel, Empresas, Obras
+  - GESTÃO DE PESSOAL: Colaboradores
+  - OPERACIONAL: Fechamento de Ponto, Folha de Pagamento, CIPA, Controle de Documentos, Vale Alimentação
+  - DASHBOARDS: Todos os Dashboards, Colaboradores
+- SST removido como categoria separada
+- Gestão de Ativos removido
+- 5W2H removido
+- Extintores/Hidrantes removido
+- Auditoria e Qualidade removido
+- Obras adicionado no PRINCIPAL
+- Zero erros TypeScript
+- Dev server rodando OK

@@ -311,3 +311,41 @@
 - [x] Verificação de CPF duplicado ao cadastrar colaborador (BLOQUEAR cadastro, mostrar erro com nome e empresa)
 - [x] Remover módulo Auditoria e Qualidade completo (menu, rota, página, dashboards)
 - [x] Auto-preenchimento de dados ao digitar CPF - CANCELADO (CPF não tem API pública gratuita)
+
+## Fase 24: Corrigir Dialog de Cadastro/Edição
+- [x] Dialog cortando campos - ajustar para tela cheia responsiva (!max-w-7xl w-[95vw])
+- [x] Importação em massa via Excel - planilha modelo para download
+- [x] Endpoint backend para processar upload de Excel
+- [x] Botão "Importar Excel" na tela de Colaboradores
+- [x] Relatório de importação (sucesso/erros)
+
+## Fase 25: Módulo de Obras + Rateio de Ponto
+- [x] Tabela `obras` no schema (nome, endereço, cliente, status, datas)
+- [x] Tabela `obra_funcionarios` para vincular funcionários à obra
+- [x] Campo `obraAtualId` no employee para saber onde está alocado
+- [x] Funções de banco (CRUD) para obras
+- [x] Rotas tRPC para obras
+- [x] Página frontend de Obras (cadastro, listagem, edição)
+- [x] Menu "Obras" na sidebar (GESTÃO DE PESSOAL)
+- [x] Campo "Obra Atual" no cadastro/edição de colaborador
+- [ ] Rateio automático de horas por obra no upload de ponto (lê código do relógio)
+- [x] Importação em massa via Excel - botão na tela de Colaboradores
+- [x] Correção do dialog cortando campos (tamanho da tela)
+- [x] Reorganizar menu OPERACIONAL: separar Ponto e Folha
+- [x] Menu Fechamento de Ponto (substituir Ponto e Folha)
+- [x] Menu Folha de Pagamento (com sub-itens Vale e Pagamento)
+- [x] Menu Controle de Documentos (Treinamentos, Exames, etc.)
+- [x] Menu Vale Alimentação (IFood Benefícios)
+- [x] Remover Gestão de Ativos do menu OPERACIONAL
+- [x] Remover categoria SST separada do menu (mover para Controle de Documentos)
+- [x] Página de Fechamento de Ponto
+- [x] Página de Folha de Pagamento (Vale + Pagamento)
+- [x] Página de Controle de Documentos
+- [x] Página de Vale Alimentação
+
+## Fase 26: Controle de Revisões do ERP
+- [x] Criar changelog completo de todas as revisões (CHANGELOG.md)
+- [x] Adicionar indicador de versão/revisão no rodapé do sistema
+- [x] Exibir número da revisão atual na sidebar ou footer
+- [x] Seed: 131 funcionários reais da FC Engenharia cadastrados
+- [x] Corrigir placeholder de busca: "carga" → "função"

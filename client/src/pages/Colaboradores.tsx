@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
@@ -67,6 +67,13 @@ export default function Colaboradores() {
 
   const { data: companies } = trpc.companies.list.useQuery();
   const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
+  const { data: obras } = trpc.obras.list.useQuery({ companyId: companyId ?? 0 }, { enabled: !!companyId });
+
+  // Import Excel
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<any>(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (companies && companies.length > 0 && !selectedCompany) {
@@ -241,6 +248,9 @@ export default function Colaboradores() {
                 ))}
               </SelectContent>
             </Select>
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!companyId} className="gap-2">
+              <Upload className="h-4 w-4" /> Importar Excel
+            </Button>
             <Button onClick={openNew} disabled={!companyId} className="gap-2">
               <Plus className="h-4 w-4" /> Novo
             </Button>
@@ -276,7 +286,7 @@ export default function Colaboradores() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nome, CPF, RG ou cargo..."
+              placeholder="Buscar por nome, CPF, RG ou função..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-10 bg-card border-border"
@@ -399,7 +409,7 @@ export default function Colaboradores() {
       {/* FORM DIALOG - CADASTRO / EDIÇÃO */}
       {/* ============================================================ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-7xl w-[95vw] max-h-[95vh] overflow-y-auto bg-card p-8">
+        <DialogContent className="!max-w-7xl w-[95vw] max-h-[95vh] overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
           <DialogHeader>
             <DialogTitle className="text-xl">{editingId ? "Editar Colaborador" : "Novo Colaborador"}</DialogTitle>
           </DialogHeader>
@@ -627,8 +637,20 @@ export default function Colaboradores() {
                   <Input value={form.funcao ?? ""} onChange={e => set("funcao", e.target.value)} className="bg-input mt-1" />
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Setor / Obra</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
                   <Input value={form.setor ?? ""} onChange={e => set("setor", e.target.value)} className="bg-input mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> Obra Atual</Label>
+                  <Select value={form.obraAtualId || undefined} onValueChange={v => set("obraAtualId", v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem obra vinculada</SelectItem>
+                      {(obras ?? []).map((o: any) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.nome} {o.codigo ? `(${o.codigo})` : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Data de Admissão</Label>
@@ -790,7 +812,7 @@ export default function Colaboradores() {
       {/* VIEW DIALOG - FICHA DO COLABORADOR */}
       {/* ============================================================ */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-card p-8">
+        <DialogContent className="!max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">Ficha do Colaborador</DialogTitle>
           </DialogHeader>
@@ -911,6 +933,102 @@ export default function Colaboradores() {
               <EmployeeWarningsSection employeeId={viewingEmployee.id} companyId={companyId!} />
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+      {/* ============================================================ */}
+      {/* IMPORT EXCEL DIALOG */}
+      {/* ============================================================ */}
+      <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) { setImportFile(null); setImportResult(null); } }}>
+        <DialogContent className="!max-w-2xl w-[90vw] bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2"><Upload className="h-5 w-5" /> Importar Colaboradores via Excel</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                <strong>Como funciona:</strong> Baixe a planilha modelo, preencha os dados dos colaboradores e faça o upload.
+              </p>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                window.open(`/api/trpc/import.downloadTemplate?input=${encodeURIComponent(JSON.stringify({ json: {} }))}`, '_blank');
+              }}>
+                <Download className="h-4 w-4" /> Baixar Planilha Modelo
+              </Button>
+            </div>
+
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                id="excel-upload"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setImportFile(file);
+                }}
+              />
+              <label htmlFor="excel-upload" className="cursor-pointer">
+                <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm font-medium">{importFile ? importFile.name : "Clique para selecionar o arquivo Excel"}</p>
+                <p className="text-xs text-muted-foreground mt-1">Formatos aceitos: .xlsx, .xls</p>
+              </label>
+            </div>
+
+            {importResult && (
+              <div className={`rounded-lg p-4 ${importResult.errors?.length > 0 ? 'bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800' : 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800'}`}>
+                <p className="text-sm font-semibold mb-2">
+                  Importados: {importResult.imported ?? 0} | Erros: {importResult.errors?.length ?? 0}
+                </p>
+                {importResult.errors?.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto">
+                    {importResult.errors.map((err: any, i: number) => (
+                      <p key={i} className="text-xs text-red-600 dark:text-red-400">Linha {err.row}: {err.error}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Fechar</Button>
+            <Button
+              disabled={!importFile || importing}
+              onClick={async () => {
+                if (!importFile || !companyId) return;
+                setImporting(true);
+                try {
+                  const reader = new FileReader();
+                  reader.onload = async (e) => {
+                    try {
+                      const base64 = (e.target?.result as string).split(',')[1];
+                      const res = await fetch('/api/trpc/import.uploadExcel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ json: { companyId, fileBase64: base64, fileName: importFile.name } }),
+                      });
+                      const json = await res.json();
+                      const result = json?.result?.data?.json ?? json?.result?.data ?? json;
+                      setImportResult(result);
+                      if (result.imported > 0) {
+                        toast.success(`${result.imported} colaborador(es) importado(s)!`);
+                        utils.employees.list.invalidate();
+                        utils.employees.stats.invalidate();
+                      }
+                    } catch (err: any) {
+                      toast.error('Erro ao importar: ' + err.message);
+                    } finally {
+                      setImporting(false);
+                    }
+                  };
+                  reader.readAsDataURL(importFile);
+                } catch (err: any) {
+                  toast.error('Erro ao ler arquivo: ' + err.message);
+                  setImporting(false);
+                }
+              }}
+            >
+              {importing ? "Importando..." : "Importar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

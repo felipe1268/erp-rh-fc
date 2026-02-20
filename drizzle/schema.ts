@@ -169,6 +169,9 @@ export const employees = mysqlTable("employees", {
   motivoListaNegra: text("motivoListaNegra"),
   dataListaNegra: date("dataListaNegra"),
 
+  // Obra Atual
+  obraAtualId: int("obraAtualId"), // Vinculado à obra onde está alocado
+
   // Foto
   fotoUrl: text("fotoUrl"),
 
@@ -704,6 +707,7 @@ export const dixiDevices = mysqlTable("dixi_devices", {
   id: int("id").autoincrement().primaryKey(),
   companyId: int("companyId").notNull(),
   serialNumber: varchar("serialNumber", { length: 50 }).notNull(), // Sn do Dixi
+  obraId: int("obraId"), // Vinculado à obra
   obraName: varchar("obraName", { length: 255 }).notNull(),
   location: text("location"),
   isActive: boolean("isActive").default(true).notNull(),
@@ -823,3 +827,69 @@ export const monthlyPayrollSummary = mysqlTable("monthly_payroll_summary", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type MonthlyPayrollSummary = typeof monthlyPayrollSummary.$inferSelect;
+
+// ============================================================
+// OBRAS (Projetos/Canteiros de Obra)
+// ============================================================
+
+export const obras = mysqlTable("obras", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  codigo: varchar("codigo", { length: 50 }), // Código interno da obra
+  cliente: varchar("cliente", { length: 255 }),
+  responsavel: varchar("responsavel", { length: 255 }),
+  endereco: text("endereco"),
+  cidade: varchar("cidade", { length: 100 }),
+  estado: varchar("estado", { length: 2 }),
+  cep: varchar("cep", { length: 10 }),
+  dataInicio: date("dataInicio"),
+  dataPrevisaoFim: date("dataPrevisaoFim"),
+  dataFimReal: date("dataFimReal"),
+  status: mysqlEnum("status", ["Planejamento", "Em_Andamento", "Paralisada", "Concluida", "Cancelada"]).default("Planejamento").notNull(),
+  valorContrato: varchar("valorContrato", { length: 20 }),
+  observacoes: text("observacoes"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Obra = typeof obras.$inferSelect;
+export type InsertObra = typeof obras.$inferInsert;
+
+// ============================================================
+// ALOCAÇÃO DE FUNCIONÁRIOS EM OBRAS
+// ============================================================
+
+export const obraFuncionarios = mysqlTable("obra_funcionarios", {
+  id: int("id").autoincrement().primaryKey(),
+  obraId: int("obraId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  companyId: int("companyId").notNull(),
+  funcaoNaObra: varchar("funcaoNaObra", { length: 100 }),
+  dataInicio: date("dataInicio"),
+  dataFim: date("dataFim"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type ObraFuncionario = typeof obraFuncionarios.$inferSelect;
+
+// ============================================================
+// RATEIO DE HORAS POR OBRA (gerado automaticamente pelo upload de ponto)
+// ============================================================
+
+export const obraHorasRateio = mysqlTable("obra_horas_rateio", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  obraId: int("obraId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  dixiDeviceId: int("dixiDeviceId"),
+  mesAno: varchar("mesAno", { length: 7 }).notNull(), // "2026-02"
+  horasNormais: varchar("horasNormais", { length: 10 }),
+  horasExtras: varchar("horasExtras", { length: 10 }),
+  horasNoturnas: varchar("horasNoturnas", { length: 10 }),
+  totalHoras: varchar("totalHoras", { length: 10 }),
+  diasTrabalhados: int("diasTrabalhados"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ObraHorasRateio = typeof obraHorasRateio.$inferSelect;

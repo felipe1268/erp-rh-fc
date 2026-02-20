@@ -20,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
+import { APP_VERSION } from "../../../shared/version";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard, LogOut, PanelLeft, Users, ShieldCheck, Wrench,
@@ -27,6 +28,7 @@ import {
   ChevronDown, ChevronRight, AlertTriangle, Truck, FlameKindling,
   Droplets, Beaker, HardHat, BookOpen, Siren, Scale,
   BarChart3, GraduationCap, ShieldAlert, ListChecks, TriangleAlert, Flame, AlertOctagon, Settings,
+  Landmark, Wallet, FolderOpen, UtensilsCrossed,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -38,8 +40,9 @@ const menuSections = [
   {
     title: "Principal",
     items: [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+      { icon: LayoutDashboard, label: "Painel", path: "/" },
       { icon: Building2, label: "Empresas", path: "/empresas" },
+      { icon: Landmark, label: "Obras", path: "/obras" },
     ],
   },
   {
@@ -49,17 +52,13 @@ const menuSections = [
     ],
   },
   {
-    title: "SST",
-    items: [
-      { icon: ShieldCheck, label: "SST - Geral", path: "/sst" },
-    ],
-  },
-  {
     title: "Operacional",
     items: [
-      { icon: Clock, label: "Ponto e Folha", path: "/ponto-folha" },
-      { icon: Wrench, label: "Gestão de Ativos", path: "/ativos" },
+      { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
+      { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: Vote, label: "CIPA", path: "/cipa" },
+      { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
+      { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
     ],
   },
   {
@@ -322,6 +321,9 @@ function DashboardLayoutContent({
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarFooter>
+          <div className="px-3 pb-2 text-center group-data-[collapsible=icon]:hidden">
+            <span className="text-[10px] text-sidebar-foreground/40 font-mono">{APP_VERSION}</span>
+          </div>
         </Sidebar>
         <div
           className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}

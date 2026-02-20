@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, cnpj, nomeFantasia FROM companies;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, cnpj, nomeFantasia FROM companies;",
+  "rows": [
+    {
+      "id": "60002",
+      "cnpj": "29.353.906/0001-71",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "60004",
+      "cnpj": "47.401.586/0001-60",
+      "nomeFantasia": "HOTEL CONSAGRADO"
+    },
+    {
+      "id": "60005",
+      "cnpj": "03.426.403/0001-95",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "90001",
+      "cnpj": "61.423.062/0001-09",
+      "nomeFantasia": "LOCNOW LOCAÇÕES"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcnpj\tnomeFantasia\n60002\t29.353.906/0001-71\tFC ENGENHARIA PROJETOS E OBRAS\n60004\t47.401.586/0001-60\tHOTEL CONSAGRADO\n60005\t03.426.403/0001-95\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n90001\t61.423.062/0001-09\tLOCNOW LOCAÇÕES\n",
+  "stderr": "",
+  "execution_time_ms": 66
+}
