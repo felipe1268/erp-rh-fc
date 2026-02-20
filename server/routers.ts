@@ -35,6 +35,11 @@ import {
   createCipaMember, getCipaMembers, updateCipaMember, deleteCipaMember,
   // Dashboard
   getSSTStats,
+  // Documentos e Uploads
+  createTrainingDocument, getTrainingDocuments, getEmployeeTrainingDocuments, deleteTrainingDocument,
+  createPayrollUpload, getPayrollUploads, updatePayrollUploadStatus, deletePayrollUpload,
+  createDixiDevice, getDixiDevices, updateDixiDevice, deleteDixiDevice,
+  checkBlacklist, getBlacklistedEmployees, searchEmployeesByTraining,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import type { ProfileType } from "../shared/modules";
@@ -329,7 +334,45 @@ export const appRouter = router({
       update: protectedProcedure.input(z.any()).mutation(({ input }: any) => { updateCipaElection(input.id, input); return { success: true }; }),
       delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { deleteCipaElection(input.id); return { success: true }; }),
     }),
-  }),
-});
+   }),
 
+  // ============================================================
+  // DOCUMENTOS DE TREINAMENTO
+  // ============================================================
+  trainingDocs: router({
+    list: protectedProcedure.input(z.object({ trainingId: z.number() })).query(({ input }) => getTrainingDocuments(input.trainingId)),
+    byEmployee: protectedProcedure.input(z.object({ employeeId: z.number() })).query(({ input }) => getEmployeeTrainingDocuments(input.employeeId)),
+    create: protectedProcedure.input(z.any()).mutation(({ input }) => createTrainingDocument(input)),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { deleteTrainingDocument(input.id); return { success: true }; }),
+  }),
+
+  // ============================================================
+  // UPLOADS DE FOLHA (Cartão de Ponto, Folha, Vale)
+  // ============================================================
+  payrollUploads: router({
+    list: protectedProcedure.input(z.object({ companyId: z.number(), month: z.string().optional(), category: z.string().optional() })).query(({ input }) => getPayrollUploads(input.companyId, input.month, input.category)),
+    create: protectedProcedure.input(z.any()).mutation(({ input }) => createPayrollUpload(input)),
+    updateStatus: protectedProcedure.input(z.object({ id: z.number(), status: z.string(), recordsProcessed: z.number().optional(), errorMessage: z.string().optional() })).mutation(({ input }) => { updatePayrollUploadStatus(input.id, input.status, input.recordsProcessed, input.errorMessage); return { success: true }; }),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { deletePayrollUpload(input.id); return { success: true }; }),
+  }),
+
+  // ============================================================
+  // DISPOSITIVOS DIXI (Vinculação Sn -> Obra)
+  // ============================================================
+  dixiDevices: router({
+    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDixiDevices(input.companyId)),
+    create: protectedProcedure.input(z.any()).mutation(({ input }) => createDixiDevice(input)),
+    update: protectedProcedure.input(z.any()).mutation(({ input }: any) => { updateDixiDevice(input.id, input); return { success: true }; }),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { deleteDixiDevice(input.id); return { success: true }; }),
+  }),
+
+  // ============================================================
+  // LISTA NEGRA E BUSCA POR TREINAMENTO
+  // ============================================================
+  blacklist: router({
+    check: protectedProcedure.input(z.object({ cpf: z.string() })).query(({ input }) => checkBlacklist(input.cpf)),
+    list: protectedProcedure.input(z.object({ companyId: z.number().optional() })).query(({ input }) => getBlacklistedEmployees(input.companyId)),
+  }),
+  searchByTraining: protectedProcedure.input(z.object({ companyId: z.number(), trainingName: z.string() })).query(({ input }) => searchEmployeesByTraining(input.companyId, input.trainingName)),
+});
 export type AppRouter = typeof appRouter;

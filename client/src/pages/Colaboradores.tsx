@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, ShieldAlert, GraduationCap, ShieldCheck, Scale, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
@@ -19,11 +20,13 @@ const statusColors: Record<string, string> = {
   Licenca: "bg-purple-400/10 text-purple-400",
   Desligado: "bg-red-400/10 text-red-400",
   Recluso: "bg-gray-400/10 text-gray-400",
+  ListaNegra: "bg-red-600/20 text-red-600",
 };
 
 const statusLabels: Record<string, string> = {
   Ativo: "Ativo", Ferias: "Férias", Afastado: "Afastado",
   Licenca: "Licença", Desligado: "Desligado", Recluso: "Recluso",
+  ListaNegra: "⛔ LISTA NEGRA",
 };
 
 export default function Colaboradores() {
@@ -35,6 +38,7 @@ export default function Colaboradores() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<any>(null);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [blacklistAlert, setBlacklistAlert] = useState<string | null>(null);
 
   const { data: companies } = trpc.companies.list.useQuery();
   const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
@@ -64,9 +68,24 @@ export default function Colaboradores() {
     onError: (e) => toast.error("Erro: " + e.message),
   });
 
+  const checkBlacklistMut = trpc.blacklist.check.useQuery(
+    { cpf: form.cpf ?? "" },
+    { enabled: !!(form.cpf && form.cpf.replace(/\D/g, "").length >= 11 && !editingId) }
+  );
+
+  useEffect(() => {
+    const d = checkBlacklistMut.data as any;
+    if (d && d.status === "ListaNegra") {
+      setBlacklistAlert(`⛔ ATENÇÃO: CPF encontrado na LISTA NEGRA! Funcionário "${d.nomeCompleto}" está proibido de ser contratado. Motivo: ${d.motivoListaNegra ?? "Não informado"}`);
+    } else {
+      setBlacklistAlert(null);
+    }
+  }, [checkBlacklistMut.data]);
+
   const openNew = () => {
     setEditingId(null);
     setForm({ status: "Ativo" });
+    setBlacklistAlert(null);
     setDialogOpen(true);
   };
 
@@ -234,8 +253,14 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label>CPF *</Label>
-                  <Input value={form.cpf ?? ""} onChange={e => set("cpf", e.target.value)} placeholder="000.000.000-00" className="bg-input" />
+                  <Input value={form.cpf ?? ""} onChange={e => set("cpf", e.target.value)} placeholder="000.000.000-00" className={`bg-input ${blacklistAlert ? "border-red-600" : ""}`} />
                 </div>
+                {blacklistAlert && (
+                  <div className="col-span-2 bg-red-600/10 border border-red-600/30 rounded-lg p-3 flex items-center gap-2">
+                    <Ban className="h-5 w-5 text-red-600 shrink-0" />
+                    <p className="text-sm font-medium text-red-600">{blacklistAlert}</p>
+                  </div>
+                )}
                 <div>
                   <Label>Data de Nascimento</Label>
                   <Input type="date" value={form.dataNascimento ?? ""} onChange={e => set("dataNascimento", e.target.value)} className="bg-input" />
@@ -510,6 +535,18 @@ export default function Colaboradores() {
                 </div>
               </div>
 
+              {/* ALERTA LISTA NEGRA */}
+              {viewingEmployee.status === "ListaNegra" && (
+                <div className="bg-red-600/10 border border-red-600/30 rounded-lg p-4 flex items-center gap-3">
+                  <Ban className="h-6 w-6 text-red-600 shrink-0" />
+                  <div>
+                    <p className="font-bold text-red-600">⛔ FUNCIONÁRIO NA LISTA NEGRA</p>
+                    <p className="text-sm text-red-500">Este funcionário está proibido de ser contratado novamente pela empresa.</p>
+                    {viewingEmployee.motivoListaNegra && <p className="text-sm text-red-500 mt-1"><strong>Motivo:</strong> {viewingEmployee.motivoListaNegra}</p>}
+                  </div>
+                </div>
+              )}
+
               {[
                 { title: "Dados Pessoais", fields: [
                   ["CPF", viewingEmployee.cpf], ["RG", viewingEmployee.rg],
@@ -545,10 +582,111 @@ export default function Colaboradores() {
                   </div>
                 </div>
               ))}
+
+              {/* HISTÓRICO DE TREINAMENTOS */}
+              {viewingEmployee && <EmployeeTrainingsSection employeeId={viewingEmployee.id} />}
+
+              {/* HISTÓRICO DE ASOs */}
+              {viewingEmployee && <EmployeeASOsSection employeeId={viewingEmployee.id} companyId={companyId!} />}
+
+              {/* HISTÓRICO DE ADVERTÊNCIAS */}
+              {viewingEmployee && <EmployeeWarningsSection employeeId={viewingEmployee.id} companyId={companyId!} />}
             </div>
           )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// COMPONENTES DE HISTÓRICO NA FICHA DO COLABORADOR
+// ============================================================
+function EmployeeTrainingsSection({ employeeId }: { employeeId: number }) {
+  const { data: docs = [] } = trpc.trainingDocs.byEmployee.useQuery({ employeeId });
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2">
+        <GraduationCap className="h-4 w-4" /> Treinamentos e Certificados
+      </h3>
+      {docs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum treinamento registrado</p>
+      ) : (
+        <div className="space-y-1">
+          {docs.map((d: any) => (
+            <div key={d.id} className="flex items-center justify-between text-sm py-1 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <FileText className="h-3.5 w-3.5 text-blue-600" />
+                <span>{d.fileName}</span>
+              </div>
+              <span className="text-muted-foreground text-xs">{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmployeeASOsSection({ employeeId, companyId }: { employeeId: number; companyId: number }) {
+  const { data: asos = [] } = trpc.sst.asos.list.useQuery({ companyId });
+  const empAsos = asos.filter((a: any) => a.employeeId === employeeId);
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4" /> ASOs
+      </h3>
+      {empAsos.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum ASO registrado</p>
+      ) : (
+        <div className="space-y-1">
+          {empAsos.map((a: any) => (
+            <div key={a.id} className="flex items-center justify-between text-sm py-1 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">{a.tipo}</Badge>
+                <span>{a.clinica ?? ""}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-muted-foreground text-xs">
+                  {a.dataExame ? new Date(a.dataExame).toLocaleDateString("pt-BR") : "-"}
+                </span>
+                {a.dataValidade && new Date(a.dataValidade) < new Date() && (
+                  <Badge variant="destructive" className="ml-2 text-xs">Vencido</Badge>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmployeeWarningsSection({ employeeId, companyId }: { employeeId: number; companyId: number }) {
+  const { data: warnings = [] } = trpc.sst.warnings.list.useQuery({ companyId });
+  const empWarnings = warnings.filter((w: any) => w.employeeId === employeeId);
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2">
+        <Scale className="h-4 w-4" /> Advertências
+      </h3>
+      {empWarnings.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma advertência registrada</p>
+      ) : (
+        <div className="space-y-1">
+          {empWarnings.map((w: any) => (
+            <div key={w.id} className="flex items-center justify-between text-sm py-1 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={`text-xs ${w.tipo === 'Suspensao' ? 'border-red-500 text-red-500' : w.tipo === 'Demissao' ? 'border-red-700 text-red-700' : ''}`}>{w.tipo}</Badge>
+                <span className="truncate max-w-[200px]">{w.motivo ?? ""}</span>
+              </div>
+              <span className="text-muted-foreground text-xs">
+                {w.data ? new Date(w.data).toLocaleDateString("pt-BR") : "-"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

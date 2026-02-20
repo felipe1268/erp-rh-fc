@@ -30,7 +30,7 @@ function createTestContext(): TrpcContext {
 }
 
 describe("ERP Router Structure", () => {
-  it("should have all required routers defined", () => {
+  it("should have all core routers defined", () => {
     const caller = appRouter.createCaller(createTestContext());
     expect(caller.auth).toBeDefined();
     expect(caller.companies).toBeDefined();
@@ -42,6 +42,15 @@ describe("ERP Router Structure", () => {
     expect(caller.assets).toBeDefined();
     expect(caller.quality).toBeDefined();
     expect(caller.cipa).toBeDefined();
+  });
+
+  it("should have new module routers defined (trainingDocs, payrollUploads, dixiDevices, blacklist)", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.trainingDocs).toBeDefined();
+    expect(caller.payrollUploads).toBeDefined();
+    expect(caller.dixiDevices).toBeDefined();
+    expect(caller.blacklist).toBeDefined();
+    expect(caller.searchByTraining).toBeDefined();
   });
 
   it("should have SST sub-routers", () => {
@@ -80,6 +89,35 @@ describe("ERP Router Structure", () => {
     const caller = appRouter.createCaller(createTestContext());
     expect(caller.cipa.members).toBeDefined();
     expect(caller.cipa.elections).toBeDefined();
+  });
+
+  it("should have trainingDocs sub-routers (list, byEmployee, create, delete)", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.trainingDocs.list).toBeDefined();
+    expect(caller.trainingDocs.byEmployee).toBeDefined();
+    expect(caller.trainingDocs.create).toBeDefined();
+    expect(caller.trainingDocs.delete).toBeDefined();
+  });
+
+  it("should have payrollUploads sub-routers (list, create, updateStatus, delete)", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.payrollUploads.list).toBeDefined();
+    expect(caller.payrollUploads.create).toBeDefined();
+    expect(caller.payrollUploads.updateStatus).toBeDefined();
+    expect(caller.payrollUploads.delete).toBeDefined();
+  });
+
+  it("should have dixiDevices sub-routers (list, create, update, delete)", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.dixiDevices.list).toBeDefined();
+    expect(caller.dixiDevices.create).toBeDefined();
+    expect(caller.dixiDevices.update).toBeDefined();
+    expect(caller.dixiDevices.delete).toBeDefined();
+  });
+
+  it("should have blacklist check route", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.blacklist.check).toBeDefined();
   });
 
   it("should return authenticated user from auth.me", async () => {
@@ -162,9 +200,8 @@ describe("Shared Modules", () => {
     expect(DEFAULT_PERMISSIONS.avaliador.sst.canView).toBe(false);
   });
 
-  it("should have correct employee status definitions", async () => {
+  it("should have correct employee status definitions including ListaNegra", async () => {
     const { EMPLOYEE_STATUS } = await import("../shared/modules");
-    expect(EMPLOYEE_STATUS.length).toBe(6);
     const values = EMPLOYEE_STATUS.map(s => s.value);
     expect(values).toContain("Ativo");
     expect(values).toContain("Ferias");

@@ -37,21 +37,21 @@ export default function Home() {
   );
 
   const rhCards = [
-    { title: "Total", value: stats?.total ?? 0, icon: Users, color: "bg-blue-500", textColor: "text-blue-600" },
-    { title: "Ativos", value: stats?.ativos ?? 0, icon: UserCheck, color: "bg-green-500", textColor: "text-green-600" },
-    { title: "Férias", value: stats?.ferias ?? 0, icon: Palmtree, color: "bg-cyan-500", textColor: "text-cyan-600" },
-    { title: "Afastados", value: stats?.afastados ?? 0, icon: AlertTriangle, color: "bg-yellow-500", textColor: "text-yellow-600" },
-    { title: "Licença", value: stats?.licenca ?? 0, icon: UserX, color: "bg-purple-500", textColor: "text-purple-600" },
-    { title: "Desligados", value: stats?.desligados ?? 0, icon: UserX, color: "bg-red-500", textColor: "text-red-600" },
+    { title: "Total Colaboradores", value: stats?.total ?? 0, icon: Users, color: "bg-blue-50", iconColor: "text-blue-600", borderColor: "border-l-blue-500" },
+    { title: "Ativos", value: stats?.ativos ?? 0, icon: UserCheck, color: "bg-green-50", iconColor: "text-green-600", borderColor: "border-l-green-500" },
+    { title: "Férias", value: stats?.ferias ?? 0, icon: Palmtree, color: "bg-cyan-50", iconColor: "text-cyan-600", borderColor: "border-l-cyan-500" },
+    { title: "Afastados", value: stats?.afastados ?? 0, icon: AlertTriangle, color: "bg-yellow-50", iconColor: "text-yellow-600", borderColor: "border-l-yellow-500" },
+    { title: "Licença", value: stats?.licenca ?? 0, icon: UserX, color: "bg-purple-50", iconColor: "text-purple-600", borderColor: "border-l-purple-500" },
+    { title: "Desligados", value: stats?.desligados ?? 0, icon: UserX, color: "bg-red-50", iconColor: "text-red-600", borderColor: "border-l-red-500" },
   ];
 
   const sstCards = [
-    { title: "ASOs Válidos", value: (sstStats as any)?.asosValidos ?? 0, icon: ShieldCheck, color: "bg-green-500", textColor: "text-green-600" },
-    { title: "ASOs Vencidos", value: sstStats?.asosVencidos ?? 0, icon: AlertTriangle, color: "bg-red-500", textColor: "text-red-600", alert: (sstStats?.asosVencidos ?? 0) > 0 },
-    { title: "Treinamentos Ativos", value: (sstStats as any)?.treinamentosAtivos ?? 0, icon: HardHat, color: "bg-blue-500", textColor: "text-blue-600" },
-    { title: "Trein. a Vencer (30d)", value: sstStats?.treinamentosVencer ?? 0, icon: Clock, color: "bg-orange-500", textColor: "text-orange-600", alert: (sstStats?.treinamentosVencer ?? 0) > 0 },
-    { title: "Acidentes no Mês", value: sstStats?.acidentesMes ?? 0, icon: Activity, color: "bg-red-500", textColor: "text-red-600" },
-    { title: "Advertências no Mês", value: sstStats?.advertenciasMes ?? 0, icon: ClipboardCheck, color: "bg-yellow-500", textColor: "text-yellow-600" },
+    { title: "ASOs Válidos", value: (sstStats as any)?.asosValidos ?? 0, icon: ShieldCheck, color: "bg-green-50", iconColor: "text-green-600", borderColor: "border-l-green-500" },
+    { title: "ASOs Vencidos", value: sstStats?.asosVencidos ?? 0, icon: AlertTriangle, color: "bg-red-50", iconColor: "text-red-600", borderColor: "border-l-red-500", alert: (sstStats?.asosVencidos ?? 0) > 0 },
+    { title: "Treinamentos Ativos", value: (sstStats as any)?.treinamentosAtivos ?? 0, icon: HardHat, color: "bg-blue-50", iconColor: "text-blue-600", borderColor: "border-l-blue-500" },
+    { title: "Trein. a Vencer (30d)", value: sstStats?.treinamentosVencer ?? 0, icon: Clock, color: "bg-orange-50", iconColor: "text-orange-600", borderColor: "border-l-orange-500", alert: (sstStats?.treinamentosVencer ?? 0) > 0 },
+    { title: "Acidentes no Mês", value: sstStats?.acidentesMes ?? 0, icon: Activity, color: "bg-red-50", iconColor: "text-red-600", borderColor: "border-l-red-500" },
+    { title: "Advertências no Mês", value: sstStats?.advertenciasMes ?? 0, icon: ClipboardCheck, color: "bg-yellow-50", iconColor: "text-yellow-600", borderColor: "border-l-yellow-500" },
   ];
 
   const modules = [
@@ -70,7 +70,7 @@ export default function Home() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
             <p className="text-muted-foreground text-sm mt-1">
               Bem-vindo(a), {user?.name ?? "Usuário"}
             </p>
@@ -96,18 +96,20 @@ export default function Home() {
             {/* RH Stats */}
             <div>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recursos Humanos</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {rhCards.map(card => (
-                  <Card key={card.title} className="bg-card border-border hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate("/colaboradores")}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-lg ${card.color}/10 flex items-center justify-center`}>
-                          <card.icon className={`h-5 w-5 ${card.textColor}`} />
-                        </div>
-                        <div>
-                          <p className={`text-2xl font-bold ${card.textColor}`}>{card.value}</p>
-                          <p className="text-xs text-muted-foreground">{card.title}</p>
-                        </div>
+                  <Card
+                    key={card.title}
+                    className={`bg-card border border-border border-l-4 ${card.borderColor} hover:shadow-md transition-shadow cursor-pointer`}
+                    onClick={() => navigate("/colaboradores")}
+                  >
+                    <CardContent className="p-4 flex flex-col items-start gap-3">
+                      <div className={`h-10 w-10 rounded-lg ${card.color} flex items-center justify-center shrink-0`}>
+                        <card.icon className={`h-5 w-5 ${card.iconColor}`} />
+                      </div>
+                      <div className="w-full">
+                        <p className={`text-2xl font-bold ${card.iconColor}`}>{card.value}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{card.title}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -118,18 +120,21 @@ export default function Home() {
             {/* SST Stats */}
             <div>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Segurança e Saúde do Trabalho</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {sstCards.map(card => (
-                  <Card key={card.title} className={`bg-card border-border hover:shadow-md transition-shadow cursor-pointer ${card.alert ? "border-red-300 bg-red-50" : ""}`} onClick={() => navigate("/sst")}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-lg ${card.color}/10 flex items-center justify-center`}>
-                          <card.icon className={`h-5 w-5 ${card.textColor}`} />
-                        </div>
-                        <div>
-                          <p className={`text-2xl font-bold ${card.textColor}`}>{card.value}</p>
-                          <p className="text-xs text-muted-foreground">{card.title}</p>
-                        </div>
+                  <Card
+                    key={card.title}
+                    className={`bg-card border border-border border-l-4 ${card.borderColor} hover:shadow-md transition-shadow cursor-pointer ${card.alert ? "ring-1 ring-red-300" : ""}`}
+                    onClick={() => navigate("/sst")}
+                  >
+                    <CardContent className="p-4 flex flex-col items-start gap-3">
+                      <div className={`h-10 w-10 rounded-lg ${card.color} flex items-center justify-center shrink-0`}>
+                        <card.icon className={`h-5 w-5 ${card.iconColor}`} />
+                      </div>
+                      <div className="w-full">
+                        <p className={`text-2xl font-bold ${card.iconColor}`}>{card.value}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{card.title}</p>
+                        {card.alert && <p className="text-[10px] text-red-500 font-medium mt-1">⚠ Atenção</p>}
                       </div>
                     </CardContent>
                   </Card>
@@ -142,17 +147,17 @@ export default function Home() {
               {/* Modules */}
               <Card className="bg-card border-border">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-semibold">Módulos</CardTitle>
+                  <CardTitle className="text-sm font-semibold">Módulos do Sistema</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
                     {modules.map(m => (
-                      <div key={m.title} className="flex items-center justify-between cursor-pointer hover:bg-accent/50 rounded-lg px-2 py-1.5 transition-colors" onClick={() => m.path !== "#" && navigate(m.path)}>
+                      <div key={m.title} className="flex items-center justify-between cursor-pointer hover:bg-accent/50 rounded-lg px-3 py-2 transition-colors" onClick={() => m.path !== "#" && navigate(m.path)}>
                         <div>
-                          <p className="text-sm font-medium">{m.title}</p>
+                          <p className="text-sm font-medium text-foreground">{m.title}</p>
                           <p className="text-xs text-muted-foreground">{m.desc}</p>
                         </div>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${m.status === "Ativo" ? "text-green-600 bg-green-100" : "text-yellow-600 bg-yellow-100"}`}>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded shrink-0 ${m.status === "Ativo" ? "text-green-600 bg-green-100" : "text-yellow-600 bg-yellow-100"}`}>
                           {m.status}
                         </span>
                       </div>

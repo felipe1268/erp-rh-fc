@@ -11,8 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   ShieldCheck, Plus, Search, AlertTriangle, GraduationCap, HardHat,
-  Siren, Scale, MapPin, Pencil, Trash2, Eye,
+  Siren, Scale, MapPin, Pencil, Trash2, Eye, Upload, FileText, Paperclip, X,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function SST() {
   const [companyId] = useState(() => {
@@ -200,6 +201,8 @@ function ASOTab({ companyId }: { companyId: number }) {
 // ============================================================
 function TrainingTab({ companyId }: { companyId: number }) {
   const [showForm, setShowForm] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
+  const [selectedTraining, setSelectedTraining] = useState<any>(null);
   const [search, setSearch] = useState("");
   const utils = trpc.useUtils();
   const { data: trainings = [], isLoading } = trpc.sst.trainings.list.useQuery({ companyId });
@@ -244,6 +247,7 @@ function TrainingTab({ companyId }: { companyId: number }) {
                 <th className="text-left p-3 font-medium">Realização</th>
                 <th className="text-left p-3 font-medium">Validade</th>
                 <th className="text-left p-3 font-medium">Instrutor</th>
+                <th className="text-center p-3 font-medium">Docs</th>
                 <th className="text-right p-3 font-medium">Ações</th>
               </tr>
             </thead>
@@ -265,6 +269,11 @@ function TrainingTab({ companyId }: { companyId: number }) {
                     {isExpired(t.dataValidade) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}
                   </td>
                   <td className="p-3">{t.instrutor ?? "-"}</td>
+                  <td className="p-3 text-center">
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedTraining(t); setShowDocs(true); }}>
+                      <Paperclip className="h-4 w-4 text-blue-600" />
+                    </Button>
+                  </td>
                   <td className="p-3 text-right">
                     <Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: t.id })}>
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -276,6 +285,21 @@ function TrainingTab({ companyId }: { companyId: number }) {
           </table>
         </div>
       </Card>
+
+      {/* Dialog de Documentos do Treinamento */}
+      <Dialog open={showDocs} onOpenChange={setShowDocs}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              Documentos do Treinamento
+            </DialogTitle>
+          </DialogHeader>
+          {selectedTraining && (
+            <TrainingDocsPanel training={selectedTraining} employees={employees} />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-lg">
@@ -703,3 +727,87 @@ function RiskTab({ companyId }: { companyId: number }) {
     </div>
   );
 }
+
+// ============================================================
+// PAINEL DE DOCUMENTOS DO TREINAMENTO
+// ============================================================
+function TrainingDocsPanel({ training, employees }: { training: any; employees: any[] }) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const utils = trpc.useUtils();
+  const { data: docs = [], isLoading } = trpc.trainingDocs.list.useQuery({ trainingId: training.id });
+  const createMut = trpc.trainingDocs.create.useMutation({
+    onSuccess: () => { utils.trainingDocs.list.invalidate(); toast.success("Documento anexado!"); },
+  });
+  const deleteMut = trpc.trainingDocs.delete.useMutation({
+    onSuccess: () => { utils.trainingDocs.list.invalidate(); toast.success("Documento removido!"); },
+  });
+
+  const empName = employees.find((e: any) => e.id === training.employeeId)?.nomeCompleto ?? "-";
+
+  const handleUpload = (file: File) => {
+    const fakeUrl = `training-docs/${training.id}/${file.name}`;
+    createMut.mutate({
+      trainingId: training.id,
+      employeeId: training.employeeId,
+      fileName: file.name,
+      fileUrl: fakeUrl,
+      fileKey: fakeUrl,
+      fileSize: file.size,
+      mimeType: file.type,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-muted/30 rounded-lg p-3">
+        <p className="text-sm"><span className="font-medium">Colaborador:</span> {empName}</p>
+        <p className="text-sm"><span className="font-medium">Treinamento:</span> {training.nome} {training.norma ? `(${training.norma})` : ""}</p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">Documentos Anexados ({docs.length})</p>
+        <div>
+          <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden" onChange={(e) => {
+            const files = e.target.files;
+            if (files && files.length > 0) { handleUpload(files[0]); e.target.value = ""; }
+          }} />
+          <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-2" /> Anexar Documento
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>
+      ) : docs.length === 0 ? (
+        <div className="border-2 border-dashed border-muted-foreground/20 rounded-lg p-6 text-center">
+          <Paperclip className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">Nenhum documento anexado</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Clique em "Anexar Documento" para fazer upload do certificado</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {docs.map((d: any) => (
+            <div key={d.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <FileText className="h-5 w-5 shrink-0 text-blue-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{d.fileName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {d.fileSize ? `${(d.fileSize / 1024).toFixed(1)} KB` : ""} · {new Date(d.createdAt).toLocaleString("pt-BR")}
+                  </p>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteMut.mutate({ id: d.id })}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Need React import for useRef
+import React from "react";

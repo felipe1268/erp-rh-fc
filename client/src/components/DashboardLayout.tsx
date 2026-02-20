@@ -107,7 +107,7 @@ export default function DashboardLayout({
       <div className="flex items-center justify-center min-h-screen bg-[#1B2A4A]">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
-            <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/MBEJyWpcLcahjIDa.png" alt="FC Engenharia" className="h-20 object-contain" />
+            <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png" alt="FC Engenharia" className="h-20 object-contain" />
             <h1 className="text-2xl font-semibold tracking-tight text-center text-white">
               ERP RH & DP
             </h1>
@@ -217,7 +217,7 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/MBEJyWpcLcahjIDa.png" alt="FC" className="h-8 object-contain" />
+                  <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png" alt="FC" className="h-8 object-contain" />
                   <span className="font-bold tracking-tight truncate text-[#D4A843] text-sm uppercase">
                     FC Engenharia
                   </span>

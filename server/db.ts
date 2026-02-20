@@ -8,6 +8,7 @@ import {
   userProfiles, InsertUserProfile,
   permissions, InsertPermission,
   auditLogs, InsertAuditLog,
+  trainingDocuments, payrollUploads, dixiDevices,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -708,4 +709,136 @@ export async function getSSTStats(companyId: number) {
     acidentesMes: Number(acidentesMes?.count ?? 0),
     advertenciasMes: Number(advertenciasMes?.count ?? 0),
   };
+}
+
+
+// ============================================================
+// DOCUMENTOS DE TREINAMENTO
+// ============================================================
+
+export async function createTrainingDocument(data: any) {
+  const db = await getDb();
+  if (!db) return;
+  const result = await db.insert(trainingDocuments).values(data);
+  return result;
+}
+
+export async function getTrainingDocuments(trainingId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(trainingDocuments).where(eq(trainingDocuments.trainingId, trainingId));
+}
+
+export async function getEmployeeTrainingDocuments(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(trainingDocuments).where(eq(trainingDocuments.employeeId, employeeId));
+}
+
+export async function deleteTrainingDocument(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(trainingDocuments).where(eq(trainingDocuments.id, id));
+}
+
+// ============================================================
+// UPLOADS DE FOLHA (Cartão de Ponto, Folha, Vale)
+// ============================================================
+
+export async function createPayrollUpload(data: any) {
+  const db = await getDb();
+  if (!db) return;
+  const result = await db.insert(payrollUploads).values(data);
+  return result;
+}
+
+export async function getPayrollUploads(companyId: number, month?: string, category?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  let query = db.select().from(payrollUploads).where(eq(payrollUploads.companyId, companyId));
+  if (month) {
+    query = db.select().from(payrollUploads).where(and(eq(payrollUploads.companyId, companyId), eq(payrollUploads.month, month)));
+  }
+  const results = await query;
+  if (category) {
+    return results.filter((r: any) => r.category === category);
+  }
+  return results;
+}
+
+export async function updatePayrollUploadStatus(id: number, status: string, recordsProcessed?: number, errorMessage?: string) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: any = { status };
+  if (recordsProcessed !== undefined) updateData.recordsProcessed = recordsProcessed;
+  if (errorMessage !== undefined) updateData.errorMessage = errorMessage;
+  await db.update(payrollUploads).set(updateData).where(eq(payrollUploads.id, id));
+}
+
+export async function deletePayrollUpload(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(payrollUploads).where(eq(payrollUploads.id, id));
+}
+
+// ============================================================
+// DISPOSITIVOS DIXI (Cartão de Ponto vinculado à Obra)
+// ============================================================
+
+export async function createDixiDevice(data: any) {
+  const db = await getDb();
+  if (!db) return;
+  return db.insert(dixiDevices).values(data);
+}
+
+export async function getDixiDevices(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(dixiDevices).where(eq(dixiDevices.companyId, companyId));
+}
+
+export async function updateDixiDevice(id: number, data: any) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(dixiDevices).set(data).where(eq(dixiDevices.id, id));
+}
+
+export async function deleteDixiDevice(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(dixiDevices).where(eq(dixiDevices.id, id));
+}
+
+// ============================================================
+// LISTA NEGRA - Busca por CPF
+// ============================================================
+
+export async function checkBlacklist(cpf: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(employees).where(and(eq(employees.cpf, cpf), eq(employees.listaNegra, true)));
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getBlacklistedEmployees(companyId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  if (companyId) {
+    return db.select().from(employees).where(and(eq(employees.companyId, companyId), eq(employees.listaNegra, true)));
+  }
+  return db.select().from(employees).where(eq(employees.listaNegra, true));
+}
+
+// ============================================================
+// BUSCA POR TREINAMENTO
+// ============================================================
+
+export async function searchEmployeesByTraining(companyId: number, trainingName: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const { trainings } = await import("../drizzle/schema");
+  const trainingResults = await db.select().from(trainings).where(
+    and(eq(trainings.companyId, companyId), like(trainings.nome, `%${trainingName}%`))
+  );
+  return trainingResults;
 }

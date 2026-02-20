@@ -59,3 +59,23 @@
 - [x] Atualizar Dashboard Home com cards de todos os módulos
 - [x] Registrar versão com descrição clara das melhorias
 - [x] Busca automática de dados pelo CNPJ (BrasilAPI) na tela de Empresas
+
+## Fase 3: Redesenho Ponto e Folha
+- [x] Corrigir erro removeChild na tela de Ponto e Folha
+- [x] Redesenhar página com upload separado por categoria (Vale, Folha, Cartão de Ponto)
+- [x] Implementar upload de arquivos XLS (cartão de ponto Dixi) - estrutura criada
+- [x] Implementar upload de arquivos PDF (folha/adiantamento contabilidade) - estrutura criada
+- [x] Vincular código Sn do cartão de ponto à obra para alocação automática do funcionário (aba Equipamentos Dixi)
+- [ ] Criar backend de processamento e armazenamento dos arquivos enviados
+- [ ] Tela de visualização dos dados processados por competência
+- [x] BUG CRÍTICO: Erro removeChild em todas as telas - RESOLVIDO (cache Vite corrompido, restart resolveu)
+- [x] Atualizar logo FC para versão em alta qualidade
+
+## Novas Funcionalidades Solicitadas
+- [x] Upload de documentos/certificados por treinamento do funcionário
+- [x] Ficha completa do colaborador com histórico de treinamentos, ASOs, advertências
+- [x] Busca por treinamento (pesquisar quem tem NR-35, NR-10, etc.)
+- [x] Lista Negra de funcionários demitidos que não podem ser recontratados
+- [x] Alerta automático ao tentar cadastrar funcionário da Lista Negra
+- [x] Status "Lista Negra" com mensagem de proibição visível
+- [x] BUG: Cards do Dashboard com texto cortado - corrigido layout vertical com bordas coloridas

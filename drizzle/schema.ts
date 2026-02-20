@@ -153,7 +153,13 @@ export const employees = mysqlTable("employees", {
     "Licenca",
     "Desligado",
     "Recluso",
+    "Lista_Negra",
   ]).default("Ativo").notNull(),
+
+  // Lista Negra
+  listaNegra: boolean("listaNegra").default(false).notNull(),
+  motivoListaNegra: text("motivoListaNegra"),
+  dataListaNegra: date("dataListaNegra"),
 
   // Foto
   fotoUrl: text("fotoUrl"),
@@ -628,3 +634,66 @@ export const cipaMembers = mysqlTable("cipa_members", {
 });
 
 export type CipaMember = typeof cipaMembers.$inferSelect;
+
+
+// ============================================================
+// DOCUMENTOS DE TREINAMENTO
+// ============================================================
+
+export const trainingDocuments = mysqlTable("training_documents", {
+  id: int("id").autoincrement().primaryKey(),
+  trainingId: int("trainingId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  companyId: int("companyId").notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  fileKey: varchar("fileKey", { length: 500 }).notNull(),
+  fileSize: int("fileSize"),
+  mimeType: varchar("mimeType", { length: 100 }),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type TrainingDocument = typeof trainingDocuments.$inferSelect;
+
+// ============================================================
+// UPLOADS DE FOLHA DE PAGAMENTO (Cartão de Ponto, Folha, Vale)
+// ============================================================
+
+export const payrollUploads = mysqlTable("payroll_uploads", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  category: mysqlEnum("category", [
+    "cartao_ponto",
+    "folha_pagamento",
+    "vale_adiantamento",
+  ]).notNull(),
+  month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  fileKey: varchar("fileKey", { length: 500 }).notNull(),
+  fileSize: int("fileSize"),
+  mimeType: varchar("mimeType", { length: 100 }),
+  status: mysqlEnum("uploadStatus", ["pendente", "processando", "processado", "erro"]).default("pendente").notNull(),
+  recordsProcessed: int("recordsProcessed").default(0),
+  errorMessage: text("errorMessage"),
+  uploadedBy: int("uploadedBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type PayrollUpload = typeof payrollUploads.$inferSelect;
+
+// ============================================================
+// EQUIPAMENTOS DIXI (Cartão de Ponto vinculado à Obra)
+// ============================================================
+
+export const dixiDevices = mysqlTable("dixi_devices", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  serialNumber: varchar("serialNumber", { length: 50 }).notNull(), // Sn do Dixi
+  obraName: varchar("obraName", { length: 255 }).notNull(),
+  location: text("location"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DixiDevice = typeof dixiDevices.$inferSelect;
