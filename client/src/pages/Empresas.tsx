@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { Building2, Plus, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Building2, Plus, Pencil, Trash2, Search, Loader2 } from "lucide-react";
+import { useState, useCallback } from "react";
 import { toast } from "sonner";
 
 type CompanyForm = {
@@ -26,10 +26,29 @@ const emptyForm: CompanyForm = {
   cidade: "", estado: "", cep: "", telefone: "", email: "",
 };
 
+function formatCnpj(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+}
+
+function formatPhone(value: string): string {
+  const d = value.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7, 11)}`;
+}
+
 export default function Empresas() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
+  const [cnpjLoading, setCnpjLoading] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: companies, isLoading } = trpc.companies.list.useQuery();
@@ -45,6 +64,43 @@ export default function Empresas() {
     onSuccess: () => { utils.companies.list.invalidate(); toast.success("Empresa excluída!"); },
     onError: (e) => toast.error("Erro ao excluir: " + e.message),
   });
+
+  const fetchCnpjData = useCallback(async (cnpj: string) => {
+    const digits = cnpj.replace(/\D/g, "");
+    if (digits.length !== 14) return;
+    setCnpjLoading(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+      if (!res.ok) throw new Error("CNPJ não encontrado");
+      const data = await res.json();
+      setForm(prev => ({
+        ...prev,
+        razaoSocial: data.razao_social ?? prev.razaoSocial,
+        nomeFantasia: data.nome_fantasia ?? prev.nomeFantasia,
+        endereco: [data.logradouro, data.numero, data.complemento].filter(Boolean).join(", ") || prev.endereco,
+        cidade: data.municipio ?? prev.cidade,
+        estado: data.uf ?? prev.estado,
+        cep: data.cep ? data.cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2") : prev.cep,
+        telefone: data.ddd_telefone_1 ? formatPhone(data.ddd_telefone_1) : prev.telefone,
+        email: data.email && data.email !== "" ? data.email.toLowerCase() : prev.email,
+      }));
+      toast.success("Dados do CNPJ carregados automaticamente!");
+    } catch {
+      toast.error("Não foi possível buscar os dados do CNPJ. Preencha manualmente.");
+    } finally {
+      setCnpjLoading(false);
+    }
+  }, []);
+
+  const handleCnpjChange = (value: string) => {
+    const formatted = formatCnpj(value);
+    setForm(prev => ({ ...prev, cnpj: formatted }));
+    // Auto-fetch when CNPJ is complete (14 digits)
+    const digits = value.replace(/\D/g, "");
+    if (digits.length === 14) {
+      fetchCnpjData(digits);
+    }
+  };
 
   const handleSubmit = () => {
     if (!form.cnpj || !form.razaoSocial) {
@@ -157,7 +213,25 @@ export default function Empresas() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
             <div className="sm:col-span-2">
               <Label>CNPJ *</Label>
-              <Input value={form.cnpj} onChange={e => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className="bg-input" />
+              <div className="relative">
+                <Input
+                  value={form.cnpj}
+                  onChange={e => handleCnpjChange(e.target.value)}
+                  placeholder="00.000.000/0000-00"
+                  className="bg-input pr-10"
+                  maxLength={18}
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  {cnpjLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {cnpjLoading ? "Buscando dados do CNPJ..." : "Digite o CNPJ completo para preencher automaticamente"}
+              </p>
             </div>
             <div className="sm:col-span-2">
               <Label>Razão Social *</Label>
@@ -196,7 +270,7 @@ export default function Empresas() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>
+            <Button onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending || cnpjLoading}>
               {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

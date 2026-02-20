@@ -15,6 +15,13 @@
       "when": 1771599832730,
       "tag": "0001_marvelous_loners",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771600800771,
+      "tag": "0002_wooden_morbius",
+      "breakpoints": true
     }
   ]
 }

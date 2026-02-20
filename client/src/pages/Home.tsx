@@ -3,14 +3,16 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle } from "lucide-react";
+import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, ShieldCheck, HardHat, Truck, ClipboardCheck, Activity, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 
 export default function Home() {
   const { user } = useAuth();
   const [selectedCompany, setSelectedCompany] = useState<string>("");
+  const [, navigate] = useLocation();
 
-  const { data: companies, isLoading: loadingCompanies } = trpc.companies.list.useQuery();
+  const { data: companies } = trpc.companies.list.useQuery();
   const companyId = selectedCompany ? parseInt(selectedCompany) : companies?.[0]?.id;
 
   useEffect(() => {
@@ -24,13 +26,42 @@ export default function Home() {
     { enabled: !!companyId }
   );
 
-  const statCards = [
-    { title: "Total de Colaboradores", value: stats?.total ?? 0, icon: Users, color: "text-primary" },
-    { title: "Ativos", value: stats?.ativos ?? 0, icon: UserCheck, color: "text-green-400" },
-    { title: "Férias", value: stats?.ferias ?? 0, icon: Palmtree, color: "text-blue-400" },
-    { title: "Afastados", value: stats?.afastados ?? 0, icon: AlertTriangle, color: "text-yellow-400" },
-    { title: "Licença", value: stats?.licenca ?? 0, icon: UserX, color: "text-purple-400" },
-    { title: "Desligados", value: stats?.desligados ?? 0, icon: UserX, color: "text-red-400" },
+  const { data: sstStats } = trpc.sst.stats.useQuery(
+    { companyId: companyId! },
+    { enabled: !!companyId }
+  );
+
+  const { data: logs } = trpc.audit.list.useQuery(
+    { companyId, limit: 8 },
+    { enabled: !!companyId }
+  );
+
+  const rhCards = [
+    { title: "Total", value: stats?.total ?? 0, icon: Users, color: "bg-blue-500", textColor: "text-blue-600" },
+    { title: "Ativos", value: stats?.ativos ?? 0, icon: UserCheck, color: "bg-green-500", textColor: "text-green-600" },
+    { title: "Férias", value: stats?.ferias ?? 0, icon: Palmtree, color: "bg-cyan-500", textColor: "text-cyan-600" },
+    { title: "Afastados", value: stats?.afastados ?? 0, icon: AlertTriangle, color: "bg-yellow-500", textColor: "text-yellow-600" },
+    { title: "Licença", value: stats?.licenca ?? 0, icon: UserX, color: "bg-purple-500", textColor: "text-purple-600" },
+    { title: "Desligados", value: stats?.desligados ?? 0, icon: UserX, color: "bg-red-500", textColor: "text-red-600" },
+  ];
+
+  const sstCards = [
+    { title: "ASOs Válidos", value: (sstStats as any)?.asosValidos ?? 0, icon: ShieldCheck, color: "bg-green-500", textColor: "text-green-600" },
+    { title: "ASOs Vencidos", value: sstStats?.asosVencidos ?? 0, icon: AlertTriangle, color: "bg-red-500", textColor: "text-red-600", alert: (sstStats?.asosVencidos ?? 0) > 0 },
+    { title: "Treinamentos Ativos", value: (sstStats as any)?.treinamentosAtivos ?? 0, icon: HardHat, color: "bg-blue-500", textColor: "text-blue-600" },
+    { title: "Trein. a Vencer (30d)", value: sstStats?.treinamentosVencer ?? 0, icon: Clock, color: "bg-orange-500", textColor: "text-orange-600", alert: (sstStats?.treinamentosVencer ?? 0) > 0 },
+    { title: "Acidentes no Mês", value: sstStats?.acidentesMes ?? 0, icon: Activity, color: "bg-red-500", textColor: "text-red-600" },
+    { title: "Advertências no Mês", value: sstStats?.advertenciasMes ?? 0, icon: ClipboardCheck, color: "bg-yellow-500", textColor: "text-yellow-600" },
+  ];
+
+  const modules = [
+    { title: "Core RH", desc: "Cadastro de colaboradores", status: "Ativo", path: "/colaboradores" },
+    { title: "SST", desc: "Segurança e Saúde", status: "Ativo", path: "/sst" },
+    { title: "Ponto e Folha", desc: "Controle de ponto e folha", status: "Ativo", path: "/ponto-folha" },
+    { title: "Ativos", desc: "Frota e equipamentos", status: "Ativo", path: "/ativos" },
+    { title: "Qualidade", desc: "Auditorias e desvios", status: "Ativo", path: "/auditoria-qualidade" },
+    { title: "CIPA", desc: "Comissão interna", status: "Ativo", path: "/cipa" },
+    { title: "Avaliação", desc: "Desempenho de equipe", status: "Em breve", path: "#" },
   ];
 
   return (
@@ -60,23 +91,106 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Stat Cards */}
         {companyId ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {statCards.map(card => (
-              <Card key={card.title} className="bg-card border-border">
-                <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
-                  <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {card.title}
-                  </CardTitle>
-                  <card.icon className={`h-4 w-4 ${card.color}`} />
+          <>
+            {/* RH Stats */}
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recursos Humanos</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {rhCards.map(card => (
+                  <Card key={card.title} className="bg-card border-border hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate("/colaboradores")}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-lg ${card.color}/10 flex items-center justify-center`}>
+                          <card.icon className={`h-5 w-5 ${card.textColor}`} />
+                        </div>
+                        <div>
+                          <p className={`text-2xl font-bold ${card.textColor}`}>{card.value}</p>
+                          <p className="text-xs text-muted-foreground">{card.title}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* SST Stats */}
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Segurança e Saúde do Trabalho</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {sstCards.map(card => (
+                  <Card key={card.title} className={`bg-card border-border hover:shadow-md transition-shadow cursor-pointer ${card.alert ? "border-red-300 bg-red-50" : ""}`} onClick={() => navigate("/sst")}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-lg ${card.color}/10 flex items-center justify-center`}>
+                          <card.icon className={`h-5 w-5 ${card.textColor}`} />
+                        </div>
+                        <div>
+                          <p className={`text-2xl font-bold ${card.textColor}`}>{card.value}</p>
+                          <p className="text-xs text-muted-foreground">{card.title}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottom Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Modules */}
+              <Card className="bg-card border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold">Módulos</CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
+                <CardContent>
+                  <div className="space-y-2">
+                    {modules.map(m => (
+                      <div key={m.title} className="flex items-center justify-between cursor-pointer hover:bg-accent/50 rounded-lg px-2 py-1.5 transition-colors" onClick={() => m.path !== "#" && navigate(m.path)}>
+                        <div>
+                          <p className="text-sm font-medium">{m.title}</p>
+                          <p className="text-xs text-muted-foreground">{m.desc}</p>
+                        </div>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${m.status === "Ativo" ? "text-green-600 bg-green-100" : "text-yellow-600 bg-yellow-100"}`}>
+                          {m.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+
+              {/* Recent Activity */}
+              <Card className="bg-card border-border lg:col-span-2">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold">Atividade Recente</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {!logs || logs.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {logs.map((log: any) => (
+                        <div key={log.id} className="flex items-start gap-3 text-sm">
+                          <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${log.action === "DELETE" ? "bg-red-500" : log.action === "CREATE" ? "bg-green-500" : "bg-blue-500"}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-foreground truncate">{log.details}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {log.userName} &middot; {new Date(log.createdAt).toLocaleString("pt-BR")}
+                            </p>
+                          </div>
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${log.action === "CREATE" ? "bg-green-100 text-green-700" : log.action === "UPDATE" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>
+                            {log.action === "CREATE" ? "Criou" : log.action === "UPDATE" ? "Editou" : "Excluiu"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </>
         ) : (
           <Card className="bg-card border-border">
             <CardContent className="flex flex-col items-center justify-center py-16">
@@ -88,74 +202,7 @@ export default function Home() {
             </CardContent>
           </Card>
         )}
-
-        {/* Quick Info */}
-        {companyId && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold">Módulos Ativos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Core RH</span>
-                    <span className="text-green-400 text-xs font-medium bg-green-400/10 px-2 py-0.5 rounded">Ativo</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Usuários e Permissões</span>
-                    <span className="text-green-400 text-xs font-medium bg-green-400/10 px-2 py-0.5 rounded">Ativo</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Auditoria do Sistema</span>
-                    <span className="text-green-400 text-xs font-medium bg-green-400/10 px-2 py-0.5 rounded">Ativo</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">SST</span>
-                    <span className="text-yellow-400 text-xs font-medium bg-yellow-400/10 px-2 py-0.5 rounded">Em breve</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Ponto e Folha</span>
-                    <span className="text-yellow-400 text-xs font-medium bg-yellow-400/10 px-2 py-0.5 rounded">Em breve</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold">Atividade Recente</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RecentActivity companyId={companyId} />
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
     </DashboardLayout>
-  );
-}
-
-function RecentActivity({ companyId }: { companyId: number }) {
-  const { data: logs } = trpc.audit.list.useQuery({ companyId, limit: 5 });
-
-  if (!logs || logs.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda.</p>;
-  }
-
-  return (
-    <div className="space-y-3">
-      {logs.map(log => (
-        <div key={log.id} className="flex items-start gap-3 text-sm">
-          <div className="h-2 w-2 rounded-full bg-primary mt-1.5 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-foreground truncate">{log.details}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {log.userName} &middot; {new Date(log.createdAt).toLocaleString("pt-BR")}
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }

@@ -32,12 +32,54 @@ function createTestContext(): TrpcContext {
 describe("ERP Router Structure", () => {
   it("should have all required routers defined", () => {
     const caller = appRouter.createCaller(createTestContext());
-    // Verify that the main routers exist
     expect(caller.auth).toBeDefined();
     expect(caller.companies).toBeDefined();
     expect(caller.employees).toBeDefined();
     expect(caller.profiles).toBeDefined();
     expect(caller.audit).toBeDefined();
+    expect(caller.sst).toBeDefined();
+    expect(caller.timesheet).toBeDefined();
+    expect(caller.assets).toBeDefined();
+    expect(caller.quality).toBeDefined();
+    expect(caller.cipa).toBeDefined();
+  });
+
+  it("should have SST sub-routers", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.sst.asos).toBeDefined();
+    expect(caller.sst.trainings).toBeDefined();
+    expect(caller.sst.epis).toBeDefined();
+    expect(caller.sst.accidents).toBeDefined();
+    expect(caller.sst.warnings).toBeDefined();
+    expect(caller.sst.risks).toBeDefined();
+  });
+
+  it("should have timesheet sub-routers", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.timesheet.records).toBeDefined();
+    expect(caller.timesheet.payroll).toBeDefined();
+  });
+
+  it("should have assets sub-routers", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.assets.vehicles).toBeDefined();
+    expect(caller.assets.equipment).toBeDefined();
+    expect(caller.assets.extinguishers).toBeDefined();
+    expect(caller.assets.hydrants).toBeDefined();
+  });
+
+  it("should have quality sub-routers", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.quality.audits).toBeDefined();
+    expect(caller.quality.deviations).toBeDefined();
+    expect(caller.quality.actions).toBeDefined();
+    expect(caller.quality.dds).toBeDefined();
+  });
+
+  it("should have CIPA sub-routers", () => {
+    const caller = appRouter.createCaller(createTestContext());
+    expect(caller.cipa.members).toBeDefined();
+    expect(caller.cipa.elections).toBeDefined();
   });
 
   it("should return authenticated user from auth.me", async () => {
@@ -66,7 +108,7 @@ describe("ERP Router Structure", () => {
 
 describe("Shared Modules", () => {
   it("should export all module keys", async () => {
-    const { MODULE_KEYS, ERP_MODULES, PROFILE_TYPES, DEFAULT_PERMISSIONS } = await import("../shared/modules");
+    const { MODULE_KEYS } = await import("../shared/modules");
     expect(MODULE_KEYS.length).toBeGreaterThan(0);
     expect(MODULE_KEYS).toContain("core_rh");
     expect(MODULE_KEYS).toContain("sst");

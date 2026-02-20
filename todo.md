@@ -46,3 +46,16 @@
 - [ ] Módulo Avaliação de Desempenho (integração do sistema existente)
 - [ ] Módulo Dashboards (10 dashboards interativos + pendências)
 - [ ] Manual de Utilização
+
+## Fase 2: Desenvolvimento em Andamento
+- [x] Ajustar tema para claro (branco/azul) igual ao sistema de avaliação
+- [x] Adicionar logo FC Engenharia na sidebar
+- [x] Criar páginas SST: ASO, Treinamentos, EPIs, Acidentes, Advertências, Riscos
+- [x] Criar páginas Ponto e Folha
+- [x] Criar páginas Gestão de Ativos: Veículos, Equipamentos, Extintores, Hidrantes
+- [x] Criar páginas Auditoria e Qualidade: Auditorias, Desvios, 5W2H, Químicos, DDS
+- [x] Criar páginas CIPA: Eleições e Membros
+- [x] Criar rotas tRPC para todos os novos módulos
+- [x] Atualizar Dashboard Home com cards de todos os módulos
+- [x] Registrar versão com descrição clara das melhorias
+- [x] Busca automática de dados pelo CNPJ (BrasilAPI) na tela de Empresas

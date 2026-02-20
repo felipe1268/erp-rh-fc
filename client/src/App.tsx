@@ -9,6 +9,11 @@ import Empresas from "./pages/Empresas";
 import Colaboradores from "./pages/Colaboradores";
 import Usuarios from "./pages/Usuarios";
 import Auditoria from "./pages/Auditoria";
+import SST from "./pages/SST";
+import PontoFolha from "./pages/PontoFolha";
+import Ativos from "./pages/Ativos";
+import AuditoriaQualidade from "./pages/AuditoriaQualidade";
+import Cipa from "./pages/Cipa";
 
 function Router() {
   return (
@@ -18,6 +23,11 @@ function Router() {
       <Route path={"/colaboradores"} component={Colaboradores} />
       <Route path={"/usuarios"} component={Usuarios} />
       <Route path={"/auditoria"} component={Auditoria} />
+      <Route path={"/sst"} component={SST} />
+      <Route path={"/ponto-folha"} component={PontoFolha} />
+      <Route path={"/ativos"} component={Ativos} />
+      <Route path={"/auditoria-qualidade"} component={AuditoriaQualidade} />
+      <Route path={"/cipa"} component={Cipa} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -27,7 +37,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />
