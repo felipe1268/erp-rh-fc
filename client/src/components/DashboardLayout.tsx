@@ -21,16 +21,51 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import {
+  LayoutDashboard, LogOut, PanelLeft, Users, ShieldCheck, Wrench,
+  ClipboardCheck, Vote, Clock, Star, Lock, BarChart3, Building2, FileText,
+  ChevronDown, ChevronRight,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+const menuSections = [
+  {
+    title: "Principal",
+    items: [
+      { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+      { icon: Building2, label: "Empresas", path: "/empresas" },
+    ],
+  },
+  {
+    title: "Gestão de Pessoal",
+    items: [
+      { icon: Users, label: "Colaboradores", path: "/colaboradores" },
+    ],
+  },
+  {
+    title: "Administração",
+    items: [
+      { icon: Lock, label: "Usuários e Permissões", path: "/usuarios" },
+      { icon: FileText, label: "Auditoria do Sistema", path: "/auditoria" },
+    ],
+  },
+  {
+    title: "Em Breve",
+    items: [
+      { icon: ShieldCheck, label: "SST", path: "/sst", soon: true },
+      { icon: Clock, label: "Ponto e Folha", path: "/ponto-folha", soon: true },
+      { icon: Wrench, label: "Gestão de Ativos", path: "/ativos", soon: true },
+      { icon: ClipboardCheck, label: "Auditoria e Qualidade", path: "/auditoria-qualidade", soon: true },
+      { icon: Vote, label: "CIPA", path: "/cipa", soon: true },
+      { icon: Star, label: "Avaliação de Desempenho", path: "/avaliacao", soon: true },
+    ],
+  },
 ];
+
+const allMenuItems = menuSections.flatMap(s => s.items);
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
@@ -62,10 +97,10 @@ export default function DashboardLayout({
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
-              Sign in to continue
+              Acesse o sistema
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Access to this dashboard requires authentication. Continue to launch the login flow.
+              Para acessar o ERP RH & DP da FC Engenharia, faça login com sua conta.
             </p>
           </div>
           <Button
@@ -75,7 +110,7 @@ export default function DashboardLayout({
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all"
           >
-            Sign in
+            Entrar
           </Button>
         </div>
       </div>
@@ -112,7 +147,13 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const activeMenuItem = allMenuItems.find(item => item.path === location);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
+    Object.fromEntries(menuSections.map(s => [s.title, true]))
+  );
+  const toggleSection = (title: string) => {
+    setExpandedSections(prev => ({ ...prev, [title]: !prev[title] }));
+  };
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -170,8 +211,8 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                  <span className="font-semibold tracking-tight truncate text-primary">
+                    ERP RH & DP
                   </span>
                 </div>
               ) : null}
@@ -179,26 +220,54 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+            {menuSections.map(section => (
+              <div key={section.title} className="mb-1">
+                {!isCollapsed && (
+                  <button
+                    onClick={() => toggleSection(section.title)}
+                    className="flex items-center justify-between w-full px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {section.title}
+                    {expandedSections[section.title] ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                  </button>
+                )}
+                {(isCollapsed || expandedSections[section.title]) && (
+                  <SidebarMenu className="px-2 py-0.5">
+                    {section.items.map((item: any) => {
+                      const isActive = location === item.path;
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            isActive={isActive}
+                            onClick={() => {
+                              if (item.soon) {
+                                import("sonner").then(m => m.toast("Em breve", { description: `O módulo ${item.label} está em desenvolvimento.` }));
+                                return;
+                              }
+                              setLocation(item.path);
+                            }}
+                            tooltip={item.label}
+                            className={`h-9 transition-all font-normal ${item.soon ? "opacity-50" : ""}`}
+                          >
+                            <item.icon
+                              className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                            />
+                            <span>{item.label}</span>
+                            {item.soon && !isCollapsed && (
+                              <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">Em breve</span>
+                            )}
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                )}
+              </div>
+            ))}
           </SidebarContent>
 
           <SidebarFooter className="p-3">
@@ -226,7 +295,7 @@ function DashboardLayoutContent({
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
+                  <span>Sair</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
