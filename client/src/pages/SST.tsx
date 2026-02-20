@@ -125,7 +125,7 @@ function ASOTab({ companyId }: { companyId: number }) {
                     <span className={isExpired(aso.dataValidade) ? "text-red-600 font-semibold" : ""}>
                       {aso.dataValidade ? new Date(aso.dataValidade).toLocaleDateString("pt-BR") : "-"}
                     </span>
-                    {isExpired(aso.dataValidade) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}
+                    {isExpired(aso.dataValidade) ? <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" /> : null}
                   </td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${aso.resultado === "Apto" ? "bg-green-100 text-green-700" : aso.resultado === "Inapto" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
@@ -266,7 +266,7 @@ function TrainingTab({ companyId }: { companyId: number }) {
                     <span className={isExpired(t.dataValidade) ? "text-red-600 font-semibold" : ""}>
                       {t.dataValidade ? new Date(t.dataValidade).toLocaleDateString("pt-BR") : "-"}
                     </span>
-                    {isExpired(t.dataValidade) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}
+                    {isExpired(t.dataValidade) ? <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" /> : null}
                   </td>
                   <td className="p-3">{t.instrutor ?? "-"}</td>
                   <td className="p-3 text-center">
@@ -295,9 +295,9 @@ function TrainingTab({ companyId }: { companyId: number }) {
               Documentos do Treinamento
             </DialogTitle>
           </DialogHeader>
-          {selectedTraining && (
+          {selectedTraining ? (
             <TrainingDocsPanel training={selectedTraining} employees={employees} />
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
 

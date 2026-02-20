@@ -99,7 +99,7 @@ export default function Dash5w2h() {
             </div>
 
             {/* Por mês */}
-            {monthlyData && (
+            {monthlyData ? (
               <div className="bg-card rounded-lg border border-border p-4">
                 <h3 className="font-semibold mb-3">Planos por Mês ({year})</h3>
                 <div style={{ height: 280 }}>
@@ -121,7 +121,7 @@ export default function Dash5w2h() {
                   />
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </>
       )}

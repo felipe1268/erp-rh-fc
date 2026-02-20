@@ -90,7 +90,7 @@ function MembrosTab({ companyId }: { companyId: number }) {
                     <span className={isExpired(m.fimEstabilidade) ? "" : "text-green-600 font-semibold"}>
                       {m.fimEstabilidade ? new Date(m.fimEstabilidade).toLocaleDateString("pt-BR") : "-"}
                     </span>
-                    {!isExpired(m.fimEstabilidade) && m.fimEstabilidade && <AlertTriangle className="inline h-3 w-3 ml-1 text-yellow-600" />}
+                    {!isExpired(m.fimEstabilidade) && m.fimEstabilidade ? <AlertTriangle className="inline h-3 w-3 ml-1 text-yellow-600" /> : null}
                   </td>
                   <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${m.status === "Ativo" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{m.status}</span></td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: m.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>

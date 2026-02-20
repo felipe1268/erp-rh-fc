@@ -301,9 +301,9 @@ function DashContent({ data, year }: { data: any; year: number }) {
                     <td className="p-2 text-right">{fmtCurrency(s.pessoas > 0 ? s.valor / s.pessoas : 0)}</td>
                   </tr>
                 ))}
-                {data.rankingSetor.length === 0 && (
+                {data.rankingSetor.length === 0 ? (
                   <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Nenhuma hora extra registrada</td></tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -348,9 +348,9 @@ function DashContent({ data, year }: { data: any; year: number }) {
                   <td className="p-2 text-right font-semibold text-red-600">{fmtCurrency(p.valor)}</td>
                 </tr>
               ))}
-              {data.rankingPessoa.length === 0 && (
+              {data.rankingPessoa.length === 0 ? (
                 <tr><td colSpan={8} className="p-4 text-center text-muted-foreground">Nenhuma hora extra registrada</td></tr>
-              )}
+              ) : null}
             </tbody>
           </table>
         </div>

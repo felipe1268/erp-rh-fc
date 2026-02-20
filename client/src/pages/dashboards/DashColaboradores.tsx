@@ -75,38 +75,38 @@ export default function DashColaboradores() {
           </div>
 
           {/* Destaques */}
-          {data.destaques && (
+          {data.destaques ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {data.destaques.maisVelho && (
+              {data.destaques.maisVelho ? (
                 <div className="bg-card rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground uppercase">Mais Velho</p>
                   <p className="font-semibold text-sm truncate">{data.destaques.maisVelho.nome}</p>
                   <p className="text-xs text-muted-foreground">{String(data.destaques.maisVelho.data)}</p>
                 </div>
-              )}
-              {data.destaques.maisNovo && (
+              ) : null}
+              {data.destaques.maisNovo ? (
                 <div className="bg-card rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground uppercase">Mais Novo</p>
                   <p className="font-semibold text-sm truncate">{data.destaques.maisNovo.nome}</p>
                   <p className="text-xs text-muted-foreground">{String(data.destaques.maisNovo.data)}</p>
                 </div>
-              )}
-              {data.destaques.maiorTempo && (
+              ) : null}
+              {data.destaques.maiorTempo ? (
                 <div className="bg-card rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground uppercase">Maior Tempo</p>
                   <p className="font-semibold text-sm truncate">{data.destaques.maiorTempo.nome}</p>
                   <p className="text-xs text-muted-foreground">Admissão: {String(data.destaques.maiorTempo.data)}</p>
                 </div>
-              )}
-              {data.destaques.menorTempo && (
+              ) : null}
+              {data.destaques.menorTempo ? (
                 <div className="bg-card rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground uppercase">Menor Tempo</p>
                   <p className="font-semibold text-sm truncate">{data.destaques.menorTempo.nome}</p>
                   <p className="text-xs text-muted-foreground">Admissão: {String(data.destaques.menorTempo.data)}</p>
                 </div>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
 
           {/* Charts Row 1 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -168,7 +168,7 @@ export default function DashColaboradores() {
             </div>
 
             {/* Age Pyramid */}
-            {agePyramid && (
+            {agePyramid ? (
               <div className="bg-card rounded-lg border border-border p-4">
                 <h3 className="font-semibold mb-3">Colaboradores por Sexo e Idade</h3>
                 <div style={{ height: 300 }}>
@@ -204,7 +204,7 @@ export default function DashColaboradores() {
                   />
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Charts Row 3 */}

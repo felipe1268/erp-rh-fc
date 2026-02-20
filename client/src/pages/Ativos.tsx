@@ -253,7 +253,7 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
                   <td className="p-3">{ext.tipo}</td>
                   <td className="p-3">{ext.capacidade ?? "-"}</td>
                   <td className="p-3">{ext.localizacao ?? "-"}</td>
-                  <td className="p-3"><span className={isExpired(ext.validadeRecarga) ? "text-red-600 font-semibold" : ""}>{ext.validadeRecarga ? new Date(ext.validadeRecarga).toLocaleDateString("pt-BR") : "-"}</span>{isExpired(ext.validadeRecarga) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}</td>
+                  <td className="p-3"><span className={isExpired(ext.validadeRecarga) ? "text-red-600 font-semibold" : ""}>{ext.validadeRecarga ? new Date(ext.validadeRecarga).toLocaleDateString("pt-BR") : "-"}</span>{isExpired(ext.validadeRecarga) ? <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" /> : null}</td>
                   <td className="p-3"><span className={isExpired(ext.validadeTesteHidrostatico) ? "text-red-600 font-semibold" : ""}>{ext.validadeTesteHidrostatico ? new Date(ext.validadeTesteHidrostatico).toLocaleDateString("pt-BR") : "-"}</span></td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: ext.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
                 </tr>
@@ -334,7 +334,7 @@ function HidrantesTab({ companyId }: { companyId: number }) {
                   <td className="p-3">{h.localizacao ?? "-"}</td>
                   <td className="p-3">{h.tipo}</td>
                   <td className="p-3">{h.ultimaInspecao ? new Date(h.ultimaInspecao).toLocaleDateString("pt-BR") : "-"}</td>
-                  <td className="p-3"><span className={isExpired(h.proximaInspecao) ? "text-red-600 font-semibold" : ""}>{h.proximaInspecao ? new Date(h.proximaInspecao).toLocaleDateString("pt-BR") : "-"}</span>{isExpired(h.proximaInspecao) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}</td>
+                  <td className="p-3"><span className={isExpired(h.proximaInspecao) ? "text-red-600 font-semibold" : ""}>{h.proximaInspecao ? new Date(h.proximaInspecao).toLocaleDateString("pt-BR") : "-"}</span>{isExpired(h.proximaInspecao) ? <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" /> : null}</td>
                   <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${h.status === "OK" ? "bg-green-100 text-green-700" : h.status === "Manutencao" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{h.status === "OK" ? "OK" : h.status === "Manutencao" ? "Manutenção" : "Inativo"}</span></td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: h.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
                 </tr>

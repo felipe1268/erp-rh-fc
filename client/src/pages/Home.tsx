@@ -135,7 +135,7 @@ export default function Home() {
                       <div className="w-full">
                         <p className={`text-2xl font-bold ${card.iconColor}`}>{card.value}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{card.title}</p>
-                        {card.alert && <p className="text-[10px] text-red-500 font-medium mt-1">⚠ Atenção</p>}
+                        {card.alert ? <p className="text-[10px] text-red-500 font-medium mt-1">⚠ Atenção</p> : null}
                       </div>
                     </CardContent>
                   </Card>

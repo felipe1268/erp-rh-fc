@@ -256,3 +256,7 @@
 - [x] Corrigir dialog de visualização de funcionário para formatar datas corretamente
 - [x] Adicionar campo Valor da Hora no formulário (base para cálculo da folha)
 - [x] Melhorar aba Bancário: banco de recebimento (Caixa/Santander/Bradesco/Itaú/BB/Nubank/Inter/C6), tipo conta (Salário/Corrente/Poupança), dados PIX completos com tipo de chave
+
+## Fase 17: Correção Bug removeChild na SST
+- [x] BUG CRÍTICO: Erro removeChild na página /sst (produção)
+- [x] Investigar e corrigir causa raiz em TODAS as páginas e componentes (44 padrões && convertidos para ternário ? : null)

@@ -524,14 +524,14 @@ export default function ComponentsShowcase() {
                       </div>
                     </PopoverContent>
                   </Popover>
-                  {datePickerDate && (
+                  {datePickerDate ? (
                     <p className="text-sm text-muted-foreground">
                       Selected:{" "}
                       {format(datePickerDate, "yyyy/MM/dd  HH:mm", {
                         locale: zhCN,
                       })}
                     </p>
-                  )}
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label>Searchable Dropdown</Label>
@@ -599,7 +599,7 @@ export default function ComponentsShowcase() {
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  {selectedFramework && (
+                  {selectedFramework ? (
                     <p className="text-sm text-muted-foreground">
                       Selected:{" "}
                       {
@@ -614,7 +614,7 @@ export default function ComponentsShowcase() {
                         ].find(fw => fw.value === selectedFramework)?.label
                       }
                     </p>
-                  )}
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-4">
@@ -667,11 +667,11 @@ export default function ComponentsShowcase() {
                       </Select>
                     </div>
                   </div>
-                  {selectedMonth && selectedYear && (
+                  {selectedMonth && selectedYear ? (
                     <p className="text-sm text-muted-foreground">
                       Selected: {selectedYear}/{selectedMonth}/
                     </p>
-                  )}
+                  ) : null}
                 </div>
               </CardContent>
             </Card>

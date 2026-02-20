@@ -55,7 +55,7 @@ export default function DashAuditorias() {
           </div>
 
           {/* NC Progress */}
-          {data.totalNC > 0 && (
+          {data.totalNC > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Resolução de Não Conformidades</h3>
               <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
@@ -70,7 +70,7 @@ export default function DashAuditorias() {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -111,7 +111,7 @@ export default function DashAuditorias() {
           </div>
 
           {/* Desvios Status */}
-          {data.desviosStatus.length > 0 && (
+          {data.desviosStatus.length > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Status dos Desvios</h3>
               <div style={{ height: 280 }}>
@@ -127,7 +127,7 @@ export default function DashAuditorias() {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

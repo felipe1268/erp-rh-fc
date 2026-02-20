@@ -213,19 +213,19 @@ export default function Configuracoes() {
                         {u.lastSignedIn ? new Date(u.lastSignedIn).toLocaleDateString("pt-BR") : "-"}
                       </td>
                       <td className="py-2">
-                        {u.loginMethod === "local" && (
+                        {u.loginMethod === "local" ? (
                           <Button size="sm" variant="outline" className="text-xs"
                             onClick={() => { if (confirm(`Resetar senha de ${u.name}?`)) resetPwdMutation.mutate({ userId: u.id }); }}>
                             Resetar Senha
                           </Button>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {usersQuery.isLoading && <p className="text-center py-4 text-gray-400">Carregando...</p>}
-              {usersQuery.data?.length === 0 && <p className="text-center py-4 text-gray-400">Nenhum usuário cadastrado</p>}
+              {usersQuery.isLoading ? <p className="text-center py-4 text-gray-400">Carregando...</p> : null}
+              {usersQuery.data?.length === 0 ? <p className="text-center py-4 text-gray-400">Nenhum usuário cadastrado</p> : null}
             </div>
           </CardContent>
         </Card>

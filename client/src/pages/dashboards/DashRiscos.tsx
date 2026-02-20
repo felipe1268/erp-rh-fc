@@ -111,7 +111,7 @@ export default function DashRiscos() {
           </div>
 
           {/* Por Setor */}
-          {data.porSetor.length > 0 && (
+          {data.porSetor.length > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Riscos por Setor</h3>
               <div style={{ height: Math.max(200, data.porSetor.length * 35) }}>
@@ -128,7 +128,7 @@ export default function DashRiscos() {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

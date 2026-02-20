@@ -44,7 +44,7 @@ export function DashboardFilters({
           ))}
         </SelectContent>
       </Select>
-      {showYear && setSelectedYear && (
+      {showYear && setSelectedYear ? (
         <Select value={String(selectedYear || currentYear)} onValueChange={v => setSelectedYear(Number(v))}>
           <SelectTrigger className="w-32 bg-card border-border">
             <SelectValue />
@@ -55,7 +55,7 @@ export function DashboardFilters({
             ))}
           </SelectContent>
         </Select>
-      )}
+      ) : null}
       {children}
     </div>
   );
@@ -75,7 +75,7 @@ export function StatCard({ title, value, color = "text-foreground", subtitle, al
     <div className={`bg-card rounded-lg border border-border p-4 ${alert ? "ring-2 ring-red-300" : ""}`}>
       <p className="text-xs text-muted-foreground uppercase tracking-wider">{title}</p>
       <p className={`text-3xl font-bold mt-1 ${color}`}>{value}</p>
-      {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+      {subtitle ? <p className="text-xs text-muted-foreground mt-1">{subtitle}</p> : null}
     </div>
   );
 }

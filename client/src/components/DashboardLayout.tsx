@@ -249,7 +249,7 @@ function DashboardLayoutContent({
           <SidebarContent className="gap-0">
             {menuSections.map(section => (
               <div key={section.title} className="mb-1">
-                {!isCollapsed && (
+                {!isCollapsed ? (
                   <button
                     onClick={() => toggleSection(section.title)}
                     className="flex items-center justify-between w-full px-4 py-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 hover:text-sidebar-foreground/80 transition-colors"
@@ -261,8 +261,8 @@ function DashboardLayoutContent({
                       <ChevronRight className="h-3 w-3" />
                     )}
                   </button>
-                )}
-                {(isCollapsed || expandedSections[section.title]) && (
+                ) : null}
+                {(isCollapsed || expandedSections[section.title]) ? (
                   <SidebarMenu className="px-2 py-0.5">
                     {section.items.map((item: any) => {
                       const isActive = location === item.path;
@@ -284,15 +284,15 @@ function DashboardLayoutContent({
                               className={`h-4 w-4 ${isActive ? "text-[#D4A843]" : ""}`}
                             />
                             <span>{item.label}</span>
-                            {item.soon && !isCollapsed && (
+                            {item.soon && !isCollapsed ? (
                               <span className="ml-auto text-[10px] bg-sidebar-accent px-1.5 py-0.5 rounded text-sidebar-foreground/50">Em breve</span>
-                            )}
+                            ) : null}
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
                     })}
                   </SidebarMenu>
-                )}
+                ) : null}
               </div>
             ))}
           </SidebarContent>
@@ -339,7 +339,7 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        {isMobile && (
+        {isMobile ? (
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
@@ -352,7 +352,7 @@ function DashboardLayoutContent({
               </div>
             </div>
           </div>
-        )}
+        ) : null}
         <main className="flex-1 p-6">{children}</main>
       </SidebarInset>
     </>

@@ -206,7 +206,7 @@ export function AIChatBox({
                 <p className="text-sm">{emptyStateMessage}</p>
               </div>
 
-              {suggestedPrompts && suggestedPrompts.length > 0 && (
+              {suggestedPrompts && suggestedPrompts.length > 0 ? (
                 <div className="flex max-w-2xl flex-wrap justify-center gap-2">
                   {suggestedPrompts.map((prompt, index) => (
                     <button
@@ -219,7 +219,7 @@ export function AIChatBox({
                     </button>
                   ))}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         ) : (
@@ -246,11 +246,11 @@ export function AIChatBox({
                         : undefined
                     }
                   >
-                    {message.role === "assistant" && (
+                    {message.role === "assistant" ? (
                       <div className="size-8 shrink-0 mt-1 rounded-full bg-primary/10 flex items-center justify-center">
                         <Sparkles className="size-4 text-primary" />
                       </div>
-                    )}
+                    ) : null}
 
                     <div
                       className={cn(
@@ -271,16 +271,16 @@ export function AIChatBox({
                       )}
                     </div>
 
-                    {message.role === "user" && (
+                    {message.role === "user" ? (
                       <div className="size-8 shrink-0 mt-1 rounded-full bg-secondary flex items-center justify-center">
                         <User className="size-4 text-secondary-foreground" />
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
 
-              {isLoading && (
+              {isLoading ? (
                 <div
                   className="flex items-start gap-3"
                   style={
@@ -296,7 +296,7 @@ export function AIChatBox({
                     <Loader2 className="size-4 animate-spin text-muted-foreground" />
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           </ScrollArea>
         )}

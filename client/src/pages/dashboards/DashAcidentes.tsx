@@ -56,7 +56,7 @@ export default function DashAcidentes() {
           </div>
 
           {/* Progresso Meta */}
-          {data.diasSemAcidente !== null && (
+          {data.diasSemAcidente !== null ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Meta de Dias sem Acidente</h3>
               <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
@@ -71,7 +71,7 @@ export default function DashAcidentes() {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -113,7 +113,7 @@ export default function DashAcidentes() {
           </div>
 
           {/* Por tipo */}
-          {data.porTipo.length > 0 && (
+          {data.porTipo.length > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Acidentes por Tipo</h3>
               <div style={{ height: 250 }}>
@@ -129,7 +129,7 @@ export default function DashAcidentes() {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

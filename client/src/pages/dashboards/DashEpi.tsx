@@ -92,7 +92,7 @@ export default function DashEpi() {
           </div>
 
           {/* Top EPIs */}
-          {data.topEpis.length > 0 && (
+          {data.topEpis.length > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Top EPIs Mais Entregues</h3>
               <div style={{ height: Math.max(200, data.topEpis.length * 30) }}>
@@ -109,7 +109,7 @@ export default function DashEpi() {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

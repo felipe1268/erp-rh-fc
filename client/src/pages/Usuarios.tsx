@@ -247,11 +247,11 @@ export default function Usuarios() {
                   ))}
                 </SelectContent>
               </Select>
-              {selectedProfileType && (
+              {selectedProfileType ? (
                 <p className="text-xs text-muted-foreground mt-1">
                   {PROFILE_TYPES[selectedProfileType as keyof typeof PROFILE_TYPES]?.description}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
           <DialogFooter>

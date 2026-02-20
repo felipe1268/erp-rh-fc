@@ -108,7 +108,7 @@ export default function DashExtintoresHidrantes() {
           </div>
 
           {/* Tipos de Extintores */}
-          {data.extintores.porTipo.length > 0 && (
+          {data.extintores.porTipo.length > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Tipos e Cargas dos Extintores</h3>
               <div style={{ height: 280 }}>
@@ -125,7 +125,7 @@ export default function DashExtintoresHidrantes() {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

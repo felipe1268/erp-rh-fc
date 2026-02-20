@@ -185,10 +185,10 @@ export default function Empresas() {
                   </div>
                 </CardHeader>
                 <CardContent className="text-xs text-muted-foreground space-y-1">
-                  {c.razaoSocial && <p>{c.razaoSocial}</p>}
-                  {c.cidade && <p>{c.cidade}{c.estado ? ` - ${c.estado}` : ""}</p>}
-                  {c.telefone && <p>{c.telefone}</p>}
-                  {c.email && <p>{c.email}</p>}
+                  {c.razaoSocial ? <p>{c.razaoSocial}</p> : null}
+                  {c.cidade ? <p>{c.cidade}{c.estado ? ` - ${c.estado}` : ""}</p> : null}
+                  {c.telefone ? <p>{c.telefone}</p> : null}
+                  {c.email ? <p>{c.email}</p> : null}
                 </CardContent>
               </Card>
             ))}

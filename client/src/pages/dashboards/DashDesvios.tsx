@@ -54,7 +54,7 @@ export default function DashDesvios() {
           </div>
 
           {/* Progress bar */}
-          {data.total > 0 && (
+          {data.total > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Progresso de Resolução</h3>
               <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
@@ -69,7 +69,7 @@ export default function DashDesvios() {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -110,7 +110,7 @@ export default function DashDesvios() {
           </div>
 
           {/* Por Setor */}
-          {data.porSetor.length > 0 && (
+          {data.porSetor.length > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Desvios por Setor</h3>
               <div style={{ height: Math.max(200, data.porSetor.length * 35) }}>
@@ -127,7 +127,7 @@ export default function DashDesvios() {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

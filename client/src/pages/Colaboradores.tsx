@@ -256,7 +256,7 @@ export default function Colaboradores() {
               <p className="text-muted-foreground text-sm mb-4">
                 {search ? "Tente outra busca." : "Cadastre o primeiro colaborador."}
               </p>
-              {!search && <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> Novo Colaborador</Button>}
+              {!search ? <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> Novo Colaborador</Button> : null}
             </CardContent>
           </Card>
         )}
@@ -309,12 +309,12 @@ export default function Colaboradores() {
                   <Label className="text-xs font-medium text-muted-foreground">CPF *</Label>
                   <Input value={form.cpf ?? ""} onChange={e => set("cpf", e.target.value)} placeholder="000.000.000-00" className={`bg-input mt-1 ${blacklistAlert ? "border-red-600 ring-1 ring-red-600" : ""}`} />
                 </div>
-                {blacklistAlert && (
+                {blacklistAlert ? (
                   <div className="sm:col-span-2 lg:col-span-3 bg-red-600/10 border border-red-600/30 rounded-lg p-3 flex items-center gap-2">
                     <Ban className="h-5 w-5 text-red-600 shrink-0" />
                     <p className="text-sm font-medium text-red-600">{blacklistAlert}</p>
                   </div>
-                )}
+                ) : null}
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Data de Nascimento</Label>
                   <Input type="date" value={form.dataNascimento ?? ""} onChange={e => set("dataNascimento", e.target.value)} className="bg-input mt-1" />
@@ -546,12 +546,12 @@ export default function Colaboradores() {
                         </SelectContent>
                       </Select>
                     </div>
-                    {form.banco === "Outro" && (
+                    {form.banco === "Outro" ? (
                       <div>
                         <Label className="text-xs font-medium text-muted-foreground">Nome do Banco</Label>
                         <Input value={form.bancoNome ?? ""} onChange={e => set("bancoNome", e.target.value)} className="bg-input mt-1" />
                       </div>
-                    )}
+                    ) : null}
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Agência</Label>
                       <Input value={form.agencia ?? ""} onChange={e => set("agencia", e.target.value)} className="bg-input mt-1" />
@@ -632,7 +632,7 @@ export default function Colaboradores() {
           <DialogHeader>
             <DialogTitle className="text-xl">Ficha do Colaborador</DialogTitle>
           </DialogHeader>
-          {viewingEmployee && (
+          {viewingEmployee ? (
             <div className="space-y-6">
               {/* Header */}
               <div className="flex items-center gap-4 pb-4 border-b border-border">
@@ -658,16 +658,16 @@ export default function Colaboradores() {
               </div>
 
               {/* ALERTA LISTA NEGRA */}
-              {viewingEmployee.status === "ListaNegra" && (
+              {viewingEmployee.status === "ListaNegra" ? (
                 <div className="bg-red-600/10 border border-red-600/30 rounded-lg p-4 flex items-center gap-3">
                   <Ban className="h-6 w-6 text-red-600 shrink-0" />
                   <div>
                     <p className="font-bold text-red-600">FUNCIONÁRIO NA LISTA NEGRA</p>
                     <p className="text-sm text-red-500">Este funcionário está proibido de ser contratado novamente.</p>
-                    {viewingEmployee.motivoListaNegra && <p className="text-sm text-red-500 mt-1"><strong>Motivo:</strong> {safeDisplay(viewingEmployee.motivoListaNegra)}</p>}
+                    {viewingEmployee.motivoListaNegra ? <p className="text-sm text-red-500 mt-1"><strong>Motivo:</strong> {safeDisplay(viewingEmployee.motivoListaNegra)}</p> : null}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Seções de dados */}
               {[
@@ -736,19 +736,19 @@ export default function Colaboradores() {
                 </div>
               ))}
 
-              {viewingEmployee.observacoes && (
+              {viewingEmployee.observacoes ? (
                 <div>
                   <h3 className="text-sm font-semibold text-primary mb-2">Observações</h3>
                   <p className="text-sm text-muted-foreground bg-secondary/30 rounded-lg p-3">{safeDisplay(viewingEmployee.observacoes)}</p>
                 </div>
-              )}
+              ) : null}
 
               {/* HISTÓRICOS */}
               <EmployeeTrainingsSection employeeId={viewingEmployee.id} />
               <EmployeeASOsSection employeeId={viewingEmployee.id} companyId={companyId!} />
               <EmployeeWarningsSection employeeId={viewingEmployee.id} companyId={companyId!} />
             </div>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </DashboardLayout>
@@ -804,9 +804,9 @@ function EmployeeASOsSection({ employeeId, companyId }: { employeeId: number; co
               </div>
               <div className="text-right flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">{formatDate(a.dataExame)}</span>
-                {a.dataValidade && new Date(String(a.dataValidade)) < new Date() && (
+                {a.dataValidade && new Date(String(a.dataValidade)) < new Date() ? (
                   <Badge variant="destructive" className="text-xs">Vencido</Badge>
-                )}
+                ) : null}
               </div>
             </div>
           ))}

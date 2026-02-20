@@ -241,12 +241,12 @@ function UploadsTab({ companyId }: { companyId: number }) {
             </div>
           </div>
 
-          {uploading && (
+          {uploading ? (
             <div className="flex items-center gap-2 text-blue-600">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Processando arquivo(s)...</span>
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
@@ -255,11 +255,11 @@ function UploadsTab({ companyId }: { companyId: number }) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Arquivos Enviados - {month}</CardTitle>
-            {selectedIds.size > 0 && (
+            {selectedIds.size > 0 ? (
               <Button variant="destructive" size="sm" onClick={handleDeleteSelected}>
                 <Trash2 className="h-4 w-4 mr-1" /> Excluir ({selectedIds.size})
               </Button>
-            )}
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>
@@ -294,11 +294,11 @@ function UploadsTab({ companyId }: { companyId: number }) {
                       <td className="p-2">{new Date(u.createdAt).toLocaleDateString("pt-BR")}</td>
                       <td className="p-2 text-center">
                         <div className="flex gap-1 justify-center">
-                          {u.fileUrl && (
+                          {u.fileUrl ? (
                             <Button variant="ghost" size="sm" onClick={() => window.open(u.fileUrl, "_blank")}>
                               <Eye className="h-4 w-4" />
                             </Button>
-                          )}
+                          ) : null}
                           <Button variant="ghost" size="sm" onClick={async () => {
                             await deleteMutation.mutateAsync({ id: u.id });
                             toast.success("Arquivo excluído");
@@ -509,13 +509,13 @@ function FolhaTab({ companyId }: { companyId: number }) {
         </Card>
       </div>
 
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 ? (
         <div className="flex gap-2">
           <Button variant="destructive" size="sm" onClick={handleDeleteSelected}>
             <Trash2 className="h-4 w-4 mr-1" /> Excluir Selecionados ({selectedIds.size})
           </Button>
         </div>
-      )}
+      ) : null}
 
       <Card>
         <CardContent className="pt-4">
@@ -618,7 +618,7 @@ function ValeTab({ companyId }: { companyId: number }) {
       </div>
 
       {/* Alertas de faltas */}
-      {alertas.length > 0 && (
+      {alertas.length > 0 ? (
         <Card className="border-orange-300 bg-orange-50">
           <CardHeader>
             <CardTitle className="text-orange-700 flex items-center gap-2">
@@ -647,7 +647,7 @@ function ValeTab({ companyId }: { companyId: number }) {
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Lista de vales */}
       <Card>
@@ -680,12 +680,12 @@ function ValeTab({ companyId }: { companyId: number }) {
                         <Badge className={(a.diasFaltas || 0) > 10 ? "bg-red-100 text-red-800" : ""}>{a.diasFaltas || 0}</Badge>
                       </td>
                       <td className="p-2 text-center">
-                        {a.aprovado === "Aprovado" && <Badge className="bg-green-100 text-green-800"><ThumbsUp className="h-3 w-3 mr-1" />Aprovado</Badge>}
-                        {a.aprovado === "Reprovado" && <Badge className="bg-red-100 text-red-800"><ThumbsDown className="h-3 w-3 mr-1" />Reprovado</Badge>}
-                        {a.aprovado === "Pendente" && <Badge className="bg-yellow-100 text-yellow-800"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>}
+                        {a.aprovado === "Aprovado" ? <Badge className="bg-green-100 text-green-800"><ThumbsUp className="h-3 w-3 mr-1" />Aprovado</Badge> : null}
+                        {a.aprovado === "Reprovado" ? <Badge className="bg-red-100 text-red-800"><ThumbsDown className="h-3 w-3 mr-1" />Reprovado</Badge> : null}
+                        {a.aprovado === "Pendente" ? <Badge className="bg-yellow-100 text-yellow-800"><Clock className="h-3 w-3 mr-1" />Pendente</Badge> : null}
                       </td>
                       <td className="p-2 text-center">
-                        {a.aprovado === "Pendente" && (
+                        {a.aprovado === "Pendente" ? (
                           <div className="flex gap-1 justify-center">
                             <Button size="sm" variant="ghost" className="text-green-600" onClick={() => handleApprove(a.id, "Aprovado")}>
                               <ThumbsUp className="h-4 w-4" />
@@ -694,7 +694,7 @@ function ValeTab({ companyId }: { companyId: number }) {
                               <ThumbsDown className="h-4 w-4" />
                             </Button>
                           </div>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -854,9 +854,9 @@ function ExtrasTab({ companyId }: { companyId: number }) {
                   ))}
                 </SelectContent>
               </Select>
-              {selectedEmp?.valorHora && (
+              {selectedEmp?.valorHora ? (
                 <p className="text-xs text-muted-foreground mt-1">Valor hora cadastrado: R$ {selectedEmp.valorHora}</p>
-              )}
+              ) : null}
             </div>
             <div>
               <Label>Tipo</Label>
@@ -871,7 +871,7 @@ function ExtrasTab({ companyId }: { companyId: number }) {
                 </SelectContent>
               </Select>
             </div>
-            {form.tipo === "Horas_Extras" && (
+            {form.tipo === "Horas_Extras" ? (
               <>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -891,7 +891,7 @@ function ExtrasTab({ companyId }: { companyId: number }) {
                   <Calculator className="h-4 w-4 mr-1" /> Calcular Valor
                 </Button>
               </>
-            )}
+            ) : null}
             <div>
               <Label>Valor Total (R$)</Label>
               <Input value={form.valorTotal} onChange={e => setForm(prev => ({ ...prev, valorTotal: e.target.value }))} placeholder="0.00" />

@@ -69,7 +69,7 @@ export default function DashTreinamentos() {
           </div>
 
           {/* Vencidos por Norma */}
-          {data.vencidosPorNorma.length > 0 && (
+          {data.vencidosPorNorma.length > 0 ? (
             <div className="bg-card rounded-lg border border-border p-4">
               <h3 className="font-semibold mb-3">Treinamentos Vencidos por Norma</h3>
               <div style={{ height: Math.max(200, data.vencidosPorNorma.length * 30) }}>
@@ -86,7 +86,7 @@ export default function DashTreinamentos() {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>
