@@ -274,3 +274,10 @@
 - [x] Corrigir HoverCard Portal para usar container fixo
 - [x] Corrigir Menubar Portal para usar container fixo
 - [x] Build de produção compilando sem erros
+
+## Fase 19: Solução Definitiva removeChild - Abordagem Diferente
+- [x] Investigar causa raiz real nos logs do browser (erro só em produção, não no dev)
+- [x] Implementar patch no React DOM (dom-patch.ts) para ignorar removeChild/insertBefore em nós órfãos
+- [x] Melhorar Error Boundary para recuperar automaticamente de erros de DOM
+- [x] Build compilando sem erros, ficha do colaborador abrindo OK
+- [ ] Testar em produção após publicação

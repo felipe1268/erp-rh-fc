@@ -1,3 +1,7 @@
+// IMPORTANTE: Patch do DOM deve ser aplicado ANTES de qualquer coisa
+import { patchDomForReact } from "@/lib/dom-patch";
+patchDomForReact();
+
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

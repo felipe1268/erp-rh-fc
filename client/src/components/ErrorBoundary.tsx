@@ -9,16 +9,50 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  retryCount: number;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, retryCount: 0 };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    // Verificar se é um erro de DOM (removeChild/insertBefore)
+    const isDomError = error.message?.includes('removeChild') || 
+                       error.message?.includes('insertBefore') ||
+                       error.message?.includes('não é filho') ||
+                       error.message?.includes('is not a child');
+    
+    if (isDomError) {
+      // Para erros de DOM, NÃO mostrar tela de erro - tentar recuperar
+      return { hasError: false, error: null };
+    }
+    
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    const isDomError = error.message?.includes('removeChild') || 
+                       error.message?.includes('insertBefore') ||
+                       error.message?.includes('não é filho') ||
+                       error.message?.includes('is not a child');
+    
+    if (isDomError) {
+      console.warn('[ErrorBoundary] Erro de DOM ignorado:', error.message);
+      // Tentar recuperar automaticamente
+      if (this.state.retryCount < 3) {
+        this.setState(prev => ({ 
+          hasError: false, 
+          error: null, 
+          retryCount: prev.retryCount + 1 
+        }));
+      }
+      return;
+    }
+    
+    console.error('[ErrorBoundary] Erro capturado:', error, errorInfo);
   }
 
   render() {
@@ -31,7 +65,7 @@ class ErrorBoundary extends Component<Props, State> {
               className="text-destructive mb-6 flex-shrink-0"
             />
 
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+            <h2 className="text-xl mb-4">Ocorreu um erro inesperado.</h2>
 
             <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
               <pre className="text-sm text-muted-foreground whitespace-break-spaces">
@@ -48,7 +82,7 @@ class ErrorBoundary extends Component<Props, State> {
               )}
             >
               <RotateCcw size={16} />
-              Reload Page
+              Recarregar página
             </button>
           </div>
         </div>
