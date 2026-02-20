@@ -56,13 +56,13 @@ function FrotaTab({ companyId }: { companyId: number }) {
   const { data: vehicles = [], isLoading } = trpc.assets.vehicles.list.useQuery({ companyId });
   const createMut = trpc.assets.vehicles.create.useMutation({ onSuccess: () => { utils.assets.vehicles.list.invalidate(); setShowForm(false); toast.success("Veículo cadastrado!"); } });
   const deleteMut = trpc.assets.vehicles.delete.useMutation({ onSuccess: () => { utils.assets.vehicles.list.invalidate(); toast.success("Veículo excluído!"); } });
-  const [form, setForm] = useState<any>({ placa: "", modelo: "", marca: "", ano: "", tipo: "Carro", quilometragem: "", proximaManutencao: "", status: "Ativo" });
+  const [form, setForm] = useState<any>({ placa: "", modelo: "", marca: "", anoFabricacao: "", tipo: "Carro", renavam: "", chassi: "", proximaManutencao: "", status: "Ativo" });
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold flex items-center gap-2"><Truck className="h-5 w-5" /> Frota de Veículos</h3>
-        <Button onClick={() => { setForm({ placa: "", modelo: "", marca: "", ano: "", tipo: "Carro", quilometragem: "", proximaManutencao: "", status: "Ativo" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ placa: "", modelo: "", marca: "", anoFabricacao: "", tipo: "Carro", renavam: "", chassi: "", proximaManutencao: "", status: "Ativo" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Veículo
         </Button>
       </div>
@@ -74,7 +74,7 @@ function FrotaTab({ companyId }: { companyId: number }) {
               <th className="text-left p-3 font-medium">Modelo</th>
               <th className="text-left p-3 font-medium">Marca</th>
               <th className="text-left p-3 font-medium">Tipo</th>
-              <th className="text-left p-3 font-medium">KM</th>
+              <th className="text-left p-3 font-medium">Ano</th>
               <th className="text-left p-3 font-medium">Próx. Manutenção</th>
               <th className="text-left p-3 font-medium">Status</th>
               <th className="text-right p-3 font-medium">Ações</th>
@@ -88,7 +88,7 @@ function FrotaTab({ companyId }: { companyId: number }) {
                   <td className="p-3">{v.modelo}</td>
                   <td className="p-3">{v.marca ?? "-"}</td>
                   <td className="p-3">{v.tipo}</td>
-                  <td className="p-3">{v.quilometragem ?? "-"}</td>
+                  <td className="p-3">{v.anoFabricacao ?? "-"}</td>
                   <td className="p-3">{v.proximaManutencao ? new Date(v.proximaManutencao).toLocaleDateString("pt-BR") : "-"}</td>
                   <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${v.status === "Ativo" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{v.status}</span></td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: v.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
@@ -105,7 +105,7 @@ function FrotaTab({ companyId }: { companyId: number }) {
             <div><Label>Placa</Label><Input value={form.placa} onChange={e => setForm({ ...form, placa: e.target.value })} /></div>
             <div><Label>Modelo</Label><Input value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} /></div>
             <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} /></div>
-            <div><Label>Ano</Label><Input value={form.ano} onChange={e => setForm({ ...form, ano: e.target.value })} /></div>
+            <div><Label>Ano Fabricação</Label><Input value={form.anoFabricacao} onChange={e => setForm({ ...form, anoFabricacao: e.target.value })} placeholder="Ex: 2024" /></div>
             <div><Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -114,11 +114,13 @@ function FrotaTab({ companyId }: { companyId: number }) {
                   <SelectItem value="Caminhao">Caminhão</SelectItem>
                   <SelectItem value="Van">Van</SelectItem>
                   <SelectItem value="Moto">Moto</SelectItem>
+                  <SelectItem value="Maquina_Pesada">Máquina Pesada</SelectItem>
                   <SelectItem value="Outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>KM</Label><Input value={form.quilometragem} onChange={e => setForm({ ...form, quilometragem: e.target.value })} /></div>
+            <div><Label>Renavam</Label><Input value={form.renavam} onChange={e => setForm({ ...form, renavam: e.target.value })} /></div>
+            <div><Label>Chassi</Label><Input value={form.chassi} onChange={e => setForm({ ...form, chassi: e.target.value })} /></div>
             <div><Label>Próx. Manutenção</Label><Input type="date" value={form.proximaManutencao} onChange={e => setForm({ ...form, proximaManutencao: e.target.value })} /></div>
             <div><Label>Status</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
@@ -143,13 +145,13 @@ function EquipamentosTab({ companyId }: { companyId: number }) {
   const { data: equipments = [], isLoading } = trpc.assets.equipment.list.useQuery({ companyId });
   const createMut = trpc.assets.equipment.create.useMutation({ onSuccess: () => { utils.assets.equipment.list.invalidate(); setShowForm(false); toast.success("Equipamento cadastrado!"); } });
   const deleteMut = trpc.assets.equipment.delete.useMutation({ onSuccess: () => { utils.assets.equipment.list.invalidate(); toast.success("Equipamento excluído!"); } });
-  const [form, setForm] = useState<any>({ nome: "", patrimonio: "", tipo: "", fabricante: "", dataAquisicao: "", proximaManutencao: "", status: "Ativo" });
+  const [form, setForm] = useState<any>({ nome: "", patrimonio: "", tipo: "", marca: "", modelo: "", numeroSerie: "", localizacao: "", dataAquisicao: "", proximaManutencao: "", status: "Ativo" });
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold flex items-center gap-2"><Wrench className="h-5 w-5" /> Equipamentos</h3>
-        <Button onClick={() => { setForm({ nome: "", patrimonio: "", tipo: "", fabricante: "", dataAquisicao: "", proximaManutencao: "", status: "Ativo" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ nome: "", patrimonio: "", tipo: "", marca: "", modelo: "", numeroSerie: "", localizacao: "", dataAquisicao: "", proximaManutencao: "", status: "Ativo" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Equipamento
         </Button>
       </div>
@@ -160,7 +162,7 @@ function EquipamentosTab({ companyId }: { companyId: number }) {
               <th className="text-left p-3 font-medium">Nome</th>
               <th className="text-left p-3 font-medium">Patrimônio</th>
               <th className="text-left p-3 font-medium">Tipo</th>
-              <th className="text-left p-3 font-medium">Fabricante</th>
+              <th className="text-left p-3 font-medium">Marca</th>
               <th className="text-left p-3 font-medium">Próx. Manutenção</th>
               <th className="text-left p-3 font-medium">Status</th>
               <th className="text-right p-3 font-medium">Ações</th>
@@ -173,7 +175,7 @@ function EquipamentosTab({ companyId }: { companyId: number }) {
                   <td className="p-3 font-medium">{eq.nome}</td>
                   <td className="p-3">{eq.patrimonio ?? "-"}</td>
                   <td className="p-3">{eq.tipo ?? "-"}</td>
-                  <td className="p-3">{eq.fabricante ?? "-"}</td>
+                  <td className="p-3">{eq.marca ?? "-"}</td>
                   <td className="p-3">{eq.proximaManutencao ? new Date(eq.proximaManutencao).toLocaleDateString("pt-BR") : "-"}</td>
                   <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${eq.status === "Ativo" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{eq.status}</span></td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: eq.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
@@ -190,7 +192,10 @@ function EquipamentosTab({ companyId }: { companyId: number }) {
             <div><Label>Nome</Label><Input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></div>
             <div><Label>Patrimônio</Label><Input value={form.patrimonio} onChange={e => setForm({ ...form, patrimonio: e.target.value })} /></div>
             <div><Label>Tipo</Label><Input value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} /></div>
-            <div><Label>Fabricante</Label><Input value={form.fabricante} onChange={e => setForm({ ...form, fabricante: e.target.value })} /></div>
+            <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} /></div>
+            <div><Label>Modelo</Label><Input value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} /></div>
+            <div><Label>Nº Série</Label><Input value={form.numeroSerie} onChange={e => setForm({ ...form, numeroSerie: e.target.value })} /></div>
+            <div><Label>Localização</Label><Input value={form.localizacao} onChange={e => setForm({ ...form, localizacao: e.target.value })} /></div>
             <div><Label>Data Aquisição</Label><Input type="date" value={form.dataAquisicao} onChange={e => setForm({ ...form, dataAquisicao: e.target.value })} /></div>
             <div><Label>Próx. Manutenção</Label><Input type="date" value={form.proximaManutencao} onChange={e => setForm({ ...form, proximaManutencao: e.target.value })} /></div>
             <div><Label>Status</Label>
@@ -216,14 +221,14 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
   const { data: extinguishers = [], isLoading } = trpc.assets.extinguishers.list.useQuery({ companyId });
   const createMut = trpc.assets.extinguishers.create.useMutation({ onSuccess: () => { utils.assets.extinguishers.list.invalidate(); setShowForm(false); toast.success("Extintor cadastrado!"); } });
   const deleteMut = trpc.assets.extinguishers.delete.useMutation({ onSuccess: () => { utils.assets.extinguishers.list.invalidate(); toast.success("Extintor excluído!"); } });
-  const [form, setForm] = useState<any>({ codigo: "", tipo: "PQS", capacidade: "", localizacao: "", dataRecarga: "", proximaRecarga: "", testeHidrostatico: "" });
+  const [form, setForm] = useState<any>({ numero: "", tipo: "PQS", capacidade: "", localizacao: "", dataRecarga: "", validadeRecarga: "", dataTesteHidrostatico: "", validadeTesteHidrostatico: "", status: "OK" });
   const isExpired = (d: string) => d && new Date(d) < new Date();
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold flex items-center gap-2"><FlameKindling className="h-5 w-5" /> Extintores</h3>
-        <Button onClick={() => { setForm({ codigo: "", tipo: "PQS", capacidade: "", localizacao: "", dataRecarga: "", proximaRecarga: "", testeHidrostatico: "" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ numero: "", tipo: "PQS", capacidade: "", localizacao: "", dataRecarga: "", validadeRecarga: "", dataTesteHidrostatico: "", validadeTesteHidrostatico: "", status: "OK" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Extintor
         </Button>
       </div>
@@ -244,12 +249,12 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
               : extinguishers.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Nenhum extintor cadastrado</td></tr>
               : extinguishers.map((ext: any) => (
                 <tr key={ext.id} className="border-b hover:bg-muted/30">
-                  <td className="p-3 font-medium">{ext.codigo}</td>
+                  <td className="p-3 font-medium">{ext.numero}</td>
                   <td className="p-3">{ext.tipo}</td>
                   <td className="p-3">{ext.capacidade ?? "-"}</td>
                   <td className="p-3">{ext.localizacao ?? "-"}</td>
-                  <td className="p-3"><span className={isExpired(ext.proximaRecarga) ? "text-red-600 font-semibold" : ""}>{ext.proximaRecarga ? new Date(ext.proximaRecarga).toLocaleDateString("pt-BR") : "-"}</span>{isExpired(ext.proximaRecarga) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}</td>
-                  <td className="p-3"><span className={isExpired(ext.testeHidrostatico) ? "text-red-600 font-semibold" : ""}>{ext.testeHidrostatico ? new Date(ext.testeHidrostatico).toLocaleDateString("pt-BR") : "-"}</span></td>
+                  <td className="p-3"><span className={isExpired(ext.validadeRecarga) ? "text-red-600 font-semibold" : ""}>{ext.validadeRecarga ? new Date(ext.validadeRecarga).toLocaleDateString("pt-BR") : "-"}</span>{isExpired(ext.validadeRecarga) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}</td>
+                  <td className="p-3"><span className={isExpired(ext.validadeTesteHidrostatico) ? "text-red-600 font-semibold" : ""}>{ext.validadeTesteHidrostatico ? new Date(ext.validadeTesteHidrostatico).toLocaleDateString("pt-BR") : "-"}</span></td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: ext.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
                 </tr>
               ))}
@@ -261,7 +266,7 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Novo Extintor</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
-            <div><Label>Código</Label><Input value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
+            <div><Label>Número</Label><Input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} placeholder="Ex: EXT-001" /></div>
             <div><Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -271,8 +276,15 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
             <div><Label>Capacidade</Label><Input value={form.capacidade} onChange={e => setForm({ ...form, capacidade: e.target.value })} placeholder="Ex: 6kg" /></div>
             <div><Label>Localização</Label><Input value={form.localizacao} onChange={e => setForm({ ...form, localizacao: e.target.value })} /></div>
             <div><Label>Data Recarga</Label><Input type="date" value={form.dataRecarga} onChange={e => setForm({ ...form, dataRecarga: e.target.value })} /></div>
-            <div><Label>Próx. Recarga</Label><Input type="date" value={form.proximaRecarga} onChange={e => setForm({ ...form, proximaRecarga: e.target.value })} /></div>
-            <div><Label>Teste Hidrostático</Label><Input type="date" value={form.testeHidrostatico} onChange={e => setForm({ ...form, testeHidrostatico: e.target.value })} /></div>
+            <div><Label>Validade Recarga</Label><Input type="date" value={form.validadeRecarga} onChange={e => setForm({ ...form, validadeRecarga: e.target.value })} /></div>
+            <div><Label>Teste Hidrostático</Label><Input type="date" value={form.dataTesteHidrostatico} onChange={e => setForm({ ...form, dataTesteHidrostatico: e.target.value })} /></div>
+            <div><Label>Validade Teste</Label><Input type="date" value={form.validadeTesteHidrostatico} onChange={e => setForm({ ...form, validadeTesteHidrostatico: e.target.value })} /></div>
+            <div><Label>Status</Label>
+              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="OK">OK</SelectItem><SelectItem value="Vencido">Vencido</SelectItem><SelectItem value="Manutencao">Manutenção</SelectItem></SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
@@ -290,14 +302,14 @@ function HidrantesTab({ companyId }: { companyId: number }) {
   const { data: hydrants = [], isLoading } = trpc.assets.hydrants.list.useQuery({ companyId });
   const createMut = trpc.assets.hydrants.create.useMutation({ onSuccess: () => { utils.assets.hydrants.list.invalidate(); setShowForm(false); toast.success("Hidrante cadastrado!"); } });
   const deleteMut = trpc.assets.hydrants.delete.useMutation({ onSuccess: () => { utils.assets.hydrants.list.invalidate(); toast.success("Hidrante excluído!"); } });
-  const [form, setForm] = useState<any>({ codigo: "", localizacao: "", tipo: "Coluna", ultimaInspecao: "", proximaInspecao: "", status: "Ativo" });
+  const [form, setForm] = useState<any>({ numero: "", localizacao: "", tipo: "Coluna", ultimaInspecao: "", proximaInspecao: "", status: "OK" });
   const isExpired = (d: string) => d && new Date(d) < new Date();
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold flex items-center gap-2"><Droplets className="h-5 w-5" /> Hidrantes</h3>
-        <Button onClick={() => { setForm({ codigo: "", localizacao: "", tipo: "Coluna", ultimaInspecao: "", proximaInspecao: "", status: "Ativo" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ numero: "", localizacao: "", tipo: "Coluna", ultimaInspecao: "", proximaInspecao: "", status: "OK" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Hidrante
         </Button>
       </div>
@@ -318,12 +330,12 @@ function HidrantesTab({ companyId }: { companyId: number }) {
               : hydrants.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Nenhum hidrante cadastrado</td></tr>
               : hydrants.map((h: any) => (
                 <tr key={h.id} className="border-b hover:bg-muted/30">
-                  <td className="p-3 font-medium">{h.codigo}</td>
+                  <td className="p-3 font-medium">{h.numero}</td>
                   <td className="p-3">{h.localizacao ?? "-"}</td>
                   <td className="p-3">{h.tipo}</td>
                   <td className="p-3">{h.ultimaInspecao ? new Date(h.ultimaInspecao).toLocaleDateString("pt-BR") : "-"}</td>
                   <td className="p-3"><span className={isExpired(h.proximaInspecao) ? "text-red-600 font-semibold" : ""}>{h.proximaInspecao ? new Date(h.proximaInspecao).toLocaleDateString("pt-BR") : "-"}</span>{isExpired(h.proximaInspecao) && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-600" />}</td>
-                  <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${h.status === "Ativo" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{h.status}</span></td>
+                  <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-medium ${h.status === "OK" ? "bg-green-100 text-green-700" : h.status === "Manutencao" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{h.status === "OK" ? "OK" : h.status === "Manutencao" ? "Manutenção" : "Inativo"}</span></td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: h.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
                 </tr>
               ))}
@@ -335,7 +347,7 @@ function HidrantesTab({ companyId }: { companyId: number }) {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Novo Hidrante</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
-            <div><Label>Código</Label><Input value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
+            <div><Label>Número</Label><Input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} placeholder="Ex: HID-001" /></div>
             <div><Label>Localização</Label><Input value={form.localizacao} onChange={e => setForm({ ...form, localizacao: e.target.value })} /></div>
             <div><Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
@@ -346,7 +358,7 @@ function HidrantesTab({ companyId }: { companyId: number }) {
             <div><Label>Status</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="Ativo">Ativo</SelectItem><SelectItem value="Inativo">Inativo</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="OK">OK</SelectItem><SelectItem value="Manutencao">Manutenção</SelectItem><SelectItem value="Inativo">Inativo</SelectItem></SelectContent>
               </Select>
             </div>
             <div><Label>Última Inspeção</Label><Input type="date" value={form.ultimaInspecao} onChange={e => setForm({ ...form, ultimaInspecao: e.target.value })} /></div>

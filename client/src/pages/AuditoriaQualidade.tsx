@@ -55,13 +55,13 @@ function AuditoriasTab({ companyId }: { companyId: number }) {
   const { data: audits = [], isLoading } = trpc.quality.audits.list.useQuery({ companyId });
   const createMut = trpc.quality.audits.create.useMutation({ onSuccess: () => { utils.quality.audits.list.invalidate(); setShowForm(false); toast.success("Auditoria registrada!"); } });
   const deleteMut = trpc.quality.audits.delete.useMutation({ onSuccess: () => { utils.quality.audits.list.invalidate(); toast.success("Auditoria excluída!"); } });
-  const [form, setForm] = useState<any>({ tipo: "Interna", dataAuditoria: "", auditor: "", setor: "", resultado: "", observacoes: "" });
+  const [form, setForm] = useState<any>({ titulo: "", tipo: "Interna", dataAuditoria: "", auditor: "", setor: "", resultado: "Pendente", descricao: "" });
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold">Registro de Auditorias</h3>
-        <Button onClick={() => { setForm({ tipo: "Interna", dataAuditoria: "", auditor: "", setor: "", resultado: "", observacoes: "" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ titulo: "", tipo: "Interna", dataAuditoria: "", auditor: "", setor: "", resultado: "Pendente", descricao: "" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Nova Auditoria
         </Button>
       </div>
@@ -97,10 +97,11 @@ function AuditoriasTab({ companyId }: { companyId: number }) {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Nova Auditoria</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2"><Label>Título *</Label><Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título da auditoria" /></div>
             <div><Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="Interna">Interna</SelectItem><SelectItem value="Externa">Externa</SelectItem><SelectItem value="Cliente">Cliente</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="Interna">Interna</SelectItem><SelectItem value="Externa">Externa</SelectItem><SelectItem value="Cliente">Cliente</SelectItem><SelectItem value="Certificadora">Certificadora</SelectItem></SelectContent>
               </Select>
             </div>
             <div><Label>Data</Label><Input type="date" value={form.dataAuditoria} onChange={e => setForm({ ...form, dataAuditoria: e.target.value })} /></div>
@@ -108,11 +109,11 @@ function AuditoriasTab({ companyId }: { companyId: number }) {
             <div><Label>Setor</Label><Input value={form.setor} onChange={e => setForm({ ...form, setor: e.target.value })} /></div>
             <div><Label>Resultado</Label>
               <Select value={form.resultado} onValueChange={v => setForm({ ...form, resultado: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent><SelectItem value="Conforme">Conforme</SelectItem><SelectItem value="Nao_Conforme">Não Conforme</SelectItem><SelectItem value="Parcial">Parcial</SelectItem></SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Conforme">Conforme</SelectItem><SelectItem value="Nao_Conforme">Não Conforme</SelectItem><SelectItem value="Observacao">Observação</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="col-span-2"><Label>Observações</Label><Input value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} /></div>
+            <div className="col-span-2"><Label>Descrição</Label><Input value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
@@ -130,13 +131,13 @@ function DesviosTab({ companyId }: { companyId: number }) {
   const { data: deviations = [], isLoading } = trpc.quality.deviations.list.useQuery({ companyId });
   const createMut = trpc.quality.deviations.create.useMutation({ onSuccess: () => { utils.quality.deviations.list.invalidate(); setShowForm(false); toast.success("Desvio registrado!"); } });
   const deleteMut = trpc.quality.deviations.delete.useMutation({ onSuccess: () => { utils.quality.deviations.list.invalidate(); toast.success("Desvio excluído!"); } });
-  const [form, setForm] = useState<any>({ descricao: "", tipo: "Comportamental", gravidade: "Baixa", setor: "", dataOcorrencia: "", status: "Aberto" });
+  const [form, setForm] = useState<any>({ titulo: "", descricao: "", tipo: "NC_Menor", setor: "", responsavel: "", prazo: "", status: "Aberto" });
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold">Desvios e Não Conformidades</h3>
-        <Button onClick={() => { setForm({ descricao: "", tipo: "Comportamental", gravidade: "Baixa", setor: "", dataOcorrencia: "", status: "Aberto" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ titulo: "", descricao: "", tipo: "NC_Menor", setor: "", responsavel: "", prazo: "", status: "Aberto" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Desvio
         </Button>
       </div>
@@ -174,21 +175,23 @@ function DesviosTab({ companyId }: { companyId: number }) {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Novo Desvio</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2"><Label>Título *</Label><Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título do desvio" /></div>
             <div className="col-span-2"><Label>Descrição</Label><Input value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></div>
             <div><Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="Comportamental">Comportamental</SelectItem><SelectItem value="Condicao_Insegura">Condição Insegura</SelectItem><SelectItem value="Processo">Processo</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="NC_Maior">NC Maior</SelectItem><SelectItem value="NC_Menor">NC Menor</SelectItem><SelectItem value="Observacao">Observação</SelectItem><SelectItem value="Oportunidade_Melhoria">Oportunidade de Melhoria</SelectItem></SelectContent>
               </Select>
             </div>
-            <div><Label>Gravidade</Label>
-              <Select value={form.gravidade} onValueChange={v => setForm({ ...form, gravidade: v })}>
+            <div><Label>Status</Label>
+              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="Baixa">Baixa</SelectItem><SelectItem value="Media">Média</SelectItem><SelectItem value="Alta">Alta</SelectItem><SelectItem value="Critica">Crítica</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="Aberto">Aberto</SelectItem><SelectItem value="Em_Andamento">Em Andamento</SelectItem><SelectItem value="Fechado">Fechado</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
               </Select>
             </div>
             <div><Label>Setor</Label><Input value={form.setor} onChange={e => setForm({ ...form, setor: e.target.value })} /></div>
-            <div><Label>Data</Label><Input type="date" value={form.dataOcorrencia} onChange={e => setForm({ ...form, dataOcorrencia: e.target.value })} /></div>
+            <div><Label>Responsável</Label><Input value={form.responsavel} onChange={e => setForm({ ...form, responsavel: e.target.value })} /></div>
+            <div><Label>Prazo</Label><Input type="date" value={form.prazo} onChange={e => setForm({ ...form, prazo: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
@@ -206,13 +209,13 @@ function AcoesTab({ companyId }: { companyId: number }) {
   const { data: actions = [], isLoading } = trpc.quality.actions.list.useQuery({ companyId });
   const createMut = trpc.quality.actions.create.useMutation({ onSuccess: () => { utils.quality.actions.list.invalidate(); setShowForm(false); toast.success("Plano de ação criado!"); } });
   const deleteMut = trpc.quality.actions.delete.useMutation({ onSuccess: () => { utils.quality.actions.list.invalidate(); toast.success("Plano excluído!"); } });
-  const [form, setForm] = useState<any>({ oque: "", porque: "", onde: "", quando: "", quem: "", como: "", quanto: "", status: "Pendente" });
+  const [form, setForm] = useState<any>({ oQue: "", porQue: "", onde: "", quando: "", quem: "", como: "", quantoCusta: "", status: "Pendente" });
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold">Planos de Ação 5W2H</h3>
-        <Button onClick={() => { setForm({ oque: "", porque: "", onde: "", quando: "", quem: "", como: "", quanto: "", status: "Pendente" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ oQue: "", porQue: "", onde: "", quando: "", quem: "", como: "", quantoCusta: "", status: "Pendente" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Plano
         </Button>
       </div>
@@ -232,7 +235,7 @@ function AcoesTab({ companyId }: { companyId: number }) {
               : actions.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhum plano de ação</td></tr>
               : actions.map((a: any) => (
                 <tr key={a.id} className="border-b hover:bg-muted/30">
-                  <td className="p-3 font-medium max-w-xs truncate">{a.oque}</td>
+                  <td className="p-3 font-medium max-w-xs truncate">{a.oQue}</td>
                   <td className="p-3">{a.quem ?? "-"}</td>
                   <td className="p-3">{a.quando ?? "-"}</td>
                   <td className="p-3">{a.onde ?? "-"}</td>
@@ -248,13 +251,13 @@ function AcoesTab({ companyId }: { companyId: number }) {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Novo Plano 5W2H</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2"><Label>O Quê? (What)</Label><Input value={form.oque} onChange={e => setForm({ ...form, oque: e.target.value })} /></div>
-            <div className="col-span-2"><Label>Por Quê? (Why)</Label><Input value={form.porque} onChange={e => setForm({ ...form, porque: e.target.value })} /></div>
+            <div className="col-span-2"><Label>O Quê? (What) *</Label><Input value={form.oQue} onChange={e => setForm({ ...form, oQue: e.target.value })} /></div>
+            <div className="col-span-2"><Label>Por Quê? (Why)</Label><Input value={form.porQue} onChange={e => setForm({ ...form, porQue: e.target.value })} /></div>
             <div><Label>Onde? (Where)</Label><Input value={form.onde} onChange={e => setForm({ ...form, onde: e.target.value })} /></div>
             <div><Label>Quando? (When)</Label><Input value={form.quando} onChange={e => setForm({ ...form, quando: e.target.value })} /></div>
             <div><Label>Quem? (Who)</Label><Input value={form.quem} onChange={e => setForm({ ...form, quem: e.target.value })} /></div>
             <div><Label>Como? (How)</Label><Input value={form.como} onChange={e => setForm({ ...form, como: e.target.value })} /></div>
-            <div><Label>Quanto? (How Much)</Label><Input value={form.quanto} onChange={e => setForm({ ...form, quanto: e.target.value })} /></div>
+            <div><Label>Quanto Custa? (How Much)</Label><Input value={form.quantoCusta} onChange={e => setForm({ ...form, quantoCusta: e.target.value })} /></div>
             <div><Label>Status</Label>
               <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -278,13 +281,13 @@ function DDSTab({ companyId }: { companyId: number }) {
   const { data: ddsList = [], isLoading } = trpc.quality.dds.list.useQuery({ companyId });
   const createMut = trpc.quality.dds.create.useMutation({ onSuccess: () => { utils.quality.dds.list.invalidate(); setShowForm(false); toast.success("DDS registrado!"); } });
   const deleteMut = trpc.quality.dds.delete.useMutation({ onSuccess: () => { utils.quality.dds.list.invalidate(); toast.success("DDS excluído!"); } });
-  const [form, setForm] = useState<any>({ tema: "", dataDDS: "", responsavel: "", participantes: "", observacoes: "" });
+  const [form, setForm] = useState<any>({ tema: "", dataRealizacao: "", responsavel: "", participantes: "", descricao: "" });
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold">Diálogo Diário de Segurança (DDS)</h3>
-        <Button onClick={() => { setForm({ tema: "", dataDDS: "", responsavel: "", participantes: "", observacoes: "" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ tema: "", dataRealizacao: "", responsavel: "", participantes: "", descricao: "" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo DDS
         </Button>
       </div>
@@ -304,7 +307,7 @@ function DDSTab({ companyId }: { companyId: number }) {
               : ddsList.map((d: any) => (
                 <tr key={d.id} className="border-b hover:bg-muted/30">
                   <td className="p-3 font-medium">{d.tema}</td>
-                  <td className="p-3">{d.dataDDS ? new Date(d.dataDDS).toLocaleDateString("pt-BR") : "-"}</td>
+                  <td className="p-3">{d.dataRealizacao ? new Date(d.dataRealizacao).toLocaleDateString("pt-BR") : "-"}</td>
                   <td className="p-3">{d.responsavel ?? "-"}</td>
                   <td className="p-3">{d.participantes ?? "-"}</td>
                   <td className="p-3 text-right"><Button variant="ghost" size="sm" onClick={() => deleteMut.mutate({ id: d.id })}><Trash2 className="h-4 w-4 text-destructive" /></Button></td>
@@ -319,10 +322,10 @@ function DDSTab({ companyId }: { companyId: number }) {
           <DialogHeader><DialogTitle>Novo DDS</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2"><Label>Tema</Label><Input value={form.tema} onChange={e => setForm({ ...form, tema: e.target.value })} /></div>
-            <div><Label>Data</Label><Input type="date" value={form.dataDDS} onChange={e => setForm({ ...form, dataDDS: e.target.value })} /></div>
+            <div><Label>Data</Label><Input type="date" value={form.dataRealizacao} onChange={e => setForm({ ...form, dataRealizacao: e.target.value })} /></div>
             <div><Label>Responsável</Label><Input value={form.responsavel} onChange={e => setForm({ ...form, responsavel: e.target.value })} /></div>
             <div className="col-span-2"><Label>Participantes</Label><Input value={form.participantes} onChange={e => setForm({ ...form, participantes: e.target.value })} placeholder="Nomes separados por vírgula" /></div>
-            <div className="col-span-2"><Label>Observações</Label><Input value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} /></div>
+            <div className="col-span-2"><Label>Descrição</Label><Input value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>

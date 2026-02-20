@@ -419,14 +419,14 @@ function AccidentTab({ companyId }: { companyId: number }) {
   const createMut = trpc.sst.accidents.create.useMutation({ onSuccess: () => { utils.sst.accidents.list.invalidate(); setShowForm(false); toast.success("Acidente registrado!"); } });
   const deleteMut = trpc.sst.accidents.delete.useMutation({ onSuccess: () => { utils.sst.accidents.list.invalidate(); toast.success("Registro excluído!"); } });
 
-  const [form, setForm] = useState<any>({ employeeId: "", dataAcidente: "", tipo: "Tipico", gravidade: "Leve", localAcidente: "", descricao: "", catNumero: "" });
+  const [form, setForm] = useState<any>({ employeeId: "", dataAcidente: "", horaAcidente: "", tipo: "Tipico", gravidade: "Leve", localAcidente: "", descricao: "", parteCorpoAtingida: "", diasAfastamento: 0, catNumero: "", catData: "", testemunhas: "", acaoCorretiva: "" });
   const getEmpName = (id: number) => employees.find((e: any) => e.id === id)?.nomeCompleto ?? "-";
 
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold">Registro de Acidentes</h3>
-        <Button onClick={() => { setForm({ employeeId: "", dataAcidente: "", tipo: "Tipico", gravidade: "Leve", localAcidente: "", descricao: "", catNumero: "" }); setShowForm(true); }}>
+        <Button onClick={() => { setForm({ employeeId: "", dataAcidente: "", horaAcidente: "", tipo: "Tipico", gravidade: "Leve", localAcidente: "", descricao: "", parteCorpoAtingida: "", diasAfastamento: 0, catNumero: "", catData: "", testemunhas: "", acaoCorretiva: "" }); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Registrar Acidente
         </Button>
       </div>
@@ -486,6 +486,7 @@ function AccidentTab({ companyId }: { companyId: number }) {
               </Select>
             </div>
             <div><Label>Data</Label><Input type="date" value={form.dataAcidente} onChange={e => setForm({ ...form, dataAcidente: e.target.value })} /></div>
+            <div><Label>Hora</Label><Input type="time" value={form.horaAcidente} onChange={e => setForm({ ...form, horaAcidente: e.target.value })} /></div>
             <div>
               <Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
@@ -510,8 +511,30 @@ function AccidentTab({ companyId }: { companyId: number }) {
               </Select>
             </div>
             <div><Label>Local</Label><Input value={form.localAcidente} onChange={e => setForm({ ...form, localAcidente: e.target.value })} /></div>
+            <div>
+              <Label>Parte do Corpo</Label>
+              <Select value={form.parteCorpoAtingida || undefined} onValueChange={v => setForm({ ...form, parteCorpoAtingida: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cabeca">Cabeça</SelectItem>
+                  <SelectItem value="Olhos">Olhos</SelectItem>
+                  <SelectItem value="Pescoco">Pescoço</SelectItem>
+                  <SelectItem value="Tronco">Tronco</SelectItem>
+                  <SelectItem value="Abdomen">Abdômen</SelectItem>
+                  <SelectItem value="Bracos">Braços</SelectItem>
+                  <SelectItem value="Maos">Mãos</SelectItem>
+                  <SelectItem value="Pernas">Pernas</SelectItem>
+                  <SelectItem value="Pes">Pés</SelectItem>
+                  <SelectItem value="Multiplas">Múltiplas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Dias Afastamento</Label><Input type="number" value={form.diasAfastamento} onChange={e => setForm({ ...form, diasAfastamento: parseInt(e.target.value) || 0 })} /></div>
             <div><Label>Nº CAT</Label><Input value={form.catNumero} onChange={e => setForm({ ...form, catNumero: e.target.value })} /></div>
+            <div><Label>Data CAT</Label><Input type="date" value={form.catData} onChange={e => setForm({ ...form, catData: e.target.value })} /></div>
             <div className="col-span-2"><Label>Descrição</Label><Input value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></div>
+            <div className="col-span-2"><Label>Testemunhas</Label><Input value={form.testemunhas} onChange={e => setForm({ ...form, testemunhas: e.target.value })} /></div>
+            <div className="col-span-2"><Label>Ação Corretiva</Label><Input value={form.acaoCorretiva} onChange={e => setForm({ ...form, acaoCorretiva: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>

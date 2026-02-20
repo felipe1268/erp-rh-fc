@@ -101,3 +101,34 @@
 - [x] Filtros dinâmicos por empresa e período em todos os dashboards
 - [x] Navegação integrada no menu lateral
 - [x] Testes unitários para rotas de dashboards (20 testes passando)
+
+## Fase 5: Importação em Massa via Excel
+- [x] Analisar schema de colaboradores para definir colunas da planilha modelo
+- [ ] Criar geração de planilha modelo Excel (.xlsx) para download
+- [ ] Criar rota tRPC de upload e parsing da planilha Excel
+- [ ] Criar rota tRPC de importação em lote dos colaboradores
+- [ ] Criar componente de importação no frontend (upload, preview, confirmação)
+- [ ] Integrar botão de importação na página de Colaboradores
+- [ ] Validação de dados (CPF, datas, campos obrigatórios)
+
+## Fase 6: Redesign Dashboard Acidentes (igual planilha original)
+- [ ] Atualizar backend com agregações: turno, tipo acidente, sexo, parte corpo, setor, lesão
+- [ ] Calcular taxa de frequência e índice relativo
+- [ ] Redesenhar frontend: meta circular, cards tipo/turno/sexo, top 5 setor, top 5 lesão, partes do corpo
+
+## Fase 7: Correção Geral de Bugs - Todas as Telas
+- [x] Corrigir erros de TypeScript pendentes (importExcel.ts)
+- [x] Verificar e corrigir cadastro de colaboradores (todos os campos) - 83 testes passando
+- [x] Verificar e corrigir todas as telas de CRUD (ASOs, Treinamentos, EPI, Acidentes, etc.) - TODOS PASSANDO
+- [x] Criar testes automatizados para validar cada módulo CRUD (63 testes CRUD + 20 outros)
+- [x] Verificar routers.ts por inconsistências de schema/input
+- [x] Testar build de produção sem erros - BUILD LIMPO
+- [x] Verificar formulários frontend para nomes de campos corretos
+- [x] Corrigir Ativos.tsx: Veículos (anoFabricacao, renavam, chassi), Equipamentos (marca, modelo, numeroSerie, localizacao)
+- [x] Corrigir SST.tsx: Acidentes (horaAcidente, parteCorpoAtingida, diasAfastamento, catData, testemunhas, acaoCorretiva)
+- [x] Corrigir AuditoriaQualidade.tsx: Auditorias (titulo, tipo Certificadora, resultado Observacao)
+- [x] Corrigir AuditoriaQualidade.tsx: Desvios (titulo, tipo NC_Maior/NC_Menor, responsavel, prazo)
+- [x] Corrigir AuditoriaQualidade.tsx: 5W2H (oQue, porQue, quantoCusta)
+- [x] Corrigir AuditoriaQualidade.tsx: DDS (dataRealizacao, descricao)
+- [x] Corrigir Cipa.tsx: Membros (electionId, representacao, inicioEstabilidade, fimEstabilidade, status)
+- [x] Corrigir Cipa.tsx: Eleições (mandatoInicio, mandatoFim, statusEleicao, dataInscricaoInicio, dataInscricaoFim)
