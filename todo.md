@@ -79,3 +79,8 @@
 - [x] Alerta automático ao tentar cadastrar funcionário da Lista Negra
 - [x] Status "Lista Negra" com mensagem de proibição visível
 - [x] BUG: Cards do Dashboard com texto cortado - corrigido layout vertical com bordas coloridas
+
+## Bugs Reportados - Produção
+- [x] BUG CRÍTICO: Erro removeChild persiste em produção - RESOLVIDO (import dinâmico do sonner no DashboardLayout convertido para estático, sonner.tsx corrigido para usar ThemeContext local ao invés de next-themes)
+- [x] BUG: Layout confuso e sobreposto em telas - RESOLVIDO (layout do Dashboard verificado e funcionando corretamente)
+- [x] BUG: Select com value vazio causando warnings - RESOLVIDO (corrigido para usar undefined)

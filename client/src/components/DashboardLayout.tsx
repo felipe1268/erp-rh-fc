@@ -31,6 +31,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import { toast } from "sonner";
 
 const menuSections = [
   {
@@ -252,7 +253,7 @@ function DashboardLayoutContent({
                             isActive={isActive}
                             onClick={() => {
                               if (item.soon) {
-                                import("sonner").then(m => m.toast("Em breve", { description: `O módulo ${item.label} está em desenvolvimento.` }));
+                                toast("Em breve", { description: `O módulo ${item.label} está em desenvolvimento.` });
                                 return;
                               }
                               setLocation(item.path);

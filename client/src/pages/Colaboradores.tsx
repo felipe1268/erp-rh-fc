@@ -267,7 +267,7 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label>Sexo</Label>
-                  <Select value={form.sexo ?? ""} onValueChange={v => set("sexo", v)}>
+                  <Select value={form.sexo || undefined} onValueChange={v => set("sexo", v)}>
                     <SelectTrigger className="bg-input"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="M">Masculino</SelectItem>
@@ -278,7 +278,7 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label>Estado Civil</Label>
-                  <Select value={form.estadoCivil ?? ""} onValueChange={v => set("estadoCivil", v)}>
+                  <Select value={form.estadoCivil || undefined} onValueChange={v => set("estadoCivil", v)}>
                     <SelectTrigger className="bg-input"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Solteiro">Solteiro(a)</SelectItem>
@@ -443,7 +443,7 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label>Tipo de Contrato</Label>
-                  <Select value={form.tipoContrato ?? ""} onValueChange={v => set("tipoContrato", v)}>
+                  <Select value={form.tipoContrato || undefined} onValueChange={v => set("tipoContrato", v)}>
                     <SelectTrigger className="bg-input"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="CLT">CLT</SelectItem>
@@ -477,7 +477,7 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label>Tipo de Conta</Label>
-                  <Select value={form.tipoConta ?? ""} onValueChange={v => set("tipoConta", v)}>
+                  <Select value={form.tipoConta || undefined} onValueChange={v => set("tipoConta", v)}>
                     <SelectTrigger className="bg-input"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Corrente">Corrente</SelectItem>
