@@ -147,8 +147,11 @@ export const employees = mysqlTable("employees", {
   bancoNome: varchar("bancoNome", { length: 100 }),
   agencia: varchar("agencia", { length: 20 }),
   conta: varchar("conta", { length: 30 }),
-  tipoConta: mysqlEnum("tipoConta", ["Corrente", "Poupanca"]),
+  tipoConta: mysqlEnum("tipoConta", ["Corrente", "Poupanca", "Salario"]),
+  tipoChavePix: mysqlEnum("tipoChavePix", ["CPF", "Celular", "Email", "Aleatoria"]),
   chavePix: varchar("chavePix", { length: 100 }),
+  contaPix: varchar("contaPix", { length: 100 }),
+  bancoPix: varchar("bancoPix", { length: 100 }),
 
   // Status
   status: mysqlEnum("status", [

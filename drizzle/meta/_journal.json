@@ -57,6 +57,13 @@
       "when": 1771615714770,
       "tag": "0007_plain_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1771616995654,
+      "tag": "0008_blue_mandroid",
+      "breakpoints": true
     }
   ]
 }

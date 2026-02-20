@@ -246,3 +246,13 @@
 - [x] Proteger limpeza com senha de confirmação (LIMPAR2026)
 - [x] Permitir limpeza seletiva por módulo (colaboradores, treinamentos, etc.)
 - [x] Testes unitários para settings e userManagement (87 testes passando)
+
+## Fase 16: Melhorias no Formulário de Colaboradores
+- [x] Adicionar campo de seleção de empresa no formulário de cadastro/edição de colaborador
+- [x] Redesenhar layout do formulário para ficar organizado e profissional (tabs com espaçamento correto)
+- [x] Corrigir tabs sobrepostas (Pessoal, Documentos, Endereço, Profissional, Bancário)
+- [x] Melhorar espaçamento e alinhamento dos campos em grid 2-3 colunas
+- [x] BUG CRÍTICO: Erro React #31 (objeto Date renderizado no JSX) ao clicar em Ver funcionário
+- [x] Corrigir dialog de visualização de funcionário para formatar datas corretamente
+- [x] Adicionar campo Valor da Hora no formulário (base para cálculo da folha)
+- [x] Melhorar aba Bancário: banco de recebimento (Caixa/Santander/Bradesco/Itaú/BB/Nubank/Inter/C6), tipo conta (Salário/Corrente/Poupança), dados PIX completos com tipo de chave
