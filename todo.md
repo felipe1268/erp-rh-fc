@@ -281,3 +281,13 @@
 - [x] Melhorar Error Boundary para recuperar automaticamente de erros de DOM
 - [x] Build compilando sem erros, ficha do colaborador abrindo OK
 - [ ] Testar em produção após publicação
+
+## Fase 20: Expandir Ficha do Colaborador
+- [ ] Expandir dialog de visualização da ficha para ser maior (max-w-4xl ou 5xl)
+- [ ] Melhorar espaçamento entre campos para não parecer amontoado
+- [ ] Layout em grid mais espaçado com labels e valores bem separados
+
+## Fase 21: Cálculo Automático Valor da Hora
+- [x] Calcular valor da hora automaticamente ao digitar salário base (salário ÷ horas mensais)
+- [x] Campo valor da hora agora é somente leitura (calculado automaticamente)
+- [x] Alterar horas mensais também recalcula o valor da hora

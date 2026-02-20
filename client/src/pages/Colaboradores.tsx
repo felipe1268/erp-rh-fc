@@ -492,15 +492,32 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Salário Base (R$)</Label>
-                  <Input value={form.salarioBase ?? ""} onChange={e => set("salarioBase", e.target.value)} placeholder="2.500,00" className="bg-input mt-1" />
+                  <Input value={form.salarioBase ?? ""} onChange={e => {
+                    const salario = e.target.value;
+                    set("salarioBase", salario);
+                    const salarioNum = parseFloat(salario.replace(/\./g, "").replace(",", "."));
+                    const horasNum = parseFloat(String(form.horasMensais || "220").replace(",", "."));
+                    if (!isNaN(salarioNum) && salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                      set("valorHora", (salarioNum / horasNum).toFixed(2));
+                    }
+                  }} placeholder="2.500,00" className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Valor da Hora (R$)</Label>
-                  <Input value={form.valorHora ?? ""} onChange={e => set("valorHora", e.target.value)} placeholder="11,36" className="bg-input mt-1" />
+                  <Input value={form.valorHora ?? ""} readOnly className="bg-input mt-1 opacity-70 cursor-not-allowed" title="Calculado automaticamente: Salário Base ÷ Horas Mensais" />
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">Calculado: Salário ÷ Horas</span>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Horas Mensais</Label>
-                  <Input value={form.horasMensais ?? ""} onChange={e => set("horasMensais", e.target.value)} placeholder="220" className="bg-input mt-1" />
+                  <Input value={form.horasMensais ?? ""} onChange={e => {
+                    const horas = e.target.value;
+                    set("horasMensais", horas);
+                    const salarioNum = parseFloat(String(form.salarioBase || "0").replace(/\./g, "").replace(",", "."));
+                    const horasNum = parseFloat(horas.replace(",", "."));
+                    if (!isNaN(salarioNum) && salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                      set("valorHora", (salarioNum / horasNum).toFixed(2));
+                    }
+                  }} placeholder="220" className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Tipo de Contrato</Label>
@@ -628,29 +645,29 @@ export default function Colaboradores() {
       {/* VIEW DIALOG - FICHA DO COLABORADOR */}
       {/* ============================================================ */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card">
+        <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-card p-8">
           <DialogHeader>
-            <DialogTitle className="text-xl">Ficha do Colaborador</DialogTitle>
+            <DialogTitle className="text-2xl font-bold">Ficha do Colaborador</DialogTitle>
           </DialogHeader>
           {viewingEmployee ? (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* Header */}
-              <div className="flex items-center gap-4 pb-4 border-b border-border">
-                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-2xl font-bold text-primary">
+              <div className="flex items-center gap-6 pb-6 border-b-2 border-primary/20">
+                <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-3xl font-bold text-primary">
                     {viewingEmployee.nomeCompleto?.charAt(0)}
                   </span>
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-lg font-bold">{safeDisplay(viewingEmployee.nomeCompleto)}</h2>
-                  <p className="text-sm text-muted-foreground">
+                  <h2 className="text-xl font-bold">{safeDisplay(viewingEmployee.nomeCompleto)}</h2>
+                  <p className="text-base text-muted-foreground mt-1">
                     {safeDisplay(viewingEmployee.cargo)} · {safeDisplay(viewingEmployee.setor)}
                   </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${statusColors[viewingEmployee.status] ?? ""}`}>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className={`text-sm font-medium px-3 py-1 rounded ${statusColors[viewingEmployee.status] ?? ""}`}>
                       {statusLabels[viewingEmployee.status] ?? viewingEmployee.status}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       Empresa: {getCompanyName(viewingEmployee.companyId)}
                     </span>
                   </div>
@@ -724,12 +741,12 @@ export default function Colaboradores() {
                 ]},
               ].map(section => (
                 <div key={section.title}>
-                  <h3 className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-primary/20">{section.title}</h3>
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                  <h3 className="text-base font-semibold text-primary mb-4 pb-2 border-b-2 border-primary/20">{section.title}</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-4">
                     {section.fields.filter(([, v]) => v && v !== "-").map(([label, value]) => (
-                      <div key={label as string} className="flex justify-between py-1.5 border-b border-border/30">
-                        <span className="text-muted-foreground text-xs">{label}</span>
-                        <span className="font-medium text-right">{value as string}</span>
+                      <div key={label as string} className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</span>
+                        <span className="text-sm font-semibold">{value as string}</span>
                       </div>
                     ))}
                   </div>
