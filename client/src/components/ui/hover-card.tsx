@@ -24,7 +24,7 @@ function HoverCardContent({
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
   return (
-    <HoverCardPrimitive.Portal data-slot="hover-card-portal">
+    <HoverCardPrimitive.Portal data-slot="hover-card-portal" container={typeof document !== 'undefined' ? document.getElementById('radix-portal') ?? undefined : undefined}>
       <HoverCardPrimitive.Content
         data-slot="hover-card-content"
         align={align}

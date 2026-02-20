@@ -62,7 +62,13 @@ function DialogTrigger({
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
+  return (
+    <DialogPrimitive.Portal
+      data-slot="dialog-portal"
+      container={typeof document !== 'undefined' ? document.getElementById('radix-portal') ?? undefined : undefined}
+      {...props}
+    />
+  );
 }
 
 function DialogClose({
@@ -119,7 +125,7 @@ function DialogContent({
   );
 
   return (
-    <>
+    <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
@@ -141,7 +147,7 @@ function DialogContent({
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
-    </>
+    </DialogPortal>
   );
 }
 

@@ -14,7 +14,11 @@ function DropdownMenuPortal({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
   return (
-    <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
+    <DropdownMenuPrimitive.Portal
+      data-slot="dropdown-menu-portal"
+      container={typeof document !== 'undefined' ? document.getElementById('radix-portal') ?? undefined : undefined}
+      {...props}
+    />
   );
 }
 

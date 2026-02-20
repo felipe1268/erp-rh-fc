@@ -22,7 +22,7 @@ function PopoverContent({
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={typeof document !== 'undefined' ? document.getElementById('radix-portal') ?? undefined : undefined}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

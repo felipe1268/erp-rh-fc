@@ -30,7 +30,8 @@ function ContextMenuPortal({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Portal>) {
   return (
-    <ContextMenuPrimitive.Portal data-slot="context-menu-portal" {...props} />
+    <ContextMenuPrimitive.Portal data-slot="context-menu-portal"
+      container={typeof document !== 'undefined' ? document.getElementById('radix-portal') ?? undefined : undefined} {...props} />
   );
 }
 
@@ -96,7 +97,7 @@ function ContextMenuContent({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content>) {
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal container={typeof document !== 'undefined' ? document.getElementById('radix-portal') ?? undefined : undefined}>
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         className={cn(

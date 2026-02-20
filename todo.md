@@ -260,3 +260,17 @@
 ## Fase 17: Correção Bug removeChild na SST
 - [x] BUG CRÍTICO: Erro removeChild na página /sst (produção)
 - [x] Investigar e corrigir causa raiz em TODAS as páginas e componentes (44 padrões && convertidos para ternário ? : null)
+
+## Fase 18: Correção Definitiva removeChild - Portais Radix UI
+- [x] Diagnóstico: erro causado por Radix UI Portals montando no document.body e conflitando com React reconciler em produção
+- [x] Criar container fixo #radix-portal no index.html para todos os portais
+- [x] Corrigir Dialog Portal para usar container fixo
+- [x] Corrigir Sheet Portal para usar container fixo (usado pelo Sidebar mobile)
+- [x] Corrigir DropdownMenu Portal para usar container fixo
+- [x] Corrigir Tooltip Portal para usar container fixo
+- [x] Corrigir Popover Portal para usar container fixo
+- [x] Corrigir AlertDialog Portal para usar container fixo
+- [x] Corrigir ContextMenu Portal para usar container fixo
+- [x] Corrigir HoverCard Portal para usar container fixo
+- [x] Corrigir Menubar Portal para usar container fixo
+- [x] Build de produção compilando sem erros
