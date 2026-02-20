@@ -132,3 +132,81 @@
 - [x] Corrigir AuditoriaQualidade.tsx: DDS (dataRealizacao, descricao)
 - [x] Corrigir Cipa.tsx: Membros (electionId, representacao, inicioEstabilidade, fimEstabilidade, status)
 - [x] Corrigir Cipa.tsx: Eleições (mandatoInicio, mandatoFim, statusEleicao, dataInscricaoInicio, dataInscricaoFim)
+
+## Fase 8: Seed de Dados Completos para Validação
+- [x] Verificar/criar 4 empresas: FC Engenharia, Lock Naul, Hotel Consagrado, Júlio Ferraz
+- [x] Criar 8 colaboradores fictícios (2 por empresa) com dados pessoais completos
+- [x] Lançar treinamentos para todos os colaboradores (20 treinamentos)
+- [x] Lançar ASOs para todos os colaboradores (16 ASOs)
+- [x] Lançar advertências para alguns colaboradores (6 advertências)
+- [x] Lançar EPIs e entregas de EPIs (24 EPIs + 24 entregas)
+- [x] Lançar acidentes de trabalho (4 acidentes)
+- [x] Lançar riscos por setor (8 riscos)
+- [x] Lançar auditorias e desvios (5 auditorias + 5 desvios)
+- [x] Lançar planos de ação 5W2H (5 planos)
+- [x] Lançar DDS (5 DDS)
+- [x] Lançar membros e eleições CIPA (3 eleições + 4 membros)
+- [x] Lançar extintores e hidrantes (9 extintores + 5 hidrantes)
+- [ ] Validar visualmente todos os módulos com os dados
+
+## Fase 9: Seleção Múltipla, Ações em Lote e Upload Múltiplo
+- [ ] Criar componente reutilizável de tabela com checkbox de seleção múltipla
+- [ ] Barra de ações em lote (editar selecionados, excluir selecionados, selecionar todos)
+- [ ] Aplicar em Colaboradores
+- [ ] Aplicar em SST (ASOs, Treinamentos, Acidentes, Advertências, Riscos)
+- [ ] Aplicar em Ativos (Veículos, Equipamentos, Extintores, Hidrantes)
+- [ ] Aplicar em Auditoria e Qualidade (Auditorias, Desvios, 5W2H, DDS)
+- [ ] Aplicar em CIPA (Membros, Eleições)
+- [ ] Suporte a upload de múltiplos arquivos em Ponto e Folha
+- [ ] Suporte a upload de múltiplos arquivos em Treinamentos (certificados)
+- [x] Criar rota tRPC de exclusão em lote (deleteBatch)
+- [x] Seleção múltipla com checkbox em Uploads e Folha de Pagamento
+- [x] Upload de múltiplos arquivos simultaneamente (input multiple)
+
+## Fase 10: Validação de CNPJ
+- [x] Criar função de validação de CNPJ (algoritmo oficial de dígitos verificadores)
+- [x] Aplicar validação no backend (rota de criação de empresa)
+- [ ] Aplicar validação no frontend (formulário de cadastro de empresa)
+- [ ] Formatar CNPJ automaticamente no campo de input (XX.XXX.XXX/XXXX-XX)
+
+## Fase 11: Módulo Completo de Ponto e Folha de Pagamento
+### Schema / Banco de Dados
+- [x] Adicionar campo valorHora no employees (pessoal é horista)
+- [x] Adicionar campo banco (Caixa/Santander) e dados bancários no employees
+- [x] Criar tabela overtime_records (horas extras por pessoa/obra com % acréscimo)
+- [x] Criar tabela advance_payments (vales/adiantamentos com aprovação)
+- [x] Criar tabela vr_benefits (VR/iFood benefícios - custo separado)
+- [x] Criar tabela payroll_files (upload de arquivos da contabilidade - payrollUploads ampliada com 9 categorias)
+- [x] Criar tabela extra_payments (pagamentos por fora: diferença salário, HE)
+
+### Regras de Negócio
+- [x] Cálculo automático de horas extras (valor hora × % acréscimo × quantidade horas)
+- [ ] Verificação automática de ano bissexto para cálculo correto de dias
+- [x] Campo de % acréscimo de horas extras para cálculo correto
+- [x] Validação de vale: se funcionário faltou >10 dias, alerta + campo aprovação sim/não
+- [x] Separação vale vs pagamento na folha
+- [x] Relatório de pagamento separado por banco (Caixa x Santander)
+- [x] Upload múltiplo de arquivos de ponto (um por obra)
+
+### Frontend - Abas do Módulo
+- [x] Aba Uploads: upload múltiplo de arquivos por categoria (9 tipos)
+- [x] Aba Cartão de Ponto: visualização por funcionário/mês
+- [x] Aba Folha de Pagamento: espelho analítico + sintético da contabilidade
+- [x] Aba Pagamentos Extras: diferença salário, horas extras (com % acréscimo e cálculo automático)
+- [x] Aba Vales/Adiantamentos: lista com aprovação, alerta >10 faltas
+- [x] Aba VR/iFood Benefícios: custo separado por funcionário
+- [x] Aba Custo Total Funcionário: previsão desembolso (folha + extras + VR)
+
+### Dashboards
+- [ ] Dashboard de Horas Extras por obra
+- [ ] Dashboard de Horas Extras por pessoa (campeão de HE)
+- [ ] Dashboard de Previsão de Desembolso da folha
+
+### Parsers de Arquivos
+- [x] Parser Dixi XLS (cartão de ponto)
+- [x] Parser Espelho Adiantamento Analítico PDF
+- [x] Parser Adiantamento Sintético PDF
+- [x] Parser Adiantamento por Banco (CEF/Santander) PDF
+- [x] Parser Espelho Folha Analítico PDF
+- [x] Parser Folha Sintético PDF
+- [x] Parser Pagamento por Banco (CEF/Santander) PDF

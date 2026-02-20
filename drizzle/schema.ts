@@ -134,12 +134,14 @@ export const employees = mysqlTable("employees", {
   dataAdmissao: date("dataAdmissao"),
   dataDemissao: date("dataDemissao"),
   salarioBase: varchar("salarioBase", { length: 20 }),
+  valorHora: varchar("valorHora", { length: 20 }),
   horasMensais: varchar("horasMensais", { length: 10 }),
   tipoContrato: mysqlEnum("tipoContrato", ["CLT", "PJ", "Temporario", "Estagio", "Aprendiz"]),
   jornadaTrabalho: varchar("jornadaTrabalho", { length: 50 }),
 
   // Dados Bancários
   banco: varchar("banco", { length: 100 }),
+  bancoNome: varchar("bancoNome", { length: 100 }),
   agencia: varchar("agencia", { length: 20 }),
   conta: varchar("conta", { length: 30 }),
   tipoConta: mysqlEnum("tipoConta", ["Corrente", "Poupanca"]),
@@ -664,8 +666,14 @@ export const payrollUploads = mysqlTable("payroll_uploads", {
   companyId: int("companyId").notNull(),
   category: mysqlEnum("category", [
     "cartao_ponto",
-    "folha_pagamento",
-    "vale_adiantamento",
+    "espelho_adiantamento_analitico",
+    "adiantamento_sintetico",
+    "adiantamento_banco_cef",
+    "adiantamento_banco_santander",
+    "espelho_folha_analitico",
+    "folha_sintetico",
+    "pagamento_banco_cef",
+    "pagamento_banco_santander",
   ]).notNull(),
   month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
   fileName: varchar("fileName", { length: 255 }).notNull(),
@@ -697,3 +705,115 @@ export const dixiDevices = mysqlTable("dixi_devices", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type DixiDevice = typeof dixiDevices.$inferSelect;
+
+// ============================================================
+// VALES / ADIANTAMENTOS (com aprovação)
+// ============================================================
+
+export const advances = mysqlTable("advances", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
+  valorAdiantamento: varchar("valorAdiantamento", { length: 20 }),
+  valorLiquido: varchar("valorLiquido", { length: 20 }),
+  descontoIR: varchar("descontoIR", { length: 20 }),
+  bancoDestino: varchar("bancoDestino", { length: 100 }),
+  diasFaltas: int("diasFaltas").default(0),
+  aprovado: mysqlEnum("aprovado", ["Pendente", "Aprovado", "Reprovado"]).default("Pendente").notNull(),
+  motivoReprovacao: text("motivoReprovacao"),
+  dataPagamento: date("dataPagamento"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Advance = typeof advances.$inferSelect;
+
+// ============================================================
+// PAGAMENTOS EXTRAS (diferença salário, horas extras por fora)
+// ============================================================
+
+export const extraPayments = mysqlTable("extra_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
+  tipo: mysqlEnum("tipoExtra", ["Diferenca_Salario", "Horas_Extras", "Reembolso", "Bonus", "Outro"]).notNull(),
+  descricao: text("descricao"),
+  valorHoraBase: varchar("valorHoraBase", { length: 20 }),
+  percentualAcrescimo: varchar("percentualAcrescimo", { length: 10 }),
+  quantidadeHoras: varchar("quantidadeHoras", { length: 10 }),
+  valorTotal: varchar("valorTotal", { length: 20 }).notNull(),
+  bancoDestino: varchar("bancoDestino", { length: 100 }),
+  dataPagamento: date("dataPagamento"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ExtraPayment = typeof extraPayments.$inferSelect;
+
+// ============================================================
+// VR / IFOOD BENEFÍCIOS
+// ============================================================
+
+export const vrBenefits = mysqlTable("vr_benefits", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
+  valorDiario: varchar("valorDiario", { length: 20 }),
+  diasUteis: int("diasUteis"),
+  valorTotal: varchar("valorTotal", { length: 20 }).notNull(),
+  operadora: varchar("operadora", { length: 100 }).default("iFood Benefícios"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type VrBenefit = typeof vrBenefits.$inferSelect;
+
+// ============================================================
+// RESUMO MENSAL DA FOLHA (consolidado por funcionário/mês)
+// ============================================================
+
+export const monthlyPayrollSummary = mysqlTable("monthly_payroll_summary", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
+  // Dados do funcionário no mês
+  nomeColaborador: varchar("nomeColaborador", { length: 255 }),
+  codigoContabil: varchar("codigoContabil", { length: 20 }),
+  funcao: varchar("funcao", { length: 100 }),
+  dataAdmissao: date("dataAdmissao"),
+  salarioBaseHora: varchar("salarioBaseHora", { length: 20 }),
+  horasMensais: varchar("horasMensais", { length: 10 }),
+  // Adiantamento
+  adiantamentoBruto: varchar("adiantamentoBruto", { length: 20 }),
+  adiantamentoDescontos: varchar("adiantamentoDescontos", { length: 20 }),
+  adiantamentoLiquido: varchar("adiantamentoLiquido", { length: 20 }),
+  // Folha
+  salarioHorista: varchar("salarioHorista", { length: 20 }),
+  dsr: varchar("dsr", { length: 20 }),
+  totalProventos: varchar("totalProventos", { length: 20 }),
+  totalDescontos: varchar("totalDescontos", { length: 20 }),
+  folhaLiquido: varchar("folhaLiquido", { length: 20 }),
+  // Encargos
+  baseINSS: varchar("baseINSS", { length: 20 }),
+  valorINSS: varchar("valorINSS", { length: 20 }),
+  baseFGTS: varchar("baseFGTS", { length: 20 }),
+  valorFGTS: varchar("valorFGTS", { length: 20 }),
+  baseIRRF: varchar("baseIRRF", { length: 20 }),
+  valorIRRF: varchar("valorIRRF", { length: 20 }),
+  // Extras
+  diferencaSalario: varchar("diferencaSalario", { length: 20 }),
+  horasExtrasValor: varchar("horasExtrasValor", { length: 20 }),
+  vrBeneficio: varchar("vrBeneficio", { length: 20 }),
+  // Banco de pagamento
+  bancoAdiantamento: varchar("bancoAdiantamento", { length: 100 }),
+  bancoFolha: varchar("bancoFolha", { length: 100 }),
+  // Custo total do funcionário
+  custoTotalMes: varchar("custoTotalMes", { length: 20 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type MonthlyPayrollSummary = typeof monthlyPayrollSummary.$inferSelect;

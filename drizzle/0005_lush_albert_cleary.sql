@@ -1,0 +1,1 @@
+ALTER TABLE `employees` MODIFY COLUMN `banco` enum('Caixa_Economica','Santander','Bradesco','Itau','Banco_do_Brasil','Nubank','Inter','Outro');

@@ -1,0 +1,1 @@
+ALTER TABLE `employees` MODIFY COLUMN `banco` varchar(100);

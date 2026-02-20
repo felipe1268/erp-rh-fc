@@ -44,6 +44,10 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
+import { validateCNPJ } from "../shared/cnpj";
+import { TRPCError } from "@trpc/server";
+import { importExcelRouter } from "./routers/importExcel";
+import { payrollParsersRouter } from "./routers/payrollParsers";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -84,6 +88,10 @@ export const appRouter = router({
       cidade: z.string().optional(), estado: z.string().optional(),
       cep: z.string().optional(), telefone: z.string().optional(), email: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
+      // Validar CNPJ
+      if (!validateCNPJ(input.cnpj)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ inválido. Verifique os dígitos e tente novamente." });
+      }
       const result = await createCompany(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "empresas", entityType: "company", entityId: result.id, details: `Empresa criada: ${input.razaoSocial}` });
       return result;
@@ -377,8 +385,43 @@ export const appRouter = router({
   searchByTraining: protectedProcedure.input(z.object({ companyId: z.number(), trainingName: z.string() })).query(({ input }) => searchEmployeesByTraining(input.companyId, input.trainingName)),
 
   // ============================================================
+  // IMPORTAÇÃO EXCEL
+  // ============================================================
+  import: importExcelRouter,
+
+  // ============================================================
+  // EXCLUSÃO EM LOTE (BATCH DELETE)
+  // ============================================================
+  batch: router({
+    delete: protectedProcedure.input(z.object({
+      table: z.enum([
+        "employees", "asos", "trainings", "epis", "epi_deliveries",
+        "accidents", "warnings", "risks", "vehicles", "equipment",
+        "extinguishers", "hydrants", "audits", "deviations",
+        "action_plans", "dds", "cipa_elections", "cipa_members",
+        "payroll", "time_records", "chemicals", "payroll_uploads",
+        "training_documents"
+      ]),
+      ids: z.array(z.number()).min(1),
+    })).mutation(async ({ input }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { sql } = await import("drizzle-orm");
+      const idList = input.ids.join(",");
+      await db.execute(sql.raw(`DELETE FROM \`${input.table}\` WHERE id IN (${idList})`));
+      return { success: true, deleted: input.ids.length };
+    }),
+  }),
+
+  // ============================================================
   // DASHBOARDS INTERATIVOS
   // ============================================================
   dashboards: dashboardsRouter,
+
+  // ============================================================
+  // FOLHA DE PAGAMENTO (parsers, vales, extras, VR)
+  // ============================================================
+  payrollParsers: payrollParsersRouter,
 });
 export type AppRouter = typeof appRouter;
