@@ -221,7 +221,7 @@ export default function Usuarios() {
 
       {/* Create Profile Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-md bg-card">
+        <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
           <DialogHeader>
             <DialogTitle>Novo Perfil de Acesso</DialogTitle>
           </DialogHeader>
@@ -265,7 +265,7 @@ export default function Usuarios() {
 
       {/* Permissions Dialog */}
       <Dialog open={permDialogOpen} onOpenChange={setPermDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-card">
+        <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
           <DialogHeader>
             <DialogTitle>Configurar Permissões</DialogTitle>
           </DialogHeader>

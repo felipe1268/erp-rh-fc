@@ -291,7 +291,7 @@ export default function Configuracoes() {
 
         {/* Dialog: Limpeza do Banco */}
         <Dialog open={showCleanDialog} onOpenChange={setShowCleanDialog}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
             <DialogHeader>
               <DialogTitle className="text-red-600">Limpeza do Banco de Dados</DialogTitle>
               <DialogDescription>

@@ -835,7 +835,7 @@ function ExtrasTab({ companyId }: { companyId: number }) {
 
       {/* Dialog para novo pagamento extra */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader>
             <DialogTitle>Novo Pagamento Extra</DialogTitle>
           </DialogHeader>

@@ -146,9 +146,9 @@ function ASOTab({ companyId }: { companyId: number }) {
       </Card>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo ASO</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
               <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
@@ -288,7 +288,7 @@ function TrainingTab({ companyId }: { companyId: number }) {
 
       {/* Dialog de Documentos do Treinamento */}
       <Dialog open={showDocs} onOpenChange={setShowDocs}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-600" />
@@ -302,9 +302,9 @@ function TrainingTab({ companyId }: { companyId: number }) {
       </Dialog>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Treinamento</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
               <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
@@ -389,9 +389,9 @@ function EPITab({ companyId }: { companyId: number }) {
       </Card>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo EPI</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2"><Label>Nome</Label><Input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></div>
             <div><Label>CA</Label><Input value={form.ca} onChange={e => setForm({ ...form, ca: e.target.value })} /></div>
             <div><Label>Validade CA</Label><Input type="date" value={form.validadeCA} onChange={e => setForm({ ...form, validadeCA: e.target.value })} /></div>
@@ -475,9 +475,9 @@ function AccidentTab({ companyId }: { companyId: number }) {
       </Card>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Registrar Acidente</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
               <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
@@ -609,9 +609,9 @@ function WarningTab({ companyId }: { companyId: number }) {
       </Card>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Nova Advertência</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
               <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
@@ -708,9 +708,9 @@ function RiskTab({ companyId }: { companyId: number }) {
       </Card>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Risco</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Setor</Label><Input value={form.setor} onChange={e => setForm({ ...form, setor: e.target.value })} /></div>
             <div><Label>Agente de Risco</Label><Input value={form.agenteRisco} onChange={e => setForm({ ...form, agenteRisco: e.target.value })} /></div>
             <div>

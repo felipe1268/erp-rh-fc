@@ -40,6 +40,7 @@ import {
   createPayrollUpload, getPayrollUploads, updatePayrollUploadStatus, deletePayrollUpload,
   createDixiDevice, getDixiDevices, updateDixiDevice, deleteDixiDevice,
   checkBlacklist, getBlacklistedEmployees, searchEmployeesByTraining,
+  checkDuplicateCpf,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import type { ProfileType } from "../shared/modules";
@@ -138,6 +139,14 @@ export const appRouter = router({
       return { success: true };
     }),
     history: protectedProcedure.input(z.object({ employeeId: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeHistory(input.employeeId, input.companyId)),
+    checkDuplicateCpf: protectedProcedure.input(z.object({ cpf: z.string(), excludeEmployeeId: z.number().optional() })).query(({ input }) => checkDuplicateCpf(input.cpf, input.excludeEmployeeId)),
+    deleteMany: protectedProcedure.input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      for (const id of input.ids) {
+        await deleteEmployee(id, input.companyId);
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", companyId: input.companyId, action: "DELETE", module: "core_rh", entityType: "employee", entityId: input.ids[0], details: `Exclus\u00e3o em massa: ${input.ids.length} colaboradores` });
+      return { success: true, deleted: input.ids.length };
+    }),
   }),
 
   // ============================================================

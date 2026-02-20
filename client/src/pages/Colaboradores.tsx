@@ -1,15 +1,17 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2 } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
 
@@ -29,7 +31,6 @@ const statusLabels: Record<string, string> = {
   ListaNegra: "Lista Negra",
 };
 
-// Helper: formatar qualquer valor para exibição segura (evita React error #31 com Date)
 function safeDisplay(value: unknown): string {
   if (value === null || value === undefined) return "-";
   if (value instanceof Date) return value.toLocaleDateString("pt-BR");
@@ -41,7 +42,6 @@ function formatDate(val: unknown): string {
   if (!val) return "-";
   if (val instanceof Date) return val.toLocaleDateString("pt-BR");
   const s = String(val);
-  // formato ISO yyyy-mm-dd
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const d = new Date(s + "T12:00:00");
     return d.toLocaleDateString("pt-BR");
@@ -59,6 +59,11 @@ export default function Colaboradores() {
   const [viewingEmployee, setViewingEmployee] = useState<any>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [blacklistAlert, setBlacklistAlert] = useState<string | null>(null);
+  const [cpfDuplicateAlert, setCpfDuplicateAlert] = useState<string | null>(null);
+
+  // Seleção múltipla
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { data: companies } = trpc.companies.list.useQuery();
   const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
@@ -87,10 +92,28 @@ export default function Colaboradores() {
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); toast.success("Colaborador excluído!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
+  const deleteManyMut = trpc.employees.deleteMany.useMutation({
+    onSuccess: (data) => {
+      utils.employees.list.invalidate();
+      utils.employees.stats.invalidate();
+      setSelectedIds(new Set());
+      setDeleteConfirmOpen(false);
+      toast.success(`${data.deleted} colaborador(es) excluído(s)!`);
+    },
+    onError: (e) => toast.error("Erro: " + e.message),
+  });
 
+  // Verificação de lista negra
   const checkBlacklistMut = trpc.blacklist.check.useQuery(
     { cpf: form.cpf ?? "" },
     { enabled: !!(form.cpf && form.cpf.replace(/\D/g, "").length >= 11 && !editingId) }
+  );
+
+  // Verificação de CPF duplicado
+  const cpfClean = useMemo(() => (form.cpf ?? "").replace(/\D/g, ""), [form.cpf]);
+  const checkDuplicateCpf = trpc.employees.checkDuplicateCpf.useQuery(
+    { cpf: cpfClean, excludeEmployeeId: editingId ?? undefined },
+    { enabled: cpfClean.length >= 11 }
   );
 
   useEffect(() => {
@@ -102,10 +125,24 @@ export default function Colaboradores() {
     }
   }, [checkBlacklistMut.data]);
 
+  useEffect(() => {
+    const duplicates = checkDuplicateCpf.data as any[];
+    if (duplicates && duplicates.length > 0) {
+      const msgs = duplicates.map((d: any) => `"${d.nomeCompleto}" na empresa ${d.empresa} (Status: ${statusLabels[d.status] ?? d.status})`);
+      setCpfDuplicateAlert(`CPF já cadastrado no grupo: ${msgs.join("; ")}`);
+    } else {
+      setCpfDuplicateAlert(null);
+    }
+  }, [checkDuplicateCpf.data]);
+
+  // Limpar seleção quando mudar empresa ou filtro
+  useEffect(() => { setSelectedIds(new Set()); }, [selectedCompany, statusFilter, search]);
+
   const openNew = () => {
     setEditingId(null);
     setForm({ status: "Ativo", companyId: selectedCompany });
     setBlacklistAlert(null);
+    setCpfDuplicateAlert(null);
     setDialogOpen(true);
   };
 
@@ -124,9 +161,9 @@ export default function Colaboradores() {
         }
       }
     });
-    // Garantir que companyId está no form
     if (!f.companyId && companyId) f.companyId = String(companyId);
     setForm(f);
+    setCpfDuplicateAlert(null);
     setDialogOpen(true);
   };
 
@@ -140,6 +177,11 @@ export default function Colaboradores() {
       toast.error("Nome e CPF são obrigatórios.");
       return;
     }
+    // Bloquear se CPF duplicado (exceto edição do mesmo)
+    if (cpfDuplicateAlert && !editingId) {
+      toast.error("Não é possível cadastrar: " + cpfDuplicateAlert);
+      return;
+    }
     const targetCompanyId = form.companyId ? parseInt(form.companyId) : companyId!;
     if (editingId) {
       const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, ...data } = form;
@@ -151,10 +193,33 @@ export default function Colaboradores() {
 
   const set = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
 
-  // Nome da empresa para exibição
   const getCompanyName = (cId: number) => {
     const c = companies?.find(c => c.id === cId);
     return c ? (c.nomeFantasia || c.razaoSocial) : "-";
+  };
+
+  // Seleção múltipla helpers
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (!employees) return;
+    if (selectedIds.size === employees.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(employees.map(e => e.id)));
+    }
+  };
+  const isAllSelected = employees && employees.length > 0 && selectedIds.size === employees.length;
+  const hasSelection = selectedIds.size > 0;
+
+  const handleBulkDelete = () => {
+    if (!companyId || selectedIds.size === 0) return;
+    deleteManyMut.mutate({ ids: Array.from(selectedIds), companyId });
   };
 
   return (
@@ -181,6 +246,30 @@ export default function Colaboradores() {
             </Button>
           </div>
         </div>
+
+        {/* Barra de ações em massa */}
+        {hasSelection ? (
+          <div className="flex items-center gap-4 bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">
+            <span className="text-sm font-medium text-destructive">
+              {selectedIds.size} colaborador(es) selecionado(s)
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-2"
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" /> Excluir Selecionados
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Limpar Seleção
+            </Button>
+          </div>
+        ) : null}
 
         {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
@@ -220,6 +309,13 @@ export default function Colaboradores() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-secondary/50">
+                  <th className="text-left px-3 py-3 w-10">
+                    <Checkbox
+                      checked={isAllSelected}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Selecionar todos"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">CPF</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Cargo</th>
@@ -230,13 +326,20 @@ export default function Colaboradores() {
               </thead>
               <tbody>
                 {employees.map(emp => (
-                  <tr key={emp.id} className="border-t border-border hover:bg-secondary/30 transition-colors">
+                  <tr key={emp.id} className={`border-t border-border hover:bg-secondary/30 transition-colors ${selectedIds.has(emp.id) ? "bg-primary/5" : ""}`}>
+                    <td className="px-3 py-3">
+                      <Checkbox
+                        checked={selectedIds.has(emp.id)}
+                        onCheckedChange={() => toggleSelect(emp.id)}
+                        aria-label={`Selecionar ${emp.nomeCompleto}`}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium">{emp.nomeCompleto}</td>
                     <td className="px-4 py-3 text-muted-foreground">{emp.cpf}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.cargo ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${statusColors[emp.status] ?? ""}`}>
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
                         {statusLabels[emp.status] ?? emp.status}
                       </span>
                     </td>
@@ -269,10 +372,34 @@ export default function Colaboradores() {
       </div>
 
       {/* ============================================================ */}
+      {/* CONFIRMAÇÃO DE EXCLUSÃO EM MASSA */}
+      {/* ============================================================ */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão em Massa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{selectedIds.size}</strong> colaborador(es)?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteManyMut.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ============================================================ */}
       {/* FORM DIALOG - CADASTRO / EDIÇÃO */}
       {/* ============================================================ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card">
+        <DialogContent className="max-w-7xl w-[95vw] max-h-[95vh] overflow-y-auto bg-card p-8">
           <DialogHeader>
             <DialogTitle className="text-xl">{editingId ? "Editar Colaborador" : "Novo Colaborador"}</DialogTitle>
           </DialogHeader>
@@ -306,19 +433,30 @@ export default function Colaboradores() {
 
             {/* ===== ABA PESSOAL ===== */}
             <TabsContent value="pessoal" className="pt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
-                <div className="sm:col-span-2 lg:col-span-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4">
                   <Label className="text-xs font-medium text-muted-foreground">Nome Completo *</Label>
                   <Input value={form.nomeCompleto ?? ""} onChange={e => set("nomeCompleto", e.target.value)} className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">CPF *</Label>
-                  <Input value={form.cpf ?? ""} onChange={e => set("cpf", e.target.value)} placeholder="000.000.000-00" className={`bg-input mt-1 ${blacklistAlert ? "border-red-600 ring-1 ring-red-600" : ""}`} />
+                  <Input
+                    value={form.cpf ?? ""}
+                    onChange={e => set("cpf", e.target.value)}
+                    placeholder="000.000.000-00"
+                    className={`bg-input mt-1 ${blacklistAlert || cpfDuplicateAlert ? "border-red-600 ring-1 ring-red-600" : ""}`}
+                  />
                 </div>
                 {blacklistAlert ? (
                   <div className="sm:col-span-2 lg:col-span-3 bg-red-600/10 border border-red-600/30 rounded-lg p-3 flex items-center gap-2">
                     <Ban className="h-5 w-5 text-red-600 shrink-0" />
                     <p className="text-sm font-medium text-red-600">{blacklistAlert}</p>
+                  </div>
+                ) : null}
+                {cpfDuplicateAlert && !editingId ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-red-600/10 border border-red-600/30 rounded-lg p-3 flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+                    <p className="text-sm font-medium text-red-600">⛔ {cpfDuplicateAlert}. Cadastro bloqueado.</p>
                   </div>
                 ) : null}
                 <div>
@@ -386,7 +524,7 @@ export default function Colaboradores() {
 
             {/* ===== ABA DOCUMENTOS ===== */}
             <TabsContent value="documentos" className="pt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">RG</Label>
                   <Input value={form.rg ?? ""} onChange={e => set("rg", e.target.value)} className="bg-input mt-1" />
@@ -432,8 +570,8 @@ export default function Colaboradores() {
 
             {/* ===== ABA ENDEREÇO ===== */}
             <TabsContent value="endereco" className="pt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
-                <div className="sm:col-span-2 lg:col-span-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4">
                   <Label className="text-xs font-medium text-muted-foreground">Logradouro</Label>
                   <Input value={form.logradouro ?? ""} onChange={e => set("logradouro", e.target.value)} className="bg-input mt-1" />
                 </div>
@@ -466,7 +604,7 @@ export default function Colaboradores() {
 
             {/* ===== ABA PROFISSIONAL ===== */}
             <TabsContent value="profissional" className="pt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Matrícula</Label>
                   <Input value={form.matricula ?? ""} onChange={e => set("matricula", e.target.value)} className="bg-input mt-1" />
@@ -548,10 +686,9 @@ export default function Colaboradores() {
             {/* ===== ABA BANCÁRIO ===== */}
             <TabsContent value="bancario" className="pt-4">
               <div className="space-y-5">
-                {/* Conta para recebimento */}
                 <div>
                   <h4 className="text-sm font-semibold text-primary mb-3">Conta para Recebimento (Folha/Vale)</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Banco</Label>
                       <Select value={form.banco || undefined} onValueChange={v => set("banco", v)}>
@@ -597,10 +734,9 @@ export default function Colaboradores() {
                   </div>
                 </div>
 
-                {/* Dados PIX */}
                 <div>
                   <h4 className="text-sm font-semibold text-primary mb-3">Dados PIX</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Tipo de Chave PIX</Label>
                       <Select value={form.tipoChavePix || undefined} onValueChange={v => set("tipoChavePix", v)}>
@@ -640,7 +776,10 @@ export default function Colaboradores() {
 
           <DialogFooter className="gap-2 pt-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>
+            <Button
+              onClick={handleSubmit}
+              disabled={createMut.isPending || updateMut.isPending || (!editingId && !!cpfDuplicateAlert)}
+            >
               {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

@@ -1,0 +1,5 @@
+Screenshot observations:
+- Sidebar is clean: no 5W2H, Extintores/Hidrantes, or Auditoria e Qualidade items
+- Menu sections: Principal (Dashboard, Empresas), Gestão de Pessoal (Colaboradores), SST (SST - Geral), Operacional (Ponto e Folha, Gestão de Ativos, CIPA), Dashboards (Todos os Dashboards, Colaboradores, Pendências)
+- Dashboard shows correctly with company selector
+- 0 TypeScript errors

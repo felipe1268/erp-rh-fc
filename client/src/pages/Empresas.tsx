@@ -206,7 +206,7 @@ export default function Empresas() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg bg-card">
+        <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar Empresa" : "Nova Empresa"}</DialogTitle>
           </DialogHeader>

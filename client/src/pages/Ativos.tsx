@@ -99,9 +99,9 @@ function FrotaTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Veículo</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Placa</Label><Input value={form.placa} onChange={e => setForm({ ...form, placa: e.target.value })} /></div>
             <div><Label>Modelo</Label><Input value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} /></div>
             <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} /></div>
@@ -186,9 +186,9 @@ function EquipamentosTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Equipamento</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Nome</Label><Input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></div>
             <div><Label>Patrimônio</Label><Input value={form.patrimonio} onChange={e => setForm({ ...form, patrimonio: e.target.value })} /></div>
             <div><Label>Tipo</Label><Input value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} /></div>
@@ -263,9 +263,9 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Extintor</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Número</Label><Input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} placeholder="Ex: EXT-001" /></div>
             <div><Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
@@ -344,9 +344,9 @@ function HidrantesTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Hidrante</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Número</Label><Input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} placeholder="Ex: HID-001" /></div>
             <div><Label>Localização</Label><Input value={form.localizacao} onChange={e => setForm({ ...form, localizacao: e.target.value })} /></div>
             <div><Label>Tipo</Label>

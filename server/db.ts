@@ -813,6 +813,27 @@ export async function deleteDixiDevice(id: number) {
 // LISTA NEGRA - Busca por CPF
 // ============================================================
 
+export async function checkDuplicateCpf(cpf: string, excludeEmployeeId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const cleanCpf = cpf.replace(/\D/g, "");
+  if (cleanCpf.length < 11) return [];
+  const conditions = [or(eq(employees.cpf, cpf), eq(employees.cpf, cleanCpf))];
+  if (excludeEmployeeId) {
+    const { ne } = await import("drizzle-orm");
+    conditions.push(ne(employees.id, excludeEmployeeId) as any);
+  }
+  // Retorna dados completos para auto-preenchimento
+  const results = await db.select().from(employees).where(and(...conditions));
+  if (results.length > 0) {
+    const companyIds = Array.from(new Set(results.map(r => r.companyId)));
+    const companyList = await db.select({ id: companies.id, nomeFantasia: companies.nomeFantasia, razaoSocial: companies.razaoSocial }).from(companies).where(sql`${companies.id} IN (${sql.raw(companyIds.join(","))})`);
+    const companyMap = Object.fromEntries(companyList.map(c => [c.id, c.nomeFantasia || c.razaoSocial]));
+    return results.map(r => ({ ...r, empresa: companyMap[r.companyId] || "Desconhecida" }));
+  }
+  return [];
+}
+
 export async function checkBlacklist(cpf: string) {
   const db = await getDb();
   if (!db) return null;

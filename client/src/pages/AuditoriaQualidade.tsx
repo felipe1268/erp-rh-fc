@@ -94,9 +94,9 @@ function AuditoriasTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Nova Auditoria</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2"><Label>Título *</Label><Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título da auditoria" /></div>
             <div><Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
@@ -172,9 +172,9 @@ function DesviosTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Desvio</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2"><Label>Título *</Label><Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título do desvio" /></div>
             <div className="col-span-2"><Label>Descrição</Label><Input value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></div>
             <div><Label>Tipo</Label>
@@ -248,9 +248,9 @@ function AcoesTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Plano 5W2H</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2"><Label>O Quê? (What) *</Label><Input value={form.oQue} onChange={e => setForm({ ...form, oQue: e.target.value })} /></div>
             <div className="col-span-2"><Label>Por Quê? (Why)</Label><Input value={form.porQue} onChange={e => setForm({ ...form, porQue: e.target.value })} /></div>
             <div><Label>Onde? (Where)</Label><Input value={form.onde} onChange={e => setForm({ ...form, onde: e.target.value })} /></div>
@@ -318,9 +318,9 @@ function DDSTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo DDS</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2"><Label>Tema</Label><Input value={form.tema} onChange={e => setForm({ ...form, tema: e.target.value })} /></div>
             <div><Label>Data</Label><Input type="date" value={form.dataRealizacao} onChange={e => setForm({ ...form, dataRealizacao: e.target.value })} /></div>
             <div><Label>Responsável</Label><Input value={form.responsavel} onChange={e => setForm({ ...form, responsavel: e.target.value })} /></div>

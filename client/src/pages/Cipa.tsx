@@ -101,9 +101,9 @@ function MembrosTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Novo Membro CIPA</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador *</Label>
               <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
@@ -199,9 +199,9 @@ function EleicoesTab({ companyId }: { companyId: number }) {
         </div>
       </Card>
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] overflow-y-auto bg-card p-6">
           <DialogHeader><DialogTitle>Nova Eleição CIPA</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Início Mandato *</Label><Input type="date" value={form.mandatoInicio} onChange={e => setForm({ ...form, mandatoInicio: e.target.value })} /></div>
             <div><Label>Fim Mandato *</Label><Input type="date" value={form.mandatoFim} onChange={e => setForm({ ...form, mandatoFim: e.target.value })} /></div>
             <div><Label>Data Edital</Label><Input type="date" value={form.dataEdital} onChange={e => setForm({ ...form, dataEdital: e.target.value })} /></div>

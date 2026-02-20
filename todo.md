@@ -296,3 +296,18 @@
 - [x] BUG: Erro "value.toISOString is not a function" ao salvar edição de colaborador (mudar empresa)
 - [x] Corrigido: openEdit agora trata datas como string e exclui createdAt/updatedAt
 - [x] Corrigido: handleSubmit remove id, createdAt, updatedAt antes de enviar ao backend
+
+## Fase 23: Expandir Dialog Edição + PDF/Impressão/WhatsApp
+- [ ] Expandir grids do formulário de edição para 4 colunas
+- [ ] Adicionar botões de PDF, Impressão e Compartilhar via WhatsApp na ficha de visualização
+- [ ] Gerar PDF da ficha completa do colaborador
+- [x] Adicionar checkbox de seleção múltipla na tabela de colaboradores
+- [x] Botão "Excluir Selecionados" para exclusão em massa
+- [x] Checkbox "Selecionar Todos" no cabeçalho da tabela
+- [x] Endpoint de exclusão em massa no backend
+- [x] Sidebar fixa (sticky) - já é fixa pelo componente Sidebar do shadcn/ui
+- [x] Remover 5W2H do menu lateral (fora do escopo por enquanto)
+- [x] Remover Extintores/Hidrantes do menu lateral (fora do escopo por enquanto)
+- [x] Verificação de CPF duplicado ao cadastrar colaborador (BLOQUEAR cadastro, mostrar erro com nome e empresa)
+- [x] Remover módulo Auditoria e Qualidade completo (menu, rota, página, dashboards)
+- [x] Auto-preenchimento de dados ao digitar CPF - CANCELADO (CPF não tem API pública gratuita)
