@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import {
   Users, AlertTriangle, GraduationCap, HardHat, ShieldAlert,
-  ClipboardCheck, ListChecks, TriangleAlert, Flame, AlertOctagon,
+  ClipboardCheck, ListChecks, TriangleAlert, Flame, AlertOctagon, Clock,
 } from "lucide-react";
 
 const dashboards = [
@@ -15,6 +15,7 @@ const dashboards = [
   { path: "/dashboards/riscos", title: "Riscos", desc: "Riscos ambientais por tipo, grau e setor", icon: TriangleAlert, color: "text-yellow-500 bg-yellow-50" },
   { path: "/dashboards/extintores-hidrantes", title: "Extintores e Hidrantes", desc: "Status, validade e tipos dos equipamentos de combate a incêndio", icon: Flame, color: "text-red-500 bg-red-50" },
   { path: "/dashboards/desvios", title: "Desvios", desc: "Status, tipos, setores e taxa de resolução", icon: AlertOctagon, color: "text-orange-500 bg-orange-50" },
+  { path: "/dashboards/horas-extras", title: "Horas Extras", desc: "Campeões de HE por obra e pessoa, impacto financeiro e evolução mensal", icon: Clock, color: "text-orange-600 bg-orange-50" },
 ];
 
 export default function DashboardIndex() {

@@ -26,6 +26,7 @@ import Dash5w2h from "./pages/dashboards/Dash5w2h";
 import DashRiscos from "./pages/dashboards/DashRiscos";
 import DashExtintoresHidrantes from "./pages/dashboards/DashExtintoresHidrantes";
 import DashDesvios from "./pages/dashboards/DashDesvios";
+import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
 
 function Router() {
   return (
@@ -52,6 +53,7 @@ function Router() {
       <Route path={"/dashboards/riscos"} component={DashRiscos} />
       <Route path={"/dashboards/extintores-hidrantes"} component={DashExtintoresHidrantes} />
       <Route path={"/dashboards/desvios"} component={DashDesvios} />
+      <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

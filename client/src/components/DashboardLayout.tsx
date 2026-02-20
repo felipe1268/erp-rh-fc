@@ -77,6 +77,7 @@ const menuSections = [
       { icon: TriangleAlert, label: "Riscos", path: "/dashboards/riscos" },
       { icon: Flame, label: "Extintores/Hidrantes", path: "/dashboards/extintores-hidrantes" },
       { icon: AlertOctagon, label: "Desvios", path: "/dashboards/desvios" },
+      { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
     ],
   },
   {

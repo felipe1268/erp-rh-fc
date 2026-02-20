@@ -210,3 +210,12 @@
 - [x] Parser Espelho Folha Analítico PDF
 - [x] Parser Folha Sintético PDF
 - [x] Parser Pagamento por Banco (CEF/Santander) PDF
+
+## Fase 12: Dashboard de Horas Extras
+- [x] Criar rota tRPC de dados agregados de horas extras (por obra, por pessoa, por mês)
+- [x] Dashboard com gráfico de HE por obra (barras horizontais)
+- [x] Ranking dos "campeões" de horas extras (top 10 por pessoa)
+- [x] Impacto financeiro total (custo de HE por obra e por pessoa)
+- [x] Evolução mensal de HE (gráfico de linha)
+- [x] Filtros por empresa e período
+- [x] Integrar na navegação dos dashboards
