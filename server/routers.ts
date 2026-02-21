@@ -21,6 +21,7 @@ import {
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
+  getObraSns, getObraSnsByCompany, getActiveSnsByCompany, checkSnAvailability, addSnToObra, removeSnFromObra, releaseObraSns, findObraBySn,
   // Setores e Funções
   listSectors, createSector, updateSector, deleteSector,
   listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction,
@@ -364,7 +365,14 @@ export const appRouter = router({
       valorContrato: z.string().optional(),
       observacoes: z.string().optional(),
       isActive: z.boolean().optional(),
-    })).mutation(({ input }) => { const { id, ...data } = input; return updateObra(id, data as any); }),
+    })).mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      // Se status mudou para Concluída/Paralisada/Cancelada, liberar SNs
+      if (data.status && ["Concluida", "Paralisada", "Cancelada"].includes(data.status)) {
+        await releaseObraSns(id);
+      }
+      return updateObra(id, data as any);
+    }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => deleteObra(input.id)),
     // Funcionários alocados
     funcionarios: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraFuncionarios(input.obraId)),
@@ -382,6 +390,32 @@ export const appRouter = router({
       mesAno: z.string(),
       obraId: z.number().optional(),
     })).query(({ input }) => getObraHorasRateio(input.companyId, input.mesAno, input.obraId)),
+    // ============================================================
+    // SNs (Relógios de Ponto) por Obra
+    // ============================================================
+    listSns: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraSns(input.obraId)),
+    listSnsByCompany: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObraSnsByCompany(input.companyId)),
+    listActiveSns: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getActiveSnsByCompany(input.companyId)),
+    checkSnAvailability: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      sn: z.string().min(1),
+      excludeObraId: z.number().optional(),
+    })).query(({ input }) => checkSnAvailability(input.companyId, input.sn, input.excludeObraId)),
+    addSn: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      sn: z.string().min(1),
+      apelido: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      // Validar unicidade antes de adicionar
+      const check = await checkSnAvailability(input.companyId, input.sn, input.obraId);
+      if (!check.available) {
+        throw new Error(`SN "${input.sn}" já está em uso na obra "${check.usedByObra}". Libere-o primeiro.`);
+      }
+      return addSnToObra(input);
+    }),
+    removeSn: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => removeSnFromObra(input.id)),
+    releaseSns: protectedProcedure.input(z.object({ obraId: z.number() })).mutation(({ input }) => releaseObraSns(input.obraId)),
   }),
 
   // ============================================================

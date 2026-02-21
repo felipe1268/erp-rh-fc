@@ -265,7 +265,7 @@ export default function FechamentoPonto() {
       titulo = "Rateio de Mão de Obra por Obra";
       rateioData.data.forEach((obra: any) => {
         conteudo += `<div style="margin-top:24px;page-break-inside:avoid;"><div style="background:#f0fdfa;padding:10px 14px;border:1px solid #99f6e4;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;"><div><strong style="color:#0d9488;font-size:15px;">${obra.nomeObra}</strong>`;
-        if (obra.snRelogioPonto) conteudo += `<br/><span style="font-size:11px;color:#0d9488;">SN: ${obra.snRelogioPonto}</span>`;
+        if (obra.sns && obra.sns.length > 0) conteudo += `<br/><span style="font-size:11px;color:#0d9488;">SN: ${obra.sns.join(", ")}</span>`;
         conteudo += `</div><div style="text-align:right;"><strong>${obra.funcionarios.length} funcionários</strong><br/><span style="font-size:11px;">${obra.totalDias} dias trabalhados</span></div></div>`;
         conteudo += `<table><thead><tr><th>Colaborador</th><th>CPF</th><th>Função</th><th>Dias</th><th>H. Normais</th><th>H. Extras</th><th>Total</th></tr></thead><tbody>`;
         obra.funcionarios.forEach((f: any) => {
@@ -1316,9 +1316,9 @@ export default function FechamentoPonto() {
                           <h3 className="font-semibold text-teal-800">{obra.nomeObra}</h3>
                           <div className="flex items-center gap-3 mt-0.5">
                             {obra.codigoObra && <span className="text-xs text-teal-600">Código: {obra.codigoObra}</span>}
-                            {obra.snRelogioPonto ? (
+                            {obra.sns && obra.sns.length > 0 ? (
                               <span className="text-xs text-teal-600 flex items-center gap-1">
-                                <Wifi className="h-3 w-3" /> SN: {obra.snRelogioPonto}
+                                <Wifi className="h-3 w-3" /> SN: {obra.sns.join(", ")}
                               </span>
                             ) : (
                               <span className="text-xs text-red-600 flex items-center gap-1">

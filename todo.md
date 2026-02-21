@@ -672,3 +672,15 @@
 - [x] Adicionar link/botão para navegar ao detalhe do funcionário diretamente da inconsistência
 - [x] Mostrar informações contextuais (obra, horários registrados) na área expandida
 - [x] Melhorar layout da área expandida com mais informações úteis para resolução
+
+## REVISÃO_08: Múltiplos SNs por Obra + Regras de Negócio
+- [x] Criar tabela obra_sns (obraId, sn, status ativo/inativo, dataVinculo, dataLiberacao)
+- [x] Migrar campo snRelogioPonto existente para nova tabela
+- [x] Validação de unicidade: SN nunca pode estar em 2 obras "Em Andamento" ao mesmo tempo
+- [x] Liberação automática: quando obra muda para Concluída/Paralisada/Cancelada, SNs ficam disponíveis
+- [x] Backend: CRUD de SNs por obra com validação
+- [x] Frontend: gerenciamento de múltiplos SNs no formulário de obras (adicionar/remover)
+- [x] Frontend: exibir SNs na listagem de obras e no card da obra
+- [x] Atualizar integração DIXI: lookup de SN busca na nova tabela obra_sns
+- [x] Atualizar rateio por obra para exibir todos os SNs vinculados
+- [x] Testes de validação de unicidade de SN

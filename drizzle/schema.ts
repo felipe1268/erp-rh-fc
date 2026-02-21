@@ -804,6 +804,27 @@ export const pontoConsolidacao = mysqlTable("ponto_consolidacao", {
 ]);
 
 // ============================================================
+// Tabela de SNs (relógios de ponto) vinculados a obras
+// Um SN só pode estar ativo em uma obra por vez
+// Quando a obra muda para Concluída/Paralisada/Cancelada, os SNs são liberados
+export const obraSns = mysqlTable("obra_sns", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	obraId: int().notNull(),
+	sn: varchar({ length: 50 }).notNull(),
+	apelido: varchar({ length: 100 }),
+	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),
+	dataVinculo: date({ mode: 'string' }),
+	dataLiberacao: date({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("obra_sn_company").on(table.companyId),
+	index("obra_sn_obra").on(table.obraId),
+	index("obra_sn_sn").on(table.sn),
+]);
+// ============================================================
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type InsertCompany = typeof companies.$inferInsert;

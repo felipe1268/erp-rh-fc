@@ -9,7 +9,7 @@ import {
   permissions, InsertPermission,
   auditLogs, InsertAuditLog,
   trainingDocuments, payrollUploads, dixiDevices,
-  obras, InsertObra, obraFuncionarios, obraHorasRateio,
+  obras, InsertObra, obraFuncionarios, obraHorasRateio, obraSns,
   sectors, InsertSector, jobFunctions, InsertJobFunction,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -1073,4 +1073,116 @@ export async function deleteJobFunction(id: number, companyId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(jobFunctions).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));
+}
+
+
+// ============================================================
+// OBRA SNs (Relógios de Ponto por Obra)
+// ============================================================
+
+export async function getObraSns(obraId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(obraSns).where(eq(obraSns.obraId, obraId)).orderBy(desc(obraSns.createdAt));
+}
+
+export async function getObraSnsByCompany(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    obraSn: obraSns,
+    obraNome: obras.nome,
+    obraStatus: obras.status,
+  }).from(obraSns)
+    .leftJoin(obras, eq(obraSns.obraId, obras.id))
+    .where(eq(obraSns.companyId, companyId))
+    .orderBy(desc(obraSns.createdAt));
+}
+
+export async function getActiveSnsByCompany(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    obraSn: obraSns,
+    obraNome: obras.nome,
+  }).from(obraSns)
+    .leftJoin(obras, eq(obraSns.obraId, obras.id))
+    .where(and(eq(obraSns.companyId, companyId), eq(obraSns.status, "ativo")));
+}
+
+// Validação: verifica se um SN já está ativo em outra obra
+export async function checkSnAvailability(companyId: number, sn: string, excludeObraId?: number): Promise<{ available: boolean; usedByObra?: string; usedByObraId?: number }> {
+  const db = await getDb();
+  if (!db) return { available: true };
+  const conditions = [
+    eq(obraSns.companyId, companyId),
+    eq(obraSns.sn, sn),
+    eq(obraSns.status, "ativo"),
+  ];
+  const existing = await db.select({
+    obraId: obraSns.obraId,
+    obraNome: obras.nome,
+  }).from(obraSns)
+    .leftJoin(obras, eq(obraSns.obraId, obras.id))
+    .where(and(...conditions));
+  
+  const conflict = excludeObraId
+    ? existing.find(e => e.obraId !== excludeObraId)
+    : existing[0];
+  
+  if (conflict) {
+    return { available: false, usedByObra: conflict.obraNome || "Obra desconhecida", usedByObraId: conflict.obraId };
+  }
+  return { available: true };
+}
+
+export async function addSnToObra(data: { companyId: number; obraId: number; sn: string; apelido?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(obraSns).values({
+    companyId: data.companyId,
+    obraId: data.obraId,
+    sn: data.sn,
+    apelido: data.apelido || null,
+    status: "ativo",
+    dataVinculo: new Date().toISOString().split("T")[0],
+  });
+  return { id: result.insertId };
+}
+
+export async function removeSnFromObra(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(obraSns).set({
+    status: "inativo",
+    dataLiberacao: new Date().toISOString().split("T")[0],
+  }).where(eq(obraSns.id, id));
+}
+
+// Liberar todos os SNs de uma obra (quando status muda para Concluída/Paralisada/Cancelada)
+export async function releaseObraSns(obraId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(obraSns).set({
+    status: "inativo",
+    dataLiberacao: new Date().toISOString().split("T")[0],
+  }).where(and(eq(obraSns.obraId, obraId), eq(obraSns.status, "ativo")));
+}
+
+// Buscar obra pelo SN ativo (para integração DIXI)
+export async function findObraBySn(companyId: number, sn: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const results = await db.select({
+    obraId: obraSns.obraId,
+    obraNome: obras.nome,
+  }).from(obraSns)
+    .leftJoin(obras, eq(obraSns.obraId, obras.id))
+    .where(and(
+      eq(obraSns.companyId, companyId),
+      eq(obraSns.sn, sn),
+      eq(obraSns.status, "ativo"),
+    ))
+    .limit(1);
+  return results[0] || null;
 }

@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -310,7 +310,15 @@ export const fechamentoPontoRouter = router({
 
       // Get all dixi devices for this company (to match SN -> obra)
       const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
-      // Also get obras with snRelogioPonto
+      // Get active SNs from obra_sns table
+      const activeSns = await db.select({
+        sn: obraSns.sn,
+        obraId: obraSns.obraId,
+        obraNome: obras.nome,
+      }).from(obraSns)
+        .leftJoin(obras, eq(obraSns.obraId, obras.id))
+        .where(and(eq(obraSns.companyId, input.companyId), eq(obraSns.status, "ativo")));
+      // Also get obras list for fallback (legacy snRelogioPonto field)
       const obrasList = await db.select({
         id: obras.id,
         nome: obras.nome,
@@ -339,15 +347,24 @@ export const fechamentoPontoRouter = router({
         let obraId: number | null = null;
         let obraNome = "";
 
-        // Check dixi_devices table first
-        const device = devices.find(d => d.serialNumber === deviceSerial);
-        if (device && device.obraId) {
-          obraId = device.obraId;
-          const obra = obrasList.find(o => o.id === device.obraId);
-          if (obra) obraNome = obra.nome;
+        // 1. Check obra_sns table (primary - supports multiple SNs per obra)
+        const snMatch = activeSns.find(s => s.sn === deviceSerial);
+        if (snMatch) {
+          obraId = snMatch.obraId;
+          obraNome = snMatch.obraNome || "";
         }
 
-        // Check obras.snRelogioPonto
+        // 2. Fallback: Check dixi_devices table
+        if (!obraId) {
+          const device = devices.find(d => d.serialNumber === deviceSerial);
+          if (device && device.obraId) {
+            obraId = device.obraId;
+            const obra = obrasList.find(o => o.id === device.obraId);
+            if (obra) obraNome = obra.nome;
+          }
+        }
+
+        // 3. Fallback: Check legacy obras.snRelogioPonto field
         if (!obraId) {
           const obra = obrasList.find(o => o.snRelogioPonto === deviceSerial);
           if (obra) {
@@ -464,7 +481,7 @@ export const fechamentoPontoRouter = router({
               companyId: input.companyId,
               obraId: obraId!,
               employeeId: Number(empId),
-              dixiDeviceId: device?.id || null,
+              dixiDeviceId: devices.find(d => d.serialNumber === deviceSerial)?.id || null,
               mesAno: mesRef,
               horasNormais: minutesToHHMM(normais > 0 ? normais : 0),
               horasExtras: minutesToHHMM(data.horasExtras),
@@ -948,35 +965,35 @@ export const fechamentoPontoRouter = router({
         .where(and(eq(obraHorasRateio.companyId, input.companyId), eq(obraHorasRateio.mesAno, input.mesReferencia)))
         .orderBy(obras.nome, employees.nomeCompleto);
 
-      // Also check if any obras lost their SN (SN was changed after upload)
+      // Check if obras have SNs linked (from obra_sns table)
       const obraIds = Array.from(new Set(rateio.map(r => r.obraId).filter(Boolean)));
       let snWarnings: Record<number, string> = {};
+      let obraSnMap: Record<number, string[]> = {};
       if (obraIds.length > 0) {
-        // Check dixi_devices linked to these obras
-        const linkedDevices = await db.select({
-          obraId: dixiDevices.obraId,
-          serialNumber: dixiDevices.serialNumber,
-        }).from(dixiDevices).where(
+        const linkedSns = await db.select({
+          obraId: obraSns.obraId,
+          sn: obraSns.sn,
+          status: obraSns.status,
+        }).from(obraSns).where(
           and(
-            eq(dixiDevices.companyId, input.companyId),
-            inArray(dixiDevices.obraId, obraIds as number[]),
+            eq(obraSns.companyId, input.companyId),
+            inArray(obraSns.obraId, obraIds as number[]),
           )
         );
-        // Check if SN in obra matches device SN
-        for (const r of rateio) {
-          if (r.obraId && !r.snRelogioPonto) {
-            // Obra has no SN defined - check if there's a device linked
-            const hasDevice = linkedDevices.some(d => d.obraId === r.obraId);
-            if (!hasDevice) {
-              snWarnings[r.obraId] = "SN do relógio não definido nesta obra. O rateio pode estar incorreto.";
-            }
+        for (const s of linkedSns) {
+          if (!obraSnMap[s.obraId]) obraSnMap[s.obraId] = [];
+          obraSnMap[s.obraId].push(s.sn);
+        }
+        for (const oId of obraIds) {
+          if (oId && !obraSnMap[oId as number]) {
+            snWarnings[oId as number] = "Nenhum SN vinculado a esta obra. O rateio pode estar incorreto.";
           }
         }
       }
 
       // Agrupar por obra
       const porObra: Record<number, {
-        obraId: number; nomeObra: string; codigoObra: string; snRelogioPonto: string | null;
+        obraId: number; nomeObra: string; codigoObra: string; sns: string[];
         funcionarios: any[]; totalHoras: string; totalExtras: string; totalDias: number;
         snWarning: string | null;
       }> = {};
@@ -986,7 +1003,7 @@ export const fechamentoPontoRouter = router({
           obraId: oId,
           nomeObra: r.nomeObra || "Sem Obra",
           codigoObra: r.codigoObra || "",
-          snRelogioPonto: r.snRelogioPonto || null,
+          sns: obraSnMap[oId] || (r.snRelogioPonto ? [r.snRelogioPonto] : []),
           funcionarios: [],
           totalHoras: "0:00",
           totalExtras: "0:00",
@@ -1218,6 +1235,14 @@ export const fechamentoPontoRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
+      // Get active SNs from obra_sns table
+      const activeSns = await db.select({
+        sn: obraSns.sn,
+        obraId: obraSns.obraId,
+        obraNome: obras.nome,
+      }).from(obraSns)
+        .leftJoin(obras, eq(obraSns.obraId, obras.id))
+        .where(and(eq(obraSns.companyId, input.companyId), eq(obraSns.status, "ativo")));
       const obrasList = await db.select({
         id: obras.id,
         nome: obras.nome,
@@ -1252,12 +1277,24 @@ export const fechamentoPontoRouter = router({
         let obraId: number | null = null;
         let obraNome = "";
 
-        const device = devices.find(d => d.serialNumber === deviceSerial);
-        if (device && device.obraId) {
-          obraId = device.obraId;
-          const obra = obrasList.find(o => o.id === device.obraId);
-          if (obra) obraNome = obra.nome;
+        // 1. Check obra_sns table (primary)
+        const snMatch = activeSns.find(s => s.sn === deviceSerial);
+        if (snMatch) {
+          obraId = snMatch.obraId;
+          obraNome = snMatch.obraNome || "";
         }
+
+        // 2. Fallback: dixi_devices
+        if (!obraId) {
+          const device = devices.find(d => d.serialNumber === deviceSerial);
+          if (device && device.obraId) {
+            obraId = device.obraId;
+            const obra = obrasList.find(o => o.id === device.obraId);
+            if (obra) obraNome = obra.nome;
+          }
+        }
+
+        // 3. Fallback: legacy obras.snRelogioPonto
         if (!obraId) {
           const obra = obrasList.find(o => o.snRelogioPonto === deviceSerial);
           if (obra) { obraId = obra.id; obraNome = obra.nome; }
