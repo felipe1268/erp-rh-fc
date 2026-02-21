@@ -11,8 +11,8 @@ import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
-  PenLine, Eye, ChevronLeft, CheckCircle, XCircle, Shield, Search, Filter,
-  Trash2, Building2, AlertCircle, MapPin
+  PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search, Filter,
+  Trash2, Building2, AlertCircle, MapPin, Info, Wifi
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo } from "react";
@@ -22,6 +22,23 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio";
 type CardFilter = null | "colaboradores" | "registros" | "inconsistencias" | "ajustes" | "multiplasObras";
+
+// Month name helper
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+function formatMesAno(mesAno: string): string {
+  const [ano, mes] = mesAno.split("-");
+  return `${MESES[parseInt(mes, 10) - 1]} ${ano}`;
+}
+function prevMes(mesAno: string): string {
+  const [ano, mes] = mesAno.split("-").map(Number);
+  if (mes === 1) return `${ano - 1}-12`;
+  return `${ano}-${String(mes - 1).padStart(2, "0")}`;
+}
+function nextMes(mesAno: string): string {
+  const [ano, mes] = mesAno.split("-").map(Number);
+  if (mes === 12) return `${ano + 1}-01`;
+  return `${ano}-${String(mes + 1).padStart(2, "0")}`;
+}
 
 export default function FechamentoPonto() {
   const { selectedCompanyId } = useCompany();
@@ -36,11 +53,12 @@ export default function FechamentoPonto() {
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [showResolveDialog, setShowResolveDialog] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
-  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [selectedInconsistency, setSelectedInconsistency] = useState<any>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<any>(null);
+  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validating, setValidating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
   const [cardFilter, setCardFilter] = useState<CardFilter>(null);
@@ -82,6 +100,8 @@ export default function FechamentoPonto() {
     onError: (err) => toast.error("Erro no upload: " + err.message),
   });
 
+  const validateMut = trpc.fechamentoPonto.validateSN.useMutation();
+
   const manualMut = trpc.fechamentoPonto.manualEntry.useMutation({
     onSuccess: () => {
       setShowManualDialog(false);
@@ -103,7 +123,6 @@ export default function FechamentoPonto() {
     onError: (err) => toast.error("Erro: " + err.message),
   });
 
-  // New mutations
   const clearMut = trpc.fechamentoPonto.clearMonthData.useMutation({
     onSuccess: () => {
       setShowClearDialog(false);
@@ -113,10 +132,6 @@ export default function FechamentoPonto() {
     onError: (err) => toast.error("Erro: " + err.message),
   });
 
-  // New queries
-  const duplicateCheck = trpc.fechamentoPonto.checkDuplicates.useQuery(
-    { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 }
-  );
   const rateioData = trpc.fechamentoPonto.getRateioPorObra.useQuery(
     { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 && viewMode === "rateio" }
   );
@@ -129,7 +144,7 @@ export default function FechamentoPonto() {
     return summary.data.filter((e: any) => e.multiplasObras).length;
   }, [summary.data]);
 
-  // Filtered summary with card filter + obra filter
+  // Filtered summary
   const filteredSummary = useMemo(() => {
     if (!summary.data) return [];
     let data = summary.data;
@@ -143,28 +158,46 @@ export default function FechamentoPonto() {
         return ids.includes(parseInt(filterObra, 10));
       });
     }
-    // Card filter
-    if (cardFilter === "ajustes") {
-      data = data.filter((e: any) => e.temAjusteManual);
-    }
-    if (cardFilter === "multiplasObras") {
-      data = data.filter((e: any) => e.multiplasObras);
-    }
+    if (cardFilter === "ajustes") data = data.filter((e: any) => e.temAjusteManual);
+    if (cardFilter === "multiplasObras") data = data.filter((e: any) => e.multiplasObras);
     return data;
   }, [summary.data, searchTerm, filterObra, cardFilter]);
 
-  // Handle upload with duplicate check
-  const handleUploadWithCheck = () => {
-    if (duplicateCheck.data?.hasData) {
-      setShowDuplicateDialog(true);
-    } else {
-      setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null);
+  // ===== PRÉ-VALIDAÇÃO DE ARQUIVOS =====
+  const handleFilesSelected = async (files: File[]) => {
+    setUploadFiles(files);
+    setUploadResult(null);
+    setValidationResult(null);
+
+    if (files.length === 0) return;
+
+    // Pré-validar arquivos (SN + meses detectados)
+    setValidating(true);
+    try {
+      const filesData = await Promise.all(
+        files.map(async (f) => {
+          const buffer = await f.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+          );
+          return { fileName: f.name, fileBase64: base64 };
+        })
+      );
+      const result = await validateMut.mutateAsync({ companyId, files: filesData });
+      setValidationResult(result);
+    } catch (e: any) {
+      toast.error("Erro na validação: " + e.message);
+    } finally {
+      setValidating(false);
     }
   };
 
-  // Upload handler
+  // ===== UPLOAD HANDLER (REGRA MÃE: sempre distribui nas datas corretas) =====
   const handleUpload = async () => {
     if (uploadFiles.length === 0) return toast.error("Selecione pelo menos um arquivo DIXI");
+    if (validationResult && !validationResult.allValid) {
+      return toast.error("Corrija os problemas de SN antes de importar. Cadastre os SNs nas obras correspondentes.");
+    }
     setUploading(true);
     setUploadResult(null);
     try {
@@ -177,7 +210,7 @@ export default function FechamentoPonto() {
           return { fileName: f.name, fileBase64: base64 };
         })
       );
-      await uploadMut.mutateAsync({ companyId, mesReferencia: mesAno, files: filesData });
+      await uploadMut.mutateAsync({ companyId, files: filesData });
     } catch (e) {
       // error handled by mutation
     } finally {
@@ -191,7 +224,6 @@ export default function FechamentoPonto() {
     return ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
   };
 
-  // Helper to open RaioX
   const openRaioX = (empId: number) => {
     setRaioXEmployeeId(empId);
   };
@@ -225,13 +257,23 @@ export default function FechamentoPonto() {
           </div>
         </div>
 
-        {/* Toolbar */}
+        {/* Toolbar com filtro de data dinâmico */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-            <input type="month" value={mesAno} onChange={e => setMesAno(e.target.value)} className="border rounded-md px-3 py-2 text-sm" />
+          {/* FILTRO DE DATA DINÂMICO */}
+          <div className="flex items-center bg-white border rounded-lg shadow-sm">
+            <Button variant="ghost" size="sm" className="h-10 px-2 rounded-r-none hover:bg-muted/50" onClick={() => setMesAno(prevMes(mesAno))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-2 px-3 min-w-[180px] justify-center">
+              <CalendarDays className="h-4 w-4 text-[#1B2A4A]" />
+              <span className="text-sm font-semibold text-[#1B2A4A]">{formatMesAno(mesAno)}</span>
+            </div>
+            <Button variant="ghost" size="sm" className="h-10 px-2 rounded-l-none hover:bg-muted/50" onClick={() => setMesAno(nextMes(mesAno))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
-          <Button onClick={handleUploadWithCheck} className="bg-[#1B2A4A] hover:bg-[#243660]">
+
+          <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
             <Upload className="h-4 w-4 mr-2" /> Upload DIXI
           </Button>
           <Button variant="outline" onClick={() => setShowManualDialog(true)}>
@@ -243,13 +285,13 @@ export default function FechamentoPonto() {
             </Button>
           )}
           {viewMode !== "resumo" && viewMode !== "detalhe" && (
-            <Button variant="ghost" onClick={() => { setViewMode("resumo"); setCardFilter(null); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setViewMode("resumo"); setCardFilter(null); }}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar ao Resumo
             </Button>
           )}
         </div>
 
-        {/* Stats Cards - All clickable as filters */}
+        {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-5">
           <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "colaboradores" ? "ring-2 ring-blue-500 shadow-md" : ""}`}
             onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "colaboradores" ? null : "colaboradores"); }}>
@@ -307,7 +349,6 @@ export default function FechamentoPonto() {
               </div>
             </CardContent>
           </Card>
-          {/* NOVO CARD: Múltiplas Obras */}
           <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "multiplasObras" ? "ring-2 ring-red-500 shadow-md" : ""} ${multiSiteCount > 0 ? "border-red-300 bg-red-50/50" : ""}`}
             onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "multiplasObras" ? null : "multiplasObras"); }}>
             <CardContent className="p-4">
@@ -373,7 +414,7 @@ export default function FechamentoPonto() {
                   <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
                   <h3 className="font-semibold text-lg">Nenhum registro de ponto</h3>
                   <p className="text-muted-foreground text-sm mt-1">Faça o upload dos arquivos DIXI para importar os registros de ponto.</p>
-                  <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); }} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
+                  <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); }} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
                     <Upload className="h-4 w-4 mr-2" /> Upload DIXI
                   </Button>
                 </CardContent>
@@ -383,7 +424,7 @@ export default function FechamentoPonto() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between flex-wrap gap-3">
                     <CardTitle className="text-base">
-                      Resumo por Colaborador — {mesAno}
+                      Resumo por Colaborador — {formatMesAno(mesAno)}
                       {cardFilter === "multiplasObras" && (
                         <Badge variant="destructive" className="ml-2 text-xs">
                           <MapPin className="h-3 w-3 mr-1" /> Filtro: Múltiplas Obras
@@ -396,7 +437,6 @@ export default function FechamentoPonto() {
                       )}
                     </CardTitle>
                     <div className="flex items-center gap-2">
-                      {/* FILTRO POR OBRA */}
                       <div className="flex items-center gap-1.5">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
                         <Select value={filterObra} onValueChange={setFilterObra}>
@@ -466,28 +506,20 @@ export default function FechamentoPonto() {
                                   ))}
                                 </div>
                               ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  {emp.obraNomes?.[0] || "-"}
-                                </span>
+                                <span className="text-xs text-muted-foreground">{emp.obraNomes?.[0] || "-"}</span>
                               )}
                             </td>
                             <td className="p-2 text-center">{emp.diasTrabalhados}</td>
                             <td className="p-2 text-center font-mono">{emp.horasTrabalhadas}</td>
                             <td className="p-2 text-center font-mono">
-                              {emp.horasExtras !== "0:00" ? (
-                                <span className="text-green-600 font-semibold">{emp.horasExtras}</span>
-                              ) : "-"}
+                              {emp.horasExtras !== "0:00" ? <span className="text-green-600 font-semibold">{emp.horasExtras}</span> : "-"}
                             </td>
                             <td className="p-2 text-center font-mono">
-                              {emp.atrasos !== "0:00" ? (
-                                <span className="text-red-600">{emp.atrasos}</span>
-                              ) : "-"}
+                              {emp.atrasos !== "0:00" ? <span className="text-red-600">{emp.atrasos}</span> : "-"}
                             </td>
                             <td className="p-2 text-center">
                               {emp.multiplasObras ? (
-                                <Badge variant="destructive" className="text-xs">
-                                  <MapPin className="h-3 w-3 mr-1" /> Multi-Obra
-                                </Badge>
+                                <Badge variant="destructive" className="text-xs"><MapPin className="h-3 w-3 mr-1" /> Multi-Obra</Badge>
                               ) : (
                                 <Badge variant="outline" className="text-xs text-green-600 border-green-300">OK</Badge>
                               )}
@@ -517,7 +549,7 @@ export default function FechamentoPonto() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
-                Inconsistências de Ponto — {mesAno}
+                Inconsistências de Ponto — {formatMesAno(mesAno)}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -546,7 +578,7 @@ export default function FechamentoPonto() {
                         return (
                           <tr key={inc.id} className="border-b last:border-0 hover:bg-muted/30">
                             <td className="p-2">
-                              <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(item.employeeId)}>
+                              <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(inc.employeeId)}>
                                 {item.employeeName}
                               </button>
                             </td>
@@ -565,13 +597,8 @@ export default function FechamentoPonto() {
                             </td>
                             <td className="p-2 text-muted-foreground text-xs max-w-[300px] truncate">{inc.descricao}</td>
                             <td className="p-2 text-center">
-                              <Badge variant={
-                                inc.status === "pendente" ? "destructive" :
-                                inc.status === "justificado" ? "secondary" : "outline"
-                              } className="text-xs">
-                                {inc.status === "pendente" ? "Pendente" :
-                                 inc.status === "justificado" ? "Justificado" :
-                                 inc.status === "ajustado" ? "Ajustado" : inc.status}
+                              <Badge variant={inc.status === "pendente" ? "destructive" : inc.status === "justificado" ? "secondary" : "outline"} className="text-xs">
+                                {inc.status === "pendente" ? "Pendente" : inc.status === "justificado" ? "Justificado" : inc.status === "ajustado" ? "Ajustado" : inc.status}
                               </Badge>
                             </td>
                             <td className="p-2 text-center">
@@ -586,10 +613,8 @@ export default function FechamentoPonto() {
                                   </Button>
                                   <Button variant="ghost" size="sm" onClick={() => {
                                     setManualData({
-                                      employeeId: item.employeeId || 0,
-                                      obraId: 0,
-                                      data: inc.data || "",
-                                      entrada1: "", saida1: "", entrada2: "", saida2: "",
+                                      employeeId: inc.employeeId || 0, obraId: 0,
+                                      data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "",
                                       justificativa: `Correção: ${inc.descricao}`,
                                     });
                                     setShowManualDialog(true);
@@ -617,93 +642,206 @@ export default function FechamentoPonto() {
           </Card>
         )}
 
-        {/* DETALHE VIEW */}
+        {/* DETALHE VIEW — SEPARADO POR OBRA */}
         {viewMode === "detalhe" && selectedEmployeeId && (
+          <>
+            {employeeDetail.isLoading ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
+            ) : (
+              <>
+                {/* Botão lançar manual */}
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setManualData({
+                      employeeId: selectedEmployeeId, obraId: 0, data: "",
+                      entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "",
+                    });
+                    setShowManualDialog(true);
+                  }}>
+                    <PenLine className="h-4 w-4 mr-1" /> Lançar Manual
+                  </Button>
+                </div>
+
+                {/* Registros agrupados por obra */}
+                {(employeeDetail.data?.recordsByObra || []).length === 0 ? (
+                  <Card>
+                    <CardContent className="py-8 text-center text-muted-foreground">
+                      Nenhum registro encontrado para este funcionário neste período.
+                    </CardContent>
+                  </Card>
+                ) : (
+                  (employeeDetail.data?.recordsByObra || []).map((obraGroup: any, idx: number) => (
+                    <Card key={idx}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Building2 className="h-5 w-5 text-teal-600" />
+                            <span>{obraGroup.obraNome}</span>
+                            <Badge variant="outline" className="text-xs ml-2">
+                              {obraGroup.records.length} registro{obraGroup.records.length > 1 ? "s" : ""}
+                            </Badge>
+                          </CardTitle>
+                          <span className="text-xs text-muted-foreground">{formatMesAno(mesAno)}</span>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b text-left bg-muted/50">
+                                <th className="p-2 font-medium">Data</th>
+                                <th className="p-2 font-medium">Dia</th>
+                                <th className="p-2 font-medium text-center">Entrada</th>
+                                <th className="p-2 font-medium text-center">Saída Int.</th>
+                                <th className="p-2 font-medium text-center">Retorno</th>
+                                <th className="p-2 font-medium text-center">Saída</th>
+                                <th className="p-2 font-medium text-center">Horas Trab.</th>
+                                <th className="p-2 font-medium text-center">H. Extra</th>
+                                <th className="p-2 font-medium text-center">Fonte</th>
+                                <th className="p-2 font-medium text-center">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {obraGroup.records.map((rec: any) => {
+                                const hasIncons = (employeeDetail.data?.inconsistencies || []).some((i: any) => i.data === rec.data);
+                                return (
+                                  <tr key={rec.id} className={`border-b last:border-0 ${rec.ajusteManual ? "bg-purple-50" : ""} ${hasIncons ? "bg-amber-50" : ""}`}>
+                                    <td className="p-2">{rec.data ? new Date(rec.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td>
+                                    <td className="p-2 text-muted-foreground">{dayOfWeek(rec.data)}</td>
+                                    <td className="p-2 text-center font-mono">{rec.entrada1 || "-"}</td>
+                                    <td className="p-2 text-center font-mono">{rec.saida1 || "-"}</td>
+                                    <td className="p-2 text-center font-mono">{rec.entrada2 || "-"}</td>
+                                    <td className="p-2 text-center font-mono">{rec.saida2 || "-"}</td>
+                                    <td className="p-2 text-center font-mono font-semibold">{rec.horasTrabalhadas || "-"}</td>
+                                    <td className="p-2 text-center font-mono">
+                                      {rec.horasExtras && rec.horasExtras !== "0:00" ? (
+                                        <span className="text-green-600 font-semibold">{rec.horasExtras}</span>
+                                      ) : "-"}
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      {rec.ajusteManual ? (
+                                        <Badge variant="outline" className="text-xs text-purple-600 border-purple-300">
+                                          <PenLine className="h-3 w-3 mr-1" /> Manual
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-xs">DIXI</Badge>
+                                      )}
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      {hasIncons ? (
+                                        <Badge variant="destructive" className="text-xs">
+                                          <AlertTriangle className="h-3 w-3 mr-1" /> Inconsistente
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-xs text-green-600 border-green-300">OK</Badge>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* RATEIO POR OBRA VIEW — COM SN */}
+        {viewMode === "rateio" && (
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Registro Diário — {mesAno}</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => {
-                  setManualData({
-                    employeeId: selectedEmployeeId,
-                    obraId: 0,
-                    data: "",
-                    entrada1: "", saida1: "", entrada2: "", saida2: "",
-                    justificativa: "",
-                  });
-                  setShowManualDialog(true);
-                }}>
-                  <PenLine className="h-4 w-4 mr-1" /> Lançar Manual
-                </Button>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-teal-600" /> Rateio de Mão de Obra por Obra — {formatMesAno(mesAno)}
+                </CardTitle>
               </div>
+              <p className="text-xs text-muted-foreground">Distribuição de horas trabalhadas por obra para rateio de custos</p>
             </CardHeader>
             <CardContent>
-              {employeeDetail.isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+              {rateioData.isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Carregando rateio...</div>
+              ) : !rateioData.data || rateioData.data.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>Nenhum dado de rateio encontrado para este período.</p>
+                  <p className="text-xs mt-1">Os dados de rateio são gerados automaticamente ao importar os arquivos DIXI.</p>
+                </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left bg-muted/50">
-                        <th className="p-2 font-medium">Data</th>
-                        <th className="p-2 font-medium">Dia</th>
-                        <th className="p-2 font-medium text-center">Entrada</th>
-                        <th className="p-2 font-medium text-center">Saída Int.</th>
-                        <th className="p-2 font-medium text-center">Retorno</th>
-                        <th className="p-2 font-medium text-center">Saída</th>
-                        <th className="p-2 font-medium text-center">Horas Trab.</th>
-                        <th className="p-2 font-medium text-center">H. Extra</th>
-                        <th className="p-2 font-medium text-center">Fonte</th>
-                        <th className="p-2 font-medium text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(employeeDetail.data?.records || []).map((rec: any) => {
-                        const hasIncons = (employeeDetail.data?.inconsistencies || []).some((i: any) => i.data === rec.data);
-                        return (
-                          <tr key={rec.id} className={`border-b last:border-0 ${rec.ajusteManual ? "bg-purple-50" : ""} ${hasIncons ? "bg-amber-50" : ""}`}>
-                            <td className="p-2">{rec.data ? new Date(rec.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td>
-                            <td className="p-2 text-muted-foreground">{dayOfWeek(rec.data)}</td>
-                            <td className="p-2 text-center font-mono">{rec.entrada1 || "-"}</td>
-                            <td className="p-2 text-center font-mono">{rec.saida1 || "-"}</td>
-                            <td className="p-2 text-center font-mono">{rec.entrada2 || "-"}</td>
-                            <td className="p-2 text-center font-mono">{rec.saida2 || "-"}</td>
-                            <td className="p-2 text-center font-mono font-semibold">{rec.horasTrabalhadas || "-"}</td>
-                            <td className="p-2 text-center font-mono">
-                              {rec.horasExtras && rec.horasExtras !== "0:00" ? (
-                                <span className="text-green-600 font-semibold">{rec.horasExtras}</span>
-                              ) : "-"}
-                            </td>
-                            <td className="p-2 text-center">
-                              {rec.ajusteManual ? (
-                                <Badge variant="outline" className="text-xs text-purple-600 border-purple-300">
-                                  <PenLine className="h-3 w-3 mr-1" /> Manual
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs">DIXI</Badge>
-                              )}
-                            </td>
-                            <td className="p-2 text-center">
-                              {hasIncons ? (
-                                <Badge variant="destructive" className="text-xs">
-                                  <AlertTriangle className="h-3 w-3 mr-1" /> Inconsistente
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs text-green-600 border-green-300">OK</Badge>
-                              )}
-                            </td>
+                <div className="space-y-6">
+                  {rateioData.data.map((obra: any) => (
+                    <div key={obra.obraId} className="border rounded-lg overflow-hidden">
+                      <div className="bg-teal-50 border-b px-4 py-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-teal-800">{obra.nomeObra}</h3>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            {obra.codigoObra && <span className="text-xs text-teal-600">Código: {obra.codigoObra}</span>}
+                            {obra.snRelogioPonto ? (
+                              <span className="text-xs text-teal-600 flex items-center gap-1">
+                                <Wifi className="h-3 w-3" /> SN: {obra.snRelogioPonto}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-red-600 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" /> SN não definido
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-teal-800">{obra.funcionarios.length} funcionários</p>
+                          <p className="text-xs text-teal-600">{obra.totalDias} dias trabalhados</p>
+                        </div>
+                      </div>
+                      {/* SN Warning */}
+                      {obra.snWarning && (
+                        <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                          <p className="text-xs text-red-700">{obra.snWarning}</p>
+                        </div>
+                      )}
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left bg-muted/30">
+                            <th className="p-2 font-medium">Colaborador</th>
+                            <th className="p-2 font-medium">CPF</th>
+                            <th className="p-2 font-medium">Função</th>
+                            <th className="p-2 font-medium text-center">Dias</th>
+                            <th className="p-2 font-medium text-center">H. Normais</th>
+                            <th className="p-2 font-medium text-center">H. Extras</th>
+                            <th className="p-2 font-medium text-center">Total</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {obra.funcionarios.map((f: any) => (
+                            <tr key={f.employeeId} className="border-b last:border-0 hover:bg-muted/20">
+                              <td className="p-2">
+                                <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(f.employeeId)}>
+                                  {f.nomeCompleto}
+                                </button>
+                              </td>
+                              <td className="p-2 text-muted-foreground font-mono text-xs">{formatCPF(f.cpf)}</td>
+                              <td className="p-2 text-muted-foreground">{f.funcao || "-"}</td>
+                              <td className="p-2 text-center">{f.diasTrabalhados}</td>
+                              <td className="p-2 text-center font-mono">{f.horasNormais || "0:00"}</td>
+                              <td className="p-2 text-center font-mono text-green-600 font-semibold">{f.horasExtras || "0:00"}</td>
+                              <td className="p-2 text-center font-mono font-bold">{f.totalHoras || "0:00"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* UPLOAD DIALOG */}
+        {/* ===== UPLOAD DIALOG (SEM CAMPO COMPETÊNCIA — REGRA MÃE) ===== */}
         <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
@@ -713,13 +851,18 @@ export default function FechamentoPonto() {
             </DialogHeader>
             <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                <strong>Como funciona:</strong> Selecione os arquivos XLS exportados dos relógios DIXI de cada obra.
-                O sistema identifica automaticamente a obra pelo número de série (SN) do relógio.
+                <strong>Como funciona:</strong> Selecione os arquivos XLS exportados dos relógios DIXI.
+                O sistema identifica automaticamente a <strong>obra pelo SN</strong> e distribui os registros
+                na <strong>competência correta</strong> baseado na data de cada registro do arquivo.
               </div>
 
-              <div>
-                <Label>Competência</Label>
-                <input type="month" value={mesAno} onChange={e => setMesAno(e.target.value)} className="border rounded-md px-3 py-2 text-sm w-full mt-1" />
+              {/* REGRA MÃE INFO */}
+              <div className="bg-[#1B2A4A]/5 border border-[#1B2A4A]/20 rounded-lg p-3 text-sm text-[#1B2A4A] flex items-start gap-2">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Regra automática:</strong> Os registros serão alocados na competência correta conforme a data do arquivo.
+                  Se o arquivo contiver registros de meses diferentes, eles serão distribuídos automaticamente.
+                </span>
               </div>
 
               <div
@@ -737,11 +880,12 @@ export default function FechamentoPonto() {
                   className="hidden"
                   onChange={e => {
                     const files = Array.from(e.target.files || []);
-                    setUploadFiles(files);
+                    handleFilesSelected(files);
                   }}
                 />
               </div>
 
+              {/* Arquivos selecionados */}
               {uploadFiles.length > 0 && (
                 <div className="space-y-1">
                   <Label>Arquivos selecionados ({uploadFiles.length})</Label>
@@ -755,11 +899,71 @@ export default function FechamentoPonto() {
                 </div>
               )}
 
+              {/* Validação em andamento */}
+              {validating && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800 flex items-center gap-2">
+                  <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  Validando arquivos (SN e datas)...
+                </div>
+              )}
+
+              {/* Resultado da pré-validação */}
+              {validationResult && !uploadResult && (
+                <div className="space-y-2">
+                  {validationResult.results.map((r: any, i: number) => (
+                    <div key={i} className={`border rounded-lg p-3 text-sm ${r.valid ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {r.valid ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          )}
+                          <span className="font-medium">{r.fileName}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{r.totalRecords} registros</span>
+                      </div>
+                      <div className="mt-1.5 ml-6 space-y-0.5">
+                        <p className="text-xs">
+                          <strong>SN:</strong> {r.deviceSerial || "Não identificado"}
+                          {r.valid && <span className="text-green-700"> → {r.obraNome}</span>}
+                        </p>
+                        {r.mesesDetectados.length > 0 && (
+                          <p className="text-xs">
+                            <strong>Competência(s) detectada(s):</strong>{" "}
+                            {r.mesesDetectados.map((m: string) => formatMesAno(m)).join(", ")}
+                          </p>
+                        )}
+                        {r.mesesDetectados.length > 1 && (
+                          <p className="text-xs text-amber-700 flex items-center gap-1 mt-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Arquivo contém registros de <strong>{r.mesesDetectados.length} meses diferentes</strong>.
+                            Serão distribuídos automaticamente nas competências corretas.
+                          </p>
+                        )}
+                        {r.error && <p className="text-xs text-red-700 font-medium mt-1">{r.error}</p>}
+                      </div>
+                    </div>
+                  ))}
+
+                  {!validationResult.allValid && (
+                    <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3 text-sm text-red-800">
+                      <strong>Ação necessária:</strong> Cadastre o SN do equipamento na aba de Obras antes de fazer o upload.
+                      Vá em <strong>Obras → Editar → Campo "SN Relógio de Ponto"</strong> e insira o número de série.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Resultado do upload */}
               {uploadResult && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm space-y-2">
                   <p className="font-semibold text-green-800">Importação concluída!</p>
                   <p>Registros importados: <strong>{uploadResult.totalImported}</strong></p>
                   <p>Inconsistências detectadas: <strong>{uploadResult.totalInconsistencies}</strong></p>
+                  {uploadResult.mesesAfetados?.length > 0 && (
+                    <p>Competências atualizadas: <strong>{uploadResult.mesesAfetados.map((m: string) => formatMesAno(m)).join(", ")}</strong></p>
+                  )}
                   {uploadResult.totalUnmatched?.length > 0 && (
                     <div className="mt-2">
                       <p className="text-amber-700 font-medium">Funcionários não encontrados no cadastro:</p>
@@ -772,6 +976,9 @@ export default function FechamentoPonto() {
                     <div key={i} className="border-t pt-2 mt-2">
                       <p className="text-xs"><strong>{fr.fileName}</strong> — Obra: {fr.obraNome} (SN: {fr.deviceSerial})</p>
                       <p className="text-xs">{fr.funcionariosProcessados} funcionários, {fr.totalDiasProcessados} registros</p>
+                      {fr.mesesDetectados?.length > 0 && (
+                        <p className="text-xs text-muted-foreground">Meses: {fr.mesesDetectados.map((m: string) => formatMesAno(m)).join(", ")}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -780,7 +987,11 @@ export default function FechamentoPonto() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowUploadDialog(false)}>Fechar</Button>
               {!uploadResult && (
-                <Button onClick={handleUpload} disabled={uploading || uploadFiles.length === 0} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                <Button
+                  onClick={handleUpload}
+                  disabled={uploading || uploadFiles.length === 0 || validating || (validationResult && !validationResult.allValid)}
+                  className="bg-[#1B2A4A] hover:bg-[#243660]"
+                >
                   {uploading ? "Processando..." : "Importar"}
                 </Button>
               )}
@@ -800,7 +1011,6 @@ export default function FechamentoPonto() {
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-xs text-purple-800">
                 Registros manuais ficam <strong>destacados</strong> e são rastreados para avaliação futura do colaborador.
               </div>
-
               <div>
                 <Label>Colaborador</Label>
                 <Select value={String(manualData.employeeId || "")} onValueChange={v => setManualData(p => ({ ...p, employeeId: parseInt(v) }))}>
@@ -812,19 +1022,16 @@ export default function FechamentoPonto() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div>
                 <Label>Data</Label>
                 <Input type="date" value={manualData.data} onChange={e => setManualData(p => ({ ...p, data: e.target.value }))} />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Entrada</Label><Input type="time" value={manualData.entrada1} onChange={e => setManualData(p => ({ ...p, entrada1: e.target.value }))} /></div>
                 <div><Label>Saída Intervalo</Label><Input type="time" value={manualData.saida1} onChange={e => setManualData(p => ({ ...p, saida1: e.target.value }))} /></div>
                 <div><Label>Retorno</Label><Input type="time" value={manualData.entrada2} onChange={e => setManualData(p => ({ ...p, entrada2: e.target.value }))} /></div>
                 <div><Label>Saída</Label><Input type="time" value={manualData.saida2} onChange={e => setManualData(p => ({ ...p, saida2: e.target.value }))} /></div>
               </div>
-
               <div>
                 <Label>Justificativa</Label>
                 <Textarea value={manualData.justificativa} onChange={e => setManualData(p => ({ ...p, justificativa: e.target.value }))} placeholder="Motivo do lançamento manual..." />
@@ -853,78 +1060,6 @@ export default function FechamentoPonto() {
           </DialogContent>
         </Dialog>
 
-        {/* RATEIO POR OBRA VIEW */}
-        {viewMode === "rateio" && (
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-teal-600" /> Rateio de Mão de Obra por Obra — {mesAno}
-                </CardTitle>
-              </div>
-              <p className="text-xs text-muted-foreground">Distribuição de horas trabalhadas por obra para rateio de custos</p>
-            </CardHeader>
-            <CardContent>
-              {rateioData.isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Carregando rateio...</div>
-              ) : !rateioData.data || rateioData.data.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Nenhum dado de rateio encontrado para este período.</p>
-                  <p className="text-xs mt-1">Os dados de rateio são gerados automaticamente ao importar os arquivos DIXI.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {rateioData.data.map((obra: any) => (
-                    <div key={obra.obraId} className="border rounded-lg overflow-hidden">
-                      <div className="bg-teal-50 border-b px-4 py-3 flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-teal-800">{obra.nomeObra}</h3>
-                          {obra.codigoObra && <p className="text-xs text-teal-600">Código: {obra.codigoObra}</p>}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-teal-800">{obra.funcionarios.length} funcionários</p>
-                          <p className="text-xs text-teal-600">{obra.totalDias} dias trabalhados</p>
-                        </div>
-                      </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b text-left bg-muted/30">
-                            <th className="p-2 font-medium">Colaborador</th>
-                            <th className="p-2 font-medium">CPF</th>
-                            <th className="p-2 font-medium">Função</th>
-                            <th className="p-2 font-medium text-center">Dias</th>
-                            <th className="p-2 font-medium text-center">H. Normais</th>
-                            <th className="p-2 font-medium text-center">H. Extras</th>
-                            <th className="p-2 font-medium text-center">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {obra.funcionarios.map((f: any) => (
-                            <tr key={f.employeeId} className="border-b last:border-0 hover:bg-muted/20">
-                              <td className="p-2">
-                                <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(f.employeeId)}>
-                                  {f.nomeCompleto}
-                                </button>
-                              </td>
-                              <td className="p-2 text-muted-foreground font-mono text-xs">{formatCPF(f.cpf)}</td>
-                              <td className="p-2 text-muted-foreground">{f.funcao || "-"}</td>
-                              <td className="p-2 text-center">{f.diasTrabalhados || 0}</td>
-                              <td className="p-2 text-center font-mono">{f.horasNormais || "0:00"}</td>
-                              <td className="p-2 text-center font-mono text-green-600 font-semibold">{f.horasExtras || "0:00"}</td>
-                              <td className="p-2 text-center font-mono font-bold">{f.totalHoras || "0:00"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
         {/* RESOLVE INCONSISTENCY DIALOG */}
         <Dialog open={showResolveDialog} onOpenChange={setShowResolveDialog}>
           <DialogContent className="max-w-md">
@@ -945,7 +1080,6 @@ export default function FechamentoPonto() {
                   <p><strong>Tipo:</strong> {selectedInconsistency.inconsistency.tipoInconsistencia}</p>
                   <p><strong>Descrição:</strong> {selectedInconsistency.inconsistency.descricao}</p>
                 </div>
-
                 <div>
                   <Label>Ação</Label>
                   <Select value={resolveData.status} onValueChange={v => setResolveData(p => ({ ...p, status: v }))}>
@@ -957,12 +1091,10 @@ export default function FechamentoPonto() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
                   <Label>{resolveData.status === "advertencia" ? "Motivo da Advertência" : "Justificativa"}</Label>
                   <Textarea value={resolveData.justificativa} onChange={e => setResolveData(p => ({ ...p, justificativa: e.target.value }))} placeholder={resolveData.status === "advertencia" ? "Descreva o motivo da advertência..." : "Descreva a justificativa..."} />
                 </div>
-
                 {resolveData.status === "advertencia" && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-800">
                     <strong>Atenção:</strong> Ao gerar uma advertência, um registro será criado no módulo de Advertências do colaborador.
@@ -992,7 +1124,7 @@ export default function FechamentoPonto() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-red-600">
-                <Trash2 className="h-5 w-5" /> Limpar Base de Dados — {mesAno}
+                <Trash2 className="h-5 w-5" /> Limpar Base de Dados — {formatMesAno(mesAno)}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -1012,7 +1144,7 @@ export default function FechamentoPonto() {
                 </Select>
               </div>
               <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                <p><strong>Competência:</strong> {mesAno}</p>
+                <p><strong>Competência:</strong> {formatMesAno(mesAno)}</p>
                 <p><strong>Registros atuais:</strong> {stats.data?.totalRegistros || 0}</p>
                 <p><strong>Inconsistências:</strong> {stats.data?.totalInconsistencias || 0}</p>
               </div>
@@ -1021,36 +1153,6 @@ export default function FechamentoPonto() {
               <Button variant="outline" onClick={() => setShowClearDialog(false)}>Cancelar</Button>
               <Button variant="destructive" onClick={() => clearMut.mutate({ companyId, mesReferencia: mesAno, tipo: clearType as any })} disabled={clearMut.isPending}>
                 {clearMut.isPending ? "Limpando..." : "Confirmar Exclusão"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* DUPLICATE CHECK DIALOG */}
-        <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-amber-600">
-                <AlertCircle className="h-5 w-5" /> Dados Existentes Detectados
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                <strong>Atenção:</strong> Já existem <strong>{duplicateCheck.data?.existingCount || 0}</strong> registros para a competência <strong>{mesAno}</strong>.
-              </div>
-              <p className="text-sm">O que deseja fazer?</p>
-            </div>
-            <DialogFooter className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowDuplicateDialog(false)}>Cancelar</Button>
-              <Button variant="destructive" onClick={() => {
-                clearMut.mutate({ companyId, mesReferencia: mesAno, tipo: "tudo" }, {
-                  onSuccess: () => { setShowDuplicateDialog(false); setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); }
-                });
-              }} disabled={clearMut.isPending}>
-                {clearMut.isPending ? "Limpando..." : "Sobrescrever (apagar e reimportar)"}
-              </Button>
-              <Button className="bg-[#1B2A4A] hover:bg-[#243660]" onClick={() => { setShowDuplicateDialog(false); setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); }}>
-                Adicionar aos existentes
               </Button>
             </DialogFooter>
           </DialogContent>

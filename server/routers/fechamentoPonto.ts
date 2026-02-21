@@ -6,6 +6,7 @@ import {
   timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 
 // ============================================================
 // HELPERS
@@ -30,6 +31,11 @@ function normalizeNameForMatch(name: string): string {
     .replace(/[^A-Z\s]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Extract YYYY-MM from a date string YYYY-MM-DD */
+function dateToMesRef(dateStr: string): string {
+  return dateStr.substring(0, 7); // "2025-12" from "2025-12-15"
 }
 
 // Parse DIXI XLS - handles both date formats (DD/MM/YYYY and YYYY/MM/DD)
@@ -138,7 +144,6 @@ function matchEmployee(
     for (const emp of employeeList) {
       const empNorm = normalizeNameForMatch(emp.nomeCompleto);
       if (empNorm.startsWith(firstName + " ")) {
-        // Check if at least one more word matches
         const empParts = empNorm.split(" ");
         const matchCount = parts.filter(p => empParts.includes(p)).length;
         if (matchCount >= 2) return emp;
@@ -150,12 +155,12 @@ function matchEmployee(
 }
 
 // Group punches by person+day, assign entry/exit slots, detect inconsistencies
+// NOW: mesReferencia is derived from each record's date, not from input
 function processRecords(
   records: Array<{ dixiId: string; nome: string; data: string; hora: string; modo: string; sn: string }>,
   employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho: any }>,
   obraId: number | null,
   companyId: number,
-  mesReferencia: string,
 ) {
   // Group by person+day
   const grouped: Record<string, Record<string, string[]>> = {};
@@ -178,14 +183,12 @@ function processRecords(
   for (const [normName, days] of Object.entries(grouped)) {
     const emp = nameToEmployee[normName];
     if (!emp) {
-      // Find original name
       const originalName = records.find(r => normalizeNameForMatch(r.nome) === normName)?.nome || normName;
       unmatchedNames.push(originalName);
       continue;
     }
 
     for (const [data, horas] of Object.entries(days)) {
-      // Sort chronologically
       horas.sort();
 
       // Remove duplicate punches (within 2 minutes)
@@ -196,10 +199,7 @@ function processRecords(
         const [lh, lm] = lastH.split(":").map(Number);
         const [ch, cm] = h.split(":").map(Number);
         const diff = Math.abs((ch * 60 + cm) - (lh * 60 + lm));
-        if (diff >= 2) {
-          filtered.push(h);
-        }
-        // else: duplicate, skip
+        if (diff >= 2) filtered.push(h);
       }
 
       const entrada1 = filtered[0] ? filtered[0].substring(0, 5) : "";
@@ -209,14 +209,12 @@ function processRecords(
       const entrada3 = filtered[4] ? filtered[4].substring(0, 5) : "";
       const saida3 = filtered[5] ? filtered[5].substring(0, 5) : "";
 
-      // Calculate hours worked
       let totalMinutes = 0;
       if (entrada1 && saida1) totalMinutes += diffMinutes(entrada1, saida1);
       if (entrada2 && saida2) totalMinutes += diffMinutes(entrada2, saida2);
       if (entrada3 && saida3) totalMinutes += diffMinutes(entrada3, saida3);
 
-      // Calculate expected hours from jornada
-      let expectedMinutes = 480; // default 8h
+      let expectedMinutes = 480;
       if (emp.jornadaTrabalho) {
         try {
           const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
@@ -234,13 +232,13 @@ function processRecords(
         } catch (e) { /* use default */ }
       }
 
-      // Calculate extras
       const horasExtras = totalMinutes > expectedMinutes ? totalMinutes - expectedMinutes : 0;
       const atrasos = totalMinutes < expectedMinutes && totalMinutes > 0 ? expectedMinutes - totalMinutes : 0;
-
-      // Detect inconsistencies
       const isOddPunches = filtered.length % 2 !== 0;
       const isMissingPunch = filtered.length < 4 && filtered.length > 0;
+
+      // AUTO-DETECT mesReferencia from record date
+      const mesReferencia = dateToMesRef(data);
 
       const rec = {
         companyId,
@@ -248,12 +246,7 @@ function processRecords(
         obraId,
         mesReferencia,
         data,
-        entrada1,
-        saida1,
-        entrada2,
-        saida2,
-        entrada3,
-        saida3,
+        entrada1, saida1, entrada2, saida2, entrada3, saida3,
         horasTrabalhadas: minutesToHHMM(totalMinutes),
         horasExtras: horasExtras > 0 ? minutesToHHMM(horasExtras) : "0:00",
         horasNoturnas: "0:00",
@@ -268,11 +261,7 @@ function processRecords(
 
       if (isOddPunches) {
         inconsistencies.push({
-          companyId,
-          employeeId: emp.id,
-          obraId,
-          mesReferencia,
-          data,
+          companyId, employeeId: emp.id, obraId, mesReferencia, data,
           tipoInconsistencia: "batida_impar" as const,
           descricao: `${filtered.length} batida(s) registrada(s) - número ímpar indica falta de entrada ou saída`,
           status: "pendente" as const,
@@ -281,11 +270,7 @@ function processRecords(
 
       if (isMissingPunch && !isOddPunches) {
         inconsistencies.push({
-          companyId,
-          employeeId: emp.id,
-          obraId,
-          mesReferencia,
-          data,
+          companyId, employeeId: emp.id, obraId, mesReferencia, data,
           tipoInconsistencia: "falta_batida" as const,
           descricao: `Apenas ${filtered.length} batida(s) - esperado 4 (entrada, saída intervalo, retorno, saída)`,
           status: "pendente" as const,
@@ -302,11 +287,12 @@ function processRecords(
 // ============================================================
 export const fechamentoPontoRouter = router({
 
-  // Upload and process DIXI files
+  // ===================== UPLOAD DIXI (INTELIGENTE) =====================
+  // Upload auto-detecta mês dos registros do arquivo. Não depende do filtro de mês.
+  // Valida SN obrigatoriamente - bloqueia se SN não estiver vinculado a obra.
   uploadDixi: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      mesReferencia: z.string(),
       files: z.array(z.object({
         fileName: z.string(),
         fileBase64: z.string(),
@@ -314,7 +300,6 @@ export const fechamentoPontoRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      // XLSX already imported at top
 
       // Get all employees for this company
       const empList = await db.select({
@@ -336,14 +321,23 @@ export const fechamentoPontoRouter = router({
       let totalInconsistencies = 0;
       let totalUnmatched: string[] = [];
       const fileResults: any[] = [];
+      const mesesAfetados = new Set<string>();
 
       for (const file of input.files) {
         const buffer = Buffer.from(file.fileBase64, "base64");
         const { records, deviceSerial } = parseDixiXLS(buffer);
 
+        // ===== VALIDAÇÃO DE SN OBRIGATÓRIA =====
+        if (!deviceSerial) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Arquivo "${file.fileName}": Não foi possível identificar o número de série (SN) do equipamento DIXI. Verifique se o arquivo está no formato correto.`,
+          });
+        }
+
         // Find obra by SN
         let obraId: number | null = null;
-        let obraNome = "Não identificada";
+        let obraNome = "";
 
         // Check dixi_devices table first
         const device = devices.find(d => d.serialNumber === deviceSerial);
@@ -362,66 +356,81 @@ export const fechamentoPontoRouter = router({
           }
         }
 
-        // Process records
+        // ===== BLOQUEAR SE SN NÃO VINCULADO A OBRA =====
+        if (!obraId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Arquivo "${file.fileName}": O equipamento DIXI com SN "${deviceSerial}" não está vinculado a nenhuma obra cadastrada. Por favor, cadastre o SN na aba de Obras antes de fazer o upload.`,
+          });
+        }
+
+        // Process records - mesReferencia is auto-detected from each record's date
         const { timeRecordsToInsert, inconsistencies, unmatchedNames } = processRecords(
-          records, empList as any, obraId, input.companyId, input.mesReferencia
+          records, empList as any, obraId, input.companyId
         );
 
-        // Delete existing records for this company/mesReferencia/obra to avoid duplicates
-        if (obraId) {
+        // Group records by mesReferencia (auto-detected)
+        const recordsByMes: Record<string, any[]> = {};
+        const inconsByMes: Record<string, any[]> = {};
+        for (const rec of timeRecordsToInsert) {
+          if (!recordsByMes[rec.mesReferencia]) recordsByMes[rec.mesReferencia] = [];
+          recordsByMes[rec.mesReferencia].push(rec);
+        }
+        for (const inc of inconsistencies) {
+          if (!inconsByMes[inc.mesReferencia]) inconsByMes[inc.mesReferencia] = [];
+          inconsByMes[inc.mesReferencia].push(inc);
+        }
+
+        // Process each month separately
+        for (const [mesRef, recs] of Object.entries(recordsByMes)) {
+          mesesAfetados.add(mesRef);
+
+          // Delete existing DIXI records for this company/mesRef/obra
           await db.delete(timeRecords).where(
             and(
               eq(timeRecords.companyId, input.companyId),
-              eq(timeRecords.mesReferencia, input.mesReferencia),
-              eq(timeRecords.obraId, obraId),
+              eq(timeRecords.mesReferencia, mesRef),
+              eq(timeRecords.obraId, obraId!),
               eq(timeRecords.fonte, "dixi"),
             )
           );
           await db.delete(timeInconsistencies).where(
             and(
               eq(timeInconsistencies.companyId, input.companyId),
-              eq(timeInconsistencies.mesReferencia, input.mesReferencia),
-              eq(timeInconsistencies.obraId, obraId),
+              eq(timeInconsistencies.mesReferencia, mesRef),
+              eq(timeInconsistencies.obraId, obraId!),
             )
           );
-        }
 
-        // Insert time records in batches
-        if (timeRecordsToInsert.length > 0) {
-          const batchSize = 50;
-          for (let i = 0; i < timeRecordsToInsert.length; i += batchSize) {
-            const batch = timeRecordsToInsert.slice(i, i + batchSize);
-            await db.insert(timeRecords).values(batch);
+          // Insert time records in batches
+          if (recs.length > 0) {
+            const batchSize = 50;
+            for (let i = 0; i < recs.length; i += batchSize) {
+              const batch = recs.slice(i, i + batchSize);
+              await db.insert(timeRecords).values(batch);
+            }
           }
-        }
 
-        // Insert inconsistencies
-        if (inconsistencies.length > 0) {
-          const batchSize = 50;
-          for (let i = 0; i < inconsistencies.length; i += batchSize) {
-            const batch = inconsistencies.slice(i, i + batchSize);
-            await db.insert(timeInconsistencies).values(batch);
+          // Insert inconsistencies for this month
+          const monthIncons = inconsByMes[mesRef] || [];
+          if (monthIncons.length > 0) {
+            const batchSize = 50;
+            for (let i = 0; i < monthIncons.length; i += batchSize) {
+              const batch = monthIncons.slice(i, i + batchSize);
+              await db.insert(timeInconsistencies).values(batch);
+            }
           }
-        }
 
-        totalImported += timeRecordsToInsert.length;
-        totalInconsistencies += inconsistencies.length;
-        totalUnmatched = [...totalUnmatched, ...unmatchedNames];
-
-        // ===== RATEIO AUTOMÁTICO POR OBRA =====
-        // Agregar horas por funcionário para esta obra (identificada pelo Sn)
-        if (obraId && timeRecordsToInsert.length > 0) {
-          // Limpar rateio anterior para esta obra/mês
+          // ===== RATEIO AUTOMÁTICO POR OBRA (por mês) =====
           await db.delete(obraHorasRateio).where(
             and(
               eq(obraHorasRateio.companyId, input.companyId),
-              eq(obraHorasRateio.mesAno, input.mesReferencia),
-              eq(obraHorasRateio.obraId, obraId),
+              eq(obraHorasRateio.mesAno, mesRef),
+              eq(obraHorasRateio.obraId, obraId!),
             )
           );
 
-          // Buscar valorHora dos funcionários
-          const empIds = Array.from(new Set(timeRecordsToInsert.map((r: any) => r.employeeId)));
+          const empIds = Array.from(new Set(recs.map((r: any) => r.employeeId)));
           const empValores = await db.select({
             id: employees.id,
             valorHora: employees.valorHora,
@@ -431,9 +440,8 @@ export const fechamentoPontoRouter = router({
             valorHoraMap[e.id] = parseFloat(String(e.valorHora || "0").replace(",", ".")) || 0;
           }
 
-          // Agregar por funcionário
           const rateioByEmp: Record<number, { horasNormais: number; horasExtras: number; totalHoras: number; dias: number }> = {};
-          for (const rec of timeRecordsToInsert) {
+          for (const rec of recs) {
             if (!rateioByEmp[rec.employeeId]) {
               rateioByEmp[rec.employeeId] = { horasNormais: 0, horasExtras: 0, totalHoras: 0, dias: 0 };
             }
@@ -441,8 +449,7 @@ export const fechamentoPontoRouter = router({
             r.dias++;
             if (rec.horasTrabalhadas) {
               const [h, m] = rec.horasTrabalhadas.split(":").map(Number);
-              const totalMin = (h || 0) * 60 + (m || 0);
-              r.totalHoras += totalMin;
+              r.totalHoras += (h || 0) * 60 + (m || 0);
             }
             if (rec.horasExtras && rec.horasExtras !== "0:00") {
               const [h, m] = rec.horasExtras.split(":").map(Number);
@@ -450,16 +457,15 @@ export const fechamentoPontoRouter = router({
             }
           }
 
-          // Calcular horas normais e inserir rateio
           const rateioInserts: any[] = [];
           for (const [empId, data] of Object.entries(rateioByEmp)) {
             const normais = data.totalHoras - data.horasExtras;
             rateioInserts.push({
               companyId: input.companyId,
-              obraId,
+              obraId: obraId!,
               employeeId: Number(empId),
               dixiDeviceId: device?.id || null,
-              mesAno: input.mesReferencia,
+              mesAno: mesRef,
               horasNormais: minutesToHHMM(normais > 0 ? normais : 0),
               horasExtras: minutesToHHMM(data.horasExtras),
               horasNoturnas: "0:00",
@@ -473,11 +479,19 @@ export const fechamentoPontoRouter = router({
           }
         }
 
+        totalImported += timeRecordsToInsert.length;
+        totalInconsistencies += inconsistencies.length;
+        totalUnmatched = [...totalUnmatched, ...unmatchedNames];
+
+        // Collect months found in this file
+        const mesesNoArquivo = Object.keys(recordsByMes).sort();
+
         fileResults.push({
           fileName: file.fileName,
           deviceSerial,
           obraNome,
           obraId,
+          mesesDetectados: mesesNoArquivo,
           totalRegistrosBrutos: records.length,
           totalDiasProcessados: timeRecordsToInsert.length,
           totalInconsistencias: inconsistencies.length,
@@ -491,6 +505,7 @@ export const fechamentoPontoRouter = router({
         totalImported,
         totalInconsistencies,
         totalUnmatched: Array.from(new Set(totalUnmatched)),
+        mesesAfetados: Array.from(mesesAfetados).sort(),
         fileResults,
       };
     }),
@@ -595,7 +610,7 @@ export const fechamentoPontoRouter = router({
         if (r.ajusteManual) emp.temAjusteManual = true;
       }
 
-      // Also fetch obra names for multi-site display
+      // Fetch obra names
       const allObraIds = new Set<number>();
       for (const emp of Object.values(byEmployee)) {
         for (const oId of emp.obraIds) allObraIds.add(oId);
@@ -650,7 +665,7 @@ export const fechamentoPontoRouter = router({
         .orderBy(sql`${timeInconsistencies.data} ASC, ${employees.nomeCompleto} ASC`);
     }),
 
-  // Resolve inconsistency (justify, adjust, or mark for warning)
+  // Resolve inconsistency
   resolveInconsistency: protectedProcedure
     .input(z.object({
       id: z.number(),
@@ -690,13 +705,11 @@ export const fechamentoPontoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
 
-      // Calculate hours
       let totalMinutes = 0;
       if (input.entrada1 && input.saida1) totalMinutes += diffMinutes(input.entrada1, input.saida1);
       if (input.entrada2 && input.saida2) totalMinutes += diffMinutes(input.entrada2, input.saida2);
       if (input.entrada3 && input.saida3) totalMinutes += diffMinutes(input.entrada3, input.saida3);
 
-      // Check if record already exists for this employee+date
       const existing = await db.select().from(timeRecords)
         .where(and(
           eq(timeRecords.companyId, input.companyId),
@@ -730,7 +743,6 @@ export const fechamentoPontoRouter = router({
 
       if (existing.length > 0) {
         await db.update(timeRecords).set(record as any).where(eq(timeRecords.id, existing[0].id));
-        // Also resolve any inconsistency for this date
         await db.update(timeInconsistencies)
           .set({ status: "ajustado", resolvidoPor: ctx.user?.name || "RH", resolvidoEm: new Date().toISOString().split("T")[0] })
           .where(and(
@@ -744,7 +756,7 @@ export const fechamentoPontoRouter = router({
       }
     }),
 
-  // Get employee detail for a month (day by day)
+  // Get employee detail for a month (day by day) — NOW includes obra info per record
   getEmployeeDetail: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -753,14 +765,18 @@ export const fechamentoPontoRouter = router({
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const recs = await db.select()
+      const recs = await db.select({
+        record: timeRecords,
+        obraNome: obras.nome,
+      })
         .from(timeRecords)
+        .leftJoin(obras, eq(timeRecords.obraId, obras.id))
         .where(and(
           eq(timeRecords.companyId, input.companyId),
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.mesReferencia, input.mesReferencia),
         ))
-        .orderBy(sql`${timeRecords.data} ASC`);
+        .orderBy(sql`${timeRecords.obraId} ASC, ${timeRecords.data} ASC`);
 
       const incons = await db.select()
         .from(timeInconsistencies)
@@ -778,9 +794,24 @@ export const fechamentoPontoRouter = router({
         jornadaTrabalho: employees.jornadaTrabalho,
       }).from(employees).where(eq(employees.id, input.employeeId)).limit(1);
 
+      // Group records by obra for display
+      const byObra: Record<string, { obraId: number | null; obraNome: string; records: any[] }> = {};
+      for (const r of recs) {
+        const obraKey = String(r.record.obraId || 0);
+        if (!byObra[obraKey]) {
+          byObra[obraKey] = {
+            obraId: r.record.obraId,
+            obraNome: r.obraNome || "Sem Obra Definida",
+            records: [],
+          };
+        }
+        byObra[obraKey].records.push(r.record);
+      }
+
       return {
         employee: emp[0] || null,
-        records: recs,
+        recordsByObra: Object.values(byObra),
+        records: recs.map(r => r.record), // flat list for backward compat
         inconsistencies: incons,
       };
     }),
@@ -875,6 +906,7 @@ export const fechamentoPontoRouter = router({
         obraId: obraHorasRateio.obraId,
         nomeObra: obras.nome,
         codigoObra: obras.codigo,
+        snRelogioPonto: obras.snRelogioPonto,
         employeeId: obraHorasRateio.employeeId,
         nomeCompleto: employees.nomeCompleto,
         cpf: employees.cpf,
@@ -889,14 +921,136 @@ export const fechamentoPontoRouter = router({
         .leftJoin(employees, eq(obraHorasRateio.employeeId, employees.id))
         .where(and(eq(obraHorasRateio.companyId, input.companyId), eq(obraHorasRateio.mesAno, input.mesReferencia)))
         .orderBy(obras.nome, employees.nomeCompleto);
+
+      // Also check if any obras lost their SN (SN was changed after upload)
+      const obraIds = Array.from(new Set(rateio.map(r => r.obraId).filter(Boolean)));
+      let snWarnings: Record<number, string> = {};
+      if (obraIds.length > 0) {
+        // Check dixi_devices linked to these obras
+        const linkedDevices = await db.select({
+          obraId: dixiDevices.obraId,
+          serialNumber: dixiDevices.serialNumber,
+        }).from(dixiDevices).where(
+          and(
+            eq(dixiDevices.companyId, input.companyId),
+            inArray(dixiDevices.obraId, obraIds as number[]),
+          )
+        );
+        // Check if SN in obra matches device SN
+        for (const r of rateio) {
+          if (r.obraId && !r.snRelogioPonto) {
+            // Obra has no SN defined - check if there's a device linked
+            const hasDevice = linkedDevices.some(d => d.obraId === r.obraId);
+            if (!hasDevice) {
+              snWarnings[r.obraId] = "SN do relógio não definido nesta obra. O rateio pode estar incorreto.";
+            }
+          }
+        }
+      }
+
       // Agrupar por obra
-      const porObra: Record<number, { obraId: number; nomeObra: string; codigoObra: string; funcionarios: any[]; totalHoras: string; totalExtras: string; totalDias: number }> = {};
+      const porObra: Record<number, {
+        obraId: number; nomeObra: string; codigoObra: string; snRelogioPonto: string | null;
+        funcionarios: any[]; totalHoras: string; totalExtras: string; totalDias: number;
+        snWarning: string | null;
+      }> = {};
       for (const r of rateio) {
         const oId = r.obraId || 0;
-        if (!porObra[oId]) porObra[oId] = { obraId: oId, nomeObra: r.nomeObra || "Sem Obra", codigoObra: r.codigoObra || "", funcionarios: [], totalHoras: "0:00", totalExtras: "0:00", totalDias: 0 };
+        if (!porObra[oId]) porObra[oId] = {
+          obraId: oId,
+          nomeObra: r.nomeObra || "Sem Obra",
+          codigoObra: r.codigoObra || "",
+          snRelogioPonto: r.snRelogioPonto || null,
+          funcionarios: [],
+          totalHoras: "0:00",
+          totalExtras: "0:00",
+          totalDias: 0,
+          snWarning: snWarnings[oId] || null,
+        };
         porObra[oId].funcionarios.push(r);
         porObra[oId].totalDias += r.diasTrabalhados || 0;
       }
       return Object.values(porObra);
+    }),
+
+  // ===================== VALIDAR SN ANTES DO UPLOAD =====================
+  validateSN: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      files: z.array(z.object({
+        fileName: z.string(),
+        fileBase64: z.string(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
+      const obrasList = await db.select({
+        id: obras.id,
+        nome: obras.nome,
+        snRelogioPonto: obras.snRelogioPonto,
+      }).from(obras).where(eq(obras.companyId, input.companyId));
+
+      const results: Array<{
+        fileName: string;
+        deviceSerial: string;
+        obraId: number | null;
+        obraNome: string;
+        valid: boolean;
+        totalRecords: number;
+        mesesDetectados: string[];
+        error?: string;
+      }> = [];
+
+      for (const file of input.files) {
+        const buffer = Buffer.from(file.fileBase64, "base64");
+        const { records, deviceSerial } = parseDixiXLS(buffer);
+
+        if (!deviceSerial) {
+          results.push({
+            fileName: file.fileName, deviceSerial: "", obraId: null, obraNome: "",
+            valid: false, totalRecords: records.length, mesesDetectados: [],
+            error: "Não foi possível identificar o SN do equipamento neste arquivo.",
+          });
+          continue;
+        }
+
+        // Find obra by SN
+        let obraId: number | null = null;
+        let obraNome = "";
+
+        const device = devices.find(d => d.serialNumber === deviceSerial);
+        if (device && device.obraId) {
+          obraId = device.obraId;
+          const obra = obrasList.find(o => o.id === device.obraId);
+          if (obra) obraNome = obra.nome;
+        }
+        if (!obraId) {
+          const obra = obrasList.find(o => o.snRelogioPonto === deviceSerial);
+          if (obra) { obraId = obra.id; obraNome = obra.nome; }
+        }
+
+        // Detect months in file
+        const meses = new Set<string>();
+        for (const r of records) {
+          if (r.data) meses.add(dateToMesRef(r.data));
+        }
+
+        results.push({
+          fileName: file.fileName,
+          deviceSerial,
+          obraId,
+          obraNome,
+          valid: obraId !== null,
+          totalRecords: records.length,
+          mesesDetectados: Array.from(meses).sort(),
+          error: obraId ? undefined : `SN "${deviceSerial}" não está vinculado a nenhuma obra. Cadastre o SN na aba de Obras antes de fazer o upload.`,
+        });
+      }
+
+      return {
+        allValid: results.every(r => r.valid),
+        results,
+      };
     }),
 });

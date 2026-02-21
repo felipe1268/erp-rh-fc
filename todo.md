@@ -550,3 +550,42 @@
 - [x] Detectar funcionários que trabalharam em mais de uma obra no mês
 - [x] Exibir alerta visual (amarelo/vermelho) no Resumo e no Rateio
 - [x] Indicar quais obras o funcionário trabalhou para verificação
+
+## REVISÃO_03: Upload DIXI Inteligente + Filtro Dinâmico + Validação SN
+### Upload DIXI
+- [ ] Upload não depende mais do mês selecionado - sistema lê as datas do arquivo e aloca na competência correta automaticamente
+- [ ] Se arquivo contém dados de múltiplos meses, distribuir registros por competência correta
+- [ ] Remover campo de competência do dialog de upload (botão serve apenas para subir arquivos)
+### Filtro de Data
+- [x] Substituir input type=month por seletor dinâmico com botões < > de navegação mês a mês
+- [x] Design mais intuitivo e bonito para o filtro de competência
+### Validação de SN
+- [x] Bloquear upload se SN do arquivo não estiver vinculado a nenhuma obra cadastrada
+- [x] Mensagem de erro clara solicitando cadastro prévio do SN antes do upload
+- [x] Exibir número SN no rateio por obra
+### Alerta de Alteração de SN
+- [x] Ao alterar SN no cadastro de obras/equipamentos, exibir alerta sobre impacto no rateio
+- [x] No relatório de rateio, indicar erro quando SN não tem obra definida
+
+## REVISÃO_03: Upload DIXI Inteligente + Filtro Dinâmico + Validação SN + Detalhe por Obra
+### Upload DIXI Inteligente (REGRA MÃE)
+- [x] REGRA MÃE: NUNCA alocar registro no mês errado — sempre respeitar data do arquivo
+- [x] Upload auto-detecta mês dos registros do arquivo (não depende do filtro de mês)
+- [x] Distribuir registros por competência correta baseado na data do arquivo
+- [x] Remover campo de competência do dialog de upload
+- [x] Pré-validação: mostrar resumo de meses detectados antes de importar
+- [x] Alerta informativo quando arquivo contém registros de múltiplos meses
+### Filtro de Data Dinâmico
+- [x] Substituir input type=month por seletor com botões < > de navegação mês a mês
+- [x] Design intuitivo e bonito para o filtro de competência
+### Validação de SN Obrigatória
+- [x] Bloquear upload se SN do arquivo não estiver vinculado a nenhuma obra cadastrada
+- [x] Mensagem de erro clara solicitando cadastro prévio do SN antes do upload
+### Detalhe do Funcionário por Obra
+- [x] Na tela de detalhe (Registro Diário), separar registros por obra
+- [x] Mostrar nome da obra como header de cada grupo de registros
+### SN no Rateio
+- [x] Exibir número SN do equipamento no rateio por obra
+### Alertas de Alteração de SN
+- [x] Ao alterar SN no cadastro de obras, exibir alerta sobre impacto no rateio
+- [x] No relatório de rateio, indicar erro quando SN não tem obra definida
