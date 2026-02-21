@@ -863,6 +863,7 @@ export default function FechamentoPonto() {
                         <th className="p-2 font-medium">Colaborador</th>
                         <th className="p-2 font-medium">CPF</th>
                         <th className="p-2 font-medium">Data</th>
+                        <th className="p-2 font-medium">Obra</th>
                         <th className="p-2 font-medium">Tipo</th>
                         <th className="p-2 font-medium">Descrição</th>
                         <th className="p-2 font-medium text-center">Status</th>
@@ -873,6 +874,7 @@ export default function FechamentoPonto() {
                       {inconsistencies.data.map((item: any) => {
                         const inc = item.inconsistency;
                         const isIncExpanded = expandedInconsistency === inc.id;
+                        const dayRecs = item.dayRecords || [];
                         return (
                           <React.Fragment key={inc.id}>
                             <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isIncExpanded ? "bg-amber-50" : ""}`}
@@ -882,11 +884,17 @@ export default function FechamentoPonto() {
                                 <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
                                   {item.employeeName}
                                 </button>
+                                {item.employeeFuncao && <span className="block text-xs text-muted-foreground">{item.employeeFuncao}</span>}
                               </td>
-                              <td className="p-2 text-muted-foreground">{formatCPF(item.employeeCpf || "")}</td>
+                              <td className="p-2 text-muted-foreground text-xs">{formatCPF(item.employeeCpf || "")}</td>
                               <td className="p-2">
                                 {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
-                                <span className="text-muted-foreground ml-1">({dayOfWeek(inc.data)})</span>
+                                <span className="text-muted-foreground ml-1 text-xs">({dayOfWeek(inc.data)})</span>
+                              </td>
+                              <td className="p-2 text-xs">
+                                {item.obraNome ? (
+                                  <span className="flex items-center gap-1"><Building2 className="h-3 w-3 text-teal-600" />{item.obraNome}</span>
+                                ) : <span className="text-muted-foreground">-</span>}
                               </td>
                               <td className="p-2">
                                 <Badge variant={inc.tipoInconsistencia === "batida_impar" ? "destructive" : "secondary"} className="text-xs">
@@ -896,7 +904,7 @@ export default function FechamentoPonto() {
                                    inc.tipoInconsistencia === "sem_registro" ? "Sem Registro" : inc.tipoInconsistencia}
                                 </Badge>
                               </td>
-                              <td className="p-2 text-muted-foreground text-xs max-w-[300px] truncate">{inc.descricao}</td>
+                              <td className="p-2 text-muted-foreground text-xs max-w-[250px] truncate">{inc.descricao}</td>
                               <td className="p-2 text-center">
                                 <Badge variant={inc.status === "pendente" ? "destructive" : inc.status === "justificado" ? "secondary" : "outline"} className="text-xs">
                                   {inc.status === "pendente" ? "Pendente" : inc.status === "justificado" ? "Justificado" : inc.status === "ajustado" ? "Ajustado" : inc.status === "advertencia" ? "Advertência" : inc.status}
@@ -908,15 +916,85 @@ export default function FechamentoPonto() {
                             </tr>
                             {isIncExpanded && (
                               <tr>
-                                <td colSpan={7} className="p-0">
-                                  <div className="bg-amber-50/50 border-t border-b border-amber-200 p-4 space-y-3">
-                                    <div className="bg-white rounded-lg border p-3 text-sm">
-                                      <p><strong>Descrição:</strong> {inc.descricao}</p>
-                                      {inc.resolvidoPor && <p className="mt-1"><strong>Resolvido por:</strong> {inc.resolvidoPor} em {inc.resolvidoEm ? new Date(inc.resolvidoEm + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</p>}
-                                      {inc.justificativa && <p className="mt-1"><strong>Justificativa:</strong> {inc.justificativa}</p>}
+                                <td colSpan={8} className="p-0">
+                                  <div className="bg-amber-50/50 border-t border-b border-amber-200 p-4 space-y-4">
+                                    {/* Info + Navegação */}
+                                    <div className="flex items-start justify-between gap-4">
+                                      <div className="bg-white rounded-lg border p-3 text-sm flex-1">
+                                        <p><strong>Descrição:</strong> {inc.descricao}</p>
+                                        {item.obraNome && <p className="mt-1"><strong>Obra:</strong> <span className="text-teal-700">{item.obraNome}</span></p>}
+                                        {inc.resolvidoPor && <p className="mt-1"><strong>Resolvido por:</strong> {inc.resolvidoPor} em {inc.resolvidoEm ? new Date(inc.resolvidoEm + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</p>}
+                                        {inc.justificativa && <p className="mt-1"><strong>Justificativa:</strong> {inc.justificativa}</p>}
+                                      </div>
+                                      <div className="flex flex-col gap-2 shrink-0">
+                                        <Button variant="outline" size="sm" className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50"
+                                          onClick={(e) => { e.stopPropagation(); setSelectedEmployeeId(inc.employeeId); setViewMode("detalhe"); }}>
+                                          <Eye className="h-3.5 w-3.5" /> Ver Ponto Completo
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground"
+                                          onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
+                                          <Users className="h-3.5 w-3.5" /> Raio-X do Funcionário
+                                        </Button>
+                                      </div>
                                     </div>
+
+                                    {/* Registros do Dia */}
+                                    {dayRecs.length > 0 && (
+                                      <div className="bg-white rounded-lg border overflow-hidden">
+                                        <div className="bg-slate-50 px-3 py-2 border-b flex items-center gap-2">
+                                          <Clock className="h-4 w-4 text-slate-500" />
+                                          <span className="text-xs font-semibold text-slate-700">Registros do dia {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : ""}</span>
+                                          <Badge variant="outline" className="text-xs ml-auto">{dayRecs.length} registro(s)</Badge>
+                                        </div>
+                                        <table className="w-full text-xs">
+                                          <thead>
+                                            <tr className="bg-slate-50/50 border-b">
+                                              <th className="px-3 py-1.5 text-left font-medium text-slate-600">Obra</th>
+                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Entrada</th>
+                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saída Int.</th>
+                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Retorno</th>
+                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saída</th>
+                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Trab.</th>
+                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Extra</th>
+                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Fonte</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {dayRecs.map((rec: any, idx: number) => (
+                                              <tr key={idx} className={`border-b last:border-0 ${rec.ajusteManual ? "bg-purple-50/50" : ""}`}>
+                                                <td className="px-3 py-1.5">
+                                                  <span className="flex items-center gap-1">
+                                                    <Building2 className="h-3 w-3 text-teal-600" />
+                                                    {rec.obraNome || "Sem Obra"}
+                                                  </span>
+                                                </td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{rec.entrada1 || <span className="text-red-400">--:--</span>}</td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{rec.saida1 || <span className="text-red-400">--:--</span>}</td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{rec.entrada2 || <span className="text-red-400">--:--</span>}</td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{rec.saida2 || <span className="text-red-400">--:--</span>}</td>
+                                                <td className="px-3 py-1.5 text-center font-semibold">{rec.horasTrabalhadas || "-"}</td>
+                                                <td className="px-3 py-1.5 text-center font-semibold text-green-700">{rec.horasExtras && rec.horasExtras !== "0:00" ? rec.horasExtras : "-"}</td>
+                                                <td className="px-3 py-1.5 text-center">
+                                                  <Badge variant={rec.ajusteManual ? "secondary" : "outline"} className="text-[10px]">
+                                                    {rec.ajusteManual ? "Manual" : "DIXI"}
+                                                  </Badge>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    )}
+                                    {dayRecs.length === 0 && (
+                                      <div className="bg-white rounded-lg border p-3 text-center text-xs text-muted-foreground">
+                                        <AlertCircle className="h-4 w-4 mx-auto mb-1 text-amber-400" />
+                                        Nenhum registro de ponto encontrado para este dia.
+                                      </div>
+                                    )}
+
+                                    {/* Ações de Resolução */}
                                     {inc.status === "pendente" && !isConsolidado && (
-                                      <div className="space-y-3">
+                                      <div className="space-y-2">
                                         <p className="text-xs font-medium text-amber-800">Escolha como resolver:</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                           <button
@@ -939,7 +1017,7 @@ export default function FechamentoPonto() {
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               setManualData({
-                                                employeeId: inc.employeeId || 0, obraId: 0,
+                                                employeeId: inc.employeeId || 0, obraId: inc.obraId || 0,
                                                 data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "",
                                                 justificativa: `Correção: ${inc.descricao}`,
                                               });

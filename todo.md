@@ -666,3 +666,9 @@
 - [x] Rodapé LGPD em TODOS os documentos: nome do usuário, data/hora, aviso confidencialidade
 - [x] Aplicar rodapé LGPD no Fechamento de Ponto (Resumo, Rateio, Detalhe)
 - [x] Aplicar rodapé LGPD na Ficha do Colaborador
+
+## REVISÃO_07: Melhoria de Navegação nas Inconsistências
+- [x] Exibir registros do dia da inconsistência ao expandir (batidas registradas)
+- [x] Adicionar link/botão para navegar ao detalhe do funcionário diretamente da inconsistência
+- [x] Mostrar informações contextuais (obra, horários registrados) na área expandida
+- [x] Melhorar layout da área expandida com mais informações úteis para resolução

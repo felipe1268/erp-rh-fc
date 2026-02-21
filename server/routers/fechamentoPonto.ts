@@ -654,15 +654,41 @@ export const fechamentoPontoRouter = router({
       if (input.obraId) conditions.push(eq(timeInconsistencies.obraId, input.obraId));
       if (input.status) conditions.push(eq(timeInconsistencies.status, input.status as any));
 
-      return db.select({
+      const results = await db.select({
         inconsistency: timeInconsistencies,
         employeeName: employees.nomeCompleto,
         employeeCpf: employees.cpf,
+        employeeFuncao: employees.funcao,
+        obraNome: obras.nome,
       })
         .from(timeInconsistencies)
         .leftJoin(employees, eq(timeInconsistencies.employeeId, employees.id))
+        .leftJoin(obras, eq(timeInconsistencies.obraId, obras.id))
         .where(and(...conditions))
         .orderBy(sql`${timeInconsistencies.data} ASC, ${employees.nomeCompleto} ASC`);
+
+      // Fetch time records for each inconsistency's employee+date to show context
+      const enriched = await Promise.all(results.map(async (r) => {
+        const dayRecords = await db.select({
+          record: timeRecords,
+          obraNome: obras.nome,
+        })
+          .from(timeRecords)
+          .leftJoin(obras, eq(timeRecords.obraId, obras.id))
+          .where(and(
+            eq(timeRecords.companyId, input.companyId),
+            eq(timeRecords.employeeId, r.inconsistency.employeeId),
+            eq(timeRecords.data, r.inconsistency.data),
+          ))
+          .orderBy(sql`${timeRecords.obraId} ASC`);
+
+        return {
+          ...r,
+          dayRecords: dayRecords.map(dr => ({ ...dr.record, obraNome: dr.obraNome })),
+        };
+      }));
+
+      return enriched;
     }),
 
   // Resolve inconsistency
