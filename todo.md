@@ -349,3 +349,5 @@
 - [x] Exibir número da revisão atual na sidebar ou footer
 - [x] Seed: 131 funcionários reais da FC Engenharia cadastrados
 - [x] Corrigir placeholder de busca: "carga" → "função"
+- [x] Busca automática de endereço pelo CEP (ViaCEP) no formulário de Colaboradores
+- [x] BUG: Erro ao salvar/editar colaborador - Failed query UPDATE employees

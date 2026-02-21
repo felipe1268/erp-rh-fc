@@ -581,6 +581,37 @@ export default function Colaboradores() {
             {/* ===== ABA ENDEREÇO ===== */}
             <TabsContent value="endereco" className="pt-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs font-medium text-muted-foreground">CEP</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={form.cep ?? ""}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/\D/g, "").slice(0, 8);
+                        const formatted = raw.length > 5 ? raw.slice(0, 5) + "-" + raw.slice(5) : raw;
+                        set("cep", formatted);
+                        if (raw.length === 8) {
+                          fetch(`https://viacep.com.br/ws/${raw}/json/`)
+                            .then(r => r.json())
+                            .then(d => {
+                              if (!d.erro) {
+                                set("logradouro", d.logradouro || "");
+                                set("bairro", d.bairro || "");
+                                set("cidade", d.localidade || "");
+                                set("estado", d.uf || "");
+                                toast.success("Endereço encontrado!");
+                              } else {
+                                toast.error("CEP não encontrado");
+                              }
+                            })
+                            .catch(() => toast.error("Erro ao buscar CEP"));
+                        }
+                      }}
+                      placeholder="00000-000"
+                      className="bg-input"
+                    />
+                  </div>
+                </div>
                 <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4">
                   <Label className="text-xs font-medium text-muted-foreground">Logradouro</Label>
                   <Input value={form.logradouro ?? ""} onChange={e => set("logradouro", e.target.value)} className="bg-input mt-1" />
@@ -604,10 +635,6 @@ export default function Colaboradores() {
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">UF</Label>
                   <Input value={form.estado ?? ""} onChange={e => set("estado", e.target.value)} maxLength={2} placeholder="PE" className="bg-input mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">CEP</Label>
-                  <Input value={form.cep ?? ""} onChange={e => set("cep", e.target.value)} placeholder="00000-000" className="bg-input mt-1" />
                 </div>
               </div>
             </TabsContent>

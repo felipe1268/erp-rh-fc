@@ -176,7 +176,18 @@ export async function createEmployee(data: InsertEmployee) {
 export async function updateEmployee(id: number, companyId: number, data: Partial<InsertEmployee>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(employees).set(data).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
+  // Sanitizar: remover campos que não devem ser atualizados e converter strings vazias para null
+  const { id: _id, companyId: _cid, createdAt: _ca, updatedAt: _ua, ...cleanData } = data as any;
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(cleanData)) {
+    if (value === "" || value === undefined) {
+      sanitized[key] = null;
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  if (Object.keys(sanitized).length === 0) return;
+  await db.update(employees).set(sanitized).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 
 export async function getEmployees(companyId: number, search?: string, status?: string) {
