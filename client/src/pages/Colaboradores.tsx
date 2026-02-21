@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -191,10 +191,14 @@ export default function Colaboradores() {
     }
     const targetCompanyId = form.companyId ? parseInt(form.companyId) : companyId!;
     if (editingId) {
-      const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, ...data } = form;
+      const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, empresa: _emp, ...data } = form;
+      // Tratar obraAtualId "none" como null
+      if (data.obraAtualId === "none") data.obraAtualId = "" as any;
       updateMut.mutate({ id: editingId, companyId: targetCompanyId, data });
     } else {
-      createMut.mutate({ ...form, companyId: targetCompanyId } as any);
+      const { empresa: _emp, ...createData } = form;
+      if (createData.obraAtualId === "none") delete (createData as any).obraAtualId;
+      createMut.mutate({ ...createData, companyId: targetCompanyId } as any);
     }
   };
 
@@ -412,6 +416,7 @@ export default function Colaboradores() {
         <DialogContent className="!max-w-7xl w-[95vw] max-h-[95vh] overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
           <DialogHeader>
             <DialogTitle className="text-xl">{editingId ? "Editar Colaborador" : "Novo Colaborador"}</DialogTitle>
+            <DialogDescription className="sr-only">Formulário de cadastro e edição de colaborador</DialogDescription>
           </DialogHeader>
 
           {/* EMPRESA */}
@@ -656,10 +661,6 @@ export default function Colaboradores() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Cargo</Label>
-                  <Input value={form.cargo ?? ""} onChange={e => set("cargo", e.target.value)} className="bg-input mt-1" />
-                </div>
-                <div>
                   <Label className="text-xs font-medium text-muted-foreground">Função</Label>
                   <Input value={form.funcao ?? ""} onChange={e => set("funcao", e.target.value)} className="bg-input mt-1" />
                 </div>
@@ -726,8 +727,22 @@ export default function Colaboradores() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Jornada de Trabalho</Label>
-                  <Input value={form.jornadaTrabalho ?? ""} onChange={e => set("jornadaTrabalho", e.target.value)} placeholder="08:00 às 17:00" className="bg-input mt-1" />
+                  <Label className="text-xs font-medium text-muted-foreground">Entrada</Label>
+                  <Select value={(() => { const j = form.jornadaTrabalho ?? ""; const parts = j.split(" às "); return parts[0] || undefined; })()} onValueChange={v => { const saida = (form.jornadaTrabalho ?? "").split(" às ")[1] || "17:00"; set("jornadaTrabalho", `${v} às ${saida}`); }}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Horário" /></SelectTrigger>
+                    <SelectContent>
+                      {["05:00","06:00","07:00","07:30","08:00","08:30","09:00","10:00","11:00","12:00","13:00","14:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Saída</Label>
+                  <Select value={(() => { const j = form.jornadaTrabalho ?? ""; const parts = j.split(" às "); return parts[1] || undefined; })()} onValueChange={v => { const entrada = (form.jornadaTrabalho ?? "").split(" às ")[0] || "08:00"; set("jornadaTrabalho", `${entrada} às ${v}`); }}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Horário" /></SelectTrigger>
+                    <SelectContent>
+                      {["12:00","13:00","14:00","15:00","16:00","17:00","17:30","18:00","19:00","20:00","21:00","22:00","23:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </TabsContent>
@@ -842,6 +857,7 @@ export default function Colaboradores() {
         <DialogContent className="!max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">Ficha do Colaborador</DialogTitle>
+            <DialogDescription className="sr-only">Visualização completa dos dados do colaborador</DialogDescription>
           </DialogHeader>
           {viewingEmployee ? (
             <div className="space-y-8">
@@ -899,6 +915,8 @@ export default function Colaboradores() {
                 ]},
                 { title: "Profissional", fields: [
                   ["Matrícula", safeDisplay(viewingEmployee.matricula)],
+                  ["Função", safeDisplay(viewingEmployee.funcao)],
+                  ["Setor", safeDisplay(viewingEmployee.setor)],
                   ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
                   ["Contrato", safeDisplay(viewingEmployee.tipoContrato)],
                   ["Jornada", safeDisplay(viewingEmployee.jornadaTrabalho)],
@@ -969,6 +987,7 @@ export default function Colaboradores() {
         <DialogContent className="!max-w-2xl w-[90vw] bg-card">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2"><Upload className="h-5 w-5" /> Importar Colaboradores via Excel</DialogTitle>
+            <DialogDescription className="sr-only">Importar colaboradores a partir de planilha Excel</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

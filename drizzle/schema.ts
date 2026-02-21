@@ -46,6 +46,41 @@ export type Company = typeof companies.$inferSelect;
 export type InsertCompany = typeof companies.$inferInsert;
 
 // ============================================================
+// SETORES
+// ============================================================
+
+export const sectors = mysqlTable("sectors", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  descricao: varchar("descricao", { length: 255 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Sector = typeof sectors.$inferSelect;
+export type InsertSector = typeof sectors.$inferInsert;
+
+// ============================================================
+// FUNÇÕES
+// ============================================================
+
+export const jobFunctions = mysqlTable("job_functions", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  descricao: varchar("descricao", { length: 255 }),
+  cbo: varchar("cbo", { length: 10 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type JobFunction = typeof jobFunctions.$inferSelect;
+export type InsertJobFunction = typeof jobFunctions.$inferInsert;
+
+// ============================================================
 // PERFIS E PERMISSÕES
 // ============================================================
 

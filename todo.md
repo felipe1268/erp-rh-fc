@@ -351,3 +351,29 @@
 - [x] Corrigir placeholder de busca: "carga" → "função"
 - [x] Busca automática de endereço pelo CEP (ViaCEP) no formulário de Colaboradores
 - [x] BUG: Erro ao salvar/editar colaborador - Failed query UPDATE employees
+
+## Fase 28: Cadastro de Setores e Reorganização do Menu
+- [ ] Criar tabela de setores no banco de dados (vinculada à empresa)
+- [ ] CRUD backend de setores (listar, criar, editar, excluir)
+- [ ] Página de gestão de Setores
+- [ ] Reorganizar menu PRINCIPAL: Empresas, Setores, Colaboradores, Obras
+- [ ] Remover campo "Cargo" do formulário de colaboradores (deixar só Função)
+- [ ] Campo Setor no formulário de colaboradores como Select (puxando da tabela de setores)
+
+## Fase 28: Cadastro de Setores/Funções e Reorganização do Menu
+- [ ] Criar tabela de setores no banco (vinculada à empresa)
+- [ ] Criar tabela de funções no banco (vinculada à empresa)
+- [ ] CRUD backend de setores e funções
+- [ ] Página de gestão de Setores
+- [ ] Página de gestão de Funções
+- [ ] Reorganizar menu: CADASTROS (Empresas, Setores, Funções, Colaboradores, Obras)
+- [ ] Remover campo "Cargo" do formulário de colaboradores
+- [ ] Campo Setor como Select no formulário de colaboradores
+- [ ] Campo Função como Select no formulário de colaboradores
+- [ ] Empresa padrão: botão para definir empresa padrão que abre automaticamente ao entrar no sistema
+- [ ] Empresa padrão: ao entrar no sistema abre na empresa definida como padrão (manter seletor para trocar)
+- [x] Bug: título do diálogo de edição mostra "Órgão" ao invés de "Editar Colaborador" - corrigido com DialogDescription
+- [x] Jornada de Trabalho: separar em dois campos (Entrada e Saída) com seleção rápida de horários
+- [x] Bug: erro SQL ao atualizar colaborador - corrigido com whitelist de campos e conversão de tipos
+- [x] Bug: campo "Cargo" removido da aba Profissional (ficou apenas "Função")
+- [x] Bug: Select "SelecioneCLT" concatenado no Tipo de Contrato - corrigido via sanitização

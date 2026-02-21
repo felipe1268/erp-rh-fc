@@ -71,6 +71,13 @@
       "when": 1771626612169,
       "tag": "0009_sharp_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1771632917740,
+      "tag": "0010_romantic_ghost_rider",
+      "breakpoints": true
     }
   ]
 }

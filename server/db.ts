@@ -176,11 +176,38 @@ export async function createEmployee(data: InsertEmployee) {
 export async function updateEmployee(id: number, companyId: number, data: Partial<InsertEmployee>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Sanitizar: remover campos que não devem ser atualizados e converter strings vazias para null
+  // Campos válidos da tabela employees
+  const validFields = new Set([
+    "matricula", "nomeCompleto", "cpf", "rg", "orgaoEmissor", "dataNascimento",
+    "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai",
+    "ctps", "serieCTPS", "pis", "tituloEleitor", "certificadoReservista",
+    "cnh", "categoriaCNH", "validadeCNH",
+    "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "cep",
+    "telefone", "celular", "email", "contatoEmergencia", "telefoneEmergencia",
+    "cargo", "funcao", "setor", "dataAdmissao", "dataDemissao",
+    "salarioBase", "valorHora", "horasMensais", "tipoContrato", "jornadaTrabalho",
+    "banco", "bancoNome", "agencia", "conta", "tipoConta",
+    "tipoChavePix", "chavePix", "contaPix", "bancoPix",
+    "status", "listaNegra", "motivoListaNegra", "dataListaNegra",
+    "obraAtualId", "fotoUrl", "observacoes",
+  ]);
+  // Campos booleanos
+  const booleanFields = new Set(["listaNegra"]);
+  // Campos inteiros
+  const intFields = new Set(["obraAtualId"]);
+  // Sanitizar: remover campos inválidos e converter tipos
   const { id: _id, companyId: _cid, createdAt: _ca, updatedAt: _ua, ...cleanData } = data as any;
   const sanitized: Record<string, any> = {};
   for (const [key, value] of Object.entries(cleanData)) {
+    if (!validFields.has(key)) continue; // ignorar campos que não existem na tabela
     if (value === "" || value === undefined) {
+      sanitized[key] = null;
+    } else if (booleanFields.has(key)) {
+      sanitized[key] = value === true || value === "true" || value === 1 || value === "1";
+    } else if (intFields.has(key)) {
+      const num = parseInt(String(value));
+      sanitized[key] = isNaN(num) ? null : num;
+    } else if (key === "obraAtualId" && value === "none") {
       sanitized[key] = null;
     } else {
       sanitized[key] = value;
