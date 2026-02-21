@@ -789,3 +789,17 @@
 - [x] Verificação cruzada: horas ponto consolidado vs horas folha
 - [x] Consolidar/desconsolidar lançamentos + excluir + re-match
 - [x] FullScreenDialog para todos os dialogs (upload, detalhes, verificação cruzada)
+
+## REVISÃO_19: Fluxo Intuitivo de Tratamento de Inconsistências
+- [x] Backend: rota resolveBatchByType para resolver inconsistências em lote por tipo
+- [x] Backend: rota resolveAllInconsistencies para resolver TODAS as inconsistências de uma vez
+- [x] Backend: rota resolveAllConflitos para resolver todos os conflitos de obra em lote
+- [x] Backend: rota resolveSelectedInconsistencies para resolver IDs selecionados
+- [x] Frontend: organizar inconsistências por tópico/seção com cards coloridos por tipo (Batida Ímpar=vermelho, Falta Batida=âmbar, Horário Divergente=azul, Sem Registro=cinza)
+- [x] Frontend: botões de ação rápida (Justificar/Corrigir/Advertência) direto na tabela + expandível com detalhes
+- [x] Frontend: botão "Resolver Tipo (N)" em cada seção/tópico para resolver em lote por tipo
+- [x] Frontend: botão "Resolver Todas (N)" geral no topo para resolver todas as inconsistências
+- [x] Frontend: seção separada de Conflitos de Obra com botão "Resolver Todos" em lote
+- [x] Frontend: filtros por status (Pendentes/Resolvidas/Todas) e por tipo de inconsistência
+- [x] Frontend: resumo visual com contadores (pendentes, resolvidas, conflitos de obra)
+- [x] Frontend: fluxo intuitivo de validação antes de permitir consolidar o mês

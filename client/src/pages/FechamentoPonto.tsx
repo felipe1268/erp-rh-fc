@@ -13,7 +13,8 @@ import { formatCPF } from "@/lib/formatters";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
-  Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft
+  Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
+  ListChecks, Filter, ChevronDown, Zap
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -71,6 +72,8 @@ export default function FechamentoPonto() {
   const [expandedConflict, setExpandedConflict] = useState<string | null>(null); // "empId|data"
   const [conflictJustificativa, setConflictJustificativa] = useState("");
   const [expandedInconsistency, setExpandedInconsistency] = useState<number | null>(null);
+  const [incFilterType, setIncFilterType] = useState<string>("all");
+  const [incFilterStatus, setIncFilterStatus] = useState<string>("pendente");
 
   // ===== QUERIES =====
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -149,6 +152,27 @@ export default function FechamentoPonto() {
       conflitos.refetch(); stats.refetch(); summary.refetch();
       if (selectedEmployeeId) employeeDetail.refetch();
       toast.success(data.message);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const resolveBatchMut = trpc.fechamentoPonto.resolveBatchByType.useMutation({
+    onSuccess: (data) => {
+      inconsistencies.refetch(); stats.refetch(); summary.refetch();
+      toast.success(`${data.resolved} inconsistências resolvidas como justificadas!`);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const resolveAllMut = trpc.fechamentoPonto.resolveAllInconsistencies.useMutation({
+    onSuccess: (data) => {
+      inconsistencies.refetch(); stats.refetch(); summary.refetch();
+      toast.success(`${data.resolved} inconsistências resolvidas como justificadas!`);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const resolveAllConflitosMut = trpc.fechamentoPonto.resolveAllConflitos.useMutation({
+    onSuccess: (data) => {
+      conflitos.refetch(); stats.refetch(); summary.refetch();
+      toast.success(`${data.resolved} conflitos resolvidos como deslocamento confirmado!`);
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
@@ -843,226 +867,530 @@ export default function FechamentoPonto() {
         )}
 
         {/* ===== INCONSISTENCIAS VIEW ===== */}
-        {viewMode === "inconsistencias" && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" /> Inconsistências de Ponto — {formatMesAno(mesAno)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!inconsistencies.data || inconsistencies.data.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle className="h-10 w-10 mx-auto mb-2 text-green-500" />
-                  <p>Nenhuma inconsistência encontrada.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left bg-muted/50">
-                        <th className="p-2 font-medium">Colaborador</th>
-                        <th className="p-2 font-medium">CPF</th>
-                        <th className="p-2 font-medium">Data</th>
-                        <th className="p-2 font-medium">Obra</th>
-                        <th className="p-2 font-medium">Tipo</th>
-                        <th className="p-2 font-medium">Descrição</th>
-                        <th className="p-2 font-medium text-center">Status</th>
-                        <th className="p-2 font-medium text-center">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inconsistencies.data.map((item: any) => {
-                        const inc = item.inconsistency;
-                        const isIncExpanded = expandedInconsistency === inc.id;
-                        const dayRecs = item.dayRecords || [];
-                        return (
-                          <React.Fragment key={inc.id}>
-                            <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isIncExpanded ? "bg-amber-50" : ""}`}
-                              onClick={() => setExpandedInconsistency(isIncExpanded ? null : inc.id)}
-                            >
-                              <td className="p-2">
-                                <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
-                                  {item.employeeName}
-                                </button>
-                                {item.employeeFuncao && <span className="block text-xs text-muted-foreground">{item.employeeFuncao}</span>}
-                              </td>
-                              <td className="p-2 text-muted-foreground text-xs">{formatCPF(item.employeeCpf || "")}</td>
-                              <td className="p-2">
-                                {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
-                                <span className="text-muted-foreground ml-1 text-xs">({dayOfWeek(inc.data)})</span>
-                              </td>
-                              <td className="p-2 text-xs">
-                                {item.obraNome ? (
-                                  <span className="flex items-center gap-1"><Building2 className="h-3 w-3 text-teal-600" />{item.obraNome}</span>
-                                ) : <span className="text-muted-foreground">-</span>}
-                              </td>
-                              <td className="p-2">
-                                <Badge variant={inc.tipoInconsistencia === "batida_impar" ? "destructive" : "secondary"} className="text-xs">
-                                  {inc.tipoInconsistencia === "batida_impar" ? "Batida Ímpar" :
-                                   inc.tipoInconsistencia === "falta_batida" ? "Falta Batida" :
-                                   inc.tipoInconsistencia === "horario_divergente" ? "Horário Divergente" :
-                                   inc.tipoInconsistencia === "sem_registro" ? "Sem Registro" : inc.tipoInconsistencia}
-                                </Badge>
-                              </td>
-                              <td className="p-2 text-muted-foreground text-xs max-w-[250px] truncate">{inc.descricao}</td>
-                              <td className="p-2 text-center">
-                                <Badge variant={inc.status === "pendente" ? "destructive" : inc.status === "justificado" ? "secondary" : "outline"} className="text-xs">
-                                  {inc.status === "pendente" ? "Pendente" : inc.status === "justificado" ? "Justificado" : inc.status === "ajustado" ? "Ajustado" : inc.status === "advertencia" ? "Advertência" : inc.status}
-                                </Badge>
-                              </td>
-                              <td className="p-2 text-center">
-                                <ChevronRight className={`h-4 w-4 inline transition-transform ${isIncExpanded ? "rotate-90" : ""}`} />
-                              </td>
-                            </tr>
-                            {isIncExpanded && (
-                              <tr>
-                                <td colSpan={8} className="p-0">
-                                  <div className="bg-amber-50/50 border-t border-b border-amber-200 p-4 space-y-4">
-                                    {/* Info + Navegação */}
-                                    <div className="flex items-start justify-between gap-4">
-                                      <div className="bg-white rounded-lg border p-3 text-sm flex-1">
-                                        <p><strong>Descrição:</strong> {inc.descricao}</p>
-                                        {item.obraNome && <p className="mt-1"><strong>Obra:</strong> <span className="text-teal-700">{item.obraNome}</span></p>}
-                                        {inc.resolvidoPor && <p className="mt-1"><strong>Resolvido por:</strong> {inc.resolvidoPor} em {inc.resolvidoEm ? new Date(inc.resolvidoEm + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</p>}
-                                        {inc.justificativa && <p className="mt-1"><strong>Justificativa:</strong> {inc.justificativa}</p>}
-                                      </div>
-                                      <div className="flex flex-col gap-2 shrink-0">
-                                        <Button variant="outline" size="sm" className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50"
-                                          onClick={(e) => { e.stopPropagation(); setSelectedEmployeeId(inc.employeeId); setViewMode("detalhe"); }}>
-                                          <Eye className="h-3.5 w-3.5" /> Ver Ponto Completo
-                                        </Button>
-                                        <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground"
-                                          onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
-                                          <Users className="h-3.5 w-3.5" /> Raio-X do Funcionário
-                                        </Button>
-                                      </div>
-                                    </div>
+        {viewMode === "inconsistencias" && (() => {
+          const allItems = inconsistencies.data || [];
+          const pendentes = allItems.filter((item: any) => item.inconsistency.status === "pendente");
+          const resolvidos = allItems.filter((item: any) => item.inconsistency.status !== "pendente");
+          const filteredByStatus = incFilterStatus === "pendente" ? pendentes : incFilterStatus === "resolvido" ? resolvidos : allItems;
 
-                                    {/* Registros do Dia */}
-                                    {dayRecs.length > 0 && (
-                                      <div className="bg-white rounded-lg border overflow-hidden">
-                                        <div className="bg-slate-50 px-3 py-2 border-b flex items-center gap-2">
-                                          <Clock className="h-4 w-4 text-slate-500" />
-                                          <span className="text-xs font-semibold text-slate-700">Registros do dia {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : ""}</span>
-                                          <Badge variant="outline" className="text-xs ml-auto">{dayRecs.length} registro(s)</Badge>
-                                        </div>
+          // Agrupar por tipo
+          const tipoLabels: Record<string, string> = {
+            batida_impar: "Batida Ímpar",
+            falta_batida: "Falta de Batida",
+            horario_divergente: "Horário Divergente",
+            sem_registro: "Sem Registro",
+            batida_duplicada: "Batida Duplicada",
+          };
+          const tipoColors: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+            batida_impar: { bg: "bg-red-50", border: "border-red-200", text: "text-red-800", badge: "bg-red-100 text-red-700" },
+            falta_batida: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-800", badge: "bg-amber-100 text-amber-700" },
+            horario_divergente: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-800", badge: "bg-blue-100 text-blue-700" },
+            sem_registro: { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-800", badge: "bg-slate-100 text-slate-700" },
+            batida_duplicada: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-800", badge: "bg-purple-100 text-purple-700" },
+          };
+
+          const grouped: Record<string, any[]> = {};
+          for (const item of filteredByStatus) {
+            const tipo = item.inconsistency.tipoInconsistencia;
+            if (!grouped[tipo]) grouped[tipo] = [];
+            grouped[tipo].push(item);
+          }
+          // Filtrar por tipo se selecionado
+          const tiposToShow = incFilterType === "all" ? Object.keys(grouped) : [incFilterType].filter(t => grouped[t]);
+          const totalPendentes = pendentes.length;
+
+          // Conflitos de obra
+          const conflitosList = conflitos.data || [];
+
+          return (
+            <div className="space-y-4">
+              {/* === HEADER COM RESUMO E AÇÕES GLOBAIS === */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-500" /> Inconsistências de Ponto — {formatMesAno(mesAno)}
+                    </CardTitle>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Filtro por status */}
+                      <Select value={incFilterStatus} onValueChange={setIncFilterStatus}>
+                        <SelectTrigger className="w-[140px] h-8 text-xs">
+                          <Filter className="h-3 w-3 mr-1" /><SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pendente">Pendentes ({pendentes.length})</SelectItem>
+                          <SelectItem value="resolvido">Resolvidas ({resolvidos.length})</SelectItem>
+                          <SelectItem value="all">Todas ({allItems.length})</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {/* Filtro por tipo */}
+                      <Select value={incFilterType} onValueChange={setIncFilterType}>
+                        <SelectTrigger className="w-[170px] h-8 text-xs">
+                          <Filter className="h-3 w-3 mr-1" /><SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos os Tipos</SelectItem>
+                          {Object.entries(tipoLabels).map(([key, label]) => {
+                            const count = (filteredByStatus.filter((i: any) => i.inconsistency.tipoInconsistencia === key)).length;
+                            if (count === 0) return null;
+                            return <SelectItem key={key} value={key}>{label} ({count})</SelectItem>;
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {/* Resumo visual */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                      <span className="font-medium">{totalPendentes}</span>
+                      <span className="text-muted-foreground">pendentes</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      <span className="font-medium">{resolvidos.length}</span>
+                      <span className="text-muted-foreground">resolvidas</span>
+                    </div>
+                    {conflitosList.length > 0 && (
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <div className="h-3 w-3 rounded-full bg-orange-500"></div>
+                        <span className="font-medium">{conflitosList.length}</span>
+                        <span className="text-muted-foreground">conflitos de obra</span>
+                      </div>
+                    )}
+                    <div className="ml-auto flex gap-2">
+                      {totalPendentes > 0 && !isConsolidado && (
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                          disabled={resolveAllMut.isPending}
+                          onClick={() => {
+                            if (confirm(`Resolver TODAS as ${totalPendentes} inconsistências pendentes como JUSTIFICADAS?`)) {
+                              resolveAllMut.mutate({ companyId, mesReferencia: mesAno, status: "justificado", justificativa: "Resolvido em lote — todas as inconsistências" });
+                            }
+                          }}>
+                          <Zap className="h-3.5 w-3.5" />
+                          {resolveAllMut.isPending ? "Processando..." : `Resolver Todas (${totalPendentes})`}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* === SEÇÕES POR TIPO DE INCONSISTÊNCIA === */}
+              {allItems.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="text-center text-muted-foreground">
+                      <CheckCircle className="h-10 w-10 mx-auto mb-2 text-green-500" />
+                      <p>Nenhuma inconsistência encontrada para este mês.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : filteredByStatus.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="text-center text-muted-foreground">
+                      <CheckCircle className="h-10 w-10 mx-auto mb-2 text-green-500" />
+                      <p>Nenhuma inconsistência {incFilterStatus === "pendente" ? "pendente" : "resolvida"} encontrada.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                tiposToShow.map(tipo => {
+                  const items = grouped[tipo] || [];
+                  if (items.length === 0) return null;
+                  const colors = tipoColors[tipo] || tipoColors.sem_registro;
+                  const label = tipoLabels[tipo] || tipo;
+                  const pendentesDeTipo = items.filter((i: any) => i.inconsistency.status === "pendente");
+
+                  return (
+                    <Card key={tipo} className={`border ${colors.border}`}>
+                      <CardHeader className={`pb-2 ${colors.bg} rounded-t-lg`}>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className={`h-4 w-4 ${colors.text}`} />
+                            <CardTitle className={`text-sm font-bold ${colors.text}`}>{label}</CardTitle>
+                            <Badge className={`text-xs ${colors.badge}`}>{items.length}</Badge>
+                            {pendentesDeTipo.length > 0 && pendentesDeTipo.length < items.length && (
+                              <span className="text-xs text-muted-foreground">({pendentesDeTipo.length} pendentes)</span>
+                            )}
+                          </div>
+                          {pendentesDeTipo.length > 1 && !isConsolidado && (
+                            <Button size="sm" variant="outline" className={`gap-1.5 text-xs ${colors.border} ${colors.text} hover:${colors.bg}`}
+                              disabled={resolveBatchMut.isPending}
+                              onClick={() => {
+                                if (confirm(`Resolver todas as ${pendentesDeTipo.length} inconsistências de "${label}" como JUSTIFICADAS?`)) {
+                                  resolveBatchMut.mutate({ companyId, mesReferencia: mesAno, tipoInconsistencia: tipo as any, status: "justificado", justificativa: `Resolvido em lote (${label})` });
+                                }
+                              }}>
+                              <ListChecks className="h-3.5 w-3.5" />
+                              {resolveBatchMut.isPending ? "Processando..." : `Resolver Tipo (${pendentesDeTipo.length})`}
+                            </Button>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b text-left bg-muted/30">
+                                <th className="p-2 font-medium">Colaborador</th>
+                                <th className="p-2 font-medium">CPF</th>
+                                <th className="p-2 font-medium">Data</th>
+                                <th className="p-2 font-medium">Obra</th>
+                                <th className="p-2 font-medium">Descrição</th>
+                                <th className="p-2 font-medium text-center">Status</th>
+                                <th className="p-2 font-medium text-center">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((item: any) => {
+                                const inc = item.inconsistency;
+                                const isIncExpanded = expandedInconsistency === inc.id;
+                                const dayRecs = item.dayRecords || [];
+                                return (
+                                  <React.Fragment key={inc.id}>
+                                    <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isIncExpanded ? colors.bg : ""}`}
+                                      onClick={() => setExpandedInconsistency(isIncExpanded ? null : inc.id)}
+                                    >
+                                      <td className="p-2">
+                                        <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
+                                          {item.employeeName}
+                                        </button>
+                                        {item.employeeFuncao && <span className="block text-xs text-muted-foreground">{item.employeeFuncao}</span>}
+                                      </td>
+                                      <td className="p-2 text-muted-foreground text-xs">{formatCPF(item.employeeCpf || "")}</td>
+                                      <td className="p-2">
+                                        {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
+                                        <span className="text-muted-foreground ml-1 text-xs">({dayOfWeek(inc.data)})</span>
+                                      </td>
+                                      <td className="p-2 text-xs">
+                                        {item.obraNome ? (
+                                          <span className="flex items-center gap-1"><Building2 className="h-3 w-3 text-teal-600" />{item.obraNome}</span>
+                                        ) : <span className="text-muted-foreground">-</span>}
+                                      </td>
+                                      <td className="p-2 text-muted-foreground text-xs max-w-[250px] truncate">{inc.descricao}</td>
+                                      <td className="p-2 text-center">
+                                        <Badge variant={inc.status === "pendente" ? "destructive" : inc.status === "justificado" ? "secondary" : "outline"} className="text-xs">
+                                          {inc.status === "pendente" ? "Pendente" : inc.status === "justificado" ? "Justificado" : inc.status === "ajustado" ? "Ajustado" : inc.status === "advertencia" ? "Advertência" : inc.status}
+                                        </Badge>
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {inc.status === "pendente" && !isConsolidado ? (
+                                          <div className="flex items-center justify-center gap-1">
+                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600 hover:bg-green-50" title="Justificar"
+                                              onClick={(e) => { e.stopPropagation(); setSelectedInconsistency(item); setResolveData({ status: "justificado", justificativa: "" }); setShowResolveDialog(true); }}>
+                                              <CheckCircle className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-purple-600 hover:bg-purple-50" title="Corrigir"
+                                              onClick={(e) => { e.stopPropagation(); setManualData({ employeeId: inc.employeeId || 0, obraId: inc.obraId || 0, data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: `Correção: ${inc.descricao}` }); setShowManualDialog(true); }}>
+                                              <PenLine className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 hover:bg-red-50" title="Advertência"
+                                              onClick={(e) => { e.stopPropagation(); setSelectedInconsistency(item); setResolveData({ status: "advertencia", justificativa: "" }); setShowResolveDialog(true); }}>
+                                              <Shield className="h-4 w-4" />
+                                            </Button>
+                                            <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isIncExpanded ? "rotate-90" : ""}`} />
+                                          </div>
+                                        ) : (
+                                          <ChevronRight className={`h-4 w-4 inline transition-transform ${isIncExpanded ? "rotate-90" : ""}`} />
+                                        )}
+                                      </td>
+                                    </tr>
+                                    {isIncExpanded && (
+                                      <tr>
+                                        <td colSpan={7} className="p-0">
+                                          <div className={`${colors.bg} border-t ${colors.border} p-4 space-y-4`}>
+                                            {/* Info + Navegação */}
+                                            <div className="flex items-start justify-between gap-4">
+                                              <div className="bg-white rounded-lg border p-3 text-sm flex-1">
+                                                <p><strong>Descrição:</strong> {inc.descricao}</p>
+                                                {item.obraNome && <p className="mt-1"><strong>Obra:</strong> <span className="text-teal-700">{item.obraNome}</span></p>}
+                                                {inc.resolvidoPor && <p className="mt-1"><strong>Resolvido por:</strong> {inc.resolvidoPor} em {inc.resolvidoEm ? new Date(inc.resolvidoEm + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</p>}
+                                                {inc.justificativa && <p className="mt-1"><strong>Justificativa:</strong> {inc.justificativa}</p>}
+                                              </div>
+                                              <div className="flex flex-col gap-2 shrink-0">
+                                                <Button variant="outline" size="sm" className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50"
+                                                  onClick={(e) => { e.stopPropagation(); setSelectedEmployeeId(inc.employeeId); setViewMode("detalhe"); }}>
+                                                  <Eye className="h-3.5 w-3.5" /> Ver Ponto Completo
+                                                </Button>
+                                                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground"
+                                                  onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
+                                                  <Users className="h-3.5 w-3.5" /> Raio-X do Funcionário
+                                                </Button>
+                                              </div>
+                                            </div>
+
+                                            {/* Registros do Dia */}
+                                            {dayRecs.length > 0 && (
+                                              <div className="bg-white rounded-lg border overflow-hidden">
+                                                <div className="bg-slate-50 px-3 py-2 border-b flex items-center gap-2">
+                                                  <Clock className="h-4 w-4 text-slate-500" />
+                                                  <span className="text-xs font-semibold text-slate-700">Registros do dia {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : ""}</span>
+                                                  <Badge variant="outline" className="text-xs ml-auto">{dayRecs.length} registro(s)</Badge>
+                                                </div>
+                                                <table className="w-full text-xs">
+                                                  <thead>
+                                                    <tr className="bg-slate-50/50 border-b">
+                                                      <th className="px-3 py-1.5 text-left font-medium text-slate-600">Obra</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">Entrada</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saída Int.</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">Retorno</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saída</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Trab.</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Extra</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">Fonte</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {dayRecs.map((rec: any, idx: number) => (
+                                                      <tr key={idx} className={`border-b last:border-0 ${rec.ajusteManual ? "bg-purple-50/50" : ""}`}>
+                                                        <td className="px-3 py-1.5">
+                                                          <span className="flex items-center gap-1">
+                                                            <Building2 className="h-3 w-3 text-teal-600" />
+                                                            {rec.obraNome || "Sem Obra"}
+                                                          </span>
+                                                        </td>
+                                                        <td className="px-3 py-1.5 text-center font-mono">{rec.entrada1 || <span className="text-red-400">--:--</span>}</td>
+                                                        <td className="px-3 py-1.5 text-center font-mono">{rec.saida1 || <span className="text-red-400">--:--</span>}</td>
+                                                        <td className="px-3 py-1.5 text-center font-mono">{rec.entrada2 || <span className="text-red-400">--:--</span>}</td>
+                                                        <td className="px-3 py-1.5 text-center font-mono">{rec.saida2 || <span className="text-red-400">--:--</span>}</td>
+                                                        <td className="px-3 py-1.5 text-center font-semibold">{rec.horasTrabalhadas || "-"}</td>
+                                                        <td className="px-3 py-1.5 text-center font-semibold text-green-700">{rec.horasExtras && rec.horasExtras !== "0:00" ? rec.horasExtras : "-"}</td>
+                                                        <td className="px-3 py-1.5 text-center">
+                                                          <Badge variant={rec.ajusteManual ? "secondary" : "outline"} className="text-[10px]">
+                                                            {rec.ajusteManual ? "Manual" : "DIXI"}
+                                                          </Badge>
+                                                        </td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            )}
+                                            {dayRecs.length === 0 && (
+                                              <div className="bg-white rounded-lg border p-3 text-center text-xs text-muted-foreground">
+                                                <AlertCircle className="h-4 w-4 mx-auto mb-1 text-amber-400" />
+                                                Nenhum registro de ponto encontrado para este dia.
+                                              </div>
+                                            )}
+
+                                            {/* Ações de Resolução (expandido) */}
+                                            {inc.status === "pendente" && !isConsolidado && (
+                                              <div className="space-y-2">
+                                                <p className="text-xs font-medium ${colors.text}">Escolha como resolver:</p>
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                  <button
+                                                    className="border-2 border-green-200 bg-green-50 rounded-lg p-3 text-left hover:border-green-400 hover:bg-green-100 transition-all"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSelectedInconsistency(item);
+                                                      setResolveData({ status: "justificado", justificativa: "" });
+                                                      setShowResolveDialog(true);
+                                                    }}
+                                                  >
+                                                    <div className="flex items-center gap-2">
+                                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                                      <span className="text-sm font-semibold text-green-800">Justificar</span>
+                                                    </div>
+                                                    <p className="text-xs text-green-600 mt-1">Sem penalidade — registrar motivo</p>
+                                                  </button>
+                                                  <button
+                                                    className="border-2 border-purple-200 bg-purple-50 rounded-lg p-3 text-left hover:border-purple-400 hover:bg-purple-100 transition-all"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setManualData({
+                                                        employeeId: inc.employeeId || 0, obraId: inc.obraId || 0,
+                                                        data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "",
+                                                        justificativa: `Correção: ${inc.descricao}`,
+                                                      });
+                                                      setShowManualDialog(true);
+                                                    }}
+                                                  >
+                                                    <div className="flex items-center gap-2">
+                                                      <PenLine className="h-4 w-4 text-purple-600" />
+                                                      <span className="text-sm font-semibold text-purple-800">Corrigir</span>
+                                                    </div>
+                                                    <p className="text-xs text-purple-600 mt-1">Lançar registro manual corrigido</p>
+                                                  </button>
+                                                  <button
+                                                    className="border-2 border-red-200 bg-red-50 rounded-lg p-3 text-left hover:border-red-400 hover:bg-red-100 transition-all"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSelectedInconsistency(item);
+                                                      setResolveData({ status: "advertencia", justificativa: "" });
+                                                      setShowResolveDialog(true);
+                                                    }}
+                                                  >
+                                                    <div className="flex items-center gap-2">
+                                                      <Shield className="h-4 w-4 text-red-600" />
+                                                      <span className="text-sm font-semibold text-red-800">Advertência</span>
+                                                    </div>
+                                                    <p className="text-xs text-red-600 mt-1">Gerar advertência formal</p>
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+
+              {/* === SEÇÃO DE CONFLITOS DE OBRA === */}
+              {conflitosList.length > 0 && (
+                <Card className="border-orange-200">
+                  <CardHeader className="pb-2 bg-orange-50 rounded-t-lg">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-orange-700" />
+                        <CardTitle className="text-sm font-bold text-orange-800">Conflitos de Obra (Mesmo Dia)</CardTitle>
+                        <Badge className="bg-orange-100 text-orange-700 text-xs">{conflitosList.length}</Badge>
+                      </div>
+                      {!isConsolidado && conflitosList.length > 1 && (
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                          disabled={resolveAllConflitosMut.isPending}
+                          onClick={() => {
+                            if (confirm(`Confirmar DESLOCAMENTO para todos os ${conflitosList.length} conflitos de obra?`)) {
+                              resolveAllConflitosMut.mutate({ companyId, mesReferencia: mesAno, acao: "confirmar_deslocamento", justificativa: "Deslocamento confirmado em lote" });
+                            }
+                          }}>
+                          <ListChecks className="h-3.5 w-3.5" />
+                          {resolveAllConflitosMut.isPending ? "Processando..." : `Resolver Todos (${conflitosList.length})`}
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left bg-muted/30">
+                            <th className="p-2 font-medium">Colaborador</th>
+                            <th className="p-2 font-medium">Data</th>
+                            <th className="p-2 font-medium">Obras</th>
+                            <th className="p-2 font-medium text-center">Registros</th>
+                            <th className="p-2 font-medium text-center">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {conflitosList.map((c: any, idx: number) => {
+                            const key = `${c.employeeId}|${c.data}`;
+                            const isExpanded = expandedConflict === key;
+                            return (
+                              <React.Fragment key={key}>
+                                <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isExpanded ? "bg-orange-50" : ""}`}
+                                  onClick={() => setExpandedConflict(isExpanded ? null : key)}>
+                                  <td className="p-2">
+                                    <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(c.employeeId); }}>
+                                      {c.employeeName}
+                                    </button>
+                                  </td>
+                                  <td className="p-2">
+                                    {c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
+                                    <span className="text-muted-foreground ml-1 text-xs">({dayOfWeek(c.data)})</span>
+                                  </td>
+                                  <td className="p-2">
+                                    <div className="flex flex-wrap gap-1">
+                                      {(c.records || []).map((r: any, ri: number) => (
+                                        <Badge key={ri} variant="outline" className="text-xs gap-1">
+                                          <Building2 className="h-3 w-3" />{r.obraNome || "Sem Obra"}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <Badge variant="secondary" className="text-xs">{(c.records || []).length}</Badge>
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                      {!isConsolidado && (
+                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-orange-700 hover:bg-orange-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`Confirmar deslocamento entre obras para ${c.employeeName} em ${c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : c.data}?`)) {
+                                              resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: "Deslocamento confirmado" });
+                                            }
+                                          }}>
+                                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirmar
+                                        </Button>
+                                      )}
+                                      <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr>
+                                    <td colSpan={5} className="p-0">
+                                      <div className="bg-orange-50/50 border-t border-orange-200 p-4">
                                         <table className="w-full text-xs">
                                           <thead>
-                                            <tr className="bg-slate-50/50 border-b">
-                                              <th className="px-3 py-1.5 text-left font-medium text-slate-600">Obra</th>
-                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Entrada</th>
-                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saída Int.</th>
-                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Retorno</th>
-                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saída</th>
-                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Trab.</th>
-                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Extra</th>
-                                              <th className="px-3 py-1.5 text-center font-medium text-slate-600">Fonte</th>
+                                            <tr className="bg-white border-b">
+                                              <th className="px-3 py-1.5 text-left font-medium">Obra</th>
+                                              <th className="px-3 py-1.5 text-center font-medium">Entrada</th>
+                                              <th className="px-3 py-1.5 text-center font-medium">Saída Int.</th>
+                                              <th className="px-3 py-1.5 text-center font-medium">Retorno</th>
+                                              <th className="px-3 py-1.5 text-center font-medium">Saída</th>
+                                              <th className="px-3 py-1.5 text-center font-medium">H. Trab.</th>
+                                              <th className="px-3 py-1.5 text-center font-medium">Fonte</th>
                                             </tr>
                                           </thead>
                                           <tbody>
-                                            {dayRecs.map((rec: any, idx: number) => (
-                                              <tr key={idx} className={`border-b last:border-0 ${rec.ajusteManual ? "bg-purple-50/50" : ""}`}>
-                                                <td className="px-3 py-1.5">
-                                                  <span className="flex items-center gap-1">
-                                                    <Building2 className="h-3 w-3 text-teal-600" />
-                                                    {rec.obraNome || "Sem Obra"}
-                                                  </span>
-                                                </td>
-                                                <td className="px-3 py-1.5 text-center font-mono">{rec.entrada1 || <span className="text-red-400">--:--</span>}</td>
-                                                <td className="px-3 py-1.5 text-center font-mono">{rec.saida1 || <span className="text-red-400">--:--</span>}</td>
-                                                <td className="px-3 py-1.5 text-center font-mono">{rec.entrada2 || <span className="text-red-400">--:--</span>}</td>
-                                                <td className="px-3 py-1.5 text-center font-mono">{rec.saida2 || <span className="text-red-400">--:--</span>}</td>
-                                                <td className="px-3 py-1.5 text-center font-semibold">{rec.horasTrabalhadas || "-"}</td>
-                                                <td className="px-3 py-1.5 text-center font-semibold text-green-700">{rec.horasExtras && rec.horasExtras !== "0:00" ? rec.horasExtras : "-"}</td>
-                                                <td className="px-3 py-1.5 text-center">
-                                                  <Badge variant={rec.ajusteManual ? "secondary" : "outline"} className="text-[10px]">
-                                                    {rec.ajusteManual ? "Manual" : "DIXI"}
-                                                  </Badge>
-                                                </td>
+                                            {(c.records || []).map((r: any, ri: number) => (
+                                              <tr key={ri} className="border-b last:border-0">
+                                                <td className="px-3 py-1.5"><span className="flex items-center gap-1"><Building2 className="h-3 w-3 text-teal-600" />{r.obraNome || "Sem Obra"}</span></td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{r.entrada1 || "--:--"}</td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{r.saida1 || "--:--"}</td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{r.entrada2 || "--:--"}</td>
+                                                <td className="px-3 py-1.5 text-center font-mono">{r.saida2 || "--:--"}</td>
+                                                <td className="px-3 py-1.5 text-center font-semibold">{r.horasTrabalhadas || "-"}</td>
+                                                <td className="px-3 py-1.5 text-center"><Badge variant={r.ajusteManual ? "secondary" : "outline"} className="text-[10px]">{r.ajusteManual ? "Manual" : "DIXI"}</Badge></td>
                                               </tr>
                                             ))}
                                           </tbody>
                                         </table>
+                                        {!isConsolidado && (
+                                          <div className="mt-3 flex gap-2">
+                                            <Button size="sm" className="gap-1.5 text-xs bg-orange-600 hover:bg-orange-700"
+                                              onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Deslocamento confirmado" })}
+                                              disabled={resolveConflitoMut.isPending}>
+                                              <MapPin className="h-3.5 w-3.5" /> Confirmar Deslocamento
+                                            </Button>
+                                            <Button size="sm" variant="outline" className="gap-1.5 text-xs"
+                                              onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Manter obra principal" })}
+                                              disabled={resolveConflitoMut.isPending}>
+                                              <Building2 className="h-3.5 w-3.5" /> Manter Obra Principal
+                                            </Button>
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
-                                    {dayRecs.length === 0 && (
-                                      <div className="bg-white rounded-lg border p-3 text-center text-xs text-muted-foreground">
-                                        <AlertCircle className="h-4 w-4 mx-auto mb-1 text-amber-400" />
-                                        Nenhum registro de ponto encontrado para este dia.
-                                      </div>
-                                    )}
-
-                                    {/* Ações de Resolução */}
-                                    {inc.status === "pendente" && !isConsolidado && (
-                                      <div className="space-y-2">
-                                        <p className="text-xs font-medium text-amber-800">Escolha como resolver:</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                          <button
-                                            className="border-2 border-green-200 bg-green-50 rounded-lg p-3 text-left hover:border-green-400 hover:bg-green-100 transition-all"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setSelectedInconsistency(item);
-                                              setResolveData({ status: "justificado", justificativa: "" });
-                                              setShowResolveDialog(true);
-                                            }}
-                                          >
-                                            <div className="flex items-center gap-2">
-                                              <CheckCircle className="h-4 w-4 text-green-600" />
-                                              <span className="text-sm font-semibold text-green-800">Justificar</span>
-                                            </div>
-                                            <p className="text-xs text-green-600 mt-1">Sem penalidade — registrar motivo</p>
-                                          </button>
-                                          <button
-                                            className="border-2 border-purple-200 bg-purple-50 rounded-lg p-3 text-left hover:border-purple-400 hover:bg-purple-100 transition-all"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setManualData({
-                                                employeeId: inc.employeeId || 0, obraId: inc.obraId || 0,
-                                                data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "",
-                                                justificativa: `Correção: ${inc.descricao}`,
-                                              });
-                                              setShowManualDialog(true);
-                                            }}
-                                          >
-                                            <div className="flex items-center gap-2">
-                                              <PenLine className="h-4 w-4 text-purple-600" />
-                                              <span className="text-sm font-semibold text-purple-800">Corrigir</span>
-                                            </div>
-                                            <p className="text-xs text-purple-600 mt-1">Lançar registro manual corrigido</p>
-                                          </button>
-                                          <button
-                                            className="border-2 border-red-200 bg-red-50 rounded-lg p-3 text-left hover:border-red-400 hover:bg-red-100 transition-all"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setSelectedInconsistency(item);
-                                              setResolveData({ status: "advertencia", justificativa: "" });
-                                              setShowResolveDialog(true);
-                                            }}
-                                          >
-                                            <div className="flex items-center gap-2">
-                                              <Shield className="h-4 w-4 text-red-600" />
-                                              <span className="text-sm font-semibold text-red-800">Advertência</span>
-                                            </div>
-                                            <p className="text-xs text-red-600 mt-1">Gerar advertência formal</p>
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          );
+        })()}
 
         {/* ===== DETALHE VIEW ===== */}
         {viewMode === "detalhe" && selectedEmployeeId && (

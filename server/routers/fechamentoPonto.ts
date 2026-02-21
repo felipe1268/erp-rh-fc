@@ -1434,4 +1434,189 @@ export const fechamentoPontoRouter = router({
 
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ação inválida ou parâmetros faltando.' });
     }),
+
+  // ===================== RESOLVER EM LOTE POR TIPO =====================
+  resolveBatchByType: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      tipoInconsistencia: z.enum(["batida_impar", "falta_batida", "horario_divergente", "batida_duplicada", "sem_registro"]),
+      status: z.enum(["justificado", "ajustado"]),
+      justificativa: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const userName = ctx.user?.name || "RH";
+      const hoje = new Date().toISOString().split("T")[0];
+
+      // Verificar consolidação
+      const consolidacao = await db.select().from(pontoConsolidacao)
+        .where(and(
+          eq(pontoConsolidacao.companyId, input.companyId),
+          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
+          eq(pontoConsolidacao.status, "consolidado"),
+        )).limit(1);
+      if (consolidacao.length > 0) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
+      }
+
+      // Buscar todas as inconsistências pendentes deste tipo
+      const pendentes = await db.select().from(timeInconsistencies)
+        .where(and(
+          eq(timeInconsistencies.companyId, input.companyId),
+          eq(timeInconsistencies.mesReferencia, input.mesReferencia),
+          eq(timeInconsistencies.tipoInconsistencia, input.tipoInconsistencia),
+          eq(timeInconsistencies.status, "pendente"),
+        ));
+
+      if (pendentes.length === 0) return { success: true, resolved: 0 };
+
+      const ids = pendentes.map(p => p.id);
+      await db.update(timeInconsistencies)
+        .set({
+          status: input.status,
+          justificativa: input.justificativa || `Resolvido em lote (${input.tipoInconsistencia}) por ${userName}`,
+          resolvidoPor: userName,
+          resolvidoEm: hoje,
+        })
+        .where(inArray(timeInconsistencies.id, ids));
+
+      return { success: true, resolved: ids.length };
+    }),
+
+  // ===================== RESOLVER TODAS AS INCONSISTÊNCIAS =====================
+  resolveAllInconsistencies: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      status: z.enum(["justificado", "ajustado"]),
+      justificativa: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const userName = ctx.user?.name || "RH";
+      const hoje = new Date().toISOString().split("T")[0];
+
+      // Verificar consolidação
+      const consolidacao = await db.select().from(pontoConsolidacao)
+        .where(and(
+          eq(pontoConsolidacao.companyId, input.companyId),
+          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
+          eq(pontoConsolidacao.status, "consolidado"),
+        )).limit(1);
+      if (consolidacao.length > 0) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
+      }
+
+      // Resolver TODAS as inconsistências pendentes
+      const pendentes = await db.select().from(timeInconsistencies)
+        .where(and(
+          eq(timeInconsistencies.companyId, input.companyId),
+          eq(timeInconsistencies.mesReferencia, input.mesReferencia),
+          eq(timeInconsistencies.status, "pendente"),
+        ));
+
+      if (pendentes.length === 0) return { success: true, resolved: 0 };
+
+      const ids = pendentes.map(p => p.id);
+      await db.update(timeInconsistencies)
+        .set({
+          status: input.status,
+          justificativa: input.justificativa || `Resolvido em lote (todas) por ${userName}`,
+          resolvidoPor: userName,
+          resolvidoEm: hoje,
+        })
+        .where(inArray(timeInconsistencies.id, ids));
+
+      return { success: true, resolved: ids.length };
+    }),
+
+  // ===================== RESOLVER MÚLTIPLOS IDS =====================
+  resolveSelectedInconsistencies: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number()),
+      status: z.enum(["justificado", "ajustado"]),
+      justificativa: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const userName = ctx.user?.name || "RH";
+      const hoje = new Date().toISOString().split("T")[0];
+
+      if (input.ids.length === 0) return { success: true, resolved: 0 };
+
+      await db.update(timeInconsistencies)
+        .set({
+          status: input.status,
+          justificativa: input.justificativa || `Resolvido em lote (selecionados) por ${userName}`,
+          resolvidoPor: userName,
+          resolvidoEm: hoje,
+        })
+        .where(and(
+          inArray(timeInconsistencies.id, input.ids),
+          eq(timeInconsistencies.status, "pendente"),
+        ));
+
+      return { success: true, resolved: input.ids.length };
+    }),
+
+  // ===================== RESOLVER TODOS OS CONFLITOS DE OBRA =====================
+  resolveAllConflitos: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      acao: z.enum(["confirmar_deslocamento"]), // Em lote só permite confirmar deslocamento
+      justificativa: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const resolvidoPor = ctx.user?.name || "RH";
+
+      // Verificar consolidação
+      const consolidacao = await db.select().from(pontoConsolidacao)
+        .where(and(
+          eq(pontoConsolidacao.companyId, input.companyId),
+          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
+          eq(pontoConsolidacao.status, "consolidado"),
+        )).limit(1);
+      if (consolidacao.length > 0) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado.' });
+      }
+
+      // Buscar todos os registros do mês com conflitos (funcionários com 2+ obras no mesmo dia)
+      const mesStart = `${input.mesReferencia}-01`;
+      const mesEnd = `${input.mesReferencia}-31`;
+      const allRecs = await db.select({
+        employeeId: timeRecords.employeeId,
+        data: timeRecords.data,
+      }).from(timeRecords)
+        .where(and(
+          eq(timeRecords.companyId, input.companyId),
+          between(timeRecords.data, mesStart, mesEnd),
+        ));
+
+      // Agrupar por empId+data e encontrar conflitos
+      const grouped: Record<string, { employeeId: number; data: string; count: number }> = {};
+      for (const r of allRecs) {
+        const key = `${r.employeeId}|${r.data}`;
+        if (!grouped[key]) grouped[key] = { employeeId: r.employeeId, data: r.data!, count: 0 };
+        grouped[key].count++;
+      }
+
+      const conflitos = Object.values(grouped).filter(g => g.count > 1);
+      let resolved = 0;
+
+      for (const c of conflitos) {
+        await db.update(timeRecords)
+          .set({ justificativa: `[Deslocamento confirmado em lote por ${resolvidoPor}] ${input.justificativa || "Deslocamento real entre obras"}` })
+          .where(and(
+            eq(timeRecords.companyId, input.companyId),
+            eq(timeRecords.employeeId, c.employeeId),
+            eq(timeRecords.data, c.data!),
+          ));
+        resolved++;
+      }
+
+      return { success: true, resolved };
+    }),
 });
