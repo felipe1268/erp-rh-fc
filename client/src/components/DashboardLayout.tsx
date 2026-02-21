@@ -23,11 +23,10 @@ import { getLoginUrl } from "@/const";
 import { APP_VERSION } from "../../../shared/version";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Users, ShieldCheck, Wrench,
-  ClipboardCheck, Vote, Clock, Star, Lock, Building2, FileText,
-  ChevronDown, ChevronRight, AlertTriangle, Truck, FlameKindling,
-  Droplets, Beaker, HardHat, BookOpen, Siren, Scale,
-  BarChart3, GraduationCap, ShieldAlert, ListChecks, TriangleAlert, Flame, AlertOctagon, Settings,
+  LayoutDashboard, LogOut, PanelLeft, Users,
+  Clock, Star, Lock, Building2, FileText,
+  ChevronDown, ChevronRight,
+  BarChart3, Settings,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -60,7 +59,6 @@ const menuSections = [
     items: [
       { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
-      { icon: Vote, label: "CIPA", path: "/cipa" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
     ],
@@ -70,11 +68,6 @@ const menuSections = [
     items: [
       { icon: BarChart3, label: "Todos os Dashboards", path: "/dashboards" },
       { icon: Users, label: "Colaboradores", path: "/dashboards/colaboradores" },
-      { icon: AlertTriangle, label: "Pendências", path: "/dashboards/pendentes" },
-      { icon: GraduationCap, label: "Treinamentos", path: "/dashboards/treinamentos" },
-      { icon: HardHat, label: "EPI", path: "/dashboards/epi" },
-      { icon: ShieldAlert, label: "Acidentes", path: "/dashboards/acidentes" },
-      { icon: TriangleAlert, label: "Riscos", path: "/dashboards/riscos" },
       { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
     ],
   },

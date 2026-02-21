@@ -83,10 +83,15 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
 
   const handleSave = () => {
     if (!form.nome.trim()) { toast.error("Nome da obra é obrigatório"); return; }
+    // Converter strings vazias para undefined para evitar erro no banco (campos date não aceitam "")
+    const cleanForm = Object.fromEntries(
+      Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? undefined : v])
+    ) as any;
+    cleanForm.nome = form.nome; // garantir que nome nunca é undefined
     if (editingId) {
-      updateMut.mutate({ id: editingId, ...form } as any);
+      updateMut.mutate({ id: editingId, ...cleanForm } as any);
     } else {
-      createMut.mutate({ companyId, ...form } as any);
+      createMut.mutate({ companyId, ...cleanForm } as any);
     }
   };
 
@@ -203,7 +208,7 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={form.status || "none"} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+              <Select value={form.status || "Planejamento"} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}

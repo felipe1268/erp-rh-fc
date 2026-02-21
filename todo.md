@@ -390,3 +390,16 @@
 - [x] Criar seletor de empresa global fixo no topo (header) que vale para todas as páginas
 - [x] Remover seletores de empresa locais de cada página (usar Context global)
 - [x] VARREDURA COMPLETA: corrigir TODOS os Selects com placeholder concatenado em TODAS as páginas do sistema
+## Fase 29: Bugs Obras
+- [x] BUG: Não é possível criar uma nova obra (erro ao salvar) - corrigido (cleanForm converte strings vazias para undefined)
+- [x] BUG: Select de status da obra sobrepondo nomes - corrigido (valor padrão Planejamento em vez de "none")
+- [x] BUG: Botão "Nova noite" - era tradução automática do Safari/iOS, adicionado lang=pt-BR e translate=no
+- [x] VARREDURA: Verificar textos de botões e títulos em TODAS as páginas - todos corretos no código
+## Fase 30: Limpeza de Módulos e Dados
+- [x] Remover módulos fora do escopo: SST, CIPA, Ativos, Auditoria Qualidade, Químicos
+- [x] Remover dashboards dos módulos removidos (mantidos: Colaboradores e Horas Extras)
+- [x] Remover rotas tRPC e funções de banco dos módulos removidos
+- [x] Limpar todos os funcionários cadastrados do banco de dados
+- [x] Corrigir bug de criação de obra (strings vazias em campos date)
+- [x] Corrigir bug de Select de status sobrepondo nomes
+- [x] Atualizar menu lateral para refletir apenas módulos ativos

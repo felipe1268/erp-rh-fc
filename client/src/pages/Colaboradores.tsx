@@ -95,27 +95,24 @@ export default function Colaboradores() {
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); toast.success("Colaborador excluído!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
-  const deleteManyMut = trpc.employees.deleteMany.useMutation({
-    onSuccess: (data) => {
+  const deleteManyMut = trpc.batch.delete.useMutation({
+    onSuccess: (data: any) => {
       utils.employees.list.invalidate();
       utils.employees.stats.invalidate();
       setSelectedIds(new Set());
       setDeleteConfirmOpen(false);
       toast.success(`${data.deleted} colaborador(es) excluído(s)!`);
     },
-    onError: (e) => toast.error("Erro: " + e.message),
+    onError: (e: any) => toast.error("Erro: " + e.message),
   });
 
-  // Verificação de lista negra
-  const checkBlacklistMut = trpc.blacklist.check.useQuery(
-    { cpf: form.cpf ?? "" },
-    { enabled: !!(form.cpf && form.cpf.replace(/\D/g, "").length >= 11 && !editingId) }
-  );
+  // Verificação de lista negra (desativado - módulo removido)
+  const checkBlacklistMut = { data: null } as any;
 
   // Verificação de CPF duplicado
   const cpfClean = useMemo(() => (form.cpf ?? "").replace(/\D/g, ""), [form.cpf]);
   const checkDuplicateCpf = trpc.employees.checkDuplicateCpf.useQuery(
-    { cpf: cpfClean, excludeEmployeeId: editingId ?? undefined },
+    { cpf: cpfClean, companyId: companyId ?? 0 },
     { enabled: cpfClean.length >= 11 }
   );
 
@@ -257,7 +254,7 @@ export default function Colaboradores() {
 
   const handleBulkDelete = () => {
     if (!companyId || selectedIds.size === 0) return;
-    deleteManyMut.mutate({ ids: Array.from(selectedIds), companyId });
+    deleteManyMut.mutate({ table: "employees" as any, ids: Array.from(selectedIds) });
   };
 
   return (
@@ -1009,9 +1006,7 @@ export default function Colaboradores() {
               ) : null}
 
               {/* HISTÓRICOS */}
-              <EmployeeTrainingsSection employeeId={viewingEmployee.id} />
-              <EmployeeASOsSection employeeId={viewingEmployee.id} companyId={companyId!} />
-              <EmployeeWarningsSection employeeId={viewingEmployee.id} companyId={companyId!} />
+              {/* Seções SST removidas - módulos não fazem parte do escopo */}
             </div>
           ) : null}
         </DialogContent>
@@ -1130,92 +1125,4 @@ export default function Colaboradores() {
   );
 }
 
-// ============================================================
-// COMPONENTES DE HISTÓRICO NA FICHA DO COLABORADOR
-// ============================================================
-function EmployeeTrainingsSection({ employeeId }: { employeeId: number }) {
-  const { data: docs = [] } = trpc.trainingDocs.byEmployee.useQuery({ employeeId });
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2 pb-1 border-b border-primary/20">
-        <GraduationCap className="h-4 w-4" /> Treinamentos e Certificados
-      </h3>
-      {docs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhum treinamento registrado</p>
-      ) : (
-        <div className="space-y-1">
-          {docs.map((d: any) => (
-            <div key={d.id} className="flex items-center justify-between text-sm py-1 border-b border-border/50">
-              <div className="flex items-center gap-2">
-                <FileText className="h-3.5 w-3.5 text-blue-600" />
-                <span>{safeDisplay(d.fileName)}</span>
-              </div>
-              <span className="text-muted-foreground text-xs">{formatDate(d.createdAt)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EmployeeASOsSection({ employeeId, companyId }: { employeeId: number; companyId: number }) {
-  const { data: asos = [] } = trpc.sst.asos.list.useQuery({ companyId });
-  const empAsos = asos.filter((a: any) => a.employeeId === employeeId);
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2 pb-1 border-b border-primary/20">
-        <ShieldCheck className="h-4 w-4" /> ASOs
-      </h3>
-      {empAsos.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhum ASO registrado</p>
-      ) : (
-        <div className="space-y-1">
-          {empAsos.map((a: any) => (
-            <div key={a.id} className="flex items-center justify-between text-sm py-1 border-b border-border/50">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">{safeDisplay(a.tipo)}</Badge>
-                <span>{safeDisplay(a.clinica)}</span>
-              </div>
-              <div className="text-right flex items-center gap-2">
-                <span className="text-muted-foreground text-xs">{formatDate(a.dataExame)}</span>
-                {a.dataValidade && new Date(String(a.dataValidade)) < new Date() ? (
-                  <Badge variant="destructive" className="text-xs">Vencido</Badge>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EmployeeWarningsSection({ employeeId, companyId }: { employeeId: number; companyId: number }) {
-  const { data: warnings = [] } = trpc.sst.warnings.list.useQuery({ companyId });
-  const empWarnings = warnings.filter((w: any) => w.employeeId === employeeId);
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-primary mb-2 flex items-center gap-2 pb-1 border-b border-primary/20">
-        <Scale className="h-4 w-4" /> Advertências
-      </h3>
-      {empWarnings.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhuma advertência registrada</p>
-      ) : (
-        <div className="space-y-1">
-          {empWarnings.map((w: any) => (
-            <div key={w.id} className="flex items-center justify-between text-sm py-1 border-b border-border/50">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={`text-xs ${w.tipo === 'Suspensao' ? 'border-red-500 text-red-500' : w.tipo === 'Demissao' ? 'border-red-700 text-red-700' : ''}`}>
-                  {safeDisplay(w.tipo)}
-                </Badge>
-                <span className="truncate max-w-[200px]">{safeDisplay(w.motivo)}</span>
-              </div>
-              <span className="text-muted-foreground text-xs">{formatDate(w.data)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// Seções SST removidas - módulos não fazem parte do escopo

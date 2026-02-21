@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, ShieldCheck, HardHat, Truck, ClipboardCheck, Activity, Clock, BarChart3 } from "lucide-react";
+import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, Clock, BarChart3, Landmark, FolderOpen, UtensilsCrossed, Layers, Briefcase } from "lucide-react";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -16,12 +16,6 @@ export default function Home() {
     { companyId: companyId! },
     { enabled: !!companyId }
   );
-
-  const { data: sstStats } = trpc.sst.stats.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId }
-  );
-
   const { data: logs } = trpc.audit.list.useQuery(
     { companyId, limit: 8 },
     { enabled: !!companyId }
@@ -36,30 +30,21 @@ export default function Home() {
     { title: "Desligados", value: stats?.desligados ?? 0, icon: UserX, color: "bg-red-50", iconColor: "text-red-600", borderColor: "border-l-red-500" },
   ];
 
-  const sstCards = [
-    { title: "ASOs Válidos", value: (sstStats as any)?.asosValidos ?? 0, icon: ShieldCheck, color: "bg-green-50", iconColor: "text-green-600", borderColor: "border-l-green-500" },
-    { title: "ASOs Vencidos", value: sstStats?.asosVencidos ?? 0, icon: AlertTriangle, color: "bg-red-50", iconColor: "text-red-600", borderColor: "border-l-red-500", alert: (sstStats?.asosVencidos ?? 0) > 0 },
-    { title: "Treinamentos Ativos", value: (sstStats as any)?.treinamentosAtivos ?? 0, icon: HardHat, color: "bg-blue-50", iconColor: "text-blue-600", borderColor: "border-l-blue-500" },
-    { title: "Trein. a Vencer (30d)", value: sstStats?.treinamentosVencer ?? 0, icon: Clock, color: "bg-orange-50", iconColor: "text-orange-600", borderColor: "border-l-orange-500", alert: (sstStats?.treinamentosVencer ?? 0) > 0 },
-    { title: "Acidentes no Mês", value: sstStats?.acidentesMes ?? 0, icon: Activity, color: "bg-red-50", iconColor: "text-red-600", borderColor: "border-l-red-500" },
-    { title: "Advertências no Mês", value: sstStats?.advertenciasMes ?? 0, icon: ClipboardCheck, color: "bg-yellow-50", iconColor: "text-yellow-600", borderColor: "border-l-yellow-500" },
-  ];
-
   const modules = [
-    { title: "Core RH", desc: "Cadastro de colaboradores", status: "Ativo", path: "/colaboradores" },
-    { title: "SST", desc: "Segurança e Saúde", status: "Ativo", path: "/sst" },
-    { title: "Ponto e Folha", desc: "Controle de ponto e folha", status: "Ativo", path: "/ponto-folha" },
-    { title: "Ativos", desc: "Frota e equipamentos", status: "Ativo", path: "/ativos" },
-    { title: "Qualidade", desc: "Auditorias e desvios", status: "Ativo", path: "/auditoria-qualidade" },
-    { title: "CIPA", desc: "Comissão interna", status: "Ativo", path: "/cipa" },
-    { title: "Dashboards", desc: "10 dashboards interativos", status: "Ativo", path: "/dashboards" },
-    { title: "Avaliação", desc: "Desempenho de equipe", status: "Em breve", path: "#" },
+    { title: "Colaboradores", desc: "Cadastro e gestão de funcionários", status: "Ativo", path: "/colaboradores" },
+    { title: "Obras", desc: "Controle de obras e alocação", status: "Ativo", path: "/obras" },
+    { title: "Setores", desc: "Cadastro de setores", status: "Ativo", path: "/setores" },
+    { title: "Funções", desc: "Cadastro de funções/cargos", status: "Ativo", path: "/funcoes" },
+    { title: "Fechamento de Ponto", desc: "Upload e controle de ponto", status: "Ativo", path: "/fechamento-ponto" },
+    { title: "Folha de Pagamento", desc: "Gestão de folha e extras", status: "Ativo", path: "/folha-pagamento" },
+    { title: "Controle de Documentos", desc: "Documentos dos colaboradores", status: "Ativo", path: "/controle-documentos" },
+    { title: "Vale Alimentação", desc: "Gestão de VR/VA", status: "Ativo", path: "/vale-alimentacao" },
+    { title: "Dashboards", desc: "Relatórios interativos", status: "Ativo", path: "/dashboards" },
   ];
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
@@ -67,7 +52,6 @@ export default function Home() {
               Bem-vindo(a), {user?.name ?? "Usuário"}
             </p>
           </div>
-
         </div>
 
         {companyId ? (
@@ -89,31 +73,6 @@ export default function Home() {
                       <div className="w-full">
                         <p className={`text-2xl font-bold ${card.iconColor}`}>{card.value}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{card.title}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            {/* SST Stats */}
-            <div>
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Segurança e Saúde do Trabalho</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {sstCards.map(card => (
-                  <Card
-                    key={card.title}
-                    className={`bg-card border border-border border-l-4 ${card.borderColor} hover:shadow-md transition-shadow cursor-pointer ${card.alert ? "ring-1 ring-red-300" : ""}`}
-                    onClick={() => navigate("/sst")}
-                  >
-                    <CardContent className="p-4 flex flex-col items-start gap-3">
-                      <div className={`h-10 w-10 rounded-lg ${card.color} flex items-center justify-center shrink-0`}>
-                        <card.icon className={`h-5 w-5 ${card.iconColor}`} />
-                      </div>
-                      <div className="w-full">
-                        <p className={`text-2xl font-bold ${card.iconColor}`}>{card.value}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{card.title}</p>
-                        {card.alert ? <p className="text-[10px] text-red-500 font-medium mt-1">⚠ Atenção</p> : null}
                       </div>
                     </CardContent>
                   </Card>
@@ -144,7 +103,6 @@ export default function Home() {
                   </div>
                 </CardContent>
               </Card>
-
               {/* Recent Activity */}
               <Card className="bg-card border-border lg:col-span-2">
                 <CardHeader className="pb-3">

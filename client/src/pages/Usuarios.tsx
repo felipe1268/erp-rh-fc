@@ -41,34 +41,34 @@ export default function Usuarios() {
   const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
 
   const utils = trpc.useUtils();
-  const { data: allUsers } = trpc.profiles.listUsers.useQuery();
-  const { data: profiles, isLoading } = trpc.profiles.getByCompany.useQuery(
+  const { data: allUsers } = trpc.userManagement.listUsers.useQuery();
+  const { data: profiles, isLoading } = trpc.profiles.listByCompany.useQuery(
     { companyId: companyId! },
     { enabled: !!companyId }
   );
 
   const createMut = trpc.profiles.create.useMutation({
-    onSuccess: () => { utils.profiles.getByCompany.invalidate(); setCreateDialogOpen(false); toast.success("Perfil criado!"); },
+    onSuccess: () => { utils.profiles.listByCompany.invalidate(); setCreateDialogOpen(false); toast.success("Perfil criado!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
   const deleteMut = trpc.profiles.delete.useMutation({
-    onSuccess: () => { utils.profiles.getByCompany.invalidate(); toast.success("Perfil removido!"); },
+    onSuccess: () => { utils.profiles.listByCompany.invalidate(); toast.success("Perfil removido!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
-  const setPermMut = trpc.profiles.setPermissions.useMutation({
+  const setPermMut = trpc.profiles.permissions.set.useMutation({
     onSuccess: () => { setPermDialogOpen(false); toast.success("Permissões atualizadas!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
 
-  const { data: currentPerms } = trpc.profiles.getPermissions.useQuery(
+  const { data: currentPerms } = trpc.profiles.permissions.get.useQuery(
     { profileId: editingProfileId! },
     { enabled: !!editingProfileId }
   );
 
   useEffect(() => {
     if (currentPerms && editingProfileId) {
-      const state: Record<string, any> = {};
-      currentPerms.forEach(p => {
+      const state: Record<string, any> = {} as any;
+      (currentPerms as any[]).forEach((p: any) => {
         state[p.module] = { canView: p.canView, canCreate: p.canCreate, canEdit: p.canEdit, canDelete: p.canDelete };
       });
       setPermissionsState(state);
@@ -97,7 +97,7 @@ export default function Usuarios() {
       canEdit: p.canEdit,
       canDelete: p.canDelete,
     }));
-    setPermMut.mutate({ profileId: editingProfileId, permissions: perms });
+    setPermMut.mutate({ profileId: editingProfileId, permissions: perms as any });
   };
 
   const togglePerm = (module: string, field: "canView" | "canCreate" | "canEdit" | "canDelete") => {
@@ -217,7 +217,7 @@ export default function Usuarios() {
                 <SelectTrigger className="bg-input"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Selecione o usuário</SelectItem>
-                  {allUsers?.map(u => (
+                  {(allUsers as any[])?.map((u: any) => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.name ?? u.email ?? u.openId}</SelectItem>
                   ))}
                 </SelectContent>

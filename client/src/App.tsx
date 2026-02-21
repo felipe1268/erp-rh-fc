@@ -10,10 +10,6 @@ import Empresas from "./pages/Empresas";
 import Colaboradores from "./pages/Colaboradores";
 import Usuarios from "./pages/Usuarios";
 import Auditoria from "./pages/Auditoria";
-import SST from "./pages/SST";
-import PontoFolha from "./pages/PontoFolha";
-import Ativos from "./pages/Ativos";
-import Cipa from "./pages/Cipa";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
 import Obras from "./pages/Obras";
@@ -26,11 +22,6 @@ import Funcoes from "./pages/Funcoes";
 // Dashboards
 import DashboardIndex from "./pages/dashboards/DashboardIndex";
 import DashColaboradores from "./pages/dashboards/DashColaboradores";
-import DashPendentes from "./pages/dashboards/DashPendentes";
-import DashTreinamentos from "./pages/dashboards/DashTreinamentos";
-import DashEpi from "./pages/dashboards/DashEpi";
-import DashAcidentes from "./pages/dashboards/DashAcidentes";
-import DashRiscos from "./pages/dashboards/DashRiscos";
 import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
 
 function Router() {
@@ -45,23 +36,14 @@ function Router() {
       <Route path={"/funcoes"} component={Funcoes} />
       <Route path={"/usuarios"} component={Usuarios} />
       <Route path={"/auditoria"} component={Auditoria} />
-      <Route path={"/sst"} component={SST} />
-      <Route path={"/ponto-folha"} component={PontoFolha} />
       <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
       <Route path={"/folha-pagamento"} component={FolhaPagamento} />
       <Route path={"/controle-documentos"} component={ControleDocumentos} />
       <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
-      <Route path={"/ativos"} component={Ativos} />
-      <Route path={"/cipa"} component={Cipa} />
       <Route path={"/configuracoes"} component={Configuracoes} />
       {/* Dashboards */}
       <Route path={"/dashboards"} component={DashboardIndex} />
       <Route path={"/dashboards/colaboradores"} component={DashColaboradores} />
-      <Route path={"/dashboards/pendentes"} component={DashPendentes} />
-      <Route path={"/dashboards/treinamentos"} component={DashTreinamentos} />
-      <Route path={"/dashboards/epi"} component={DashEpi} />
-      <Route path={"/dashboards/acidentes"} component={DashAcidentes} />
-      <Route path={"/dashboards/riscos"} component={DashRiscos} />
       <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
