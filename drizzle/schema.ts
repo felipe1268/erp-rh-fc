@@ -603,6 +603,8 @@ export const timeRecords = mysqlTable("time_records", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
 	employeeId: int().notNull(),
+	obraId: int(),
+	mesReferencia: varchar({ length: 7 }),
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	data: date({ mode: 'string' }).notNull(),
 	entrada1: varchar({ length: 10 }),
@@ -617,9 +619,39 @@ export const timeRecords = mysqlTable("time_records", {
 	faltas: varchar({ length: 10 }),
 	atrasos: varchar({ length: 10 }),
 	justificativa: text(),
-	fonte: varchar({ length: 50 }).default('manual'),
+	fonte: varchar({ length: 50 }).default('dixi'),
+	ajusteManual: tinyint().default(0),
+	ajustadoPor: varchar({ length: 255 }),
+	batidasBrutas: json(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-});
+},
+(table) => [
+	index("time_records_emp_date").on(table.employeeId, table.data),
+	index("time_records_company_mes").on(table.companyId, table.mesReferencia),
+]);
+
+export const timeInconsistencies = mysqlTable("time_inconsistencies", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	obraId: int(),
+	timeRecordId: int(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	data: date({ mode: 'string' }).notNull(),
+	tipoInconsistencia: mysqlEnum(['batida_impar','falta_batida','horario_divergente','batida_duplicada','sem_registro']).notNull(),
+	descricao: text(),
+	status: mysqlEnum(['pendente','justificado','ajustado','advertencia']).default('pendente').notNull(),
+	justificativa: text(),
+	resolvidoPor: varchar({ length: 255 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	resolvidoEm: date({ mode: 'string' }),
+	warningId: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("time_incons_emp_mes").on(table.employeeId, table.mesReferencia),
+]);
 
 export const trainingDocuments = mysqlTable("training_documents", {
 	id: int().autoincrement().notNull(),

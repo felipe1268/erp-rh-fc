@@ -1,6 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
+import { fechamentoPontoRouter } from "./routers/fechamentoPonto";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import {
@@ -310,6 +311,11 @@ export const appRouter = router({
   // FOLHA DE PAGAMENTO (parsers, vales, extras, VR)
   // ============================================================
   payrollParsers: payrollParsersRouter,
+
+  // ============================================================
+  // FECHAMENTO DE PONTO (upload DIXI, cálculo horas, inconsistências)
+  // ============================================================
+  fechamentoPonto: fechamentoPontoRouter,
 
   // ============================================================
   // OBRAS

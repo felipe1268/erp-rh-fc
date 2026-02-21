@@ -434,3 +434,31 @@
 - [x] Corrigir parseDate para não depender de XLSX.SSF.parse_date_code
 - [x] Adicionar credentials: include nos fetch calls
 - [x] Melhorar tratamento de erros no frontend (detectar erros tRPC)
+
+## Fase 37: Módulo Completo de Tratamento de Cartão de Ponto
+### Análise e Schema
+- [x] Analisar estrutura dos 4 arquivos DIXI reais para mapear campos
+- [x] Criar/atualizar schema de registros de ponto (time_records) com campos completos
+- [x] Vincular SN do relógio à obra automaticamente (tabela obras.snRelogioPonto)
+
+### Backend - Parser e Regras de Negócio
+- [x] Parser DIXI robusto: ler múltiplos arquivos XLS e extrair batidas por funcionário/dia
+- [x] Identificação automática de obra pelo número SN do relógio
+- [x] Vincular funcionário pelo nome/CPF ao cadastro de colaboradores
+- [x] Cálculo de horas trabalhadas por dia (entrada/saída, descontando intervalo)
+- [x] Cálculo automático de horas extras (comparar com jornada cadastrada do colaborador)
+- [x] Detecção de inconsistências: falta de batida, batida ímpar, horário fora do padrão
+- [x] Gerar lista de inconsistências com status (pendente, justificado, advertência)
+
+### Frontend - Tela de Fechamento de Ponto
+- [x] Upload múltiplo de arquivos DIXI (um por obra)
+- [x] Visualização por competência (mês/ano) com resumo geral
+- [x] Tabela de funcionários com horas trabalhadas, HE, faltas, inconsistências
+- [x] Detalhe por funcionário: batidas dia a dia com destaque de problemas
+- [x] Lançamento manual de batidas (destacado visualmente como "ajuste RH")
+- [x] Lista de inconsistências com link para gerar advertência
+- [x] Exportação de relatório de ponto por funcionário/obra
+
+### Integração
+- [x] Base de dados pronta para consulta pela Folha de Pagamento
+- [x] Funcionários com lançamento manual destacados para avaliação futura

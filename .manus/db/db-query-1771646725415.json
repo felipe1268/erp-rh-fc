@@ -1,0 +1,74 @@
+{
+  "query": "SELECT column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'time_inconsistencies' AND table_schema = DATABASE() ORDER BY ordinal_position;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT column_name, data_type FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'time_inconsistencies' AND table_schema = DATABASE() ORDER BY ordinal_position;",
+  "rows": [
+    {
+      "column_name": "id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "company_id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "employee_id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "obra_id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "time_record_id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "mes_referencia",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "data",
+      "data_type": "date"
+    },
+    {
+      "column_name": "tipo_inconsistencia",
+      "data_type": "enum"
+    },
+    {
+      "column_name": "descricao",
+      "data_type": "text"
+    },
+    {
+      "column_name": "status",
+      "data_type": "enum"
+    },
+    {
+      "column_name": "justificativa",
+      "data_type": "text"
+    },
+    {
+      "column_name": "resolvido_por",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "resolvido_em",
+      "data_type": "date"
+    },
+    {
+      "column_name": "warning_id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp"
+    },
+    {
+      "column_name": "updated_at",
+      "data_type": "timestamp"
+    }
+  ],
+  "messages": [],
+  "stdout": "column_name\tdata_type\nid\tint\ncompany_id\tint\nemployee_id\tint\nobra_id\tint\ntime_record_id\tint\nmes_referencia\tvarchar\ndata\tdate\ntipo_inconsistencia\tenum\ndescricao\ttext\nstatus\tenum\njustificativa\ttext\nresolvido_por\tvarchar\nresolvido_em\tdate\nwarning_id\tint\ncreated_at\ttimestamp\nupdated_at\ttimestamp\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}
