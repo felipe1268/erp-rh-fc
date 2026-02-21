@@ -718,15 +718,50 @@ export const fechamentoPontoRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const userName = input.resolvidoPor || ctx.user?.name || "RH";
+      const hoje = new Date().toISOString().split("T")[0];
+
+      // Se for advertência, criar registro no módulo de warnings
+      let warningId: number | null = null;
+      if (input.status === "advertencia") {
+        // Buscar dados da inconsistência para preencher a advertência
+        const [inc] = await db.select().from(timeInconsistencies)
+          .where(eq(timeInconsistencies.id, input.id)).limit(1);
+        if (inc) {
+          // Contar advertências existentes do funcionário para definir sequência
+          const existingWarnings = await db.select().from(warnings)
+            .where(eq(warnings.employeeId, inc.employeeId));
+          const totalAdv = existingWarnings.filter(w => w.tipoAdvertencia === "Verbal" || w.tipoAdvertencia === "Escrita").length;
+          const sequencia = totalAdv + 1;
+          // Definir tipo: 1ª e 2ª são Verbal, 3ª em diante Escrita
+          const tipoAdv = sequencia <= 2 ? "Verbal" as const : "Escrita" as const;
+
+          const result = await db.insert(warnings).values({
+            companyId: inc.companyId,
+            employeeId: inc.employeeId,
+            tipoAdvertencia: tipoAdv,
+            sequencia,
+            dataOcorrencia: inc.data,
+            motivo: `Inconsistência de ponto: ${inc.descricao || inc.tipoInconsistencia}`,
+            descricao: input.justificativa || `Advertência gerada automaticamente a partir de inconsistência de ponto (${inc.tipoInconsistencia}) do dia ${inc.data}. ${inc.descricao || ""}`,
+            aplicadoPor: userName,
+            origemModulo: "fechamento_ponto",
+            origemId: inc.id,
+          });
+          warningId = Number(result[0].insertId);
+        }
+      }
+
       await db.update(timeInconsistencies)
         .set({
           status: input.status,
           justificativa: input.justificativa || null,
-          resolvidoPor: input.resolvidoPor || ctx.user?.name || "RH",
-          resolvidoEm: new Date().toISOString().split("T")[0],
+          resolvidoPor: userName,
+          resolvidoEm: hoje,
+          warningId: warningId,
         })
         .where(eq(timeInconsistencies.id, input.id));
-      return { success: true };
+      return { success: true, warningId };
     }),
 
   // Manual time record entry/update

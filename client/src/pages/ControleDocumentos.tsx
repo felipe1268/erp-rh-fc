@@ -81,7 +81,8 @@ export default function ControleDocumentos() {
   const deleteAtest = trpc.docs.atestados.delete.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Atestado excluído!"); } });
   const uploadAtestDoc = trpc.docs.atestados.uploadDoc.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Documento anexado!"); } });
 
-  const createAdv = trpc.docs.advertencias.create.useMutation({ onSuccess: (result: any) => { refetchAdv(); if (result?.alerta) { toast.warning(result.alerta, { duration: 8000 }); } else { toast.success(`Advertência cadastrada! (${result?.sequencia || ''}ª do colaborador)`); } } });
+  const createAdv = trpc.docs.advertencias.create.useMutation({ onSuccess: (result: any) => { refetchAdv(); if (result?.alerta) { toast.warning(result.alerta, { duration: 8000 }); } else { toast.success(`Advertência cadastrada! (${result?.sequencia || ''}ª do colaborador)`); } if (result?.id) { setLastCreatedAdvId(result.id); } } });
+  const [lastCreatedAdvId, setLastCreatedAdvId] = useState<number | null>(null);
   const deleteAtestBatch = trpc.docs.atestadosDeleteBatch.useMutation({ onSuccess: (r: any) => { refetchAtest(); toast.success(`${r.deletados} atestado(s) excluído(s)!`); setSelectedAtestIds([]); } });
   const { user: authUser } = useAuth();
   const updateAdv = trpc.docs.advertencias.update.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência atualizada!"); } });
@@ -105,6 +106,8 @@ export default function ControleDocumentos() {
   const [editingAdvId, setEditingAdvId] = useState<number | null>(null);
   const [selectedAtestIds, setSelectedAtestIds] = useState<number[]>([]);
   const [advEmployeeCount, setAdvEmployeeCount] = useState<{total: number; proximaAcao: string; sugestaoTipo: string} | null>(null);
+  const [showAdvPreview, setShowAdvPreview] = useState(false);
+  const [previewAdvData, setPreviewAdvData] = useState<any>(null);
 
   // ============ FORM STATES ============
   const [asoForm, setAsoForm] = useState<any>({});
@@ -261,6 +264,27 @@ export default function ControleDocumentos() {
       updateAdv.mutate({ id: editingAdvId, ...advForm });
     } else {
       createAdv.mutate({ companyId, ...advForm, aplicadoPor: authUser?.name || authUser?.username || undefined });
+    }
+    if (!editingAdvId) {
+      // Após salvar nova advertência, preparar dados para preview
+      const emp = (allEmployees as any[]).find((e: any) => e.id === advForm.employeeId);
+      const empAdvs = (advList as any[]).filter((x: any) => x.employeeId === advForm.employeeId);
+      setPreviewAdvData({
+        nomeCompleto: emp?.nomeCompleto || "",
+        cpf: emp?.cpf || "",
+        funcao: emp?.funcao || "",
+        setor: emp?.setor || "OBRA",
+        tipoAdvertencia: advForm.tipoAdvertencia,
+        dataOcorrencia: advForm.dataOcorrencia,
+        motivo: advForm.motivo,
+        descricao: advForm.descricao,
+        testemunhas: advForm.testemunhas,
+        diasSuspensao: advForm.diasSuspensao,
+        sequencia: empAdvs.length + 1,
+        anteriores: empAdvs.sort((a: any, b: any) => (a.dataOcorrencia || "").localeCompare(b.dataOcorrencia || "")),
+        employeeId: advForm.employeeId,
+      });
+      setTimeout(() => setShowAdvPreview(true), 300);
     }
     setShowAdvDialog(false); setAdvForm({}); setEditingAdvId(null); setAdvEmployeeCount(null);
   };
@@ -717,6 +741,69 @@ export default function ControleDocumentos() {
                           <td className="py-2">{a.testemunhas || "-"}</td>
                           <td className="py-2">
                             <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Imprimir Documento CLT" onClick={() => {
+                                const userName = authUser?.name || authUser?.username || "Usuário";
+                                const dataEmissao = new Date().toLocaleString("pt-BR");
+                                const tipo = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
+                                const tipoTitulo = a.tipoAdvertencia === "Suspensao" ? "SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "RESCISÃO POR JUSTA CAUSA" : a.tipoAdvertencia === "Escrita" ? "ADVERTÊNCIA POR ESCRITO" : "ADVERTÊNCIA VERBAL";
+                                const empAdvs = (advList as any[]).filter((x: any) => x.employeeId === a.employeeId).sort((x: any, y: any) => (x.dataOcorrencia || "").localeCompare(y.dataOcorrencia || ""));
+                                const idxAdv = empAdvs.findIndex((x: any) => x.id === a.id);
+                                const anteriores = empAdvs.filter((_: any, i: number) => i < idxAdv);
+                                const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${tipoTitulo}</title>
+                                <style>
+                                  @page { size: A4 portrait; margin: 25mm 20mm; }
+                                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                                  body { font-family: 'Times New Roman', serif; font-size: 13px; color: #000; line-height: 1.8; padding: 20px; }
+                                  .doc-header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #000; padding-bottom: 15px; }
+                                  .doc-header h1 { font-size: 18px; font-weight: bold; letter-spacing: 2px; margin-bottom: 5px; }
+                                  .doc-header p { font-size: 11px; color: #333; }
+                                  .doc-body { text-align: justify; margin-bottom: 40px; }
+                                  .doc-body p { margin-bottom: 16px; text-indent: 40px; }
+                                  .doc-body .motivo-box { background: #f5f5f5; border: 1px solid #ccc; padding: 12px 16px; margin: 16px 0; text-indent: 0; font-style: italic; }
+                                  .doc-body .historico { margin: 16px 0; text-indent: 0; }
+                                  .doc-body .historico li { margin-left: 40px; margin-bottom: 4px; }
+                                  .signatures { margin-top: 60px; }
+                                  .sig-row { display: flex; justify-content: space-between; margin-bottom: 50px; }
+                                  .sig-block { text-align: center; width: 45%; }
+                                  .sig-block .line { border-top: 1px solid #000; padding-top: 5px; font-size: 11px; }
+                                  .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 8px 20mm; border-top: 2px solid #1e40af; font-size: 9px; display: flex; justify-content: space-between; background: white; }
+                                  .footer .lgpd { color: #dc2626; font-weight: 600; }
+                                </style></head><body>
+                                <div class="doc-header">
+                                  <h1>${tipoTitulo}</h1>
+                                  <p>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</p>
+                                </div>
+                                <div class="doc-body">
+                                  <p>Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</strong>, vem por meio deste ${a.tipoAdvertencia === "Suspensao" ? "SUSPENDER" : a.tipoAdvertencia === "JustaCausa" ? "COMUNICAR A RESCISÃO POR JUSTA CAUSA" : "ADVERTIR"} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong>${a.diasSuspensao} dia(s)</strong>,` : ""} pelo seguinte motivo:</p>
+                                  <div class="motivo-box">${a.motivo}${a.descricao ? "<br/><br/>" + a.descricao : ""}</div>
+                                  <p>Ocorrido em <strong>${formatDate(a.dataOcorrencia)}</strong>.</p>
+                                  ${anteriores.length > 0 ? `<p>Registramos que o(a) colaborador(a) já recebeu as seguintes medidas disciplinares anteriores:</p><div class="historico"><ul>${anteriores.map((prev: any, pi: number) => `<li>${pi + 1}ª ${prev.tipoAdvertencia === "Suspensao" ? "Suspensão" : prev.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : prev.tipoAdvertencia} em ${formatDate(prev.dataOcorrencia)} — ${prev.motivo}</li>`).join("")}</ul></div>` : ""}
+                                  <p>${a.tipoAdvertencia === "Suspensao" ? "A presente suspensão é aplicada com fundamento no Art. 474 da CLT, que limita a suspensão disciplinar a no máximo 30 (trinta) dias consecutivos. Durante o período de suspensão, o(a) colaborador(a) não deverá comparecer ao local de trabalho e terá os dias descontados de sua remuneração." : a.tipoAdvertencia === "JustaCausa" ? "Após esgotadas todas as medidas socioeducativas e disciplinares previstas, e diante da reincidência e/ou gravidade da falta cometida, a empresa não encontra outra alternativa senão a aplicação da penalidade máxima, com fundamento no Art. 482 da CLT." : "Esclarecemos que a presente advertência tem caráter educativo e visa orientar o(a) colaborador(a) sobre a conduta esperada, conforme previsto no Art. 482 da CLT e no regulamento interno da empresa."}</p>
+                                  <p>${a.tipoAdvertencia !== "JustaCausa" ? "A reincidência poderá acarretar a aplicação de penalidades mais severas, incluindo " + (a.tipoAdvertencia === "Suspensao" ? "rescisão do contrato de trabalho por justa causa." : "advertência por escrito, suspensão disciplinar e, em último caso, rescisão do contrato de trabalho por justa causa.") : "O(A) colaborador(a) deverá comparecer ao Departamento Pessoal para as providências de rescisão contratual."}</p>
+                                  <p>O(A) colaborador(a) declara estar ciente desta ${tipo.toLowerCase()} e compromete-se a adequar sua conduta.</p>
+                                  <p style="text-indent:0; margin-top: 30px;">_________________, ${new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}.</p>
+                                </div>
+                                <div class="signatures">
+                                  <div class="sig-row">
+                                    <div class="sig-block"><div class="line">Empregador / Representante Legal</div></div>
+                                    <div class="sig-block"><div class="line">${a.nomeCompleto}<br/>Colaborador(a)</div></div>
+                                  </div>
+                                  <div class="sig-row">
+                                    <div class="sig-block"><div class="line">Testemunha 1${a.testemunhas ? ": " + a.testemunhas.split(",")[0]?.trim() : ""}</div></div>
+                                    <div class="sig-block"><div class="line">Testemunha 2${a.testemunhas && a.testemunhas.split(",")[1] ? ": " + a.testemunhas.split(",")[1]?.trim() : ""}</div></div>
+                                  </div>
+                                </div>
+                                <div class="footer">
+                                  <span>ERP RH & DP — FC Engenharia</span>
+                                  <span>Documento gerado por: <strong>${userName}</strong> em ${dataEmissao}</span>
+                                  <span class="lgpd">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span>
+                                </div>
+                                </body></html>`;
+                                const w = window.open("", "_blank");
+                                if (w) { w.document.write(printHtml); w.document.close(); setTimeout(() => w.print(), 500); }
+                              }}>
+                                <Printer className="h-3.5 w-3.5" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAdv(a)}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
@@ -1045,6 +1132,132 @@ export default function ControleDocumentos() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* ===================== DIALOG: VISUALIZAR DOCUMENTO CLT ===================== */}
+      <Dialog open={showAdvPreview} onOpenChange={v => { if (!v) { setShowAdvPreview(false); setPreviewAdvData(null); setLastCreatedAdvId(null); } }}>
+        <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              Documento de {previewAdvData?.tipoAdvertencia === "Suspensao" ? "Suspensão" : previewAdvData?.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : "Advertência"} — Visualização
+            </DialogTitle>
+          </DialogHeader>
+          {previewAdvData && (() => {
+            const a = previewAdvData;
+            const tipo = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
+            const tipoTitulo = a.tipoAdvertencia === "Suspensao" ? "SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "RESCISÃO POR JUSTA CAUSA" : a.tipoAdvertencia === "Escrita" ? "ADVERTÊNCIA POR ESCRITO" : "ADVERTÊNCIA VERBAL";
+            const verbo = a.tipoAdvertencia === "Suspensao" ? "SUSPENDER" : a.tipoAdvertencia === "JustaCausa" ? "COMUNICAR A RESCISÃO POR JUSTA CAUSA de" : "ADVERTIR";
+            const anteriores = a.anteriores || [];
+            return (
+              <div className="space-y-4">
+                {/* Preview do documento */}
+                <div className="border-2 border-gray-200 rounded-lg p-8 bg-white" style={{ fontFamily: "'Times New Roman', serif" }}>
+                  <div className="text-center border-b-4 border-double border-black pb-4 mb-6">
+                    <h2 className="text-xl font-bold tracking-widest">{tipoTitulo}</h2>
+                    <p className="text-xs text-gray-600 mt-1">FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</p>
+                  </div>
+                  <div className="text-justify leading-relaxed text-sm space-y-4">
+                    <p className="indent-10">Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</strong>, vem por meio deste {verbo} o(a) colaborador(a) <strong>{a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>{formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>{a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>{a.setor || "OBRA"}</strong>{a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? <>, pelo período de <strong>{a.diasSuspensao} dia(s)</strong>,</> : null} pelo seguinte motivo:</p>
+                    <div className="bg-gray-50 border border-gray-300 p-4 italic">
+                      {a.motivo}{a.descricao ? <><br /><br />{a.descricao}</> : null}
+                    </div>
+                    <p className="indent-10">Ocorrido em <strong>{formatDate(a.dataOcorrencia)}</strong>.</p>
+                    {anteriores.length > 0 ? (
+                      <>
+                        <p className="indent-10">Registramos que o(a) colaborador(a) já recebeu as seguintes medidas disciplinares anteriores:</p>
+                        <ul className="ml-10 list-disc space-y-1">
+                          {anteriores.map((prev: any, pi: number) => (
+                            <li key={pi}>{pi + 1}ª {prev.tipoAdvertencia === "Suspensao" ? "Suspensão" : prev.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : prev.tipoAdvertencia} em {formatDate(prev.dataOcorrencia)} — {prev.motivo}</li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : null}
+                    <p className="indent-10">
+                      {a.tipoAdvertencia === "Suspensao" ? "A presente suspensão é aplicada com fundamento no Art. 474 da CLT, que limita a suspensão disciplinar a no máximo 30 (trinta) dias consecutivos. Durante o período de suspensão, o(a) colaborador(a) não deverá comparecer ao local de trabalho e terá os dias descontados de sua remuneração." : a.tipoAdvertencia === "JustaCausa" ? "Após esgotadas todas as medidas socioeducativas e disciplinares previstas, e diante da reincidência e/ou gravidade da falta cometida, a empresa não encontra outra alternativa senão a aplicação da penalidade máxima, com fundamento no Art. 482 da CLT." : "Esclarecemos que a presente advertência tem caráter educativo e visa orientar o(a) colaborador(a) sobre a conduta esperada, conforme previsto no Art. 482 da CLT e no regulamento interno da empresa."}
+                    </p>
+                    <p className="indent-10">
+                      {a.tipoAdvertencia !== "JustaCausa" ? "A reincidência poderá acarretar a aplicação de penalidades mais severas, incluindo " + (a.tipoAdvertencia === "Suspensao" ? "rescisão do contrato de trabalho por justa causa." : "advertência por escrito, suspensão disciplinar e, em último caso, rescisão do contrato de trabalho por justa causa.") : "O(A) colaborador(a) deverá comparecer ao Departamento Pessoal para as providências de rescisão contratual."}
+                    </p>
+                    <p className="indent-10">O(A) colaborador(a) declara estar ciente desta {tipo.toLowerCase()} e compromete-se a adequar sua conduta.</p>
+                    <p className="mt-6">_________________, {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}.</p>
+                  </div>
+                  <div className="mt-16 space-y-12">
+                    <div className="flex justify-between">
+                      <div className="text-center w-[45%]"><div className="border-t border-black pt-1 text-xs">Empregador / Representante Legal</div></div>
+                      <div className="text-center w-[45%]"><div className="border-t border-black pt-1 text-xs">{a.nomeCompleto}<br />Colaborador(a)</div></div>
+                    </div>
+                    <div className="flex justify-between">
+                      <div className="text-center w-[45%]"><div className="border-t border-black pt-1 text-xs">Testemunha 1{a.testemunhas ? ": " + a.testemunhas.split(",")[0]?.trim() : ""}</div></div>
+                      <div className="text-center w-[45%]"><div className="border-t border-black pt-1 text-xs">Testemunha 2{a.testemunhas && a.testemunhas.split(",")[1] ? ": " + a.testemunhas.split(",")[1]?.trim() : ""}</div></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botões de ação */}
+                <div className="flex flex-wrap gap-3 justify-center pt-2 border-t">
+                  <Button className="gap-2 bg-blue-600 hover:bg-blue-700" onClick={() => {
+                    const userName = authUser?.name || authUser?.username || "Usuário";
+                    const dataEmissao = new Date().toLocaleString("pt-BR");
+                    const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${tipoTitulo}</title>
+                    <style>
+                      @page { size: A4 portrait; margin: 25mm 20mm; }
+                      * { margin: 0; padding: 0; box-sizing: border-box; }
+                      body { font-family: 'Times New Roman', serif; font-size: 13px; color: #000; line-height: 1.8; padding: 20px; }
+                      .doc-header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #000; padding-bottom: 15px; }
+                      .doc-header h1 { font-size: 18px; font-weight: bold; letter-spacing: 2px; margin-bottom: 5px; }
+                      .doc-header p { font-size: 11px; color: #333; }
+                      .doc-body { text-align: justify; margin-bottom: 40px; }
+                      .doc-body p { margin-bottom: 16px; text-indent: 40px; }
+                      .doc-body .motivo-box { background: #f5f5f5; border: 1px solid #ccc; padding: 12px 16px; margin: 16px 0; text-indent: 0; font-style: italic; }
+                      .doc-body .historico { margin: 16px 0; text-indent: 0; }
+                      .doc-body .historico li { margin-left: 40px; margin-bottom: 4px; }
+                      .signatures { margin-top: 60px; }
+                      .sig-row { display: flex; justify-content: space-between; margin-bottom: 50px; }
+                      .sig-block { text-align: center; width: 45%; }
+                      .sig-block .line { border-top: 1px solid #000; padding-top: 5px; font-size: 11px; }
+                      .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 8px 20mm; border-top: 2px solid #1e40af; font-size: 9px; display: flex; justify-content: space-between; background: white; }
+                      .footer .lgpd { color: #dc2626; font-weight: 600; }
+                    </style></head><body>
+                    <div class="doc-header"><h1>${tipoTitulo}</h1><p>FC ENGENHARIA PROJETOS E CONSTRU\u00c7\u00d5ES LTDA</p></div>
+                    <div class="doc-body">
+                      <p>Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRU\u00c7\u00d5ES LTDA</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF n\u00ba <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo per\u00edodo de <strong>${a.diasSuspensao} dia(s)</strong>,` : ""} pelo seguinte motivo:</p>
+                      <div class="motivo-box">${a.motivo}${a.descricao ? "<br/><br/>" + a.descricao : ""}</div>
+                      <p>Ocorrido em <strong>${formatDate(a.dataOcorrencia)}</strong>.</p>
+                      ${anteriores.length > 0 ? `<p>Registramos que o(a) colaborador(a) j\u00e1 recebeu as seguintes medidas disciplinares anteriores:</p><div class="historico"><ul>${anteriores.map((prev: any, pi: number) => `<li>${pi + 1}\u00aa ${prev.tipoAdvertencia === "Suspensao" ? "Suspens\u00e3o" : prev.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : prev.tipoAdvertencia} em ${formatDate(prev.dataOcorrencia)} \u2014 ${prev.motivo}</li>`).join("")}</ul></div>` : ""}
+                      <p>${a.tipoAdvertencia === "Suspensao" ? "A presente suspens\u00e3o \u00e9 aplicada com fundamento no Art. 474 da CLT, que limita a suspens\u00e3o disciplinar a no m\u00e1ximo 30 (trinta) dias consecutivos." : a.tipoAdvertencia === "JustaCausa" ? "Ap\u00f3s esgotadas todas as medidas socioeducativas e disciplinares previstas, a empresa n\u00e3o encontra outra alternativa sen\u00e3o a aplica\u00e7\u00e3o da penalidade m\u00e1xima, com fundamento no Art. 482 da CLT." : "Esclarecemos que a presente advert\u00eancia tem car\u00e1ter educativo e visa orientar o(a) colaborador(a) sobre a conduta esperada, conforme previsto no Art. 482 da CLT e no regulamento interno da empresa."}</p>
+                      <p>O(A) colaborador(a) declara estar ciente desta ${tipo.toLowerCase()} e compromete-se a adequar sua conduta.</p>
+                      <p style="text-indent:0; margin-top: 30px;">_________________, ${new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}.</p>
+                    </div>
+                    <div class="signatures">
+                      <div class="sig-row"><div class="sig-block"><div class="line">Empregador / Representante Legal</div></div><div class="sig-block"><div class="line">${a.nomeCompleto}<br/>Colaborador(a)</div></div></div>
+                      <div class="sig-row"><div class="sig-block"><div class="line">Testemunha 1${a.testemunhas ? ": " + a.testemunhas.split(",")[0]?.trim() : ""}</div></div><div class="sig-block"><div class="line">Testemunha 2${a.testemunhas && a.testemunhas.split(",")[1] ? ": " + a.testemunhas.split(",")[1]?.trim() : ""}</div></div></div>
+                    </div>
+                    <div class="footer">
+                      <span>ERP RH & DP \u2014 FC Engenharia</span>
+                      <span>Documento gerado por: <strong>${userName}</strong> em ${dataEmissao}</span>
+                      <span class="lgpd">LGPD (Lei 13.709/2018) \u2014 Uso restrito e confidencial.</span>
+                    </div>
+                    </body></html>`;
+                    const w = window.open("", "_blank");
+                    if (w) { w.document.write(printHtml); w.document.close(); setTimeout(() => w.print(), 500); }
+                  }}>
+                    <Printer className="h-4 w-4" /> Imprimir para Assinatura
+                  </Button>
+                  <Button variant="outline" className="gap-2" onClick={() => {
+                    if (lastCreatedAdvId) handleUploadDoc("adv", lastCreatedAdvId);
+                    else toast.info("Salve a advert\u00eancia primeiro para anexar o documento assinado.");
+                  }}>
+                    <Upload className="h-4 w-4" /> Upload Documento Assinado
+                  </Button>
+                  <Button variant="outline" onClick={() => { setShowAdvPreview(false); setPreviewAdvData(null); setLastCreatedAdvId(null); }}>
+                    Fechar
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* ===================== RAIO-X DO FUNCIONÁRIO ===================== */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>

@@ -532,6 +532,7 @@ export const controleDocumentosRouter = router({
             nomeCompleto: employees.nomeCompleto,
             cpf: employees.cpf,
             funcao: employees.funcao,
+            setor: employees.setor,
             tipoAdvertencia: warnings.tipoAdvertencia,
             dataOcorrencia: warnings.dataOcorrencia,
             motivo: warnings.motivo,

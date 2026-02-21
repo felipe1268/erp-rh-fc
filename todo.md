@@ -702,3 +702,24 @@
 - [x] Criar página dedicada de Raio-X do Funcionário com seleção de colaborador
 - [x] Registrar rota no App.tsx
 - [x] Manter o Raio-X como componente reutilizável (dialog em outras telas + página dedicada)
+
+## REVISÃO_11: Bug Fix - Integração Advertências + Modelo CLT para Impressão
+- [x] Bug: botão Advertência nas inconsistências não cria registro no warnings do funcionário
+- [x] Conectar advertência da inconsistência ao sistema de warnings (Controle de Documentos)
+- [x] Criar modelo CLT padrão de advertência para impressão com campos de assinatura
+- [x] Criar modelo CLT padrão de suspensão para impressão com campos de assinatura
+- [x] Botão para imprimir/gerar PDF do documento de advertência formatado
+- [x] Garantir que advertência criada em qualquer tela apareça no Raio-X e no Controle de Documentos
+- [x] Tela de edição de modelos de documentos acessível pelo Admin Master
+
+## REVISÃO_11B: Raio-X FULL SCREEN REAL + Impressão Advertência CLT
+- [x] BUG: Raio-X abre como dialog pequeno, precisa ser FULL SCREEN (100vw x 100vh)
+- [x] Reescrever RaioXFuncionario como overlay fixo ocupando tela inteira
+- [x] Botão de imprimir documento CLT de advertência na tabela de advertências
+- [x] Garantir que advertência das inconsistências cria registro no warnings
+
+## REVISÃO_11C: Visualização Documento CLT + Upload Assinado
+- [x] Dialog de visualização do documento CLT completo após salvar advertência
+- [x] Botão de Imprimir para Assinatura direto do dialog de visualização
+- [x] Botão de Upload do documento assinado para registro
+- [x] Integrar no fluxo: salvar → visualizar → imprimir → upload assinado
