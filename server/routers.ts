@@ -44,6 +44,9 @@ import {
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
+  // Setores e Funções
+  listSectors, createSector, updateSector, deleteSector,
+  listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import type { ProfileType } from "../shared/modules";
@@ -114,6 +117,60 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       await deleteCompany(input.id);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "empresas", entityType: "company", entityId: input.id, details: `Empresa excluída` });
+      return { success: true };
+    }),
+  }),
+
+  // ============================================================
+  // SETORES
+  // ============================================================
+  sectors: router({
+    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => listSectors(input.companyId)),
+    create: protectedProcedure.input(z.object({
+      companyId: z.number(), nome: z.string().min(1), descricao: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const result = await createSector(input);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "cadastro", entityType: "sector", entityId: result.id, details: `Setor criado: ${input.nome}` });
+      return result;
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(), companyId: z.number(), nome: z.string().optional(), descricao: z.string().optional(), isActive: z.boolean().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const { id, companyId, ...data } = input;
+      await updateSector(id, companyId, data);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "cadastro", entityType: "sector", entityId: id, details: `Setor atualizado` });
+      return { success: true };
+    }),
+    delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      await deleteSector(input.id, input.companyId);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "cadastro", entityType: "sector", entityId: input.id, details: `Setor excluído` });
+      return { success: true };
+    }),
+  }),
+
+  // ============================================================
+  // FUNÇÕES (JOB FUNCTIONS)
+  // ============================================================
+  jobFunctions: router({
+    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => listJobFunctions(input.companyId)),
+    create: protectedProcedure.input(z.object({
+      companyId: z.number(), nome: z.string().min(1), descricao: z.string().optional(), cbo: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const result = await createJobFunction(input);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "cadastro", entityType: "jobFunction", entityId: result.id, details: `Função criada: ${input.nome}` });
+      return result;
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(), companyId: z.number(), nome: z.string().optional(), descricao: z.string().optional(), cbo: z.string().optional(), isActive: z.boolean().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const { id, companyId, ...data } = input;
+      await updateJobFunction(id, companyId, data);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "cadastro", entityType: "jobFunction", entityId: id, details: `Função atualizada` });
+      return { success: true };
+    }),
+    delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      await deleteJobFunction(input.id, input.companyId);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "cadastro", entityType: "jobFunction", entityId: input.id, details: `Função excluída` });
       return { success: true };
     }),
   }),

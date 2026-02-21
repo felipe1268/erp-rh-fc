@@ -10,6 +10,7 @@ import {
   auditLogs, InsertAuditLog,
   trainingDocuments, payrollUploads, dixiDevices,
   obras, InsertObra, obraFuncionarios, obraHorasRateio,
+  sectors, InsertSector, jobFunctions, InsertJobFunction,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -991,4 +992,81 @@ export async function getObraHorasRateio(companyId: number, mesAno: string, obra
   const conditions = [eq(obraHorasRateio.companyId, companyId), eq(obraHorasRateio.mesAno, mesAno)];
   if (obraId) conditions.push(eq(obraHorasRateio.obraId, obraId));
   return db.select().from(obraHorasRateio).where(and(...conditions));
+}
+
+
+// ============================================================
+// SETORES
+// ============================================================
+
+export async function listSectors(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sectors).where(eq(sectors.companyId, companyId)).orderBy(sectors.nome);
+}
+
+export async function createSector(data: { companyId: number; nome: string; descricao?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(sectors).values({
+    companyId: data.companyId,
+    nome: data.nome,
+    descricao: data.descricao || null,
+  });
+  return { id: result[0].insertId };
+}
+
+export async function updateSector(id: number, companyId: number, data: { nome?: string; descricao?: string; isActive?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updateData: Record<string, unknown> = {};
+  if (data.nome !== undefined) updateData.nome = data.nome;
+  if (data.descricao !== undefined) updateData.descricao = data.descricao;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  await db.update(sectors).set(updateData).where(and(eq(sectors.id, id), eq(sectors.companyId, companyId)));
+}
+
+export async function deleteSector(id: number, companyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(sectors).where(and(eq(sectors.id, id), eq(sectors.companyId, companyId)));
+}
+
+// ============================================================
+// FUNÇÕES (JOB FUNCTIONS)
+// ============================================================
+
+export async function listJobFunctions(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(jobFunctions).where(eq(jobFunctions.companyId, companyId)).orderBy(jobFunctions.nome);
+}
+
+export async function createJobFunction(data: { companyId: number; nome: string; descricao?: string; cbo?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(jobFunctions).values({
+    companyId: data.companyId,
+    nome: data.nome,
+    descricao: data.descricao || null,
+    cbo: data.cbo || null,
+  });
+  return { id: result[0].insertId };
+}
+
+export async function updateJobFunction(id: number, companyId: number, data: { nome?: string; descricao?: string; cbo?: string; isActive?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updateData: Record<string, unknown> = {};
+  if (data.nome !== undefined) updateData.nome = data.nome;
+  if (data.descricao !== undefined) updateData.descricao = data.descricao;
+  if (data.cbo !== undefined) updateData.cbo = data.cbo;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  await db.update(jobFunctions).set(updateData).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));
+}
+
+export async function deleteJobFunction(id: number, companyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(jobFunctions).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));
 }

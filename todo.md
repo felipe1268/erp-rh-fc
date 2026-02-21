@@ -379,3 +379,7 @@
 - [x] Bug: campo "Cargo" removido da aba Profissional (ficou apenas "Função")
 - [x] Bug: Select "SelecioneCLT" concatenado no Tipo de Contrato - corrigido via sanitização
 - [x] Lançar ~130 funcionários da FC Engenharia (CNPJ 29.353.906/0001-71) no sistema via script - 131 inseridos com sucesso
+- [x] Reorganizar menu: criar grupo CADASTRO com Empresa, Colaboradores, Obras, Setores, Função
+- [x] Criar página CRUD de Setores (por empresa)
+- [x] Criar página CRUD de Funções (por empresa)
+- [x] Registrar rotas de Setores e Funções no App.tsx

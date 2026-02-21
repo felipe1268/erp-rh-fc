@@ -28,7 +28,7 @@ import {
   ChevronDown, ChevronRight, AlertTriangle, Truck, FlameKindling,
   Droplets, Beaker, HardHat, BookOpen, Siren, Scale,
   BarChart3, GraduationCap, ShieldAlert, ListChecks, TriangleAlert, Flame, AlertOctagon, Settings,
-  Landmark, Wallet, FolderOpen, UtensilsCrossed,
+  Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -41,14 +41,16 @@ const menuSections = [
     title: "Principal",
     items: [
       { icon: LayoutDashboard, label: "Painel", path: "/" },
-      { icon: Building2, label: "Empresas", path: "/empresas" },
-      { icon: Landmark, label: "Obras", path: "/obras" },
     ],
   },
   {
-    title: "Gestão de Pessoal",
+    title: "Cadastro",
     items: [
+      { icon: Building2, label: "Empresas", path: "/empresas" },
       { icon: Users, label: "Colaboradores", path: "/colaboradores" },
+      { icon: Landmark, label: "Obras", path: "/obras" },
+      { icon: Layers, label: "Setores", path: "/setores" },
+      { icon: Briefcase, label: "Funções", path: "/funcoes" },
     ],
   },
   {

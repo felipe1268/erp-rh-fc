@@ -20,6 +20,8 @@ import FechamentoPonto from "./pages/FechamentoPonto";
 import FolhaPagamento from "./pages/FolhaPagamento";
 import ControleDocumentos from "./pages/ControleDocumentos";
 import ValeAlimentacao from "./pages/ValeAlimentacao";
+import Setores from "./pages/Setores";
+import Funcoes from "./pages/Funcoes";
 // Dashboards
 import DashboardIndex from "./pages/dashboards/DashboardIndex";
 import DashColaboradores from "./pages/dashboards/DashColaboradores";
@@ -38,6 +40,8 @@ function Router() {
       <Route path={"/empresas"} component={Empresas} />
       <Route path={"/colaboradores"} component={Colaboradores} />
       <Route path={"/obras"} component={Obras} />
+      <Route path={"/setores"} component={Setores} />
+      <Route path={"/funcoes"} component={Funcoes} />
       <Route path={"/usuarios"} component={Usuarios} />
       <Route path={"/auditoria"} component={Auditoria} />
       <Route path={"/sst"} component={SST} />
