@@ -589,3 +589,6 @@
 ### Alertas de Alteração de SN
 - [x] Ao alterar SN no cadastro de obras, exibir alerta sobre impacto no rateio
 - [x] No relatório de rateio, indicar erro quando SN não tem obra definida
+
+## FIX: Dialog de Upload DIXI cortado
+- [x] Expandir dialog de upload e adicionar scroll interno para conteúdo longo

@@ -843,13 +843,13 @@ export default function FechamentoPonto() {
 
         {/* ===== UPLOAD DIALOG (SEM CAMPO COMPETÊNCIA — REGRA MÃE) ===== */}
         <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <Upload className="h-5 w-5" /> Upload de Arquivos DIXI
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-2">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                 <strong>Como funciona:</strong> Selecione os arquivos XLS exportados dos relógios DIXI.
                 O sistema identifica automaticamente a <strong>obra pelo SN</strong> e distribui os registros
@@ -984,7 +984,7 @@ export default function FechamentoPonto() {
                 </div>
               )}
             </div>
-            <DialogFooter>
+            <DialogFooter className="shrink-0 border-t pt-4 mt-2">
               <Button variant="outline" onClick={() => setShowUploadDialog(false)}>Fechar</Button>
               {!uploadResult && (
                 <Button
