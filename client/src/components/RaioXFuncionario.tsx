@@ -370,13 +370,16 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                   { label: "Advertências", value: advertencias.length, tab: "adv", bgColor: advertencias.length >= 3 ? "bg-gradient-to-br from-red-600 to-red-700" : "bg-gradient-to-br from-orange-500 to-orange-600", textColor: "text-white", iconColor: advertencias.length >= 3 ? "text-red-200" : "text-orange-200", icon: ShieldAlert },
                   { label: "Meses Ponto", value: pontoResumo.length, tab: "ponto", bgColor: "bg-gradient-to-br from-cyan-500 to-cyan-600", textColor: "text-white", iconColor: "text-cyan-200", icon: Clock },
                   { label: "EPIs", value: epis.length, tab: "epis", bgColor: "bg-gradient-to-br from-teal-500 to-teal-600", textColor: "text-white", iconColor: "text-teal-200", icon: HardHat },
-                ].map(c => (
-                  <button key={c.label} onClick={() => { const el = document.querySelector(`[data-value="${c.tab}"]`); if (el) (el as HTMLElement).click(); }} className={`${c.bgColor} rounded-xl p-3 text-center shadow-lg hover:shadow-xl transition-all hover:scale-105 hover:-translate-y-0.5 cursor-pointer border-0`}>
-                    <c.icon className={`h-5 w-5 mx-auto mb-1 ${c.iconColor}`} />
-                    <p className={`text-2xl font-bold ${c.textColor}`}>{c.value}</p>
-                    <p className={`text-xs font-semibold ${c.textColor} opacity-80`}>{c.label}</p>
-                  </button>
-                ))}
+                ].map(c => {
+                  const Icon = c.icon;
+                  return (
+                    <button key={c.label} onClick={() => { const el = document.querySelector(`[data-value="${c.tab}"]`); if (el) (el as HTMLElement).click(); }} className={`${c.bgColor} rounded-xl p-3 text-center shadow-lg hover:shadow-xl transition-all hover:scale-105 hover:-translate-y-0.5 cursor-pointer border-0`}>
+                      <Icon className={`h-5 w-5 mx-auto mb-1 ${c.iconColor}`} />
+                      <p className={`text-2xl font-bold ${c.textColor}`}>{c.value}</p>
+                      <p className={`text-xs font-semibold ${c.textColor} opacity-80`}>{c.label}</p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -651,7 +654,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                                     <p>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</p>
                                   </div>
                                   <div class="doc-body">
-                                    <p>Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</strong>, vem por meio deste ${a.tipoAdvertencia === "Suspensao" ? "SUSPENDER" : a.tipoAdvertencia === "JustaCausa" ? "COMUNICAR A RESCISÃO POR JUSTA CAUSA" : "ADVERTIR"} o(a) colaborador(a) <strong>${emp.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(emp.cpf)}</strong>, ocupante do cargo de <strong>${emp.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${emp.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong>${a.diasSuspensao} dia(s)</strong>,` : ""} pelo seguinte motivo:</p>
+                                    <p>Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</strong>, vem por meio deste ${a.tipoAdvertencia === "Suspensao" ? "SUSPENDER" : a.tipoAdvertencia === "JustaCausa" ? "COMUNICAR A RESCISÃO POR JUSTA CAUSA" : "ADVERTIR"} o(a) colaborador(a) <strong>${emp.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(emp.cpf)}</strong>, ocupante do cargo de <strong>${emp.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${emp.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
                                     <div class="motivo-box">${a.motivo}${a.descricao ? "<br/><br/>" + a.descricao : ""}</div>
                                     <p>Ocorrido em <strong>${formatDate(a.dataOcorrencia)}</strong>.</p>
                                     ${advertencias.length > 1 ? `<p>Registramos que o(a) colaborador(a) já recebeu as seguintes medidas disciplinares anteriores:</p><div class="historico"><ul>${advertencias.filter((_: any, i: number) => i < idx).map((prev: any, pi: number) => `<li>${pi + 1}ª ${prev.tipoAdvertencia === "Suspensao" ? "Suspensão" : prev.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : prev.tipoAdvertencia} em ${formatDate(prev.dataOcorrencia)} — ${prev.motivo}</li>`).join("")}</ul></div>` : ""}

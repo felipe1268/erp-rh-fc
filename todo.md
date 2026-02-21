@@ -917,3 +917,9 @@
 
 ## REVISÃO_26: Melhorar cores dos cards de métricas no Raio-X
 - [x] Cards de ASOs, Treinamentos, Atestados, Advertências, Meses Ponto, EPIs com cores mais vibrantes e aparência de botão clicável
+
+## FIX_27: Importação de PDFs mostra 0 funcionários e R$ 0,00
+- [x] Analisar texto extraído dos PDFs reais com pdf-parse v2
+- [x] Corrigir parser para funcionar com o formato de texto do pdf-parse v2
+- [x] Testar com PDFs reais (006 analítico e 007 sintético de janeiro)
+- [x] Destacar período de afastamento em vermelho no documento de suspensão

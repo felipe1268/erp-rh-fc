@@ -1,0 +1,1905 @@
+Página: 1	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+128 ACACIO LESCURA DE CAMARGO Admissão em 27/09/2022 Salário base 12,61 Horas mensais: 220,00	0 0
+0,33	Arredondamento provento adiant.
+salarial
+90011
+1.146,67	Adiantamento salarial com IR	20504
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+835 ADRIANO PAZ FERREIRA Admissão em 04/08/2025 Salário base 10,50 Horas mensais: 220,00	0 0
+954,80	Adiantamento salarial com IR	20504
+0,20	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 955,00 Total de descontos - > 0,00
+Líquido - > 955,00
+IR - >
+1.779,88
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.779,88	0,00	0,00
+190 AGOSTINHO DIJALMA FERREIRA Admissão em 01/06/2023 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+631 ALEX ALESSANDRO MONTEIRO DA
+SILVA
+Admissão em 06/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 178,13	Ad. sal. Créd. Trabalhador com IR	20904
+0,34	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,13 Total de descontos - > 178,13
+Líquido - > 727,00
+IR - >
+1.654,83
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,83	0,00	0,00
+630 ALEX DA SILVA DOMINGOS Admissão em 03/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.581,23
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.581,23	0,00	0,00
+647 ALEX PAULO RODRIGUES Admissão em 17/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 225,64	Ad. sal. Créd. Trabalhador com IR	20904
+0,85	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,64 Total de descontos - > 225,64
+Líquido - > 680,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+674 ALEX ROBSON CARNEIRO PINTO Admissão em 01/04/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+216 ALEXANDRO GONCALVES DO
+NASCIMENTO
+Admissão em 24/07/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,77	0,00	0,00
+SCI Novo Visual
+
+-- 1 of 20 --
+
+Página: 2	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+115 ANDERSON BRAGA SILVA Admissão em 11/07/2022 Salário base 12,61 Horas mensais: 220,00	0 1
+0,33	Arredondamento provento adiant.
+salarial
+90011
+1.146,67	Adiantamento salarial com IR	20504
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+1.650,95
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.650,95	0,00	0,00
+11 ANDERSON DOS ANJOS ALKMIN
+JUNIOR
+Admissão em 16/07/2018 Salário base 11,85 Horas mensais: 220,00	0 0
+1.077,56	Adiantamento salarial com IR	20504 340,00	Ad. sal. Créd. Trabalhador com IR	20904
+0,44	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.078,00 Total de descontos - > 340,00
+Líquido - > 738,00
+IR - >
+2.086,78
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.086,78	0,00	0,00
+785 ANDRÉ LUIZ BARLETTA DAS
+CHAGAS
+Admissão em 09/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+32 ANDREI DA SILVA Admissão em 12/03/2020 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+1.577,59
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.577,59	0,00	0,00
+173 ANTONIO CARLOS SANTOS Admissão em 24/04/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+730 ANTONIO RENATO DE SANTANA Admissão em 12/05/2025 Salário base 6.200,00 Horas mensais: 220,00	0 0
+2.480,00	Adiantamento salarial com IR	20504 27,50 456,82	IR adiantamento	91555
+0,82	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 2.480,82 Total de descontos - > 456,82
+Líquido - > 2.024,00
+IR - >
+5.522,42
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 5.522,42	0,00	0,00
+527 ANTONIO WAGNER BARBOSA DE
+SOUSA
+Admissão em 23/10/2024 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+866 ARIEL DA SILVA Admissão em 10/09/2025 Salário base 10,50 Horas mensais: 220,00	0 0
+954,80	Adiantamento salarial com IR	20504
+0,20	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 955,00 Total de descontos - > 0,00
+Líquido - > 955,00
+IR - >
+2.387,08
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.387,08	0,00	0,00
+SCI Novo Visual
+
+-- 2 of 20 --
+
+Página: 3	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+914 BRUNO LUIS FARIA MACHADO Admissão em 24/11/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+760 BRUNO RAFAEL BATISTA DA SILVA Admissão em 02/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,77	0,00	0,00
+734 BRUNO SERRA GALVÃO Admissão em 19/05/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 221,42	Ad. sal. Créd. Trabalhador com IR	20904
+0,63	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,42 Total de descontos - > 221,42
+Líquido - > 684,00
+IR - >
+922,63
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 922,63	0,00	0,00
+265 CAIO AUGUSTO DA SILVA GARUFE Admissão em 09/10/2023 Salário base 20,14 Horas mensais: 220,00	0 0
+1.831,40	Adiantamento salarial com IR	20504
+0,60	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.832,00 Total de descontos - > 0,00
+Líquido - > 1.832,00
+IR - >
+3.971,42
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 3.971,42	0,00	0,00
+612 CAIO MATHEUS PEREIRA ANTUNES Admissão em 21/01/2025 Salário base 9,95 Horas mensais: 220,00	0 2
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+691 CARLOS ALBERTO GONÇALVES Admissão em 07/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+174 CARLOS VITORIANO TOBIAS Admissão em 24/04/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+731 CAROLINA DA SILVA PENA FIRME Admissão em 15/05/2025 Salário base 2.500,00 Horas mensais: 220,00	0 0
+1.000,00	Adiantamento salarial com IR	20504
+Total de proventos - > 1.000,00 Total de descontos - > 0,00
+Líquido - > 1.000,00
+IR - >
+1.892,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.892,80	0,00	0,00
+SCI Novo Visual
+
+-- 3 of 20 --
+
+Página: 4	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+539 CLAUDIO JOSE GONCALVES DIAS Admissão em 30/10/2024 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+702 CLAUDIO SILVA Admissão em 14/04/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+164 DAVYD JOSE SANTOS DE SOUSA Admissão em 23/01/2023 Salário base 18,18 Horas mensais: 220,00	0 2
+0,83	Arredondamento provento adiant.
+salarial
+90011
+1.653,17	Adiantamento salarial com IR	20504
+Total de proventos - > 1.654,00 Total de descontos - > 0,00
+Líquido - > 1.654,00
+IR - >
+3.887,69
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 3.887,69	0,00	0,00
+917 DENIS AUGUSTO DE JESUS ARAUJO Admissão em 08/12/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+1.871,09
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.871,09	0,00	0,00
+361 DESILDO DA COSTA SANTOS Admissão em 18/03/2024 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+855 DIEGO HENRIQUE ESPINELI DOS
+SANTOS
+Admissão em 19/08/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+2.559,63
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.559,63	0,00	0,00
+250 DIOGO SOARES DA SILVA Admissão em 20/09/2023 Salário base 7,90 Horas mensais: 220,00	2 0
+718,37	Adiantamento salarial com IR	20504
+0,63	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.795,93
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.795,93	0,00	0,00
+277 DOUGLAS DE SOUZA ROCHA Admissão em 25/10/2023 Salário base 12,61 Horas mensais: 220,00	0 1
+0,33	Arredondamento provento adiant.
+salarial
+90011
+1.146,67	Adiantamento salarial com IR	20504
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+SCI Novo Visual
+
+-- 4 of 20 --
+
+Página: 5	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+205 EDENILSON SOUZA LIMA Admissão em 03/07/2023 Salário base 11,85 Horas mensais: 220,00	0 1
+1.077,56	Adiantamento salarial com IR	20504 346,40	Ad. sal. Créd. Trabalhador com IR	20904
+0,84	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.078,40 Total de descontos - > 346,40
+Líquido - > 732,00
+IR - >
+2.017,38
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.017,38	0,00	0,00
+280 EDSON FERNANDO MACHADO Admissão em 25/10/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 99,11	Ad. sal. Créd. Trabalhador com IR	20904
+0,32	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,11 Total de descontos - > 99,11
+Líquido - > 806,00
+IR - >
+1.508,90
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.508,90	0,00	0,00
+598 EDUARDO DA SILVA OLIVEIRA Admissão em 16/01/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+805 EDUARDO HENRIQUE DA SILVA
+PAIVA
+Admissão em 01/07/2025 Salário base 7,90 Horas mensais: 220,00	0 0
+718,37	Adiantamento salarial com IR	20504
+0,63	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.795,93
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.795,93	0,00	0,00
+23 ELIAS VIEIRA DO NASCIMENTO Admissão em 25/03/2019 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+910 ELIEL BRENDON DE LIMA MARQUES Admissão em 17/11/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+802 ELIZEU FRANCISCO DE SOUZA Admissão em 26/06/2025 Salário base 3.500,00 Horas mensais: 220,00	0 0
+1.400,00	Adiantamento salarial com IR	20504
+Total de proventos - > 1.400,00 Total de descontos - > 0,00
+Líquido - > 1.400,00
+IR - >
+3.192,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 3.192,80	0,00	0,00
+748 ERIC GUSTAVO DE SOUZA Admissão em 19/05/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+SCI Novo Visual
+
+-- 5 of 20 --
+
+Página: 6	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+201 ERITON ANDRE SEVERINO DA SILVA Admissão em 12/06/2023 Salário base 12,27 Horas mensais: 220,00	0 0
+0,25	Arredondamento provento adiant.
+salarial
+90011
+1.115,75	Adiantamento salarial com IR	20504
+Total de proventos - > 1.116,00 Total de descontos - > 0,00
+Líquido - > 1.116,00
+IR - >
+2.829,20
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.829,20	0,00	0,00
+871 EVERTON RICARDO DA SILVA
+COSTA
+Admissão em 11/09/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 195,24	Ad. sal. Créd. Trabalhador com IR	20904
+0,45	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,24 Total de descontos - > 195,24
+Líquido - > 710,00
+IR - >
+1.459,60
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.459,60	0,00	0,00
+418 EWERTTON DA SILVA ARAUJO Admissão em 03/06/2024 Salário base 10,50 Horas mensais: 220,00	2 0
+554,40	Adiantamento salarial com IR	20504 152,15	Ad. sal. Créd. Trabalhador com IR	20904
+0,75	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 555,15 Total de descontos - > 152,15
+Líquido - > 403,00
+IR - >
+1.134,86
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.134,86	0,00	0,00
+549 FERNANDO AMORIM VIEIRA Admissão em 13/11/2024 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+87 FERNANDO RODRIGO DE CASTILHO
+PRADO
+Admissão em 18/11/2021 Salário base 11,85 Horas mensais: 220,00	0 1
+1.077,56	Adiantamento salarial com IR	20504
+0,44	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.078,00 Total de descontos - > 0,00
+Líquido - > 1.078,00
+IR - >
+2.086,78
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.086,78	0,00	0,00
+226 FRANCISCO DAS CHAGAS DIAS Admissão em 30/08/2023 Salário base 12,61 Horas mensais: 220,00	0 0
+0,57	Arredondamento provento adiant.
+salarial
+90011
+1.146,67	Adiantamento salarial com IR	20504 356,24	Ad. sal. Créd. Trabalhador com IR	20904
+Total de proventos - > 1.147,24 Total de descontos - > 356,24
+Líquido - > 791,00
+IR - >
+2.259,52
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,52	0,00	0,00
+843 GENILSON DE SOUZA LOPES Admissão em 19/08/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+362 GERALDO MACHADO Admissão em 18/03/2024 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+SCI Novo Visual
+
+-- 6 of 20 --
+
+Página: 7	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+667 GILBERTO DA COSTA BARBOZA Admissão em 01/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+311 GILMAR PEREIRA DE BRITO Admissão em 13/12/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+251 GILMAR SANTOS DO NASCIMENTO Admissão em 20/09/2023 Salário base 7,90 Horas mensais: 220,00	1 1
+718,37	Adiantamento salarial com IR	20504
+0,63	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.795,91
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.795,91	0,00	0,00
+792 GISLEI RODRIGO DE CARVALHO Admissão em 17/06/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504 294,49	Ad. sal. Créd. Trabalhador com IR	20904
+0,82	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,49 Total de descontos - > 294,49
+Líquido - > 853,00
+IR - >
+2.032,34
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.032,34	0,00	0,00
+786 GIVALDO DOS SANTOS Admissão em 02/06/2025 Salário base 4.000,00 Horas mensais: 220,00	0 0
+1.600,00	Adiantamento salarial com IR	20504
+Total de proventos - > 1.600,00 Total de descontos - > 0,00
+Líquido - > 1.600,00
+IR - >
+3.392,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 3.392,80	0,00	0,00
+719 GLEDSON FERREIRA SANTOS Admissão em 28/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 225,66	Ad. sal. Créd. Trabalhador com IR	20904
+0,87	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,66 Total de descontos - > 225,66
+Líquido - > 680,00
+IR - >
+1.210,28
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.210,28	0,00	0,00
+687 ISABELA AUGUSTA DA SILVA
+VELLOSO
+Admissão em 02/04/2025 Salário base 1.643,00 Horas mensais: 220,00	0 0
+657,20	Adiantamento salarial com IR	20504
+0,80	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 658,00 Total de descontos - > 0,00
+Líquido - > 658,00
+IR - >
+1.035,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.035,80	0,00	0,00
+788 ISAIAS COELHO MUYAGUTI
+MONTEIRO
+Admissão em 17/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+SCI Novo Visual
+
+-- 7 of 20 --
+
+Página: 8	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+834 ITALO CAUA PEDRO DA SILVA Admissão em 04/08/2025 Salário base 7,90 Horas mensais: 220,00	0 0
+718,37	Adiantamento salarial com IR	20504
+0,63	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.188,76
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.188,76	0,00	0,00
+643 IVAN DOS SANTOS Admissão em 17/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+806 JAMIELSON GOMES DOS SANTOS
+SILVA
+Admissão em 01/07/2025 Salário base 7,90 Horas mensais: 220,00	2 2
+718,37	Adiantamento salarial com IR	20504
+0,63	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.907,08
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.907,08	0,00	0,00
+642 JEAN CARLOS MARTINS Admissão em 17/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.435,83
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.435,83	0,00	0,00
+787 JEAN CARLOS RIBEIRO DA SILVA Admissão em 09/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 224,94	Ad. sal. Créd. Trabalhador com IR	20904
+0,15	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 904,94 Total de descontos - > 224,94
+Líquido - > 680,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+352 JEFTER EMANOEL CRISPINIANO DE
+MELO SILVA
+Admissão em 11/03/2024 Salário base 10,50 Horas mensais: 220,00	0 0
+954,80	Adiantamento salarial com IR	20504
+0,20	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 955,00 Total de descontos - > 0,00
+Líquido - > 955,00
+IR - >
+1.979,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.979,77	0,00	0,00
+191 JERRYALITON AUGUSTO BEZERRA Admissão em 01/06/2023 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+181 JOAO CAMPOS DA SILVA Admissão em 22/05/2023 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+SCI Novo Visual
+
+-- 8 of 20 --
+
+Página: 9	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+645 JOAO CARLOS DA SILVA
+CONCEICAO
+Admissão em 17/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+140 JOAO DARC DOS SANTOS Admissão em 16/12/2022 Salário base 6.420,00 Horas mensais: 220,00	0 0
+1.883,20	Adiantamento salarial com IR	20504
+0,80	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.884,00 Total de descontos - > 0,00
+Líquido - > 1.884,00
+IR - >
+1.276,00
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.276,00	0,00	0,00
+601 JOAO HENRIQUE SOARES Admissão em 16/01/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 253,82	Ad. sal. Créd. Trabalhador com IR	20904
+0,03	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 904,82 Total de descontos - > 253,82
+Líquido - > 651,00
+IR - >
+1.141,09
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.141,09	0,00	0,00
+92 JOAO JOSE DE PAULA OLIVEIRA Admissão em 02/12/2021 Salário base 11,85 Horas mensais: 220,00	0 0
+1.077,56	Adiantamento salarial com IR	20504
+0,44	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.078,00 Total de descontos - > 0,00
+Líquido - > 1.078,00
+IR - >
+2.086,78
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.086,78	0,00	0,00
+692 JOÃO MACHADO DE AZEVEDO Admissão em 07/04/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.074,62
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.074,62	0,00	0,00
+177 JOAO ODAIR DOMINGOS Admissão em 02/05/2023 Salário base 13,50 Horas mensais: 220,00	0 0
+0,40	Arredondamento provento adiant.
+salarial
+90011
+1.227,60	Adiantamento salarial com IR	20504
+Total de proventos - > 1.228,00 Total de descontos - > 0,00
+Líquido - > 1.228,00
+IR - >
+2.461,90
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.461,90	0,00	0,00
+633 JOÃO VITOR GOMES DE CARVALHO Admissão em 06/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,77	0,00	0,00
+901 JORGE MARCELINO DA SILVA
+MOREIRA
+Admissão em 17/11/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+SCI Novo Visual
+
+-- 9 of 20 --
+
+Página: 10	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+454 JOSE ALBERTO SILVA Admissão em 15/07/2024 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 291,20	Ad. sal. Créd. Trabalhador com IR	20904
+0,41	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,20 Total de descontos - > 291,20
+Líquido - > 614,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+676 JOSÉ ASTOR BATISTA Admissão em 01/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,77	0,00	0,00
+777 JOSE LUCIO DE SOUZA Admissão em 02/06/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+0,33	Arredondamento provento adiant.
+salarial
+90011
+1.146,67	Adiantamento salarial com IR	20504
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+414 JOSIAS HELENO DA SILVA Admissão em 24/05/2024 Salário base 7,90 Horas mensais: 220,00	1 1
+0,63	Arredondamento provento adiant.
+salarial
+90011
+718,37	Adiantamento salarial com IR	20504
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.096,06
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.096,06	0,00	0,00
+306 JOSUE DO NASCIMENTO ALVES Admissão em 04/12/2023 Salário base 13,50 Horas mensais: 220,00	0 0
+1.227,60	Adiantamento salarial com IR	20504
+0,40	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.228,00 Total de descontos - > 0,00
+Líquido - > 1.228,00
+IR - >
+2.461,76
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.461,76	0,00	0,00
+675 JOVANILDO INACIO Admissão em 01/04/2025 Salário base 9,95 Horas mensais: 220,00	0 3
+904,79	Adiantamento salarial com IR	20504 189,01	Ad. sal. Créd. Trabalhador com IR	20904
+0,22	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,01 Total de descontos - > 189,01
+Líquido - > 716,00
+IR - >
+1.512,46
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.512,46	0,00	0,00
+771 JULIANO RODRIGO DINIZ DE SOUSA Admissão em 02/06/2025 Salário base 11,85 Horas mensais: 220,00	0 0
+1.077,56	Adiantamento salarial com IR	20504
+0,44	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.078,00 Total de descontos - > 0,00
+Líquido - > 1.078,00
+IR - >
+2.086,78
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.086,78	0,00	0,00
+608 JULIO CESAR DOS SANTOS Admissão em 23/01/2025 Salário base 9,95 Horas mensais: 220,00	1 2
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+SCI Novo Visual
+
+-- 10 of 20 --
+
+Página: 11	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+885 JULIO CESAR LEMES DE OLIVEIRA Admissão em 14/10/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+882 JURANDI PEREIRA DOS SANTOS Admissão em 14/10/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,69
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,69	0,00	0,00
+849 KAUAN SANTIAGO DA SILVA
+SANTOS
+Admissão em 19/08/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+633,31
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 633,31	0,00	0,00
+832 KELBEM CARLOS DE LIMA SILVA Admissão em 04/08/2025 Salário base 7,90 Horas mensais: 220,00	1 0
+0,63	Arredondamento provento adiant.
+salarial
+90011
+718,37	Adiantamento salarial com IR	20504
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.188,76
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.188,76	0,00	0,00
+342 KELLEN LARISSA LOURENCO
+CLARO
+Admissão em 04/03/2024 Salário base 15,09 Horas mensais: 220,00	0 0
+1.372,18	Adiantamento salarial com IR	20504
+0,82	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.373,00 Total de descontos - > 0,00
+Líquido - > 1.373,00
+IR - >
+2.823,36
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.823,36	0,00	0,00
+804 KELVIS ALVES PESSOA Admissão em 01/07/2025 Salário base 7,90 Horas mensais: 220,00	0 0
+718,37	Adiantamento salarial com IR	20504
+0,63	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.795,91
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.795,91	0,00	0,00
+322 LUIS CARLOS DA SILVA Admissão em 08/01/2024 Salário base 12,61 Horas mensais: 220,00	0 0
+887,74	Adiantamento salarial com IR	20504
+0,26	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 888,00 Total de descontos - > 0,00
+Líquido - > 888,00
+IR - >
+1.020,24
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.020,24	0,00	0,00
+218 LUIS CLAUDIO ANDRADE CARNEIRO Admissão em 24/07/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+SCI Novo Visual
+
+-- 11 of 20 --
+
+Página: 12	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+862 LUIS GUSTAVO RODRIGUES DE
+CASTRO
+Admissão em 08/09/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 225,50	Ad. sal. Créd. Trabalhador com IR	20904
+0,71	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,50 Total de descontos - > 225,50
+Líquido - > 680,00
+IR - >
+1.429,34
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.429,34	0,00	0,00
+723 LUIS HENRIQUE DO NASCIMENTO Admissão em 28/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 147,09	Ad. sal. Créd. Trabalhador com IR	20904
+0,30	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,09 Total de descontos - > 147,09
+Líquido - > 758,00
+IR - >
+1.508,83
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.508,83	0,00	0,00
+669 LUIZ HENRIQUE DE MACEDO Admissão em 01/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+301 MANOEL WAGNER ROCHA
+GUIMARAES
+Admissão em 16/11/2023 Salário base 9,95 Horas mensais: 220,00	0 1
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+864 MARCELO ALEXANDRE PEREIRA Admissão em 08/09/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,33	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504 227,12	Ad. sal. Créd. Trabalhador com IR	20904
+Total de proventos - > 905,12 Total de descontos - > 227,12
+Líquido - > 678,00
+IR - >
+1.427,72
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.427,72	0,00	0,00
+197 MARCELO DE LIMA FELISBERTO Admissão em 01/06/2023 Salário base 13,50 Horas mensais: 220,00	0 0
+1.227,60	Adiantamento salarial com IR	20504 196,52	Ad. sal. Créd. Trabalhador com IR	20904
+0,92	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.228,52 Total de descontos - > 196,52
+Líquido - > 1.032,00
+IR - >
+1.834,55
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.834,55	0,00	0,00
+54 MARCIO DE TOLEDO Admissão em 17/08/2020 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+552 MARCO ANTONIO DOS SANTOS
+BATISTA
+Admissão em 13/11/2024 Salário base 12,61 Horas mensais: 220,00	0 1
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+SCI Novo Visual
+
+-- 12 of 20 --
+
+Página: 13	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+398 MARIANA CASTILHO DE LIMA Admissão em 07/05/2024 Salário base 5.694,13 Horas mensais: 220,00	0 0
+0,05	Arredondamento provento adiant.
+salarial
+90011
+2.277,65	Adiantamento salarial com IR	20504 27,50 269,70	IR adiantamento	91555
+Total de proventos - > 2.277,70 Total de descontos - > 269,70
+Líquido - > 2.008,00
+IR - >
+5.086,93
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 5.086,93	0,00	0,00
+57 MATEUS OLIVEIRA BRITO PIRES Admissão em 03/11/2020 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+670 MATHEUS DONIZETTI ALVES
+RODRIGUES
+Admissão em 01/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 181,37	Ad. sal. Créd. Trabalhador com IR	20904
+0,58	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,37 Total de descontos - > 181,37
+Líquido - > 724,00
+IR - >
+1.508,90
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.508,90	0,00	0,00
+40 MAURICIO BENEDITO ELESBAO Admissão em 23/04/2020 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+793 MAYCON ADREAN POLYCARPO
+CORREA
+Admissão em 17/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 157,83	Ad. sal. Créd. Trabalhador com IR	20904
+0,04	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 904,83 Total de descontos - > 157,83
+Líquido - > 747,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+244 MELQUISEDEQUE SILVA BATISTA Admissão em 13/09/2023 Salário base 12,61 Horas mensais: 220,00	0 0
+0,17	Arredondamento provento adiant.
+salarial
+90011
+591,83	Adiantamento salarial com IR	20504
+Total de proventos - > 592,00 Total de descontos - > 0,00
+Líquido - > 592,00
+IR - >
+225,15
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 225,15	0,00	0,00
+445 MILTON CESAR DA COSTA Admissão em 10/07/2024 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.508,90
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.508,90	0,00	0,00
+399 MYRIELLE FIALHO BORGES
+ARCANJO
+Admissão em 07/05/2024 Salário base 1.661,55 Horas mensais: 220,00	0 0
+664,62	Adiantamento salarial com IR	20504
+0,38	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 665,00 Total de descontos - > 0,00
+Líquido - > 665,00
+IR - >
+1.054,35
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.054,35	0,00	0,00
+SCI Novo Visual
+
+-- 13 of 20 --
+
+Página: 14	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+327 NAYARA APARECIDA DOS SANTOS
+RODRIGUES BASTOS
+Admissão em 23/01/2024 Salário base 2.436,94 Horas mensais: 220,00	0 0
+974,78	Adiantamento salarial com IR	20504
+0,22	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 975,00 Total de descontos - > 0,00
+Líquido - > 975,00
+IR - >
+1.829,74
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.829,74	0,00	0,00
+305 NELSON MOREIRA GOMES Admissão em 04/12/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.567,24
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.567,24	0,00	0,00
+872 NILO CESAR DOS SANTOS ARANTES Admissão em 11/09/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,77	0,00	0,00
+469 OSMAR MAGNO DE OLIVEIRA Admissão em 06/08/2024 Salário base 15,35 Horas mensais: 220,00	0 4
+1.395,83	Adiantamento salarial com IR	20504
+0,17	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.396,00 Total de descontos - > 0,00
+Líquido - > 1.396,00
+IR - >
+2.953,35
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.953,35	0,00	0,00
+918 PATRICIA SIMOES DE SOUSA Admissão em 05/01/2026 Salário base 3.200,00 Horas mensais: 220,00	0 0
+1.152,00	Adiantamento salarial com IR	20504
+Total de proventos - > 1.152,00 Total de descontos - > 0,00
+Líquido - > 1.152,00
+IR - >
+544,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 544,80	0,00	0,00
+826 PAULO DANIEL ALVES Admissão em 21/07/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+749 PAULO HENRIQUE LIMA GUIMARÃES Admissão em 19/05/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.435,94
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.435,94	0,00	0,00
+203 PAULO HENRIQUE MONTEIRO
+XAVIER
+Admissão em 14/06/2023 Salário base 12,27 Horas mensais: 220,00	0 0
+0,25	Arredondamento provento adiant.
+salarial
+90011
+1.115,75	Adiantamento salarial com IR	20504
+Total de proventos - > 1.116,00 Total de descontos - > 0,00
+Líquido - > 1.116,00
+IR - >
+2.850,66
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.850,66	0,00	0,00
+SCI Novo Visual
+
+-- 14 of 20 --
+
+Página: 15	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+782 PAULO ROBERTO DOS SANTOS
+ESPINELI
+Admissão em 09/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 218,22	Ad. sal. Créd. Trabalhador com IR	20904
+0,43	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,22 Total de descontos - > 218,22
+Líquido - > 687,00
+IR - >
+1.556,51
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.556,51	0,00	0,00
+304 PAULO ROSA DA SILVA Admissão em 04/12/2023 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 244,40	Ad. sal. Créd. Trabalhador com IR	20904
+0,61	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,40 Total de descontos - > 244,40
+Líquido - > 661,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+10 PAULO VINICIUS SALES TEIXEIRA Admissão em 07/06/2018 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,43
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,43	0,00	0,00
+854 PEDRO HENRIQUE MARQUES
+NOGUEIRA
+Admissão em 25/08/2025 Salário base 5.000,00 Horas mensais: 220,00	0 0
+2.000,00	Adiantamento salarial com IR	20504
+Total de proventos - > 2.000,00 Total de descontos - > 0,00
+Líquido - > 2.000,00
+IR - >
+4.392,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 4.392,80	0,00	0,00
+635 RAFAEL ALEXANDRE MONTEIRO
+FERREIRA
+Admissão em 06/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,99	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504 193,78	Ad. sal. Créd. Trabalhador com IR	20904
+Total de proventos - > 905,78 Total de descontos - > 193,78
+Líquido - > 712,00
+IR - >
+1.653,74
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.653,74	0,00	0,00
+287 RAFAELA ALBUQUERQUE DA SILVA Admissão em 06/11/2023 Salário base 10,50 Horas mensais: 220,00	1 0
+954,80	Adiantamento salarial com IR	20504
+0,20	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 955,00 Total de descontos - > 0,00
+Líquido - > 955,00
+IR - >
+1.979,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.979,77	0,00	0,00
+743 RAY HENRIQUE MOREIRA
+BERNARDES
+Admissão em 19/05/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.581,87
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.581,87	0,00	0,00
+722 REGINALDO BATISTA OLIVEIRA Admissão em 28/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 227,21	Ad. sal. Créd. Trabalhador com IR	20904
+0,42	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,21 Total de descontos - > 227,21
+Líquido - > 678,00
+IR - >
+479,07
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 479,07	0,00	0,00
+SCI Novo Visual
+
+-- 15 of 20 --
+
+Página: 16	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+45 REGINALDO VITORIANO LOURENCO Admissão em 14/05/2020 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 95,52	Ad. sal. Créd. Trabalhador com IR	20904
+0,73	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,52 Total de descontos - > 95,52
+Líquido - > 810,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+732 REGIS MORAES FERNANDES DOS
+SANTOS
+Admissão em 19/05/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+853 RICARDO ANTONIO SILVESTRE Admissão em 18/08/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+694 ROBERTO DAMASIO Admissão em 07/04/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504 148,00	Ad. sal. Créd. Trabalhador com IR	20904
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 148,00
+Líquido - > 999,00
+IR - >
+1.834,14
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.834,14	0,00	0,00
+12 RODRIGO DA SILVA Admissão em 01/08/2018 Salário base 9,95 Horas mensais: 220,00	0 3
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.512,36
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.512,36	0,00	0,00
+714 RODRIGO NOGUEIRA DA SILVA
+MEIRELES BRAGA
+Admissão em 22/04/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+879 ROGERIO DIAS DE FREITAS Admissão em 14/10/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,21	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+706,23
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 706,23	0,00	0,00
+677 SERGIO AUGUSTO DE OLIVEIRA Admissão em 01/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+SCI Novo Visual
+
+-- 16 of 20 --
+
+Página: 17	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+781 SILVANO MONTEIRO CORREA Admissão em 09/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+712 SILVIO CLODOMIRO OLIVEIRA DE
+MOURA
+Admissão em 22/04/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+470 SYDENEY GOMES DE OLIVEIRA Admissão em 06/08/2024 Salário base 11,81 Horas mensais: 220,00	0 0
+0,08	Arredondamento provento adiant.
+salarial
+90011
+1.073,92	Adiantamento salarial com IR	20504
+Total de proventos - > 1.074,00 Total de descontos - > 0,00
+Líquido - > 1.074,00
+IR - >
+2.684,77
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.684,77	0,00	0,00
+364 THIAGO MARTINS MENEZES DE
+JESUS
+Admissão em 18/03/2024 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+846 THOMAS BARBOSA DE MATOS
+JESUS
+Admissão em 19/08/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 251,72	Ad. sal. Créd. Trabalhador com IR	20904
+0,93	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,72 Total de descontos - > 251,72
+Líquido - > 654,00
+IR - >
+1.403,12
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.403,12	0,00	0,00
+537 TIAGO AUGUSTO DE OLIVEIRA Admissão em 30/10/2024 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.435,83
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.435,83	0,00	0,00
+797 TIAGO MACHADO DA SILVA Admissão em 24/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+0,35	Arredondamento provento adiant.
+salarial
+90011
+904,79	Adiantamento salarial com IR	20504 66,14	Ad. sal. Créd. Trabalhador com IR	20904
+Total de proventos - > 905,14 Total de descontos - > 66,14
+Líquido - > 839,00
+IR - >
+2.055,69
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.055,69	0,00	0,00
+838 VAGNER FELIPE OLIVEIRA REZENDE Admissão em 19/08/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.508,90
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.508,90	0,00	0,00
+SCI Novo Visual
+
+-- 17 of 20 --
+
+Página: 18	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+863 VALDINEI LUIS AMARO MARTINS Admissão em 08/09/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+660 VALDIR DONIZETTI GONÇALVES
+JÚNIOR
+Admissão em 24/03/2025 Salário base 12,61 Horas mensais: 220,00	0 0
+1.146,67	Adiantamento salarial com IR	20504
+0,33	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.259,56
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.259,56	0,00	0,00
+285 WALMIR JOSE DA SILVA Admissão em 26/10/2023 Salário base 11,85 Horas mensais: 220,00	0 0
+1.077,56	Adiantamento salarial com IR	20504
+0,44	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 1.078,00 Total de descontos - > 0,00
+Líquido - > 1.078,00
+IR - >
+2.086,78
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.086,78	0,00	0,00
+289 WANDERSON ANTONIO DA COSTA Admissão em 13/11/2023 Salário base 12,61 Horas mensais: 220,00	0 0
+0,33	Arredondamento provento adiant.
+salarial
+90011
+1.146,67	Adiantamento salarial com IR	20504
+Total de proventos - > 1.147,00 Total de descontos - > 0,00
+Líquido - > 1.147,00
+IR - >
+2.166,96
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.166,96	0,00	0,00
+776 WELINGTON SILVA BRITO Admissão em 02/06/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+172 WELLINGTON VALERIANO BRAZ
+LEMES DA SILVA
+Admissão em 13/04/2023 Salário base 9,95 Horas mensais: 220,00	0 2
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,84
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,84	0,00	0,00
+358 WEMERSON BARBOSA DA HORA Admissão em 11/03/2024 Salário base 10,50 Horas mensais: 220,00	0 0
+954,80	Adiantamento salarial com IR	20504
+0,20	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 955,00 Total de descontos - > 0,00
+Líquido - > 955,00
+IR - >
+2.386,97
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.386,97	0,00	0,00
+833 WESLEY CASSIO LIBANIO DA SILVA Admissão em 04/08/2025 Salário base 7,90 Horas mensais: 220,00	1 0
+0,63	Arredondamento provento adiant.
+salarial
+90011
+718,37	Adiantamento salarial com IR	20504
+Total de proventos - > 719,00 Total de descontos - > 0,00
+Líquido - > 719,00
+IR - >
+1.188,78
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.188,78	0,00	0,00
+SCI Novo Visual
+
+-- 18 of 20 --
+
+Página: 19	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+20/01/2026	Adiantamento em:
+NOME DO COLABORADOR SF IR
+PROVENTOS REFERÊNCIA VALOR DESCONTOS REFERÊNCIA VALOR
+900 WESLEY LEONARD DE OLIVEIRA Admissão em 05/11/2025 Salário base 2.000,00 Horas mensais: 220,00	0 0
+800,00	Adiantamento salarial com IR	20504
+Total de proventos - > 800,00 Total de descontos - > 0,00
+Líquido - > 800,00
+IR - >
+1.392,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.392,80	0,00	0,00
+34 WILLIAN GUSTAVO FARIA DA SILVA Admissão em 12/03/2020 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.654,73
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.654,73	0,00	0,00
+632 WILLIANS FELIPE DA SILVA Admissão em 06/03/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+297,59
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 297,59	0,00	0,00
+681 WILSON LUIZ RIBEIRO Admissão em 01/04/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504 197,44	Ad. sal. Créd. Trabalhador com IR	20904
+0,65	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,44 Total de descontos - > 197,44
+Líquido - > 708,00
+IR - >
+2.355,21
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 2.355,21	0,00	0,00
+883 ZENAIDO DE SOUZA CHRISTINO
+FILHO
+Admissão em 14/10/2025 Salário base 9,95 Horas mensais: 220,00	0 0
+904,79	Adiantamento salarial com IR	20504
+0,21	Arredondamento provento adiant.
+salarial
+90011
+Total de proventos - > 905,00 Total de descontos - > 0,00
+Líquido - > 905,00
+IR - >
+1.581,80
+Base INSS Valor INSS Valor FGTS Base IRRF	Base FGTS
+Folha 0,00 0,00 1.581,80	0,00	0,00
+PROVENTOS DESCONTOS
+150.739,71	Adiantamento salarial com IR	20504 6.371,31	Ad. sal. Créd. Trabalhador com IR	20904
+51,12	Arredondamento provento adiant.
+salarial
+90011 726,52	IR adiantamento	91555
+RESUMO GERAL COLABORADORES EMPREGADORES AUTÔNOMOS ESTAGIÁRIOS
+Quantidade 149 149 0 0 0
+Proventos 150.790,83 150.790,83 0,00 0,00 0,00
+Descontos 7.097,83 7.097,83 0,00 0,00 0,00
+Líquido 143.693,00 143.693,00 0,00 0,00 0,00
+Base IRRF 277.728,75 277.728,75 0,00 0,00 0,00
+Valor IRRF 726,52 726,52 0,00 0,00 0,00
+Ativos: 0 Admitidos: 0 Demitidos: 0 Acidente trabalho: 0 Maternidade: 0 Militar: 0 Doença: 0 Outras sit.: 0	Transferidos: 0
+SCI Novo Visual
+
+-- 19 of 20 --
+
+Página: 20	Espelho e resumo de adiantamento salarial de 15/01/2026 até 25/01/2026
+Guaratinguetá/SP - CNPJ:29.353.906/0001-71	Empresa: FC ENGENHARIA E CONSTRUCAO LTDA
+Previdenciários
+GPS 0,00 GPS funrural 0,00 PIS 0,00
+Total R$ 0,00
+Resumo de impostos
+*IRRF assalariados *IRRF rescisão *IRRF autônomos
+Total R$ 726,52
+Mês 726,52
+Mês posterior 0,00
+Mês anterior 0,00
+Mês 0,00
+Mês posterior 0,00
+Mês 0,00
+Mês posterior 0,00
+Total DARF previdenciário mês R$ 726,52
+FGTS mensal FGTS rescisório FGTS mês posterior
+GFD 0,00 GFD 0,00	GFD 0,00
+Crédito do trabalhador 0,00 Crédito do trabalhador 0,00
+Total R$ 0,00 Total R$ 0,00 Total R$ 0,00
+Total de impostos R$ 726,52
+* Para conferência do IRRF emita o relatório de Bases IRRF (Relatórios/Periódicos/Bases IRRF)
+SCI Novo Visual
+
+-- 20 of 20 --
+

@@ -37,7 +37,7 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
 
 // ============================================================
 // PARSER: PDF Analítico (Espelho detalhado - tipo 006)
-// Usa pdftotext -layout para extração precisa
+// Compatível com pdf-parse v2 (formato de texto diferente do pdftotext -layout)
 // ============================================================
 function parseAnaliticoPDF(text: string): Array<{
   codigo: string;
@@ -74,22 +74,24 @@ function parseAnaliticoPDF(text: string): Array<{
         trimmed.startsWith("Adiantamento em:") || trimmed.startsWith("NOME DO COLABORADOR") ||
         trimmed.startsWith("PROVENTOS") || trimmed.startsWith("SCI Novo Visual") ||
         trimmed.startsWith("Página:") || trimmed.startsWith("Guaratinguetá") ||
-        trimmed.includes("CNPJ:") || trimmed.startsWith("Espelho e resumo de folha")) {
+        trimmed.includes("CNPJ:") || trimmed.startsWith("Espelho e resumo de folha") ||
+        trimmed.match(/^Folha de pagamento/) || trimmed.match(/^Relação de líquido/)) {
       continue;
     }
 
-    // Detect employee header: "   codigo NOME   SF  IR   Admissão em DD/MM/YYYY Salário base XX,XX Horas mensais: 220,00"
-    const headerMatch = trimmed.match(/^(\d{1,4})\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)\s+(\d+)\s+(\d+)\s+Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)/);
-    if (headerMatch) {
+    // NEW FORMAT (pdf-parse v2): "128 ACACIO ... Admissão em 27/09/2022 Salário base 12,61 Horas mensais: 220,00\t0 0"
+    // SF and IR are at the END after a tab, not in the middle
+    const headerMatchNew = trimmed.match(/^(\d{1,4})\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)\s+Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)\s+(\d+)\s+(\d+)/);
+    if (headerMatchNew) {
       if (current) results.push(current);
       current = {
-        codigo: headerMatch[1].trim(),
-        nome: headerMatch[2].trim(),
-        sf: parseInt(headerMatch[3]),
-        ir: parseInt(headerMatch[4]),
-        dataAdmissao: headerMatch[5],
-        salarioBase: headerMatch[6],
-        horasMensais: headerMatch[7],
+        codigo: headerMatchNew[1].trim(),
+        nome: headerMatchNew[2].trim(),
+        sf: parseInt(headerMatchNew[6]),
+        ir: parseInt(headerMatchNew[7]),
+        dataAdmissao: headerMatchNew[3],
+        salarioBase: headerMatchNew[4],
+        horasMensais: headerMatchNew[5],
         proventos: [],
         descontos: [],
         totalProventos: "0",
@@ -99,29 +101,43 @@ function parseAnaliticoPDF(text: string): Array<{
         baseIrrf: "0", valorIrrf: "0",
         liquido: "0",
       };
-      // Check if next line is a name continuation (indented single word)
-      if (i + 1 < lines.length) {
-        const nextTrimmed = lines[i + 1].trim();
-        if (nextTrimmed.match(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]*$/) && nextTrimmed.length >= 2 && nextTrimmed.length <= 40 &&
-            !nextTrimmed.match(/^(Folha|Base|Total|PROVENTOS|DESCONTOS|Admiss|SCI|Espelho|Empresa)/) &&
-            !nextTrimmed.match(/^\d{5}/)) {
-          current.nome = current.nome + " " + nextTrimmed;
-          i++; // Skip the continuation line
-        }
-      }
       pendingNameContinuation = false;
       continue;
     }
 
-    // Name split across 2 lines: first line has code + partial name + SF + IR
-    const partialHeaderMatch = trimmed.match(/^(\d{1,4})\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)\s+(\d+)\s+(\d+)\s*$/);
-    if (partialHeaderMatch && partialHeaderMatch[2].length > 3) {
+    // OLD FORMAT (pdftotext -layout): "128 ACACIO ... 0 0 Admissão em ..."
+    const headerMatchOld = trimmed.match(/^(\d{1,4})\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)\s+(\d+)\s+(\d+)\s+Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)/);
+    if (headerMatchOld) {
       if (current) results.push(current);
       current = {
-        codigo: partialHeaderMatch[1].trim(),
-        nome: partialHeaderMatch[2].trim(),
-        sf: parseInt(partialHeaderMatch[3]),
-        ir: parseInt(partialHeaderMatch[4]),
+        codigo: headerMatchOld[1].trim(),
+        nome: headerMatchOld[2].trim(),
+        sf: parseInt(headerMatchOld[3]),
+        ir: parseInt(headerMatchOld[4]),
+        dataAdmissao: headerMatchOld[5],
+        salarioBase: headerMatchOld[6],
+        horasMensais: headerMatchOld[7],
+        proventos: [],
+        descontos: [],
+        totalProventos: "0",
+        totalDescontos: "0",
+        baseInss: "0", valorInss: "0",
+        baseFgts: "0", valorFgts: "0",
+        baseIrrf: "0", valorIrrf: "0",
+        liquido: "0",
+      };
+      pendingNameContinuation = false;
+      continue;
+    }
+
+    // Name split across lines: "631 ALEX ALESSANDRO MONTEIRO DA" then "SILVA"
+    const partialHeader = trimmed.match(/^(\d{1,4})\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)$/);
+    if (partialHeader && partialHeader[2].length > 3 && !trimmed.match(/^(Folha|Base|Total|PROVENTOS|DESCONTOS|IR)/)) {
+      if (current) results.push(current);
+      current = {
+        codigo: partialHeader[1].trim(),
+        nome: partialHeader[2].trim(),
+        sf: 0, ir: 0,
         dataAdmissao: "",
         salarioBase: "",
         horasMensais: "",
@@ -138,20 +154,22 @@ function parseAnaliticoPDF(text: string): Array<{
       continue;
     }
 
-    // Name continuation line (indented name part + Admissão)
+    // Name continuation + Admissão
     if (pendingNameContinuation && current) {
-      const contMatch = trimmed.match(/^([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]*?)\s+Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)/);
-      if (contMatch) {
-        current.nome = current.nome + " " + contMatch[1].trim();
-        current.dataAdmissao = contMatch[2];
-        current.salarioBase = contMatch[3];
-        current.horasMensais = contMatch[4];
+      const contWithAdm = trimmed.match(/^([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]*?)\s+Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)/);
+      if (contWithAdm) {
+        current.nome = current.nome + " " + contWithAdm[1].trim();
+        current.dataAdmissao = contWithAdm[2];
+        current.salarioBase = contWithAdm[3];
+        current.horasMensais = contWithAdm[4];
+        const sfir = trimmed.match(/Horas\s+mensais:\s*[\d.,]+\s+(\d+)\s+(\d+)/);
+        if (sfir) { current.sf = parseInt(sfir[1]); current.ir = parseInt(sfir[2]); }
         pendingNameContinuation = false;
         continue;
       }
-      // Just name continuation without Admissão on same line
+      // Just name continuation
       const nameOnly = trimmed.match(/^([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+)$/);
-      if (nameOnly && nameOnly[1].length > 2 && !nameOnly[1].match(/^(Folha|Base|Total|PROVENTOS|DESCONTOS)/)) {
+      if (nameOnly && nameOnly[1].length >= 2 && !nameOnly[1].match(/^(Folha|Base|Total|PROVENTOS|DESCONTOS|IR)/)) {
         current.nome = current.nome + " " + nameOnly[1].trim();
         continue;
       }
@@ -161,6 +179,8 @@ function parseAnaliticoPDF(text: string): Array<{
         current.dataAdmissao = admOnly[1];
         current.salarioBase = admOnly[2];
         current.horasMensais = admOnly[3];
+        const sfir = trimmed.match(/Horas\s+mensais:\s*[\d.,]+\s+(\d+)\s+(\d+)/);
+        if (sfir) { current.sf = parseInt(sfir[1]); current.ir = parseInt(sfir[2]); }
         pendingNameContinuation = false;
         continue;
       }
@@ -172,28 +192,29 @@ function parseAnaliticoPDF(text: string): Array<{
     const provTotalMatch = trimmed.match(/Total\s+de\s+proventos\s*-?\s*>\s*([\d.,]+)/);
     if (provTotalMatch) {
       current.totalProventos = provTotalMatch[1];
-      // Check if descontos total is on same line
       const descTotalSameLine = trimmed.match(/Total\s+de\s+descontos\s*-?\s*>\s*([\d.,]+)/);
-      if (descTotalSameLine) {
-        current.totalDescontos = descTotalSameLine[1];
-      }
+      if (descTotalSameLine) current.totalDescontos = descTotalSameLine[1];
       continue;
     }
 
-    // Total de descontos (standalone)
+    // Total de descontos standalone
     const descTotalMatch = trimmed.match(/Total\s+de\s+descontos\s*-?\s*>\s*([\d.,]+)/);
     if (descTotalMatch) {
       current.totalDescontos = descTotalMatch[1];
       continue;
     }
 
-    // Folha line with bases and Líquido
-    // Adiantamento: Folha + 6 nums + Líquido -> valor (baseInss, valorInss, baseFgts, valorFgts, baseIrrf, valorIrrf)
-    // Pagamento: Folha + 7 nums + Líquido -> valor (baseInss, valorInss, baseFgts, valorFgts, baseIrrf, valorIrrf, extra)
-    const folhaMatch = trimmed.match(/Folha\s+([\d.,]+(?:\s+[\d.,]+)*)\s+L[ií]quido\s*-?\s*>\s*([\d.,]+)/);
-    if (folhaMatch) {
-      const nums = folhaMatch[1].trim().split(/\s+/);
-      // Last number before Líquido varies: 6 nums (adiantamento) or 7 nums (pagamento)
+    // Líquido -> valor (standalone line — pdf-parse v2 puts it on its own line)
+    const liquidoMatch = trimmed.match(/L[ií]quido\s*-?\s*>\s*([\d.,]+)/);
+    if (liquidoMatch) {
+      current.liquido = liquidoMatch[1];
+      continue;
+    }
+
+    // Folha line with bases (may or may not have Líquido on same line)
+    const folhaMatchWithLiq = trimmed.match(/Folha\s+([\d.,]+(?:[\s\t]+[\d.,]+)*)\s+L[ií]quido\s*-?\s*>\s*([\d.,]+)/);
+    if (folhaMatchWithLiq) {
+      const nums = folhaMatchWithLiq[1].trim().split(/[\s\t]+/);
       if (nums.length >= 6) {
         current.baseInss = nums[0];
         current.valorInss = nums[1];
@@ -202,38 +223,47 @@ function parseAnaliticoPDF(text: string): Array<{
         current.baseIrrf = nums[nums.length - 2];
         current.valorIrrf = nums[nums.length - 1];
       }
-      current.liquido = folhaMatch[2];
+      current.liquido = folhaMatchWithLiq[2];
       continue;
     }
 
-    // Fallback: Líquido standalone (sem "Folha" antes) — ex: "Líquido -> 1.234,56" ou "Líquido  1.234,56"
-    const liquidoStandalone = trimmed.match(/L[ií]quido\s*[-=]?\s*>?\s*([\d.,]+)/);
-    if (liquidoStandalone && current.liquido === "0") {
-      current.liquido = liquidoStandalone[1];
+    // Folha line without Líquido (pdf-parse v2 separates them)
+    const folhaMatchNoLiq = trimmed.match(/Folha\s+([\d.,]+(?:[\s\t]+[\d.,]+)*)/);
+    if (folhaMatchNoLiq && !trimmed.includes("pagamento")) {
+      const nums = folhaMatchNoLiq[1].trim().split(/[\s\t]+/);
+      if (nums.length >= 4) {
+        current.baseInss = nums[0];
+        current.valorInss = nums[1];
+        current.baseFgts = nums[2];
+        current.valorFgts = nums[3];
+        if (nums.length >= 6) {
+          current.baseIrrf = nums[nums.length - 2];
+          current.valorIrrf = nums[nums.length - 1];
+        }
+      }
       continue;
     }
 
-    // Provento/desconto lines: "código descrição   valor" or "código descrição   valor   código descrição   valor"
-    // Left side = proventos, right side = descontos
-    // Pattern with both: "20504 Adiant...  904,79    20904 Ad. sal...  178,13"
-    const dualMatch = trimmed.match(/^(\d{5})\s+(.+?)\s{2,}([\d.,]+)\s{2,}(\d{5})\s+(.+?)\s{2,}([\d.,]+)\s*$/);
-    if (dualMatch) {
-      current.proventos.push({ ref: dualMatch[1], descricao: dualMatch[2].trim(), valor: dualMatch[3] });
-      current.descontos.push({ ref: dualMatch[4], descricao: dualMatch[5].trim(), valor: dualMatch[6] });
-      continue;
-    }
+    // Base INSS / IR standalone lines — skip
+    if (trimmed.match(/^Base\s+INSS/) || trimmed.match(/^IR\s*-?\s*>?\s*$/)) continue;
+    // Standalone number (e.g. base IRRF value) — skip
+    if (trimmed.match(/^[\d.,]+$/) && current) continue;
 
-    // Single provento/desconto line
-    const singleMatch = trimmed.match(/^(\d{5})\s+(.+?)\s{2,}([\d.,]+)\s*$/);
-    if (singleMatch) {
-      // Determine if it's provento or desconto based on ref code
-      // Proventos: 20xxx, 90011; Descontos: 91xxx, 20904
-      const ref = singleMatch[1];
-      const isDesconto = ref.startsWith("91") || ref === "20904";
-      if (isDesconto) {
-        current.descontos.push({ ref, descricao: singleMatch[2].trim(), valor: singleMatch[3] });
-      } else {
-        current.proventos.push({ ref, descricao: singleMatch[2].trim(), valor: singleMatch[3] });
+    // Provento/desconto lines (pdf-parse v2 format)
+    // "904,79\tAdiantamento salarial com IR\t20504 178,13\tAd. sal. Créd. Trabalhador com IR\t20904"
+    const proventoLine = trimmed.match(/([\d.,]+)\s+(.+?)\s+(\d{5})/g);
+    if (proventoLine && proventoLine.length > 0) {
+      for (const pl of proventoLine) {
+        const pm = pl.match(/([\d.,]+)\s+(.+?)\s+(\d{5})/);
+        if (pm) {
+          const ref = pm[3];
+          const isDesconto = ref.startsWith("91") || ref === "20904";
+          if (isDesconto) {
+            current.descontos.push({ ref, descricao: pm[2].trim(), valor: pm[1] });
+          } else {
+            current.proventos.push({ ref, descricao: pm[2].trim(), valor: pm[1] });
+          }
+        }
       }
       continue;
     }
@@ -245,7 +275,7 @@ function parseAnaliticoPDF(text: string): Array<{
 
 // ============================================================
 // PARSER: PDF Sintético (lista simples - tipo 007)
-// Padrão: Código | Nome | Data Adm. | Função | Salário Líquido
+// Compatível com pdf-parse v2 e pdftotext -layout
 // ============================================================
 function parseSinteticoPDF(text: string): Array<{
   codigo: string;
@@ -259,27 +289,42 @@ function parseSinteticoPDF(text: string): Array<{
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    if (!trimmed || trimmed === '_') continue;
 
     // Skip headers
     if (trimmed.startsWith("Relação de líquido") || trimmed.startsWith("Empresa:") ||
         trimmed.startsWith("Código") || trimmed.startsWith("GRUPO PRONUS") ||
         trimmed.includes("CNPJ:") || trimmed.startsWith("Página:") ||
         trimmed.startsWith("Guaratinguetá") || trimmed.includes("Total Geral") ||
-        trimmed.includes("Qtde. Func")) {
+        trimmed.includes("Qtde. Func") || trimmed.startsWith("Nome do colaborador") ||
+        trimmed.match(/^SCI Novo Visual/)) {
       continue;
     }
 
-    // Pattern: "  código   NOME COMPLETO   DD/MM/YYYY   FUNCAO   valor ___"
-    const match = trimmed.match(/^(\d{1,4})\s{2,}(.+?)\s{2,}(\d{2}\/\d{2}\/\d{4})\s{2,}(.+?)\s{2,}([\d.,]+)\s*_*/);
-    if (match) {
+    // NEW FORMAT (pdf-parse v2): "NOME COMPLETO\tCODIGO DD/MM/YYYY FUNCAO valor ___"
+    const matchNew = trimmed.match(/^([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)\t(\d{1,4})\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([\d.,]+)\s*_*/);
+    if (matchNew) {
       results.push({
-        codigo: match[1].trim(),
-        nome: match[2].trim(),
-        dataAdmissao: match[3].trim(),
-        funcao: match[4].trim(),
-        liquido: match[5].trim(),
+        codigo: matchNew[2].trim(),
+        nome: matchNew[1].trim(),
+        dataAdmissao: matchNew[3].trim(),
+        funcao: matchNew[4].trim(),
+        liquido: matchNew[5].trim(),
       });
+      continue;
+    }
+
+    // OLD FORMAT (pdftotext -layout): "  codigo   NOME COMPLETO   DD/MM/YYYY   FUNCAO   valor ___"
+    const matchOld = trimmed.match(/^(\d{1,4})\s{2,}(.+?)\s{2,}(\d{2}\/\d{2}\/\d{4})\s{2,}(.+?)\s{2,}([\d.,]+)\s*_*/);
+    if (matchOld) {
+      results.push({
+        codigo: matchOld[1].trim(),
+        nome: matchOld[2].trim(),
+        dataAdmissao: matchOld[3].trim(),
+        funcao: matchOld[4].trim(),
+        liquido: matchOld[5].trim(),
+      });
+      continue;
     }
   }
 
