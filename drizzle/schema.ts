@@ -569,7 +569,7 @@ export const payroll = mysqlTable("payroll", {
 export const payrollUploads = mysqlTable("payroll_uploads", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
-	category: mysqlEnum(['cartao_ponto','espelho_adiantamento_analitico','adiantamento_sintetico','adiantamento_banco_cef','adiantamento_banco_santander','espelho_folha_analitico','folha_sintetico','pagamento_banco_cef','pagamento_banco_santander']).notNull(),
+	category: mysqlEnum(['cartao_ponto','espelho_adiantamento_analitico','adiantamento_sintetico','espelho_folha_analitico','folha_sintetico']).notNull(),
 	month: varchar({ length: 7 }).notNull(),
 	fileName: varchar({ length: 255 }).notNull(),
 	fileUrl: text().notNull(),
@@ -798,8 +798,7 @@ export const folhaLancamentos = mysqlTable("folha_lancamentos", {
 	// Arquivos importados
 	analiticoUploadId: int(),
 	sinteticoUploadId: int(),
-	bancoCefUploadId: int(),
-	bancoSantanderUploadId: int(),
+
 	// Totais gerais
 	totalFuncionarios: int().default(0),
 	totalProventos: varchar({ length: 20 }),
@@ -853,10 +852,7 @@ export const folhaItens = mysqlTable("folha_itens", {
 	valorIrrf: varchar({ length: 20 }),
 	// Líquido
 	liquido: varchar({ length: 20 }),
-	// Dados bancários (do resumo por banco)
-	banco: varchar({ length: 100 }),
-	agencia: varchar({ length: 20 }),
-	conta: varchar({ length: 30 }),
+
 	// Situações especiais
 	situacaoEspecial: text(),
 	// Validação cruzada

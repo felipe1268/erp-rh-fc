@@ -803,3 +803,18 @@
 - [x] Frontend: filtros por status (Pendentes/Resolvidas/Todas) e por tipo de inconsistência
 - [x] Frontend: resumo visual com contadores (pendentes, resolvidas, conflitos de obra)
 - [x] Frontend: fluxo intuitivo de validação antes de permitir consolidar o mês
+
+## REVISÃO_20: Redesenho Folha de Pagamento (Modelo Correto 4 Arquivos)
+- [x] Simplificar modelo: apenas 4 arquivos (2 adiantamento dia 20 + 2 pagamento 5º dia útil)
+- [x] Cada lançamento recebe: 1 Analítico (006 espelho detalhado) + 1 Sintético (007 lista resumida)
+- [x] Remover categorias extras de upload (banco CEF, banco Santander, etc.)
+- [x] Atualizar schema/enum de categorias de arquivo no banco de dados
+- [x] Atualizar parser do PDF analítico (006) para extrair dados corretos por funcionário
+- [x] Atualizar parser do PDF sintético (007) para extrair lista resumida
+- [x] Atualizar routers de importação da folha
+- [x] Redesenhar frontend: cards Adiantamento (dia 20) e Pagamento (5º dia útil) com 2 uploads cada
+- [x] Verificação cruzada: funcionários da folha vs cadastro (match código contábil + nome)
+- [x] Testar com PDFs reais (006 e 007 de janeiro)
+- [x] Cadastro automático de código contábil nos funcionários ao importar folha
+- [x] Verificação cruzada completa: salário, função, dados admissão, ponto
+- [x] Teste real com PDFs 006 e 007 de janeiro via upload no sistema

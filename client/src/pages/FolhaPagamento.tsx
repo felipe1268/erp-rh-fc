@@ -50,7 +50,7 @@ export default function FolhaPagamento() {
   // Upload dialog
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadTipo, setUploadTipo] = useState<"vale" | "pagamento">("vale");
-  const [uploadArquivo, setUploadArquivo] = useState<"analitico" | "sintetico" | "banco_cef" | "banco_santander">("analitico");
+  const [uploadArquivo, setUploadArquivo] = useState<"analitico" | "sintetico">("analitico");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,7 +82,19 @@ export default function FolhaPagamento() {
   // ===== MUTATIONS =====
   const importarMut = trpc.folha.importarFolha.useMutation({
     onSuccess: (data) => {
-      toast.success(`${data.recordsProcessed} registros processados com sucesso!`);
+      const r = data.result as any;
+      if (r?.match) {
+        const parts = [
+          `${data.recordsProcessed} funcionários processados`,
+          `${r.match.matched} vinculados`,
+          r.match.unmatched > 0 ? `${r.match.unmatched} não encontrados` : null,
+          r.match.divergentes > 0 ? `${r.match.divergentes} com divergências` : null,
+          r.match.codigosAtualizados > 0 ? `${r.match.codigosAtualizados} códigos contábeis cadastrados` : null,
+        ].filter(Boolean);
+        toast.success(parts.join(" | "), { duration: 8000 });
+      } else {
+        toast.success(`${data.recordsProcessed} registros processados com sucesso!`);
+      }
       statusMes.refetch();
       lancamentos.refetch();
       mesesComLanc.refetch();
@@ -94,7 +106,13 @@ export default function FolhaPagamento() {
 
   const reprocessarMut = trpc.folha.reprocessarMatch.useMutation({
     onSuccess: (data) => {
-      toast.success(`Re-match concluído: ${data.matched} vinculados, ${data.unmatched} não encontrados, ${data.divergentes} divergentes`);
+      const parts = [
+        `Re-match: ${data.matched} vinculados`,
+        data.unmatched > 0 ? `${data.unmatched} não encontrados` : null,
+        data.divergentes > 0 ? `${data.divergentes} divergentes` : null,
+        data.codigosAtualizados > 0 ? `${data.codigosAtualizados} códigos atualizados` : null,
+      ].filter(Boolean);
+      toast.success(parts.join(" | "), { duration: 6000 });
       itensDetail.refetch();
       statusMes.refetch();
       lancamentos.refetch();
@@ -577,8 +595,7 @@ export default function FolhaPagamento() {
                 {[
                   { key: "analitico" as const, label: "Analítico (Espelho)", desc: "Detalhamento completo", icon: FileSpreadsheet },
                   { key: "sintetico" as const, label: "Sintético (Líquido)", desc: "Lista resumida", icon: FileText },
-                  { key: "banco_cef" as const, label: "Banco CEF", desc: "Crédito Caixa Econômica", icon: Building2 },
-                  { key: "banco_santander" as const, label: "Banco Santander", desc: "Crédito Santander", icon: Building2 },
+
                 ].map(opt => (
                   <button
                     key={opt.key}

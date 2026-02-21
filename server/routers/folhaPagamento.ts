@@ -7,6 +7,10 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
+import { execSync } from "child_process";
+import { writeFileSync, readFileSync, unlinkSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 // ============================================================
 // HELPERS
@@ -23,11 +27,221 @@ function formatBRL(val: number): string {
 }
 
 function normalizeNome(nome: string): string {
-  return nome.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return nome.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
+}
+
+function extractTextFromPDF(buffer: Buffer): string {
+  const tmpPath = join(tmpdir(), `pdf-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.pdf`);
+  const txtPath = tmpPath.replace(".pdf", ".txt");
+  try {
+    writeFileSync(tmpPath, buffer);
+    execSync(`pdftotext -layout "${tmpPath}" "${txtPath}"`, { timeout: 30000 });
+    const text = readFileSync(txtPath, "utf-8");
+    return text;
+  } finally {
+    try { unlinkSync(tmpPath); } catch {}
+    try { unlinkSync(txtPath); } catch {}
+  }
 }
 
 // ============================================================
-// PARSER: PDF Sintético (lista simples de líquidos)
+// PARSER: PDF Analítico (Espelho detalhado - tipo 006)
+// Usa pdftotext -layout para extração precisa
+// ============================================================
+function parseAnaliticoPDF(text: string): Array<{
+  codigo: string;
+  nome: string;
+  sf: number;
+  ir: number;
+  dataAdmissao: string;
+  salarioBase: string;
+  horasMensais: string;
+  proventos: Array<{ ref: string; descricao: string; valor: string }>;
+  descontos: Array<{ ref: string; descricao: string; valor: string }>;
+  totalProventos: string;
+  totalDescontos: string;
+  baseInss: string;
+  valorInss: string;
+  baseFgts: string;
+  valorFgts: string;
+  baseIrrf: string;
+  valorIrrf: string;
+  liquido: string;
+}> {
+  const lines = text.split("\n");
+  const results: any[] = [];
+  let current: any = null;
+  let pendingNameContinuation = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Skip page headers
+    if (trimmed.startsWith("Espelho e resumo") || trimmed.startsWith("Empresa:") ||
+        trimmed.startsWith("Adiantamento em:") || trimmed.startsWith("NOME DO COLABORADOR") ||
+        trimmed.startsWith("PROVENTOS") || trimmed.startsWith("SCI Novo Visual") ||
+        trimmed.startsWith("Página:") || trimmed.startsWith("Guaratinguetá") ||
+        trimmed.includes("CNPJ:") || trimmed.startsWith("Espelho e resumo de folha")) {
+      continue;
+    }
+
+    // Detect employee header: "   codigo NOME   SF  IR   Admissão em DD/MM/YYYY Salário base XX,XX Horas mensais: 220,00"
+    const headerMatch = trimmed.match(/^(\d{1,4})\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)\s+(\d+)\s+(\d+)\s+Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)/);
+    if (headerMatch) {
+      if (current) results.push(current);
+      current = {
+        codigo: headerMatch[1].trim(),
+        nome: headerMatch[2].trim(),
+        sf: parseInt(headerMatch[3]),
+        ir: parseInt(headerMatch[4]),
+        dataAdmissao: headerMatch[5],
+        salarioBase: headerMatch[6],
+        horasMensais: headerMatch[7],
+        proventos: [],
+        descontos: [],
+        totalProventos: "0",
+        totalDescontos: "0",
+        baseInss: "0", valorInss: "0",
+        baseFgts: "0", valorFgts: "0",
+        baseIrrf: "0", valorIrrf: "0",
+        liquido: "0",
+      };
+      // Check if next line is a name continuation (indented single word)
+      if (i + 1 < lines.length) {
+        const nextTrimmed = lines[i + 1].trim();
+        if (nextTrimmed.match(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]*$/) && nextTrimmed.length >= 2 && nextTrimmed.length <= 40 &&
+            !nextTrimmed.match(/^(Folha|Base|Total|PROVENTOS|DESCONTOS|Admiss|SCI|Espelho|Empresa)/) &&
+            !nextTrimmed.match(/^\d{5}/)) {
+          current.nome = current.nome + " " + nextTrimmed;
+          i++; // Skip the continuation line
+        }
+      }
+      pendingNameContinuation = false;
+      continue;
+    }
+
+    // Name split across 2 lines: first line has code + partial name + SF + IR
+    const partialHeaderMatch = trimmed.match(/^(\d{1,4})\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+?)\s+(\d+)\s+(\d+)\s*$/);
+    if (partialHeaderMatch && partialHeaderMatch[2].length > 3) {
+      if (current) results.push(current);
+      current = {
+        codigo: partialHeaderMatch[1].trim(),
+        nome: partialHeaderMatch[2].trim(),
+        sf: parseInt(partialHeaderMatch[3]),
+        ir: parseInt(partialHeaderMatch[4]),
+        dataAdmissao: "",
+        salarioBase: "",
+        horasMensais: "",
+        proventos: [],
+        descontos: [],
+        totalProventos: "0",
+        totalDescontos: "0",
+        baseInss: "0", valorInss: "0",
+        baseFgts: "0", valorFgts: "0",
+        baseIrrf: "0", valorIrrf: "0",
+        liquido: "0",
+      };
+      pendingNameContinuation = true;
+      continue;
+    }
+
+    // Name continuation line (indented name part + Admissão)
+    if (pendingNameContinuation && current) {
+      const contMatch = trimmed.match(/^([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]*?)\s+Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)/);
+      if (contMatch) {
+        current.nome = current.nome + " " + contMatch[1].trim();
+        current.dataAdmissao = contMatch[2];
+        current.salarioBase = contMatch[3];
+        current.horasMensais = contMatch[4];
+        pendingNameContinuation = false;
+        continue;
+      }
+      // Just name continuation without Admissão on same line
+      const nameOnly = trimmed.match(/^([A-ZÁÉÍÓÚÂÊÔÃÕÇÑ][A-ZÁÉÍÓÚÂÊÔÃÕÇÑ\s]+)$/);
+      if (nameOnly && nameOnly[1].length > 2 && !nameOnly[1].match(/^(Folha|Base|Total|PROVENTOS|DESCONTOS)/)) {
+        current.nome = current.nome + " " + nameOnly[1].trim();
+        continue;
+      }
+      // Admissão on separate line
+      const admOnly = trimmed.match(/Admiss[ãa]o\s+em\s+(\d{2}\/\d{2}\/\d{4})\s+Sal[aá]rio\s+base\s+([\d.,]+)\s+Horas\s+mensais:\s*([\d.,]+)/);
+      if (admOnly) {
+        current.dataAdmissao = admOnly[1];
+        current.salarioBase = admOnly[2];
+        current.horasMensais = admOnly[3];
+        pendingNameContinuation = false;
+        continue;
+      }
+    }
+
+    if (!current) continue;
+
+    // Total de proventos
+    const provTotalMatch = trimmed.match(/Total\s+de\s+proventos\s*-?\s*>\s*([\d.,]+)/);
+    if (provTotalMatch) {
+      current.totalProventos = provTotalMatch[1];
+      // Check if descontos total is on same line
+      const descTotalSameLine = trimmed.match(/Total\s+de\s+descontos\s*-?\s*>\s*([\d.,]+)/);
+      if (descTotalSameLine) {
+        current.totalDescontos = descTotalSameLine[1];
+      }
+      continue;
+    }
+
+    // Total de descontos (standalone)
+    const descTotalMatch = trimmed.match(/Total\s+de\s+descontos\s*-?\s*>\s*([\d.,]+)/);
+    if (descTotalMatch) {
+      current.totalDescontos = descTotalMatch[1];
+      continue;
+    }
+
+    // Folha line with bases and Líquido
+    // Pattern: "Folha  0,00  0,00  0,00  0,00  baseIrrf  irrf  Líquido ->  valor"
+    const folhaMatch = trimmed.match(/Folha\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+L[ií]quido\s*-?\s*>\s*([\d.,]+)/);
+    if (folhaMatch) {
+      current.baseInss = folhaMatch[1];
+      current.valorInss = folhaMatch[2];
+      current.baseFgts = folhaMatch[3];
+      current.valorFgts = folhaMatch[4];
+      current.baseIrrf = folhaMatch[5];
+      current.valorIrrf = folhaMatch[6];
+      current.liquido = folhaMatch[7];
+      continue;
+    }
+
+    // Provento/desconto lines: "código descrição   valor" or "código descrição   valor   código descrição   valor"
+    // Left side = proventos, right side = descontos
+    // Pattern with both: "20504 Adiant...  904,79    20904 Ad. sal...  178,13"
+    const dualMatch = trimmed.match(/^(\d{5})\s+(.+?)\s{2,}([\d.,]+)\s{2,}(\d{5})\s+(.+?)\s{2,}([\d.,]+)\s*$/);
+    if (dualMatch) {
+      current.proventos.push({ ref: dualMatch[1], descricao: dualMatch[2].trim(), valor: dualMatch[3] });
+      current.descontos.push({ ref: dualMatch[4], descricao: dualMatch[5].trim(), valor: dualMatch[6] });
+      continue;
+    }
+
+    // Single provento/desconto line
+    const singleMatch = trimmed.match(/^(\d{5})\s+(.+?)\s{2,}([\d.,]+)\s*$/);
+    if (singleMatch) {
+      // Determine if it's provento or desconto based on ref code
+      // Proventos: 20xxx, 90011; Descontos: 91xxx, 20904
+      const ref = singleMatch[1];
+      const isDesconto = ref.startsWith("91") || ref === "20904";
+      if (isDesconto) {
+        current.descontos.push({ ref, descricao: singleMatch[2].trim(), valor: singleMatch[3] });
+      } else {
+        current.proventos.push({ ref, descricao: singleMatch[2].trim(), valor: singleMatch[3] });
+      }
+      continue;
+    }
+  }
+
+  if (current) results.push(current);
+  return results;
+}
+
+// ============================================================
+// PARSER: PDF Sintético (lista simples - tipo 007)
 // Padrão: Código | Nome | Data Adm. | Função | Salário Líquido
 // ============================================================
 function parseSinteticoPDF(text: string): Array<{
@@ -37,12 +251,24 @@ function parseSinteticoPDF(text: string): Array<{
   funcao: string;
   liquido: string;
 }> {
-  const lines = text.split("\n").map(l => l.trim()).filter(l => l);
+  const lines = text.split("\n");
   const results: any[] = [];
 
   for (const line of lines) {
-    // Match: número + nome + data dd/mm/yyyy + função + valor
-    const match = line.match(/^(\d+)\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([\d.,]+)\s*$/);
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Skip headers
+    if (trimmed.startsWith("Relação de líquido") || trimmed.startsWith("Empresa:") ||
+        trimmed.startsWith("Código") || trimmed.startsWith("GRUPO PRONUS") ||
+        trimmed.includes("CNPJ:") || trimmed.startsWith("Página:") ||
+        trimmed.startsWith("Guaratinguetá") || trimmed.includes("Total Geral") ||
+        trimmed.includes("Qtde. Func")) {
+      continue;
+    }
+
+    // Pattern: "  código   NOME COMPLETO   DD/MM/YYYY   FUNCAO   valor ___"
+    const match = trimmed.match(/^(\d{1,4})\s{2,}(.+?)\s{2,}(\d{2}\/\d{2}\/\d{4})\s{2,}(.+?)\s{2,}([\d.,]+)\s*_*/);
     if (match) {
       results.push({
         codigo: match[1].trim(),
@@ -58,234 +284,126 @@ function parseSinteticoPDF(text: string): Array<{
 }
 
 // ============================================================
-// PARSER: PDF Analítico (espelho detalhado)
-// ============================================================
-function parseAnaliticoPDF(text: string): Array<{
-  codigo: string;
-  nome: string;
-  sf: number;
-  ir: number;
-  dataAdmissao: string;
-  salarioBase: string;
-  horasMensais: string;
-  proventos: Array<{ ref: string; descricao: string; referencia: string; valor: string }>;
-  descontos: Array<{ ref: string; descricao: string; referencia: string; valor: string }>;
-  totalProventos: string;
-  totalDescontos: string;
-  baseInss: string;
-  valorInss: string;
-  baseFgts: string;
-  valorFgts: string;
-  baseIrrf: string;
-  valorIrrf: string;
-  liquido: string;
-}> {
-  const lines = text.split("\n").map(l => l.trim()).filter(l => l);
-  const results: any[] = [];
-  let current: any = null;
-  let section = ""; // proventos | descontos
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Detect employee header: código + NOME (bold/underlined in PDF)
-    // Pattern: number followed by uppercase name
-    const headerMatch = line.match(/^(\d{1,4})\s+([A-Z][A-Z\s]+[A-Z])$/);
-    if (headerMatch && headerMatch[2].length > 5) {
-      if (current) results.push(current);
-      current = {
-        codigo: headerMatch[1].trim(),
-        nome: headerMatch[2].trim(),
-        sf: 0, ir: 0,
-        dataAdmissao: "",
-        salarioBase: "",
-        horasMensais: "",
-        proventos: [],
-        descontos: [],
-        totalProventos: "0",
-        totalDescontos: "0",
-        baseInss: "0", valorInss: "0",
-        baseFgts: "0", valorFgts: "0",
-        baseIrrf: "0", valorIrrf: "0",
-        liquido: "0",
-      };
-      section = "";
-      continue;
-    }
-
-    if (!current) continue;
-
-    // SF and IR line
-    const sfMatch = line.match(/SF:\s*(\d+)/);
-    if (sfMatch) current.sf = parseInt(sfMatch[1]);
-    const irMatch = line.match(/IR:\s*(\d+)/);
-    if (irMatch) current.ir = parseInt(irMatch[1]);
-
-    // Admissão, Salário, Horas
-    const admMatch = line.match(/Admiss[ãa]o:\s*(\d{2}\/\d{2}\/\d{4})/);
-    if (admMatch) current.dataAdmissao = admMatch[1];
-
-    const salMatch = line.match(/Sal[aá]rio:\s*([\d.,]+)/);
-    if (salMatch) current.salarioBase = salMatch[1];
-
-    const horasMatch = line.match(/Horas:\s*([\d:]+)/);
-    if (horasMatch) current.horasMensais = horasMatch[1];
-
-    // Section detection
-    if (line.includes("PROVENTOS")) { section = "proventos"; continue; }
-    if (line.includes("DESCONTOS")) { section = "descontos"; continue; }
-
-    // Total de proventos
-    if (line.match(/Total\s+de\s+proventos/i)) {
-      const val = line.match(/([\d.,]+)\s*$/);
-      if (val) current.totalProventos = val[1];
-      section = "";
-      continue;
-    }
-
-    // Total de descontos
-    if (line.match(/Total\s+de\s+descontos/i)) {
-      const val = line.match(/([\d.,]+)\s*$/);
-      if (val) current.totalDescontos = val[1];
-      section = "";
-      continue;
-    }
-
-    // Líquido
-    if (line.match(/L[ií]quido/i) && !line.includes("Sal")) {
-      const val = line.match(/([\d.,]+)\s*$/);
-      if (val) current.liquido = val[1];
-    }
-
-    // Base INSS / FGTS / IRRF (rodapé)
-    if (line.match(/Base\s+INSS/i)) {
-      const vals = line.match(/([\d.,]+)/g);
-      if (vals && vals.length >= 2) {
-        current.baseInss = vals[0];
-        current.valorInss = vals[1];
-      }
-    }
-    if (line.match(/Base\s+FGTS/i)) {
-      const vals = line.match(/([\d.,]+)/g);
-      if (vals && vals.length >= 2) {
-        current.baseFgts = vals[0];
-        current.valorFgts = vals[1];
-      }
-    }
-    if (line.match(/Base\s+IRRF/i)) {
-      const vals = line.match(/([\d.,]+)/g);
-      if (vals && vals.length >= 1) {
-        current.baseIrrf = vals[0];
-        if (vals.length >= 2) current.valorIrrf = vals[1];
-      }
-    }
-
-    // Parse provento/desconto lines: ref + descrição + referência + valor
-    if (section === "proventos" || section === "descontos") {
-      const itemMatch = line.match(/^(\d{3,5})\s+(.+?)\s+([\d.,]+)\s*$/);
-      if (itemMatch) {
-        const item = {
-          ref: itemMatch[1],
-          descricao: itemMatch[2].trim(),
-          referencia: "",
-          valor: itemMatch[3],
-        };
-        // Try to split descricao and referencia
-        const parts = item.descricao.match(/^(.+?)\s{2,}([\d.,/:]+)$/);
-        if (parts) {
-          item.descricao = parts[1].trim();
-          item.referencia = parts[2].trim();
-        }
-        current[section].push(item);
-      }
-    }
-  }
-
-  if (current) results.push(current);
-  return results;
-}
-
-// ============================================================
-// PARSER: PDF Resumo por Banco (CEF ou Santander)
-// ============================================================
-function parseBancoPDF(text: string): Array<{
-  codigo: string;
-  nome: string;
-  agencia: string;
-  conta: string;
-  liquido: string;
-}> {
-  const lines = text.split("\n").map(l => l.trim()).filter(l => l);
-  const results: any[] = [];
-
-  for (const line of lines) {
-    // Pattern: código + nome + agência + conta + valor
-    const match = line.match(/^(\d+)\s+(.+?)\s+(\d{3,5})\s+([\d.\-]+)\s+([\d.,]+)\s*$/);
-    if (match) {
-      results.push({
-        codigo: match[1].trim(),
-        nome: match[2].trim(),
-        agencia: match[3].trim(),
-        conta: match[4].trim(),
-        liquido: match[5].trim(),
-      });
-    }
-  }
-
-  return results;
-}
-
-// ============================================================
 // MATCH: Vincular itens da folha com cadastro de funcionários
+// + Cadastrar código contábil automaticamente
+// + Verificação cruzada completa (salário, função, admissão)
 // ============================================================
 async function matchItensComCadastro(
   db: any,
   companyId: number,
   itens: any[],
-  allEmployees: any[]
-): Promise<{ matched: number; unmatched: number; divergentes: number; details: any[] }> {
-  let matched = 0, unmatched = 0, divergentes = 0;
+  allEmployees: any[],
+  autoUpdateCodigo: boolean = true
+): Promise<{ matched: number; unmatched: number; divergentes: number; codigosAtualizados: number; details: any[] }> {
+  let matched = 0, unmatched = 0, divergentes = 0, codigosAtualizados = 0;
   const details: any[] = [];
 
   for (const item of itens) {
     let emp = null;
     const divergencias: string[] = [];
 
-    // 1. Match por código contábil
+    // 1. Match por código contábil (se funcionário já tem código)
     if (item.codigoContabil) {
       emp = allEmployees.find((e: any) => e.codigoContabil === item.codigoContabil);
     }
 
-    // 2. Fallback: match por nome normalizado
+    // 2. Match por nome normalizado exato
     if (!emp) {
       const nomeNorm = normalizeNome(item.nomeColaborador);
       emp = allEmployees.find((e: any) => normalizeNome(e.nomeCompleto) === nomeNorm);
     }
 
-    // 3. Match parcial por nome (primeiros 3 tokens)
+    // 3. Match parcial: primeiros 3 tokens do nome
     if (!emp) {
       const tokens = normalizeNome(item.nomeColaborador).split(/\s+/).slice(0, 3);
-      emp = allEmployees.find((e: any) => {
-        const empTokens = normalizeNome(e.nomeCompleto).split(/\s+/).slice(0, 3);
-        return tokens.length >= 2 && empTokens.length >= 2 &&
-          tokens[0] === empTokens[0] && tokens[1] === empTokens[1];
-      });
+      if (tokens.length >= 2) {
+        emp = allEmployees.find((e: any) => {
+          const empTokens = normalizeNome(e.nomeCompleto).split(/\s+/).slice(0, 3);
+          return empTokens.length >= 2 &&
+            tokens[0] === empTokens[0] && tokens[1] === empTokens[1] &&
+            (tokens.length < 3 || empTokens.length < 3 || tokens[2] === empTokens[2]);
+        });
+      }
+    }
+
+    // 4. Match mais flexível: primeiro + último nome
+    if (!emp) {
+      const tokens = normalizeNome(item.nomeColaborador).split(/\s+/);
+      if (tokens.length >= 2) {
+        const primeiro = tokens[0];
+        const ultimo = tokens[tokens.length - 1];
+        emp = allEmployees.find((e: any) => {
+          const empTokens = normalizeNome(e.nomeCompleto).split(/\s+/);
+          return empTokens.length >= 2 &&
+            primeiro === empTokens[0] &&
+            ultimo === empTokens[empTokens.length - 1];
+        });
+      }
     }
 
     if (emp) {
       item.employeeId = emp.id;
 
-      // Verificar status
+      // AUTO-CADASTRAR código contábil se não tem
+      if (autoUpdateCodigo && item.codigoContabil && (!emp.codigoContabil || emp.codigoContabil !== item.codigoContabil)) {
+        try {
+          await db.update(employees)
+            .set({ codigoContabil: item.codigoContabil })
+            .where(eq(employees.id, emp.id));
+          emp.codigoContabil = item.codigoContabil;
+          codigosAtualizados++;
+        } catch {}
+      }
+
+      // VERIFICAÇÃO: Status
       if (emp.status !== "Ativo") {
         divergencias.push(`Status: ${emp.status} (não ativo)`);
       }
 
-      // Verificar salário base
+      // VERIFICAÇÃO: Salário base (comparar valor/hora do PDF com salário mensal do cadastro)
       if (item.salarioBase && emp.salarioBase) {
         const salFolha = parseBRL(item.salarioBase);
         const salCadastro = parseBRL(emp.salarioBase);
-        if (salFolha > 0 && salCadastro > 0 && Math.abs(salFolha - salCadastro) > 1) {
-          divergencias.push(`Salário: Folha R$ ${item.salarioBase} ≠ Cadastro R$ ${emp.salarioBase}`);
+        // O PDF mostra valor/hora, o cadastro pode ter o mensal
+        // Se salário do PDF < 100, é valor/hora; se >= 100, é mensal
+        if (salFolha > 0 && salCadastro > 0) {
+          if (salFolha < 100) {
+            // Valor/hora no PDF - calcular mensal: valor/hora * 220
+            const salMensalCalculado = salFolha * 220;
+            if (Math.abs(salMensalCalculado - salCadastro) > 50) {
+              divergencias.push(`Salário: Folha R$ ${item.salarioBase}/h (≈R$ ${formatBRL(salMensalCalculado)}/mês) ≠ Cadastro R$ ${emp.salarioBase}`);
+            }
+          } else if (Math.abs(salFolha - salCadastro) > 1) {
+            divergencias.push(`Salário: Folha R$ ${item.salarioBase} ≠ Cadastro R$ ${emp.salarioBase}`);
+          }
+        }
+      }
+
+      // VERIFICAÇÃO: Função
+      if (item.funcao && emp.funcao) {
+        const funcFolha = normalizeNome(item.funcao);
+        const funcCadastro = normalizeNome(emp.funcao);
+        // Comparação parcial (função pode estar truncada no PDF)
+        if (funcFolha.length > 3 && funcCadastro.length > 3) {
+          const match = funcFolha.startsWith(funcCadastro.substring(0, 6)) ||
+                       funcCadastro.startsWith(funcFolha.substring(0, 6));
+          if (!match && funcFolha !== funcCadastro) {
+            divergencias.push(`Função: Folha "${item.funcao}" ≠ Cadastro "${emp.funcao}"`);
+          }
+        }
+      }
+
+      // VERIFICAÇÃO: Data de admissão
+      if (item.dataAdmissao && emp.dataAdmissao) {
+        const dataFolha = item.dataAdmissao; // DD/MM/YYYY ou YYYY-MM-DD
+        let dataFolhaISO = dataFolha;
+        if (dataFolha.includes("/")) {
+          const parts = dataFolha.split("/");
+          dataFolhaISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        const dataCadastro = typeof emp.dataAdmissao === "string" ? emp.dataAdmissao.substring(0, 10) : "";
+        if (dataFolhaISO && dataCadastro && dataFolhaISO !== dataCadastro) {
+          divergencias.push(`Admissão: Folha ${dataFolha} ≠ Cadastro ${dataCadastro}`);
         }
       }
 
@@ -310,11 +428,13 @@ async function matchItensComCadastro(
       employeeId: item.employeeId,
       divergencias: divergencias,
       empNome: emp?.nomeCompleto,
+      empFuncao: emp?.funcao,
       empStatus: emp?.status,
+      empSalario: emp?.salarioBase,
     });
   }
 
-  return { matched, unmatched, divergentes, details };
+  return { matched, unmatched, divergentes, codigosAtualizados, details };
 }
 
 // ============================================================
@@ -396,36 +516,62 @@ export const folhaPagamentoRouter = router({
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
         ));
 
+      // Get uploads for this month
+      const uploads = await db.select().from(payrollUploads)
+        .where(and(
+          eq(payrollUploads.companyId, input.companyId),
+          eq(payrollUploads.month, input.mesReferencia),
+        ));
+
       return {
         vale: vale ? {
           id: vale.id,
           status: vale.status,
           totalFuncionarios: vale.totalFuncionarios,
           totalLiquido: vale.totalLiquido,
+          totalProventos: vale.totalProventos,
+          totalDescontos: vale.totalDescontos,
           totalDivergencias: vale.totalDivergencias,
+          divergenciasResolvidas: vale.divergenciasResolvidas,
           importadoEm: vale.importadoEm,
+          analiticoUploadId: vale.analiticoUploadId,
+          sinteticoUploadId: vale.sinteticoUploadId,
         } : null,
         pagamento: pagamento ? {
           id: pagamento.id,
           status: pagamento.status,
           totalFuncionarios: pagamento.totalFuncionarios,
           totalLiquido: pagamento.totalLiquido,
+          totalProventos: pagamento.totalProventos,
+          totalDescontos: pagamento.totalDescontos,
           totalDivergencias: pagamento.totalDivergencias,
+          divergenciasResolvidas: pagamento.divergenciasResolvidas,
           importadoEm: pagamento.importadoEm,
+          analiticoUploadId: pagamento.analiticoUploadId,
+          sinteticoUploadId: pagamento.sinteticoUploadId,
         } : null,
         pontoConsolidado: pontoConsolidado.length > 0 && pontoConsolidado[0].status === "consolidado",
+        uploads: uploads.map(u => ({
+          id: u.id,
+          category: u.category,
+          fileName: u.fileName,
+          uploadStatus: u.uploadStatus,
+          recordsProcessed: u.recordsProcessed,
+          createdAt: u.createdAt,
+        })),
       };
     }),
 
   // ============================================================
   // IMPORTAR FOLHA (upload de PDF + parse + match)
+  // Simplificado: apenas analítico e sintético
   // ============================================================
   importarFolha: protectedProcedure
     .input(z.object({
       companyId: z.number(),
       mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
       tipoLancamento: z.enum(["vale", "pagamento"]),
-      tipoArquivo: z.enum(["analitico", "sintetico", "banco_cef", "banco_santander"]),
+      tipoArquivo: z.enum(["analitico", "sintetico"]),
       fileName: z.string(),
       fileBase64: z.string(),
       mimeType: z.string(),
@@ -443,12 +589,8 @@ export const folhaPagamentoRouter = router({
       const categoryMap: Record<string, any> = {
         "vale-analitico": "espelho_adiantamento_analitico",
         "vale-sintetico": "adiantamento_sintetico",
-        "vale-banco_cef": "adiantamento_banco_cef",
-        "vale-banco_santander": "adiantamento_banco_santander",
         "pagamento-analitico": "espelho_folha_analitico",
         "pagamento-sintetico": "folha_sintetico",
-        "pagamento-banco_cef": "pagamento_banco_cef",
-        "pagamento-banco_santander": "pagamento_banco_santander",
       };
 
       const [uploadRecord] = await db.insert(payrollUploads).values({
@@ -461,15 +603,13 @@ export const folhaPagamentoRouter = router({
         fileSize: buffer.length,
         mimeType: input.mimeType,
         uploadStatus: "processando",
-      }).$returningId();
+      });
 
-      const uploadId = (uploadRecord as any).id;
+      const uploadId = Number((uploadRecord as any).insertId);
 
       try {
-        // Parse PDF
-        const pdfParse = require("pdf-parse");
-        const pdfData = await pdfParse(buffer);
-        const text = pdfData.text;
+        // Extract text using pdftotext (much better than pdf-parse)
+        const text = extractTextFromPDF(buffer);
 
         // Find or create lancamento for this month/type
         let lancamento = await db.select().from(folhaLancamentos)
@@ -488,22 +628,16 @@ export const folhaPagamentoRouter = router({
             status: "importado",
             importadoPor: ctx.user?.name || "Sistema",
             importadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
-          }).$returningId();
-          lancamento = { id: (newLanc as any).id };
+          });
+          lancamento = { id: Number((newLanc as any).insertId) };
         }
 
         const lancamentoId = lancamento.id;
 
         // Update upload link
-        const uploadField = {
-          analitico: "analiticoUploadId",
-          sintetico: "sinteticoUploadId",
-          banco_cef: "bancoCefUploadId",
-          banco_santander: "bancoSantanderUploadId",
-        }[input.tipoArquivo];
-
+        const uploadField = input.tipoArquivo === "analitico" ? "analiticoUploadId" : "sinteticoUploadId";
         await db.update(folhaLancamentos)
-          .set({ [uploadField!]: uploadId })
+          .set({ [uploadField]: uploadId })
           .where(eq(folhaLancamentos.id, lancamentoId));
 
         // Get all employees for matching
@@ -547,8 +681,8 @@ export const folhaPagamentoRouter = router({
             matchStatus: "unmatched" as const,
           }));
 
-          // Match with cadastro
-          const matchResult = await matchItensComCadastro(db, input.companyId, itensToInsert, allEmployees);
+          // Match with cadastro + auto-update código contábil
+          const matchResult = await matchItensComCadastro(db, input.companyId, itensToInsert, allEmployees, true);
 
           // Insert itens
           if (itensToInsert.length > 0) {
@@ -575,57 +709,53 @@ export const folhaPagamentoRouter = router({
             totalLiquido: formatBRL(totalLiquido),
             totalProventos: formatBRL(totalProventos),
             totalDescontos: formatBRL(totalDescontos),
-            match: matchResult,
+            match: {
+              matched: matchResult.matched,
+              unmatched: matchResult.unmatched,
+              divergentes: matchResult.divergentes,
+              codigosAtualizados: matchResult.codigosAtualizados,
+            },
+            unmatchedNames: matchResult.details
+              .filter(d => d.matchStatus === "unmatched")
+              .map(d => ({ nome: d.nome, codigo: d.codigo })),
+            divergentNames: matchResult.details
+              .filter(d => d.matchStatus === "divergente")
+              .map(d => ({ nome: d.nome, codigo: d.codigo, divergencias: d.divergencias })),
           };
 
         } else if (input.tipoArquivo === "sintetico") {
           const parsed = parseSinteticoPDF(text);
           recordsProcessed = parsed.length;
 
-          // Update existing itens with funcao from sintético (if itens exist)
+          // Update existing itens with funcao from sintético
           for (const p of parsed) {
             const nomeNorm = normalizeNome(p.nome);
-            // Try to update matching item
             await db.update(folhaItens)
               .set({ funcao: p.funcao })
               .where(and(
                 eq(folhaItens.folhaLancamentoId, lancamentoId),
-                sql`UPPER(${folhaItens.nomeColaborador}) = ${nomeNorm}`,
+                sql`UPPER(REPLACE(${folhaItens.nomeColaborador}, '  ', ' ')) = ${nomeNorm}`,
               ));
           }
 
-          const totalLiquido = parsed.reduce((s, p) => s + parseBRL(p.liquido), 0);
-          parseResult = {
-            totalFuncionarios: parsed.length,
-            totalLiquido: formatBRL(totalLiquido),
-          };
-
-        } else if (input.tipoArquivo === "banco_cef" || input.tipoArquivo === "banco_santander") {
-          const parsed = parseBancoPDF(text);
-          recordsProcessed = parsed.length;
-
-          const bancoNome = input.tipoArquivo === "banco_cef" ? "Caixa Econômica" : "Santander";
-
-          // Update existing itens with bank data
+          // Also try to match and update código contábil from sintético
           for (const p of parsed) {
+            if (!p.codigo) continue;
             const nomeNorm = normalizeNome(p.nome);
-            await db.update(folhaItens)
-              .set({
-                banco: bancoNome,
-                agencia: p.agencia,
-                conta: p.conta,
-              })
-              .where(and(
-                eq(folhaItens.folhaLancamentoId, lancamentoId),
-                sql`UPPER(${folhaItens.nomeColaborador}) = ${nomeNorm}`,
-              ));
+            // Find employee by name and update código
+            const emp = allEmployees.find((e: any) => normalizeNome(e.nomeCompleto) === nomeNorm);
+            if (emp && (!emp.codigoContabil || emp.codigoContabil !== p.codigo)) {
+              await db.update(employees)
+                .set({ codigoContabil: p.codigo })
+                .where(eq(employees.id, emp.id));
+            }
           }
 
           const totalLiquido = parsed.reduce((s, p) => s + parseBRL(p.liquido), 0);
           parseResult = {
-            banco: bancoNome,
             totalFuncionarios: parsed.length,
             totalLiquido: formatBRL(totalLiquido),
+            funcionarios: parsed.slice(0, 5).map(p => ({ nome: p.nome, funcao: p.funcao, liquido: p.liquido })),
           };
         }
 
@@ -666,7 +796,7 @@ export const folhaPagamentoRouter = router({
       const allEmployees = await db.select().from(employees)
         .where(eq(employees.companyId, input.companyId));
 
-      const matchResult = await matchItensComCadastro(db, input.companyId, itens, allEmployees);
+      const matchResult = await matchItensComCadastro(db, input.companyId, itens as any, allEmployees, true);
 
       // Update each item
       for (const item of itens) {
@@ -738,38 +868,60 @@ export const folhaPagamentoRouter = router({
         const ponto = item.employeeId ? pontoByEmp.get(item.employeeId) : null;
         const alertas: string[] = [];
 
-        // Status check
-        if (emp && emp.status !== "Ativo") {
-          alertas.push(`⚠️ Funcionário com status "${emp.status}"`);
+        if (!item.employeeId) {
+          alertas.push("Funcionário não vinculado ao cadastro");
         }
 
-        // Salary check
+        if (emp && emp.status !== "Ativo") {
+          alertas.push(`Funcionário com status "${emp.status}"`);
+        }
+
         if (emp && item.salarioBase && emp.salarioBase) {
           const salFolha = parseBRL(item.salarioBase);
           const salCadastro = parseBRL(emp.salarioBase);
-          if (salFolha > 0 && salCadastro > 0 && Math.abs(salFolha - salCadastro) > 1) {
-            alertas.push(`💰 Salário divergente: Folha R$ ${item.salarioBase} ≠ Cadastro R$ ${emp.salarioBase}`);
+          if (salFolha > 0 && salCadastro > 0) {
+            if (salFolha < 100) {
+              const salMensal = salFolha * 220;
+              if (Math.abs(salMensal - salCadastro) > 50) {
+                alertas.push(`Salário divergente: Folha R$ ${item.salarioBase}/h ≠ Cadastro R$ ${emp.salarioBase}`);
+              }
+            } else if (Math.abs(salFolha - salCadastro) > 1) {
+              alertas.push(`Salário divergente: Folha R$ ${item.salarioBase} ≠ Cadastro R$ ${emp.salarioBase}`);
+            }
           }
         }
 
-        // Ponto check
+        if (emp && item.funcao && emp.funcao) {
+          const funcFolha = normalizeNome(item.funcao);
+          const funcCadastro = normalizeNome(emp.funcao);
+          if (funcFolha.length > 3 && funcCadastro.length > 3 &&
+              !funcFolha.startsWith(funcCadastro.substring(0, 6)) &&
+              !funcCadastro.startsWith(funcFolha.substring(0, 6))) {
+            alertas.push(`Função divergente: Folha "${item.funcao}" ≠ Cadastro "${emp.funcao}"`);
+          }
+        }
+
         if (ponto) {
           if (ponto.faltas > 0) {
-            alertas.push(`📋 ${ponto.faltas} falta(s) registrada(s) no ponto`);
+            alertas.push(`${ponto.faltas} falta(s) registrada(s) no ponto`);
           }
         } else if (item.employeeId) {
-          alertas.push(`📋 Sem registros de ponto para este mês`);
+          alertas.push("Sem registros de ponto para este mês");
         }
 
         return {
           id: item.id,
           nome: item.nomeColaborador,
           codigo: item.codigoContabil,
+          funcaoFolha: item.funcao,
+          funcaoCadastro: emp?.funcao,
           matchStatus: item.matchStatus,
           liquido: item.liquido,
           salarioFolha: item.salarioBase,
           salarioCadastro: emp?.salarioBase,
           statusEmpregado: emp?.status,
+          dataAdmissaoFolha: item.dataAdmissao,
+          dataAdmissaoCadastro: emp?.dataAdmissao,
           ponto: ponto ? {
             totalHoras: ponto.totalHoras.toFixed(1),
             diasTrabalhados: ponto.diasTrabalhados,
@@ -782,6 +934,9 @@ export const folhaPagamentoRouter = router({
       return {
         totalItens: itens.length,
         totalAlertas: verificacoes.filter(v => v.alertas.length > 0).length,
+        totalMatched: verificacoes.filter(v => v.matchStatus === "matched").length,
+        totalUnmatched: verificacoes.filter(v => v.matchStatus === "unmatched").length,
+        totalDivergente: verificacoes.filter(v => v.matchStatus === "divergente").length,
         verificacoes,
       };
     }),
@@ -876,7 +1031,6 @@ export const folhaPagamentoRouter = router({
           sql`${folhaLancamentos.mesReferencia} LIKE ${`${input.ano}-%`}`,
         ));
 
-      // Group by month
       const meses: Record<string, { vale: string | null; pagamento: string | null }> = {};
       for (const l of lancamentos) {
         if (!meses[l.mesReferencia]) meses[l.mesReferencia] = { vale: null, pagamento: null };
