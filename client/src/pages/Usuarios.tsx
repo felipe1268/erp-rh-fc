@@ -10,6 +10,7 @@ import { Lock, Plus, Settings, Trash2, Shield } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PROFILE_TYPES, ERP_MODULES, MODULE_KEYS } from "../../../shared/modules";
+import { useDefaultCompany } from "@/hooks/useDefaultCompany";
 
 const profileLabels: Record<string, string> = {
   adm_master: "ADM Master",
@@ -28,6 +29,7 @@ const profileColors: Record<string, string> = {
 };
 
 export default function Usuarios() {
+  const { getInitialCompany } = useDefaultCompany();
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [permDialogOpen, setPermDialogOpen] = useState(false);
@@ -41,9 +43,9 @@ export default function Usuarios() {
 
   useEffect(() => {
     if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(String(companies[0].id));
+      setSelectedCompany(getInitialCompany(companies));
     }
-  }, [companies, selectedCompany]);
+  }, [companies, selectedCompany, getInitialCompany]);
 
   const utils = trpc.useUtils();
   const { data: allUsers } = trpc.profiles.listUsers.useQuery();

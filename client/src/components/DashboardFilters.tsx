@@ -1,6 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
+import { useDefaultCompany } from "@/hooks/useDefaultCompany";
 
 interface DashboardFiltersProps {
   selectedCompany: string;
@@ -20,12 +21,13 @@ export function DashboardFilters({
   children,
 }: DashboardFiltersProps) {
   const { data: companies } = trpc.companies.list.useQuery();
+  const { getInitialCompany } = useDefaultCompany();
 
   useEffect(() => {
     if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(String(companies[0].id));
+      setSelectedCompany(getInitialCompany(companies));
     }
-  }, [companies, selectedCompany, setSelectedCompany]);
+  }, [companies, selectedCompany, setSelectedCompany, getInitialCompany]);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 6 }, (_, i) => currentYear - i);

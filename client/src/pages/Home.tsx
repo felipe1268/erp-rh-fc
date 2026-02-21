@@ -6,20 +6,22 @@ import { trpc } from "@/lib/trpc";
 import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, ShieldCheck, HardHat, Truck, ClipboardCheck, Activity, Clock, BarChart3 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useDefaultCompany } from "@/hooks/useDefaultCompany";
 
 export default function Home() {
   const { user } = useAuth();
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [, navigate] = useLocation();
+  const { getInitialCompany } = useDefaultCompany();
 
   const { data: companies } = trpc.companies.list.useQuery();
   const companyId = selectedCompany ? parseInt(selectedCompany) : companies?.[0]?.id;
 
   useEffect(() => {
     if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(String(companies[0].id));
+      setSelectedCompany(getInitialCompany(companies));
     }
-  }, [companies, selectedCompany]);
+  }, [companies, selectedCompany, getInitialCompany]);
 
   const { data: stats } = trpc.employees.stats.useQuery(
     { companyId: companyId! },

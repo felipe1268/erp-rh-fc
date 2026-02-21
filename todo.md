@@ -370,8 +370,9 @@
 - [ ] Remover campo "Cargo" do formulário de colaboradores
 - [ ] Campo Setor como Select no formulário de colaboradores
 - [ ] Campo Função como Select no formulário de colaboradores
-- [ ] Empresa padrão: botão para definir empresa padrão que abre automaticamente ao entrar no sistema
-- [ ] Empresa padrão: ao entrar no sistema abre na empresa definida como padrão (manter seletor para trocar)
+- [x] Empresa padrão: botão estrela para definir empresa padrão na página de Empresas
+- [x] Empresa padrão: ao entrar no sistema abre na empresa definida como padrão (manter seletor para trocar)
+- [x] Empresa padrão aplicada em: Home, Colaboradores, Usuários, DashboardFilters (todos os dashboards)
 - [x] Bug: título do diálogo de edição mostra "Órgão" ao invés de "Editar Colaborador" - corrigido com DialogDescription
 - [x] Jornada de Trabalho: separar em dois campos (Entrada e Saída) com seleção rápida de horários
 - [x] Bug: erro SQL ao atualizar colaborador - corrigido com whitelist de campos e conversão de tipos

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
+import { useDefaultCompany } from "@/hooks/useDefaultCompany";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -50,6 +51,7 @@ function formatDate(val: unknown): string {
 }
 
 export default function Colaboradores() {
+  const { getInitialCompany } = useDefaultCompany();
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -77,9 +79,9 @@ export default function Colaboradores() {
 
   useEffect(() => {
     if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(String(companies[0].id));
+      setSelectedCompany(getInitialCompany(companies));
     }
-  }, [companies, selectedCompany]);
+  }, [companies, selectedCompany, getInitialCompany]);
 
   const utils = trpc.useUtils();
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
