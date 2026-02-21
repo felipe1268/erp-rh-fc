@@ -7,9 +7,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+import { PDFParse } from "pdf-parse";
 
 // ============================================================
 // HELPERS
@@ -30,7 +28,10 @@ function normalizeNome(nome: string): string {
 }
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const result = await pdfParse(buffer);
+  const uint8 = new Uint8Array(buffer);
+  const parser = new PDFParse(uint8) as any;
+  await parser.load();
+  const result = await parser.getText();
   return result.text;
 }
 

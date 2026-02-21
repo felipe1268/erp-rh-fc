@@ -7,6 +7,15 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { storagePut } from "../storage";
+import { PDFParse } from "pdf-parse";
+
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  const uint8 = new Uint8Array(buffer);
+  const parser = new PDFParse(uint8) as any;
+  await parser.load();
+  const result = await parser.getText();
+  return result.text;
+}
 
 // ============================================================
 // HELPERS: Parse currency values from Brazilian format
@@ -450,9 +459,8 @@ export const payrollParsersRouter = router({
           };
         } else if (input.category.includes("sintetico")) {
           // Parse Sintético PDF
-          const pdfParse = require("pdf-parse");
-          const pdfData = await pdfParse(buffer);
-          const parsed = parseSinteticoPDF(pdfData.text);
+          const pdfText = await extractTextFromPDF(buffer);
+          const parsed = parseSinteticoPDF(pdfText);
           
           recordsProcessed = parsed.length;
           result = {
@@ -462,9 +470,8 @@ export const payrollParsersRouter = router({
           };
         } else if (input.category.includes("banco")) {
           // Parse Pagamento por Banco PDF
-          const pdfParse = require("pdf-parse");
-          const pdfData = await pdfParse(buffer);
-          const parsed = parsePagamentoBancoPDF(pdfData.text);
+          const pdfText = await extractTextFromPDF(buffer);
+          const parsed = parsePagamentoBancoPDF(pdfText);
           
           recordsProcessed = parsed.obras.reduce((s, o) => s + o.funcionarios.length, 0);
           result = {
@@ -483,9 +490,8 @@ export const payrollParsersRouter = router({
           };
         } else if (input.category.includes("analitico")) {
           // Parse Espelho Analítico PDF
-          const pdfParse = require("pdf-parse");
-          const pdfData = await pdfParse(buffer);
-          const parsed = parseEspelhoAnaliticoPDF(pdfData.text);
+          const pdfText = await extractTextFromPDF(buffer);
+          const parsed = parseEspelhoAnaliticoPDF(pdfText);
           
           recordsProcessed = parsed.length;
           result = {

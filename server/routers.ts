@@ -558,5 +558,172 @@ export const appRouter = router({
       return { success: true, tablesCleared: cleaned };
     }),
   }),
+
+  // ============================================================
+  // CRITÉRIOS DO SISTEMA
+  // ============================================================
+  criteria: router({
+    getAll: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const rows = await db.select().from(systemCriteria)
+        .where(eq(systemCriteria.companyId, input.companyId))
+        .orderBy(systemCriteria.categoria, systemCriteria.chave);
+      return rows;
+    }),
+
+    getByCategory: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      categoria: z.string(),
+    })).query(async ({ input }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const rows = await db.select().from(systemCriteria)
+        .where(and(
+          eq(systemCriteria.companyId, input.companyId),
+          eq(systemCriteria.categoria, input.categoria)
+        ));
+      return rows;
+    }),
+
+    updateBatch: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      criterios: z.array(z.object({
+        chave: z.string(),
+        valor: z.string(),
+      })),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar critérios" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      let updated = 0;
+      for (const c of input.criterios) {
+        const existing = await db.select().from(systemCriteria)
+          .where(and(
+            eq(systemCriteria.companyId, input.companyId),
+            eq(systemCriteria.chave, c.chave)
+          )).limit(1);
+        if (existing.length > 0) {
+          await db.update(systemCriteria)
+            .set({ valor: c.valor, atualizadoPor: ctx.user.name ?? "Sistema" })
+            .where(eq(systemCriteria.id, existing[0].id));
+          updated++;
+        }
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "criterios", entityId: input.companyId, details: `Atualizado ${updated} critérios` });
+      return { success: true, updated };
+    }),
+
+    resetToDefault: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      categoria: z.string(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode restaurar padrões" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const rows = await db.select().from(systemCriteria)
+        .where(and(
+          eq(systemCriteria.companyId, input.companyId),
+          eq(systemCriteria.categoria, input.categoria)
+        ));
+      let reset = 0;
+      for (const row of rows) {
+        if (row.valorPadraoClt) {
+          await db.update(systemCriteria)
+            .set({ valor: row.valorPadraoClt, atualizadoPor: ctx.user.name ?? "Sistema" })
+            .where(eq(systemCriteria.id, row.id));
+          reset++;
+        }
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "criterios", entityId: input.companyId, details: `Restaurado padrão CLT: ${input.categoria} (${reset} critérios)` });
+      return { success: true, reset };
+    }),
+
+    initDefaults: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const existing = await db.select().from(systemCriteria)
+        .where(eq(systemCriteria.companyId, input.companyId)).limit(1);
+      if (existing.length > 0) return { success: true, message: "Critérios já inicializados", created: 0 };
+
+      const defaults = [
+        // HORAS EXTRAS
+        { categoria: "horas_extras", chave: "he_dias_uteis", valor: "50", descricao: "Percentual de hora extra em dias úteis", valorPadraoClt: "50", unidade: "%" },
+        { categoria: "horas_extras", chave: "he_domingos_feriados", valor: "100", descricao: "Percentual de hora extra em domingos e feriados", valorPadraoClt: "100", unidade: "%" },
+        { categoria: "horas_extras", chave: "he_adicional_noturno", valor: "20", descricao: "Percentual de adicional noturno", valorPadraoClt: "20", unidade: "%" },
+        { categoria: "horas_extras", chave: "he_noturno_inicio", valor: "22:00", descricao: "Início do horário noturno", valorPadraoClt: "22:00", unidade: "hora" },
+        { categoria: "horas_extras", chave: "he_noturno_fim", valor: "05:00", descricao: "Fim do horário noturno", valorPadraoClt: "05:00", unidade: "hora" },
+        { categoria: "horas_extras", chave: "he_interjornada", valor: "50", descricao: "Percentual de hora extra interjornada", valorPadraoClt: "50", unidade: "%" },
+        { categoria: "horas_extras", chave: "he_limite_mensal", valor: "44", descricao: "Limite máximo de horas extras mensais", valorPadraoClt: "44", unidade: "horas" },
+        { categoria: "horas_extras", chave: "he_banco_horas", valor: "0", descricao: "Empresa utiliza banco de horas (0=Não, 1=Sim)", valorPadraoClt: "0", unidade: "bool" },
+        // JORNADA
+        { categoria: "jornada", chave: "jornada_horas_diarias", valor: "8", descricao: "Horas diárias padrão de trabalho", valorPadraoClt: "8", unidade: "horas" },
+        { categoria: "jornada", chave: "jornada_horas_semanais", valor: "44", descricao: "Horas semanais padrão", valorPadraoClt: "44", unidade: "horas" },
+        { categoria: "jornada", chave: "jornada_intervalo_almoco", valor: "60", descricao: "Intervalo mínimo para almoço", valorPadraoClt: "60", unidade: "min" },
+        { categoria: "jornada", chave: "jornada_descanso_semanal", valor: "1", descricao: "Dias de descanso semanal remunerado", valorPadraoClt: "1", unidade: "dias" },
+        { categoria: "jornada", chave: "jornada_sabado_tipo", valor: "compensado", descricao: "Tipo de sábado (compensado, meio_periodo, normal, folga)", valorPadraoClt: "compensado", unidade: "tipo" },
+        // PONTO
+        { categoria: "ponto", chave: "ponto_tolerancia_atraso", valor: "10", descricao: "Tolerância de atraso na entrada (minutos)", valorPadraoClt: "10", unidade: "min" },
+        { categoria: "ponto", chave: "ponto_tolerancia_saida", valor: "10", descricao: "Tolerância de saída antecipada (minutos)", valorPadraoClt: "10", unidade: "min" },
+        { categoria: "ponto", chave: "ponto_batida_impar_tolerancia", valor: "30", descricao: "Tolerância para batida ímpar (minutos)", valorPadraoClt: "30", unidade: "min" },
+        { categoria: "ponto", chave: "ponto_falta_apos_atraso", valor: "120", descricao: "Considerar falta após X minutos de atraso", valorPadraoClt: "120", unidade: "min" },
+        { categoria: "ponto", chave: "ponto_hora_noturna_reduzida", valor: "52:30", descricao: "Duração da hora noturna reduzida (mm:ss)", valorPadraoClt: "52:30", unidade: "mm:ss" },
+        // FOLHA
+        { categoria: "folha", chave: "folha_dia_vale", valor: "20", descricao: "Dia do mês para pagamento do vale", valorPadraoClt: "20", unidade: "dia" },
+        { categoria: "folha", chave: "folha_dia_pagamento", valor: "5", descricao: "Dia útil para pagamento do salário", valorPadraoClt: "5", unidade: "dia_util" },
+        { categoria: "folha", chave: "folha_percentual_adiantamento", valor: "40", descricao: "Percentual do salário para adiantamento", valorPadraoClt: "40", unidade: "%" },
+        { categoria: "folha", chave: "folha_desconto_vr_faltas", valor: "1", descricao: "Descontar VR nos dias de falta (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "folha", chave: "folha_desconto_vt_faltas", valor: "1", descricao: "Descontar VT nos dias de falta (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        // ADVERTÊNCIAS
+        { categoria: "advertencias", chave: "adv_qtd_para_suspensao", valor: "3", descricao: "Advertências para gerar suspensão", valorPadraoClt: "3", unidade: "qtd" },
+        { categoria: "advertencias", chave: "adv_dias_suspensao", valor: "3", descricao: "Dias de suspensão padrão", valorPadraoClt: "3", unidade: "dias" },
+        { categoria: "advertencias", chave: "adv_suspensoes_para_justa_causa", valor: "3", descricao: "Suspensões para justa causa", valorPadraoClt: "3", unidade: "qtd" },
+        { categoria: "advertencias", chave: "adv_validade_meses", valor: "6", descricao: "Validade da advertência em meses", valorPadraoClt: "6", unidade: "meses" },
+        // BENEFÍCIOS
+        { categoria: "beneficios", chave: "ben_vr_valor_diario", valor: "0", descricao: "Valor diário do VR/VA (R$)", valorPadraoClt: "0", unidade: "R$" },
+        { categoria: "beneficios", chave: "ben_vt_percentual_desconto", valor: "6", descricao: "Percentual de desconto do VT", valorPadraoClt: "6", unidade: "%" },
+        { categoria: "beneficios", chave: "ben_dias_uteis_mes", valor: "22", descricao: "Dias úteis padrão por mês", valorPadraoClt: "22", unidade: "dias" },
+        // FÉRIAS
+        { categoria: "ferias", chave: "ferias_periodo_aquisitivo", valor: "12", descricao: "Meses para período aquisitivo", valorPadraoClt: "12", unidade: "meses" },
+        { categoria: "ferias", chave: "ferias_dias_direito", valor: "30", descricao: "Dias de férias por período", valorPadraoClt: "30", unidade: "dias" },
+        { categoria: "ferias", chave: "ferias_abono_pecuniario", valor: "1", descricao: "Permitir venda de 1/3 (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "ferias", chave: "ferias_adicional_terco", valor: "33.33", descricao: "Adicional de 1/3 de férias (%)", valorPadraoClt: "33.33", unidade: "%" },
+        // RESCISÃO
+        { categoria: "rescisao", chave: "rescisao_aviso_previo_dias", valor: "30", descricao: "Dias de aviso prévio base", valorPadraoClt: "30", unidade: "dias" },
+        { categoria: "rescisao", chave: "rescisao_aviso_adicional_ano", valor: "3", descricao: "Dias adicionais por ano trabalhado", valorPadraoClt: "3", unidade: "dias" },
+        { categoria: "rescisao", chave: "rescisao_multa_fgts", valor: "40", descricao: "Multa sobre FGTS na demissão sem justa causa", valorPadraoClt: "40", unidade: "%" },
+      ];
+
+      for (const d of defaults) {
+        await db.insert(systemCriteria).values({
+          companyId: input.companyId,
+          ...d,
+          atualizadoPor: ctx.user.name ?? "Sistema",
+        });
+      }
+
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "configuracoes", entityType: "criterios", entityId: input.companyId, details: `Critérios padrão CLT inicializados (${defaults.length} itens)` });
+      return { success: true, message: "Critérios padrão inicializados", created: defaults.length };
+    }),
+  }),
 });
 export type AppRouter = typeof appRouter;

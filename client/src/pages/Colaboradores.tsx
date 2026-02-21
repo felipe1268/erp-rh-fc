@@ -493,7 +493,7 @@ export default function Colaboradores() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nome, CPF, RG ou função..."
+              placeholder="Buscar por nome, CPF, RG, função ou Nº interno (JFC)..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-10 bg-card border-border"
@@ -533,6 +533,7 @@ export default function Colaboradores() {
                       aria-label="Selecionar todos"
                     />
                   </th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Nº Interno</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">CPF</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Função</th>
@@ -551,6 +552,7 @@ export default function Colaboradores() {
                         aria-label={`Selecionar ${emp.nomeCompleto}`}
                       />
                     </td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-primary">{emp.codigoInterno || "-"}</td>
                     <td className="px-4 py-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
                     <td className="px-4 py-3 text-muted-foreground">{formatCPF(emp.cpf)}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>

@@ -246,6 +246,8 @@ export async function getEmployees(companyId: number, search?: string, status?: 
         like(employees.cpf, `%${search}%`),
         like(employees.rg, `%${search}%`),
         like(employees.cargo, `%${search}%`),
+        like(employees.funcao, `%${search}%`),
+        like(employees.codigoInterno, `%${search}%`),
       )!
     );
   }

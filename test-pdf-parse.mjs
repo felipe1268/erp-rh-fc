@@ -1,24 +1,31 @@
+import { PDFParse } from 'pdf-parse';
 import fs from 'fs';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdfParseModule = require('pdf-parse');
-const pdfParse = pdfParseModule.default || pdfParseModule;
 
-const buf006 = fs.readFileSync('/home/ubuntu/upload/006-EspelhoResumoAdiantamentoJaneiro-ANALITICO-CONTABILIDADE.pdf');
-const buf007 = fs.readFileSync('/home/ubuntu/upload/007-AdiantamentoJaneiro-SINTETICO-CONTABILIDADE.pdf');
-
-async function main() {
-  console.log("=== PDF 006 (ANALÍTICO) - Primeiras 120 linhas ===");
-  const d006 = await pdfParse(buf006);
-  const lines006 = d006.text.split('\n');
-  lines006.slice(0, 120).forEach((l, i) => console.log(`${i}: [${l}]`));
-  console.log(`\nTotal linhas 006: ${lines006.length}`);
-
-  console.log("\n\n=== PDF 007 (SINTÉTICO) - Primeiras 80 linhas ===");
-  const d007 = await pdfParse(buf007);
-  const lines007 = d007.text.split('\n');
-  lines007.slice(0, 80).forEach((l, i) => console.log(`${i}: [${l}]`));
-  console.log(`\nTotal linhas 007: ${lines007.length}`);
+const files = fs.readdirSync('/home/ubuntu/upload/').filter(f => f.endsWith('.pdf'));
+if (files.length > 0) {
+  const buf = fs.readFileSync('/home/ubuntu/upload/' + files[0]);
+  const uint8 = new Uint8Array(buf);
+  console.log('Testing with file:', files[0], 'size:', uint8.length);
+  
+  const p = new PDFParse(uint8, {verbosity: 0});
+  
+  const loaded = await p.load();
+  console.log('Pages:', loaded.numPages);
+  
+  const textResult = await p.getText();
+  console.log('getText type:', typeof textResult);
+  
+  if (typeof textResult === 'object' && textResult !== null) {
+    console.log('Keys:', Object.keys(textResult));
+    if (textResult.text) {
+      console.log('First 500 chars:', textResult.text.substring(0, 500));
+    } else if (textResult.pages) {
+      console.log('Pages:', textResult.pages.length);
+      console.log('First page text:', JSON.stringify(textResult.pages[0]).substring(0, 500));
+    } else {
+      console.log('Full result:', JSON.stringify(textResult).substring(0, 500));
+    }
+  } else {
+    console.log('Text result (first 500):', String(textResult).substring(0, 500));
+  }
 }
-
-main().catch(console.error);

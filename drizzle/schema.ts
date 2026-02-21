@@ -952,3 +952,25 @@ export type InsertAuditLog = typeof auditLogs.$inferInsert;
 export type InsertObra = typeof obras.$inferInsert;
 export type InsertSector = typeof sectors.$inferInsert;
 export type InsertJobFunction = typeof jobFunctions.$inferInsert;
+
+
+// ============================================================
+// CRITÉRIOS DO SISTEMA (configurações globais por empresa)
+// ============================================================
+export const systemCriteria = mysqlTable("system_criteria", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	categoria: varchar({ length: 50 }).notNull(), // horas_extras, jornada, folha, advertencias, beneficios, ponto
+	chave: varchar({ length: 100 }).notNull(),
+	valor: varchar({ length: 255 }).notNull(),
+	descricao: varchar({ length: 500 }),
+	valorPadraoClt: varchar({ length: 255 }), // valor padrão CLT para referência
+	unidade: varchar({ length: 50 }), // %, min, horas, dias, R$
+	atualizadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("sys_criteria_company_cat").on(table.companyId, table.categoria),
+	index("sys_criteria_company_key").on(table.companyId, table.chave),
+]);

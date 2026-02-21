@@ -886,3 +886,31 @@
 ## FIX: pdftotext not found em produção
 - [x] Substituir comando pdftotext (sistema) por biblioteca Node.js pdf-parse para extração de texto de PDFs
 - [x] Garantir compatibilidade com produção (sem dependência de binários do sistema)
+
+## REVISÃO_24: Aba Critérios do Sistema em Configurações
+### Schema e Backend
+- [ ] Criar tabela system_criteria (chave-valor por empresa) no banco de dados
+- [ ] Rotas tRPC: getCriteria, updateCriteria (protegidas por ADM/ADM Master)
+- [ ] Valores padrão CLT pré-configurados ao criar empresa
+### Categorias de Critérios
+- [ ] Horas Extras: % HE dias úteis, % HE domingos/feriados, % adicional noturno, horário noturno (início/fim), limite mensal HE
+- [ ] Jornada de Trabalho: horas diárias padrão, horas semanais, tolerância atraso (min), tolerância saída antecipada (min), intervalo almoço (min)
+- [ ] Folha de Pagamento: dia do vale/adiantamento, dia do pagamento, % adiantamento sobre salário
+- [ ] Advertências CLT: nº advertências para suspensão, dias de suspensão padrão, nº suspensões para justa causa
+- [ ] Benefícios: valor padrão VR/VA diário, dias úteis para cálculo VR
+- [ ] Ponto: tolerância batida ímpar (min), considerar falta após X min atraso
+### Frontend
+- [ ] Nova aba "Critérios" na página de Configurações com layout organizado por seções
+- [ ] Formulário editável com valores atuais e indicação do padrão CLT
+- [ ] Botão "Restaurar Padrão CLT" por seção
+- [ ] Apenas ADM Master pode alterar critérios
+### Integração
+- [ ] Usar critérios de HE nos cálculos de horas extras (substituir valores hardcoded)
+- [ ] Usar critérios de jornada no fechamento de ponto (tolerâncias, horário noturno)
+- [ ] Usar critérios de advertência no fluxo CLT progressivo
+### Fix pendente
+- [ ] Fix: pdftotext not found em produção (substituir por pdf-parse)
+
+## REVISÃO_25: Nº Interno na tabela de Colaboradores
+- [x] Adicionar coluna "Nº Interno" (codigoInterno JFC) na tabela de listagem de colaboradores
+- [x] Incluir número interno na busca/pesquisa de colaboradores
