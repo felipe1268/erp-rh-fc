@@ -723,3 +723,20 @@
 - [x] Botão de Imprimir para Assinatura direto do dialog de visualização
 - [x] Botão de Upload do documento assinado para registro
 - [x] Integrar no fluxo: salvar → visualizar → imprimir → upload assinado
+
+## REVISÃO_12: 3 Testemunhas com Nome + CPF/RG
+- [x] Substituir campo único de testemunhas por 3 campos individuais (Nome + CPF/RG)
+- [x] Atualizar documento CLT de impressão com 3 testemunhas
+- [x] Atualizar dialog de visualização com 3 testemunhas
+
+## REVISÃO_12B: Dialog Advertência FULL SCREEN + Numeração
+- [x] Dialog de visualização do documento CLT em FULL SCREEN (não dialog pequeno)
+- [x] Incluir numeração da advertência no documento (1ª, 2ª, 3ª...)
+- [x] Incluir 3 testemunhas com Nome e CPF/RG no documento CLT
+- [x] Todas as telas/dialogs do sistema devem ser FULL SCREEN
+
+## REVISÃO_12C: Logo FC Engenharia + FULL SCREEN + Numeração + 3 Testemunhas
+- [x] Adicionar logo FC Engenharia no cabeçalho do documento de advertência
+- [x] Dialog de visualização em FULL SCREEN
+- [x] Numeração da advertência (1ª, 2ª, 3ª...) no documento
+- [x] 3 testemunhas com Nome e CPF/RG no documento de impressão
