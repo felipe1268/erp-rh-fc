@@ -100,7 +100,23 @@ export default function FolhaPagamento() {
         data.match.codigosAtualizados > 0 ? `${data.match.codigosAtualizados} códigos cadastrados` : null,
       ].filter(Boolean);
 
-      const fileInfo = data.arquivosProcessados.map((f: any) => `${f.fileName} → ${f.tipo} (${f.registros})`).join("\n");
+      // Alerta de redirecionamento de mês
+      if (data.mesRedirecionado && data.alertaMes) {
+        toast.warning(
+          <div>
+            <p className="font-bold flex items-center gap-1"><AlertTriangle className="w-4 h-4" /> Mês Redirecionado</p>
+            <p className="text-sm mt-1">{data.alertaMes}</p>
+          </div>,
+          { duration: 15000 }
+        );
+        // Navegar para o mês correto
+        if (data.mesDetectado) {
+          const [ano, mes] = data.mesDetectado.split("-");
+          setAnoSelecionado(parseInt(ano, 10));
+          setMesSelecionado(parseInt(mes, 10));
+        }
+      }
+
       toast.success(
         <div>
           <p className="font-medium">{parts.join(" | ")}</p>
@@ -253,25 +269,21 @@ export default function FolhaPagamento() {
             </div>
           </div>
 
-          {/* Stats bar */}
+          {/* Stats bar — clicável como filtro */}
           {itensDetail.data && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-blue-50 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-blue-700">{itensDetail.data.length}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-green-700">{itensDetail.data.filter((i: any) => i.matchStatus === "matched").length}</p>
-                <p className="text-xs text-muted-foreground">Vinculados</p>
-              </div>
-              <div className="bg-amber-50 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-amber-700">{itensDetail.data.filter((i: any) => i.matchStatus === "divergente").length}</p>
-                <p className="text-xs text-muted-foreground">Divergentes</p>
-              </div>
-              <div className="bg-red-50 rounded-lg p-3 text-center">
-                <p className="text-xl font-bold text-red-700">{itensDetail.data.filter((i: any) => i.matchStatus === "unmatched").length}</p>
-                <p className="text-xs text-muted-foreground">Não Encontrados</p>
-              </div>
+              {[
+                { label: "Total", value: itensDetail.data.length, filter: "all", bg: "bg-blue-50", bgActive: "bg-blue-200 ring-2 ring-blue-500", text: "text-blue-700" },
+                { label: "Vinculados", value: itensDetail.data.filter((i: any) => i.matchStatus === "matched").length, filter: "matched", bg: "bg-green-50", bgActive: "bg-green-200 ring-2 ring-green-500", text: "text-green-700" },
+                { label: "Divergentes", value: itensDetail.data.filter((i: any) => i.matchStatus === "divergente").length, filter: "divergente", bg: "bg-amber-50", bgActive: "bg-amber-200 ring-2 ring-amber-500", text: "text-amber-700" },
+                { label: "Não Encontrados", value: itensDetail.data.filter((i: any) => i.matchStatus === "unmatched").length, filter: "unmatched", bg: "bg-red-50", bgActive: "bg-red-200 ring-2 ring-red-500", text: "text-red-700" },
+              ].map(c => (
+                <button key={c.label} onClick={() => setFilterStatus(filterStatus === c.filter ? "all" : c.filter)}
+                  className={`rounded-lg p-3 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-md border-0 ${filterStatus === c.filter ? c.bgActive : c.bg}`}>
+                  <p className={`text-xl font-bold ${c.text}`}>{c.value}</p>
+                  <p className="text-xs text-muted-foreground font-medium">{c.label}</p>
+                </button>
+              ))}
             </div>
           )}
 
@@ -515,6 +527,7 @@ export default function FolhaPagamento() {
                                 <th className="pb-1 font-medium">Função</th>
                                 <th className="pb-1 font-medium text-right">Horas Trab.</th>
                                 <th className="pb-1 font-medium text-right">Horas Extras</th>
+                                <th className="pb-1 font-medium text-right">% Aloc.</th>
                                 <th className="pb-1 font-medium text-right">Custo Alocado</th>
                               </tr>
                             </thead>
@@ -525,6 +538,7 @@ export default function FolhaPagamento() {
                                   <td className="py-1.5 text-muted-foreground">{f.funcao || "—"}</td>
                                   <td className="py-1.5 text-right">{(f.horas || 0).toFixed(1)}h</td>
                                   <td className="py-1.5 text-right">{(f.horasExtras || 0) > 0 ? <span className="text-amber-600 font-medium">{f.horasExtras.toFixed(1)}h</span> : "—"}</td>
+                                  <td className="py-1.5 text-right">{f.percentual != null ? <span className="text-blue-600 font-medium">{f.percentual.toFixed(1)}%</span> : "100%"}</td>
                                   <td className="py-1.5 text-right font-bold">{formatBRL(f.custoEstimado)}</td>
                                 </tr>
                               ))}

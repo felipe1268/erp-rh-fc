@@ -613,6 +613,7 @@ export const folhaPagamentoRouter = router({
   // ============================================================
   // IMPORTAR FOLHA AUTO (múltiplos PDFs com detecção automática)
   // Usuário só escolhe Vale ou Pagamento, o sistema detecta o tipo
+  // Auto-detecta o mês de referência a partir do conteúdo do PDF
   // ============================================================
   importarFolhaAuto: protectedProcedure
     .input(z.object({
@@ -628,15 +629,94 @@ export const folhaPagamentoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
 
+      // ===== FUNÇÃO: Detectar mês de referência do PDF =====
+      const mesesNome: Record<string, string> = {
+        "janeiro": "01", "fevereiro": "02", "marco": "03", "março": "03",
+        "abril": "04", "maio": "05", "junho": "06",
+        "julho": "07", "agosto": "08", "setembro": "09",
+        "outubro": "10", "novembro": "11", "dezembro": "12",
+      };
+
+      function detectMesReferencia(text: string, fileName: string): string | null {
+        // 1. Procurar "Adiantamento em: DD/MM/YYYY" ou "DD/MM/YYYY Adiantamento em:"
+        const adiantMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})\s*(?:Adiantamento|Pagamento|Folha)\s*em/i)
+          || text.match(/(?:Adiantamento|Pagamento|Folha)\s*em:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+        if (adiantMatch) {
+          // Formato: DD/MM/YYYY
+          const groups = adiantMatch;
+          if (groups[3] && groups[3].length === 4) {
+            // DD/MM/YYYY ... em
+            return `${groups[3]}-${groups[2]}`;
+          } else if (groups[1] && groups[2] && groups[3]) {
+            return `${groups[3]}-${groups[2]}`;
+          }
+        }
+
+        // 2. Procurar "Competência: MM/YYYY" ou "Referência: MM/YYYY"
+        const compMatch = text.match(/(?:Competência|Competencia|Referência|Referencia)[:\s]*(\d{2})\/(\d{4})/i);
+        if (compMatch) return `${compMatch[2]}-${compMatch[1]}`;
+
+        // 3. Procurar data DD/MM/YYYY no início do texto (primeiras 500 chars)
+        const headerText = text.substring(0, 500);
+        const dateMatch = headerText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (dateMatch) return `${dateMatch[3]}-${dateMatch[2]}`;
+
+        // 4. Procurar nome do mês no nome do arquivo (ex: "AdiantamentoJaneiro")
+        const fileNameLower = fileName.toLowerCase();
+        for (const [mesNome, mesNum] of Object.entries(mesesNome)) {
+          if (fileNameLower.includes(mesNome)) {
+            // Tentar encontrar o ano no nome do arquivo
+            const yearMatch = fileName.match(/(20\d{2})/);
+            const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
+            return `${year}-${mesNum}`;
+          }
+        }
+
+        // 5. Procurar nome do mês no conteúdo (primeiras 1000 chars)
+        const contentStart = text.substring(0, 1000).toLowerCase();
+        for (const [mesNome, mesNum] of Object.entries(mesesNome)) {
+          if (contentStart.includes(mesNome)) {
+            const yearMatch = text.substring(0, 1000).match(/(20\d{2})/);
+            const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
+            return `${year}-${mesNum}`;
+          }
+        }
+
+        return null; // Não conseguiu detectar
+      }
+
       // Get all employees for matching
       const allEmployees = await db.select().from(employees)
         .where(eq(employees.companyId, input.companyId));
 
-      // Find or create lancamento for this month/type
+      // ===== DETECTAR MÊS REAL DOS PDFs =====
+      // Primeiro, extrair texto de todos os PDFs para detectar o mês
+      const textosPDFs: Array<{ text: string; fileName: string; buffer: Buffer }> = [];
+      for (const arquivo of input.arquivos) {
+        const buffer = Buffer.from(arquivo.fileBase64, "base64");
+        const text = await extractTextFromPDF(buffer);
+        textosPDFs.push({ text, fileName: arquivo.fileName, buffer });
+      }
+
+      // Detectar mês de cada PDF
+      let mesDetectado: string | null = null;
+      for (const pdf of textosPDFs) {
+        const mes = detectMesReferencia(pdf.text, pdf.fileName);
+        if (mes) { mesDetectado = mes; break; }
+      }
+
+      // Usar o mês detectado ou o mês informado pelo usuário
+      const mesReal = mesDetectado || input.mesReferencia;
+      const mesRedirecionado = mesReal !== input.mesReferencia;
+      const alertaMes = mesRedirecionado
+        ? `PDF detectado como referência ${mesReal.split("-").reverse().join("/")}. Alocado automaticamente no mês correto (você estava em ${input.mesReferencia.split("-").reverse().join("/")}).`
+        : null;
+
+      // Find or create lancamento for the CORRECT month
       let lancamento = await db.select().from(folhaLancamentos)
         .where(and(
           eq(folhaLancamentos.companyId, input.companyId),
-          eq(folhaLancamentos.mesReferencia, input.mesReferencia),
+          eq(folhaLancamentos.mesReferencia, mesReal),
           eq(folhaLancamentos.tipoLancamento, input.tipoLancamento),
         ))
         .then((r: any[]) => r[0]);
@@ -644,7 +724,7 @@ export const folhaPagamentoRouter = router({
       if (!lancamento) {
         const [newLanc] = await db.insert(folhaLancamentos).values({
           companyId: input.companyId,
-          mesReferencia: input.mesReferencia,
+          mesReferencia: mesReal,
           tipoLancamento: input.tipoLancamento,
           status: "importado",
           importadoPor: ctx.user?.name || "Sistema",
@@ -660,16 +740,14 @@ export const folhaPagamentoRouter = router({
       const uploadIds: number[] = [];
       const processedFiles: Array<{ fileName: string; tipo: string; registros: number }> = [];
 
-      for (const arquivo of input.arquivos) {
-        const buffer = Buffer.from(arquivo.fileBase64, "base64");
+      for (let i = 0; i < input.arquivos.length; i++) {
+        const arquivo = input.arquivos[i];
+        const { text, buffer } = textosPDFs[i];
 
         // Upload to S3
         const randomSuffix = Math.random().toString(36).substring(2, 10);
-        const fileKey = `folha/${input.companyId}/${input.mesReferencia}/${input.tipoLancamento}-${randomSuffix}-${arquivo.fileName}`;
+        const fileKey = `folha/${input.companyId}/${mesReal}/${input.tipoLancamento}-${randomSuffix}-${arquivo.fileName}`;
         const { url } = await storagePut(fileKey, buffer, arquivo.mimeType);
-
-        // Extract text
-        const text = await extractTextFromPDF(buffer);
 
         // AUTO-DETECT: Analítico tem "Admissão em" e "Salário base", Sintético tem "Relação de líquido"
         const isAnalitico = text.includes("Admiss\u00e3o em") || text.includes("Admissao em") || text.includes("Sal\u00e1rio base") || text.includes("Salario base") || text.includes("Espelho e resumo");
@@ -697,7 +775,7 @@ export const folhaPagamentoRouter = router({
         const [uploadRecord] = await db.insert(payrollUploads).values({
           companyId: input.companyId,
           category: categoryMap[`${input.tipoLancamento}-${finalTipo}`] || "espelho_adiantamento_analitico",
-          month: input.mesReferencia,
+          month: mesReal,
           fileName: arquivo.fileName,
           fileUrl: url,
           fileKey: fileKey,
@@ -857,6 +935,9 @@ export const folhaPagamentoRouter = router({
         unmatchedNames: matchResult.details
           ?.filter((d: any) => d.matchStatus === "unmatched")
           .map((d: any) => ({ nome: d.nome, codigo: d.codigo })) || [],
+        mesDetectado: mesReal,
+        mesRedirecionado,
+        alertaMes,
       };
     }),
 
@@ -1345,6 +1426,15 @@ export const folhaPagamentoRouter = router({
         .where(eq(obras.companyId, input.companyId));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
+      // Helper: converte "HH:MM" para horas decimais (ex: "8:30" -> 8.5)
+      const hhmmToDecimal = (hhmm: string | null): number => {
+        if (!hhmm || hhmm === "0:00" || hhmm === "0") return 0;
+        const parts = hhmm.split(":");
+        const h = parseInt(parts[0] || "0");
+        const m = parseInt(parts[1] || "0");
+        return h + m / 60;
+      };
+
       // Group ponto by employee and obra
       const empObraHoras = new Map<number, Map<number | null, { horasTrab: number; horasExtras: number; dias: number }>>();
       for (const rec of pontoRecords) {
@@ -1353,8 +1443,8 @@ export const folhaPagamentoRouter = router({
         const obraKey = rec.obraId || null;
         const obraGroup = empObraHoras.get(rec.employeeId)!;
         const existing = obraGroup.get(obraKey) || { horasTrab: 0, horasExtras: 0, dias: 0 };
-        const horas = rec.horasTrabalhadas ? parseFloat(rec.horasTrabalhadas.replace(":", ".")) : 0;
-        const he = rec.horasExtras ? parseFloat(rec.horasExtras.replace(":", ".")) : 0;
+        const horas = hhmmToDecimal(rec.horasTrabalhadas);
+        const he = hhmmToDecimal(rec.horasExtras);
         existing.horasTrab += horas;
         existing.horasExtras += he;
         if (horas > 0) existing.dias++;
@@ -1365,7 +1455,7 @@ export const folhaPagamentoRouter = router({
       const obraCustos = new Map<number | null, {
         obraId: number | null;
         obraNome: string;
-        funcionarios: Array<{ id: number; nome: string; funcao: string; horas: number; horasExtras: number; dias: number; custoEstimado: string; liquido: string }>;
+        funcionarios: Array<{ id: number; nome: string; funcao: string; horas: number; horasExtras: number; dias: number; custoEstimado: string; liquido: string; percentual?: number }>;
         totalCusto: number;
         totalHoras: number;
         totalHE: number;
@@ -1423,6 +1513,7 @@ export const folhaPagamentoRouter = router({
             dias: data.dias,
             custoEstimado: formatBRL(custoAlocado),
             liquido: item.liquido || "0,00",
+            percentual: Math.round(proporcao * 1000) / 10, // % de alocação com 1 casa decimal
           });
           grupo.totalCusto += custoAlocado;
           grupo.totalHoras += data.horasTrab;

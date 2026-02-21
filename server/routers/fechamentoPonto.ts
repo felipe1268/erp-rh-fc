@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -36,6 +36,134 @@ function normalizeNameForMatch(name: string): string {
 /** Extract YYYY-MM from a date string YYYY-MM-DD */
 function dateToMesRef(dateStr: string): string {
   return dateStr.substring(0, 7); // "2025-12" from "2025-12-15"
+}
+
+// ============================================================
+// CRITÉRIOS DO SISTEMA - Helper para buscar critérios configurados
+// ============================================================
+interface CriteriaMap {
+  // Horas Extras
+  heDiasUteis: number;        // % HE dias úteis (padrão CLT: 50)
+  heDomingosFeriados: number; // % HE domingos/feriados (padrão CLT: 100)
+  heAdicionalNoturno: number; // % adicional noturno (padrão CLT: 20)
+  heNoturnoInicio: string;    // Início horário noturno (padrão: 22:00)
+  heNoturnoFim: string;       // Fim horário noturno (padrão: 05:00)
+  heInterjornada: number;     // % HE interjornada (padrão: 50)
+  heLimiteMensal: number;     // Limite máximo HE mensais (padrão: 44h)
+  heBancoHoras: boolean;      // Empresa usa banco de horas
+  // Jornada
+  jornadaHorasDiarias: number;   // Horas diárias padrão (padrão: 8)
+  jornadaHorasSemanais: number;  // Horas semanais (padrão: 44)
+  jornadaIntervaloAlmoco: number; // Intervalo almoço em min (padrão: 60)
+  jornadaSabadoTipo: string;     // compensado, meio_periodo, normal, folga
+  // Ponto
+  pontoToleranciaAtraso: number;  // Tolerância atraso entrada em min (padrão: 10)
+  pontoToleranciaSaida: number;   // Tolerância saída antecipada em min (padrão: 10)
+  pontoFaltaAposAtraso: number;   // Considerar falta após X min de atraso (padrão: 120)
+  pontoHoraNoturnaReduzida: string; // Duração hora noturna reduzida (padrão: 52:30)
+}
+
+const DEFAULT_CRITERIA: CriteriaMap = {
+  heDiasUteis: 50,
+  heDomingosFeriados: 100,
+  heAdicionalNoturno: 20,
+  heNoturnoInicio: "22:00",
+  heNoturnoFim: "05:00",
+  heInterjornada: 50,
+  heLimiteMensal: 44,
+  heBancoHoras: false,
+  jornadaHorasDiarias: 8,
+  jornadaHorasSemanais: 44,
+  jornadaIntervaloAlmoco: 60,
+  jornadaSabadoTipo: "compensado",
+  pontoToleranciaAtraso: 10,
+  pontoToleranciaSaida: 10,
+  pontoFaltaAposAtraso: 120,
+  pontoHoraNoturnaReduzida: "52:30",
+};
+
+async function getCriteriaMap(companyId: number): Promise<CriteriaMap> {
+  try {
+    const db = await getDb();
+    if (!db) return { ...DEFAULT_CRITERIA };
+    const rows = await db.select().from(systemCriteria)
+      .where(eq(systemCriteria.companyId, companyId));
+    if (rows.length === 0) return { ...DEFAULT_CRITERIA };
+    
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.chave] = r.valor;
+    
+    return {
+      heDiasUteis: parseFloat(map["he_dias_uteis"] || "50"),
+      heDomingosFeriados: parseFloat(map["he_domingos_feriados"] || "100"),
+      heAdicionalNoturno: parseFloat(map["he_adicional_noturno"] || "20"),
+      heNoturnoInicio: map["he_noturno_inicio"] || "22:00",
+      heNoturnoFim: map["he_noturno_fim"] || "05:00",
+      heInterjornada: parseFloat(map["he_interjornada"] || "50"),
+      heLimiteMensal: parseFloat(map["he_limite_mensal"] || "44"),
+      heBancoHoras: map["he_banco_horas"] === "1",
+      jornadaHorasDiarias: parseFloat(map["jornada_horas_diarias"] || "8"),
+      jornadaHorasSemanais: parseFloat(map["jornada_horas_semanais"] || "44"),
+      jornadaIntervaloAlmoco: parseFloat(map["jornada_intervalo_almoco"] || "60"),
+      jornadaSabadoTipo: map["jornada_sabado_tipo"] || "compensado",
+      pontoToleranciaAtraso: parseFloat(map["ponto_tolerancia_atraso"] || "10"),
+      pontoToleranciaSaida: parseFloat(map["ponto_tolerancia_saida"] || "10"),
+      pontoFaltaAposAtraso: parseFloat(map["ponto_falta_apos_atraso"] || "120"),
+      pontoHoraNoturnaReduzida: map["ponto_hora_noturna_reduzida"] || "52:30",
+    };
+  } catch {
+    return { ...DEFAULT_CRITERIA };
+  }
+}
+
+/** Calcula minutos noturnos entre duas batidas */
+function calcNightMinutes(entrada: string, saida: string, noturnoInicio: string, noturnoFim: string): number {
+  const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const entMin = toMin(entrada);
+  const saiMin = toMin(saida);
+  const notIni = toMin(noturnoInicio); // ex: 22:00 = 1320
+  const notFim = toMin(noturnoFim);     // ex: 05:00 = 300
+  
+  let nightMins = 0;
+  // Noturno cruza meia-noite (22:00 - 05:00)
+  if (notIni > notFim) {
+    // Período 1: notIni até 23:59
+    const p1Start = Math.max(entMin, notIni);
+    const p1End = Math.min(saiMin > notIni ? saiMin : 1440, 1440);
+    if (p1End > p1Start) nightMins += p1End - p1Start;
+    // Período 2: 00:00 até notFim (para saídas após meia-noite)
+    if (saiMin <= notFim) {
+      const p2Start = Math.max(entMin < notFim ? entMin : 0, 0);
+      const p2End = Math.min(saiMin, notFim);
+      if (p2End > p2Start) nightMins += p2End - p2Start;
+    }
+  } else {
+    // Noturno não cruza meia-noite
+    const start = Math.max(entMin, notIni);
+    const end = Math.min(saiMin, notFim);
+    if (end > start) nightMins += end - start;
+  }
+  return nightMins;
+}
+
+/** Obtém percentuais de HE para um funcionário (acordo individual > critérios empresa > padrão CLT) */
+function getEmployeeHEPercentuais(emp: any, criteria: CriteriaMap) {
+  if (emp.acordoHoraExtra === 1) {
+    return {
+      heDiasUteis: parseFloat(emp.heNormal50 || "50"),
+      heDomingosFeriados: parseFloat(emp.he100 || "100"),
+      heAdicionalNoturno: parseFloat(emp.heNoturna || "20"),
+      heFeriado: parseFloat(emp.heFeriado || "100"),
+      heInterjornada: parseFloat(emp.heInterjornada || "50"),
+    };
+  }
+  return {
+    heDiasUteis: criteria.heDiasUteis,
+    heDomingosFeriados: criteria.heDomingosFeriados,
+    heAdicionalNoturno: criteria.heAdicionalNoturno,
+    heFeriado: criteria.heDomingosFeriados,
+    heInterjornada: criteria.heInterjornada,
+  };
 }
 
 // Parse DIXI XLS - handles both date formats (DD/MM/YYYY and YYYY/MM/DD)
@@ -158,9 +286,10 @@ function matchEmployee(
 // NOW: mesReferencia is derived from each record's date, not from input
 function processRecords(
   records: Array<{ dixiId: string; nome: string; data: string; hora: string; modo: string; sn: string }>,
-  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho: any }>,
+  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho: any; acordoHoraExtra?: any; heNormal50?: any; heNoturna?: any; he100?: any; heFeriado?: any; heInterjornada?: any }>,
   obraId: number | null,
   companyId: number,
+  criteria: CriteriaMap = DEFAULT_CRITERIA,
 ) {
   // Group by person+day
   const grouped: Record<string, Record<string, string[]>> = {};
@@ -232,8 +361,43 @@ function processRecords(
         } catch (e) { /* use default */ }
       }
 
-      const horasExtras = totalMinutes > expectedMinutes ? totalMinutes - expectedMinutes : 0;
-      const atrasos = totalMinutes < expectedMinutes && totalMinutes > 0 ? expectedMinutes - totalMinutes : 0;
+      // ---- APLICAR CRITÉRIOS DO SISTEMA ----
+      const tolAtraso = criteria.pontoToleranciaAtraso; // min
+      const tolSaida = criteria.pontoToleranciaSaida;   // min
+      const faltaApos = criteria.pontoFaltaAposAtraso;  // min
+      
+      // Calcular diferença bruta
+      const diffBruto = totalMinutes - expectedMinutes;
+      
+      // Aplicar tolerâncias:
+      // Se trabalhou a mais, mas dentro da tolerância de saída, não conta HE
+      // Se trabalhou a menos, mas dentro da tolerância de atraso, não conta atraso
+      let horasExtras = 0;
+      let atrasos = 0;
+      let faltas = "0";
+      
+      if (diffBruto > 0) {
+        // Trabalhou mais que o esperado
+        horasExtras = diffBruto > tolSaida ? diffBruto : 0;
+      } else if (diffBruto < 0 && totalMinutes > 0) {
+        const atrasoReal = Math.abs(diffBruto);
+        if (atrasoReal >= faltaApos) {
+          // Atraso muito grande: considerar falta
+          faltas = "1";
+          atrasos = 0;
+        } else if (atrasoReal > tolAtraso) {
+          // Atraso fora da tolerância: registrar
+          atrasos = atrasoReal;
+        }
+        // Dentro da tolerância: atraso = 0
+      }
+      
+      // Calcular horas noturnas
+      let nightMinutes = 0;
+      if (entrada1 && saida1) nightMinutes += calcNightMinutes(entrada1, saida1, criteria.heNoturnoInicio, criteria.heNoturnoFim);
+      if (entrada2 && saida2) nightMinutes += calcNightMinutes(entrada2, saida2, criteria.heNoturnoInicio, criteria.heNoturnoFim);
+      if (entrada3 && saida3) nightMinutes += calcNightMinutes(entrada3, saida3, criteria.heNoturnoInicio, criteria.heNoturnoFim);
+      
       const isOddPunches = filtered.length % 2 !== 0;
       const isMissingPunch = filtered.length < 4 && filtered.length > 0;
 
@@ -249,8 +413,8 @@ function processRecords(
         entrada1, saida1, entrada2, saida2, entrada3, saida3,
         horasTrabalhadas: minutesToHHMM(totalMinutes),
         horasExtras: horasExtras > 0 ? minutesToHHMM(horasExtras) : "0:00",
-        horasNoturnas: "0:00",
-        faltas: "0",
+        horasNoturnas: nightMinutes > 0 ? minutesToHHMM(nightMinutes) : "0:00",
+        faltas,
         atrasos: atrasos > 0 ? minutesToHHMM(atrasos) : "0:00",
         fonte: "dixi",
         ajusteManual: 0,
@@ -381,9 +545,12 @@ export const fechamentoPontoRouter = router({
           });
         }
 
+        // Buscar critérios do sistema para aplicar nos cálculos
+        const criteria = await getCriteriaMap(input.companyId);
+
         // Process records - mesReferencia is auto-detected from each record's date
         const { timeRecordsToInsert, inconsistencies, unmatchedNames } = processRecords(
-          records, empList as any, obraId, input.companyId
+          records, empList as any, obraId, input.companyId, criteria
         );
 
         // Group records by mesReferencia (auto-detected)

@@ -909,7 +909,7 @@
 - [ ] Usar critérios de jornada no fechamento de ponto (tolerâncias, horário noturno)
 - [ ] Usar critérios de advertência no fluxo CLT progressivo
 ### Fix pendente
-- [ ] Fix: pdftotext not found em produção (substituir por pdf-parse)
+- [x] Fix: pdftotext not found em produção (substituir por pdf-parse)
 
 ## REVISÃO_25: Nº Interno na tabela de Colaboradores
 - [x] Adicionar coluna "Nº Interno" (codigoInterno JFC) na tabela de listagem de colaboradores
@@ -923,3 +923,43 @@
 - [x] Corrigir parser para funcionar com o formato de texto do pdf-parse v2
 - [x] Testar com PDFs reais (006 analítico e 007 sintético de janeiro)
 - [x] Destacar período de afastamento em vermelho no documento de suspensão
+
+## REVISÃO_28: Integração Critérios de HE nos Cálculos
+- [ ] Criar função helper getCriteriaForCompany() para buscar critérios do banco
+- [ ] Substituir valores hardcoded de % HE no fechamento de ponto pelos critérios configurados
+- [ ] Aplicar critérios de tolerância de atraso/saída antecipada no cálculo de ponto
+- [ ] Aplicar critérios de horário noturno e adicional noturno nos cálculos
+- [ ] Aplicar critérios na folha de pagamento (verificação cruzada)
+- [ ] Respeitar acordo individual do funcionário (override dos critérios globais)
+- [ ] Incrementar revisão para Rev. 37
+
+## REVISÃO_28: Filtros clicáveis nos cards de resumo + Integração critérios HE
+- [x] Cards de resumo da Folha de Pagamento (Total, Vinculados, Divergentes, Não Encontrados) como filtros clicáveis
+- [ ] Criar helper getCriteriaMap() para buscar critérios do banco
+- [ ] Integrar critérios de HE no cálculo do fechamento de ponto (tolerância, % HE, noturno)
+- [ ] Respeitar acordo individual do funcionário (override dos critérios globais)
+- [ ] Incrementar revisão para Rev. 37
+
+## REVISÃO_29: Rateio proporcional de custos por obra baseado no ponto
+- [x] Refatorar getCustosPorObra para cruzar time_records com folha de pagamento
+- [x] Calcular horas trabalhadas por obra para cada funcionário usando time_records
+- [x] Distribuir custo proporcionalmente (ex: 60% Obra A, 40% Obra B)
+- [x] Funcionários sem ponto ficam em "Sem Obra Vinculada"
+- [x] Exibir % de alocação e horas por obra no frontend
+
+## REVISÃO_30: Detecção automática de mês na importação de PDF
+- [x] Extrair data de referência do conteúdo do PDF (ex: "Adiantamento em: 20/01/2026")
+- [x] Alocar automaticamente no mês correto, independente do mês selecionado pelo usuário
+- [x] Exibir alerta quando o mês detectado for diferente do mês selecionado
+- [x] Criar/buscar folha_lancamento do mês correto automaticamente
+
+## Rev. 37: Detecção automática de mês + Percentual de alocação por obra
+- [x] Implementar função detectMesReferencia() no backend (5 estratégias de detecção)
+- [x] Integrar detecção automática na rota importarFolhaAuto
+- [x] Redirecionar importação para o mês correto automaticamente
+- [x] Exibir toast de alerta (warning) quando mês detectado difere do selecionado
+- [x] Navegar automaticamente para o mês correto após importação redirecionada
+- [x] Otimizar extração de texto PDF (extrair uma vez, reutilizar no loop)
+- [x] Adicionar coluna "% Aloc." na tabela de custos por obra
+- [x] Exibir percentual de alocação por funcionário em cada obra
+- [x] Incrementar versão para Rev. 37
