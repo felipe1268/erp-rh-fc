@@ -92,7 +92,54 @@ export function formatCNH(val: unknown): string {
  */
 export function formatMoeda(val: unknown): string {
   if (!val) return "-";
-  const num = typeof val === "number" ? val : parseFloat(String(val).replace(",", "."));
+  const num = typeof val === "number" ? val : parseFloat(String(val).replace(/\./g, "").replace(",", "."));
   if (isNaN(num)) return String(val);
   return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * Formata valor monetário para exibição sem prefixo R$ (ex: 2.500,00)
+ */
+export function formatMoedaSemPrefixo(val: unknown): string {
+  if (!val && val !== 0) return "";
+  const num = typeof val === "number" ? val : parseFloat(String(val).replace(/\./g, "").replace(",", "."));
+  if (isNaN(num)) return String(val);
+  return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Máscara de input para valores monetários brasileiros.
+ * Aceita digitação livre mas formata ao sair do campo.
+ * Retorna o valor formatado como string (ex: "2.500,00")
+ */
+export function formatMoedaInput(rawValue: string): string {
+  // Remove tudo exceto dígitos e vírgula
+  let cleaned = rawValue.replace(/[^\d,]/g, "");
+  
+  // Garante apenas uma vírgula
+  const parts = cleaned.split(",");
+  if (parts.length > 2) {
+    cleaned = parts[0] + "," + parts.slice(1).join("");
+  }
+  
+  // Separa parte inteira e decimal
+  const [intPart, decPart] = cleaned.split(",");
+  
+  // Formata parte inteira com pontos de milhar
+  const intFormatted = intPart ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+  
+  // Retorna com vírgula se houver parte decimal
+  if (decPart !== undefined) {
+    return `${intFormatted},${decPart.slice(0, 2)}`;
+  }
+  return intFormatted;
+}
+
+/**
+ * Converte valor formatado brasileiro (2.500,00) para número float
+ */
+export function parseMoedaBR(val: string): number {
+  if (!val) return 0;
+  const num = parseFloat(val.replace(/\./g, "").replace(",", "."));
+  return isNaN(num) ? 0 : num;
 }

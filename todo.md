@@ -656,3 +656,7 @@
 - [x] Impressão do Rateio por Obra
 - [x] Impressão do Detalhe do Funcionário
 - [x] Layout profissional A4 paisagem com header FC Engenharia
+
+## FIX: Formatação de Valores Monetários
+- [x] Formatar campos de Salário Base e Valor da Hora no padrão brasileiro (ponto milhares, vírgula centavos)
+- [x] Aplicar formatação em todos os campos monetários do sistema

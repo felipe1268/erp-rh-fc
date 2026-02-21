@@ -15,7 +15,7 @@ import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
-import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor } from "@/lib/formatters";
+import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor, formatMoedaInput, formatMoedaSemPrefixo, parseMoedaBR, formatMoeda } from "@/lib/formatters";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 const statusColors: Record<string, string> = {
@@ -821,12 +821,12 @@ export default function Colaboradores() {
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Salário Base (R$)</Label>
                   <Input value={form.salarioBase ?? ""} onChange={e => {
-                    const salario = e.target.value;
-                    set("salarioBase", salario);
-                    const salarioNum = parseFloat(salario.replace(/\./g, "").replace(",", "."));
+                    const formatted = formatMoedaInput(e.target.value);
+                    set("salarioBase", formatted);
+                    const salarioNum = parseMoedaBR(formatted);
                     const horasNum = parseFloat(String(form.horasMensais || "220").replace(",", "."));
-                    if (!isNaN(salarioNum) && salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
-                      set("valorHora", (salarioNum / horasNum).toFixed(2));
+                    if (salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                      set("valorHora", formatMoedaSemPrefixo(salarioNum / horasNum));
                     }
                   }} placeholder="2.500,00" className="bg-input mt-1" />
                 </div>
@@ -840,10 +840,10 @@ export default function Colaboradores() {
                   <Input value={form.horasMensais ?? ""} onChange={e => {
                     const horas = e.target.value;
                     set("horasMensais", horas);
-                    const salarioNum = parseFloat(String(form.salarioBase || "0").replace(/\./g, "").replace(",", "."));
+                    const salarioNum = parseMoedaBR(String(form.salarioBase || "0"));
                     const horasNum = parseFloat(horas.replace(",", "."));
-                    if (!isNaN(salarioNum) && salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
-                      set("valorHora", (salarioNum / horasNum).toFixed(2));
+                    if (salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                      set("valorHora", formatMoedaSemPrefixo(salarioNum / horasNum));
                     }
                   }} placeholder="220" className="bg-input mt-1" />
                 </div>
@@ -1157,8 +1157,8 @@ export default function Colaboradores() {
                   ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
                   ["Contrato", safeDisplay(viewingEmployee.tipoContrato)],
                   ["Jornada", formatJornada(viewingEmployee.jornadaTrabalho)],
-                  ["Salário Base", viewingEmployee.salarioBase ? `R$ ${viewingEmployee.salarioBase}` : "-"],
-                  ["Valor da Hora", viewingEmployee.valorHora ? `R$ ${viewingEmployee.valorHora}` : "-"],
+                  ["Salário Base", viewingEmployee.salarioBase ? formatMoeda(viewingEmployee.salarioBase) : "-"],
+                  ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
                   ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
                 ]},
                 { title: "Documentos", fields: [
