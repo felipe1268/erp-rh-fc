@@ -33,6 +33,7 @@ import { validateCNPJ } from "../shared/cnpj";
 import { TRPCError } from "@trpc/server";
 import { importExcelRouter } from "./routers/importExcel";
 import { payrollParsersRouter } from "./routers/payrollParsers";
+import { folhaPagamentoRouter } from "./routers/folhaPagamento";
 import { controleDocumentosRouter } from "./routers/controleDocumentos";
 
 // Helper: generic CRUD builder
@@ -314,6 +315,11 @@ export const appRouter = router({
   // FOLHA DE PAGAMENTO (parsers, vales, extras, VR)
   // ============================================================
   payrollParsers: payrollParsersRouter,
+
+  // ============================================================
+  // FOLHA DE PAGAMENTO (novo módulo redesenhado)
+  // ============================================================
+  folha: folhaPagamentoRouter,
 
   // ============================================================
   // FECHAMENTO DE PONTO (upload DIXI, cálculo horas, inconsistências)

@@ -329,6 +329,7 @@ export const employees = mysqlTable("employees", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataListaNegra: date({ mode: 'string' }),
 	obraAtualId: int(),
+	codigoContabil: varchar({ length: 20 }),
 });
 
 export const epiDeliveries = mysqlTable("epi_deliveries", {
@@ -784,6 +785,89 @@ export const warnings = mysqlTable("warnings", {
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
+
+// ============================================================
+// FOLHA DE PAGAMENTO - LANÇAMENTOS IMPORTADOS DA CONTABILIDADE
+// ============================================================
+export const folhaLancamentos = mysqlTable("folha_lancamentos", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	tipoLancamento: mysqlEnum(['vale','pagamento']).notNull(),
+	status: mysqlEnum(['importado','validado','consolidado']).default('importado').notNull(),
+	// Arquivos importados
+	analiticoUploadId: int(),
+	sinteticoUploadId: int(),
+	bancoCefUploadId: int(),
+	bancoSantanderUploadId: int(),
+	// Totais gerais
+	totalFuncionarios: int().default(0),
+	totalProventos: varchar({ length: 20 }),
+	totalDescontos: varchar({ length: 20 }),
+	totalLiquido: varchar({ length: 20 }),
+	// Divergências
+	totalDivergencias: int().default(0),
+	divergenciasResolvidas: int().default(0),
+	// Metadados
+	importadoPor: varchar({ length: 255 }),
+	importadoEm: timestamp({ mode: 'string' }),
+	validadoPor: varchar({ length: 255 }),
+	validadoEm: timestamp({ mode: 'string' }),
+	consolidadoPor: varchar({ length: 255 }),
+	consolidadoEm: timestamp({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("folha_lanc_company_mes").on(table.companyId, table.mesReferencia),
+]);
+
+// Itens individuais por funcionário em cada lançamento
+export const folhaItens = mysqlTable("folha_itens", {
+	id: int().autoincrement().notNull(),
+	folhaLancamentoId: int().notNull(),
+	companyId: int().notNull(),
+	employeeId: int(),
+	// Dados do PDF (para match)
+	codigoContabil: varchar({ length: 20 }),
+	nomeColaborador: varchar({ length: 255 }).notNull(),
+	// Dados de admissão/função do PDF
+	dataAdmissao: date({ mode: 'string' }),
+	salarioBase: varchar({ length: 20 }),
+	horasMensais: varchar({ length: 10 }),
+	funcao: varchar({ length: 100 }),
+	sf: int().default(0),
+	ir: int().default(0),
+	// Proventos e descontos (JSON array)
+	proventos: json(),
+	descontos: json(),
+	totalProventos: varchar({ length: 20 }),
+	totalDescontos: varchar({ length: 20 }),
+	// Bases e impostos
+	baseInss: varchar({ length: 20 }),
+	valorInss: varchar({ length: 20 }),
+	baseFgts: varchar({ length: 20 }),
+	valorFgts: varchar({ length: 20 }),
+	baseIrrf: varchar({ length: 20 }),
+	valorIrrf: varchar({ length: 20 }),
+	// Líquido
+	liquido: varchar({ length: 20 }),
+	// Dados bancários (do resumo por banco)
+	banco: varchar({ length: 100 }),
+	agencia: varchar({ length: 20 }),
+	conta: varchar({ length: 30 }),
+	// Situações especiais
+	situacaoEspecial: text(),
+	// Validação cruzada
+	matchStatus: mysqlEnum(['matched','unmatched','divergente']).default('unmatched').notNull(),
+	divergencias: json(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("folha_itens_lanc").on(table.folhaLancamentoId),
+	index("folha_itens_emp").on(table.employeeId),
+]);
 
 // ============================================================
 // INFERRED TYPES

@@ -356,6 +356,7 @@ export default function Colaboradores() {
         ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
         ["Contrato", safeDisplay(viewingEmployee.tipoContrato)],
         ["Jornada", formatJornada(viewingEmployee.jornadaTrabalho)],
+        ["Cód. Contábil", safeDisplay(viewingEmployee.codigoContabil)],
         ["Salário Base", viewingEmployee.salarioBase ? formatMoeda(viewingEmployee.salarioBase) : "-"],
         ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
         ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
@@ -925,6 +926,11 @@ export default function Colaboradores() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Código Contábil</Label>
+                  <Input value={form.codigoContabil ?? ""} onChange={e => set("codigoContabil", e.target.value)} placeholder="Ex: 128" className="bg-input mt-1" />
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">Nº de identificação no sistema da contabilidade</span>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Data de Admissão</Label>

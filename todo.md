@@ -770,3 +770,22 @@
 
 ## REVISÃO_17: Aniversário em meses e dias
 - [x] Alterar exibição de dias faltando para aniversário de "em X dias" para "em X meses e Y dias"
+
+## REVISÃO_18: Módulo Folha de Pagamento Completo (Redesign)
+- [x] Adicionar campo codigoContabil no schema do funcionário (+ campo no formulário de cadastro e visualização)
+- [x] Criar tabelas: folha_lancamentos e folha_itens no banco de dados
+- [x] Backend: parser de PDF analítico (espelho) para extrair dados por funcionário
+- [x] Backend: parser de PDF sintético (líquido) para extrair lista resumida
+- [x] Backend: parser de PDF resumo por banco (CEF/Santander)
+- [x] Backend: router de importação com validação cruzada (cadastro, status, salário, ponto)
+- [x] Frontend: redesenhar página Folha de Pagamento com layout similar ao Fechamento de Ponto
+- [x] Frontend: seletor ano/mês com legenda de status (sem lançamentos, com lançamentos, consolidado)
+- [x] Frontend: cards Vale/Adiantamento e Pagamento separados com resumo
+- [x] Frontend: upload de 4 arquivos por lançamento (analítico, sintético, banco CEF, banco Santander)
+- [x] Frontend: tela de detalhes com busca/filtro + tela de verificação cruzada
+- [x] Verificação cruzada: funcionários da folha vs cadastro (match código contábil + nome)
+- [x] Verificação cruzada: status ativo (alertar férias, afastado, demitido)
+- [x] Verificação cruzada: salário base folha vs salário cadastrado
+- [x] Verificação cruzada: horas ponto consolidado vs horas folha
+- [x] Consolidar/desconsolidar lançamentos + excluir + re-match
+- [x] FullScreenDialog para todos os dialogs (upload, detalhes, verificação cruzada)
