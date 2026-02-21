@@ -378,3 +378,4 @@
 - [x] Bug: erro SQL ao atualizar colaborador - corrigido com whitelist de campos e conversão de tipos
 - [x] Bug: campo "Cargo" removido da aba Profissional (ficou apenas "Função")
 - [x] Bug: Select "SelecioneCLT" concatenado no Tipo de Contrato - corrigido via sanitização
+- [x] Lançar ~130 funcionários da FC Engenharia (CNPJ 29.353.906/0001-71) no sistema via script - 131 inseridos com sucesso

@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, razaoSocial, cnpj FROM companies",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, razaoSocial, cnpj FROM companies",
+  "rows": [
+    {
+      "id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "cnpj": "29.353.906/0001-71"
+    },
+    {
+      "id": "60004",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "cnpj": "47.401.586/0001-60"
+    },
+    {
+      "id": "60005",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "cnpj": "03.426.403/0001-95"
+    },
+    {
+      "id": "90001",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "cnpj": "61.423.062/0001-09"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\tcnpj\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t29.353.906/0001-71\n60004\tCF HOTELARIA LTDA\t47.401.586/0001-60\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t03.426.403/0001-95\n90001\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\t61.423.062/0001-09\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, razaoSocial, nomeFantasia, cnpj FROM companies WHERE cnpj LIKE '%29.353.906%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, razaoSocial, nomeFantasia, cnpj FROM companies WHERE cnpj LIKE '%29.353.906%'",
+  "rows": [
+    {
+      "id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "cnpj": "29.353.906/0001-71"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\tnomeFantasia\tcnpj\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\tFC ENGENHARIA PROJETOS E OBRAS\t29.353.906/0001-71\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}
