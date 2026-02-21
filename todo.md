@@ -592,3 +592,38 @@
 
 ## FIX: Dialog de Upload DIXI cortado
 - [x] Expandir dialog de upload e adicionar scroll interno para conteúdo longo
+
+## REVISÃO_04: Filtro Visual Ano/Mês + Consolidação Mensal
+### Filtro Visual de Ano/Mês
+- [x] Seletor de ano no topo
+- [x] 12 botões de meses com cores: Azul (com lançamento), Cinza (sem lançamento), Verde (consolidado)
+- [x] Substituir filtro atual por novo layout visual
+### Consolidação Mensal
+- [x] Criar tabela pontoConsolidacao no schema (companyId, mesReferencia, consolidadoPor, consolidadoEm, status)
+- [x] Rota consolidar: marca mês como consolidado, registra quem e quando
+- [x] Rota desconsolidar: apenas admin master pode desconsolidar
+- [x] Bloqueio de upload DIXI quando mês consolidado
+- [x] Bloqueio de lançamento manual quando mês consolidado
+- [x] Bloqueio de limpar base quando mês consolidado
+- [x] Botão "Consolidar Mês" visível na interface
+- [x] Nome do responsável pela consolidação visível no filtro e relatório
+- [x] Rota getMonthStatuses: retorna status de todos os meses de um ano (sem dados, com dados, consolidado)
+
+## REVISÃO_04b: Conflito Obra/Dia + Consolidação + SN Vinculado
+### Conflito de Obras no Mesmo Dia
+- [x] Detectar funcionário com registro em 2+ obras na mesma data
+- [x] Marcar como "Conflito de Obra" com alerta vermelho no detalhe
+- [x] Card de alerta mostrando dias com conflito e quais obras
+- [x] Opção de validar (deslocamento real) ou rejeitar (erro de lançamento)
+### SN Sempre Vinculado
+- [x] SN nunca digitado, sempre puxado da base de cadastro da obra
+- [x] Exibir SN junto ao nome da obra em todas as telas (detalhe, rateio)
+### Consolidação Mensal
+- [x] Rotas consolidar/desconsolidar no backend
+- [x] Bloqueio de upload/lançamento/limpar quando consolidado
+- [x] Botão "Consolidar Mês" na interface
+- [x] Nome do responsável pela consolidação visível
+### Filtro Visual Ano/Mês
+- [x] Seletor de ano + 12 botões de meses
+- [x] Azul = com lançamento, Cinza = sem lançamento, Verde = consolidado
+- [x] Rota getMonthStatuses retornando status de cada mês

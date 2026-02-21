@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -971,6 +971,213 @@ export const fechamentoPontoRouter = router({
         porObra[oId].totalDias += r.diasTrabalhados || 0;
       }
       return Object.values(porObra);
+    }),
+
+  // ===================== CONSOLIDAÇÃO MENSAL =====================
+  getMonthStatuses: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const meses: Record<string, { status: 'vazio' | 'aberto' | 'consolidado'; totalRegistros: number; consolidadoPor?: string; consolidadoEm?: string }> = {};
+      for (let m = 1; m <= 12; m++) {
+        const mesRef = `${input.ano}-${String(m).padStart(2, '0')}`;
+        meses[mesRef] = { status: 'vazio', totalRegistros: 0 };
+      }
+      // Check which months have data
+      const monthCounts = await db.select({
+        mesReferencia: timeRecords.mesReferencia,
+        count: sql<number>`COUNT(*)`,
+      }).from(timeRecords)
+        .where(and(
+          eq(timeRecords.companyId, input.companyId),
+          like(timeRecords.mesReferencia, `${input.ano}-%`),
+        ))
+        .groupBy(timeRecords.mesReferencia);
+      for (const mc of monthCounts) {
+        const mesKey = mc.mesReferencia || '';
+        if (meses[mesKey]) {
+          meses[mesKey].status = 'aberto';
+          meses[mesKey].totalRegistros = Number(mc.count);
+        }
+      }
+      // Check consolidation status
+      const consolidacoes = await db.select().from(pontoConsolidacao)
+        .where(and(
+          eq(pontoConsolidacao.companyId, input.companyId),
+          like(pontoConsolidacao.mesReferencia, `${input.ano}-%`),
+        ));
+      for (const c of consolidacoes) {
+        if (meses[c.mesReferencia] && c.status === 'consolidado') {
+          meses[c.mesReferencia].status = 'consolidado';
+          meses[c.mesReferencia].consolidadoPor = c.consolidadoPor || undefined;
+          meses[c.mesReferencia].consolidadoEm = c.consolidadoEm || undefined;
+        }
+      }
+      return meses;
+    }),
+
+  consolidarMes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      // Check if there are pending inconsistencies
+      const [pendingIncons] = await db.select({ count: sql<number>`COUNT(*)` })
+        .from(timeInconsistencies)
+        .where(and(
+          eq(timeInconsistencies.companyId, input.companyId),
+          eq(timeInconsistencies.mesReferencia, input.mesReferencia),
+          eq(timeInconsistencies.status, 'pendente'),
+        ));
+      if (Number(pendingIncons?.count || 0) > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Existem ${pendingIncons?.count} inconsistências pendentes. Resolva todas antes de consolidar o mês.`,
+        });
+      }
+      // Check if already consolidated
+      const existing = await db.select().from(pontoConsolidacao)
+        .where(and(
+          eq(pontoConsolidacao.companyId, input.companyId),
+          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
+        )).limit(1);
+      const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      if (existing.length > 0) {
+        await db.update(pontoConsolidacao).set({
+          status: 'consolidado',
+          consolidadoPor: ctx.user?.name || 'RH',
+          consolidadoEm: now,
+          observacoes: input.observacoes || null,
+        }).where(eq(pontoConsolidacao.id, existing[0].id));
+      } else {
+        await db.insert(pontoConsolidacao).values({
+          companyId: input.companyId,
+          mesReferencia: input.mesReferencia,
+          status: 'consolidado',
+          consolidadoPor: ctx.user?.name || 'RH',
+          consolidadoEm: now,
+          observacoes: input.observacoes || null,
+        });
+      }
+      return { success: true, consolidadoPor: ctx.user?.name || 'RH', consolidadoEm: now };
+    }),
+
+  desconsolidarMes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o Admin Master pode desconsolidar um mês.' });
+      }
+      const db = (await getDb())!;
+      const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      await db.update(pontoConsolidacao).set({
+        status: 'aberto',
+        desconsolidadoPor: ctx.user?.name || 'Admin',
+        desconsolidadoEm: now,
+      }).where(and(
+        eq(pontoConsolidacao.companyId, input.companyId),
+        eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
+      ));
+      return { success: true };
+    }),
+
+  getConsolidacaoStatus: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rows = await db.select().from(pontoConsolidacao)
+        .where(and(
+          eq(pontoConsolidacao.companyId, input.companyId),
+          eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
+        )).limit(1);
+      if (rows.length === 0) return { consolidado: false };
+      return {
+        consolidado: rows[0].status === 'consolidado',
+        consolidadoPor: rows[0].consolidadoPor,
+        consolidadoEm: rows[0].consolidadoEm,
+        desconsolidadoPor: rows[0].desconsolidadoPor,
+        desconsolidadoEm: rows[0].desconsolidadoEm,
+      };
+    }),
+
+  // ===================== CONFLITOS OBRA/DIA =====================
+  getConflitosObraDia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      employeeId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      // Find employees with records in multiple obras on the same day
+      const conditions: any[] = [
+        eq(timeRecords.companyId, input.companyId),
+        eq(timeRecords.mesReferencia, input.mesReferencia),
+      ];
+      if (input.employeeId) conditions.push(eq(timeRecords.employeeId, input.employeeId));
+
+      const recs = await db.select({
+        employeeId: timeRecords.employeeId,
+        employeeName: employees.nomeCompleto,
+        data: timeRecords.data,
+        obraId: timeRecords.obraId,
+        obraNome: obras.nome,
+        entrada1: timeRecords.entrada1,
+        saida2: timeRecords.saida2,
+        horasTrabalhadas: timeRecords.horasTrabalhadas,
+      })
+        .from(timeRecords)
+        .leftJoin(employees, eq(timeRecords.employeeId, employees.id))
+        .leftJoin(obras, eq(timeRecords.obraId, obras.id))
+        .where(and(...conditions))
+        .orderBy(sql`${timeRecords.employeeId} ASC, ${timeRecords.data} ASC`);
+
+      // Group by employee+date and find conflicts
+      const byEmpDate: Record<string, Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null; entrada1: string | null; saida2: string | null }>> = {};
+      const empNames: Record<number, string> = {};
+      for (const r of recs) {
+        const key = `${r.employeeId}|${r.data}`;
+        if (!byEmpDate[key]) byEmpDate[key] = [];
+        byEmpDate[key].push({ obraId: r.obraId, obraNome: r.obraNome, horasTrabalhadas: r.horasTrabalhadas, entrada1: r.entrada1, saida2: r.saida2 });
+        if (r.employeeName) empNames[r.employeeId] = r.employeeName;
+      }
+
+      const conflitos: Array<{
+        employeeId: number;
+        employeeName: string;
+        data: string;
+        obras: Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null }>;
+      }> = [];
+
+      for (const [key, entries] of Object.entries(byEmpDate)) {
+        if (entries.length > 1) {
+          // Multiple obras on same day = conflict
+          const obraIds = new Set(entries.map(e => e.obraId));
+          if (obraIds.size > 1) {
+            const [empId, data] = key.split('|');
+            conflitos.push({
+              employeeId: Number(empId),
+              employeeName: empNames[Number(empId)] || 'Desconhecido',
+              data,
+              obras: entries,
+            });
+          }
+        }
+      }
+
+      return conflitos;
     }),
 
   // ===================== VALIDAR SN ANTES DO UPLOAD =====================

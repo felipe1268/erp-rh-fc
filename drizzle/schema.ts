@@ -784,6 +784,26 @@ export const warnings = mysqlTable("warnings", {
 // ============================================================
 // INFERRED TYPES
 // ============================================================
+// CONSOLIDAÇÃO MENSAL DE PONTO
+// ============================================================
+export const pontoConsolidacao = mysqlTable("ponto_consolidacao", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	status: mysqlEnum(['aberto','consolidado']).default('aberto').notNull(),
+	consolidadoPor: varchar({ length: 255 }),
+	consolidadoEm: timestamp({ mode: 'string' }),
+	desconsolidadoPor: varchar({ length: 255 }),
+	desconsolidadoEm: timestamp({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("ponto_consolidacao_company_mes").on(table.companyId, table.mesReferencia),
+]);
+
+// ============================================================
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type InsertCompany = typeof companies.$inferInsert;
