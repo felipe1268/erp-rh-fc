@@ -52,8 +52,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
     if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
     else if (user.openId === ENV.ownerOpenId) { values.role = 'admin'; updateSet.role = 'admin'; }
-    if (!values.lastSignedIn) values.lastSignedIn = new Date();
-    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
+    if (!values.lastSignedIn) values.lastSignedIn = new Date().toISOString();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date().toISOString();
     await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) { console.error("[Database] Failed to upsert user:", error); throw error; }
 }
@@ -877,7 +877,7 @@ export async function checkDuplicateCpf(cpf: string, excludeEmployeeId?: number)
 export async function checkBlacklist(cpf: string) {
   const db = await getDb();
   if (!db) return null;
-  const result = await db.select().from(employees).where(and(eq(employees.cpf, cpf), eq(employees.listaNegra, true)));
+  const result = await db.select().from(employees).where(and(eq(employees.cpf, cpf), eq(employees.listaNegra, 1)));
   return result.length > 0 ? result[0] : null;
 }
 
@@ -885,9 +885,9 @@ export async function getBlacklistedEmployees(companyId?: number) {
   const db = await getDb();
   if (!db) return [];
   if (companyId) {
-    return db.select().from(employees).where(and(eq(employees.companyId, companyId), eq(employees.listaNegra, true)));
+    return db.select().from(employees).where(and(eq(employees.companyId, companyId), eq(employees.listaNegra, 1)));
   }
-  return db.select().from(employees).where(eq(employees.listaNegra, true));
+  return db.select().from(employees).where(eq(employees.listaNegra, 1));
 }
 
 // ============================================================
@@ -943,14 +943,14 @@ export async function deleteObra(id: number) {
 export async function getObrasByCompanyActive(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(obras).where(and(eq(obras.companyId, companyId), eq(obras.isActive, true))).orderBy(obras.nome);
+  return db.select().from(obras).where(and(eq(obras.companyId, companyId), eq(obras.isActive, 1))).orderBy(obras.nome);
 }
 
 // Funcionários alocados na obra
 export async function getObraFuncionarios(obraId: number) {
   const db = await getDb();
   if (!db) return [];
-  const allocs = await db.select().from(obraFuncionarios).where(and(eq(obraFuncionarios.obraId, obraId), eq(obraFuncionarios.isActive, true)));
+  const allocs = await db.select().from(obraFuncionarios).where(and(eq(obraFuncionarios.obraId, obraId), eq(obraFuncionarios.isActive, 1)));
   if (allocs.length === 0) return [];
   const empIds = allocs.map(a => a.employeeId);
   const emps = await db.select().from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
@@ -962,7 +962,7 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   // Desativar alocação anterior do funcionário
-  await db.update(obraFuncionarios).set({ isActive: false }).where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, true)));
+  await db.update(obraFuncionarios).set({ isActive: 0 } as any).where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, 1)));
   // Criar nova alocação
   const insertData: any = {
     obraId: data.obraId,
@@ -981,7 +981,7 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
 export async function removeEmployeeFromObra(employeeId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(obraFuncionarios).set({ isActive: false, dataFim: sql`CURDATE()` } as any).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, true)));
+  await db.update(obraFuncionarios).set({ isActive: 0, dataFim: sql`CURDATE()` } as any).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, 1)));
   await db.update(employees).set({ obraAtualId: null } as any).where(eq(employees.id, employeeId));
 }
 

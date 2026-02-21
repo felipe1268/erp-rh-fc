@@ -85,7 +85,7 @@ export const appRouter = router({
       cep: z.string().optional(), telefone: z.string().optional(), email: z.string().optional(), isActive: z.boolean().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
-      await updateCompany(id, data);
+      await updateCompany(id, { ...data, isActive: data.isActive !== undefined ? (data.isActive ? 1 : 0) : undefined } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "empresas", entityType: "company", entityId: id, details: `Empresa atualizada` });
       return { success: true };
     }),
@@ -399,7 +399,7 @@ export const appRouter = router({
       const result = await db.insert(users).values({
         openId, name: input.name, email: input.email || null,
         username: input.username, password: hashed,
-        mustChangePassword: true, loginMethod: "local", role: input.role,
+        mustChangePassword: 1, loginMethod: "local", role: input.role,
       });
       return { id: Number(result[0].insertId), username: input.username, defaultPassword: defaultPwd };
     }),
@@ -420,7 +420,7 @@ export const appRouter = router({
       const token = jwt.default.sign({ userId: user.id, openId: user.openId }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" });
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
-      await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
+      await db.update(users).set({ lastSignedIn: new Date().toISOString() }).where(eq(users.id, user.id));
       return { success: true, mustChangePassword: !!user.mustChangePassword, user: { id: user.id, name: user.name, role: user.role } };
     }),
     changePassword: protectedProcedure.input(z.object({
@@ -437,7 +437,7 @@ export const appRouter = router({
       const valid = bcrypt.compareSync(input.currentPassword, user.password);
       if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha atual incorreta" });
       const hashed = bcrypt.hashSync(input.newPassword, 10);
-      await db.update(users).set({ password: hashed, mustChangePassword: false }).where(eq(users.id, ctx.user.id));
+      await db.update(users).set({ password: hashed, mustChangePassword: 0 } as any).where(eq(users.id, ctx.user.id));
       return { success: true };
     }),
     resetPassword: protectedProcedure.input(z.object({
@@ -452,7 +452,7 @@ export const appRouter = router({
       const { eq } = await import("drizzle-orm");
       const defaultPwd = "fc2026";
       const hashed = bcrypt.hashSync(defaultPwd, 10);
-      await db.update(users).set({ password: hashed, mustChangePassword: true }).where(eq(users.id, input.userId));
+      await db.update(users).set({ password: hashed, mustChangePassword: 1 } as any).where(eq(users.id, input.userId));
       return { success: true, defaultPassword: defaultPwd };
     }),
   }),

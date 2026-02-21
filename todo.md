@@ -403,3 +403,11 @@
 - [x] Corrigir bug de criação de obra (strings vazias em campos date)
 - [x] Corrigir bug de Select de status sobrepondo nomes
 - [x] Atualizar menu lateral para refletir apenas módulos ativos
+## Fase 31: Selects Dinâmicos de Setor e Função
+- [x] Transformar campo Função em Select dinâmico (puxando da tabela funcoes da empresa selecionada)
+- [x] Transformar campo Setor em Select dinâmico (puxando da tabela setores da empresa selecionada)
+- [x] Atualizar ao trocar empresa no formulário
+## Fase 32: Jornada de Trabalho Dia a Dia
+- [x] Reestruturar campo jornada para tabela dia a dia (Seg-Dom) com Entrada, Intervalo (duração), Saída
+- [x] Atualizar backend para salvar/carregar jornada como JSON
+- [x] Atualizar visualização do colaborador para mostrar jornada dia a dia

@@ -1,930 +1,747 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, boolean, json } from "drizzle-orm/mysql-core";
-
-// ============================================================
-// AUTH & USERS
-// ============================================================
-
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  username: varchar("username", { length: 100 }),
-  password: varchar("password", { length: 255 }),
-  mustChangePassword: boolean("mustChangePassword").default(true),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
-
-export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
-
-// ============================================================
-// MULTI-TENANT: EMPRESAS
-// ============================================================
-
-export const companies = mysqlTable("companies", {
-  id: int("id").autoincrement().primaryKey(),
-  cnpj: varchar("cnpj", { length: 18 }).notNull().unique(),
-  razaoSocial: varchar("razaoSocial", { length: 255 }).notNull(),
-  nomeFantasia: varchar("nomeFantasia", { length: 255 }),
-  endereco: text("endereco"),
-  cidade: varchar("cidade", { length: 100 }),
-  estado: varchar("estado", { length: 2 }),
-  cep: varchar("cep", { length: 10 }),
-  telefone: varchar("telefone", { length: 20 }),
-  email: varchar("email", { length: 320 }),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Company = typeof companies.$inferSelect;
-export type InsertCompany = typeof companies.$inferInsert;
-
-// ============================================================
-// SETORES
-// ============================================================
-
-export const sectors = mysqlTable("sectors", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  nome: varchar("nome", { length: 100 }).notNull(),
-  descricao: varchar("descricao", { length: 255 }),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Sector = typeof sectors.$inferSelect;
-export type InsertSector = typeof sectors.$inferInsert;
-
-// ============================================================
-// FUNÇÕES
-// ============================================================
-
-export const jobFunctions = mysqlTable("job_functions", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  nome: varchar("nome", { length: 100 }).notNull(),
-  descricao: varchar("descricao", { length: 255 }),
-  cbo: varchar("cbo", { length: 10 }),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type JobFunction = typeof jobFunctions.$inferSelect;
-export type InsertJobFunction = typeof jobFunctions.$inferInsert;
-
-// ============================================================
-// PERFIS E PERMISSÕES
-// ============================================================
-
-export const userProfiles = mysqlTable("user_profiles", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  companyId: int("companyId").notNull(),
-  profileType: mysqlEnum("profileType", [
-    "adm_master",
-    "adm",
-    "operacional",
-    "avaliador",
-    "consulta",
-  ]).notNull(),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type UserProfile = typeof userProfiles.$inferSelect;
-export type InsertUserProfile = typeof userProfiles.$inferInsert;
-
-export const permissions = mysqlTable("permissions", {
-  id: int("id").autoincrement().primaryKey(),
-  profileId: int("profileId").notNull(),
-  module: varchar("module", { length: 50 }).notNull(),
-  canView: boolean("canView").default(false).notNull(),
-  canCreate: boolean("canCreate").default(false).notNull(),
-  canEdit: boolean("canEdit").default(false).notNull(),
-  canDelete: boolean("canDelete").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type Permission = typeof permissions.$inferSelect;
-export type InsertPermission = typeof permissions.$inferInsert;
-
-// ============================================================
-// CORE RH: COLABORADORES
-// ============================================================
-
-export const employees = mysqlTable("employees", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  matricula: varchar("matricula", { length: 20 }),
-
-  // Dados Pessoais
-  nomeCompleto: varchar("nomeCompleto", { length: 255 }).notNull(),
-  cpf: varchar("cpf", { length: 14 }).notNull(),
-  rg: varchar("rg", { length: 20 }),
-  orgaoEmissor: varchar("orgaoEmissor", { length: 20 }),
-  dataNascimento: date("dataNascimento"),
-  sexo: mysqlEnum("sexo", ["M", "F", "Outro"]),
-  estadoCivil: mysqlEnum("estadoCivil", ["Solteiro", "Casado", "Divorciado", "Viuvo", "Uniao_Estavel"]),
-  nacionalidade: varchar("nacionalidade", { length: 50 }),
-  naturalidade: varchar("naturalidade", { length: 100 }),
-  nomeMae: varchar("nomeMae", { length: 255 }),
-  nomePai: varchar("nomePai", { length: 255 }),
-
-  // Documentos
-  ctps: varchar("ctps", { length: 20 }),
-  serieCTPS: varchar("serieCTPS", { length: 10 }),
-  pis: varchar("pis", { length: 20 }),
-  tituloEleitor: varchar("tituloEleitor", { length: 20 }),
-  certificadoReservista: varchar("certificadoReservista", { length: 20 }),
-  cnh: varchar("cnh", { length: 20 }),
-  categoriaCNH: varchar("categoriaCNH", { length: 5 }),
-  validadeCNH: date("validadeCNH"),
-
-  // Endereço
-  logradouro: varchar("logradouro", { length: 255 }),
-  numero: varchar("numero", { length: 20 }),
-  complemento: varchar("complemento", { length: 100 }),
-  bairro: varchar("bairro", { length: 100 }),
-  cidade: varchar("cidade", { length: 100 }),
-  estado: varchar("estado", { length: 2 }),
-  cep: varchar("cep", { length: 10 }),
-
-  // Contato
-  telefone: varchar("telefone", { length: 20 }),
-  celular: varchar("celular", { length: 20 }),
-  email: varchar("email", { length: 320 }),
-  contatoEmergencia: varchar("contatoEmergencia", { length: 255 }),
-  telefoneEmergencia: varchar("telefoneEmergencia", { length: 20 }),
-
-  // Dados Profissionais
-  cargo: varchar("cargo", { length: 100 }),
-  funcao: varchar("funcao", { length: 100 }),
-  setor: varchar("setor", { length: 100 }),
-  dataAdmissao: date("dataAdmissao"),
-  dataDemissao: date("dataDemissao"),
-  salarioBase: varchar("salarioBase", { length: 20 }),
-  valorHora: varchar("valorHora", { length: 20 }),
-  horasMensais: varchar("horasMensais", { length: 10 }),
-  tipoContrato: mysqlEnum("tipoContrato", ["CLT", "PJ", "Temporario", "Estagio", "Aprendiz"]),
-  jornadaTrabalho: varchar("jornadaTrabalho", { length: 50 }),
-
-  // Dados Bancários
-  banco: varchar("banco", { length: 100 }),
-  bancoNome: varchar("bancoNome", { length: 100 }),
-  agencia: varchar("agencia", { length: 20 }),
-  conta: varchar("conta", { length: 30 }),
-  tipoConta: mysqlEnum("tipoConta", ["Corrente", "Poupanca", "Salario"]),
-  tipoChavePix: mysqlEnum("tipoChavePix", ["CPF", "Celular", "Email", "Aleatoria"]),
-  chavePix: varchar("chavePix", { length: 100 }),
-  contaPix: varchar("contaPix", { length: 100 }),
-  bancoPix: varchar("bancoPix", { length: 100 }),
-
-  // Status
-  status: mysqlEnum("status", [
-    "Ativo",
-    "Ferias",
-    "Afastado",
-    "Licenca",
-    "Desligado",
-    "Recluso",
-    "Lista_Negra",
-  ]).default("Ativo").notNull(),
-
-  // Lista Negra
-  listaNegra: boolean("listaNegra").default(false).notNull(),
-  motivoListaNegra: text("motivoListaNegra"),
-  dataListaNegra: date("dataListaNegra"),
-
-  // Obra Atual
-  obraAtualId: int("obraAtualId"), // Vinculado à obra onde está alocado
-
-  // Foto
-  fotoUrl: text("fotoUrl"),
-
-  // Observações
-  observacoes: text("observacoes"),
-
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Employee = typeof employees.$inferSelect;
-export type InsertEmployee = typeof employees.$inferInsert;
-
-// ============================================================
-// HISTÓRICO FUNCIONAL
-// ============================================================
-
-export const employeeHistory = mysqlTable("employee_history", {
-  id: int("id").autoincrement().primaryKey(),
-  employeeId: int("employeeId").notNull(),
-  companyId: int("companyId").notNull(),
-  tipo: mysqlEnum("tipo", [
-    "Admissao",
-    "Promocao",
-    "Transferencia",
-    "Mudanca_Funcao",
-    "Mudanca_Setor",
-    "Mudanca_Salario",
-    "Afastamento",
-    "Retorno",
-    "Ferias",
-    "Desligamento",
-    "Outros",
-  ]).notNull(),
-  descricao: text("descricao"),
-  valorAnterior: text("valorAnterior"),
-  valorNovo: text("valorNovo"),
-  dataEvento: date("dataEvento").notNull(),
-  registradoPor: int("registradoPor"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type EmployeeHistory = typeof employeeHistory.$inferSelect;
-export type InsertEmployeeHistory = typeof employeeHistory.$inferInsert;
-
-// ============================================================
-// AUDITORIA DE SISTEMA
-// ============================================================
-
-export const auditLogs = mysqlTable("audit_logs", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId"),
-  userName: varchar("userName", { length: 255 }),
-  companyId: int("companyId"),
-  action: varchar("action", { length: 50 }).notNull(),
-  module: varchar("module", { length: 50 }).notNull(),
-  entityType: varchar("entityType", { length: 50 }),
-  entityId: int("entityId"),
-  details: text("details"),
-  ipAddress: varchar("ipAddress", { length: 45 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type AuditLog = typeof auditLogs.$inferSelect;
-export type InsertAuditLog = typeof auditLogs.$inferInsert;
-
-// ============================================================
-// MÓDULO SST: ASOs
-// ============================================================
-
-export const asos = mysqlTable("asos", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  tipo: mysqlEnum("tipo", ["Admissional", "Periodico", "Retorno", "Mudanca_Funcao", "Demissional"]).notNull(),
-  dataExame: date("dataExame").notNull(),
-  dataValidade: date("dataValidade").notNull(),
-  resultado: mysqlEnum("resultado", ["Apto", "Inapto", "Apto_Restricao"]).default("Apto").notNull(),
-  medico: varchar("medico", { length: 255 }),
-  crm: varchar("crm", { length: 20 }),
-  clinica: varchar("clinica", { length: 255 }),
-  observacoes: text("observacoes"),
-  documentoUrl: text("documentoUrl"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Aso = typeof asos.$inferSelect;
-
-// ============================================================
-// MÓDULO SST: TREINAMENTOS
-// ============================================================
-
-export const trainings = mysqlTable("trainings", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  nome: varchar("nome", { length: 255 }).notNull(),
-  norma: varchar("norma", { length: 50 }),
-  cargaHoraria: varchar("cargaHoraria", { length: 20 }),
-  dataRealizacao: date("dataRealizacao").notNull(),
-  dataValidade: date("dataValidade"),
-  instrutor: varchar("instrutor", { length: 255 }),
-  entidade: varchar("entidade", { length: 255 }),
-  certificadoUrl: text("certificadoUrl"),
-  status: mysqlEnum("statusTreinamento", ["Valido", "Vencido", "A_Vencer"]).default("Valido").notNull(),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Training = typeof trainings.$inferSelect;
-
-// ============================================================
-// MÓDULO SST: EPIs
-// ============================================================
-
-export const epis = mysqlTable("epis", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  nome: varchar("nome", { length: 255 }).notNull(),
-  ca: varchar("ca", { length: 20 }),
-  validadeCA: date("validadeCA"),
-  fabricante: varchar("fabricante", { length: 255 }),
-  quantidadeEstoque: int("quantidadeEstoque").default(0),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Epi = typeof epis.$inferSelect;
-
-export const epiDeliveries = mysqlTable("epi_deliveries", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  epiId: int("epiId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  quantidade: int("quantidade").default(1).notNull(),
-  dataEntrega: date("dataEntrega").notNull(),
-  dataDevolucao: date("dataDevolucao"),
-  motivo: varchar("motivo", { length: 255 }),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type EpiDelivery = typeof epiDeliveries.$inferSelect;
-
-// ============================================================
-// MÓDULO SST: ACIDENTES
-// ============================================================
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, date, varchar, mysqlEnum, text, timestamp, index, tinyint, boolean, json } from "drizzle-orm/mysql-core"
+import { sql } from "drizzle-orm"
 
 export const accidents = mysqlTable("accidents", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  dataAcidente: date("dataAcidente").notNull(),
-  horaAcidente: varchar("horaAcidente", { length: 10 }),
-  tipo: mysqlEnum("tipoAcidente", ["Tipico", "Trajeto", "Doenca_Ocupacional"]).notNull(),
-  gravidade: mysqlEnum("gravidade", ["Leve", "Moderado", "Grave", "Fatal"]).notNull(),
-  localAcidente: varchar("localAcidente", { length: 255 }),
-  descricao: text("descricao"),
-  parteCorpoAtingida: varchar("parteCorpoAtingida", { length: 255 }),
-  catNumero: varchar("catNumero", { length: 50 }),
-  catData: date("catData"),
-  diasAfastamento: int("diasAfastamento").default(0),
-  testemunhas: text("testemunhas"),
-  acaoCorretiva: text("acaoCorretiva"),
-  documentoUrl: text("documentoUrl"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataAcidente: date({ mode: 'string' }).notNull(),
+	horaAcidente: varchar({ length: 10 }),
+	tipoAcidente: mysqlEnum(['Tipico','Trajeto','Doenca_Ocupacional']).notNull(),
+	gravidade: mysqlEnum(['Leve','Moderado','Grave','Fatal']).notNull(),
+	localAcidente: varchar({ length: 255 }),
+	descricao: text(),
+	parteCorpoAtingida: varchar({ length: 255 }),
+	catNumero: varchar({ length: 50 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	catData: date({ mode: 'string' }),
+	diasAfastamento: int().default(0),
+	testemunhas: text(),
+	acaoCorretiva: text(),
+	documentoUrl: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-
-export type Accident = typeof accidents.$inferSelect;
-
-// ============================================================
-// MÓDULO SST: ADVERTÊNCIAS / OSS
-// ============================================================
-
-export const warnings = mysqlTable("warnings", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  tipo: mysqlEnum("tipoAdvertencia", ["Verbal", "Escrita", "Suspensao", "OSS"]).notNull(),
-  dataOcorrencia: date("dataOcorrencia").notNull(),
-  motivo: text("motivo").notNull(),
-  descricao: text("descricao"),
-  testemunhas: text("testemunhas"),
-  documentoUrl: text("documentoUrl"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Warning = typeof warnings.$inferSelect;
-
-// ============================================================
-// MÓDULO SST: RISCOS OCUPACIONAIS
-// ============================================================
-
-export const risks = mysqlTable("risks", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  setor: varchar("setor", { length: 100 }).notNull(),
-  agenteRisco: varchar("agenteRisco", { length: 255 }).notNull(),
-  tipoRisco: mysqlEnum("tipoRisco", ["Fisico", "Quimico", "Biologico", "Ergonomico", "Acidente"]).notNull(),
-  fonteGeradora: varchar("fonteGeradora", { length: 255 }),
-  grauRisco: mysqlEnum("grauRisco", ["Baixo", "Medio", "Alto", "Critico"]).notNull(),
-  medidasControle: text("medidasControle"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Risk = typeof risks.$inferSelect;
-
-// ============================================================
-// MÓDULO PONTO E FOLHA
-// ============================================================
-
-export const timeRecords = mysqlTable("time_records", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  data: date("data").notNull(),
-  entrada1: varchar("entrada1", { length: 10 }),
-  saida1: varchar("saida1", { length: 10 }),
-  entrada2: varchar("entrada2", { length: 10 }),
-  saida2: varchar("saida2", { length: 10 }),
-  entrada3: varchar("entrada3", { length: 10 }),
-  saida3: varchar("saida3", { length: 10 }),
-  horasTrabalhadas: varchar("horasTrabalhadas", { length: 10 }),
-  horasExtras: varchar("horasExtras", { length: 10 }),
-  horasNoturnas: varchar("horasNoturnas", { length: 10 }),
-  faltas: varchar("faltas", { length: 10 }),
-  atrasos: varchar("atrasos", { length: 10 }),
-  justificativa: text("justificativa"),
-  fonte: varchar("fonte", { length: 50 }).default("manual"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type TimeRecord = typeof timeRecords.$inferSelect;
-
-export const payroll = mysqlTable("payroll", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
-  tipo: mysqlEnum("tipoFolha", ["Mensal", "Adiantamento", "Ferias", "Rescisao", "PLR", "13_Salario"]).notNull(),
-  salarioBruto: varchar("salarioBruto", { length: 20 }),
-  totalProventos: varchar("totalProventos", { length: 20 }),
-  totalDescontos: varchar("totalDescontos", { length: 20 }),
-  salarioLiquido: varchar("salarioLiquido", { length: 20 }),
-  inss: varchar("inss", { length: 20 }),
-  irrf: varchar("irrf", { length: 20 }),
-  fgts: varchar("fgts", { length: 20 }),
-  valeTransporte: varchar("valeTransporte", { length: 20 }),
-  valeAlimentacao: varchar("valeAlimentacao", { length: 20 }),
-  outrosProventos: text("outrosProventos"),
-  outrosDescontos: text("outrosDescontos"),
-  bancoDestino: varchar("bancoDestino", { length: 100 }),
-  dataPagamento: date("dataPagamento"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Payroll = typeof payroll.$inferSelect;
-
-// ============================================================
-// MÓDULO GESTÃO DE ATIVOS
-// ============================================================
-
-export const vehicles = mysqlTable("vehicles", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  tipo: mysqlEnum("tipoVeiculo", ["Carro", "Caminhao", "Van", "Moto", "Maquina_Pesada", "Outro"]).notNull(),
-  placa: varchar("placa", { length: 10 }),
-  modelo: varchar("modelo", { length: 100 }).notNull(),
-  marca: varchar("marca", { length: 100 }),
-  anoFabricacao: varchar("anoFabricacao", { length: 4 }),
-  renavam: varchar("renavam", { length: 20 }),
-  chassi: varchar("chassi", { length: 30 }),
-  responsavel: varchar("responsavel", { length: 255 }),
-  status: mysqlEnum("statusVeiculo", ["Ativo", "Manutencao", "Inativo"]).default("Ativo").notNull(),
-  proximaManutencao: date("proximaManutencao"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Vehicle = typeof vehicles.$inferSelect;
-
-export const equipment = mysqlTable("equipment", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  nome: varchar("nome", { length: 255 }).notNull(),
-  patrimonio: varchar("patrimonio", { length: 50 }),
-  tipo: varchar("tipoEquipamento", { length: 100 }),
-  marca: varchar("marca", { length: 100 }),
-  modelo: varchar("modelo", { length: 100 }),
-  numeroSerie: varchar("numeroSerie", { length: 100 }),
-  localizacao: varchar("localizacao", { length: 255 }),
-  responsavel: varchar("responsavel", { length: 255 }),
-  status: mysqlEnum("statusEquipamento", ["Ativo", "Manutencao", "Inativo", "Descartado"]).default("Ativo").notNull(),
-  dataAquisicao: date("dataAquisicao"),
-  proximaManutencao: date("proximaManutencao"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Equipment = typeof equipment.$inferSelect;
-
-export const extinguishers = mysqlTable("extinguishers", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  numero: varchar("numero", { length: 20 }).notNull(),
-  tipo: mysqlEnum("tipoExtintor", ["PQS", "CO2", "Agua", "Espuma", "AP"]).notNull(),
-  capacidade: varchar("capacidade", { length: 20 }),
-  localizacao: varchar("localizacao", { length: 255 }),
-  dataRecarga: date("dataRecarga"),
-  validadeRecarga: date("validadeRecarga"),
-  dataTesteHidrostatico: date("dataTesteHidrostatico"),
-  validadeTesteHidrostatico: date("validadeTesteHidrostatico"),
-  status: mysqlEnum("statusExtintor", ["OK", "Vencido", "Manutencao"]).default("OK").notNull(),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Extinguisher = typeof extinguishers.$inferSelect;
-
-export const hydrants = mysqlTable("hydrants", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  numero: varchar("numero", { length: 20 }).notNull(),
-  localizacao: varchar("localizacao", { length: 255 }),
-  tipo: varchar("tipoHidrante", { length: 50 }),
-  ultimaInspecao: date("ultimaInspecao"),
-  proximaInspecao: date("proximaInspecao"),
-  status: mysqlEnum("statusHidrante", ["OK", "Manutencao", "Inativo"]).default("OK").notNull(),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Hydrant = typeof hydrants.$inferSelect;
-
-// ============================================================
-// MÓDULO AUDITORIA E QUALIDADE
-// ============================================================
-
-export const audits = mysqlTable("audits", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  titulo: varchar("titulo", { length: 255 }).notNull(),
-  tipo: mysqlEnum("tipoAuditoria", ["Interna", "Externa", "Cliente", "Certificadora"]).notNull(),
-  dataAuditoria: date("dataAuditoria").notNull(),
-  auditor: varchar("auditor", { length: 255 }),
-  setor: varchar("setor", { length: 100 }),
-  resultado: mysqlEnum("resultadoAuditoria", ["Conforme", "Nao_Conforme", "Observacao", "Pendente"]).default("Pendente").notNull(),
-  descricao: text("descricao"),
-  documentoUrl: text("documentoUrl"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Audit = typeof audits.$inferSelect;
-
-export const deviations = mysqlTable("deviations", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  auditId: int("auditId"),
-  titulo: varchar("titulo", { length: 255 }).notNull(),
-  tipo: mysqlEnum("tipoDesvio", ["NC_Maior", "NC_Menor", "Observacao", "Oportunidade_Melhoria"]).notNull(),
-  setor: varchar("setor", { length: 100 }),
-  descricao: text("descricao"),
-  causaRaiz: text("causaRaiz"),
-  status: mysqlEnum("statusDesvio", ["Aberto", "Em_Andamento", "Fechado", "Cancelado"]).default("Aberto").notNull(),
-  responsavel: varchar("responsavel", { length: 255 }),
-  prazo: date("prazo"),
-  dataConclusao: date("dataConclusao"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Deviation = typeof deviations.$inferSelect;
 
 export const actionPlans = mysqlTable("action_plans", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  deviationId: int("deviationId"),
-  oQue: text("oQue").notNull(),
-  porQue: text("porQue"),
-  onde: varchar("onde", { length: 255 }),
-  quando: date("quando"),
-  quem: varchar("quem", { length: 255 }),
-  como: text("como"),
-  quantoCusta: varchar("quantoCusta", { length: 50 }),
-  status: mysqlEnum("statusPlano", ["Pendente", "Em_Andamento", "Concluido", "Cancelado"]).default("Pendente").notNull(),
-  dataConclusao: date("dataConclusao"),
-  evidencia: text("evidencia"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	deviationId: int(),
+	oQue: text().notNull(),
+	porQue: text(),
+	onde: varchar({ length: 255 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	quando: date({ mode: 'string' }),
+	quem: varchar({ length: 255 }),
+	como: text(),
+	quantoCusta: varchar({ length: 50 }),
+	statusPlano: mysqlEnum(['Pendente','Em_Andamento','Concluido','Cancelado']).default('Pendente').notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataConclusao: date({ mode: 'string' }),
+	evidencia: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-
-export type ActionPlan = typeof actionPlans.$inferSelect;
-
-export const chemicals = mysqlTable("chemicals", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  nome: varchar("nome", { length: 255 }).notNull(),
-  fabricante: varchar("fabricante", { length: 255 }),
-  numeroCAS: varchar("numeroCAS", { length: 50 }),
-  classificacaoPerigo: varchar("classificacaoPerigo", { length: 255 }),
-  localArmazenamento: varchar("localArmazenamento", { length: 255 }),
-  quantidadeEstoque: varchar("quantidadeEstoque", { length: 50 }),
-  fispqUrl: text("fispqUrl"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Chemical = typeof chemicals.$inferSelect;
-
-export const dds = mysqlTable("dds", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  tema: varchar("tema", { length: 255 }).notNull(),
-  dataRealizacao: date("dataRealizacao").notNull(),
-  responsavel: varchar("responsavel", { length: 255 }),
-  participantes: text("participantes"),
-  descricao: text("descricao"),
-  documentoUrl: text("documentoUrl"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type Dds = typeof dds.$inferSelect;
-
-// ============================================================
-// MÓDULO CIPA
-// ============================================================
-
-export const cipaElections = mysqlTable("cipa_elections", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  mandatoInicio: date("mandatoInicio").notNull(),
-  mandatoFim: date("mandatoFim").notNull(),
-  statusEleicao: mysqlEnum("statusEleicao", ["Planejamento", "Inscricao", "Campanha", "Votacao", "Apuracao", "Concluida"]).default("Planejamento").notNull(),
-  dataEdital: date("dataEdital"),
-  dataInscricaoInicio: date("dataInscricaoInicio"),
-  dataInscricaoFim: date("dataInscricaoFim"),
-  dataEleicao: date("dataEleicao"),
-  dataPosse: date("dataPosse"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type CipaElection = typeof cipaElections.$inferSelect;
-
-export const cipaMembers = mysqlTable("cipa_members", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  electionId: int("electionId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  cargo: mysqlEnum("cargoCipa", ["Presidente", "Vice_Presidente", "Secretario", "Membro_Titular", "Membro_Suplente"]).notNull(),
-  representacao: mysqlEnum("representacao", ["Empregador", "Empregados"]).notNull(),
-  inicioEstabilidade: date("inicioEstabilidade"),
-  fimEstabilidade: date("fimEstabilidade"),
-  status: mysqlEnum("statusMembro", ["Ativo", "Desligado", "Substituido"]).default("Ativo").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type CipaMember = typeof cipaMembers.$inferSelect;
-
-
-// ============================================================
-// DOCUMENTOS DE TREINAMENTO
-// ============================================================
-
-export const trainingDocuments = mysqlTable("training_documents", {
-  id: int("id").autoincrement().primaryKey(),
-  trainingId: int("trainingId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  companyId: int("companyId").notNull(),
-  fileName: varchar("fileName", { length: 255 }).notNull(),
-  fileUrl: text("fileUrl").notNull(),
-  fileKey: varchar("fileKey", { length: 500 }).notNull(),
-  fileSize: int("fileSize"),
-  mimeType: varchar("mimeType", { length: 100 }),
-  description: text("description"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-export type TrainingDocument = typeof trainingDocuments.$inferSelect;
-
-// ============================================================
-// UPLOADS DE FOLHA DE PAGAMENTO (Cartão de Ponto, Folha, Vale)
-// ============================================================
-
-export const payrollUploads = mysqlTable("payroll_uploads", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  category: mysqlEnum("category", [
-    "cartao_ponto",
-    "espelho_adiantamento_analitico",
-    "adiantamento_sintetico",
-    "adiantamento_banco_cef",
-    "adiantamento_banco_santander",
-    "espelho_folha_analitico",
-    "folha_sintetico",
-    "pagamento_banco_cef",
-    "pagamento_banco_santander",
-  ]).notNull(),
-  month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
-  fileName: varchar("fileName", { length: 255 }).notNull(),
-  fileUrl: text("fileUrl").notNull(),
-  fileKey: varchar("fileKey", { length: 500 }).notNull(),
-  fileSize: int("fileSize"),
-  mimeType: varchar("mimeType", { length: 100 }),
-  status: mysqlEnum("uploadStatus", ["pendente", "processando", "processado", "erro"]).default("pendente").notNull(),
-  recordsProcessed: int("recordsProcessed").default(0),
-  errorMessage: text("errorMessage"),
-  uploadedBy: int("uploadedBy"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-export type PayrollUpload = typeof payrollUploads.$inferSelect;
-
-// ============================================================
-// EQUIPAMENTOS DIXI (Cartão de Ponto vinculado à Obra)
-// ============================================================
-
-export const dixiDevices = mysqlTable("dixi_devices", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  serialNumber: varchar("serialNumber", { length: 50 }).notNull(), // Sn do Dixi
-  obraId: int("obraId"), // Vinculado à obra
-  obraName: varchar("obraName", { length: 255 }).notNull(),
-  location: text("location"),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-export type DixiDevice = typeof dixiDevices.$inferSelect;
-
-// ============================================================
-// VALES / ADIANTAMENTOS (com aprovação)
-// ============================================================
 
 export const advances = mysqlTable("advances", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
-  valorAdiantamento: varchar("valorAdiantamento", { length: 20 }),
-  valorLiquido: varchar("valorLiquido", { length: 20 }),
-  descontoIR: varchar("descontoIR", { length: 20 }),
-  bancoDestino: varchar("bancoDestino", { length: 100 }),
-  diasFaltas: int("diasFaltas").default(0),
-  aprovado: mysqlEnum("aprovado", ["Pendente", "Aprovado", "Reprovado"]).default("Pendente").notNull(),
-  motivoReprovacao: text("motivoReprovacao"),
-  dataPagamento: date("dataPagamento"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	valorAdiantamento: varchar({ length: 20 }),
+	valorLiquido: varchar({ length: 20 }),
+	descontoIr: varchar({ length: 20 }),
+	bancoDestino: varchar({ length: 100 }),
+	diasFaltas: int().default(0),
+	aprovado: mysqlEnum(['Pendente','Aprovado','Reprovado']).default('Pendente').notNull(),
+	motivoReprovacao: text(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataPagamento: date({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-export type Advance = typeof advances.$inferSelect;
 
-// ============================================================
-// PAGAMENTOS EXTRAS (diferença salário, horas extras por fora)
-// ============================================================
+export const asos = mysqlTable("asos", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	tipo: mysqlEnum(['Admissional','Periodico','Retorno','Mudanca_Funcao','Demissional']).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataExame: date({ mode: 'string' }).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataValidade: date({ mode: 'string' }).notNull(),
+	resultado: mysqlEnum(['Apto','Inapto','Apto_Restricao']).default('Apto').notNull(),
+	medico: varchar({ length: 255 }),
+	crm: varchar({ length: 20 }),
+	clinica: varchar({ length: 255 }),
+	observacoes: text(),
+	documentoUrl: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const auditLogs = mysqlTable("audit_logs", {
+	id: int().autoincrement().notNull(),
+	userId: int(),
+	userName: varchar({ length: 255 }),
+	companyId: int(),
+	action: varchar({ length: 50 }).notNull(),
+	module: varchar({ length: 50 }).notNull(),
+	entityType: varchar({ length: 50 }),
+	entityId: int(),
+	details: text(),
+	ipAddress: varchar({ length: 45 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const audits = mysqlTable("audits", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	titulo: varchar({ length: 255 }).notNull(),
+	tipoAuditoria: mysqlEnum(['Interna','Externa','Cliente','Certificadora']).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataAuditoria: date({ mode: 'string' }).notNull(),
+	auditor: varchar({ length: 255 }),
+	setor: varchar({ length: 100 }),
+	resultadoAuditoria: mysqlEnum(['Conforme','Nao_Conforme','Observacao','Pendente']).default('Pendente').notNull(),
+	descricao: text(),
+	documentoUrl: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const chemicals = mysqlTable("chemicals", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	fabricante: varchar({ length: 255 }),
+	numeroCas: varchar({ length: 50 }),
+	classificacaoPerigo: varchar({ length: 255 }),
+	localArmazenamento: varchar({ length: 255 }),
+	quantidadeEstoque: varchar({ length: 50 }),
+	fispqUrl: text(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const cipaElections = mysqlTable("cipa_elections", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	mandatoInicio: date({ mode: 'string' }).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	mandatoFim: date({ mode: 'string' }).notNull(),
+	statusEleicao: mysqlEnum(['Planejamento','Inscricao','Campanha','Votacao','Apuracao','Concluida']).default('Planejamento').notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataEdital: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataInscricaoInicio: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataInscricaoFim: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataEleicao: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataPosse: date({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const cipaMembers = mysqlTable("cipa_members", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	electionId: int().notNull(),
+	employeeId: int().notNull(),
+	cargoCipa: mysqlEnum(['Presidente','Vice_Presidente','Secretario','Membro_Titular','Membro_Suplente']).notNull(),
+	representacao: mysqlEnum(['Empregador','Empregados']).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	inicioEstabilidade: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	fimEstabilidade: date({ mode: 'string' }),
+	statusMembro: mysqlEnum(['Ativo','Desligado','Substituido']).default('Ativo').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const companies = mysqlTable("companies", {
+	id: int().autoincrement().notNull(),
+	cnpj: varchar({ length: 18 }).notNull(),
+	razaoSocial: varchar({ length: 255 }).notNull(),
+	nomeFantasia: varchar({ length: 255 }),
+	endereco: text(),
+	cidade: varchar({ length: 100 }),
+	estado: varchar({ length: 2 }),
+	cep: varchar({ length: 10 }),
+	telefone: varchar({ length: 20 }),
+	email: varchar({ length: 320 }),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("companies_cnpj_unique").on(table.cnpj),
+]);
+
+export const dds = mysqlTable("dds", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	tema: varchar({ length: 255 }).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataRealizacao: date({ mode: 'string' }).notNull(),
+	responsavel: varchar({ length: 255 }),
+	participantes: text(),
+	descricao: text(),
+	documentoUrl: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const deviations = mysqlTable("deviations", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	auditId: int(),
+	titulo: varchar({ length: 255 }).notNull(),
+	tipoDesvio: mysqlEnum(['NC_Maior','NC_Menor','Observacao','Oportunidade_Melhoria']).notNull(),
+	setor: varchar({ length: 100 }),
+	descricao: text(),
+	causaRaiz: text(),
+	statusDesvio: mysqlEnum(['Aberto','Em_Andamento','Fechado','Cancelado']).default('Aberto').notNull(),
+	responsavel: varchar({ length: 255 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	prazo: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataConclusao: date({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const dixiDevices = mysqlTable("dixi_devices", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	serialNumber: varchar({ length: 50 }).notNull(),
+	obraName: varchar({ length: 255 }).notNull(),
+	location: text(),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	obraId: int(),
+});
+
+export const employeeHistory = mysqlTable("employee_history", {
+	id: int().autoincrement().notNull(),
+	employeeId: int().notNull(),
+	companyId: int().notNull(),
+	tipo: mysqlEnum(['Admissao','Promocao','Transferencia','Mudanca_Funcao','Mudanca_Setor','Mudanca_Salario','Afastamento','Retorno','Ferias','Desligamento','Outros']).notNull(),
+	descricao: text(),
+	valorAnterior: text(),
+	valorNovo: text(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataEvento: date({ mode: 'string' }).notNull(),
+	registradoPor: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const employees = mysqlTable("employees", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	matricula: varchar({ length: 20 }),
+	nomeCompleto: varchar({ length: 255 }).notNull(),
+	cpf: varchar({ length: 14 }).notNull(),
+	rg: varchar({ length: 20 }),
+	orgaoEmissor: varchar({ length: 20 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataNascimento: date({ mode: 'string' }),
+	sexo: mysqlEnum(['M','F','Outro']),
+	estadoCivil: mysqlEnum(['Solteiro','Casado','Divorciado','Viuvo','Uniao_Estavel']),
+	nacionalidade: varchar({ length: 50 }),
+	naturalidade: varchar({ length: 100 }),
+	nomeMae: varchar({ length: 255 }),
+	nomePai: varchar({ length: 255 }),
+	ctps: varchar({ length: 20 }),
+	serieCtps: varchar({ length: 10 }),
+	pis: varchar({ length: 20 }),
+	tituloEleitor: varchar({ length: 20 }),
+	certificadoReservista: varchar({ length: 20 }),
+	cnh: varchar({ length: 20 }),
+	categoriaCnh: varchar({ length: 5 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	validadeCnh: date({ mode: 'string' }),
+	logradouro: varchar({ length: 255 }),
+	numero: varchar({ length: 20 }),
+	complemento: varchar({ length: 100 }),
+	bairro: varchar({ length: 100 }),
+	cidade: varchar({ length: 100 }),
+	estado: varchar({ length: 2 }),
+	cep: varchar({ length: 10 }),
+	telefone: varchar({ length: 20 }),
+	celular: varchar({ length: 20 }),
+	email: varchar({ length: 320 }),
+	contatoEmergencia: varchar({ length: 255 }),
+	telefoneEmergencia: varchar({ length: 20 }),
+	cargo: varchar({ length: 100 }),
+	funcao: varchar({ length: 100 }),
+	setor: varchar({ length: 100 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataAdmissao: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataDemissao: date({ mode: 'string' }),
+	salarioBase: varchar({ length: 20 }),
+	valorHora: varchar({ length: 20 }),
+	horasMensais: varchar({ length: 10 }),
+	tipoContrato: mysqlEnum(['CLT','PJ','Temporario','Estagio','Aprendiz']),
+	jornadaTrabalho: varchar({ length: 50 }),
+	banco: varchar({ length: 100 }),
+	bancoNome: varchar({ length: 100 }),
+	agencia: varchar({ length: 20 }),
+	conta: varchar({ length: 30 }),
+	tipoConta: mysqlEnum(['Corrente','Poupanca','Salario']),
+	tipoChavePix: mysqlEnum(['CPF','Celular','Email','Aleatoria']),
+	chavePix: varchar({ length: 100 }),
+	contaPix: varchar({ length: 100 }),
+	bancoPix: varchar({ length: 100 }),
+	status: mysqlEnum(['Ativo','Ferias','Afastado','Licenca','Desligado','Recluso','Lista_Negra']).default('Ativo').notNull(),
+	fotoUrl: text(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	listaNegra: tinyint().default(0).notNull(),
+	motivoListaNegra: text(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataListaNegra: date({ mode: 'string' }),
+	obraAtualId: int(),
+});
+
+export const epiDeliveries = mysqlTable("epi_deliveries", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	epiId: int().notNull(),
+	employeeId: int().notNull(),
+	quantidade: int().default(1).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataEntrega: date({ mode: 'string' }).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataDevolucao: date({ mode: 'string' }),
+	motivo: varchar({ length: 255 }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const epis = mysqlTable("epis", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	ca: varchar({ length: 20 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	validadeCa: date({ mode: 'string' }),
+	fabricante: varchar({ length: 255 }),
+	quantidadeEstoque: int().default(0),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const equipment = mysqlTable("equipment", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	patrimonio: varchar({ length: 50 }),
+	tipoEquipamento: varchar({ length: 100 }),
+	marca: varchar({ length: 100 }),
+	modelo: varchar({ length: 100 }),
+	numeroSerie: varchar({ length: 100 }),
+	localizacao: varchar({ length: 255 }),
+	responsavel: varchar({ length: 255 }),
+	statusEquipamento: mysqlEnum(['Ativo','Manutencao','Inativo','Descartado']).default('Ativo').notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataAquisicao: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	proximaManutencao: date({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const extinguishers = mysqlTable("extinguishers", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	numero: varchar({ length: 20 }).notNull(),
+	tipoExtintor: mysqlEnum(['PQS','CO2','Agua','Espuma','AP']).notNull(),
+	capacidade: varchar({ length: 20 }),
+	localizacao: varchar({ length: 255 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataRecarga: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	validadeRecarga: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataTesteHidrostatico: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	validadeTesteHidrostatico: date({ mode: 'string' }),
+	statusExtintor: mysqlEnum(['OK','Vencido','Manutencao']).default('OK').notNull(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
 
 export const extraPayments = mysqlTable("extra_payments", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
-  tipo: mysqlEnum("tipoExtra", ["Diferenca_Salario", "Horas_Extras", "Reembolso", "Bonus", "Outro"]).notNull(),
-  descricao: text("descricao"),
-  valorHoraBase: varchar("valorHoraBase", { length: 20 }),
-  percentualAcrescimo: varchar("percentualAcrescimo", { length: 10 }),
-  quantidadeHoras: varchar("quantidadeHoras", { length: 10 }),
-  valorTotal: varchar("valorTotal", { length: 20 }).notNull(),
-  bancoDestino: varchar("bancoDestino", { length: 100 }),
-  dataPagamento: date("dataPagamento"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	tipoExtra: mysqlEnum(['Diferenca_Salario','Horas_Extras','Reembolso','Bonus','Outro']).notNull(),
+	descricao: text(),
+	valorHoraBase: varchar({ length: 20 }),
+	percentualAcrescimo: varchar({ length: 10 }),
+	quantidadeHoras: varchar({ length: 10 }),
+	valorTotal: varchar({ length: 20 }).notNull(),
+	bancoDestino: varchar({ length: 100 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataPagamento: date({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-export type ExtraPayment = typeof extraPayments.$inferSelect;
 
-// ============================================================
-// VR / IFOOD BENEFÍCIOS
-// ============================================================
-
-export const vrBenefits = mysqlTable("vr_benefits", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
-  valorDiario: varchar("valorDiario", { length: 20 }),
-  diasUteis: int("diasUteis"),
-  valorTotal: varchar("valorTotal", { length: 20 }).notNull(),
-  operadora: varchar("operadora", { length: 100 }).default("iFood Benefícios"),
-  observacoes: text("observacoes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const hydrants = mysqlTable("hydrants", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	numero: varchar({ length: 20 }).notNull(),
+	localizacao: varchar({ length: 255 }),
+	tipoHidrante: varchar({ length: 50 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	ultimaInspecao: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	proximaInspecao: date({ mode: 'string' }),
+	statusHidrante: mysqlEnum(['OK','Manutencao','Inativo']).default('OK').notNull(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-export type VrBenefit = typeof vrBenefits.$inferSelect;
 
-// ============================================================
-// RESUMO MENSAL DA FOLHA (consolidado por funcionário/mês)
-// ============================================================
+export const jobFunctions = mysqlTable("job_functions", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 100 }).notNull(),
+	descricao: varchar({ length: 255 }),
+	cbo: varchar({ length: 10 }),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
 
 export const monthlyPayrollSummary = mysqlTable("monthly_payroll_summary", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  mesReferencia: varchar("mesReferencia", { length: 7 }).notNull(),
-  // Dados do funcionário no mês
-  nomeColaborador: varchar("nomeColaborador", { length: 255 }),
-  codigoContabil: varchar("codigoContabil", { length: 20 }),
-  funcao: varchar("funcao", { length: 100 }),
-  dataAdmissao: date("dataAdmissao"),
-  salarioBaseHora: varchar("salarioBaseHora", { length: 20 }),
-  horasMensais: varchar("horasMensais", { length: 10 }),
-  // Adiantamento
-  adiantamentoBruto: varchar("adiantamentoBruto", { length: 20 }),
-  adiantamentoDescontos: varchar("adiantamentoDescontos", { length: 20 }),
-  adiantamentoLiquido: varchar("adiantamentoLiquido", { length: 20 }),
-  // Folha
-  salarioHorista: varchar("salarioHorista", { length: 20 }),
-  dsr: varchar("dsr", { length: 20 }),
-  totalProventos: varchar("totalProventos", { length: 20 }),
-  totalDescontos: varchar("totalDescontos", { length: 20 }),
-  folhaLiquido: varchar("folhaLiquido", { length: 20 }),
-  // Encargos
-  baseINSS: varchar("baseINSS", { length: 20 }),
-  valorINSS: varchar("valorINSS", { length: 20 }),
-  baseFGTS: varchar("baseFGTS", { length: 20 }),
-  valorFGTS: varchar("valorFGTS", { length: 20 }),
-  baseIRRF: varchar("baseIRRF", { length: 20 }),
-  valorIRRF: varchar("valorIRRF", { length: 20 }),
-  // Extras
-  diferencaSalario: varchar("diferencaSalario", { length: 20 }),
-  horasExtrasValor: varchar("horasExtrasValor", { length: 20 }),
-  vrBeneficio: varchar("vrBeneficio", { length: 20 }),
-  // Banco de pagamento
-  bancoAdiantamento: varchar("bancoAdiantamento", { length: 100 }),
-  bancoFolha: varchar("bancoFolha", { length: 100 }),
-  // Custo total do funcionário
-  custoTotalMes: varchar("custoTotalMes", { length: 20 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	nomeColaborador: varchar({ length: 255 }),
+	codigoContabil: varchar({ length: 20 }),
+	funcao: varchar({ length: 100 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataAdmissao: date({ mode: 'string' }),
+	salarioBaseHora: varchar({ length: 20 }),
+	horasMensais: varchar({ length: 10 }),
+	adiantamentoBruto: varchar({ length: 20 }),
+	adiantamentoDescontos: varchar({ length: 20 }),
+	adiantamentoLiquido: varchar({ length: 20 }),
+	salarioHorista: varchar({ length: 20 }),
+	dsr: varchar({ length: 20 }),
+	totalProventos: varchar({ length: 20 }),
+	totalDescontos: varchar({ length: 20 }),
+	folhaLiquido: varchar({ length: 20 }),
+	baseInss: varchar({ length: 20 }),
+	valorInss: varchar({ length: 20 }),
+	baseFgts: varchar({ length: 20 }),
+	valorFgts: varchar({ length: 20 }),
+	baseIrrf: varchar({ length: 20 }),
+	valorIrrf: varchar({ length: 20 }),
+	diferencaSalario: varchar({ length: 20 }),
+	horasExtrasValor: varchar({ length: 20 }),
+	vrBeneficio: varchar({ length: 20 }),
+	bancoAdiantamento: varchar({ length: 100 }),
+	bancoFolha: varchar({ length: 100 }),
+	custoTotalMes: varchar({ length: 20 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-export type MonthlyPayrollSummary = typeof monthlyPayrollSummary.$inferSelect;
-
-// ============================================================
-// OBRAS (Projetos/Canteiros de Obra)
-// ============================================================
-
-export const obras = mysqlTable("obras", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  nome: varchar("nome", { length: 255 }).notNull(),
-  codigo: varchar("codigo", { length: 50 }), // Código interno da obra
-  cliente: varchar("cliente", { length: 255 }),
-  responsavel: varchar("responsavel", { length: 255 }),
-  endereco: text("endereco"),
-  cidade: varchar("cidade", { length: 100 }),
-  estado: varchar("estado", { length: 2 }),
-  cep: varchar("cep", { length: 10 }),
-  dataInicio: date("dataInicio"),
-  dataPrevisaoFim: date("dataPrevisaoFim"),
-  dataFimReal: date("dataFimReal"),
-  status: mysqlEnum("status", ["Planejamento", "Em_Andamento", "Paralisada", "Concluida", "Cancelada"]).default("Planejamento").notNull(),
-  valorContrato: varchar("valorContrato", { length: 20 }),
-  observacoes: text("observacoes"),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-export type Obra = typeof obras.$inferSelect;
-export type InsertObra = typeof obras.$inferInsert;
-
-// ============================================================
-// ALOCAÇÃO DE FUNCIONÁRIOS EM OBRAS
-// ============================================================
 
 export const obraFuncionarios = mysqlTable("obra_funcionarios", {
-  id: int("id").autoincrement().primaryKey(),
-  obraId: int("obraId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  companyId: int("companyId").notNull(),
-  funcaoNaObra: varchar("funcaoNaObra", { length: 100 }),
-  dataInicio: date("dataInicio"),
-  dataFim: date("dataFim"),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+	id: int().autoincrement().notNull(),
+	obraId: int().notNull(),
+	employeeId: int().notNull(),
+	companyId: int().notNull(),
+	funcaoNaObra: varchar({ length: 100 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataInicio: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataFim: date({ mode: 'string' }),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
-export type ObraFuncionario = typeof obraFuncionarios.$inferSelect;
-
-// ============================================================
-// RATEIO DE HORAS POR OBRA (gerado automaticamente pelo upload de ponto)
-// ============================================================
 
 export const obraHorasRateio = mysqlTable("obra_horas_rateio", {
-  id: int("id").autoincrement().primaryKey(),
-  companyId: int("companyId").notNull(),
-  obraId: int("obraId").notNull(),
-  employeeId: int("employeeId").notNull(),
-  dixiDeviceId: int("dixiDeviceId"),
-  mesAno: varchar("mesAno", { length: 7 }).notNull(), // "2026-02"
-  horasNormais: varchar("horasNormais", { length: 10 }),
-  horasExtras: varchar("horasExtras", { length: 10 }),
-  horasNoturnas: varchar("horasNoturnas", { length: 10 }),
-  totalHoras: varchar("totalHoras", { length: 10 }),
-  diasTrabalhados: int("diasTrabalhados"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	obraId: int().notNull(),
+	employeeId: int().notNull(),
+	dixiDeviceId: int(),
+	mesAno: varchar({ length: 7 }).notNull(),
+	horasNormais: varchar({ length: 10 }),
+	horasExtras: varchar({ length: 10 }),
+	horasNoturnas: varchar({ length: 10 }),
+	totalHoras: varchar({ length: 10 }),
+	diasTrabalhados: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-export type ObraHorasRateio = typeof obraHorasRateio.$inferSelect;
+
+export const obras = mysqlTable("obras", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	codigo: varchar({ length: 50 }),
+	cliente: varchar({ length: 255 }),
+	responsavel: varchar({ length: 255 }),
+	endereco: text(),
+	cidade: varchar({ length: 100 }),
+	estado: varchar({ length: 2 }),
+	cep: varchar({ length: 10 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataInicio: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataPrevisaoFim: date({ mode: 'string' }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataFimReal: date({ mode: 'string' }),
+	status: mysqlEnum(['Planejamento','Em_Andamento','Paralisada','Concluida','Cancelada']).default('Planejamento').notNull(),
+	valorContrato: varchar({ length: 20 }),
+	observacoes: text(),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	numOrcamento: varchar({ length: 50 }),
+	snRelogioPonto: varchar({ length: 50 }),
+});
+
+export const payroll = mysqlTable("payroll", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	tipoFolha: mysqlEnum(['Mensal','Adiantamento','Ferias','Rescisao','PLR','13_Salario']).notNull(),
+	salarioBruto: varchar({ length: 20 }),
+	totalProventos: varchar({ length: 20 }),
+	totalDescontos: varchar({ length: 20 }),
+	salarioLiquido: varchar({ length: 20 }),
+	inss: varchar({ length: 20 }),
+	irrf: varchar({ length: 20 }),
+	fgts: varchar({ length: 20 }),
+	valeTransporte: varchar({ length: 20 }),
+	valeAlimentacao: varchar({ length: 20 }),
+	outrosProventos: text(),
+	outrosDescontos: text(),
+	bancoDestino: varchar({ length: 100 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataPagamento: date({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const payrollUploads = mysqlTable("payroll_uploads", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	category: mysqlEnum(['cartao_ponto','espelho_adiantamento_analitico','adiantamento_sintetico','adiantamento_banco_cef','adiantamento_banco_santander','espelho_folha_analitico','folha_sintetico','pagamento_banco_cef','pagamento_banco_santander']).notNull(),
+	month: varchar({ length: 7 }).notNull(),
+	fileName: varchar({ length: 255 }).notNull(),
+	fileUrl: text().notNull(),
+	fileKey: varchar({ length: 500 }).notNull(),
+	fileSize: int(),
+	mimeType: varchar({ length: 100 }),
+	uploadStatus: mysqlEnum(['pendente','processando','processado','erro']).default('pendente').notNull(),
+	recordsProcessed: int().default(0),
+	errorMessage: text(),
+	uploadedBy: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const permissions = mysqlTable("permissions", {
+	id: int().autoincrement().notNull(),
+	profileId: int().notNull(),
+	module: varchar({ length: 50 }).notNull(),
+	canView: tinyint().default(0).notNull(),
+	canCreate: tinyint().default(0).notNull(),
+	canEdit: tinyint().default(0).notNull(),
+	canDelete: tinyint().default(0).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const risks = mysqlTable("risks", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	setor: varchar({ length: 100 }).notNull(),
+	agenteRisco: varchar({ length: 255 }).notNull(),
+	tipoRisco: mysqlEnum(['Fisico','Quimico','Biologico','Ergonomico','Acidente']).notNull(),
+	fonteGeradora: varchar({ length: 255 }),
+	grauRisco: mysqlEnum(['Baixo','Medio','Alto','Critico']).notNull(),
+	medidasControle: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const sectors = mysqlTable("sectors", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 100 }).notNull(),
+	descricao: varchar({ length: 255 }),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const timeRecords = mysqlTable("time_records", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	data: date({ mode: 'string' }).notNull(),
+	entrada1: varchar({ length: 10 }),
+	saida1: varchar({ length: 10 }),
+	entrada2: varchar({ length: 10 }),
+	saida2: varchar({ length: 10 }),
+	entrada3: varchar({ length: 10 }),
+	saida3: varchar({ length: 10 }),
+	horasTrabalhadas: varchar({ length: 10 }),
+	horasExtras: varchar({ length: 10 }),
+	horasNoturnas: varchar({ length: 10 }),
+	faltas: varchar({ length: 10 }),
+	atrasos: varchar({ length: 10 }),
+	justificativa: text(),
+	fonte: varchar({ length: 50 }).default('manual'),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const trainingDocuments = mysqlTable("training_documents", {
+	id: int().autoincrement().notNull(),
+	trainingId: int().notNull(),
+	employeeId: int().notNull(),
+	companyId: int().notNull(),
+	fileName: varchar({ length: 255 }).notNull(),
+	fileUrl: text().notNull(),
+	fileKey: varchar({ length: 500 }).notNull(),
+	fileSize: int(),
+	mimeType: varchar({ length: 100 }),
+	description: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+export const trainings = mysqlTable("trainings", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	norma: varchar({ length: 50 }),
+	cargaHoraria: varchar({ length: 20 }),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataRealizacao: date({ mode: 'string' }).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataValidade: date({ mode: 'string' }),
+	instrutor: varchar({ length: 255 }),
+	entidade: varchar({ length: 255 }),
+	certificadoUrl: text(),
+	statusTreinamento: mysqlEnum(['Valido','Vencido','A_Vencer']).default('Valido').notNull(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const userProfiles = mysqlTable("user_profiles", {
+	id: int().autoincrement().notNull(),
+	userId: int().notNull(),
+	companyId: int().notNull(),
+	profileType: mysqlEnum(['adm_master','adm','operacional','avaliador','consulta']).notNull(),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const users = mysqlTable("users", {
+	id: int().autoincrement().notNull(),
+	openId: varchar({ length: 64 }).notNull(),
+	name: text(),
+	email: varchar({ length: 320 }),
+	loginMethod: varchar({ length: 64 }),
+	role: mysqlEnum(['user','admin']).default('user').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	lastSignedIn: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	username: varchar({ length: 100 }),
+	password: varchar({ length: 255 }),
+	mustChangePassword: tinyint().default(1),
+},
+(table) => [
+	index("users_openId_unique").on(table.openId),
+]);
+
+export const vehicles = mysqlTable("vehicles", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	tipoVeiculo: mysqlEnum(['Carro','Caminhao','Van','Moto','Maquina_Pesada','Outro']).notNull(),
+	placa: varchar({ length: 10 }),
+	modelo: varchar({ length: 100 }).notNull(),
+	marca: varchar({ length: 100 }),
+	anoFabricacao: varchar({ length: 4 }),
+	renavam: varchar({ length: 20 }),
+	chassi: varchar({ length: 30 }),
+	responsavel: varchar({ length: 255 }),
+	statusVeiculo: mysqlEnum(['Ativo','Manutencao','Inativo']).default('Ativo').notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	proximaManutencao: date({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const vrBenefits = mysqlTable("vr_benefits", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	valorDiario: varchar({ length: 20 }),
+	diasUteis: int(),
+	valorTotal: varchar({ length: 20 }).notNull(),
+	operadora: varchar({ length: 100 }).default('iFood Benefícios'),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const warnings = mysqlTable("warnings", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	tipoAdvertencia: mysqlEnum(['Verbal','Escrita','Suspensao','OSS']).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	dataOcorrencia: date({ mode: 'string' }).notNull(),
+	motivo: text().notNull(),
+	descricao: text(),
+	testemunhas: text(),
+	documentoUrl: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+// ============================================================
+// INFERRED TYPES
+// ============================================================
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+export type InsertCompany = typeof companies.$inferInsert;
+export type InsertEmployee = typeof employees.$inferInsert;
+export type InsertEmployeeHistory = typeof employeeHistory.$inferInsert;
+export type InsertUserProfile = typeof userProfiles.$inferInsert;
+export type InsertPermission = typeof permissions.$inferInsert;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+export type InsertObra = typeof obras.$inferInsert;
+export type InsertSector = typeof sectors.$inferInsert;
+export type InsertJobFunction = typeof jobFunctions.$inferInsert;

@@ -414,11 +414,11 @@ export const payrollParsersRouter = router({
         fileKey: fileKey,
         fileSize: buffer.length,
         mimeType: input.mimeType,
-        status: "processando",
+        uploadStatus: "processando",
         uploadedBy: null,
       }).$returningId();
       
-      const uploadId = uploadRecord.id;
+      const uploadId = (uploadRecord as any).id;
       
       try {
         let result: any = {};
@@ -434,7 +434,7 @@ export const payrollParsersRouter = router({
             await db.insert(timeRecords).values({
               companyId: input.companyId,
               employeeId: 0, // Will be matched by name later
-              data: new Date(rec.data),
+              data: rec.data,
               entrada1: rec.entrada1,
               saida1: rec.saida1,
               entrada2: rec.entrada2,
@@ -503,13 +503,13 @@ export const payrollParsersRouter = router({
         
         // Update upload status
         await db.update(payrollUploads)
-          .set({ status: "processado", recordsProcessed })
+          .set({ uploadStatus: "processado", recordsProcessed })
           .where(eq(payrollUploads.id, uploadId));
         
         return { success: true, uploadId, recordsProcessed, result };
       } catch (error: any) {
         await db.update(payrollUploads)
-          .set({ status: "erro", errorMessage: error.message })
+          .set({ uploadStatus: "erro", errorMessage: error.message })
           .where(eq(payrollUploads.id, uploadId));
         
         throw error;
@@ -597,7 +597,7 @@ export const payrollParsersRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       const [result] = await db.insert(extraPayments).values(input as any).$returningId();
-      return { success: true, id: result.id };
+      return { success: true, id: (result as any).id };
     }),
 
   listExtraPayments: protectedProcedure
@@ -631,7 +631,7 @@ export const payrollParsersRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       const [result] = await db.insert(vrBenefits).values(input as any).$returningId();
-      return { success: true, id: result.id };
+      return { success: true, id: (result as any).id };
     }),
 
   listVrBenefits: protectedProcedure

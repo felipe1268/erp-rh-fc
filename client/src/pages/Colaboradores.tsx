@@ -69,6 +69,10 @@ export default function Colaboradores() {
 
   const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
   const { data: obras } = trpc.obras.list.useQuery({ companyId: companyId ?? 0 }, { enabled: !!companyId });
+  // Setores e Funções dinâmicos vinculados à empresa do formulário
+  const formCompanyIdNum = form.companyId ? parseInt(form.companyId) : companyId;
+  const { data: setoresList } = trpc.sectors.list.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
+  const { data: funcoesList } = trpc.jobFunctions.list.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
 
   // Import Excel
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -162,22 +166,32 @@ export default function Colaboradores() {
       }
     });
     if (!f.companyId && companyId) f.companyId = String(companyId);
-    // Decompor jornadaTrabalho em campos separados (Entrada - Intervalo - Saída)
+    // Decompor jornadaTrabalho - suporta formato JSON dia a dia e formato legado
     if (f.jornadaTrabalho) {
-      // Formato novo: "08:00 - 12:00 - 17:00" ou antigo "08:00 às 17:00" ou "44h semanais"
-      const dashParts = f.jornadaTrabalho.split(" - ");
-      const asParts = f.jornadaTrabalho.split(" às ");
-      if (dashParts.length === 3) {
-        f.jornadaEntrada = dashParts[0];
-        f.jornadaIntervalo = dashParts[1];
-        f.jornadaSaida = dashParts[2];
-      } else if (asParts.length === 2 && asParts[0].includes(":")) {
-        f.jornadaEntrada = asParts[0];
-        f.jornadaSaida = asParts[1];
-      }
-      // Se não é formato reconhecido (ex: "44h semanais"), limpa
-      if (!f.jornadaEntrada) {
-        delete f.jornadaTrabalho;
+      try {
+        const parsed = JSON.parse(f.jornadaTrabalho);
+        if (typeof parsed === "object" && !Array.isArray(parsed)) {
+          // Formato JSON dia a dia: { seg: { entrada, intervalo, saida }, ... }
+          const DIAS_KEYS = ["seg","ter","qua","qui","sex","sab","dom"];
+          DIAS_KEYS.forEach(d => {
+            if (parsed[d]) {
+              f[`jornada_${d}_entrada`] = parsed[d].entrada || "";
+              f[`jornada_${d}_intervalo`] = parsed[d].intervalo || "";
+              f[`jornada_${d}_saida`] = parsed[d].saida || "";
+            }
+          });
+        }
+      } catch {
+        // Formato legado: "08:00 - 12:00 - 17:00" - migrar para todos os dias
+        const dashParts = f.jornadaTrabalho.split(" - ");
+        if (dashParts.length === 3) {
+          const DIAS_KEYS = ["seg","ter","qua","qui","sex","sab","dom"];
+          DIAS_KEYS.forEach(d => {
+            f[`jornada_${d}_entrada`] = dashParts[0];
+            f[`jornada_${d}_intervalo`] = dashParts[1];
+            f[`jornada_${d}_saida`] = dashParts[2];
+          });
+        }
       }
     }
     // Normalizar sexo antigo ("masculino"/"feminino" minúsculo) para "M"/"F"
@@ -206,11 +220,23 @@ export default function Colaboradores() {
       return;
     }
     const targetCompanyId = form.companyId ? parseInt(form.companyId) : companyId!;
-    // Compor jornadaTrabalho a partir dos campos separados
-    const jornadaParts = [form.jornadaEntrada, form.jornadaIntervalo, form.jornadaSaida].filter(Boolean);
-    const jornadaStr = jornadaParts.length >= 2 ? jornadaParts.join(" - ") : "";
+    // Compor jornadaTrabalho como JSON dia a dia
+    const DIAS_KEYS = ["seg","ter","qua","qui","sex","sab","dom"];
+    const jornadaObj: Record<string, { entrada: string; intervalo: string; saida: string }> = {};
+    DIAS_KEYS.forEach(d => {
+      const entrada = form[`jornada_${d}_entrada`] || "";
+      const intervalo = form[`jornada_${d}_intervalo`] || "";
+      const saida = form[`jornada_${d}_saida`] || "";
+      if (entrada || saida) {
+        jornadaObj[d] = { entrada, intervalo, saida };
+      }
+    });
+    const jornadaStr = Object.keys(jornadaObj).length > 0 ? JSON.stringify(jornadaObj) : "";
     if (editingId) {
-      const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, empresa: _emp, jornadaEntrada: _je, jornadaIntervalo: _ji, jornadaSaida: _js, ...data } = form;
+      const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, empresa: _emp, ...rest } = form;
+      // Remover campos temporários de jornada dia a dia do form
+      const data: Record<string, any> = {};
+      Object.entries(rest).forEach(([k, v]) => { if (!k.startsWith("jornada_")) data[k] = v; });
       // Tratar obraAtualId "none" como null
       if (data.obraAtualId === "none") data.obraAtualId = "" as any;
       // Limpar valores "none" dos selects
@@ -218,7 +244,10 @@ export default function Colaboradores() {
       (data as any).jornadaTrabalho = jornadaStr;
       updateMut.mutate({ id: editingId, companyId: targetCompanyId, data });
     } else {
-      const { empresa: _emp, jornadaEntrada: _je, jornadaIntervalo: _ji, jornadaSaida: _js, ...createData } = form;
+      const { empresa: _emp, ...restCreate } = form;
+      // Remover campos temporários de jornada dia a dia do form
+      const createData: Record<string, any> = {};
+      Object.entries(restCreate).forEach(([k, v]) => { if (!k.startsWith("jornada_")) createData[k] = v; });
       if (createData.obraAtualId === "none") delete (createData as any).obraAtualId;
       Object.keys(createData).forEach(k => { if ((createData as any)[k] === "none") (createData as any)[k] = ""; });
       (createData as any).jornadaTrabalho = jornadaStr;
@@ -679,11 +708,27 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Função</Label>
-                  <Input value={form.funcao ?? ""} onChange={e => set("funcao", e.target.value)} className="bg-input mt-1" />
+                  <Select value={form.funcao || "none"} onValueChange={v => set("funcao", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione a função</SelectItem>
+                      {(funcoesList ?? []).filter((f: any) => f.isActive !== false).map((f: any) => (
+                        <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
-                  <Input value={form.setor ?? ""} onChange={e => set("setor", e.target.value)} className="bg-input mt-1" />
+                  <Select value={form.setor || "none"} onValueChange={v => set("setor", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione o setor</SelectItem>
+                      {(setoresList ?? []).filter((s: any) => s.isActive !== false).map((s: any) => (
+                        <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> Obra Atual</Label>
@@ -744,35 +789,66 @@ export default function Colaboradores() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Entrada</Label>
-                  <Select value={form.jornadaEntrada || "none"} onValueChange={v => set("jornadaEntrada", v === "none" ? "" : v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Horário</SelectItem>
-                      {["05:00","06:00","07:00","07:30","08:00","08:30","09:00","10:00","11:00","12:00","13:00","14:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Intervalo</Label>
-                  <Select value={form.jornadaIntervalo || "none"} onValueChange={v => set("jornadaIntervalo", v === "none" ? "" : v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Horário</SelectItem>
-                      {["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Saída</Label>
-                  <Select value={form.jornadaSaida || "none"} onValueChange={v => set("jornadaSaida", v === "none" ? "" : v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Horário</SelectItem>
-                      {["12:00","13:00","14:00","15:00","16:00","17:00","17:30","18:00","19:00","20:00","21:00","22:00","23:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+              </div>
+              {/* Jornada de Trabalho - Dia a Dia */}
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold text-primary mb-3">Jornada de Trabalho</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border border-border rounded-lg">
+                    <thead>
+                      <tr className="bg-secondary/50">
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">Dia</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Entrada</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Intervalo</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Saída</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { key: "seg", label: "Segunda" },
+                        { key: "ter", label: "Terça" },
+                        { key: "qua", label: "Quarta" },
+                        { key: "qui", label: "Quinta" },
+                        { key: "sex", label: "Sexta" },
+                        { key: "sab", label: "Sábado" },
+                        { key: "dom", label: "Domingo" },
+                      ].map(dia => (
+                        <tr key={dia.key} className="border-t border-border">
+                          <td className="px-3 py-1.5 font-medium text-foreground">{dia.label}</td>
+                          <td className="px-1 py-1">
+                            <Select value={form[`jornada_${dia.key}_entrada`] || "none"} onValueChange={v => set(`jornada_${dia.key}_entrada`, v === "none" ? "" : v)}>
+                              <SelectTrigger className="bg-input h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">-</SelectItem>
+                                {["05:00","05:30","06:00","06:30","07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-1 py-1">
+                            <Select value={form[`jornada_${dia.key}_intervalo`] || "none"} onValueChange={v => set(`jornada_${dia.key}_intervalo`, v === "none" ? "" : v)}>
+                              <SelectTrigger className="bg-input h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">-</SelectItem>
+                                <SelectItem value="00:30">30 min</SelectItem>
+                                <SelectItem value="01:00">1 hora</SelectItem>
+                                <SelectItem value="01:30">1h30</SelectItem>
+                                <SelectItem value="02:00">2 horas</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-1 py-1">
+                            <Select value={form[`jornada_${dia.key}_saida`] || "none"} onValueChange={v => set(`jornada_${dia.key}_saida`, v === "none" ? "" : v)}>
+                              <SelectTrigger className="bg-input h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">-</SelectItem>
+                                {["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","22:00","23:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </TabsContent>

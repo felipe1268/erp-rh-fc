@@ -111,7 +111,7 @@ async function getDashHorasExtras(companyId: number, year?: number) {
     .from(extraPayments)
     .where(and(
       eq(extraPayments.companyId, companyId),
-      eq(extraPayments.tipo, "Horas_Extras"),
+      eq(extraPayments.tipoExtra, "Horas_Extras"),
       gte(extraPayments.mesReferencia, startDate),
       lte(extraPayments.mesReferencia, endDate),
     ));

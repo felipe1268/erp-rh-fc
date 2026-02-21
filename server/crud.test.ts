@@ -81,13 +81,13 @@ describe("CRUD Completo - Todos os Módulos", () => {
         nomeMae: "Maria da Silva",
         nomePai: "José da Silva",
         ctps: "12345",
-        serieCTPS: "001",
+        serieCtps: "001",
         pis: "123.45678.90-1",
         tituloEleitor: "1234 5678 9012",
         certificadoReservista: "123456789012",
         cnh: "12345678901",
-        categoriaCNH: "AB",
-        validadeCNH: "2027-12-31",
+        categoriaCnh: "AB",
+        validadeCnh: "2027-12-31",
         logradouro: "Rua das Flores",
         numero: "123",
         complemento: "Apto 4",
@@ -137,13 +137,13 @@ describe("CRUD Completo - Todos os Módulos", () => {
       expect(emp!.nomeMae).toBe("Maria da Silva");
       expect(emp!.nomePai).toBe("José da Silva");
       expect(emp!.ctps).toBe("12345");
-      expect(emp!.serieCTPS).toBe("001");
+      expect(emp!.serieCtps).toBe("001");
       expect(emp!.pis).toBe("123.45678.90-1");
       expect(emp!.tituloEleitor).toBe("1234 5678 9012");
       expect(emp!.certificadoReservista).toBe("123456789012");
       expect(emp!.cnh).toBe("12345678901");
-      expect(emp!.categoriaCNH).toBe("AB");
-      expect(toDateStr(emp!.validadeCNH)).toBe("2027-12-31");
+      expect(emp!.categoriaCnh).toBe("AB");
+      expect(toDateStr(emp!.validadeCnh)).toBe("2027-12-31");
       expect(emp!.logradouro).toBe("Rua das Flores");
       expect(emp!.numero).toBe("123");
       expect(emp!.complemento).toBe("Apto 4");
@@ -293,7 +293,7 @@ describe("CRUD Completo - Todos os Módulos", () => {
         dataValidade: "2026-03-15",
         cargaHoraria: "8",
         instrutor: "José Instrutor",
-        status: "Valido",
+        statusTreinamento: "Valido",
       });
       expect(result.id).toBeGreaterThan(0);
       trainingId = result.id;
@@ -305,7 +305,7 @@ describe("CRUD Completo - Todos os Módulos", () => {
     });
 
     it("deve atualizar treinamento", async () => {
-      await updateTraining(trainingId, { status: "Vencido" });
+      await updateTraining(trainingId, { statusTreinamento: "Vencido" } as any);
     });
 
     it("deve excluir treinamento", async () => {
