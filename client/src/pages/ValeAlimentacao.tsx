@@ -8,6 +8,7 @@ import { UtensilsCrossed, Search, Upload, FileSpreadsheet, CalendarDays, Users, 
 import { useState } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { formatCPF } from "@/lib/formatters";
 
 export default function ValeAlimentacao() {
   const { selectedCompanyId } = useCompany();
@@ -131,7 +132,7 @@ const now = new Date();
                       .map((e: any) => (
                         <tr key={e.id} className="border-b last:border-0">
                           <td className="py-2">{e.nomeCompleto}</td>
-                          <td className="py-2">{e.cpf || "-"}</td>
+                          <td className="py-2">{formatCPF(e.cpf)}</td>
                           <td className="py-2">{e.cargo || "-"}</td>
                           <td className="py-2">-</td>
                           <td className="py-2">

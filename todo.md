@@ -417,3 +417,13 @@
 - [x] Remover campos desnecessários: Código, Cliente, Responsável, Cidade, Estado, Valor Contrato, Data Conclusão Real
 - [x] Adicionar campo Sn (código de identificação do relógio de ponto)
 - [x] Busca automática de endereço pelo CEP (ViaCEP)
+## Fase 34: Linha Padrão na Jornada
+- [x] Adicionar linha "Padrão" no topo da tabela de jornada que preenche todos os dias ao ser alterada
+## Fase 35: Bug - Dados de Colaboradores não salvando
+- [x] Investigar por que dados inseridos/editados nos colaboradores não estão sendo persistidos
+- [x] Corrigir o problema de salvamento (create e update)
+- [x] Verificar que a linha Padrão da jornada está funcionando corretamente
+- [x] Formatar exibição da jornada na ficha do colaborador (resumida e bonita, não JSON bruto)
+- [x] Formatar CPF (000.000.000-00) em TODAS as telas do sistema
+- [x] Formatar RG, CEP, PIS, CNPJ, Telefone e demais documentos em TODAS as telas
+- [x] REGRA PERMANENTE: Todos os números de documentos devem ser exibidos formatados conforme padrão brasileiro

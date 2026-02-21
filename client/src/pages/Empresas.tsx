@@ -9,6 +9,7 @@ import { Building2, Plus, Pencil, Trash2, Search, Loader2, Star } from "lucide-r
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useDefaultCompany } from "@/hooks/useDefaultCompany";
+import { formatCNPJ, formatTelefone } from "@/lib/formatters";
 
 type CompanyForm = {
   cnpj: string;
@@ -190,7 +191,7 @@ export default function Empresas() {
                       </div>
                       <div>
                         <CardTitle className="text-sm font-semibold">{c.nomeFantasia || c.razaoSocial}</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">{c.cnpj}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatCNPJ(c.cnpj)}</p>
                       </div>
                     </div>
                     <div className="flex gap-1">
@@ -216,7 +217,7 @@ export default function Empresas() {
                   <CardContent className="text-xs text-muted-foreground space-y-1">
                     {c.razaoSocial ? <p>{c.razaoSocial}</p> : null}
                     {c.cidade ? <p>{c.cidade}{c.estado ? ` - ${c.estado}` : ""}</p> : null}
-                    {c.telefone ? <p>{c.telefone}</p> : null}
+                    {c.telefone ? <p>{formatTelefone(c.telefone)}</p> : null}
                     {c.email ? <p>{c.email}</p> : null}
                   </CardContent>
                 </Card>
@@ -287,12 +288,19 @@ export default function Empresas() {
               </div>
               <div>
                 <Label>CEP</Label>
-                <Input value={form.cep} onChange={e => set("cep", e.target.value)} placeholder="00000-000" className="bg-input" />
+                <Input value={form.cep} onChange={e => {
+                  const raw = e.target.value.replace(/\D/g, "").slice(0, 8);
+                  const formatted = raw.length > 5 ? raw.slice(0, 5) + "-" + raw.slice(5) : raw;
+                  set("cep", formatted);
+                }} placeholder="00000-000" maxLength={9} className="bg-input" />
               </div>
             </div>
             <div>
               <Label>Telefone</Label>
-              <Input value={form.telefone} onChange={e => set("telefone", e.target.value)} placeholder="(00) 0000-0000" className="bg-input" />
+              <Input value={form.telefone} onChange={e => {
+                const v = formatPhone(e.target.value);
+                set("telefone", v);
+              }} placeholder="(00) 0000-0000" maxLength={15} className="bg-input" />
             </div>
             <div>
               <Label>E-mail</Label>

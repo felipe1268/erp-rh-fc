@@ -20,13 +20,13 @@ const COLUMN_MAP = [
   { header: "Nome da Mãe", field: "nomeMae", required: false, example: "Maria da Silva" },
   { header: "Nome do Pai", field: "nomePai", required: false, example: "José da Silva" },
   { header: "CTPS", field: "ctps", required: false, example: "12345" },
-  { header: "Série CTPS", field: "serieCTPS", required: false, example: "001" },
+  { header: "Série CTPS", field: "serieCtps", required: false, example: "001" },
   { header: "PIS", field: "pis", required: false, example: "123.45678.90-1" },
   { header: "Título Eleitor", field: "tituloEleitor", required: false, example: "1234 5678 9012" },
   { header: "Cert. Reservista", field: "certificadoReservista", required: false, example: "123456789012" },
   { header: "CNH", field: "cnh", required: false, example: "12345678901" },
-  { header: "Categoria CNH", field: "categoriaCNH", required: false, example: "AB" },
-  { header: "Validade CNH", field: "validadeCNH", required: false, example: "31/12/2027" },
+  { header: "Categoria CNH", field: "categoriaCnh", required: false, example: "AB" },
+  { header: "Validade CNH", field: "validadeCnh", required: false, example: "31/12/2027" },
   { header: "Logradouro", field: "logradouro", required: false, example: "Rua das Flores" },
   { header: "Número", field: "numero", required: false, example: "123" },
   { header: "Complemento", field: "complemento", required: false, example: "Apto 4" },
@@ -197,7 +197,7 @@ function parseRow(row: any, rowNum: number): ParsedRow {
       }
       case "dataNascimento":
       case "dataAdmissao":
-      case "validadeCNH": {
+      case "validadeCnh": {
         const parsed = parseDate(rawVal);
         if (!parsed) {
           errors.push(`Data inválida em "${col.header}": ${val}`);
@@ -339,8 +339,8 @@ export const importExcelRouter = router({
           // Add all optional fields
           const optionalFields = [
             "matricula", "rg", "orgaoEmissor", "dataNascimento", "sexo", "estadoCivil",
-            "nacionalidade", "naturalidade", "nomeMae", "nomePai", "ctps", "serieCTPS",
-            "pis", "tituloEleitor", "certificadoReservista", "cnh", "categoriaCNH", "validadeCNH",
+            "nacionalidade", "naturalidade", "nomeMae", "nomePai", "ctps", "serieCtps",
+            "pis", "tituloEleitor", "certificadoReservista", "cnh", "categoriaCnh", "validadeCnh",
             "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "cep",
             "telefone", "celular", "email", "contatoEmergencia", "telefoneEmergencia",
             "cargo", "funcao", "setor", "dataAdmissao", "salarioBase", "horasMensais",

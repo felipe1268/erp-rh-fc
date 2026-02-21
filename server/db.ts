@@ -181,8 +181,8 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   const validFields = new Set([
     "matricula", "nomeCompleto", "cpf", "rg", "orgaoEmissor", "dataNascimento",
     "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai",
-    "ctps", "serieCTPS", "pis", "tituloEleitor", "certificadoReservista",
-    "cnh", "categoriaCNH", "validadeCNH",
+    "ctps", "serieCtps", "pis", "tituloEleitor", "certificadoReservista",
+    "cnh", "categoriaCnh", "validadeCnh",
     "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "cep",
     "telefone", "celular", "email", "contatoEmergencia", "telefoneEmergencia",
     "cargo", "funcao", "setor", "dataAdmissao", "dataDemissao",

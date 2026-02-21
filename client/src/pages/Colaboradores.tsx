@@ -15,6 +15,7 @@ import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
+import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor } from "@/lib/formatters";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -37,6 +38,41 @@ function safeDisplay(value: unknown): string {
   if (value instanceof Date) return value.toLocaleDateString("pt-BR");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+const DIAS_LABELS: Record<string, string> = {
+  seg: "Seg", ter: "Ter", qua: "Qua", qui: "Qui", sex: "Sex", sab: "Sáb", dom: "Dom"
+};
+
+function formatJornada(val: unknown): string {
+  if (!val) return "-";
+  const s = String(val);
+  try {
+    const parsed = JSON.parse(s);
+    if (typeof parsed === "object" && parsed !== null) {
+      // Agrupar dias com mesma jornada
+      const groups: { dias: string[]; entrada: string; intervalo: string; saida: string }[] = [];
+      for (const d of ["seg","ter","qua","qui","sex","sab","dom"]) {
+        if (!parsed[d]) continue;
+        const { entrada, intervalo, saida } = parsed[d];
+        const existing = groups.find(g => g.entrada === entrada && g.intervalo === intervalo && g.saida === saida);
+        if (existing) {
+          existing.dias.push(DIAS_LABELS[d] || d);
+        } else {
+          groups.push({ dias: [DIAS_LABELS[d] || d], entrada, intervalo, saida });
+        }
+      }
+      if (groups.length === 0) return "-";
+      return groups.map(g => {
+        const diasStr = g.dias.length > 2
+          ? `${g.dias[0]} a ${g.dias[g.dias.length - 1]}`
+          : g.dias.join(", ");
+        const intLabel = g.intervalo === "00:30" ? "30min" : g.intervalo === "01:00" ? "1h" : g.intervalo === "01:30" ? "1h30" : g.intervalo === "02:00" ? "2h" : g.intervalo || "";
+        return `${diasStr}: ${g.entrada} - ${g.saida}${intLabel ? " (int. " + intLabel + ")" : ""}`;
+      }).join(" | ");
+    }
+  } catch { /* not JSON */ }
+  return s;
 }
 
 function formatDate(val: unknown): string {
@@ -393,7 +429,7 @@ export default function Colaboradores() {
                       />
                     </td>
                     <td className="px-4 py-3 font-medium">{emp.nomeCompleto}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{emp.cpf ? emp.cpf.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatCPF(emp.cpf)}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3">
@@ -501,8 +537,15 @@ export default function Colaboradores() {
                   <Label className="text-xs font-medium text-muted-foreground">CPF *</Label>
                   <Input
                     value={form.cpf ?? ""}
-                    onChange={e => set("cpf", e.target.value)}
+                    onChange={e => {
+                      let v = e.target.value.replace(/\D/g, "").slice(0, 11);
+                      if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, "$1.$2.$3-$4");
+                      else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{0,3})/, "$1.$2.$3");
+                      else if (v.length > 3) v = v.replace(/(\d{3})(\d{0,3})/, "$1.$2");
+                      set("cpf", v);
+                    }}
                     placeholder="000.000.000-00"
+                    maxLength={14}
                     className={`bg-input mt-1 ${blacklistAlert || cpfDuplicateAlert ? "border-red-600 ring-1 ring-red-600" : ""}`}
                   />
                 </div>
@@ -566,7 +609,12 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Celular</Label>
-                  <Input value={form.celular ?? ""} onChange={e => set("celular", e.target.value)} placeholder="(00) 00000-0000" className="bg-input mt-1" />
+                  <Input value={form.celular ?? ""} onChange={e => {
+                      let v = e.target.value.replace(/\D/g, "").slice(0, 11);
+                      if (v.length > 6) v = v.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
+                      else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, "($1) $2");
+                      set("celular", v);
+                    }} placeholder="(00) 00000-0000" maxLength={15} className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">E-mail</Label>
@@ -578,7 +626,12 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Tel. Emergência</Label>
-                  <Input value={form.telefoneEmergencia ?? ""} onChange={e => set("telefoneEmergencia", e.target.value)} className="bg-input mt-1" />
+                  <Input value={form.telefoneEmergencia ?? ""} onChange={e => {
+                      let v = e.target.value.replace(/\D/g, "").slice(0, 11);
+                      if (v.length > 6) v = v.replace(/(\d{2})(\d{4,5})(\d{0,4})/, "($1) $2-$3");
+                      else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, "($1) $2");
+                      set("telefoneEmergencia", v);
+                    }} placeholder="(00) 00000-0000" maxLength={15} className="bg-input mt-1" />
                 </div>
               </div>
             </TabsContent>
@@ -588,7 +641,13 @@ export default function Colaboradores() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">RG</Label>
-                  <Input value={form.rg ?? ""} onChange={e => set("rg", e.target.value)} className="bg-input mt-1" />
+                  <Input value={form.rg ?? ""} onChange={e => {
+                      let v = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      if (v.length > 8) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{0,2})/, "$1.$2.$3-$4");
+                      else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{0,3})/, "$1.$2.$3");
+                      else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,3})/, "$1.$2");
+                      set("rg", v);
+                    }} placeholder="00.000.000-0" maxLength={13} className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Órgão Emissor</Label>
@@ -600,15 +659,26 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Série CTPS</Label>
-                  <Input value={form.serieCTPS ?? ""} onChange={e => set("serieCTPS", e.target.value)} className="bg-input mt-1" />
+                  <Input value={form.serieCtps ?? ""} onChange={e => set("serieCtps", e.target.value)} className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">PIS</Label>
-                  <Input value={form.pis ?? ""} onChange={e => set("pis", e.target.value)} className="bg-input mt-1" />
+                  <Input value={form.pis ?? ""} onChange={e => {
+                      let v = e.target.value.replace(/\D/g, "").slice(0, 11);
+                      if (v.length > 10) v = v.replace(/(\d{3})(\d{5})(\d{2})(\d{1})/, "$1.$2.$3-$4");
+                      else if (v.length > 8) v = v.replace(/(\d{3})(\d{5})(\d{0,2})/, "$1.$2.$3");
+                      else if (v.length > 3) v = v.replace(/(\d{3})(\d{0,5})/, "$1.$2");
+                      set("pis", v);
+                    }} placeholder="000.00000.00-0" maxLength={14} className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Título de Eleitor</Label>
-                  <Input value={form.tituloEleitor ?? ""} onChange={e => set("tituloEleitor", e.target.value)} className="bg-input mt-1" />
+                  <Input value={form.tituloEleitor ?? ""} onChange={e => {
+                      let v = e.target.value.replace(/\D/g, "").slice(0, 12);
+                      if (v.length > 8) v = v.replace(/(\d{4})(\d{4})(\d{0,4})/, "$1 $2 $3");
+                      else if (v.length > 4) v = v.replace(/(\d{4})(\d{0,4})/, "$1 $2");
+                      set("tituloEleitor", v);
+                    }} placeholder="0000 0000 0000" maxLength={14} className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Certificado de Reservista</Label>
@@ -620,11 +690,11 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Categoria CNH</Label>
-                  <Input value={form.categoriaCNH ?? ""} onChange={e => set("categoriaCNH", e.target.value)} placeholder="A, B, AB..." className="bg-input mt-1" />
+                  <Input value={form.categoriaCnh ?? ""} onChange={e => set("categoriaCnh", e.target.value)} placeholder="A, B, AB..." className="bg-input mt-1" />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Validade CNH</Label>
-                  <Input type="date" value={form.validadeCNH ?? ""} onChange={e => set("validadeCNH", e.target.value)} className="bg-input mt-1" />
+                  <Input type="date" value={form.validadeCnh ?? ""} onChange={e => set("validadeCnh", e.target.value)} className="bg-input mt-1" />
                 </div>
               </div>
             </TabsContent>
@@ -804,6 +874,62 @@ export default function Colaboradores() {
                       </tr>
                     </thead>
                     <tbody>
+                      {/* Linha Padrão - preenche todos os dias */}
+                      <tr className="border-t-2 border-primary/30 bg-primary/5">
+                        <td className="px-3 py-1.5 font-bold text-primary text-xs">Padrão</td>
+                        <td className="px-1 py-1">
+                          <Select value={form.jornada_padrao_entrada || "none"} onValueChange={v => {
+                            const val = v === "none" ? "" : v;
+                            setForm(prev => {
+                              const updated: Record<string, string> = { ...prev, jornada_padrao_entrada: val };
+                              ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_entrada`] = val; });
+                              return updated;
+                            });
+                          }}>
+                            <SelectTrigger className="bg-primary/10 h-8 text-xs border-primary/30"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {["05:00","05:30","06:00","06:30","07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select value={form.jornada_padrao_intervalo || "none"} onValueChange={v => {
+                            const val = v === "none" ? "" : v;
+                            setForm(prev => {
+                              const updated: Record<string, string> = { ...prev, jornada_padrao_intervalo: val };
+                              ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_intervalo`] = val; });
+                              return updated;
+                            });
+                          }}>
+                            <SelectTrigger className="bg-primary/10 h-8 text-xs border-primary/30"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              <SelectItem value="00:30">30 min</SelectItem>
+                              <SelectItem value="01:00">1 hora</SelectItem>
+                              <SelectItem value="01:30">1h30</SelectItem>
+                              <SelectItem value="02:00">2 horas</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select value={form.jornada_padrao_saida || "none"} onValueChange={v => {
+                            const val = v === "none" ? "" : v;
+                            setForm(prev => {
+                              const updated: Record<string, string> = { ...prev, jornada_padrao_saida: val };
+                              ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_saida`] = val; });
+                              return updated;
+                            });
+                          }}>
+                            <SelectTrigger className="bg-primary/10 h-8 text-xs border-primary/30"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","22:00","23:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                      {/* Dias individuais */}
                       {[
                         { key: "seg", label: "Segunda" },
                         { key: "ter", label: "Terça" },
@@ -1008,19 +1134,19 @@ export default function Colaboradores() {
               {/* Seções de dados */}
               {[
                 { title: "Dados Pessoais", fields: [
-                  ["CPF", viewingEmployee.cpf ? viewingEmployee.cpf.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "-"],
-                  ["RG", safeDisplay(viewingEmployee.rg)],
+                  ["CPF", formatCPF(viewingEmployee.cpf)],
+                  ["RG", formatRG(viewingEmployee.rg)],
                   ["Nascimento", formatDate(viewingEmployee.dataNascimento)],
                   ["Sexo", viewingEmployee.sexo === "M" ? "Masculino" : viewingEmployee.sexo === "F" ? "Feminino" : safeDisplay(viewingEmployee.sexo)],
                   ["Estado Civil", safeDisplay(viewingEmployee.estadoCivil)],
                   ["Nacionalidade", safeDisplay(viewingEmployee.nacionalidade)],
                   ["Naturalidade", safeDisplay(viewingEmployee.naturalidade)],
-                  ["Celular", safeDisplay(viewingEmployee.celular)],
+                  ["Celular", formatTelefone(viewingEmployee.celular)],
                   ["E-mail", safeDisplay(viewingEmployee.email)],
                   ["Nome da Mãe", safeDisplay(viewingEmployee.nomeMae)],
                   ["Nome do Pai", safeDisplay(viewingEmployee.nomePai)],
                   ["Contato Emergência", safeDisplay(viewingEmployee.contatoEmergencia)],
-                  ["Tel. Emergência", safeDisplay(viewingEmployee.telefoneEmergencia)],
+                  ["Tel. Emergência", formatTelefone(viewingEmployee.telefoneEmergencia)],
                 ]},
                 { title: "Profissional", fields: [
                   ["Matrícula", safeDisplay(viewingEmployee.matricula)],
@@ -1028,20 +1154,20 @@ export default function Colaboradores() {
                   ["Setor", safeDisplay(viewingEmployee.setor)],
                   ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
                   ["Contrato", safeDisplay(viewingEmployee.tipoContrato)],
-                  ["Jornada", safeDisplay(viewingEmployee.jornadaTrabalho)],
+                  ["Jornada", formatJornada(viewingEmployee.jornadaTrabalho)],
                   ["Salário Base", viewingEmployee.salarioBase ? `R$ ${viewingEmployee.salarioBase}` : "-"],
                   ["Valor da Hora", viewingEmployee.valorHora ? `R$ ${viewingEmployee.valorHora}` : "-"],
                   ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
                 ]},
                 { title: "Documentos", fields: [
                   ["CTPS", safeDisplay(viewingEmployee.ctps)],
-                  ["Série CTPS", safeDisplay(viewingEmployee.serieCTPS)],
-                  ["PIS", safeDisplay(viewingEmployee.pis)],
-                  ["Título Eleitor", safeDisplay(viewingEmployee.tituloEleitor)],
+                  ["Série CTPS", safeDisplay(viewingEmployee.serieCtps)],
+                  ["PIS", formatPIS(viewingEmployee.pis)],
+                  ["Título Eleitor", formatTituloEleitor(viewingEmployee.tituloEleitor)],
                   ["Reservista", safeDisplay(viewingEmployee.certificadoReservista)],
                   ["CNH", safeDisplay(viewingEmployee.cnh)],
-                  ["Cat. CNH", safeDisplay(viewingEmployee.categoriaCNH)],
-                  ["Val. CNH", formatDate(viewingEmployee.validadeCNH)],
+                  ["Cat. CNH", safeDisplay(viewingEmployee.categoriaCnh)],
+                  ["Val. CNH", formatDate(viewingEmployee.validadeCnh)],
                 ]},
                 { title: "Endereço", fields: [
                   ["Logradouro", safeDisplay(viewingEmployee.logradouro)],
@@ -1049,7 +1175,7 @@ export default function Colaboradores() {
                   ["Complemento", safeDisplay(viewingEmployee.complemento)],
                   ["Bairro", safeDisplay(viewingEmployee.bairro)],
                   ["Cidade/UF", `${viewingEmployee.cidade ?? ""}${viewingEmployee.estado ? " - " + viewingEmployee.estado : ""}` || "-"],
-                  ["CEP", safeDisplay(viewingEmployee.cep)],
+                  ["CEP", formatCEP(viewingEmployee.cep)],
                 ]},
                 { title: "Dados Bancários", fields: [
                   ["Banco", safeDisplay(viewingEmployee.banco)],

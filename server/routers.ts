@@ -167,8 +167,10 @@ export const appRouter = router({
       return result;
     }),
     update: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }: any) => {
-      await updateEmployee(input.id, input.companyId, input);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${input.nomeCompleto || ""}` });
+      // Frontend envia { id, companyId, data } - extrair dados corretamente
+      const employeeData = input.data || input;
+      await updateEmployee(input.id, input.companyId, employeeData);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${employeeData.nomeCompleto || input.nomeCompleto || ""}` });
       return { success: true };
     }),
     delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
