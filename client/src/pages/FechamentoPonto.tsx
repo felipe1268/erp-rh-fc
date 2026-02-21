@@ -12,7 +12,7 @@ import { formatCPF } from "@/lib/formatters";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, CheckCircle, XCircle, Shield, Search, Filter,
-  Trash2, Building2, AlertCircle
+  Trash2, Building2, AlertCircle, MapPin
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo } from "react";
@@ -21,7 +21,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio";
-type CardFilter = null | "colaboradores" | "registros" | "inconsistencias" | "ajustes";
+type CardFilter = null | "colaboradores" | "registros" | "inconsistencias" | "ajustes" | "multiplasObras";
 
 export default function FechamentoPonto() {
   const { selectedCompanyId } = useCompany();
@@ -123,7 +123,13 @@ export default function FechamentoPonto() {
 
   const utils = trpc.useUtils();
 
-  // Filtered summary with card filter
+  // Count multi-site employees
+  const multiSiteCount = useMemo(() => {
+    if (!summary.data) return 0;
+    return summary.data.filter((e: any) => e.multiplasObras).length;
+  }, [summary.data]);
+
+  // Filtered summary with card filter + obra filter
   const filteredSummary = useMemo(() => {
     if (!summary.data) return [];
     let data = summary.data;
@@ -132,11 +138,17 @@ export default function FechamentoPonto() {
       data = data.filter((e: any) => e.employeeName?.toLowerCase().includes(term) || e.employeeCpf?.includes(term));
     }
     if (filterObra && filterObra !== "all") {
-      data = data.filter((e: any) => String(e.obraId) === filterObra);
+      data = data.filter((e: any) => {
+        const ids = e.obraIds || (e.obraId ? [e.obraId] : []);
+        return ids.includes(parseInt(filterObra, 10));
+      });
     }
     // Card filter
     if (cardFilter === "ajustes") {
       data = data.filter((e: any) => e.temAjusteManual);
+    }
+    if (cardFilter === "multiplasObras") {
+      data = data.filter((e: any) => e.multiplasObras);
     }
     return data;
   }, [summary.data, searchTerm, filterObra, cardFilter]);
@@ -177,6 +189,11 @@ export default function FechamentoPonto() {
   const dayOfWeek = (dateStr: string) => {
     const d = new Date(dateStr + "T12:00:00");
     return ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
+  };
+
+  // Helper to open RaioX
+  const openRaioX = (empId: number) => {
+    setRaioXEmployeeId(empId);
   };
 
   return (
@@ -233,7 +250,7 @@ export default function FechamentoPonto() {
         </div>
 
         {/* Stats Cards - All clickable as filters */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "colaboradores" ? "ring-2 ring-blue-500 shadow-md" : ""}`}
             onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "colaboradores" ? null : "colaboradores"); }}>
             <CardContent className="p-4">
@@ -290,7 +307,41 @@ export default function FechamentoPonto() {
               </div>
             </CardContent>
           </Card>
+          {/* NOVO CARD: Múltiplas Obras */}
+          <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "multiplasObras" ? "ring-2 ring-red-500 shadow-md" : ""} ${multiSiteCount > 0 ? "border-red-300 bg-red-50/50" : ""}`}
+            onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "multiplasObras" ? null : "multiplasObras"); }}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${multiSiteCount > 0 ? "bg-red-100" : "bg-gray-100"}`}>
+                  <MapPin className={`h-5 w-5 ${multiSiteCount > 0 ? "text-red-600" : "text-gray-400"}`} />
+                </div>
+                <div>
+                  <p className={`text-2xl font-bold ${multiSiteCount > 0 ? "text-red-600" : ""}`}>{multiSiteCount}</p>
+                  <p className="text-xs text-muted-foreground">Múltiplas Obras</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* ALERTA DE MÚLTIPLAS OBRAS */}
+        {multiSiteCount > 0 && cardFilter !== "multiplasObras" && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-start gap-3 cursor-pointer hover:bg-red-100/50 transition-colors"
+            onClick={() => { setViewMode("resumo"); setCardFilter("multiplasObras"); }}>
+            <MapPin className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-bold text-red-800 text-base">Alerta — Funcionários em Múltiplas Obras</p>
+              <p className="text-sm text-red-700 mt-1">
+                <strong>{multiSiteCount} funcionário(s)</strong> registraram ponto em mais de uma obra neste mês.
+                Isso pode indicar <strong>erro de lançamento</strong> ou <strong>deslocamento real entre obras</strong>.
+                Clique para filtrar e verificar.
+              </p>
+            </div>
+            <Badge variant="destructive" className="text-sm px-3 py-1 shrink-0">
+              {multiSiteCount} alerta{multiSiteCount > 1 ? "s" : ""}
+            </Badge>
+          </div>
+        )}
 
         {/* Tab buttons */}
         {viewMode !== "detalhe" && (stats.data?.totalRegistros || 0) > 0 && (
@@ -330,13 +381,45 @@ export default function FechamentoPonto() {
             ) : (
               <Card>
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Resumo por Colaborador — {mesAno}</CardTitle>
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <CardTitle className="text-base">
+                      Resumo por Colaborador — {mesAno}
+                      {cardFilter === "multiplasObras" && (
+                        <Badge variant="destructive" className="ml-2 text-xs">
+                          <MapPin className="h-3 w-3 mr-1" /> Filtro: Múltiplas Obras
+                        </Badge>
+                      )}
+                      {cardFilter === "ajustes" && (
+                        <Badge className="ml-2 text-xs bg-purple-100 text-purple-700">
+                          <PenLine className="h-3 w-3 mr-1" /> Filtro: Ajustes Manuais
+                        </Badge>
+                      )}
+                    </CardTitle>
                     <div className="flex items-center gap-2">
+                      {/* FILTRO POR OBRA */}
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <Select value={filterObra} onValueChange={setFilterObra}>
+                          <SelectTrigger className="w-52 h-9">
+                            <SelectValue placeholder="Todas as Obras" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas as Obras</SelectItem>
+                            {(obrasList.data || []).map((o: any) => (
+                              <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="relative">
                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8 w-48 h-9" />
                       </div>
+                      {(cardFilter || filterObra !== "all") && (
+                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCardFilter(null); setFilterObra("all"); setSearchTerm(""); }}>
+                          <XCircle className="h-3.5 w-3.5 mr-1" /> Limpar Filtros
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -348,6 +431,7 @@ export default function FechamentoPonto() {
                           <th className="p-2 font-medium">Colaborador</th>
                           <th className="p-2 font-medium">CPF</th>
                           <th className="p-2 font-medium">Função</th>
+                          <th className="p-2 font-medium">Obra(s)</th>
                           <th className="p-2 font-medium text-center">Dias</th>
                           <th className="p-2 font-medium text-center">Horas Trab.</th>
                           <th className="p-2 font-medium text-center">Horas Extras</th>
@@ -358,9 +442,11 @@ export default function FechamentoPonto() {
                       </thead>
                       <tbody>
                         {filteredSummary.map((emp: any) => (
-                          <tr key={emp.employeeId} className={`border-b last:border-0 hover:bg-muted/30 ${emp.temAjusteManual ? "bg-purple-50" : ""}`}>
-                            <td className="p-2 font-medium">
-                              {emp.employeeName}
+                          <tr key={emp.employeeId} className={`border-b last:border-0 hover:bg-muted/30 ${emp.temAjusteManual ? "bg-purple-50" : ""} ${emp.multiplasObras ? "bg-red-50" : ""}`}>
+                            <td className="p-2">
+                              <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(emp.employeeId)}>
+                                {emp.employeeName}
+                              </button>
                               {emp.temAjusteManual && (
                                 <Badge variant="outline" className="ml-2 text-xs text-purple-600 border-purple-300">
                                   <PenLine className="h-3 w-3 mr-1" /> Ajuste RH
@@ -369,6 +455,22 @@ export default function FechamentoPonto() {
                             </td>
                             <td className="p-2 text-muted-foreground">{formatCPF(emp.employeeCpf || "")}</td>
                             <td className="p-2 text-muted-foreground">{emp.employeeFuncao || "-"}</td>
+                            <td className="p-2">
+                              {emp.multiplasObras ? (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <MapPin className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                  {(emp.obraNomes || []).map((nome: string, i: number) => (
+                                    <Badge key={i} variant="outline" className="text-xs border-red-300 text-red-700 bg-red-50">
+                                      {nome}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  {emp.obraNomes?.[0] || "-"}
+                                </span>
+                              )}
+                            </td>
                             <td className="p-2 text-center">{emp.diasTrabalhados}</td>
                             <td className="p-2 text-center font-mono">{emp.horasTrabalhadas}</td>
                             <td className="p-2 text-center font-mono">
@@ -382,7 +484,13 @@ export default function FechamentoPonto() {
                               ) : "-"}
                             </td>
                             <td className="p-2 text-center">
-                              <Badge variant="outline" className="text-xs text-green-600 border-green-300">OK</Badge>
+                              {emp.multiplasObras ? (
+                                <Badge variant="destructive" className="text-xs">
+                                  <MapPin className="h-3 w-3 mr-1" /> Multi-Obra
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs text-green-600 border-green-300">OK</Badge>
+                              )}
                             </td>
                             <td className="p-2 text-center">
                               <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployeeId(emp.employeeId); setViewMode("detalhe"); }}>
@@ -391,6 +499,9 @@ export default function FechamentoPonto() {
                             </td>
                           </tr>
                         ))}
+                        {filteredSummary.length === 0 && (
+                          <tr><td colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum resultado encontrado para os filtros aplicados.</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -434,7 +545,11 @@ export default function FechamentoPonto() {
                         const inc = item.inconsistency;
                         return (
                           <tr key={inc.id} className="border-b last:border-0 hover:bg-muted/30">
-                            <td className="p-2 font-medium">{item.employeeName}</td>
+                            <td className="p-2">
+                              <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(item.employeeId)}>
+                                {item.employeeName}
+                              </button>
+                            </td>
                             <td className="p-2 text-muted-foreground">{formatCPF(item.employeeCpf || "")}</td>
                             <td className="p-2">
                               {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
@@ -452,37 +567,36 @@ export default function FechamentoPonto() {
                             <td className="p-2 text-center">
                               <Badge variant={
                                 inc.status === "pendente" ? "destructive" :
-                                inc.status === "justificado" ? "secondary" :
-                                inc.status === "ajustado" ? "default" : "outline"
+                                inc.status === "justificado" ? "secondary" : "outline"
                               } className="text-xs">
                                 {inc.status === "pendente" ? "Pendente" :
                                  inc.status === "justificado" ? "Justificado" :
-                                 inc.status === "ajustado" ? "Ajustado" : "Advertência"}
+                                 inc.status === "ajustado" ? "Ajustado" : inc.status}
                               </Badge>
                             </td>
                             <td className="p-2 text-center">
                               {inc.status === "pendente" && (
-                                <div className="flex gap-1 justify-center">
-                                  <Button variant="ghost" size="sm" title="Resolver" onClick={() => {
+                                <div className="flex items-center gap-1 justify-center">
+                                  <Button variant="ghost" size="sm" onClick={() => {
                                     setSelectedInconsistency(item);
                                     setResolveData({ status: "justificado", justificativa: "" });
                                     setShowResolveDialog(true);
                                   }}>
                                     <CheckCircle className="h-4 w-4 text-green-600" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" title="Lançar Manual" onClick={() => {
+                                  <Button variant="ghost" size="sm" onClick={() => {
                                     setManualData({
-                                      employeeId: inc.employeeId,
-                                      obraId: inc.obraId || 0,
-                                      data: inc.data,
+                                      employeeId: item.employeeId || 0,
+                                      obraId: 0,
+                                      data: inc.data || "",
                                       entrada1: "", saida1: "", entrada2: "", saida2: "",
-                                      justificativa: "Ajuste manual - " + inc.descricao,
+                                      justificativa: `Correção: ${inc.descricao}`,
                                     });
                                     setShowManualDialog(true);
                                   }}>
                                     <PenLine className="h-4 w-4 text-purple-600" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" title="Gerar Advertência" onClick={() => {
+                                  <Button variant="ghost" size="sm" onClick={() => {
                                     setSelectedInconsistency(item);
                                     setResolveData({ status: "advertencia", justificativa: "" });
                                     setShowResolveDialog(true);
@@ -788,7 +902,11 @@ export default function FechamentoPonto() {
                         <tbody>
                           {obra.funcionarios.map((f: any) => (
                             <tr key={f.employeeId} className="border-b last:border-0 hover:bg-muted/20">
-                              <td className="p-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(f.employeeId)}>{f.nomeCompleto}</td>
+                              <td className="p-2">
+                                <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(f.employeeId)}>
+                                  {f.nomeCompleto}
+                                </button>
+                              </td>
                               <td className="p-2 text-muted-foreground font-mono text-xs">{formatCPF(f.cpf)}</td>
                               <td className="p-2 text-muted-foreground">{f.funcao || "-"}</td>
                               <td className="p-2 text-center">{f.diasTrabalhados || 0}</td>
@@ -916,7 +1034,7 @@ export default function FechamentoPonto() {
                 <AlertCircle className="h-5 w-5" /> Dados Existentes Detectados
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
                 <strong>Atenção:</strong> Já existem <strong>{duplicateCheck.data?.existingCount || 0}</strong> registros para a competência <strong>{mesAno}</strong>.
               </div>

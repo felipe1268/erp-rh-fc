@@ -533,3 +533,20 @@
 - [x] Gerar rateio automático de horas por obra no momento do upload
 - [x] Calcular custo por obra (horas × valor hora do funcionário)
 - [x] Exibir rateio na aba "Rateio por Obra" com dados reais gerados automaticamente
+
+## REVISÃO_02: Expandir Telas e Filtro por Obra
+### Raio-X do Funcionário
+- [x] Expandir modal Raio-X para fullscreen/maximizado (ocupa toda a tela)
+- [x] Melhorar layout interno com mais espaço para tabelas e dados
+- [x] Cards de resumo maiores e mais legíveis
+### Fechamento de Ponto
+- [x] Adicionar filtro/select por Obra (Todas as Obras ou obra específica)
+- [x] Filtrar Resumo por Colaborador pela obra selecionada
+- [x] Filtrar Rateio por Obra pela obra selecionada
+### Regra Geral
+- [x] SEMPRE expandir telas ao máximo para melhor visualização em todas as telas futuras
+
+## REVISÃO_02b: Alerta Múltiplas Obras
+- [x] Detectar funcionários que trabalharam em mais de uma obra no mês
+- [x] Exibir alerta visual (amarelo/vermelho) no Resumo e no Rateio
+- [x] Indicar quais obras o funcionário trabalhou para verificação

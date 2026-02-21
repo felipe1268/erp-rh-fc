@@ -569,6 +569,7 @@ export const fechamentoPontoRouter = router({
             employeeCpf: r.employeeCpf,
             employeeFuncao: r.employeeFuncao,
             obraId: r.obraId,
+            obraIds: new Set<number>(),
             diasTrabalhados: 0,
             totalMinutosTrabalhados: 0,
             totalMinutosExtras: 0,
@@ -578,6 +579,7 @@ export const fechamentoPontoRouter = router({
         }
         const emp = byEmployee[r.employeeId];
         emp.diasTrabalhados++;
+        if (r.obraId) emp.obraIds.add(r.obraId);
         if (r.horasTrabalhadas) {
           const [h, m] = r.horasTrabalhadas.split(":").map(Number);
           emp.totalMinutosTrabalhados += (h || 0) * 60 + (m || 0);
@@ -593,12 +595,31 @@ export const fechamentoPontoRouter = router({
         if (r.ajusteManual) emp.temAjusteManual = true;
       }
 
-      return Object.values(byEmployee).map((emp: any) => ({
-        ...emp,
-        horasTrabalhadas: minutesToHHMM(emp.totalMinutosTrabalhados),
-        horasExtras: minutesToHHMM(emp.totalMinutosExtras),
-        atrasos: minutesToHHMM(emp.totalMinutosAtrasos),
-      }));
+      // Also fetch obra names for multi-site display
+      const allObraIds = new Set<number>();
+      for (const emp of Object.values(byEmployee)) {
+        for (const oId of emp.obraIds) allObraIds.add(oId);
+      }
+      let obraNameMap: Record<number, string> = {};
+      if (allObraIds.size > 0) {
+        const obraRows = await db.select({ id: obras.id, nome: obras.nome })
+          .from(obras)
+          .where(inArray(obras.id, Array.from(allObraIds)));
+        for (const o of obraRows) obraNameMap[o.id] = o.nome;
+      }
+
+      return Object.values(byEmployee).map((emp: any) => {
+        const obraIdsArr = Array.from(emp.obraIds) as number[];
+        return {
+          ...emp,
+          obraIds: obraIdsArr,
+          obraNomes: obraIdsArr.map((id: number) => obraNameMap[id] || `Obra #${id}`),
+          multiplasObras: obraIdsArr.length > 1,
+          horasTrabalhadas: minutesToHHMM(emp.totalMinutosTrabalhados),
+          horasExtras: minutesToHHMM(emp.totalMinutosExtras),
+          atrasos: minutesToHHMM(emp.totalMinutosAtrasos),
+        };
+      });
     }),
 
   // List inconsistencies
