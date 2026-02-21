@@ -32,6 +32,7 @@ import { validateCNPJ } from "../shared/cnpj";
 import { TRPCError } from "@trpc/server";
 import { importExcelRouter } from "./routers/importExcel";
 import { payrollParsersRouter } from "./routers/payrollParsers";
+import { controleDocumentosRouter } from "./routers/controleDocumentos";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -51,6 +52,7 @@ function crudRouter(opts: {
 
 export const appRouter = router({
   system: systemRouter,
+  docs: controleDocumentosRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

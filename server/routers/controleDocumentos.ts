@@ -1,0 +1,579 @@
+import { z } from "zod";
+import { protectedProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
+import { asos, atestados, trainings, warnings, employees } from "../../drizzle/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { storagePut } from "../storage";
+
+// Helper: calcular status do ASO baseado na data de validade
+function calcularStatusASO(dataValidade: string): { status: string; diasRestantes: number } {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const validade = new Date(dataValidade + "T00:00:00");
+  const diffMs = validade.getTime() - hoje.getTime();
+  const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diasRestantes < 0) return { status: "VENCIDO", diasRestantes };
+  if (diasRestantes <= 7) return { status: `${diasRestantes} DIAS PARA VENCER`, diasRestantes };
+  if (diasRestantes <= 30) return { status: `${diasRestantes} DIAS PARA VENCER`, diasRestantes };
+  return { status: "VÁLIDO", diasRestantes };
+}
+
+export const controleDocumentosRouter = router({
+  // ===================== ASO =====================
+  asos: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const rows = await db
+          .select({
+            id: asos.id,
+            companyId: asos.companyId,
+            employeeId: asos.employeeId,
+            nomeCompleto: employees.nomeCompleto,
+            cpf: employees.cpf,
+            funcao: employees.funcao,
+            tipo: asos.tipo,
+            dataExame: asos.dataExame,
+            dataValidade: asos.dataValidade,
+            validadeDias: asos.validadeDias,
+            resultado: asos.resultado,
+            medico: asos.medico,
+            crm: asos.crm,
+            examesRealizados: asos.examesRealizados,
+            jaAtualizou: asos.jaAtualizou,
+            clinica: asos.clinica,
+            observacoes: asos.observacoes,
+            documentoUrl: asos.documentoUrl,
+            createdAt: asos.createdAt,
+          })
+          .from(asos)
+          .leftJoin(employees, eq(asos.employeeId, employees.id))
+          .where(eq(asos.companyId, input.companyId))
+          .orderBy(employees.nomeCompleto);
+
+        return rows.map((r: any) => ({
+          ...r,
+          ...calcularStatusASO(r.dataValidade),
+        }));
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          companyId: z.number(),
+          employeeId: z.number(),
+          tipo: z.enum(["Admissional", "Periodico", "Retorno", "Mudanca_Funcao", "Demissional"]),
+          dataExame: z.string(),
+          validadeDias: z.number().default(365),
+          resultado: z.enum(["Apto", "Inapto", "Apto_Restricao"]).default("Apto"),
+          medico: z.string().optional(),
+          crm: z.string().optional(),
+          examesRealizados: z.string().optional(),
+          clinica: z.string().optional(),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const dataExame = new Date(input.dataExame);
+        const dataValidade = new Date(dataExame);
+        dataValidade.setDate(dataValidade.getDate() + input.validadeDias);
+        const dataValidadeStr = dataValidade.toISOString().split("T")[0];
+
+        await db.insert(asos).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          tipo: input.tipo,
+          dataExame: input.dataExame,
+          dataValidade: dataValidadeStr,
+          validadeDias: input.validadeDias,
+          resultado: input.resultado,
+          medico: input.medico || null,
+          crm: input.crm || null,
+          examesRealizados: input.examesRealizados || null,
+          clinica: input.clinica || null,
+          observacoes: input.observacoes || null,
+        });
+        return { success: true };
+      }),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          tipo: z.enum(["Admissional", "Periodico", "Retorno", "Mudanca_Funcao", "Demissional"]).optional(),
+          dataExame: z.string().optional(),
+          validadeDias: z.number().optional(),
+          resultado: z.enum(["Apto", "Inapto", "Apto_Restricao"]).optional(),
+          medico: z.string().optional(),
+          crm: z.string().optional(),
+          examesRealizados: z.string().optional(),
+          clinica: z.string().optional(),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const { id, dataExame, validadeDias, ...rest } = input;
+        const updateData: any = { ...rest };
+
+        if (dataExame) updateData.dataExame = dataExame;
+        if (dataExame && validadeDias) {
+          const d = new Date(dataExame);
+          d.setDate(d.getDate() + validadeDias);
+          updateData.dataValidade = d.toISOString().split("T")[0];
+          updateData.validadeDias = validadeDias;
+        } else if (validadeDias) {
+          updateData.validadeDias = validadeDias;
+        }
+
+        await db.update(asos).set(updateData).where(eq(asos.id, id));
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(asos).where(eq(asos.id, input.id));
+        return { success: true };
+      }),
+
+    uploadDoc: protectedProcedure
+      .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const ext = input.fileName.split(".").pop() || "pdf";
+        const key = `documentos/asos/${input.id}-${Date.now()}.${ext}`;
+        const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
+        await db.update(asos).set({ documentoUrl: url }).where(eq(asos.id, input.id));
+        return { url };
+      }),
+
+    importBatch: protectedProcedure
+      .input(
+        z.object({
+          companyId: z.number(),
+          records: z.array(
+            z.object({
+              employeeName: z.string(),
+              tipo: z.string(),
+              dataExame: z.string(),
+              validadeDias: z.number().default(365),
+              resultado: z.string().default("Apto"),
+              medico: z.string().optional(),
+              crm: z.string().optional(),
+              examesRealizados: z.string().optional(),
+              jaAtualizou: z.boolean().optional(),
+            })
+          ),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // Buscar todos os funcionários da empresa
+        const emps = await db
+          .select({ id: employees.id, nomeCompleto: employees.nomeCompleto })
+          .from(employees)
+          .where(eq(employees.companyId, input.companyId));
+
+        const nameMap = new Map<string, number>();
+        emps.forEach((e: any) => {
+          if (e.nomeCompleto) nameMap.set(e.nomeCompleto.toUpperCase().trim(), e.id);
+        });
+
+        let imported = 0;
+        let notFound = 0;
+        const errors: string[] = [];
+
+        for (const rec of input.records) {
+          const empName = rec.employeeName.toUpperCase().trim();
+          let empId = nameMap.get(empName);
+
+          // Fuzzy match se não encontrou exato
+          if (!empId) {
+            const entries = Array.from(nameMap.entries());
+            for (const [name, id] of entries) {
+              if (name.includes(empName) || empName.includes(name)) {
+                empId = id;
+                break;
+              }
+              // Match por primeiro e último nome
+              const parts = empName.split(" ");
+              if (parts.length >= 2) {
+                const first = parts[0];
+                const last = parts[parts.length - 1];
+                if (name.startsWith(first) && name.endsWith(last)) {
+                  empId = id;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!empId) {
+            notFound++;
+            errors.push(`Funcionário não encontrado: ${rec.employeeName}`);
+            continue;
+          }
+
+          // Mapear tipo
+          let tipo: "Admissional" | "Periodico" | "Retorno" | "Mudanca_Funcao" | "Demissional" = "Admissional";
+          const tipoUpper = rec.tipo.toUpperCase().trim();
+          if (tipoUpper.includes("PERIÓD") || tipoUpper.includes("PERIODIC")) tipo = "Periodico";
+          else if (tipoUpper.includes("RETORNO")) tipo = "Retorno";
+          else if (tipoUpper.includes("MUDANÇA") || tipoUpper.includes("MUDANCA") || tipoUpper.includes("FUNÇÃO")) tipo = "Mudanca_Funcao";
+          else if (tipoUpper.includes("DEMISSION") || tipoUpper.includes("DEMISSIONAL")) tipo = "Demissional";
+
+          // Mapear resultado
+          let resultado: "Apto" | "Inapto" | "Apto_Restricao" = "Apto";
+          if (rec.resultado.toUpperCase().includes("INAPTO")) resultado = "Inapto";
+          else if (rec.resultado.toUpperCase().includes("RESTR")) resultado = "Apto_Restricao";
+
+          // Calcular data de validade
+          const dataExame = rec.dataExame;
+          const d = new Date(dataExame);
+          d.setDate(d.getDate() + rec.validadeDias);
+          const dataValidade = d.toISOString().split("T")[0];
+
+          try {
+            await db.insert(asos).values({
+              companyId: input.companyId,
+              employeeId: empId,
+              tipo,
+              dataExame,
+              dataValidade,
+              validadeDias: rec.validadeDias,
+              resultado,
+              medico: rec.medico || null,
+              crm: rec.crm || null,
+              examesRealizados: rec.examesRealizados || null,
+              jaAtualizou: rec.jaAtualizou ? 1 : 0,
+            });
+            imported++;
+          } catch (e: any) {
+            errors.push(`Erro ao importar ${rec.employeeName}: ${e.message}`);
+          }
+        }
+
+        return { imported, notFound, errors };
+      }),
+  }),
+
+  // ===================== ATESTADOS =====================
+  atestados: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        return db
+          .select({
+            id: atestados.id,
+            companyId: atestados.companyId,
+            employeeId: atestados.employeeId,
+            nomeCompleto: employees.nomeCompleto,
+            cpf: employees.cpf,
+            funcao: employees.funcao,
+            tipo: atestados.tipo,
+            dataEmissao: atestados.dataEmissao,
+            diasAfastamento: atestados.diasAfastamento,
+            dataRetorno: atestados.dataRetorno,
+            cid: atestados.cid,
+            medico: atestados.medico,
+            crm: atestados.crm,
+            descricao: atestados.descricao,
+            documentoUrl: atestados.documentoUrl,
+          })
+          .from(atestados)
+          .leftJoin(employees, eq(atestados.employeeId, employees.id))
+          .where(eq(atestados.companyId, input.companyId))
+          .orderBy(desc(atestados.dataEmissao));
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          companyId: z.number(),
+          employeeId: z.number(),
+          tipo: z.string(),
+          dataEmissao: z.string(),
+          diasAfastamento: z.number().default(0),
+          dataRetorno: z.string().optional(),
+          cid: z.string().optional(),
+          medico: z.string().optional(),
+          crm: z.string().optional(),
+          descricao: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.insert(atestados).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          tipo: input.tipo,
+          dataEmissao: input.dataEmissao,
+          diasAfastamento: input.diasAfastamento,
+          dataRetorno: input.dataRetorno || null,
+          cid: input.cid || null,
+          medico: input.medico || null,
+          crm: input.crm || null,
+          descricao: input.descricao || null,
+        });
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(atestados).where(eq(atestados.id, input.id));
+        return { success: true };
+      }),
+
+    uploadDoc: protectedProcedure
+      .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const ext = input.fileName.split(".").pop() || "pdf";
+        const key = `documentos/atestados/${input.id}-${Date.now()}.${ext}`;
+        const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
+        await db.update(atestados).set({ documentoUrl: url }).where(eq(atestados.id, input.id));
+        return { url };
+      }),
+  }),
+
+  // ===================== TREINAMENTOS =====================
+  treinamentos: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const rows = await db
+          .select({
+            id: trainings.id,
+            companyId: trainings.companyId,
+            employeeId: trainings.employeeId,
+            nomeCompleto: employees.nomeCompleto,
+            cpf: employees.cpf,
+            funcao: employees.funcao,
+            nome: trainings.nome,
+            norma: trainings.norma,
+            cargaHoraria: trainings.cargaHoraria,
+            dataRealizacao: trainings.dataRealizacao,
+            dataValidade: trainings.dataValidade,
+            instrutor: trainings.instrutor,
+            entidade: trainings.entidade,
+            certificadoUrl: trainings.certificadoUrl,
+            statusTreinamento: trainings.statusTreinamento,
+            observacoes: trainings.observacoes,
+          })
+          .from(trainings)
+          .leftJoin(employees, eq(trainings.employeeId, employees.id))
+          .where(eq(trainings.companyId, input.companyId))
+          .orderBy(desc(trainings.dataRealizacao));
+
+        return rows.map((r: any) => {
+          if (r.dataValidade) {
+            const { status, diasRestantes } = calcularStatusASO(r.dataValidade);
+            return { ...r, statusCalculado: status, diasRestantes };
+          }
+          return { ...r, statusCalculado: "SEM VALIDADE", diasRestantes: 0 };
+        });
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          companyId: z.number(),
+          employeeId: z.number(),
+          nome: z.string(),
+          norma: z.string().optional(),
+          cargaHoraria: z.string().optional(),
+          dataRealizacao: z.string(),
+          dataValidade: z.string().optional(),
+          instrutor: z.string().optional(),
+          entidade: z.string().optional(),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        let statusTreinamento: "Valido" | "Vencido" | "A_Vencer" = "Valido";
+        if (input.dataValidade) {
+          const { diasRestantes } = calcularStatusASO(input.dataValidade);
+          if (diasRestantes < 0) statusTreinamento = "Vencido";
+          else if (diasRestantes <= 30) statusTreinamento = "A_Vencer";
+        }
+
+        await db.insert(trainings).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          nome: input.nome,
+          norma: input.norma || null,
+          cargaHoraria: input.cargaHoraria || null,
+          dataRealizacao: input.dataRealizacao,
+          dataValidade: input.dataValidade || null,
+          instrutor: input.instrutor || null,
+          entidade: input.entidade || null,
+          statusTreinamento,
+          observacoes: input.observacoes || null,
+        });
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(trainings).where(eq(trainings.id, input.id));
+        return { success: true };
+      }),
+
+    uploadDoc: protectedProcedure
+      .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const ext = input.fileName.split(".").pop() || "pdf";
+        const key = `documentos/treinamentos/${input.id}-${Date.now()}.${ext}`;
+        const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
+        await db.update(trainings).set({ certificadoUrl: url }).where(eq(trainings.id, input.id));
+        return { url };
+      }),
+  }),
+
+  // ===================== ADVERTÊNCIAS =====================
+  advertencias: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        return db
+          .select({
+            id: warnings.id,
+            companyId: warnings.companyId,
+            employeeId: warnings.employeeId,
+            nomeCompleto: employees.nomeCompleto,
+            cpf: employees.cpf,
+            funcao: employees.funcao,
+            tipoAdvertencia: warnings.tipoAdvertencia,
+            dataOcorrencia: warnings.dataOcorrencia,
+            motivo: warnings.motivo,
+            descricao: warnings.descricao,
+            testemunhas: warnings.testemunhas,
+            documentoUrl: warnings.documentoUrl,
+          })
+          .from(warnings)
+          .leftJoin(employees, eq(warnings.employeeId, employees.id))
+          .where(eq(warnings.companyId, input.companyId))
+          .orderBy(desc(warnings.dataOcorrencia));
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          companyId: z.number(),
+          employeeId: z.number(),
+          tipoAdvertencia: z.enum(["Verbal", "Escrita", "Suspensao", "OSS"]),
+          dataOcorrencia: z.string(),
+          motivo: z.string(),
+          descricao: z.string().optional(),
+          testemunhas: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.insert(warnings).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          tipoAdvertencia: input.tipoAdvertencia,
+          dataOcorrencia: input.dataOcorrencia,
+          motivo: input.motivo,
+          descricao: input.descricao || null,
+          testemunhas: input.testemunhas || null,
+        });
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(warnings).where(eq(warnings.id, input.id));
+        return { success: true };
+      }),
+
+    uploadDoc: protectedProcedure
+      .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const ext = input.fileName.split(".").pop() || "pdf";
+        const key = `documentos/advertencias/${input.id}-${Date.now()}.${ext}`;
+        const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
+        await db.update(warnings).set({ documentoUrl: url }).where(eq(warnings.id, input.id));
+        return { url };
+      }),
+  }),
+
+  // ===================== RESUMO GERAL =====================
+  resumo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+        const db = (await getDb())!;
+      const [asoCount] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(asos)
+        .where(eq(asos.companyId, input.companyId));
+
+      const [treinamentoCount] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(trainings)
+        .where(eq(trainings.companyId, input.companyId));
+
+      const [atestadoCount] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(atestados)
+        .where(eq(atestados.companyId, input.companyId));
+
+      const [advertenciaCount] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(warnings)
+        .where(eq(warnings.companyId, input.companyId));
+
+      // ASOs vencidos
+      const hoje = new Date().toISOString().split("T")[0];
+      const [asosVencidos] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(asos)
+        .where(and(eq(asos.companyId, input.companyId), sql`${asos.dataValidade} < ${hoje}`));
+
+      // ASOs a vencer em 30 dias
+      const em30dias = new Date();
+      em30dias.setDate(em30dias.getDate() + 30);
+      const em30diasStr = em30dias.toISOString().split("T")[0];
+      const [asosAVencer] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(asos)
+        .where(
+          and(
+            eq(asos.companyId, input.companyId),
+            sql`${asos.dataValidade} >= ${hoje}`,
+            sql`${asos.dataValidade} <= ${em30diasStr}`
+          )
+        );
+
+      return {
+        totalASOs: Number(asoCount.count),
+        totalTreinamentos: Number(treinamentoCount.count),
+        totalAtestados: Number(atestadoCount.count),
+        totalAdvertencias: Number(advertenciaCount.count),
+        asosVencidos: Number(asosVencidos.count),
+        asosAVencer: Number(asosAVencer.count),
+      };
+    }),
+});

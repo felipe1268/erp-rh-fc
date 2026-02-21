@@ -1,0 +1,70 @@
+{
+  "query": "SELECT * FROM companies LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM companies LIMIT 5;",
+  "rows": [
+    {
+      "id": "60002",
+      "cnpj": "29.353.906/0001-71",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "endereco": "JUSCELINO KUBITSCHEK DE OLIVEIRA, 1301, SALA 1104",
+      "cidade": "GUARATINGUETA",
+      "estado": "SP",
+      "cep": "12505-300",
+      "telefone": "(12) 9144-3486",
+      "email": "contato@fcengenharia.com.br",
+      "isActive": "1",
+      "createdAt": "2026-02-20 19:35:19",
+      "updatedAt": "2026-02-20 21:49:11"
+    },
+    {
+      "id": "60004",
+      "cnpj": "47.401.586/0001-60",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "nomeFantasia": "HOTEL CONSAGRADO",
+      "endereco": "MONTE CARMELO, 164",
+      "cidade": "APARECIDA",
+      "estado": "SP",
+      "cep": "12570-025",
+      "telefone": "(12) 3105-5110",
+      "email": "contato@hotelconsagrado.com.br",
+      "isActive": "1",
+      "createdAt": "2026-02-20 19:35:19",
+      "updatedAt": "2026-02-20 21:50:10"
+    },
+    {
+      "id": "60005",
+      "cnpj": "03.426.403/0001-95",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "endereco": "ANGELO PASIN, 47",
+      "cidade": "APARECIDA",
+      "estado": "SP",
+      "cep": "12570-000",
+      "telefone": "(12) 9188-9238",
+      "email": "contato@julioferraz.com.br",
+      "isActive": "1",
+      "createdAt": "2026-02-20 19:35:19",
+      "updatedAt": "2026-02-20 21:50:50"
+    },
+    {
+      "id": "90001",
+      "cnpj": "61.423.062/0001-09",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "nomeFantasia": "",
+      "endereco": "LAUDELINO DE FREITAS CASTRO, 235",
+      "cidade": "GUARATINGUETA",
+      "estado": "SP",
+      "cep": "12516-190",
+      "telefone": "(12) 9260-6868",
+      "email": "",
+      "isActive": "1",
+      "createdAt": "2026-02-20 21:49:45",
+      "updatedAt": "2026-02-20 23:33:01"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcnpj\trazaoSocial\tnomeFantasia\tendereco\tcidade\testado\tcep\ttelefone\temail\tisActive\tcreatedAt\tupdatedAt\n60002\t29.353.906/0001-71\tFC ENGENHARIA E CONSTRUCAO LTDA\tFC ENGENHARIA PROJETOS E OBRAS\tJUSCELINO KUBITSCHEK DE OLIVEIRA, 1301, SALA 1104\tGUARATINGUETA\tSP\t12505-300\t(12) 9144-3486\tcontato@fcengenharia.com.br\t1\t2026-02-20 19:35:19\t2026-02-20 21:49:11\n60004\t47.401.586/0001-60\tCF HOTELARIA LTDA\tHOTEL CONSAGRADO\tMONTE CARMELO, 164\tAPARECIDA\tSP\t12570-025\t(12) 3105-5110\tcontato@hotelconsagrado.com.br\t1\t2026-02-20 19:35:19\t2026-02-20 21:50:10\n60005\t03.426.403/0001-95\tJULIO FERRAZ PROJETOS E OBRAS LTDA\tJULIO FERRAZ PROJETOS E OBRAS LTDA\tANGELO PASIN, 47\tAPARECIDA\tSP\t12570-000\t(12) 9188-9238\tcontato@julioferraz.com.br\t1\t2026-02-20 19:35:19\t2026-02-20 21:50:50\n90001\t61.423.062/0001-09\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\t\tLAUDELINO DE FREITAS CASTRO, 235\tGUARATINGUETA\tSP\t12516-190\t(12) 9260-6868\t\t1\t2026-02-20 21:49:45\t2026-02-20 23:33:01\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

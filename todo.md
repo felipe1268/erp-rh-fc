@@ -462,3 +462,25 @@
 ### Integração
 - [x] Base de dados pronta para consulta pela Folha de Pagamento
 - [x] Funcionários com lançamento manual destacados para avaliação futura
+
+## Fase 38: Redesign Controle de Documentos
+### Schema e Backend
+- [x] Atualizar tabela ASOs com campos: tipo exame, validade em dias, data vencimento, apto/não apto, médico, CRM, exames realizados, upload PDF
+- [x] Criar tabela de Atestados (data, tipo, CID, dias afastamento, médico, upload PDF)
+- [x] Atualizar tabela Advertências com upload PDF
+- [x] Atualizar tabela Treinamentos com upload PDF de certificado
+- [x] Cadastro de Tipos de ASO (Admissional, Periódico, Retorno ao Trabalho, Mudança de Função, Demissional)
+- [x] Cálculo automático de status (Válido, X dias para vencer, Vencido)
+- [x] Rotas tRPC para CRUD de cada tipo de documento com upload S3
+
+### Frontend
+- [x] Tela de Controle de Documentos com 4 abas: ASO, Treinamentos, Atestados, Advertências
+- [x] Tabela de ASOs no estilo da planilha (NÚM, Colaborador, Tipo, Data Emissão, Validade, Status, Vencimento, Apto, Médico, CRM, Exames)
+- [x] Status com cores: verde (Válido), amarelo (X dias para vencer), vermelho (Vencido)
+- [x] Upload de PDF em cada registro (botão Anexar PDF + upload S3)
+- [x] Botão de download/visualização do PDF (ícone olho quando PDF anexado)
+- [x] Filtros por status, tipo de exame, colaborador
+- [x] Importação em massa dos dados da planilha ASO enviada (110 ASOs importados com sucesso)
+
+### Cadastro (menu lateral)
+- [ ] Adicionar item "ASO" no menu Cadastro para gerenciar tipos de exame padrão

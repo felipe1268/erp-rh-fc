@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE asos ADD COLUMN validadeDias INT DEFAULT 365 AFTER dataValidade;\nALTER TABLE asos ADD COLUMN examesRealizados TEXT AFTER crm;\nALTER TABLE asos ADD COLUMN jaAtualizou TINYINT DEFAULT 0 AFTER examesRealizados;\nCREATE TABLE IF NOT EXISTS atestados (\n  id INT AUTO_INCREMENT NOT NULL,\n  companyId INT NOT NULL,\n  employeeId INT NOT NULL,\n  tipo VARCHAR(100) NOT NULL,\n  dataEmissao DATE NOT NULL,\n  diasAfastamento INT DEFAULT 0,\n  dataRetorno DATE,\n  cid VARCHAR(20),\n  medico VARCHAR(255),\n  crm VARCHAR(20),\n  descricao TEXT,\n  documentoUrl TEXT,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,\n  PRIMARY KEY (id)\n)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE asos ADD COLUMN validadeDias INT DEFAULT 365 AFTER dataValidade;\nALTER TABLE asos ADD COLUMN examesRealizados TEXT AFTER crm;\nALTER TABLE asos ADD COLUMN jaAtualizou TINYINT DEFAULT 0 AFTER examesRealizados;\nCREATE TABLE IF NOT EXISTS atestados (\n  id INT AUTO_INCREMENT NOT NULL,\n  companyId INT NOT NULL,\n  employeeId INT NOT NULL,\n  tipo VARCHAR(100) NOT NULL,\n  dataEmissao DATE NOT NULL,\n  diasAfastamento INT DEFAULT 0,\n  dataRetorno DATE,\n  cid VARCHAR(20),\n  medico VARCHAR(255),\n  crm VARCHAR(20),\n  descricao TEXT,\n  documentoUrl TEXT,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,\n  PRIMARY KEY (id)\n)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 614
+}
