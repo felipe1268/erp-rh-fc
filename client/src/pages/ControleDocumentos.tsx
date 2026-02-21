@@ -11,13 +11,13 @@ import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 
-// ============ HELPER: Status Badge ============
+// ============ HELPERS ============
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {
   if (status === "VENCIDO") return <Badge variant="destructive">VENCIDO</Badge>;
   if (status.includes("DIAS PARA VENCER")) {
@@ -27,15 +27,8 @@ function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes:
   return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">VÁLIDO</Badge>;
 }
 
-// ============ HELPER: Tipo ASO formatado ============
 function formatTipoASO(tipo: string) {
-  const map: Record<string, string> = {
-    Admissional: "Admissional",
-    Periodico: "Periódico",
-    Retorno: "Retorno ao Trabalho",
-    Mudanca_Funcao: "Mudança de Função",
-    Demissional: "Demissional",
-  };
+  const map: Record<string, string> = { Admissional: "Admissional", Periodico: "Periódico", Retorno: "Retorno ao Trabalho", Mudanca_Funcao: "Mudança de Função", Demissional: "Demissional" };
   return map[tipo] || tipo;
 }
 
@@ -63,33 +56,48 @@ export default function ControleDocumentos() {
   const { data: treinList = [], refetch: refetchTrein } = trpc.docs.treinamentos.list.useQuery({ companyId }, { enabled: !!companyId });
   const { data: atestList = [], refetch: refetchAtest } = trpc.docs.atestados.list.useQuery({ companyId }, { enabled: !!companyId });
   const { data: advList = [], refetch: refetchAdv } = trpc.docs.advertencias.list.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: employees = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: allEmployees = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+
+  // Filtrar APENAS funcionários ativos para os selects
+  const activeEmployees = useMemo(() => {
+    return (allEmployees as any[]).filter((e: any) => e.status === "Ativo");
+  }, [allEmployees]);
 
   // ============ MUTATIONS ============
   const createAso = trpc.docs.asos.create.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO cadastrado!"); } });
+  const updateAso = trpc.docs.asos.update.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO atualizado!"); } });
   const deleteAso = trpc.docs.asos.delete.useMutation({ onSuccess: () => { refetchAso(); toast.success("ASO excluído!"); } });
   const uploadAsoDoc = trpc.docs.asos.uploadDoc.useMutation({ onSuccess: () => { refetchAso(); toast.success("Documento anexado!"); } });
 
   const createTrein = trpc.docs.treinamentos.create.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento cadastrado!"); } });
+  const updateTrein = trpc.docs.treinamentos.update.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento atualizado!"); } });
   const deleteTrein = trpc.docs.treinamentos.delete.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Treinamento excluído!"); } });
   const uploadTreinDoc = trpc.docs.treinamentos.uploadDoc.useMutation({ onSuccess: () => { refetchTrein(); toast.success("Certificado anexado!"); } });
 
   const createAtest = trpc.docs.atestados.create.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Atestado cadastrado!"); } });
+  const updateAtest = trpc.docs.atestados.update.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Atestado atualizado!"); } });
   const deleteAtest = trpc.docs.atestados.delete.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Atestado excluído!"); } });
   const uploadAtestDoc = trpc.docs.atestados.uploadDoc.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Documento anexado!"); } });
 
   const createAdv = trpc.docs.advertencias.create.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência cadastrada!"); } });
+  const updateAdv = trpc.docs.advertencias.update.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência atualizada!"); } });
   const deleteAdv = trpc.docs.advertencias.delete.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência excluída!"); } });
   const uploadAdvDoc = trpc.docs.advertencias.uploadDoc.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Documento anexado!"); } });
 
   const importAso = trpc.docs.asos.importBatch.useMutation({ onSuccess: (r) => { refetchAso(); toast.success(`${r.imported} ASOs importados!`); } });
 
   // ============ DIALOGS ============
-  const [showNewAso, setShowNewAso] = useState(false);
-  const [showNewTrein, setShowNewTrein] = useState(false);
-  const [showNewAtest, setShowNewAtest] = useState(false);
-  const [showNewAdv, setShowNewAdv] = useState(false);
+  const [showAsoDialog, setShowAsoDialog] = useState(false);
+  const [showTreinDialog, setShowTreinDialog] = useState(false);
+  const [showAtestDialog, setShowAtestDialog] = useState(false);
+  const [showAdvDialog, setShowAdvDialog] = useState(false);
   const [showImportAso, setShowImportAso] = useState(false);
+
+  // ============ EDIT MODE (null = criação, number = edição) ============
+  const [editingAsoId, setEditingAsoId] = useState<number | null>(null);
+  const [editingTreinId, setEditingTreinId] = useState<number | null>(null);
+  const [editingAtestId, setEditingAtestId] = useState<number | null>(null);
+  const [editingAdvId, setEditingAdvId] = useState<number | null>(null);
 
   // ============ FORM STATES ============
   const [asoForm, setAsoForm] = useState<any>({});
@@ -99,6 +107,23 @@ export default function ControleDocumentos() {
 
   // ============ FILTER ============
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [cardFilter, setCardFilter] = useState<string | null>(null);
+
+  const handleCardClick = (filter: string) => {
+    if (cardFilter === filter) {
+      setCardFilter(null);
+      setStatusFilter("todos");
+      if (filter === "vencido" || filter === "vencer" || filter === "asos") setActiveTab("aso");
+    } else {
+      setCardFilter(filter);
+      if (filter === "asos") { setActiveTab("aso"); setStatusFilter("todos"); }
+      else if (filter === "vencido") { setActiveTab("aso"); setStatusFilter("vencido"); }
+      else if (filter === "vencer") { setActiveTab("aso"); setStatusFilter("vencer"); }
+      else if (filter === "treinamentos") { setActiveTab("treinamentos"); setStatusFilter("todos"); }
+      else if (filter === "atestados") { setActiveTab("atestados"); setStatusFilter("todos"); }
+      else if (filter === "advertencias") { setActiveTab("advertencias"); setStatusFilter("todos"); }
+    }
+  };
 
   const filteredAso = useMemo(() => {
     let list = asoList as any[];
@@ -163,41 +188,74 @@ export default function ControleDocumentos() {
     input.click();
   };
 
+  // ============ OPEN DIALOGS ============
+  const openNewAso = () => { setEditingAsoId(null); setAsoForm({}); setShowAsoDialog(true); };
+  const openEditAso = (a: any) => {
+    setEditingAsoId(a.id);
+    setAsoForm({ employeeId: a.employeeId, tipo: a.tipo, dataExame: a.dataExame, validadeDias: a.validadeDias || 365, resultado: a.resultado || "Apto", medico: a.medico || "", crm: a.crm || "", clinica: a.clinica || "", examesRealizados: a.examesRealizados || "", observacoes: a.observacoes || "" });
+    setShowAsoDialog(true);
+  };
+
+  const openNewTrein = () => { setEditingTreinId(null); setTreinForm({}); setShowTreinDialog(true); };
+  const openEditTrein = (t: any) => {
+    setEditingTreinId(t.id);
+    setTreinForm({ employeeId: t.employeeId, nome: t.nome || "", norma: t.norma || "", cargaHoraria: t.cargaHoraria || "", dataRealizacao: t.dataRealizacao || "", dataValidade: t.dataValidade || "", instrutor: t.instrutor || "", entidade: t.entidade || "", observacoes: t.observacoes || "" });
+    setShowTreinDialog(true);
+  };
+
+  const openNewAtest = () => { setEditingAtestId(null); setAtestForm({}); setShowAtestDialog(true); };
+  const openEditAtest = (a: any) => {
+    setEditingAtestId(a.id);
+    setAtestForm({ employeeId: a.employeeId, tipo: a.tipo || "", dataEmissao: a.dataEmissao || "", diasAfastamento: a.diasAfastamento || 0, dataRetorno: a.dataRetorno || "", cid: a.cid || "", medico: a.medico || "", crm: a.crm || "", descricao: a.descricao || "" });
+    setShowAtestDialog(true);
+  };
+
+  const openNewAdv = () => { setEditingAdvId(null); setAdvForm({}); setShowAdvDialog(true); };
+  const openEditAdv = (a: any) => {
+    setEditingAdvId(a.id);
+    setAdvForm({ employeeId: a.employeeId, tipoAdvertencia: a.tipoAdvertencia || "", dataOcorrencia: a.dataOcorrencia || "", motivo: a.motivo || "", descricao: a.descricao || "", testemunhas: a.testemunhas || "" });
+    setShowAdvDialog(true);
+  };
+
   // ============ SUBMIT HANDLERS ============
   const handleSubmitAso = () => {
-    if (!asoForm.employeeId || !asoForm.tipo || !asoForm.dataExame) {
-      toast.error("Preencha os campos obrigatórios"); return;
+    if (!asoForm.employeeId || !asoForm.tipo || !asoForm.dataExame) { toast.error("Preencha os campos obrigatórios"); return; }
+    if (editingAsoId) {
+      updateAso.mutate({ id: editingAsoId, ...asoForm, validadeDias: asoForm.validadeDias || 365 });
+    } else {
+      createAso.mutate({ companyId, ...asoForm, validadeDias: asoForm.validadeDias || 365 });
     }
-    createAso.mutate({ companyId, ...asoForm, validadeDias: asoForm.validadeDias || 365 });
-    setShowNewAso(false);
-    setAsoForm({});
+    setShowAsoDialog(false); setAsoForm({}); setEditingAsoId(null);
   };
 
   const handleSubmitTrein = () => {
-    if (!treinForm.employeeId || !treinForm.nome || !treinForm.dataRealizacao) {
-      toast.error("Preencha os campos obrigatórios"); return;
+    if (!treinForm.employeeId || !treinForm.nome || !treinForm.dataRealizacao) { toast.error("Preencha os campos obrigatórios"); return; }
+    if (editingTreinId) {
+      updateTrein.mutate({ id: editingTreinId, ...treinForm });
+    } else {
+      createTrein.mutate({ companyId, ...treinForm });
     }
-    createTrein.mutate({ companyId, ...treinForm });
-    setShowNewTrein(false);
-    setTreinForm({});
+    setShowTreinDialog(false); setTreinForm({}); setEditingTreinId(null);
   };
 
   const handleSubmitAtest = () => {
-    if (!atestForm.employeeId || !atestForm.tipo || !atestForm.dataEmissao) {
-      toast.error("Preencha os campos obrigatórios"); return;
+    if (!atestForm.employeeId || !atestForm.tipo || !atestForm.dataEmissao) { toast.error("Preencha os campos obrigatórios"); return; }
+    if (editingAtestId) {
+      updateAtest.mutate({ id: editingAtestId, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
+    } else {
+      createAtest.mutate({ companyId, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
     }
-    createAtest.mutate({ companyId, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
-    setShowNewAtest(false);
-    setAtestForm({});
+    setShowAtestDialog(false); setAtestForm({}); setEditingAtestId(null);
   };
 
   const handleSubmitAdv = () => {
-    if (!advForm.employeeId || !advForm.tipoAdvertencia || !advForm.dataOcorrencia || !advForm.motivo) {
-      toast.error("Preencha os campos obrigatórios"); return;
+    if (!advForm.employeeId || !advForm.tipoAdvertencia || !advForm.dataOcorrencia || !advForm.motivo) { toast.error("Preencha os campos obrigatórios"); return; }
+    if (editingAdvId) {
+      updateAdv.mutate({ id: editingAdvId, ...advForm });
+    } else {
+      createAdv.mutate({ companyId, ...advForm });
     }
-    createAdv.mutate({ companyId, ...advForm });
-    setShowNewAdv(false);
-    setAdvForm({});
+    setShowAdvDialog(false); setAdvForm({}); setEditingAdvId(null);
   };
 
   // ============ IMPORT ASO ============
@@ -207,7 +265,6 @@ export default function ControleDocumentos() {
     const text = await importFile.text();
     const lines = text.split("\n").filter(l => l.trim());
     const records: any[] = [];
-
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split("\t");
       if (cols.length < 4) continue;
@@ -215,27 +272,37 @@ export default function ControleDocumentos() {
       const tipo = cols[2]?.trim();
       const dataStr = cols[3]?.trim();
       if (!name || !tipo || !dataStr) continue;
-
-      // Parse date dd/mm/yyyy to yyyy-mm-dd
       const parts = dataStr.split("/");
       let dataExame = dataStr;
       if (parts.length === 3) dataExame = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
-
       const validadeDias = parseInt(cols[4]) || 365;
       const resultado = cols[7]?.trim() || "Apto";
       const medico = cols[8]?.trim() || "";
       const crm = cols[9]?.trim() || "";
-      const jaAtualizou = cols[10]?.trim()?.toLowerCase() === "sim";
-      const exames = cols[11]?.trim() || "";
-
-      records.push({ employeeName: name, tipo, dataExame, validadeDias, resultado, medico, crm, jaAtualizou, examesRealizados: exames });
+      const jaAtualizou = cols[10]?.trim()?.toUpperCase() === "SIM";
+      const examesRealizados = cols[11]?.trim() || "";
+      records.push({ employeeName: name, tipo, dataExame, validadeDias, resultado, medico, crm, jaAtualizou, examesRealizados });
     }
-
     if (records.length === 0) { toast.error("Nenhum registro encontrado no arquivo"); return; }
     importAso.mutate({ companyId, records });
-    setShowImportAso(false);
-    setImportFile(null);
+    setShowImportAso(false); setImportFile(null);
   };
+
+  // ============ EMPLOYEE SELECT COMPONENT ============
+  const EmployeeSelect = ({ value, onChange }: { value: number | undefined; onChange: (id: number) => void }) => (
+    <Select value={value ? String(value) : ""} onValueChange={v => onChange(parseInt(v))}>
+      <SelectTrigger><SelectValue placeholder="Selecione o colaborador (apenas ativos)" /></SelectTrigger>
+      <SelectContent>
+        {activeEmployees.length === 0 ? (
+          <div className="p-3 text-sm text-muted-foreground text-center">Nenhum colaborador ativo cadastrado</div>
+        ) : (
+          activeEmployees.map((e: any) => (
+            <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto} - {formatCPF(e.cpf)}</SelectItem>
+          ))
+        )}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <DashboardLayout>
@@ -249,86 +316,41 @@ export default function ControleDocumentos() {
         </div>
 
         {/* CARDS RESUMO */}
-        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Stethoscope className="h-5 w-5 text-blue-600" />
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            { key: "asos", label: "ASOs", value: resumo?.totalASOs || 0, icon: Stethoscope, color: "blue" },
+            { key: "vencido", label: "Vencidos", value: resumo?.asosVencidos || 0, icon: AlertTriangle, color: "red" },
+            { key: "vencer", label: "A Vencer", value: resumo?.asosAVencer || 0, icon: Calendar, color: "yellow" },
+            { key: "treinamentos", label: "Treinamentos", value: resumo?.totalTreinamentos || 0, icon: GraduationCap, color: "green" },
+            { key: "atestados", label: "Atestados", value: resumo?.totalAtestados || 0, icon: ClipboardList, color: "purple" },
+            { key: "advertencias", label: "Advertências", value: resumo?.totalAdvertencias || 0, icon: ShieldAlert, color: "orange" },
+          ].map(c => (
+            <Card key={c.key} className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${cardFilter === c.key ? `ring-2 ring-${c.color}-500 shadow-lg bg-${c.color}-50/50` : ""}`} onClick={() => handleCardClick(c.key)}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`h-10 w-10 rounded-lg bg-${c.color}-100 flex items-center justify-center`}>
+                    <c.icon className={`h-5 w-5 text-${c.color}-600`} />
+                  </div>
+                  <div>
+                    <p className={`text-2xl font-bold ${c.color === "red" || c.color === "yellow" ? `text-${c.color}-600` : ""}`}>{c.value}</p>
+                    <p className="text-xs text-muted-foreground">{c.label}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{resumo?.totalASOs || 0}</p>
-                  <p className="text-xs text-muted-foreground">ASOs</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-red-600">{resumo?.asosVencidos || 0}</p>
-                  <p className="text-xs text-muted-foreground">Vencidos</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-                  <Calendar className="h-5 w-5 text-yellow-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-yellow-600">{resumo?.asosAVencer || 0}</p>
-                  <p className="text-xs text-muted-foreground">A Vencer</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <GraduationCap className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{resumo?.totalTreinamentos || 0}</p>
-                  <p className="text-xs text-muted-foreground">Treinamentos</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <ClipboardList className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{resumo?.totalAtestados || 0}</p>
-                  <p className="text-xs text-muted-foreground">Atestados</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                  <ShieldAlert className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{resumo?.totalAdvertencias || 0}</p>
-                  <p className="text-xs text-muted-foreground">Advertências</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
+
+        {/* Filtro ativo */}
+        {cardFilter && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Filtro ativo:</span>
+            <Badge variant="secondary" className="gap-1">
+              {cardFilter === "asos" ? "Todos os ASOs" : cardFilter === "vencido" ? "ASOs Vencidos" : cardFilter === "vencer" ? "ASOs A Vencer" : cardFilter === "treinamentos" ? "Treinamentos" : cardFilter === "atestados" ? "Atestados" : "Advertências"}
+              <button onClick={() => { setCardFilter(null); setStatusFilter("todos"); }} className="ml-1 hover:text-foreground">✕</button>
+            </Badge>
+          </div>
+        )}
 
         {/* SEARCH + FILTER */}
         <div className="flex items-center gap-3">
@@ -365,7 +387,7 @@ export default function ControleDocumentos() {
                 <CardTitle className="text-base">Atestados de Saúde Ocupacional</CardTitle>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setShowImportAso(true)}><Upload className="h-4 w-4 mr-1" /> Importar</Button>
-                  <Button size="sm" onClick={() => { setAsoForm({}); setShowNewAso(true); }}><Plus className="h-4 w-4 mr-1" /> Novo ASO</Button>
+                  <Button size="sm" onClick={openNewAso}><Plus className="h-4 w-4 mr-1" /> Novo ASO</Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -415,6 +437,9 @@ export default function ControleDocumentos() {
                           </td>
                           <td className="py-2">
                             <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAso(a)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("aso", a.id)}>
                                 <FileUp className="h-3.5 w-3.5" />
                               </Button>
@@ -442,7 +467,7 @@ export default function ControleDocumentos() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">Treinamentos e Capacitações</CardTitle>
-                <Button size="sm" onClick={() => { setTreinForm({}); setShowNewTrein(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Treinamento</Button>
+                <Button size="sm" onClick={openNewTrein}><Plus className="h-4 w-4 mr-1" /> Novo Treinamento</Button>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -483,6 +508,9 @@ export default function ControleDocumentos() {
                           </td>
                           <td className="py-2">
                             <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditTrein(t)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar certificado" onClick={() => handleUploadDoc("trein", t.id)}>
                                 <FileUp className="h-3.5 w-3.5" />
                               </Button>
@@ -510,7 +538,7 @@ export default function ControleDocumentos() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">Atestados Médicos</CardTitle>
-                <Button size="sm" onClick={() => { setAtestForm({}); setShowNewAtest(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Atestado</Button>
+                <Button size="sm" onClick={openNewAtest}><Plus className="h-4 w-4 mr-1" /> Novo Atestado</Button>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -546,6 +574,9 @@ export default function ControleDocumentos() {
                           </td>
                           <td className="py-2">
                             <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAtest(a)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("atest", a.id)}>
                                 <FileUp className="h-3.5 w-3.5" />
                               </Button>
@@ -573,7 +604,7 @@ export default function ControleDocumentos() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">Advertências e Suspensões</CardTitle>
-                <Button size="sm" onClick={() => { setAdvForm({}); setShowNewAdv(true); }}><Plus className="h-4 w-4 mr-1" /> Nova Advertência</Button>
+                <Button size="sm" onClick={openNewAdv}><Plus className="h-4 w-4 mr-1" /> Nova Advertência</Button>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -608,6 +639,9 @@ export default function ControleDocumentos() {
                           <td className="py-2">{a.testemunhas || "-"}</td>
                           <td className="py-2">
                             <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAdv(a)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("adv", a.id)}>
                                 <FileUp className="h-3.5 w-3.5" />
                               </Button>
@@ -632,21 +666,14 @@ export default function ControleDocumentos() {
         </Tabs>
       </div>
 
-      {/* ===================== DIALOG: NOVO ASO ===================== */}
-      <Dialog open={showNewAso} onOpenChange={setShowNewAso}>
+      {/* ===================== DIALOG: ASO (Criar/Editar) ===================== */}
+      <Dialog open={showAsoDialog} onOpenChange={v => { if (!v) { setShowAsoDialog(false); setEditingAsoId(null); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Novo ASO</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAsoId ? "Editar ASO" : "Novo ASO"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador *</label>
-              <Select value={String(asoForm.employeeId || "")} onValueChange={v => setAsoForm({ ...asoForm, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
-                <SelectContent>
-                  {(employees as any[]).map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto} - {formatCPF(e.cpf)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
+              <EmployeeSelect value={asoForm.employeeId} onChange={id => setAsoForm({ ...asoForm, employeeId: id })} />
             </div>
             <div>
               <label className="text-sm font-medium">Tipo de Exame *</label>
@@ -702,27 +729,22 @@ export default function ControleDocumentos() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewAso(false)}>Cancelar</Button>
-            <Button onClick={handleSubmitAso} disabled={createAso.isPending}>{createAso.isPending ? "Salvando..." : "Salvar"}</Button>
+            <Button variant="outline" onClick={() => { setShowAsoDialog(false); setEditingAsoId(null); }}>Cancelar</Button>
+            <Button onClick={handleSubmitAso} disabled={createAso.isPending || updateAso.isPending}>
+              {(createAso.isPending || updateAso.isPending) ? "Salvando..." : editingAsoId ? "Atualizar" : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ===================== DIALOG: NOVO TREINAMENTO ===================== */}
-      <Dialog open={showNewTrein} onOpenChange={setShowNewTrein}>
+      {/* ===================== DIALOG: TREINAMENTO (Criar/Editar) ===================== */}
+      <Dialog open={showTreinDialog} onOpenChange={v => { if (!v) { setShowTreinDialog(false); setEditingTreinId(null); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Novo Treinamento</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingTreinId ? "Editar Treinamento" : "Novo Treinamento"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador *</label>
-              <Select value={String(treinForm.employeeId || "")} onValueChange={v => setTreinForm({ ...treinForm, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
-                <SelectContent>
-                  {(employees as any[]).map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
+              <EmployeeSelect value={treinForm.employeeId} onChange={id => setTreinForm({ ...treinForm, employeeId: id })} />
             </div>
             <div>
               <label className="text-sm font-medium">Nome do Treinamento *</label>
@@ -758,27 +780,22 @@ export default function ControleDocumentos() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewTrein(false)}>Cancelar</Button>
-            <Button onClick={handleSubmitTrein} disabled={createTrein.isPending}>{createTrein.isPending ? "Salvando..." : "Salvar"}</Button>
+            <Button variant="outline" onClick={() => { setShowTreinDialog(false); setEditingTreinId(null); }}>Cancelar</Button>
+            <Button onClick={handleSubmitTrein} disabled={createTrein.isPending || updateTrein.isPending}>
+              {(createTrein.isPending || updateTrein.isPending) ? "Salvando..." : editingTreinId ? "Atualizar" : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ===================== DIALOG: NOVO ATESTADO ===================== */}
-      <Dialog open={showNewAtest} onOpenChange={setShowNewAtest}>
+      {/* ===================== DIALOG: ATESTADO (Criar/Editar) ===================== */}
+      <Dialog open={showAtestDialog} onOpenChange={v => { if (!v) { setShowAtestDialog(false); setEditingAtestId(null); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Novo Atestado</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAtestId ? "Editar Atestado" : "Novo Atestado"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador *</label>
-              <Select value={String(atestForm.employeeId || "")} onValueChange={v => setAtestForm({ ...atestForm, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
-                <SelectContent>
-                  {(employees as any[]).map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
+              <EmployeeSelect value={atestForm.employeeId} onChange={id => setAtestForm({ ...atestForm, employeeId: id })} />
             </div>
             <div>
               <label className="text-sm font-medium">Tipo *</label>
@@ -825,27 +842,22 @@ export default function ControleDocumentos() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewAtest(false)}>Cancelar</Button>
-            <Button onClick={handleSubmitAtest} disabled={createAtest.isPending}>{createAtest.isPending ? "Salvando..." : "Salvar"}</Button>
+            <Button variant="outline" onClick={() => { setShowAtestDialog(false); setEditingAtestId(null); }}>Cancelar</Button>
+            <Button onClick={handleSubmitAtest} disabled={createAtest.isPending || updateAtest.isPending}>
+              {(createAtest.isPending || updateAtest.isPending) ? "Salvando..." : editingAtestId ? "Atualizar" : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ===================== DIALOG: NOVA ADVERTÊNCIA ===================== */}
-      <Dialog open={showNewAdv} onOpenChange={setShowNewAdv}>
+      {/* ===================== DIALOG: ADVERTÊNCIA (Criar/Editar) ===================== */}
+      <Dialog open={showAdvDialog} onOpenChange={v => { if (!v) { setShowAdvDialog(false); setEditingAdvId(null); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Nova Advertência</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAdvId ? "Editar Advertência" : "Nova Advertência"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="text-sm font-medium">Colaborador *</label>
-              <Select value={String(advForm.employeeId || "")} onValueChange={v => setAdvForm({ ...advForm, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
-                <SelectContent>
-                  {(employees as any[]).map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
+              <EmployeeSelect value={advForm.employeeId} onChange={id => setAdvForm({ ...advForm, employeeId: id })} />
             </div>
             <div>
               <label className="text-sm font-medium">Tipo *</label>
@@ -877,8 +889,10 @@ export default function ControleDocumentos() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewAdv(false)}>Cancelar</Button>
-            <Button onClick={handleSubmitAdv} disabled={createAdv.isPending}>{createAdv.isPending ? "Salvando..." : "Salvar"}</Button>
+            <Button variant="outline" onClick={() => { setShowAdvDialog(false); setEditingAdvId(null); }}>Cancelar</Button>
+            <Button onClick={handleSubmitAdv} disabled={createAdv.isPending || updateAdv.isPending}>
+              {(createAdv.isPending || updateAdv.isPending) ? "Salvando..." : editingAdvId ? "Atualizar" : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

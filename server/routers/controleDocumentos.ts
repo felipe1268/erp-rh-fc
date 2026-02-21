@@ -325,6 +325,30 @@ export const controleDocumentosRouter = router({
         return { success: true };
       }),
 
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          employeeId: z.number().optional(),
+          tipo: z.string().optional(),
+          dataEmissao: z.string().optional(),
+          diasAfastamento: z.number().optional(),
+          dataRetorno: z.string().optional(),
+          cid: z.string().optional(),
+          medico: z.string().optional(),
+          crm: z.string().optional(),
+          descricao: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const { id, ...rest } = input;
+        const updateData: any = {};
+        Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+        await db.update(atestados).set(updateData).where(eq(atestados.id, id));
+        return { success: true };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
@@ -425,6 +449,34 @@ export const controleDocumentosRouter = router({
         return { success: true };
       }),
 
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          employeeId: z.number().optional(),
+          nome: z.string().optional(),
+          norma: z.string().optional(),
+          cargaHoraria: z.string().optional(),
+          dataRealizacao: z.string().optional(),
+          dataValidade: z.string().optional(),
+          instrutor: z.string().optional(),
+          entidade: z.string().optional(),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const { id, ...rest } = input;
+        const updateData: any = {};
+        Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+        if (updateData.dataValidade) {
+          const { diasRestantes } = calcularStatusASO(updateData.dataValidade);
+          updateData.statusTreinamento = diasRestantes < 0 ? "Vencido" : diasRestantes <= 30 ? "A_Vencer" : "Valido";
+        }
+        await db.update(trainings).set(updateData).where(eq(trainings.id, id));
+        return { success: true };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
@@ -496,6 +548,27 @@ export const controleDocumentosRouter = router({
           descricao: input.descricao || null,
           testemunhas: input.testemunhas || null,
         });
+        return { success: true };
+      }),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          employeeId: z.number().optional(),
+          tipoAdvertencia: z.enum(["Verbal", "Escrita", "Suspensao", "OSS"]).optional(),
+          dataOcorrencia: z.string().optional(),
+          motivo: z.string().optional(),
+          descricao: z.string().optional(),
+          testemunhas: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const { id, ...rest } = input;
+        const updateData: any = {};
+        Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+        await db.update(warnings).set(updateData).where(eq(warnings.id, id));
         return { success: true };
       }),
 

@@ -484,3 +484,27 @@
 
 ### Cadastro (menu lateral)
 - [ ] Adicionar item "ASO" no menu Cadastro para gerenciar tipos de exame padrão
+
+## Fase 39: Cards de Resumo Clicáveis e Responsivos
+- [ ] Cards de resumo (ASOs, Vencidos, A Vencer, Treinamentos, Atestados, Advertências) clicáveis
+- [ ] Ao clicar em um card, filtrar automaticamente a tabela/aba correspondente
+- [ ] Feedback visual no card selecionado (borda, sombra ou destaque)
+- [ ] Clicar novamente no card ativo remove o filtro (volta a mostrar todos)
+- [ ] Layout responsivo dos cards em telas menores (empilhar em 2 ou 3 colunas)
+
+## Fase 39b: Edição de ASOs e Vínculo com Cadastro de Colaboradores
+- [ ] Botão de editar em cada linha da tabela de ASOs (ícone lápis)
+- [ ] Dialog de edição de ASO com todos os campos preenchidos
+- [ ] Rota tRPC de update para ASOs
+- [ ] Seleção de colaborador vinculada ao cadastro de funcionários ATIVOS (não permitir inativos)
+- [ ] Não permitir criar ASO para funcionário não cadastrado
+- [ ] Aplicar mesma lógica para Treinamentos (edição + colaborador do cadastro)
+- [ ] Aplicar mesma lógica para Atestados (edição + colaborador do cadastro)
+- [ ] Aplicar mesma lógica para Advertências (edição + colaborador do cadastro)
+
+## Fase 39c: Correção - Colaborador SEMPRE do cadastro + Edição
+- [x] Backend: rotas update para Atestados, Treinamentos e Advertências
+- [x] Frontend: dropdown de colaborador filtra APENAS ativos do cadastro (employees)
+- [x] Frontend: botão editar (lápis) em cada linha de ASO, Treinamentos, Atestados, Advertências
+- [x] Frontend: dialog de edição reutiliza mesmo formulário de criação preenchido com dados existentes
+- [x] Frontend: mutation de update no frontend para todas as 4 abas
