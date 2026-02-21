@@ -660,3 +660,9 @@
 ## FIX: Formatação de Valores Monetários
 - [x] Formatar campos de Salário Base e Valor da Hora no padrão brasileiro (ponto milhares, vírgula centavos)
 - [x] Aplicar formatação em todos os campos monetários do sistema
+
+## REVISÃO_06: Impressão Ficha + Rodapé LGPD
+- [ ] Botão de impressão/PDF na Ficha do Colaborador
+- [ ] Rodapé LGPD em TODOS os documentos: nome do usuário, data/hora, aviso confidencialidade
+- [ ] Aplicar rodapé LGPD no Fechamento de Ponto (Resumo, Rateio, Detalhe)
+- [ ] Aplicar rodapé LGPD na Ficha do Colaborador
