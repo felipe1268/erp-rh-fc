@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import FullScreenDialog from "@/components/FullScreenDialog";
 
 // ============ HELPERS ============
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {
@@ -276,7 +277,7 @@ export default function ControleDocumentos() {
     } else {
       createAdv.mutate({ companyId, ...payload, aplicadoPor: authUser?.name || authUser?.username || undefined });
     }
-    if (!editingAdvId) {
+    if (!editingAdvId && advForm.tipoAdvertencia !== "Verbal") {
       const emp = (allEmployees as any[]).find((e: any) => e.id === advForm.employeeId);
       const empAdvs = (advList as any[]).filter((x: any) => x.employeeId === advForm.employeeId);
       setPreviewAdvData({
@@ -351,21 +352,65 @@ export default function ControleDocumentos() {
     setShowImportAso(false); setImportFile(null);
   };
 
-  // ============ EMPLOYEE SELECT COMPONENT ============
-  const EmployeeSelect = ({ value, onChange }: { value: number | undefined; onChange: (id: number) => void }) => (
-    <Select value={value ? String(value) : ""} onValueChange={v => onChange(parseInt(v))}>
-      <SelectTrigger><SelectValue placeholder="Selecione o colaborador (apenas ativos)" /></SelectTrigger>
-      <SelectContent>
-        {activeEmployees.length === 0 ? (
-          <div className="p-3 text-sm text-muted-foreground text-center">Nenhum colaborador ativo cadastrado</div>
-        ) : (
-          activeEmployees.map((e: any) => (
-            <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto} - {formatCPF(e.cpf)}</SelectItem>
-          ))
+  // ============ EMPLOYEE SELECT COMPONENT (com busca por nome/CPF) ============
+  const EmployeeSelect = ({ value, onChange }: { value: number | undefined; onChange: (id: number) => void }) => {
+    const [empSearch, setEmpSearch] = useState("");
+    const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
+    const selectedEmp = activeEmployees.find((e: any) => e.id === value);
+    const filteredEmps = activeEmployees.filter((e: any) => {
+      if (!empSearch) return true;
+      const s = empSearch.toLowerCase();
+      return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""));
+    });
+    return (
+      <div className="relative">
+        <div
+          className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 transition-colors"
+          onClick={() => setEmpDropdownOpen(!empDropdownOpen)}
+        >
+          <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
+          {empDropdownOpen ? (
+            <input
+              autoFocus
+              className="flex-1 bg-transparent outline-none text-sm"
+              placeholder="Digite nome ou CPF para buscar..."
+              value={empSearch}
+              onChange={e => setEmpSearch(e.target.value)}
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
+              {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Digite nome ou CPF para buscar..."}
+            </span>
+          )}
+          {value && (
+            <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); onChange(undefined as any); setEmpSearch(""); }}>
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {empDropdownOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto">
+              {filteredEmps.length === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground text-center">{activeEmployees.length === 0 ? "Nenhum colaborador ativo cadastrado" : "Nenhum resultado encontrado"}</div>
+              ) : filteredEmps.map((e: any) => (
+                <div
+                  key={e.id}
+                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 flex items-center justify-between ${value === e.id ? "bg-blue-100 font-medium" : ""}`}
+                  onClick={() => { onChange(e.id); setEmpDropdownOpen(false); setEmpSearch(""); }}
+                >
+                  <span>{e.nomeCompleto}</span>
+                  <span className="text-xs text-muted-foreground">{formatCPF(e.cpf)}</span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
-      </SelectContent>
-    </Select>
-  );
+      </div>
+    );
+  };
 
   return (
     <DashboardLayout>
@@ -706,6 +751,13 @@ export default function ControleDocumentos() {
                   <p className="font-semibold flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> Fluxo Progressivo (CLT Art. 482)</p>
                   <p className="text-xs mt-1">1ª Advertência Verbal → 2ª Advertência Escrita → 3ª Advertência Escrita → Suspensão (1-30 dias) → Justa Causa</p>
                   <p className="text-xs mt-0.5 text-amber-600">O sistema sugere automaticamente o próximo passo com base no histórico do colaborador.</p>
+                  <div className="flex items-center gap-4 mt-2 pt-2 border-t border-amber-200">
+                    <span className="text-xs font-medium text-amber-900">Legenda Sequência:</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-5 h-5 rounded text-center text-[10px] font-bold leading-5 bg-green-100 text-green-700 border border-green-300">1ª</span><span className="text-xs">1ª Medida</span></span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-5 h-5 rounded text-center text-[10px] font-bold leading-5 bg-yellow-100 text-yellow-700 border border-yellow-300">2ª</span><span className="text-xs">2ª Medida</span></span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-5 h-5 rounded text-center text-[10px] font-bold leading-5 bg-orange-100 text-orange-700 border border-orange-300">3ª</span><span className="text-xs">3ª Medida</span></span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-5 h-5 rounded text-center text-[10px] font-bold leading-5 bg-red-100 text-red-700 border border-red-300">4ª+</span><span className="text-xs">4ª+ (Crítico)</span></span>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -741,7 +793,12 @@ export default function ControleDocumentos() {
                             </Badge>
                           </td>
                           <td className="py-2">
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${empAdvCount >= 4 ? "bg-red-100 text-red-700" : empAdvCount >= 3 ? "bg-orange-100 text-orange-700" : empAdvCount >= 2 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded font-bold border ${
+                              (a.sequencia || empAdvCount) >= 4 ? "bg-red-100 text-red-700 border-red-300" :
+                              (a.sequencia || empAdvCount) === 3 ? "bg-orange-100 text-orange-700 border-orange-300" :
+                              (a.sequencia || empAdvCount) === 2 ? "bg-yellow-100 text-yellow-700 border-yellow-300" :
+                              "bg-green-100 text-green-700 border-green-300"
+                            }`}>
                               {a.sequencia || empAdvCount}ª
                             </span>
                           </td>
@@ -751,7 +808,7 @@ export default function ControleDocumentos() {
                           <td className="py-2">{a.testemunhas || "-"}</td>
                           <td className="py-2">
                             <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Visualizar Documento CLT" onClick={() => {
+                              {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Visualizar Documento CLT" onClick={() => {
                                 const empAdvs = (advList as any[]).filter((x: any) => x.employeeId === a.employeeId).sort((x: any, y: any) => (x.dataOcorrencia || "").localeCompare(y.dataOcorrencia || ""));
                                 const idxAdv = empAdvs.findIndex((x: any) => x.id === a.id);
                                 const anteriores = empAdvs.filter((_: any, i: number) => i < idxAdv);
@@ -776,8 +833,8 @@ export default function ControleDocumentos() {
                                 setShowAdvPreview(true);
                               }}>
                                 <Eye className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Imprimir Documento CLT" onClick={() => {
+                              </Button>}
+                              {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Imprimir Documento CLT" onClick={() => {
                                 const userName = authUser?.name || authUser?.username || "Usuário";
                                 const dataEmissao = new Date().toLocaleString("pt-BR");
                                 const logoUrl = "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png";
@@ -856,7 +913,7 @@ export default function ControleDocumentos() {
                                 if (w) { w.document.write(printHtml); w.document.close(); setTimeout(() => w.print(), 500); }
                               }}>
                                 <Printer className="h-3.5 w-3.5" />
-                              </Button>
+                              </Button>}
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAdv(a)}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
@@ -885,9 +942,8 @@ export default function ControleDocumentos() {
       </div>
 
       {/* ===================== DIALOG: ASO (Criar/Editar) ===================== */}
-      <Dialog open={showAsoDialog} onOpenChange={v => { if (!v) { setShowAsoDialog(false); setEditingAsoId(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingAsoId ? "Editar ASO" : "Novo ASO"}</DialogTitle></DialogHeader>
+      <FullScreenDialog open={showAsoDialog} onClose={() => { setShowAsoDialog(false); setEditingAsoId(null); }} title={editingAsoId ? "Editar ASO" : "Novo ASO"} icon={<Stethoscope className="h-5 w-5 text-white" />}>
+        <div className="max-w-2xl mx-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -946,19 +1002,18 @@ export default function ControleDocumentos() {
               <Textarea value={asoForm.observacoes || ""} onChange={e => setAsoForm({ ...asoForm, observacoes: e.target.value })} rows={2} />
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setShowAsoDialog(false); setEditingAsoId(null); }}>Cancelar</Button>
             <Button onClick={handleSubmitAso} disabled={createAso.isPending || updateAso.isPending}>
               {(createAso.isPending || updateAso.isPending) ? "Salvando..." : editingAsoId ? "Atualizar" : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
 
       {/* ===================== DIALOG: TREINAMENTO (Criar/Editar) ===================== */}
-      <Dialog open={showTreinDialog} onOpenChange={v => { if (!v) { setShowTreinDialog(false); setEditingTreinId(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingTreinId ? "Editar Treinamento" : "Novo Treinamento"}</DialogTitle></DialogHeader>
+      <FullScreenDialog open={showTreinDialog} onClose={() => { setShowTreinDialog(false); setEditingTreinId(null); }} title={editingTreinId ? "Editar Treinamento" : "Novo Treinamento"} icon={<GraduationCap className="h-5 w-5 text-white" />}>
+        <div className="max-w-2xl mx-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -997,19 +1052,18 @@ export default function ControleDocumentos() {
               <Textarea value={treinForm.observacoes || ""} onChange={e => setTreinForm({ ...treinForm, observacoes: e.target.value })} rows={2} />
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setShowTreinDialog(false); setEditingTreinId(null); }}>Cancelar</Button>
             <Button onClick={handleSubmitTrein} disabled={createTrein.isPending || updateTrein.isPending}>
               {(createTrein.isPending || updateTrein.isPending) ? "Salvando..." : editingTreinId ? "Atualizar" : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
 
       {/* ===================== DIALOG: ATESTADO (Criar/Editar) ===================== */}
-      <Dialog open={showAtestDialog} onOpenChange={v => { if (!v) { setShowAtestDialog(false); setEditingAtestId(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingAtestId ? "Editar Atestado" : "Novo Atestado"}</DialogTitle></DialogHeader>
+      <FullScreenDialog open={showAtestDialog} onClose={() => { setShowAtestDialog(false); setEditingAtestId(null); }} title={editingAtestId ? "Editar Atestado" : "Novo Atestado"} icon={<FileText className="h-5 w-5 text-white" />}>
+        <div className="max-w-2xl mx-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -1059,19 +1113,18 @@ export default function ControleDocumentos() {
               <Textarea value={atestForm.descricao || ""} onChange={e => setAtestForm({ ...atestForm, descricao: e.target.value })} rows={2} />
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setShowAtestDialog(false); setEditingAtestId(null); }}>Cancelar</Button>
             <Button onClick={handleSubmitAtest} disabled={createAtest.isPending || updateAtest.isPending}>
               {(createAtest.isPending || updateAtest.isPending) ? "Salvando..." : editingAtestId ? "Atualizar" : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
 
       {/* ===================== DIALOG: ADVERTÊNCIA (Criar/Editar) ===================== */}
-      <Dialog open={showAdvDialog} onOpenChange={v => { if (!v) { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingAdvId ? "Editar Advertência" : "Nova Advertência"}</DialogTitle></DialogHeader>
+      <FullScreenDialog open={showAdvDialog} onClose={() => { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); }} title={editingAdvId ? "Editar Advertência" : "Nova Advertência"} icon={<ShieldAlert className="h-5 w-5 text-white" />}>
+        <div className="max-w-2xl mx-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -1139,6 +1192,7 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">Descrição Detalhada</label>
               <Textarea value={advForm.descricao || ""} onChange={e => setAdvForm({ ...advForm, descricao: e.target.value })} rows={3} />
             </div>
+            {advForm.tipoAdvertencia !== "Verbal" && (
             <div className="col-span-2 space-y-3">
               <label className="text-sm font-bold text-gray-700">Testemunhas</label>
               {[1, 2, 3].map(n => (
@@ -1162,20 +1216,26 @@ export default function ControleDocumentos() {
                 </div>
               ))}
             </div>
+            )}
+            {advForm.tipoAdvertencia === "Verbal" && (
+              <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                <p className="font-medium">Advertência Verbal — Apenas Registro</p>
+                <p className="text-xs mt-1">A advertência verbal será registrada no sistema para controle, sem necessidade de documento formal ou testemunhas.</p>
+              </div>
+            )}
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); }}>Cancelar</Button>
             <Button onClick={handleSubmitAdv} disabled={createAdv.isPending || updateAdv.isPending}>
               {(createAdv.isPending || updateAdv.isPending) ? "Salvando..." : editingAdvId ? "Atualizar" : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
 
       {/* ===================== DIALOG: IMPORTAR ASO ===================== */}
-      <Dialog open={showImportAso} onOpenChange={setShowImportAso}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Importar ASOs</DialogTitle></DialogHeader>
+      <FullScreenDialog open={showImportAso} onClose={() => setShowImportAso(false)} title="Importar ASOs" icon={<Upload className="h-5 w-5 text-white" />}>
+        <div className="max-w-2xl mx-auto">
           <div className="space-y-4">
             <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
               <p className="font-medium">Como funciona:</p>
@@ -1196,14 +1256,14 @@ export default function ControleDocumentos() {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setShowImportAso(false)}>Fechar</Button>
             <Button onClick={handleImportAso} disabled={importAso.isPending || !importFile}>
               {importAso.isPending ? "Importando..." : "Importar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
       {/* ===================== DIALOG: VISUALIZAR DOCUMENTO CLT ===================== */}
       {/* ===================== VISUALIZAÇÃO FULL SCREEN DO DOCUMENTO ===================== */}
       {showAdvPreview && previewAdvData && (() => {

@@ -13,8 +13,9 @@ import { formatCPF } from "@/lib/formatters";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
-  Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown
+  Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft
 } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -1376,12 +1377,9 @@ export default function FechamentoPonto() {
           </Card>
         )}
 
-        {/* ===== UPLOAD DIALOG ===== */}
-        <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-            <DialogHeader className="shrink-0">
-              <DialogTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Upload de Arquivos DIXI</DialogTitle>
-            </DialogHeader>
+        {/* ===== UPLOAD DIALOG (FULL SCREEN) ===== */}
+        <FullScreenDialog open={showUploadDialog} onClose={() => setShowUploadDialog(false)} title="Upload de Arquivos DIXI" subtitle={`Competência: ${formatMesAno(mesAno)}`} icon={<Upload className="h-5 w-5 text-white" />}>
+          <div className="max-w-2xl mx-auto">
             <div className="space-y-4 overflow-y-auto flex-1 pr-2">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                 <strong>Como funciona:</strong> Selecione os arquivos XLS exportados dos relógios DIXI.
@@ -1468,23 +1466,20 @@ export default function FechamentoPonto() {
                 </div>
               )}
             </div>
-            <DialogFooter className="shrink-0 border-t pt-4 mt-2">
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowUploadDialog(false)}>Fechar</Button>
               {!uploadResult && (
                 <Button onClick={handleUpload} disabled={uploading || uploadFiles.length === 0 || validating || (validationResult && !validationResult.allValid)} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {uploading ? "Processando..." : "Importar"}
                 </Button>
               )}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
 
-        {/* ===== MANUAL ENTRY DIALOG ===== */}
-        <Dialog open={showManualDialog} onOpenChange={setShowManualDialog}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><PenLine className="h-5 w-5 text-purple-600" /> Lançamento Manual</DialogTitle>
-            </DialogHeader>
+        {/* ===== MANUAL ENTRY DIALOG (FULL SCREEN) ===== */}
+        <FullScreenDialog open={showManualDialog} onClose={() => setShowManualDialog(false)} title="Lançamento Manual" subtitle={`Competência: ${formatMesAno(mesAno)}`} icon={<PenLine className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-purple-800 to-purple-600">
+          <div className="max-w-md mx-auto">
             <div className="space-y-3">
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-xs text-purple-800">
                 Registros manuais ficam <strong>destacados</strong> e são rastreados.
@@ -1515,7 +1510,7 @@ export default function FechamentoPonto() {
                 <Textarea value={manualData.justificativa} onChange={e => setManualData(p => ({ ...p, justificativa: e.target.value }))} placeholder="Motivo do lançamento manual..." />
               </div>
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowManualDialog(false)}>Cancelar</Button>
               <Button onClick={() => {
                 if (!manualData.employeeId || !manualData.data) return toast.error("Selecione o colaborador e a data");
@@ -1529,22 +1524,13 @@ export default function FechamentoPonto() {
               }} disabled={manualMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                 {manualMut.isPending ? "Salvando..." : "Salvar"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
 
-        {/* ===== RESOLVE INCONSISTENCY DIALOG ===== */}
-        <Dialog open={showResolveDialog} onOpenChange={setShowResolveDialog}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                {resolveData.status === "advertencia" ? (
-                  <><Shield className="h-5 w-5 text-red-600" /> Gerar Advertência</>
-                ) : (
-                  <><CheckCircle className="h-5 w-5 text-green-600" /> Resolver Inconsistência</>
-                )}
-              </DialogTitle>
-            </DialogHeader>
+        {/* ===== RESOLVE INCONSISTENCY DIALOG (FULL SCREEN) ===== */}
+        <FullScreenDialog open={showResolveDialog} onClose={() => setShowResolveDialog(false)} title={resolveData.status === "advertencia" ? "Gerar Advertência" : "Resolver Inconsistência"} subtitle={selectedInconsistency ? selectedInconsistency.employeeName : ""} icon={resolveData.status === "advertencia" ? <Shield className="h-5 w-5 text-white" /> : <CheckCircle className="h-5 w-5 text-white" />} headerColor={resolveData.status === "advertencia" ? "bg-gradient-to-r from-red-800 to-red-600" : "bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a]"}>
+          <div className="max-w-md mx-auto">
             {selectedInconsistency && (
               <div className="space-y-3">
                 <div className="bg-muted/50 rounded-lg p-3 text-sm">
@@ -1575,7 +1561,7 @@ export default function FechamentoPonto() {
                 )}
               </div>
             )}
-            <DialogFooter>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowResolveDialog(false)}>Cancelar</Button>
               <Button onClick={() => {
                 if (!selectedInconsistency) return;
@@ -1584,18 +1570,13 @@ export default function FechamentoPonto() {
                 className={resolveData.status === "advertencia" ? "bg-red-600 hover:bg-red-700" : "bg-[#1B2A4A] hover:bg-[#243660]"}>
                 {resolveMut.isPending ? "Processando..." : resolveData.status === "advertencia" ? "Gerar Advertência" : "Resolver"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
 
-        {/* ===== CONSOLIDAR MÊS DIALOG ===== */}
-        <Dialog open={showConsolidarDialog} onOpenChange={setShowConsolidarDialog}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-green-700">
-                <Lock className="h-5 w-5" /> Consolidar Mês — {formatMesAno(mesAno)}
-              </DialogTitle>
-            </DialogHeader>
+        {/* ===== CONSOLIDAR MÊS DIALOG (FULL SCREEN) ===== */}
+        <FullScreenDialog open={showConsolidarDialog} onClose={() => setShowConsolidarDialog(false)} title={`Consolidar Mês — ${formatMesAno(mesAno)}`} icon={<Lock className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-green-800 to-green-600">
+          <div className="max-w-md mx-auto">
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
                 <strong>Atenção:</strong> Ao consolidar, nenhuma alteração será permitida neste mês.
@@ -1620,25 +1601,20 @@ export default function FechamentoPonto() {
                 <Textarea value={consolidarObs} onChange={e => setConsolidarObs(e.target.value)} placeholder="Observações sobre a consolidação..." />
               </div>
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowConsolidarDialog(false)}>Cancelar</Button>
               <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => {
                 consolidarMut.mutate({ companyId, mesReferencia: mesAno, observacoes: consolidarObs || undefined });
               }} disabled={consolidarMut.isPending}>
                 {consolidarMut.isPending ? "Consolidando..." : "Consolidar Mês"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
 
-        {/* ===== DESCONSOLIDAR DIALOG ===== */}
-        <Dialog open={showDesconsolidarDialog} onOpenChange={setShowDesconsolidarDialog}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-amber-700">
-                <Unlock className="h-5 w-5" /> Desconsolidar Mês — {formatMesAno(mesAno)}
-              </DialogTitle>
-            </DialogHeader>
+        {/* ===== DESCONSOLIDAR DIALOG (FULL SCREEN) ===== */}
+        <FullScreenDialog open={showDesconsolidarDialog} onClose={() => setShowDesconsolidarDialog(false)} title={`Desconsolidar Mês — ${formatMesAno(mesAno)}`} icon={<Unlock className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-amber-700 to-amber-500">
+          <div className="max-w-md mx-auto">
             <div className="space-y-4">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
                 <strong>Atenção:</strong> Ao desconsolidar, o mês voltará a aceitar alterações.
@@ -1649,25 +1625,20 @@ export default function FechamentoPonto() {
                 <p><strong>Data:</strong> {consolidacaoStatus.data?.consolidadoEm ? new Date(consolidacaoStatus.data.consolidadoEm).toLocaleString("pt-BR") : "—"}</p>
               </div>
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowDesconsolidarDialog(false)}>Cancelar</Button>
               <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => {
                 desconsolidarMut.mutate({ companyId, mesReferencia: mesAno });
               }} disabled={desconsolidarMut.isPending}>
                 {desconsolidarMut.isPending ? "Desconsolidando..." : "Desconsolidar"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
 
-        {/* ===== LIMPAR BASE DIALOG ===== */}
-        <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-600">
-                <Trash2 className="h-5 w-5" /> Limpar Base — {formatMesAno(mesAno)}
-              </DialogTitle>
-            </DialogHeader>
+        {/* ===== LIMPAR BASE DIALOG (FULL SCREEN) ===== */}
+        <FullScreenDialog open={showClearDialog} onClose={() => setShowClearDialog(false)} title={`Limpar Base — ${formatMesAno(mesAno)}`} icon={<Trash2 className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-red-800 to-red-600">
+          <div className="max-w-md mx-auto">
             <div className="space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
                 <strong>Atenção:</strong> Esta ação é irreversível.
@@ -1689,14 +1660,14 @@ export default function FechamentoPonto() {
                 <p><strong>Inconsistências:</strong> {stats.data?.totalInconsistencias || 0}</p>
               </div>
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowClearDialog(false)}>Cancelar</Button>
               <Button variant="destructive" onClick={() => clearMut.mutate({ companyId, mesReferencia: mesAno, tipo: clearType as any })} disabled={clearMut.isPending}>
                 {clearMut.isPending ? "Limpando..." : "Confirmar Exclusão"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
       </div>
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>

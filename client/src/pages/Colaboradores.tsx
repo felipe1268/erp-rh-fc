@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
@@ -610,12 +611,7 @@ export default function Colaboradores() {
       {/* ============================================================ */}
       {/* FORM DIALOG - CADASTRO / EDIÇÃO */}
       {/* ============================================================ */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="!max-w-7xl w-[95vw] max-h-[95vh] overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
-          <DialogHeader>
-            <DialogTitle className="text-xl">{editingId ? "Editar Colaborador" : "Novo Colaborador"}</DialogTitle>
-            <DialogDescription className="sr-only">Formulário de cadastro e edição de colaborador</DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Colaborador" : "Novo Colaborador"} icon={<Users className="h-5 w-5 text-white" />}>
 
           {/* EMPRESA */}
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-2">
@@ -1191,7 +1187,7 @@ export default function Colaboradores() {
             />
           </div>
 
-          <DialogFooter className="gap-2 pt-2">
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button
               onClick={handleSubmit}
@@ -1199,19 +1195,13 @@ export default function Colaboradores() {
             >
               {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+      </FullScreenDialog>
 
       {/* ============================================================ */}
       {/* VIEW DIALOG - FICHA DO COLABORADOR */}
       {/* ============================================================ */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="!max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-card p-4 sm:p-6 lg:p-8">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">Ficha do Colaborador</DialogTitle>
-            <DialogDescription className="sr-only">Visualização completa dos dados do colaborador</DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} title="Ficha do Colaborador" subtitle={viewingEmployee?.nomeCompleto || ""} icon={<Eye className="h-5 w-5 text-white" />}>
           {viewingEmployee ? (
             <div className="space-y-8">
               {/* Header */}
@@ -1332,17 +1322,12 @@ export default function Colaboradores() {
               {/* Seções SST removidas - módulos não fazem parte do escopo */}
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
+      </FullScreenDialog>
       {/* ============================================================ */}
       {/* IMPORT EXCEL DIALOG */}
       {/* ============================================================ */}
-      <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) { setImportFile(null); setImportResult(null); } }}>
-        <DialogContent className="!max-w-2xl w-[90vw] bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2"><Upload className="h-5 w-5" /> Importar Colaboradores via Excel</DialogTitle>
-            <DialogDescription className="sr-only">Importar colaboradores a partir de planilha Excel</DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog open={importDialogOpen} onClose={() => { setImportDialogOpen(false); setImportFile(null); setImportResult(null); }} title="Importar Colaboradores via Excel" icon={<Upload className="h-5 w-5 text-white" />}>
+        <div className="max-w-2xl mx-auto">
           <div className="space-y-4">
             <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
@@ -1401,7 +1386,7 @@ export default function Colaboradores() {
               </div>
             )}
           </div>
-          <DialogFooter className="gap-2">
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Fechar</Button>
             <Button
               disabled={!importFile || importing}
@@ -1420,7 +1405,6 @@ export default function Colaboradores() {
                         body: JSON.stringify({ json: { companyId, fileBase64: base64, fileName: importFile.name } }),
                       });
                       const json = await res.json();
-                      // Verificar se houve erro do tRPC
                       if (json?.error) {
                         const errMsg = json.error?.json?.message || json.error?.message || 'Erro desconhecido';
                         toast.error('Erro ao importar: ' + errMsg);
@@ -1451,9 +1435,9 @@ export default function Colaboradores() {
             >
               {importing ? "Importando..." : "Importar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
        <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );

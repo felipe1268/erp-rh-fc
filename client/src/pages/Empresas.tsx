@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { Building2, Plus, Pencil, Trash2, Search, Loader2, Star } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, Search, Loader2, Star, ArrowLeft } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useDefaultCompany } from "@/hooks/useDefaultCompany";
@@ -236,12 +237,8 @@ export default function Empresas() {
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Empresa" : "Nova Empresa"}</DialogTitle>
-            <DialogDescription className="sr-only">Formulário de cadastro e edição de empresa</DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Empresa" : "Nova Empresa"} icon={<Building2 className="h-5 w-5 text-white" />}>
+        <div className="max-w-3xl mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
             <div className="sm:col-span-2">
               <Label>CNPJ *</Label>
@@ -307,14 +304,14 @@ export default function Empresas() {
               <Input value={form.email} onChange={e => set("email", e.target.value)} placeholder="email@empresa.com" className="bg-input" />
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending || cnpjLoading}>
               {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
     </DashboardLayout>
   );
 }

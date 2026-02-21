@@ -743,3 +743,18 @@
 
 ## REVISÃO_13: Botão Voltar no Raio-X
 - [x] Adicionar botão de voltar à tela de seleção no Raio-X do Funcionário (página Relatórios)
+
+## REVISÃO_14: Remover redundância - Botão Advertência nas Inconsistências
+- [x] Remover dialog "Gerar Advertência" do Fechamento de Ponto (redundante)
+- [x] Botão Advertência deve navegar direto para Controle de Documentos > aba Advertências
+- [x] Pré-preencher dados do colaborador e inconsistência ao navegar
+
+## REVISÃO_15: Varredura Full Screen + Busca + Voltar + Legenda Cores + Verbal
+- [x] Busca por nome/CPF no select de colaborador (advertência e outros formulários)
+- [x] Varredura: converter TODOS os dialogs para FULL SCREEN em todas as telas (22 dialogs em 9 páginas)
+- [x] Botão Voltar em todas as telas full screen para facilitar navegação
+- [x] Remover dialog redundante de advertência no Fechamento de Ponto (navegar direto ao Controle de Documentos)
+- [x] Legenda de cores por sequência de advertência (1ª verde/amarelo, 2ª laranja, 3ª+ vermelho)
+- [x] Advertência Verbal: apenas registro, sem documento CLT/impressão/visualização
+- [x] Componente FullScreenDialog reutilizável criado para padronizar todas as telas
+- [x] Páginas convertidas: ControleDocumentos (5), FechamentoPonto (6), Colaboradores (3), Empresas (1), Obras (1), Funções (1), Setores (1), Usuários (2), Configurações (2)

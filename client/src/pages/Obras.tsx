@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -272,11 +273,8 @@ export default function Obras() {
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Obra" : "Nova Obra"}</DialogTitle>
-          </DialogHeader>
+      <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Obra" : "Nova Obra"} icon={<Landmark className="h-5 w-5 text-white" />}>
+        <div className="max-w-2xl mx-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <Label>Nome da Obra *</Label>
@@ -436,14 +434,14 @@ export default function Obras() {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
               {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
     </DashboardLayout>
   );
 }

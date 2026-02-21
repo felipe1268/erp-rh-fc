@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { Lock, Plus, Settings, Trash2, Shield } from "lucide-react";
+import { Lock, Plus, Settings, Trash2, Shield, ArrowLeft } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PROFILE_TYPES, ERP_MODULES, MODULE_KEYS } from "../../../shared/modules";
@@ -205,11 +206,8 @@ export default function Usuarios() {
       </div>
 
       {/* Create Profile Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
-          <DialogHeader>
-            <DialogTitle>Novo Perfil de Acesso</DialogTitle>
-          </DialogHeader>
+      <FullScreenDialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} title="Novo Perfil de Acesso" icon={<Plus className="h-5 w-5 text-white" />}>
+        <div className="max-w-3xl mx-auto">
           <div className="space-y-4 py-4">
             <div>
               <Label>Usuário</Label>
@@ -241,21 +239,18 @@ export default function Usuarios() {
               ) : null}
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateProfile} disabled={createMut.isPending}>
               {createMut.isPending ? "Criando..." : "Criar Perfil"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
 
       {/* Permissions Dialog */}
-      <Dialog open={permDialogOpen} onOpenChange={setPermDialogOpen}>
-        <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
-          <DialogHeader>
-            <DialogTitle>Configurar Permissões</DialogTitle>
-          </DialogHeader>
+      <FullScreenDialog open={permDialogOpen} onClose={() => setPermDialogOpen(false)} title="Configurar Permissões" icon={<Shield className="h-5 w-5 text-white" />}>
+        <div className="max-w-3xl mx-auto">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -288,14 +283,14 @@ export default function Usuarios() {
               </tbody>
             </table>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setPermDialogOpen(false)}>Cancelar</Button>
             <Button onClick={savePermissions} disabled={setPermMut.isPending}>
               {setPermMut.isPending ? "Salvando..." : "Salvar Permissões"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
     </DashboardLayout>
   );
 }

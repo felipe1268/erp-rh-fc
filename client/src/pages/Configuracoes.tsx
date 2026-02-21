@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import FullScreenDialog from "@/components/FullScreenDialog";
 
 const MODULES_LIST = [
   { key: "colaboradores", label: "Colaboradores" },
@@ -234,12 +235,8 @@ export default function Configuracoes() {
         </Card>
 
         {/* Dialog: Criar Usuário */}
-        <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Novo Usuário Local</DialogTitle>
-              <DialogDescription>Crie um usuário com acesso por username e senha</DialogDescription>
-            </DialogHeader>
+        <FullScreenDialog open={showCreateUser} onClose={() => setShowCreateUser(false)} title="Novo Usuário Local" subtitle="Crie um usuário com acesso por username e senha">
+          <div className="max-w-lg mx-auto">
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium">Nome Completo *</label>
@@ -265,24 +262,18 @@ export default function Configuracoes() {
                 </select>
               </div>
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowCreateUser(false)}>Cancelar</Button>
               <Button onClick={handleCreateUser} disabled={createUserMutation.isPending}>
                 {createUserMutation.isPending ? "Criando..." : "Criar Usuário"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
 
         {/* Dialog: Limpeza do Banco */}
-        <Dialog open={showCleanDialog} onOpenChange={setShowCleanDialog}>
-          <DialogContent className="max-w-3xl w-[85vw] max-h-[90vh] overflow-y-auto bg-card p-6">
-            <DialogHeader>
-              <DialogTitle className="text-red-600">Limpeza do Banco de Dados</DialogTitle>
-              <DialogDescription>
-                Selecione os módulos que deseja limpar. Todos os registros serão removidos permanentemente.
-              </DialogDescription>
-            </DialogHeader>
+        <FullScreenDialog open={showCleanDialog} onClose={() => setShowCleanDialog(false)} title="Limpeza do Banco de Dados" subtitle="Selecione os módulos que deseja limpar. Todos os registros serão removidos permanentemente." headerColor="bg-gradient-to-r from-red-700 to-red-500">
+          <div className="max-w-3xl mx-auto">
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b">
                 <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} className="w-4 h-4" />
@@ -314,14 +305,14 @@ export default function Configuracoes() {
                 />
               </div>
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowCleanDialog(false)}>Cancelar</Button>
               <Button variant="destructive" onClick={handleClean} disabled={cleanMutation.isPending}>
                 {cleanMutation.isPending ? "Limpando..." : `Limpar ${selectedModules.length} módulo(s)`}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </div>
+        </FullScreenDialog>
       </div>
     </DashboardLayout>
   );

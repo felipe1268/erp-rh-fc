@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Briefcase } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Briefcase, ArrowLeft } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -131,12 +132,8 @@ const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: !!com
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Função" : "Nova Função"}</DialogTitle>
-            <DialogDescription className="sr-only">Formulário de cadastro de função</DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Função" : "Nova Função"} icon={<Briefcase className="h-5 w-5 text-white" />}>
+        <div className="max-w-lg mx-auto">
           <div className="space-y-4">
             <div>
               <Label>Nome da Função *</Label>
@@ -151,14 +148,14 @@ const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: !!com
               <Textarea value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} rows={3} placeholder="Descrição da função (opcional)" />
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
               {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
     </DashboardLayout>
   );
 }
