@@ -7,10 +7,9 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
-import { execSync } from "child_process";
-import { writeFileSync, readFileSync, unlinkSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 // ============================================================
 // HELPERS
@@ -30,18 +29,9 @@ function normalizeNome(nome: string): string {
   return nome.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
 }
 
-function extractTextFromPDF(buffer: Buffer): string {
-  const tmpPath = join(tmpdir(), `pdf-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.pdf`);
-  const txtPath = tmpPath.replace(".pdf", ".txt");
-  try {
-    writeFileSync(tmpPath, buffer);
-    execSync(`pdftotext -layout "${tmpPath}" "${txtPath}"`, { timeout: 30000 });
-    const text = readFileSync(txtPath, "utf-8");
-    return text;
-  } finally {
-    try { unlinkSync(tmpPath); } catch {}
-    try { unlinkSync(txtPath); } catch {}
-  }
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  const result = await pdfParse(buffer);
+  return result.text;
 }
 
 // ============================================================
@@ -633,7 +623,7 @@ export const folhaPagamentoRouter = router({
         const { url } = await storagePut(fileKey, buffer, arquivo.mimeType);
 
         // Extract text
-        const text = extractTextFromPDF(buffer);
+        const text = await extractTextFromPDF(buffer);
 
         // AUTO-DETECT: Analítico tem "Admissão em" e "Salário base", Sintético tem "Relação de líquido"
         const isAnalitico = text.includes("Admiss\u00e3o em") || text.includes("Admissao em") || text.includes("Sal\u00e1rio base") || text.includes("Salario base") || text.includes("Espelho e resumo");
@@ -871,7 +861,7 @@ export const folhaPagamentoRouter = router({
 
       try {
         // Extract text using pdftotext (much better than pdf-parse)
-        const text = extractTextFromPDF(buffer);
+        const text = await extractTextFromPDF(buffer);
 
         // Find or create lancamento for this month/type
         let lancamento = await db.select().from(folhaLancamentos)

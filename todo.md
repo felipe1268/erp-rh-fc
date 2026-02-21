@@ -882,3 +882,7 @@
 - [x] Resolução em lote (resolveAllConflitos) deve pular conflitos com sobreposição e retornar lista dos que precisam resolução manual
 - [x] Frontend: exibir erro claro quando há sobreposição, indicar que o usuário deve escolher manualmente qual obra manter
 - [x] Frontend: diferenciar visualmente conflitos com sobreposição (vermelho) vs deslocamento real válido (verde)
+
+## FIX: pdftotext not found em produção
+- [x] Substituir comando pdftotext (sistema) por biblioteca Node.js pdf-parse para extração de texto de PDFs
+- [x] Garantir compatibilidade com produção (sem dependência de binários do sistema)
