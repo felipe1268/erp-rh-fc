@@ -174,6 +174,10 @@ export const appRouter = router({
     update: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }: any) => {
       // Frontend envia { id, companyId, data } - extrair dados corretamente
       const employeeData = input.data || input;
+      // Proteger código interno JFC: somente ADM Master pode alterar
+      if (employeeData.codigoInterno !== undefined && ctx.user.role !== 'admin') {
+        delete employeeData.codigoInterno;
+      }
       await updateEmployee(input.id, input.companyId, employeeData);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${employeeData.nomeCompleto || input.nomeCompleto || ""}` });
       return { success: true };

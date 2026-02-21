@@ -330,6 +330,7 @@ export const employees = mysqlTable("employees", {
 	dataListaNegra: date({ mode: 'string' }),
 	obraAtualId: int(),
 	codigoContabil: varchar({ length: 20 }),
+	codigoInterno: varchar({ length: 10 }),
 });
 
 export const epiDeliveries = mysqlTable("epi_deliveries", {

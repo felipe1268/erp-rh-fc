@@ -818,3 +818,13 @@
 - [x] Cadastro automático de código contábil nos funcionários ao importar folha
 - [x] Verificação cruzada completa: salário, função, dados admissão, ponto
 - [x] Teste real com PDFs 006 e 007 de janeiro via upload no sistema
+
+## REVISÃO_21: Código Interno JFC (Identificação Única do Funcionário)
+- [x] Schema: adicionar campo codigoInterno (varchar único) na tabela employees
+- [x] Backend: gerar automaticamente JFC001, JFC002... ao criar funcionário
+- [x] Backend: garantir que código é único e nunca reutilizado (mesmo após desligamento)
+- [x] Backend: somente ADM Master pode alterar o código interno
+- [x] Frontend: exibir campo JFC na aba Profissional (primeiro campo, antes da Matrícula)
+- [x] Frontend: campo read-only para usuários normais, editável apenas por ADM Master com ícone Lock
+- [x] Migração: gerar códigos JFC001-JFC132 para todos os 132 funcionários existentes
+- [x] Teste visual: campo JFC002 aparecendo corretamente na edição do funcionário ACACIO LESCURA DE CAMARGO

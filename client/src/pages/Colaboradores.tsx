@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
@@ -350,6 +350,7 @@ export default function Colaboradores() {
         ["Tel. Emergência", formatTelefone(viewingEmployee.telefoneEmergencia)],
       ]},
       { title: "Profissional", fields: [
+        ["Cód. Interno (JFC)", viewingEmployee.codigoInterno ? `🔒 ${viewingEmployee.codigoInterno}` : "-"],
         ["Matrícula", safeDisplay(viewingEmployee.matricula)],
         ["Função", safeDisplay(viewingEmployee.funcao)],
         ["Setor", safeDisplay(viewingEmployee.setor)],
@@ -879,6 +880,30 @@ export default function Colaboradores() {
             <TabsContent value="profissional" className="pt-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                 <div>
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <Hash className="h-3.5 w-3.5" /> Código Interno (JFC)
+                    {form.codigoInterno && <Lock className="h-3 w-3 text-amber-500" />}
+                  </Label>
+                  {editingId && form.codigoInterno ? (
+                    <div className="relative">
+                      <Input
+                        value={form.codigoInterno ?? ""}
+                        onChange={e => set("codigoInterno", e.target.value.toUpperCase())}
+                        className="bg-input mt-1 font-mono font-bold text-primary"
+                        readOnly={user?.role !== 'admin'}
+                        disabled={user?.role !== 'admin'}
+                      />
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                        {user?.role === 'admin' ? 'Somente ADM Master pode alterar' : 'Gerado automaticamente • Imutável'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-muted/50 border border-dashed border-muted-foreground/30 rounded-md px-3 py-2 mt-1 text-sm text-muted-foreground italic">
+                      Gerado automaticamente ao salvar
+                    </div>
+                  )}
+                </div>
+                <div>
                   <Label className="text-xs font-medium text-muted-foreground">Matrícula</Label>
                   <Input value={form.matricula ?? ""} onChange={e => set("matricula", e.target.value)} className="bg-input mt-1" />
                 </div>
@@ -1266,6 +1291,7 @@ export default function Colaboradores() {
                   ["Tel. Emergência", formatTelefone(viewingEmployee.telefoneEmergencia)],
                 ]},
                 { title: "Profissional", fields: [
+                  ["Cód. Interno (JFC)", viewingEmployee.codigoInterno ? `🔒 ${viewingEmployee.codigoInterno}` : "-"],
                   ["Matrícula", safeDisplay(viewingEmployee.matricula)],
                   ["Função", safeDisplay(viewingEmployee.funcao)],
                   ["Setor", safeDisplay(viewingEmployee.setor)],

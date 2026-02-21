@@ -170,8 +170,20 @@ export async function getPermissions(profileId: number) {
 export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(employees).values(data);
-  return { id: result[0].insertId };
+  
+  // Gerar código interno JFC automaticamente
+  const [maxCodeResult] = await db.execute(
+    sql`SELECT codigoInterno FROM employees WHERE codigoInterno IS NOT NULL ORDER BY codigoInterno DESC LIMIT 1`
+  ) as any;
+  let nextNum = 1;
+  if (maxCodeResult && maxCodeResult.length > 0 && maxCodeResult[0]?.codigoInterno) {
+    const num = parseInt(maxCodeResult[0].codigoInterno.replace('JFC', ''));
+    if (!isNaN(num)) nextNum = num + 1;
+  }
+  const codigoInterno = 'JFC' + String(nextNum).padStart(3, '0');
+  
+  const result = await db.insert(employees).values({ ...data, codigoInterno });
+  return { id: result[0].insertId, codigoInterno };
 }
 
 export async function updateEmployee(id: number, companyId: number, data: Partial<InsertEmployee>) {
@@ -190,7 +202,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "banco", "bancoNome", "agencia", "conta", "tipoConta",
     "tipoChavePix", "chavePix", "contaPix", "bancoPix",
     "status", "listaNegra", "motivoListaNegra", "dataListaNegra",
-    "obraAtualId", "fotoUrl", "observacoes",
+    "obraAtualId", "fotoUrl", "observacoes", "codigoContabil", "codigoInterno",
   ]);
   // Campos booleanos
   const booleanFields = new Set(["listaNegra"]);
