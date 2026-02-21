@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -12,7 +13,7 @@ import { formatCPF } from "@/lib/formatters";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
-  Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck
+  Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo } from "react";
@@ -66,6 +67,9 @@ export default function FechamentoPonto() {
     employeeId: 0, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "",
   });
   const [resolveData, setResolveData] = useState({ status: "justificado" as string, justificativa: "" });
+  const [expandedConflict, setExpandedConflict] = useState<string | null>(null); // "empId|data"
+  const [conflictJustificativa, setConflictJustificativa] = useState("");
+  const [expandedInconsistency, setExpandedInconsistency] = useState<number | null>(null);
 
   // ===== QUERIES =====
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -136,6 +140,16 @@ export default function FechamentoPonto() {
       toast.success("Mês desconsolidado com sucesso!");
     },
     onError: (err) => toast.error(err.message),
+  });
+  const resolveConflitoMut = trpc.fechamentoPonto.resolveConflito.useMutation({
+    onSuccess: (data) => {
+      setExpandedConflict(null);
+      setConflictJustificativa("");
+      conflitos.refetch(); stats.refetch(); summary.refetch();
+      if (selectedEmployeeId) employeeDetail.refetch();
+      toast.success(data.message);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
   });
 
   // ===== COMPUTED =====
@@ -219,6 +233,85 @@ export default function FechamentoPonto() {
   };
 
   const openRaioX = (empId: number) => setRaioXEmployeeId(empId);
+
+  // ===== PRINT / PDF =====
+  const handlePrint = () => {
+    const empresa = "FC ENGENHARIA PROJETOS E CONSTRUÇÕES";
+    const competencia = formatMesAno(mesAno);
+    const dataEmissao = new Date().toLocaleString("pt-BR");
+    const consolidadoInfo = isConsolidado ? `Consolidado por: ${consolidacaoStatus.data?.consolidadoPor || "—"} em ${consolidacaoStatus.data?.consolidadoEm ? new Date(consolidacaoStatus.data.consolidadoEm).toLocaleString("pt-BR") : "—"}` : "Não consolidado";
+
+    let titulo = "";
+    let conteudo = "";
+
+    if (viewMode === "detalhe" && selectedEmployeeId && employeeDetail.data) {
+      // DETALHE DO FUNCIONÁRIO
+      const emp = employeeDetail.data.employee;
+      titulo = `Registro de Ponto — ${emp?.nomeCompleto || "Colaborador"}`;
+      const groups = employeeDetail.data.recordsByObra || [];
+      conteudo = `<div style="margin-bottom:16px;padding:10px;background:#f0f0f0;border-radius:6px;"><strong>Colaborador:</strong> ${emp?.nomeCompleto || "-"} | <strong>CPF:</strong> ${formatCPF(emp?.cpf || "")} | <strong>Função:</strong> ${emp?.funcao || "-"}</div>`;
+      groups.forEach((g: any) => {
+        conteudo += `<h3 style="margin-top:20px;color:#0d9488;font-size:14px;">🏗 ${g.obraNome} — ${g.records.length} registros</h3>`;
+        conteudo += `<table><thead><tr><th>Data</th><th>Dia</th><th>Entrada</th><th>Saída Int.</th><th>Retorno</th><th>Saída</th><th>H. Trab.</th><th>H. Extra</th><th>Fonte</th><th>Status</th></tr></thead><tbody>`;
+        g.records.forEach((r: any) => {
+          const hasIncons = (employeeDetail.data?.inconsistencies || []).some((i: any) => i.data === r.data);
+          const bgColor = r.ajusteManual ? "#faf5ff" : hasIncons ? "#fffbeb" : "";
+          conteudo += `<tr style="background:${bgColor}"><td>${r.data ? new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td><td>${dayOfWeek(r.data)}</td><td>${r.entrada1 || "-"}</td><td>${r.saida1 || "-"}</td><td>${r.entrada2 || "-"}</td><td>${r.saida2 || "-"}</td><td style="font-weight:600">${r.horasTrabalhadas || "-"}</td><td style="color:#16a34a;font-weight:600">${r.horasExtras && r.horasExtras !== "0:00" ? r.horasExtras : "-"}</td><td>${r.ajusteManual ? "Manual" : "DIXI"}</td><td>${hasIncons ? "⚠ Inconsistente" : "✓ OK"}</td></tr>`;
+        });
+        conteudo += `</tbody></table>`;
+      });
+    } else if (viewMode === "rateio" && rateioData.data) {
+      // RATEIO POR OBRA
+      titulo = "Rateio de Mão de Obra por Obra";
+      rateioData.data.forEach((obra: any) => {
+        conteudo += `<div style="margin-top:24px;page-break-inside:avoid;"><div style="background:#f0fdfa;padding:10px 14px;border:1px solid #99f6e4;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;"><div><strong style="color:#0d9488;font-size:15px;">${obra.nomeObra}</strong>`;
+        if (obra.snRelogioPonto) conteudo += `<br/><span style="font-size:11px;color:#0d9488;">SN: ${obra.snRelogioPonto}</span>`;
+        conteudo += `</div><div style="text-align:right;"><strong>${obra.funcionarios.length} funcionários</strong><br/><span style="font-size:11px;">${obra.totalDias} dias trabalhados</span></div></div>`;
+        conteudo += `<table><thead><tr><th>Colaborador</th><th>CPF</th><th>Função</th><th>Dias</th><th>H. Normais</th><th>H. Extras</th><th>Total</th></tr></thead><tbody>`;
+        obra.funcionarios.forEach((f: any) => {
+          conteudo += `<tr><td>${f.nomeCompleto}</td><td>${formatCPF(f.cpf)}</td><td>${f.funcao || "-"}</td><td style="text-align:center">${f.diasTrabalhados}</td><td style="text-align:center">${f.horasNormais || "0:00"}</td><td style="text-align:center;color:#16a34a;font-weight:600">${f.horasExtras || "0:00"}</td><td style="text-align:center;font-weight:700">${f.totalHoras || "0:00"}</td></tr>`;
+        });
+        conteudo += `</tbody></table></div>`;
+      });
+    } else {
+      // RESUMO POR COLABORADOR
+      titulo = "Resumo por Colaborador";
+      conteudo += `<div style="margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap;"><div><strong>Colaboradores:</strong> ${stats.data?.totalColaboradores || 0}</div><div><strong>Registros:</strong> ${stats.data?.totalRegistros || 0}</div><div><strong>Inconsistências:</strong> ${stats.data?.totalInconsistencias || 0}</div><div><strong>Múltiplas Obras:</strong> ${multiSiteCount}</div><div><strong>Conflitos:</strong> ${conflitosCount}</div></div>`;
+      conteudo += `<table><thead><tr><th>Colaborador</th><th>CPF</th><th>Função</th><th>Obra(s)</th><th>Dias</th><th>H. Trab.</th><th>H. Extras</th><th>Atrasos</th><th>Status</th></tr></thead><tbody>`;
+      (filteredSummary || []).forEach((emp: any) => {
+        const hasConflict = (conflitos.data || []).some((c: any) => c.employeeId === emp.employeeId);
+        const bgColor = hasConflict ? "#fff7ed" : emp.multiplasObras ? "#fef2f2" : "";
+        const statusText = hasConflict ? "⚠ Conflito" : emp.multiplasObras ? "🔴 Multi-Obra" : "✓ OK";
+        conteudo += `<tr style="background:${bgColor}"><td>${emp.employeeName}</td><td>${formatCPF(emp.employeeCpf || "")}</td><td>${emp.employeeFuncao || "-"}</td><td>${(emp.obraNomes || []).join(", ") || "-"}</td><td style="text-align:center">${emp.diasTrabalhados}</td><td style="text-align:center">${emp.horasTrabalhadas}</td><td style="text-align:center;color:#16a34a;font-weight:600">${emp.horasExtras !== "0:00" ? emp.horasExtras : "-"}</td><td style="text-align:center;color:#dc2626">${emp.atrasos !== "0:00" ? emp.atrasos : "-"}</td><td style="text-align:center">${statusText}</td></tr>`;
+      });
+      conteudo += `</tbody></table>`;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return toast.error("Popup bloqueado. Permita popups para imprimir.");
+    printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${titulo} — ${competencia}</title><style>
+      @media print { @page { margin: 12mm 10mm; size: A4 landscape; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1B2A4A; padding-bottom: 12px; margin-bottom: 16px; }
+      .header h1 { font-size: 18px; color: #1B2A4A; margin-bottom: 2px; }
+      .header .sub { font-size: 11px; color: #666; }
+      .header .right { text-align: right; font-size: 10px; color: #666; }
+      .consolidado-badge { display: inline-block; background: #16a34a; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
+      th { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; font-weight: 600; color: #334155; white-space: nowrap; }
+      td { border: 1px solid #e2e8f0; padding: 5px 8px; white-space: nowrap; }
+      tr:nth-child(even) { background: #fafafa; }
+      h3 { page-break-after: avoid; }
+      .footer { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 9px; color: #999; display: flex; justify-content: space-between; }
+    </style></head><body>
+      <div class="header"><div><h1>${empresa}</h1><div class="sub">${titulo} — ${competencia}</div></div><div class="right">Emitido em: ${dataEmissao}<br/>${consolidadoInfo}${isConsolidado ? ' <span class="consolidado-badge">✓ CONSOLIDADO</span>' : ''}</div></div>
+      ${conteudo}
+      <div class="footer"><span>ERP RH & DP — FC Engenharia</span><span>${titulo} — ${competencia}</span></div>
+    </body></html>`);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 500);
+  };
 
   // ===== MONTH STATUS COLORS =====
   const getMonthStatus = (mes: number) => {
@@ -354,6 +447,13 @@ export default function FechamentoPonto() {
           {isAdmin && !isConsolidado && (stats.data?.totalRegistros || 0) > 0 && (
             <Button variant="outline" className="text-red-600 border-red-300 hover:bg-red-50" onClick={() => setShowClearDialog(true)}>
               <Trash2 className="h-4 w-4 mr-2" /> Limpar Base
+            </Button>
+          )}
+
+          {/* Botão Imprimir / PDF */}
+          {(stats.data?.totalRegistros || 0) > 0 && (
+            <Button variant="outline" className="text-gray-700 border-gray-300 hover:bg-gray-50 ml-auto" onClick={handlePrint}>
+              <Printer className="h-4 w-4 mr-2" /> Imprimir / PDF
             </Button>
           )}
 
@@ -771,57 +871,109 @@ export default function FechamentoPonto() {
                     <tbody>
                       {inconsistencies.data.map((item: any) => {
                         const inc = item.inconsistency;
+                        const isIncExpanded = expandedInconsistency === inc.id;
                         return (
-                          <tr key={inc.id} className="border-b last:border-0 hover:bg-muted/30">
-                            <td className="p-2">
-                              <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(inc.employeeId)}>
-                                {item.employeeName}
-                              </button>
-                            </td>
-                            <td className="p-2 text-muted-foreground">{formatCPF(item.employeeCpf || "")}</td>
-                            <td className="p-2">
-                              {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
-                              <span className="text-muted-foreground ml-1">({dayOfWeek(inc.data)})</span>
-                            </td>
-                            <td className="p-2">
-                              <Badge variant={inc.tipoInconsistencia === "batida_impar" ? "destructive" : "secondary"} className="text-xs">
-                                {inc.tipoInconsistencia === "batida_impar" ? "Batida Ímpar" :
-                                 inc.tipoInconsistencia === "falta_batida" ? "Falta Batida" :
-                                 inc.tipoInconsistencia === "horario_divergente" ? "Horário Divergente" :
-                                 inc.tipoInconsistencia === "sem_registro" ? "Sem Registro" : inc.tipoInconsistencia}
-                              </Badge>
-                            </td>
-                            <td className="p-2 text-muted-foreground text-xs max-w-[300px] truncate">{inc.descricao}</td>
-                            <td className="p-2 text-center">
-                              <Badge variant={inc.status === "pendente" ? "destructive" : inc.status === "justificado" ? "secondary" : "outline"} className="text-xs">
-                                {inc.status === "pendente" ? "Pendente" : inc.status === "justificado" ? "Justificado" : inc.status === "ajustado" ? "Ajustado" : inc.status}
-                              </Badge>
-                            </td>
-                            <td className="p-2 text-center">
-                              {inc.status === "pendente" && !isConsolidado && (
-                                <div className="flex items-center gap-1 justify-center">
-                                  <Button variant="ghost" size="sm" onClick={() => {
-                                    setSelectedInconsistency(item);
-                                    setResolveData({ status: "justificado", justificativa: "" });
-                                    setShowResolveDialog(true);
-                                  }}><CheckCircle className="h-4 w-4 text-green-600" /></Button>
-                                  <Button variant="ghost" size="sm" onClick={() => {
-                                    setManualData({
-                                      employeeId: inc.employeeId || 0, obraId: 0,
-                                      data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "",
-                                      justificativa: `Correção: ${inc.descricao}`,
-                                    });
-                                    setShowManualDialog(true);
-                                  }}><PenLine className="h-4 w-4 text-purple-600" /></Button>
-                                  <Button variant="ghost" size="sm" onClick={() => {
-                                    setSelectedInconsistency(item);
-                                    setResolveData({ status: "advertencia", justificativa: "" });
-                                    setShowResolveDialog(true);
-                                  }}><Shield className="h-4 w-4 text-red-600" /></Button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
+                          <React.Fragment key={inc.id}>
+                            <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isIncExpanded ? "bg-amber-50" : ""}`}
+                              onClick={() => setExpandedInconsistency(isIncExpanded ? null : inc.id)}
+                            >
+                              <td className="p-2">
+                                <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
+                                  {item.employeeName}
+                                </button>
+                              </td>
+                              <td className="p-2 text-muted-foreground">{formatCPF(item.employeeCpf || "")}</td>
+                              <td className="p-2">
+                                {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
+                                <span className="text-muted-foreground ml-1">({dayOfWeek(inc.data)})</span>
+                              </td>
+                              <td className="p-2">
+                                <Badge variant={inc.tipoInconsistencia === "batida_impar" ? "destructive" : "secondary"} className="text-xs">
+                                  {inc.tipoInconsistencia === "batida_impar" ? "Batida Ímpar" :
+                                   inc.tipoInconsistencia === "falta_batida" ? "Falta Batida" :
+                                   inc.tipoInconsistencia === "horario_divergente" ? "Horário Divergente" :
+                                   inc.tipoInconsistencia === "sem_registro" ? "Sem Registro" : inc.tipoInconsistencia}
+                                </Badge>
+                              </td>
+                              <td className="p-2 text-muted-foreground text-xs max-w-[300px] truncate">{inc.descricao}</td>
+                              <td className="p-2 text-center">
+                                <Badge variant={inc.status === "pendente" ? "destructive" : inc.status === "justificado" ? "secondary" : "outline"} className="text-xs">
+                                  {inc.status === "pendente" ? "Pendente" : inc.status === "justificado" ? "Justificado" : inc.status === "ajustado" ? "Ajustado" : inc.status === "advertencia" ? "Advertência" : inc.status}
+                                </Badge>
+                              </td>
+                              <td className="p-2 text-center">
+                                <ChevronRight className={`h-4 w-4 inline transition-transform ${isIncExpanded ? "rotate-90" : ""}`} />
+                              </td>
+                            </tr>
+                            {isIncExpanded && (
+                              <tr>
+                                <td colSpan={7} className="p-0">
+                                  <div className="bg-amber-50/50 border-t border-b border-amber-200 p-4 space-y-3">
+                                    <div className="bg-white rounded-lg border p-3 text-sm">
+                                      <p><strong>Descrição:</strong> {inc.descricao}</p>
+                                      {inc.resolvidoPor && <p className="mt-1"><strong>Resolvido por:</strong> {inc.resolvidoPor} em {inc.resolvidoEm ? new Date(inc.resolvidoEm + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</p>}
+                                      {inc.justificativa && <p className="mt-1"><strong>Justificativa:</strong> {inc.justificativa}</p>}
+                                    </div>
+                                    {inc.status === "pendente" && !isConsolidado && (
+                                      <div className="space-y-3">
+                                        <p className="text-xs font-medium text-amber-800">Escolha como resolver:</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                          <button
+                                            className="border-2 border-green-200 bg-green-50 rounded-lg p-3 text-left hover:border-green-400 hover:bg-green-100 transition-all"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedInconsistency(item);
+                                              setResolveData({ status: "justificado", justificativa: "" });
+                                              setShowResolveDialog(true);
+                                            }}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <CheckCircle className="h-4 w-4 text-green-600" />
+                                              <span className="text-sm font-semibold text-green-800">Justificar</span>
+                                            </div>
+                                            <p className="text-xs text-green-600 mt-1">Sem penalidade — registrar motivo</p>
+                                          </button>
+                                          <button
+                                            className="border-2 border-purple-200 bg-purple-50 rounded-lg p-3 text-left hover:border-purple-400 hover:bg-purple-100 transition-all"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setManualData({
+                                                employeeId: inc.employeeId || 0, obraId: 0,
+                                                data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "",
+                                                justificativa: `Correção: ${inc.descricao}`,
+                                              });
+                                              setShowManualDialog(true);
+                                            }}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <PenLine className="h-4 w-4 text-purple-600" />
+                                              <span className="text-sm font-semibold text-purple-800">Corrigir</span>
+                                            </div>
+                                            <p className="text-xs text-purple-600 mt-1">Lançar registro manual corrigido</p>
+                                          </button>
+                                          <button
+                                            className="border-2 border-red-200 bg-red-50 rounded-lg p-3 text-left hover:border-red-400 hover:bg-red-100 transition-all"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedInconsistency(item);
+                                              setResolveData({ status: "advertencia", justificativa: "" });
+                                              setShowResolveDialog(true);
+                                            }}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <Shield className="h-4 w-4 text-red-600" />
+                                              <span className="text-sm font-semibold text-red-800">Advertência</span>
+                                            </div>
+                                            <p className="text-xs text-red-600 mt-1">Gerar advertência formal</p>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>
@@ -848,7 +1000,7 @@ export default function FechamentoPonto() {
                   </div>
                 )}
 
-                {/* Conflitos deste funcionário */}
+                {/* Conflitos deste funcionário — expandível com ações inline */}
                 {(() => {
                   const empConflitos = (conflitos.data || []).filter((c: any) => c.employeeId === selectedEmployeeId);
                   if (empConflitos.length === 0) return null;
@@ -857,25 +1009,119 @@ export default function FechamentoPonto() {
                       <div className="flex items-center gap-2 mb-3">
                         <AlertCircle className="h-5 w-5 text-orange-600" />
                         <p className="font-bold text-orange-800">Conflitos de Obra Detectados ({empConflitos.length} dia{empConflitos.length > 1 ? "s" : ""})</p>
+                        <span className="text-xs text-orange-600 ml-auto">Clique para expandir e resolver</span>
                       </div>
                       <div className="space-y-2">
-                        {empConflitos.map((c: any, idx: number) => (
-                          <div key={idx} className="bg-white border border-orange-200 rounded-lg p-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium">
-                                {new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR")} ({dayOfWeek(c.data)})
-                              </p>
-                              <div className="flex gap-1 mt-1">
-                                {c.obras.map((o: any, i: number) => (
-                                  <Badge key={i} variant="outline" className="text-xs border-orange-300 text-orange-700">
-                                    {o.obraNome || "Sem Obra"} — {o.horasTrabalhadas || "0:00"}
-                                  </Badge>
-                                ))}
-                              </div>
+                        {empConflitos.map((c: any, idx: number) => {
+                          const conflictKey = `${c.employeeId}|${c.data}`;
+                          const isExpanded = expandedConflict === conflictKey;
+                          return (
+                            <div key={idx} className={`bg-white border rounded-lg overflow-hidden transition-all ${isExpanded ? "border-orange-400 shadow-md" : "border-orange-200"}`}>
+                              <button
+                                className="w-full p-3 flex items-center justify-between hover:bg-orange-50/50 transition-colors text-left"
+                                onClick={() => { setExpandedConflict(isExpanded ? null : conflictKey); setConflictJustificativa(""); }}
+                              >
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR")} ({dayOfWeek(c.data)})
+                                  </p>
+                                  <div className="flex gap-1 mt-1 flex-wrap">
+                                    {c.obras.map((o: any, i: number) => (
+                                      <Badge key={i} variant="outline" className="text-xs border-orange-300 text-orange-700">
+                                        {o.obraNome || "Sem Obra"} — {o.horasTrabalhadas || "0:00"}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-orange-600 text-white text-xs">2+ obras</Badge>
+                                  <ChevronRight className={`h-4 w-4 text-orange-600 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                </div>
+                              </button>
+                              {isExpanded && (
+                                <div className="border-t border-orange-200 p-4 bg-orange-50/30 space-y-3">
+                                  <p className="text-xs text-orange-800 font-medium">Escolha como resolver este conflito:</p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {c.obras.map((o: any, i: number) => (
+                                      <button
+                                        key={i}
+                                        className="border-2 border-blue-200 bg-blue-50 rounded-lg p-3 text-left hover:border-blue-400 hover:bg-blue-100 transition-all group"
+                                        onClick={() => {
+                                          if (!o.obraId) return toast.error("Obra sem ID");
+                                          resolveConflitoMut.mutate({
+                                            companyId, employeeId: c.employeeId, data: c.data,
+                                            acao: "manter_obra", obraIdManter: o.obraId,
+                                            justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome}`,
+                                          });
+                                        }}
+                                        disabled={resolveConflitoMut.isPending}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <Building2 className="h-4 w-4 text-blue-600" />
+                                          <span className="text-sm font-semibold text-blue-800">Manter em: {o.obraNome}</span>
+                                        </div>
+                                        <p className="text-xs text-blue-600 mt-1">Horas: {o.horasTrabalhadas || "0:00"} — Remove registros das outras obras</p>
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="flex-1 border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
+                                      onClick={() => {
+                                        resolveConflitoMut.mutate({
+                                          companyId, employeeId: c.employeeId, data: c.data,
+                                          acao: "confirmar_deslocamento",
+                                          justificativa: conflictJustificativa || "Deslocamento real entre obras confirmado",
+                                        });
+                                      }}
+                                      disabled={resolveConflitoMut.isPending}
+                                    >
+                                      <CheckCircle className="h-4 w-4 mr-1" /> Confirmar Deslocamento Real
+                                    </Button>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {c.obras.map((o: any, i: number) => (
+                                      <Button
+                                        key={i}
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
+                                        onClick={() => {
+                                          if (!o.obraId) return toast.error("Obra sem ID");
+                                          resolveConflitoMut.mutate({
+                                            companyId, employeeId: c.employeeId, data: c.data,
+                                            acao: "excluir_registro", obraIdExcluir: o.obraId,
+                                            justificativa: conflictJustificativa || `Excluído registro de ${o.obraNome} (erro de lançamento)`,
+                                          });
+                                        }}
+                                        disabled={resolveConflitoMut.isPending}
+                                      >
+                                        <Trash2 className="h-3 w-3 mr-1" /> Excluir {o.obraNome?.substring(0, 15)}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-orange-700">Justificativa (opcional)</Label>
+                                    <Textarea
+                                      value={conflictJustificativa}
+                                      onChange={e => setConflictJustificativa(e.target.value)}
+                                      placeholder="Motivo da decisão..."
+                                      className="mt-1 text-sm h-16"
+                                    />
+                                  </div>
+                                  {resolveConflitoMut.isPending && (
+                                    <div className="flex items-center gap-2 text-sm text-orange-700">
+                                      <div className="h-4 w-4 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+                                      Processando...
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <Badge className="bg-orange-600 text-white text-xs">2+ obras</Badge>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );

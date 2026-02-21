@@ -1260,4 +1260,80 @@ export const fechamentoPontoRouter = router({
         results,
       };
     }),
+
+  // ===================== RESOLVER CONFLITO DE OBRA/DIA =====================
+  resolveConflito: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      employeeId: z.number(),
+      data: z.string(), // YYYY-MM-DD
+      acao: z.enum(["manter_obra", "confirmar_deslocamento", "excluir_registro"]),
+      obraIdManter: z.number().optional(), // para manter_obra: qual obra manter
+      obraIdExcluir: z.number().optional(), // para excluir_registro: qual registro excluir
+      justificativa: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+
+      // Verificar consolidação
+      const mesRef = input.data.substring(0, 7);
+      const consolidacao = await db.select().from(pontoConsolidacao)
+        .where(and(
+          eq(pontoConsolidacao.companyId, input.companyId),
+          eq(pontoConsolidacao.mesReferencia, mesRef),
+          eq(pontoConsolidacao.status, "consolidado"),
+        )).limit(1);
+      if (consolidacao.length > 0) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Mês consolidado. Não é possível alterar registros.' });
+      }
+
+      const resolvidoPor = ctx.user?.name || "RH";
+
+      if (input.acao === "manter_obra" && input.obraIdManter) {
+        // Excluir registros de OUTRAS obras neste dia para este funcionário
+        await db.delete(timeRecords).where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.employeeId, input.employeeId),
+          eq(timeRecords.data, input.data),
+          sql`${timeRecords.obraId} != ${input.obraIdManter}`,
+        ));
+        // Registrar justificativa no registro mantido
+        if (input.justificativa) {
+          await db.update(timeRecords)
+            .set({ justificativa: `[Conflito resolvido por ${resolvidoPor}] ${input.justificativa}` })
+            .where(and(
+              eq(timeRecords.companyId, input.companyId),
+              eq(timeRecords.employeeId, input.employeeId),
+              eq(timeRecords.data, input.data),
+              eq(timeRecords.obraId, input.obraIdManter),
+            ));
+        }
+        return { success: true, message: `Registros de outras obras removidos. Mantido na obra selecionada.` };
+      }
+
+      if (input.acao === "confirmar_deslocamento") {
+        // Marcar todos os registros deste dia com justificativa de deslocamento confirmado
+        await db.update(timeRecords)
+          .set({ justificativa: `[Deslocamento confirmado por ${resolvidoPor}] ${input.justificativa || "Deslocamento real entre obras"}` })
+          .where(and(
+            eq(timeRecords.companyId, input.companyId),
+            eq(timeRecords.employeeId, input.employeeId),
+            eq(timeRecords.data, input.data),
+          ));
+        return { success: true, message: `Deslocamento entre obras confirmado e registrado.` };
+      }
+
+      if (input.acao === "excluir_registro" && input.obraIdExcluir) {
+        // Excluir registro específico de uma obra
+        await db.delete(timeRecords).where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.employeeId, input.employeeId),
+          eq(timeRecords.data, input.data),
+          eq(timeRecords.obraId, input.obraIdExcluir),
+        ));
+        return { success: true, message: `Registro da obra removido (erro de lançamento).` };
+      }
+
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ação inválida ou parâmetros faltando.' });
+    }),
 });

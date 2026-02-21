@@ -627,3 +627,32 @@
 - [x] Seletor de ano + 12 botões de meses
 - [x] Azul = com lançamento, Cinza = sem lançamento, Verde = consolidado
 - [x] Rota getMonthStatuses retornando status de cada mês
+
+## REVISÃO_05: Botão de Impressão/PDF
+- [x] Adicionar botão de impressão na barra de ações do Fechamento de Ponto
+- [x] Gerar PDF/imprimir do Resumo por Colaborador
+- [x] Gerar PDF/imprimir do Rateio por Obra (separado por obra)
+- [x] Gerar PDF/imprimir do Detalhe do Funcionário (registro diário)
+- [x] Layout de impressão profissional com cabeçalho FC Engenharia, data, competência
+
+## REVISÃO_05b: Resolução Fluida de Conflitos e Inconsistências
+
+### Conflitos de Obra/Dia — Ações Inline
+- [x] Cada conflito clicável expande inline mostrando registros lado a lado
+- [x] Botão "Manter na Obra A" — remove registro da obra errada
+- [x] Botão "Manter na Obra B" — remove registro da obra errada
+- [x] Botão "Confirmar Deslocamento" — valida que esteve nas duas obras
+- [x] Botão "Excluir Duplicado" — remove registro duplicado (erro de lançamento)
+- [x] Backend: rota resolveConflito com ações (manter_obra, confirmar_deslocamento, excluir_duplicado)
+
+### Inconsistências — Ações Inline
+- [x] Cada inconsistência clicável expande inline com detalhes + ações rápidas
+- [x] Ações rápidas: Justificar, Corrigir (lançar manual), Advertência — tudo inline
+- [x] Sem dialog separado — fluxo fluido no mesmo lugar
+
+### Botão de Impressão/PDF
+- [x] Botão Imprimir/PDF na barra de ações
+- [x] Impressão do Resumo por Colaborador
+- [x] Impressão do Rateio por Obra
+- [x] Impressão do Detalhe do Funcionário
+- [x] Layout profissional A4 paisagem com header FC Engenharia
