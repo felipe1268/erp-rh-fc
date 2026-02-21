@@ -508,3 +508,21 @@
 - [x] Frontend: botão editar (lápis) em cada linha de ASO, Treinamentos, Atestados, Advertências
 - [x] Frontend: dialog de edição reutiliza mesmo formulário de criação preenchido com dados existentes
 - [x] Frontend: mutation de update no frontend para todas as 4 abas
+
+## REVISÃO_01: Melhorias Fechamento de Ponto e Controle de Documentos
+### Fechamento de Ponto
+- [x] Botão limpar base do mês (apenas ADM)
+- [x] Rateio de mão de obra por obra com filtro por equipamento/obra
+- [x] Indicadores/cards clicáveis como filtros
+- [x] Verificação de duplicidade antes de importar dados (perguntar se quer sobrescrever)
+- [x] Auditoria de ajustes manuais (salvar nome do usuário que fez o ajuste)
+### Controle de Documentos
+- [x] Abas coloridas para melhor identificação visual
+- [x] Sistema de advertências progressivas conforme CLT (3 advertências → suspensão → justa causa)
+- [x] Modelos de texto normatizados para advertência verbal, escrita, suspensão e justa causa
+### Raio-X do Funcionário
+- [x] Raio-X completo consolidando TODOS os módulos (ASOs, treinamentos, atestados, advertências, ponto, folha, EPIs)
+- [x] Nome do colaborador clicável em TODAS as telas abrindo o Raio-X (Colaboradores, Controle de Documentos, Fechamento de Ponto, Vale Alimentação)
+- [x] Desligados não aparecem nas contagens de vencidos/a vencer
+### Pendente
+- [ ] Geração de PDF por obra e por funcionário para análise ponto a ponto

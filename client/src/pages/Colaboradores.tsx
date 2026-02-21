@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor } from "@/lib/formatters";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -95,6 +96,7 @@ export default function Colaboradores() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<any>(null);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [blacklistAlert, setBlacklistAlert] = useState<string | null>(null);
   const [cpfDuplicateAlert, setCpfDuplicateAlert] = useState<string | null>(null);
@@ -428,7 +430,7 @@ export default function Colaboradores() {
                         aria-label={`Selecionar ${emp.nomeCompleto}`}
                       />
                     </td>
-                    <td className="px-4 py-3 font-medium">{emp.nomeCompleto}</td>
+                    <td className="px-4 py-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
                     <td className="px-4 py-3 text-muted-foreground">{formatCPF(emp.cpf)}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
@@ -1333,8 +1335,8 @@ export default function Colaboradores() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }
-
 // Seções SST removidas - módulos não fazem parte do escopo

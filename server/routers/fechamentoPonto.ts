@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
 
@@ -739,5 +739,78 @@ export const fechamentoPontoRouter = router({
         totalInconsistencias: Number(totalIncons?.count || 0),
         totalAjustesManuais: Number(totalManual?.count || 0),
       };
+    }),
+
+  // ===================== LIMPAR BASE DO MÊS (ADMIN ONLY) =====================
+  clearMonthData: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      tipo: z.enum(["tudo", "registros", "inconsistencias", "rateio"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin") throw new Error("Apenas administradores podem limpar a base de dados");
+      const db = (await getDb())!;
+      if (input.tipo === "tudo" || input.tipo === "registros") {
+        await db.delete(timeRecords).where(and(eq(timeRecords.companyId, input.companyId), eq(timeRecords.mesReferencia, input.mesReferencia)));
+      }
+      if (input.tipo === "tudo" || input.tipo === "inconsistencias") {
+        await db.delete(timeInconsistencies).where(and(eq(timeInconsistencies.companyId, input.companyId), eq(timeInconsistencies.mesReferencia, input.mesReferencia)));
+      }
+      if (input.tipo === "tudo" || input.tipo === "rateio") {
+        await db.delete(obraHorasRateio).where(and(eq(obraHorasRateio.companyId, input.companyId), eq(obraHorasRateio.mesAno, input.mesReferencia)));
+      }
+      return { success: true };
+    }),
+
+  // ===================== VERIFICAÇÃO DE DUPLICIDADE =====================
+  checkDuplicates: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [existing] = await db.select({ count: sql<number>`COUNT(*)` })
+        .from(timeRecords)
+        .where(and(eq(timeRecords.companyId, input.companyId), eq(timeRecords.mesReferencia, input.mesReferencia)));
+      return { existingCount: Number(existing?.count || 0), hasData: Number(existing?.count || 0) > 0 };
+    }),
+
+  // ===================== RATEIO POR OBRA =====================
+  getRateioPorObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rateio = await db.select({
+        obraId: obraHorasRateio.obraId,
+        nomeObra: obras.nome,
+        codigoObra: obras.codigo,
+        employeeId: obraHorasRateio.employeeId,
+        nomeCompleto: employees.nomeCompleto,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        horasNormais: obraHorasRateio.horasNormais,
+        horasExtras: obraHorasRateio.horasExtras,
+        totalHoras: obraHorasRateio.totalHoras,
+        diasTrabalhados: obraHorasRateio.diasTrabalhados,
+      })
+        .from(obraHorasRateio)
+        .leftJoin(obras, eq(obraHorasRateio.obraId, obras.id))
+        .leftJoin(employees, eq(obraHorasRateio.employeeId, employees.id))
+        .where(and(eq(obraHorasRateio.companyId, input.companyId), eq(obraHorasRateio.mesAno, input.mesReferencia)))
+        .orderBy(obras.nome, employees.nomeCompleto);
+      // Agrupar por obra
+      const porObra: Record<number, { obraId: number; nomeObra: string; codigoObra: string; funcionarios: any[]; totalHoras: string; totalExtras: string; totalDias: number }> = {};
+      for (const r of rateio) {
+        const oId = r.obraId || 0;
+        if (!porObra[oId]) porObra[oId] = { obraId: oId, nomeObra: r.nomeObra || "Sem Obra", codigoObra: r.codigoObra || "", funcionarios: [], totalHoras: "0:00", totalExtras: "0:00", totalDias: 0 };
+        porObra[oId].funcionarios.push(r);
+        porObra[oId].totalDias += r.diasTrabalhados || 0;
+      }
+      return Object.values(porObra);
     }),
 });

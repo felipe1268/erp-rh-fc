@@ -1,9 +1,29 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras } from "../../drizzle/schema";
+import { eq, and, desc, sql, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
+
+// Modelos de advertência padrão CLT
+const MODELOS_ADVERTENCIA = {
+  Verbal: {
+    titulo: "Advertência Verbal",
+    texto: `ADVERTÊNCIA VERBAL\n\nPelo presente instrumento, a empresa [EMPRESA], inscrita no CNPJ sob o nº [CNPJ], vem por meio deste ADVERTIR VERBALMENTE o(a) colaborador(a) [FUNCIONARIO], portador(a) do CPF nº [CPF], ocupante do cargo de [CARGO], lotado(a) no setor [SETOR], pelo seguinte motivo:\n\n[MOTIVO]\n\nOcorrido em [DATA_OCORRENCIA].\n\nEsclarecemos que a presente advertência tem caráter educativo e visa orientar o(a) colaborador(a) sobre a conduta esperada, conforme previsto no Art. 482 da CLT e no regulamento interno da empresa.\n\nA reincidência poderá acarretar a aplicação de penalidades mais severas, incluindo advertência por escrito, suspensão disciplinar e, em último caso, rescisão do contrato de trabalho por justa causa.\n\n[CIDADE], [DATA]\n\n\n_______________________________\nEmpregador/Representante Legal\n\n\n_______________________________\nColaborador(a)\n\n\n_______________________________\nTestemunha 1\n\n\n_______________________________\nTestemunha 2`
+  },
+  Escrita: {
+    titulo: "Advertência por Escrito",
+    texto: `ADVERTÊNCIA POR ESCRITO\n\nPelo presente instrumento, a empresa [EMPRESA], inscrita no CNPJ sob o nº [CNPJ], vem por meio deste ADVERTIR POR ESCRITO o(a) colaborador(a) [FUNCIONARIO], portador(a) do CPF nº [CPF], ocupante do cargo de [CARGO], lotado(a) no setor [SETOR], pelo seguinte motivo:\n\n[MOTIVO]\n\nOcorrido em [DATA_OCORRENCIA].\n\nRegistramos que o(a) colaborador(a) já foi advertido(a) verbalmente em [DATA_ADV_ANTERIOR] pelo mesmo tipo de infração, conforme Art. 482 da CLT.\n\nA presente advertência por escrito constitui a segunda medida disciplinar aplicada. A reincidência poderá acarretar suspensão disciplinar de até 3 (três) dias, conforme previsto na legislação trabalhista vigente, e em caso de persistência, rescisão do contrato de trabalho por justa causa.\n\nO(A) colaborador(a) declara estar ciente desta advertência e compromete-se a adequar sua conduta.\n\n[CIDADE], [DATA]\n\n\n_______________________________\nEmpregador/Representante Legal\n\n\n_______________________________\nColaborador(a)\n\n\n_______________________________\nTestemunha 1\n\n\n_______________________________\nTestemunha 2`
+  },
+  Suspensao: {
+    titulo: "Suspensão Disciplinar",
+    texto: `SUSPENSÃO DISCIPLINAR\n\nPelo presente instrumento, a empresa [EMPRESA], inscrita no CNPJ sob o nº [CNPJ], vem por meio deste SUSPENDER o(a) colaborador(a) [FUNCIONARIO], portador(a) do CPF nº [CPF], ocupante do cargo de [CARGO], lotado(a) no setor [SETOR], pelo período de [DIAS_SUSPENSAO] dia(s), a contar de [DATA_INICIO] até [DATA_FIM], pelo seguinte motivo:\n\n[MOTIVO]\n\nOcorrido em [DATA_OCORRENCIA].\n\nRegistramos que o(a) colaborador(a) já recebeu as seguintes medidas disciplinares anteriores:\n- Advertência Verbal em [DATA_ADV_VERBAL]\n- Advertência por Escrito em [DATA_ADV_ESCRITA]\n\nA presente suspensão é aplicada com fundamento no Art. 474 da CLT, que limita a suspensão disciplinar a no máximo 30 (trinta) dias consecutivos. Durante o período de suspensão, o(a) colaborador(a) não deverá comparecer ao local de trabalho e terá os dias descontados de sua remuneração.\n\nAdvertimos que a reincidência em qualquer falta disciplinar poderá ensejar a rescisão do contrato de trabalho por justa causa, nos termos do Art. 482 da CLT.\n\n[CIDADE], [DATA]\n\n\n_______________________________\nEmpregador/Representante Legal\n\n\n_______________________________\nColaborador(a)\n\n\n_______________________________\nTestemunha 1\n\n\n_______________________________\nTestemunha 2`
+  },
+  JustaCausa: {
+    titulo: "Rescisão por Justa Causa",
+    texto: `RESCISÃO DO CONTRATO DE TRABALHO POR JUSTA CAUSA\n\nPelo presente instrumento, a empresa [EMPRESA], inscrita no CNPJ sob o nº [CNPJ], vem por meio deste COMUNICAR a rescisão do contrato de trabalho por JUSTA CAUSA do(a) colaborador(a) [FUNCIONARIO], portador(a) do CPF nº [CPF], ocupante do cargo de [CARGO], lotado(a) no setor [SETOR], com fundamento no Art. 482, alínea(s) [ALINEA] da Consolidação das Leis do Trabalho (CLT), pelo seguinte motivo:\n\n[MOTIVO]\n\nOcorrido em [DATA_OCORRENCIA].\n\nHistórico disciplinar do(a) colaborador(a):\n- Advertência Verbal em [DATA_ADV_VERBAL]\n- Advertência por Escrito em [DATA_ADV_ESCRITA]\n- Suspensão Disciplinar em [DATA_SUSPENSAO]\n\nApós esgotadas todas as medidas socioeducativas e disciplinares previstas, e diante da reincidência e/ou gravidade da falta cometida, a empresa não encontra outra alternativa senão a aplicação da penalidade máxima.\n\nO(A) colaborador(a) deverá comparecer ao Departamento Pessoal para as providências de rescisão contratual.\n\n[CIDADE], [DATA]\n\n\n_______________________________\nEmpregador/Representante Legal\n\n\n_______________________________\nColaborador(a)\n\n\n_______________________________\nTestemunha 1\n\n\n_______________________________\nTestemunha 2`
+  }
+};
 
 // Helper: calcular status do ASO baseado na data de validade
 function calcularStatusASO(dataValidade: string): { status: string; diasRestantes: number } {
@@ -648,5 +668,83 @@ export const controleDocumentosRouter = router({
         asosVencidos: Number(asosVencidos.count),
         asosAVencer: Number(asosAVencer.count),
       };
+    }),
+
+  // ===================== RAIO-X DO FUNCIONÁRIO =====================
+  raioX: protectedProcedure
+    .input(z.object({ employeeId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      // Dados do funcionário
+      const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
+      if (!emp) return null;
+      // ASOs
+      const empAsos = await db.select().from(asos).where(eq(asos.employeeId, input.employeeId)).orderBy(desc(asos.dataExame));
+      const asosComStatus = empAsos.map(a => ({ ...a, ...calcularStatusASO(a.dataValidade || "") }));
+      // Treinamentos
+      const empTreinamentos = await db.select().from(trainings).where(eq(trainings.employeeId, input.employeeId)).orderBy(desc(trainings.dataRealizacao));
+      // Atestados
+      const empAtestados = await db.select().from(atestados).where(eq(atestados.employeeId, input.employeeId)).orderBy(desc(atestados.dataEmissao));
+      // Advertências
+      const empAdvertencias = await db.select().from(warnings).where(eq(warnings.employeeId, input.employeeId)).orderBy(desc(warnings.dataOcorrencia));
+      // Ponto (últimos 3 meses)
+      const tresMesesAtras = new Date();
+      tresMesesAtras.setMonth(tresMesesAtras.getMonth() - 3);
+      const empPonto = await db.select().from(timeRecords).where(and(eq(timeRecords.employeeId, input.employeeId))).orderBy(desc(timeRecords.data)).limit(90);
+      // Folha de pagamento (últimos 6 meses)
+      const empPayroll = await db.select().from(payroll).where(eq(payroll.employeeId, input.employeeId)).orderBy(desc(payroll.mesReferencia)).limit(6);
+      // EPIs entregues
+      const empEpis = await db.select({ id: epiDeliveries.id, epiId: epiDeliveries.epiId, quantidade: epiDeliveries.quantidade, dataEntrega: epiDeliveries.dataEntrega, dataDevolucao: epiDeliveries.dataDevolucao, motivo: epiDeliveries.motivo, nomeEpi: epis.nome }).from(epiDeliveries).leftJoin(epis, eq(epiDeliveries.epiId, epis.id)).where(eq(epiDeliveries.employeeId, input.employeeId)).orderBy(desc(epiDeliveries.dataEntrega));
+      // VR
+      const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia)).limit(6);
+      // Adiantamentos
+      const empAdiantamentos = await db.select().from(advances).where(eq(advances.employeeId, input.employeeId)).orderBy(desc(advances.mesReferencia)).limit(6);
+      // Rateio por obra
+      const empRateio = await db.select({ id: obraHorasRateio.id, obraId: obraHorasRateio.obraId, nomeObra: obras.nome, mesAno: obraHorasRateio.mesAno, horasNormais: obraHorasRateio.horasNormais, horasExtras: obraHorasRateio.horasExtras, totalHoras: obraHorasRateio.totalHoras, diasTrabalhados: obraHorasRateio.diasTrabalhados }).from(obraHorasRateio).leftJoin(obras, eq(obraHorasRateio.obraId, obras.id)).where(eq(obraHorasRateio.employeeId, input.employeeId)).orderBy(desc(obraHorasRateio.mesAno));
+      // Contagem de advertências para progressão
+      const advVerbais = empAdvertencias.filter(a => a.tipoAdvertencia === "Verbal").length;
+      const advEscritas = empAdvertencias.filter(a => a.tipoAdvertencia === "Escrita").length;
+      const advSuspensoes = empAdvertencias.filter(a => a.tipoAdvertencia === "Suspensao").length;
+      let proximaAcao = "Nenhuma pendência";
+      if (advVerbais >= 3 && advEscritas === 0) proximaAcao = "Sugestão: Aplicar Advertência por Escrito";
+      else if (advEscritas >= 1 && advSuspensoes === 0) proximaAcao = "Sugestão: Aplicar Suspensão Disciplinar";
+      else if (advSuspensoes >= 1) proximaAcao = "⚠️ Sugestão: Avaliar Rescisão por Justa Causa";
+      return {
+        funcionario: emp,
+        asos: asosComStatus,
+        treinamentos: empTreinamentos,
+        atestados: empAtestados,
+        advertencias: empAdvertencias,
+        ponto: empPonto,
+        folhaPagamento: empPayroll,
+        epis: empEpis,
+        valeAlimentacao: empVR,
+        adiantamentos: empAdiantamentos,
+        rateioObras: empRateio,
+        progressaoAdvertencias: { verbais: advVerbais, escritas: advEscritas, suspensoes: advSuspensoes, proximaAcao },
+      };
+    }),
+
+  // ===================== MODELOS DE ADVERTÊNCIA CLT =====================
+  modelosAdvertencia: protectedProcedure
+    .query(async () => {
+      return MODELOS_ADVERTENCIA;
+    }),
+
+  // ===================== CONTAGEM ADVERTÊNCIAS POR FUNCIONÁRIO =====================
+  contagemAdvertencias: protectedProcedure
+    .input(z.object({ employeeId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const advs = await db.select().from(warnings).where(eq(warnings.employeeId, input.employeeId)).orderBy(desc(warnings.dataOcorrencia));
+      const verbais = advs.filter(a => a.tipoAdvertencia === "Verbal").length;
+      const escritas = advs.filter(a => a.tipoAdvertencia === "Escrita").length;
+      const suspensoes = advs.filter(a => a.tipoAdvertencia === "Suspensao").length;
+      let proximaAcao = "Nenhuma pendência";
+      let sugestaoTipo = "Verbal";
+      if (verbais >= 3 && escritas === 0) { proximaAcao = "Aplicar Advertência por Escrito"; sugestaoTipo = "Escrita"; }
+      else if (escritas >= 1 && suspensoes === 0) { proximaAcao = "Aplicar Suspensão Disciplinar"; sugestaoTipo = "Suspensao"; }
+      else if (suspensoes >= 1) { proximaAcao = "Avaliar Rescisão por Justa Causa"; sugestaoTipo = "JustaCausa"; }
+      return { verbais, escritas, suspensoes, total: advs.length, proximaAcao, sugestaoTipo, historico: advs };
     }),
 });

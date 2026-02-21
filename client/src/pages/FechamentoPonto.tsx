@@ -11,16 +11,22 @@ import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
-  PenLine, Eye, ChevronLeft, CheckCircle, XCircle, Shield, Search, Filter
+  PenLine, Eye, ChevronLeft, CheckCircle, XCircle, Shield, Search, Filter,
+  Trash2, Building2, AlertCircle
 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 
-type ViewMode = "resumo" | "inconsistencias" | "detalhe";
+type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio";
+type CardFilter = null | "colaboradores" | "registros" | "inconsistencias" | "ajustes";
 
 export default function FechamentoPonto() {
   const { selectedCompanyId } = useCompany();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const now = new Date();
   const [mesAno, setMesAno] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -29,13 +35,19 @@ export default function FechamentoPonto() {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [showResolveDialog, setShowResolveDialog] = useState(false);
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [selectedInconsistency, setSelectedInconsistency] = useState<any>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterObra, setFilterObra] = useState<string>("all");
+  const [cardFilter, setCardFilter] = useState<CardFilter>(null);
+  const [clearType, setClearType] = useState<string>("tudo");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showRaioX, setShowRaioX] = useState(false);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
   // Manual entry state
   const [manualData, setManualData] = useState({
@@ -91,9 +103,27 @@ export default function FechamentoPonto() {
     onError: (err) => toast.error("Erro: " + err.message),
   });
 
+  // New mutations
+  const clearMut = trpc.fechamentoPonto.clearMonthData.useMutation({
+    onSuccess: () => {
+      setShowClearDialog(false);
+      stats.refetch(); summary.refetch(); inconsistencies.refetch();
+      toast.success("Base de dados limpa com sucesso!");
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+
+  // New queries
+  const duplicateCheck = trpc.fechamentoPonto.checkDuplicates.useQuery(
+    { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 }
+  );
+  const rateioData = trpc.fechamentoPonto.getRateioPorObra.useQuery(
+    { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 && viewMode === "rateio" }
+  );
+
   const utils = trpc.useUtils();
 
-  // Filtered summary
+  // Filtered summary with card filter
   const filteredSummary = useMemo(() => {
     if (!summary.data) return [];
     let data = summary.data;
@@ -104,8 +134,21 @@ export default function FechamentoPonto() {
     if (filterObra && filterObra !== "all") {
       data = data.filter((e: any) => String(e.obraId) === filterObra);
     }
+    // Card filter
+    if (cardFilter === "ajustes") {
+      data = data.filter((e: any) => e.temAjusteManual);
+    }
     return data;
-  }, [summary.data, searchTerm, filterObra]);
+  }, [summary.data, searchTerm, filterObra, cardFilter]);
+
+  // Handle upload with duplicate check
+  const handleUploadWithCheck = () => {
+    if (duplicateCheck.data?.hasData) {
+      setShowDuplicateDialog(true);
+    } else {
+      setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null);
+    }
+  };
 
   // Upload handler
   const handleUpload = async () => {
@@ -171,22 +214,28 @@ export default function FechamentoPonto() {
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
             <input type="month" value={mesAno} onChange={e => setMesAno(e.target.value)} className="border rounded-md px-3 py-2 text-sm" />
           </div>
-          <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
+          <Button onClick={handleUploadWithCheck} className="bg-[#1B2A4A] hover:bg-[#243660]">
             <Upload className="h-4 w-4 mr-2" /> Upload DIXI
           </Button>
           <Button variant="outline" onClick={() => setShowManualDialog(true)}>
             <PenLine className="h-4 w-4 mr-2" /> Lançamento Manual
           </Button>
+          {isAdmin && (stats.data?.totalRegistros || 0) > 0 && (
+            <Button variant="outline" className="text-red-600 border-red-300 hover:bg-red-50" onClick={() => setShowClearDialog(true)}>
+              <Trash2 className="h-4 w-4 mr-2" /> Limpar Base
+            </Button>
+          )}
           {viewMode !== "resumo" && viewMode !== "detalhe" && (
-            <Button variant="ghost" onClick={() => setViewMode("resumo")}>
+            <Button variant="ghost" onClick={() => { setViewMode("resumo"); setCardFilter(null); }}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar ao Resumo
             </Button>
           )}
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - All clickable as filters */}
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setViewMode("resumo")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "colaboradores" ? "ring-2 ring-blue-500 shadow-md" : ""}`}
+            onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "colaboradores" ? null : "colaboradores"); }}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -199,7 +248,8 @@ export default function FechamentoPonto() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "registros" ? "ring-2 ring-green-500 shadow-md" : ""}`}
+            onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "registros" ? null : "registros"); }}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
@@ -212,7 +262,8 @@ export default function FechamentoPonto() {
               </div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setViewMode("inconsistencias")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "inconsistencias" ? "ring-2 ring-amber-500 shadow-md" : ""}`}
+            onClick={() => { setViewMode("inconsistencias"); setCardFilter("inconsistencias"); }}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
@@ -225,7 +276,8 @@ export default function FechamentoPonto() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className={`cursor-pointer hover:shadow-md transition-all ${cardFilter === "ajustes" ? "ring-2 ring-purple-500 shadow-md" : ""}`}
+            onClick={() => { setViewMode("resumo"); setCardFilter(cardFilter === "ajustes" ? null : "ajustes"); }}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
@@ -243,14 +295,20 @@ export default function FechamentoPonto() {
         {/* Tab buttons */}
         {viewMode !== "detalhe" && (stats.data?.totalRegistros || 0) > 0 && (
           <div className="flex gap-2 border-b pb-2">
-            <Button variant={viewMode === "resumo" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("resumo")} className={viewMode === "resumo" ? "bg-[#1B2A4A]" : ""}>
+            <Button variant={viewMode === "resumo" ? "default" : "ghost"} size="sm" onClick={() => { setViewMode("resumo"); setCardFilter(null); }}
+              className={viewMode === "resumo" ? "bg-[#1B2A4A]" : ""}>
               <Users className="h-4 w-4 mr-1" /> Resumo por Colaborador
             </Button>
-            <Button variant={viewMode === "inconsistencias" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("inconsistencias")} className={viewMode === "inconsistencias" ? "bg-[#1B2A4A]" : ""}>
+            <Button variant={viewMode === "inconsistencias" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("inconsistencias")}
+              className={viewMode === "inconsistencias" ? "bg-amber-600 text-white" : ""}>
               <AlertTriangle className="h-4 w-4 mr-1" /> Inconsistências
               {(stats.data?.totalInconsistencias || 0) > 0 && (
                 <Badge variant="destructive" className="ml-1 text-xs">{stats.data?.totalInconsistencias}</Badge>
               )}
+            </Button>
+            <Button variant={viewMode === "rateio" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("rateio")}
+              className={viewMode === "rateio" ? "bg-teal-600 text-white" : ""}>
+              <Building2 className="h-4 w-4 mr-1" /> Rateio por Obra
             </Button>
           </div>
         )}
@@ -681,6 +739,74 @@ export default function FechamentoPonto() {
           </DialogContent>
         </Dialog>
 
+        {/* RATEIO POR OBRA VIEW */}
+        {viewMode === "rateio" && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-teal-600" /> Rateio de Mão de Obra por Obra — {mesAno}
+                </CardTitle>
+              </div>
+              <p className="text-xs text-muted-foreground">Distribuição de horas trabalhadas por obra para rateio de custos</p>
+            </CardHeader>
+            <CardContent>
+              {rateioData.isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Carregando rateio...</div>
+              ) : !rateioData.data || rateioData.data.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>Nenhum dado de rateio encontrado para este período.</p>
+                  <p className="text-xs mt-1">Os dados de rateio são gerados automaticamente ao importar os arquivos DIXI.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {rateioData.data.map((obra: any) => (
+                    <div key={obra.obraId} className="border rounded-lg overflow-hidden">
+                      <div className="bg-teal-50 border-b px-4 py-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-teal-800">{obra.nomeObra}</h3>
+                          {obra.codigoObra && <p className="text-xs text-teal-600">Código: {obra.codigoObra}</p>}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-teal-800">{obra.funcionarios.length} funcionários</p>
+                          <p className="text-xs text-teal-600">{obra.totalDias} dias trabalhados</p>
+                        </div>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left bg-muted/30">
+                            <th className="p-2 font-medium">Colaborador</th>
+                            <th className="p-2 font-medium">CPF</th>
+                            <th className="p-2 font-medium">Função</th>
+                            <th className="p-2 font-medium text-center">Dias</th>
+                            <th className="p-2 font-medium text-center">H. Normais</th>
+                            <th className="p-2 font-medium text-center">H. Extras</th>
+                            <th className="p-2 font-medium text-center">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {obra.funcionarios.map((f: any) => (
+                            <tr key={f.employeeId} className="border-b last:border-0 hover:bg-muted/20">
+                              <td className="p-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(f.employeeId)}>{f.nomeCompleto}</td>
+                              <td className="p-2 text-muted-foreground font-mono text-xs">{formatCPF(f.cpf)}</td>
+                              <td className="p-2 text-muted-foreground">{f.funcao || "-"}</td>
+                              <td className="p-2 text-center">{f.diasTrabalhados || 0}</td>
+                              <td className="p-2 text-center font-mono">{f.horasNormais || "0:00"}</td>
+                              <td className="p-2 text-center font-mono text-green-600 font-semibold">{f.horasExtras || "0:00"}</td>
+                              <td className="p-2 text-center font-mono font-bold">{f.totalHoras || "0:00"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* RESOLVE INCONSISTENCY DIALOG */}
         <Dialog open={showResolveDialog} onOpenChange={setShowResolveDialog}>
           <DialogContent className="max-w-md">
@@ -742,7 +868,77 @@ export default function FechamentoPonto() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* LIMPAR BASE DIALOG (ADMIN ONLY) */}
+        <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <Trash2 className="h-5 w-5" /> Limpar Base de Dados — {mesAno}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+                <strong>Atenção:</strong> Esta ação é irreversível. Selecione o que deseja apagar.
+              </div>
+              <div>
+                <Label>O que deseja limpar?</Label>
+                <Select value={clearType} onValueChange={setClearType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tudo">Tudo (Registros + Inconsistências + Rateio)</SelectItem>
+                    <SelectItem value="registros">Apenas Registros de Ponto</SelectItem>
+                    <SelectItem value="inconsistencias">Apenas Inconsistências</SelectItem>
+                    <SelectItem value="rateio">Apenas Rateio por Obra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <p><strong>Competência:</strong> {mesAno}</p>
+                <p><strong>Registros atuais:</strong> {stats.data?.totalRegistros || 0}</p>
+                <p><strong>Inconsistências:</strong> {stats.data?.totalInconsistencias || 0}</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowClearDialog(false)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => clearMut.mutate({ companyId, mesReferencia: mesAno, tipo: clearType as any })} disabled={clearMut.isPending}>
+                {clearMut.isPending ? "Limpando..." : "Confirmar Exclusão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* DUPLICATE CHECK DIALOG */}
+        <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-600">
+                <AlertCircle className="h-5 w-5" /> Dados Existentes Detectados
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                <strong>Atenção:</strong> Já existem <strong>{duplicateCheck.data?.existingCount || 0}</strong> registros para a competência <strong>{mesAno}</strong>.
+              </div>
+              <p className="text-sm">O que deseja fazer?</p>
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowDuplicateDialog(false)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => {
+                clearMut.mutate({ companyId, mesReferencia: mesAno, tipo: "tudo" }, {
+                  onSuccess: () => { setShowDuplicateDialog(false); setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); }
+                });
+              }} disabled={clearMut.isPending}>
+                {clearMut.isPending ? "Limpando..." : "Sobrescrever (apagar e reimportar)"}
+              </Button>
+              <Button className="bg-[#1B2A4A] hover:bg-[#243660]" onClick={() => { setShowDuplicateDialog(false); setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); }}>
+                Adicionar aos existentes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

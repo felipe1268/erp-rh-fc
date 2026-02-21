@@ -9,6 +9,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF } from "@/lib/formatters";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 export default function ValeAlimentacao() {
   const { selectedCompanyId } = useCompany();
@@ -16,6 +17,7 @@ export default function ValeAlimentacao() {
 const now = new Date();
   const [mesAno, setMesAno] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [search, setSearch] = useState("");
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
   // Buscar colaboradores para listar benefícios
   const employeesQ = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -131,7 +133,7 @@ const now = new Date();
                       })
                       .map((e: any) => (
                         <tr key={e.id} className="border-b last:border-0">
-                          <td className="py-2">{e.nomeCompleto}</td>
+                          <td className="py-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(e.id)}>{e.nomeCompleto}</td>
                           <td className="py-2">{formatCPF(e.cpf)}</td>
                           <td className="py-2">{e.cargo || "-"}</td>
                           <td className="py-2">-</td>
@@ -147,6 +149,7 @@ const now = new Date();
           </CardContent>
         </Card>
       </div>
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

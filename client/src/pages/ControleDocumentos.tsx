@@ -16,6 +16,7 @@ import {
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 // ============ HELPERS ============
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {
@@ -33,7 +34,7 @@ function formatTipoASO(tipo: string) {
 }
 
 function formatTipoAdv(tipo: string) {
-  const map: Record<string, string> = { Verbal: "Verbal", Escrita: "Escrita", Suspensao: "Suspensão", OSS: "OSS" };
+  const map: Record<string, string> = { Verbal: "Verbal", Escrita: "Escrita", Suspensao: "Suspensão", JustaCausa: "Justa Causa", OSS: "OSS" };
   return map[tipo] || tipo;
 }
 
@@ -92,6 +93,7 @@ export default function ControleDocumentos() {
   const [showAtestDialog, setShowAtestDialog] = useState(false);
   const [showAdvDialog, setShowAdvDialog] = useState(false);
   const [showImportAso, setShowImportAso] = useState(false);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
   // ============ EDIT MODE (null = criação, number = edição) ============
   const [editingAsoId, setEditingAsoId] = useState<number | null>(null);
@@ -373,11 +375,19 @@ export default function ControleDocumentos() {
 
         {/* TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="aso" className="gap-1"><Stethoscope className="h-4 w-4" /> ASO</TabsTrigger>
-            <TabsTrigger value="treinamentos" className="gap-1"><GraduationCap className="h-4 w-4" /> Treinamentos</TabsTrigger>
-            <TabsTrigger value="atestados" className="gap-1"><ClipboardList className="h-4 w-4" /> Atestados</TabsTrigger>
-            <TabsTrigger value="advertencias" className="gap-1"><ShieldAlert className="h-4 w-4" /> Advertências</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 h-12 gap-1 bg-transparent p-0">
+            <TabsTrigger value="aso" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "aso" ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-blue-50/50 hover:text-blue-600"}`}>
+              <Stethoscope className="h-4 w-4" /> ASO
+            </TabsTrigger>
+            <TabsTrigger value="treinamentos" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "treinamentos" ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-emerald-50/50 hover:text-emerald-600"}`}>
+              <GraduationCap className="h-4 w-4" /> Treinamentos
+            </TabsTrigger>
+            <TabsTrigger value="atestados" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "atestados" ? "border-purple-500 bg-purple-50 text-purple-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-purple-50/50 hover:text-purple-600"}`}>
+              <ClipboardList className="h-4 w-4" /> Atestados
+            </TabsTrigger>
+            <TabsTrigger value="advertencias" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "advertencias" ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-orange-50/50 hover:text-orange-600"}`}>
+              <ShieldAlert className="h-4 w-4" /> Advertências
+            </TabsTrigger>
           </TabsList>
 
           {/* ===================== ABA ASO ===================== */}
@@ -415,7 +425,7 @@ export default function ControleDocumentos() {
                         <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
                           <td className="py-2 text-muted-foreground">{idx + 1}</td>
                           <td className="py-2">
-                            <div className="font-medium">{a.nomeCompleto}</div>
+                            <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
                             <div className="text-xs text-muted-foreground">{formatCPF(a.cpf)}</div>
                           </td>
                           <td className="py-2">{formatTipoASO(a.tipo)}</td>
@@ -491,7 +501,7 @@ export default function ControleDocumentos() {
                       ) : filteredTrein.map((t: any) => (
                         <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
                           <td className="py-2">
-                            <div className="font-medium">{t.nomeCompleto}</div>
+                            <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(t.employeeId)}>{t.nomeCompleto}</div>
                             <div className="text-xs text-muted-foreground">{t.funcao || "-"}</div>
                           </td>
                           <td className="py-2 font-medium">{t.nome}</td>
@@ -561,7 +571,7 @@ export default function ControleDocumentos() {
                         <tr><td colSpan={9} className="py-8 text-center text-muted-foreground">Nenhum atestado cadastrado</td></tr>
                       ) : filteredAtest.map((a: any) => (
                         <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="py-2 font-medium">{a.nomeCompleto}</td>
+                          <td className="py-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
                           <td className="py-2">{a.tipo}</td>
                           <td className="py-2">{formatDate(a.dataEmissao)}</td>
@@ -602,9 +612,16 @@ export default function ControleDocumentos() {
           {/* ===================== ABA ADVERTÊNCIAS ===================== */}
           <TabsContent value="advertencias">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <CardTitle className="text-base">Advertências e Suspensões</CardTitle>
-                <Button size="sm" onClick={openNewAdv}><Plus className="h-4 w-4 mr-1" /> Nova Advertência</Button>
+              <CardHeader className="pb-3">
+                <div className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">Advertências e Suspensões</CardTitle>
+                  <Button size="sm" onClick={openNewAdv}><Plus className="h-4 w-4 mr-1" /> Nova Advertência</Button>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3 text-sm text-amber-800">
+                  <p className="font-semibold flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> Fluxo Progressivo (CLT Art. 482)</p>
+                  <p className="text-xs mt-1">1ª Advertência Verbal → 2ª Advertência Escrita → 3ª Advertência Escrita → Suspensão (1-30 dias) → Justa Causa</p>
+                  <p className="text-xs mt-0.5 text-amber-600">O sistema sugere automaticamente o próximo passo com base no histórico do colaborador.</p>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -614,6 +631,7 @@ export default function ControleDocumentos() {
                         <th className="pb-2 font-medium">Colaborador</th>
                         <th className="pb-2 font-medium">CPF</th>
                         <th className="pb-2 font-medium">Tipo</th>
+                        <th className="pb-2 font-medium">Seq.</th>
                         <th className="pb-2 font-medium">Data</th>
                         <th className="pb-2 font-medium">Motivo</th>
                         <th className="pb-2 font-medium">Descrição</th>
@@ -623,19 +641,28 @@ export default function ControleDocumentos() {
                     </thead>
                     <tbody>
                       {filteredAdv.length === 0 ? (
-                        <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">Nenhuma advertência cadastrada</td></tr>
-                      ) : filteredAdv.map((a: any) => (
-                        <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="py-2 font-medium">{a.nomeCompleto}</td>
+                        <tr><td colSpan={9} className="py-8 text-center text-muted-foreground">Nenhuma advertência cadastrada</td></tr>
+                      ) : filteredAdv.map((a: any) => {
+                        const empAdvCount = (advList as any[]).filter((x: any) => x.employeeId === a.employeeId).length;
+                        const nextStep = empAdvCount >= 3 ? "Suspensão" : empAdvCount >= 4 ? "Justa Causa" : null;
+                        return (
+                        <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.tipoAdvertencia === "Suspensao" ? "bg-red-50/50" : a.tipoAdvertencia === "JustaCausa" ? "bg-red-100/50" : ""}`}>
+                          <td className="py-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
                           <td className="py-2">
-                            <Badge variant={a.tipoAdvertencia === "Suspensao" ? "destructive" : a.tipoAdvertencia === "Escrita" ? "secondary" : "outline"}>
+                            <Badge variant={a.tipoAdvertencia === "Suspensao" || a.tipoAdvertencia === "JustaCausa" ? "destructive" : a.tipoAdvertencia === "Escrita" ? "secondary" : "outline"}
+                              className={a.tipoAdvertencia === "JustaCausa" ? "bg-red-800" : ""}>
                               {formatTipoAdv(a.tipoAdvertencia)}
                             </Badge>
                           </td>
+                          <td className="py-2">
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${empAdvCount >= 4 ? "bg-red-100 text-red-700" : empAdvCount >= 3 ? "bg-orange-100 text-orange-700" : empAdvCount >= 2 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
+                              {a.sequencia || empAdvCount}ª
+                            </span>
+                          </td>
                           <td className="py-2">{formatDate(a.dataOcorrencia)}</td>
-                          <td className="py-2 max-w-[200px] truncate" title={a.motivo}>{a.motivo}</td>
-                          <td className="py-2 max-w-[200px] truncate" title={a.descricao}>{a.descricao || "-"}</td>
+                          <td className="py-2 max-w-[180px] truncate" title={a.motivo}>{a.motivo}</td>
+                          <td className="py-2 max-w-[180px] truncate" title={a.descricao}>{a.descricao || "-"}</td>
                           <td className="py-2">{a.testemunhas || "-"}</td>
                           <td className="py-2">
                             <div className="flex gap-1">
@@ -656,7 +683,7 @@ export default function ControleDocumentos() {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      );})}
                     </tbody>
                   </table>
                 </div>
@@ -867,6 +894,7 @@ export default function ControleDocumentos() {
                   <SelectItem value="Verbal">Verbal</SelectItem>
                   <SelectItem value="Escrita">Escrita</SelectItem>
                   <SelectItem value="Suspensao">Suspensão</SelectItem>
+                  <SelectItem value="JustaCausa">Justa Causa</SelectItem>
                   <SelectItem value="OSS">OSS</SelectItem>
                 </SelectContent>
               </Select>
@@ -929,6 +957,8 @@ export default function ControleDocumentos() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* ===================== RAIO-X DO FUNCIONÁRIO ===================== */}
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }
