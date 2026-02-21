@@ -758,3 +758,12 @@
 - [x] Advertência Verbal: apenas registro, sem documento CLT/impressão/visualização
 - [x] Componente FullScreenDialog reutilizável criado para padronizar todas as telas
 - [x] Páginas convertidas: ControleDocumentos (5), FechamentoPonto (6), Colaboradores (3), Empresas (1), Obras (1), Funções (1), Setores (1), Usuários (2), Configurações (2)
+
+## REVISÃO_16: Validação de Dados + Tempo de Empresa + Aniversário
+- [x] Corrigir exibição de Salário (R$ 2,50 está errado — parseBRNumber para formato brasileiro)
+- [x] Corrigir Valor/Hora: R$ NaN — parseBRNumber trata vírgula e ponto corretamente
+- [x] Adicionar Tempo de Empresa (ex: "3 anos e 5 meses") no Raio-X
+- [x] Adicionar Data de Aniversário e dias faltando para o próximo aniversário
+- [x] Validação geral: tratar nulos, NaN, undefined antes de exibir qualquer dado
+- [x] REGRA: Sempre verificar informações antes de exibir ao usuário
+- [x] Varredura: corrigir Number() direto em valores monetários em FolhaPagamento e Raio-X (folha)

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
+import { formatMoeda } from "@/lib/formatters";
 import { Wallet, Upload, FileSpreadsheet, CalendarDays, DollarSign, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -166,9 +167,9 @@ const now = new Date();
                         {pagamentos.map((p: any) => (
                           <tr key={p.id} className="border-b last:border-0">
                             <td className="py-2">{p.employeeName || `#${p.employeeId}`}</td>
-                            <td className="py-2">R$ {p.salarioBase || p.amount || "-"}</td>
-                            <td className="py-2">R$ {p.descontos || "-"}</td>
-                            <td className="py-2 font-medium">R$ {p.liquido || p.amount || "-"}</td>
+                            <td className="py-2">{formatMoeda(p.salarioBase || p.amount)}</td>
+                            <td className="py-2">{formatMoeda(p.descontos)}</td>
+                            <td className="py-2 font-medium">{formatMoeda(p.liquido || p.amount)}</td>
                             <td className="py-2">{p.mesReferencia || p.month || "-"}</td>
                           </tr>
                         ))}

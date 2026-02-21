@@ -2,12 +2,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { formatCPF } from "@/lib/formatters";
+import { formatCPF, formatMoeda } from "@/lib/formatters";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
   User, Stethoscope, GraduationCap, ClipboardList, ShieldAlert,
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
-  Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft
+  Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer
 } from "lucide-react";
 import { useEffect } from "react";
 
@@ -16,6 +16,61 @@ function formatDate(d: string | null | undefined) {
   const parts = d.split("-");
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return d;
+}
+
+/** Converte string monetária BR ("2.500" ou "11,36") para número */
+function parseBRNumber(val: string | null | undefined): number {
+  if (!val) return 0;
+  const s = String(val).trim();
+  // Se tem vírgula, é formato BR (ex: "11,36" ou "2.500,00")
+  if (s.includes(",")) {
+    return parseFloat(s.replace(/\./g, "").replace(",", "."));
+  }
+  // Se tem ponto e mais de 2 dígitos depois, é milhar BR (ex: "2.500")
+  const dotParts = s.split(".");
+  if (dotParts.length === 2 && dotParts[1].length === 3) {
+    return parseFloat(s.replace(/\./g, ""));
+  }
+  return parseFloat(s) || 0;
+}
+
+/** Formata valor monetário BR com segurança */
+function formatSalario(val: string | null | undefined): string {
+  if (!val) return "-";
+  const num = parseBRNumber(val);
+  if (isNaN(num) || num === 0) return "-";
+  return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Calcula tempo de empresa */
+function calcTempoEmpresa(dataAdmissao: string | null | undefined): string {
+  if (!dataAdmissao) return "-";
+  const admissao = new Date(dataAdmissao + "T00:00:00");
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - admissao.getFullYear();
+  let meses = hoje.getMonth() - admissao.getMonth();
+  if (hoje.getDate() < admissao.getDate()) meses--;
+  if (meses < 0) { anos--; meses += 12; }
+  if (anos > 0 && meses > 0) return `${anos} ano${anos > 1 ? "s" : ""} e ${meses} ${meses > 1 ? "meses" : "mês"}`;
+  if (anos > 0) return `${anos} ano${anos > 1 ? "s" : ""}`;
+  if (meses > 0) return `${meses} ${meses > 1 ? "meses" : "mês"}`;
+  return "Menos de 1 mês";
+}
+
+/** Calcula dias para o próximo aniversário */
+function calcDiasAniversario(dataNascimento: string | null | undefined): { aniversario: string; diasFaltando: number; texto: string } {
+  if (!dataNascimento) return { aniversario: "-", diasFaltando: -1, texto: "-" };
+  const nasc = new Date(dataNascimento.split("T")[0] + "T00:00:00");
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const anivStr = `${String(nasc.getDate()).padStart(2, "0")}/${String(nasc.getMonth() + 1).padStart(2, "0")}`;
+  let proxAniv = new Date(hoje.getFullYear(), nasc.getMonth(), nasc.getDate());
+  if (proxAniv < hoje) proxAniv = new Date(hoje.getFullYear() + 1, nasc.getMonth(), nasc.getDate());
+  const diff = Math.ceil((proxAniv.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return { aniversario: anivStr, diasFaltando: 0, texto: "🎂 HOJE!" };
+  if (diff <= 7) return { aniversario: anivStr, diasFaltando: diff, texto: `em ${diff} dia${diff > 1 ? "s" : ""}` };
+  if (diff <= 30) return { aniversario: anivStr, diasFaltando: diff, texto: `em ${diff} dias` };
+  return { aniversario: anivStr, diasFaltando: diff, texto: `em ${diff} dias` };
 }
 
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {
@@ -118,8 +173,10 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
       { label: "Setor", value: emp?.setor },
       { label: "Admissão", value: formatDate(emp?.dataAdmissao) },
       { label: "Telefone", value: emp?.telefone },
-      { label: "Salário Base", value: emp?.salarioBase ? `R$ ${Number(emp.salarioBase).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "-" },
-      { label: "Valor/Hora", value: emp?.valorHora ? `R$ ${Number(emp.valorHora).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "-" },
+      { label: "Salário Base", value: formatSalario(emp?.salarioBase) },
+      { label: "Valor/Hora", value: formatSalario(emp?.valorHora) },
+      { label: "Tempo de Empresa", value: calcTempoEmpresa(emp?.dataAdmissao) },
+      { label: "Aniversário", value: (() => { const a = calcDiasAniversario(emp?.dataNascimento); return a.aniversario !== "-" ? `${a.aniversario} (${a.texto})` : "-"; })() },
       { label: "Endereço", value: emp?.logradouro ? `${emp.logradouro}${emp.bairro ? `, ${emp.bairro}` : ""}${emp.cidade ? ` - ${emp.cidade}` : ""}` : "-" },
       { label: "Demissão", value: emp?.dataDemissao ? formatDate(emp.dataDemissao) : "-" },
     ];
@@ -246,16 +303,22 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-8 gap-y-3">
-                    {[
-                      { icon: CreditCard, label: "CPF", value: formatCPF(emp.cpf) },
-                      emp.rg ? { icon: CreditCard, label: "RG", value: emp.rg } : null,
-                      emp.funcao ? { icon: Briefcase, label: "Função", value: emp.funcao } : null,
-                      emp.setor ? { icon: Building2, label: "Setor", value: emp.setor } : null,
-                      emp.telefone ? { icon: Phone, label: "Telefone", value: emp.telefone } : null,
-                      emp.dataAdmissao ? { icon: Calendar, label: "Admissão", value: formatDate(emp.dataAdmissao) } : null,
-                      emp.salarioBase ? { icon: DollarSign, label: "Salário", value: `R$ ${Number(emp.salarioBase).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` } : null,
-                      emp.valorHora ? { icon: Clock, label: "Valor/Hora", value: `R$ ${Number(emp.valorHora).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` } : null,
-                    ].filter(Boolean).map((item: any, idx) => (
+                    {(() => {
+                      const anivInfo = calcDiasAniversario(emp.dataNascimento);
+                      const tempoEmp = calcTempoEmpresa(emp.dataAdmissao);
+                      return [
+                        { icon: CreditCard, label: "CPF", value: formatCPF(emp.cpf) },
+                        emp.rg ? { icon: CreditCard, label: "RG", value: emp.rg } : null,
+                        emp.funcao ? { icon: Briefcase, label: "Função", value: emp.funcao } : null,
+                        emp.setor ? { icon: Building2, label: "Setor", value: emp.setor } : null,
+                        emp.telefone ? { icon: Phone, label: "Telefone", value: emp.telefone } : null,
+                        emp.dataAdmissao ? { icon: Calendar, label: "Admissão", value: formatDate(emp.dataAdmissao) } : null,
+                        emp.dataAdmissao ? { icon: Timer, label: "Tempo de Empresa", value: tempoEmp } : null,
+                        emp.salarioBase ? { icon: DollarSign, label: "Salário", value: formatSalario(emp.salarioBase) } : null,
+                        emp.valorHora ? { icon: Clock, label: "Valor/Hora", value: formatSalario(emp.valorHora) } : null,
+                        emp.dataNascimento ? { icon: Gift, label: "Aniversário", value: `${anivInfo.aniversario} (${anivInfo.texto})` } : null,
+                      ].filter(Boolean);
+                    })().map((item: any, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-sm text-blue-700">
                         <item.icon className="h-4 w-4 shrink-0 text-blue-500" />
                         <span><strong>{item.label}:</strong> {item.value}</span>
@@ -269,6 +332,23 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                     </div>
                   )}
                   {emp.dataDemissao && <p className="text-sm text-red-600 mt-2 font-medium">Desligado em: {formatDate(emp.dataDemissao)}</p>}
+                  {/* Alerta de aniversário próximo */}
+                  {(() => {
+                    const anivInfo = calcDiasAniversario(emp.dataNascimento);
+                    if (anivInfo.diasFaltando === 0) return (
+                      <div className="mt-3 bg-yellow-100 border border-yellow-300 rounded-lg px-4 py-2 flex items-center gap-2">
+                        <Gift className="h-5 w-5 text-yellow-600" />
+                        <span className="text-yellow-800 font-semibold">🎂 Hoje é aniversário de {emp.nomeCompleto}! Parabéns!</span>
+                      </div>
+                    );
+                    if (anivInfo.diasFaltando > 0 && anivInfo.diasFaltando <= 30) return (
+                      <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-2">
+                        <Gift className="h-4 w-4 text-blue-500" />
+                        <span className="text-blue-700 text-sm">Aniversário em {anivInfo.diasFaltando} dia{anivInfo.diasFaltando > 1 ? "s" : ""} ({anivInfo.aniversario})</span>
+                      </div>
+                    );
+                    return null;
+                  })()}
                 </div>
               </div>
 
@@ -661,10 +741,10 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                         {folhaPagamento.map((f: any) => (
                           <tr key={f.id} className="border-b last:border-0 hover:bg-muted/30">
                             <td className="p-3 font-medium">{f.mesReferencia}</td>
-                            <td className="p-3 text-right font-mono">R$ {Number(f.salarioBase || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right font-mono text-green-600">R$ {Number(f.horasExtrasValor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right font-mono text-red-600">R$ {Number(f.totalDescontos || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right font-mono font-bold text-lg">R$ {Number(f.salarioLiquido || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-3 text-right font-mono">{formatSalario(f.salarioBase)}</td>
+                            <td className="p-3 text-right font-mono text-green-600">{formatSalario(f.horasExtrasValor)}</td>
+                            <td className="p-3 text-right font-mono text-red-600">{formatSalario(f.totalDescontos)}</td>
+                            <td className="p-3 text-right font-mono font-bold text-lg">{formatSalario(f.salarioLiquido)}</td>
                             <td className="p-3 text-center">
                               <Badge variant={f.status === "Pago" ? "default" : "secondary"}>{f.status}</Badge>
                             </td>
