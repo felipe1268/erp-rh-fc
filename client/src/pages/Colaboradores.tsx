@@ -328,7 +328,7 @@ export default function Colaboradores() {
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">CPF</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Cargo</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Função</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Setor</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Ações</th>
@@ -345,8 +345,8 @@ export default function Colaboradores() {
                       />
                     </td>
                     <td className="px-4 py-3 font-medium">{emp.nomeCompleto}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{emp.cpf}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.cargo ?? "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{emp.cpf ? emp.cpf.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
@@ -828,7 +828,7 @@ export default function Colaboradores() {
                 <div className="flex-1">
                   <h2 className="text-xl font-bold">{safeDisplay(viewingEmployee.nomeCompleto)}</h2>
                   <p className="text-base text-muted-foreground mt-1">
-                    {safeDisplay(viewingEmployee.cargo)} · {safeDisplay(viewingEmployee.setor)}
+                    {safeDisplay(viewingEmployee.funcao)} · {safeDisplay(viewingEmployee.setor)}
                   </p>
                   <div className="flex items-center gap-3 mt-2">
                     <span className={`text-sm font-medium px-3 py-1 rounded ${statusColors[viewingEmployee.status] ?? ""}`}>
@@ -856,7 +856,7 @@ export default function Colaboradores() {
               {/* Seções de dados */}
               {[
                 { title: "Dados Pessoais", fields: [
-                  ["CPF", safeDisplay(viewingEmployee.cpf)],
+                  ["CPF", viewingEmployee.cpf ? viewingEmployee.cpf.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "-"],
                   ["RG", safeDisplay(viewingEmployee.rg)],
                   ["Nascimento", formatDate(viewingEmployee.dataNascimento)],
                   ["Sexo", viewingEmployee.sexo === "M" ? "Masculino" : viewingEmployee.sexo === "F" ? "Feminino" : safeDisplay(viewingEmployee.sexo)],
@@ -948,8 +948,21 @@ export default function Colaboradores() {
               <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
                 <strong>Como funciona:</strong> Baixe a planilha modelo, preencha os dados dos colaboradores e faça o upload.
               </p>
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
-                window.open(`/api/trpc/import.downloadTemplate?input=${encodeURIComponent(JSON.stringify({ json: {} }))}`, '_blank');
+              <Button variant="outline" size="sm" className="gap-2" onClick={async () => {
+                try {
+                  const res = await fetch(`/api/trpc/import.downloadTemplate?input=${encodeURIComponent(JSON.stringify({ json: {} }))}`);
+                  const json = await res.json();
+                  const b64 = json?.result?.data?.json?.base64;
+                  if (!b64) { toast.error("Erro ao gerar planilha"); return; }
+                  const bin = atob(b64);
+                  const arr = new Uint8Array(bin.length);
+                  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                  const blob = new Blob([arr], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "modelo_colaboradores.xlsx"; a.click();
+                  URL.revokeObjectURL(url);
+                } catch { toast.error("Erro ao baixar planilha"); }
               }}>
                 <Download className="h-4 w-4" /> Baixar Planilha Modelo
               </Button>

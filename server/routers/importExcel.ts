@@ -39,8 +39,7 @@ const COLUMN_MAP = [
   { header: "E-mail", field: "email", required: false, example: "joao@email.com" },
   { header: "Contato Emergência", field: "contatoEmergencia", required: false, example: "Maria - Esposa" },
   { header: "Tel. Emergência", field: "telefoneEmergencia", required: false, example: "(11) 91234-5678" },
-  { header: "Cargo*", field: "cargo", required: true, example: "Pedreiro" },
-  { header: "Função", field: "funcao", required: false, example: "Pedreiro de Acabamento" },
+  { header: "Função*", field: "funcao", required: true, example: "Pedreiro" },
   { header: "Setor*", field: "setor", required: true, example: "Obras" },
   { header: "Data Admissão*", field: "dataAdmissao", required: true, example: "01/02/2024" },
   { header: "Salário Base", field: "salarioBase", required: false, example: "2500.00" },
@@ -80,7 +79,7 @@ function generateTemplate(): Buffer {
     ["CAMPOS OBRIGATÓRIOS:"],
     ["- Nome Completo: Nome completo do colaborador"],
     ["- CPF: Formato 123.456.789-00 (com ou sem pontuação)"],
-    ["- Cargo: Cargo do colaborador"],
+    ["- Função: Função do colaborador"],
     ["- Setor: Setor de trabalho"],
     ["- Data Admissão: Formato DD/MM/AAAA"],
     [""],
@@ -263,7 +262,7 @@ function parseRow(row: any, rowNum: number): ParsedRow {
 
 export const importExcelRouter = router({
   // Gerar template
-  downloadTemplate: protectedProcedure.mutation(async () => {
+  downloadTemplate: protectedProcedure.query(async () => {
     const buf = generateTemplate();
     const base64 = buf.toString("base64");
     return { base64, filename: "modelo_colaboradores.xlsx" };
