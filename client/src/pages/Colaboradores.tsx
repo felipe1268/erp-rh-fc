@@ -1229,7 +1229,7 @@ export default function Colaboradores() {
               </p>
               <Button variant="outline" size="sm" className="gap-2" onClick={async () => {
                 try {
-                  const res = await fetch(`/api/trpc/import.downloadTemplate?input=${encodeURIComponent(JSON.stringify({ json: {} }))}`);
+                  const res = await fetch(`/api/trpc/import.downloadTemplate?input=${encodeURIComponent(JSON.stringify({ json: {} }))}`, { credentials: 'include' });
                   const json = await res.json();
                   const b64 = json?.result?.data?.json?.base64;
                   if (!b64) { toast.error("Erro ao gerar planilha"); return; }
@@ -1295,15 +1295,25 @@ export default function Colaboradores() {
                       const res = await fetch('/api/trpc/import.uploadExcel', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
                         body: JSON.stringify({ json: { companyId, fileBase64: base64, fileName: importFile.name } }),
                       });
                       const json = await res.json();
+                      // Verificar se houve erro do tRPC
+                      if (json?.error) {
+                        const errMsg = json.error?.json?.message || json.error?.message || 'Erro desconhecido';
+                        toast.error('Erro ao importar: ' + errMsg);
+                        setImporting(false);
+                        return;
+                      }
                       const result = json?.result?.data?.json ?? json?.result?.data ?? json;
                       setImportResult(result);
                       if (result.imported > 0) {
                         toast.success(`${result.imported} colaborador(es) importado(s)!`);
                         utils.employees.list.invalidate();
                         utils.employees.stats.invalidate();
+                      } else if (result.errors?.length > 0) {
+                        toast.error(`${result.errors.length} erro(s) encontrado(s) na importação`);
                       }
                     } catch (err: any) {
                       toast.error('Erro ao importar: ' + err.message);

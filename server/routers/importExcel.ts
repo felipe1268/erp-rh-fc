@@ -107,14 +107,14 @@ function generateTemplate(): Buffer {
 function parseDate(val: any): string | null {
   if (!val) return null;
   if (typeof val === "number") {
-    // Excel serial date
-    const d = XLSX.SSF.parse_date_code(val);
-    if (d) {
-      const mm = String(d.m).padStart(2, "0");
-      const dd = String(d.d).padStart(2, "0");
-      return `${d.y}-${mm}-${dd}`;
-    }
-    return null;
+    // Excel serial date -> JS Date
+    // Excel epoch is 1900-01-01 (serial 1), but has a bug treating 1900 as leap year
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Dec 30, 1899
+    const jsDate = new Date(excelEpoch.getTime() + val * 86400000);
+    const y = jsDate.getUTCFullYear();
+    const mm = String(jsDate.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(jsDate.getUTCDate()).padStart(2, "0");
+    return `${y}-${mm}-${dd}`;
   }
   const str = String(val).trim();
   // DD/MM/YYYY
@@ -312,6 +312,77 @@ export const importExcelRouter = router({
         })),
         summary,
       };
+    }),
+
+  // Upload + Parse + Import em uma única chamada (usado pelo frontend)
+  uploadExcel: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fileBase64: z.string(),
+      fileName: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const buffer = Buffer.from(input.fileBase64, "base64");
+      const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
+
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+      if (rows.length === 0) {
+        return { imported: 0, errors: [{ row: 0, error: "Planilha vazia" }] };
+      }
+
+      const parsed = rows.map((row, i) => parseRow(row, i + 2));
+      let imported = 0;
+      const errors: { row: number; error: string }[] = [];
+
+      for (const p of parsed) {
+        if (p.errors.length > 0) {
+          errors.push({ row: p.rowNum, error: p.errors.join("; ") });
+          continue;
+        }
+
+        try {
+          const insertData: any = {
+            companyId: input.companyId,
+            nomeCompleto: p.data.nomeCompleto,
+            cpf: p.data.cpf,
+            status: p.data.status || "Ativo",
+          };
+
+          const optionalFields = [
+            "matricula", "rg", "orgaoEmissor", "dataNascimento", "sexo", "estadoCivil",
+            "nacionalidade", "naturalidade", "nomeMae", "nomePai", "ctps", "serieCtps",
+            "pis", "tituloEleitor", "certificadoReservista", "cnh", "categoriaCnh", "validadeCnh",
+            "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "cep",
+            "telefone", "celular", "email", "contatoEmergencia", "telefoneEmergencia",
+            "cargo", "funcao", "setor", "dataAdmissao", "salarioBase", "horasMensais",
+            "tipoContrato", "jornadaTrabalho", "banco", "agencia", "conta", "tipoConta",
+            "chavePix", "observacoes",
+          ];
+
+          for (const field of optionalFields) {
+            if (p.data[field] !== null && p.data[field] !== undefined && p.data[field] !== "") {
+              insertData[field] = p.data[field];
+            }
+          }
+
+          await db.insert(employees).values(insertData);
+          imported++;
+        } catch (err: any) {
+          if (err.message?.includes("Duplicate")) {
+            errors.push({ row: p.rowNum, error: `CPF ${p.data.cpf} (${p.data.nomeCompleto}): já cadastrado` });
+          } else {
+            errors.push({ row: p.rowNum, error: `${p.data.nomeCompleto}: ${err.message}` });
+          }
+        }
+      }
+
+      return { imported, errors };
     }),
 
   // Importar em lote

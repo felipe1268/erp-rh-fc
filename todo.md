@@ -427,3 +427,10 @@
 - [x] Formatar CPF (000.000.000-00) em TODAS as telas do sistema
 - [x] Formatar RG, CEP, PIS, CNPJ, Telefone e demais documentos em TODAS as telas
 - [x] REGRA PERMANENTE: Todos os números de documentos devem ser exibidos formatados conforme padrão brasileiro
+## Fase 36: Bug - Importação de colaboradores via Excel não funciona
+- [x] Investigar por que a importação retorna 0 importados e 0 erros
+- [x] Corrigir o código de importação para funcionar com a planilha modelo
+- [x] Criar rota uploadExcel unificada (parse + import em uma chamada)
+- [x] Corrigir parseDate para não depender de XLSX.SSF.parse_date_code
+- [x] Adicionar credentials: include nos fetch calls
+- [x] Melhorar tratamento de erros no frontend (detectar erros tRPC)
