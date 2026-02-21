@@ -662,7 +662,7 @@
 - [x] Aplicar formatação em todos os campos monetários do sistema
 
 ## REVISÃO_06: Impressão Ficha + Rodapé LGPD
-- [ ] Botão de impressão/PDF na Ficha do Colaborador
-- [ ] Rodapé LGPD em TODOS os documentos: nome do usuário, data/hora, aviso confidencialidade
-- [ ] Aplicar rodapé LGPD no Fechamento de Ponto (Resumo, Rateio, Detalhe)
-- [ ] Aplicar rodapé LGPD na Ficha do Colaborador
+- [x] Botão de impressão/PDF na Ficha do Colaborador
+- [x] Rodapé LGPD em TODOS os documentos: nome do usuário, data/hora, aviso confidencialidade
+- [x] Aplicar rodapé LGPD no Fechamento de Ponto (Resumo, Rateio, Detalhe)
+- [x] Aplicar rodapé LGPD na Ficha do Colaborador

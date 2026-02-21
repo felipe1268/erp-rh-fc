@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { EMPLOYEE_STATUS } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor, formatMoedaInput, formatMoedaSemPrefixo, parseMoedaBR, formatMoeda } from "@/lib/formatters";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -89,6 +90,7 @@ function formatDate(val: unknown): string {
 
 export default function Colaboradores() {
   const { selectedCompanyId, companies } = useCompany();
+  const { user } = useAuth();
   const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -322,6 +324,120 @@ export default function Colaboradores() {
   const handleBulkDelete = () => {
     if (!companyId || selectedIds.size === 0) return;
     deleteManyMut.mutate({ table: "employees" as any, ids: Array.from(selectedIds) });
+  };
+
+  const handlePrintFicha = () => {
+    if (!viewingEmployee) return;
+    const empresa = getCompanyName(viewingEmployee.companyId);
+    const dataEmissao = new Date().toLocaleString("pt-BR");
+    const nomeUsuario = user?.name || user?.username || "Usuário";
+
+    const sections = [
+      { title: "Dados Pessoais", fields: [
+        ["CPF", formatCPF(viewingEmployee.cpf)],
+        ["RG", formatRG(viewingEmployee.rg)],
+        ["Nascimento", formatDate(viewingEmployee.dataNascimento)],
+        ["Sexo", viewingEmployee.sexo === "M" ? "Masculino" : viewingEmployee.sexo === "F" ? "Feminino" : safeDisplay(viewingEmployee.sexo)],
+        ["Estado Civil", safeDisplay(viewingEmployee.estadoCivil)],
+        ["Nacionalidade", safeDisplay(viewingEmployee.nacionalidade)],
+        ["Naturalidade", safeDisplay(viewingEmployee.naturalidade)],
+        ["Celular", formatTelefone(viewingEmployee.celular)],
+        ["E-mail", safeDisplay(viewingEmployee.email)],
+        ["Nome da Mãe", safeDisplay(viewingEmployee.nomeMae)],
+        ["Nome do Pai", safeDisplay(viewingEmployee.nomePai)],
+        ["Contato Emergência", safeDisplay(viewingEmployee.contatoEmergencia)],
+        ["Tel. Emergência", formatTelefone(viewingEmployee.telefoneEmergencia)],
+      ]},
+      { title: "Profissional", fields: [
+        ["Matrícula", safeDisplay(viewingEmployee.matricula)],
+        ["Função", safeDisplay(viewingEmployee.funcao)],
+        ["Setor", safeDisplay(viewingEmployee.setor)],
+        ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
+        ["Contrato", safeDisplay(viewingEmployee.tipoContrato)],
+        ["Jornada", formatJornada(viewingEmployee.jornadaTrabalho)],
+        ["Salário Base", viewingEmployee.salarioBase ? formatMoeda(viewingEmployee.salarioBase) : "-"],
+        ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
+        ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
+      ]},
+      { title: "Documentos", fields: [
+        ["CTPS", safeDisplay(viewingEmployee.ctps)],
+        ["Série CTPS", safeDisplay(viewingEmployee.serieCtps)],
+        ["PIS", formatPIS(viewingEmployee.pis)],
+        ["Título Eleitor", formatTituloEleitor(viewingEmployee.tituloEleitor)],
+        ["Reservista", safeDisplay(viewingEmployee.certificadoReservista)],
+        ["CNH", safeDisplay(viewingEmployee.cnh)],
+        ["Cat. CNH", safeDisplay(viewingEmployee.categoriaCnh)],
+        ["Val. CNH", formatDate(viewingEmployee.validadeCnh)],
+      ]},
+      { title: "Endereço", fields: [
+        ["Logradouro", safeDisplay(viewingEmployee.logradouro)],
+        ["Nº", safeDisplay(viewingEmployee.numero)],
+        ["Complemento", safeDisplay(viewingEmployee.complemento)],
+        ["Bairro", safeDisplay(viewingEmployee.bairro)],
+        ["Cidade/UF", `${viewingEmployee.cidade ?? ""}${viewingEmployee.estado ? " - " + viewingEmployee.estado : ""}` || "-"],
+        ["CEP", formatCEP(viewingEmployee.cep)],
+      ]},
+      { title: "Dados Bancários", fields: [
+        ["Banco", safeDisplay(viewingEmployee.banco)],
+        ["Agência", safeDisplay(viewingEmployee.agencia)],
+        ["Conta", safeDisplay(viewingEmployee.conta)],
+        ["Tipo Conta", safeDisplay(viewingEmployee.tipoConta)],
+        ["Tipo Chave PIX", safeDisplay(viewingEmployee.tipoChavePix)],
+        ["Chave PIX", safeDisplay(viewingEmployee.chavePix)],
+        ["Banco PIX", safeDisplay(viewingEmployee.bancoPix)],
+      ]},
+    ];
+
+    let conteudo = `<div style="display:flex;align-items:center;gap:20px;padding-bottom:16px;border-bottom:3px solid #1B2A4A;margin-bottom:20px;">
+      <div style="width:60px;height:60px;border-radius:50%;background:#e8edf3;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#1B2A4A;">${viewingEmployee.nomeCompleto?.charAt(0) || "?"}</div>
+      <div><h2 style="font-size:18px;font-weight:700;color:#1B2A4A;margin:0;">${safeDisplay(viewingEmployee.nomeCompleto)}</h2>
+      <p style="font-size:12px;color:#666;margin:4px 0 0;">${safeDisplay(viewingEmployee.funcao)} · ${safeDisplay(viewingEmployee.setor)}</p>
+      <span style="display:inline-block;background:${viewingEmployee.status === 'Ativo' ? '#dcfce7' : viewingEmployee.status === 'ListaNegra' ? '#fecaca' : '#fef3c7'};color:${viewingEmployee.status === 'Ativo' ? '#166534' : viewingEmployee.status === 'ListaNegra' ? '#991b1b' : '#92400e'};padding:2px 10px;border-radius:4px;font-size:10px;font-weight:600;margin-top:4px;">${statusLabels[viewingEmployee.status] ?? viewingEmployee.status}</span>
+      <span style="font-size:11px;color:#888;margin-left:12px;">Empresa: ${empresa}</span></div></div>`;
+
+    if (viewingEmployee.status === "ListaNegra") {
+      conteudo += `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:16px;">
+        <strong style="color:#dc2626;">FUNCIONÁRIO NA LISTA NEGRA</strong>
+        <p style="font-size:11px;color:#dc2626;margin:4px 0 0;">Este funcionário está proibido de ser contratado novamente.${viewingEmployee.motivoListaNegra ? " Motivo: " + viewingEmployee.motivoListaNegra : ""}</p></div>`;
+    }
+
+    sections.forEach(section => {
+      const validFields = section.fields.filter(([, v]) => v && v !== "-");
+      if (validFields.length === 0) return;
+      conteudo += `<div style="margin-top:20px;"><h3 style="font-size:13px;font-weight:600;color:#1B2A4A;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">${section.title}</h3>`;
+      conteudo += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px 16px;">`;
+      validFields.forEach(([label, value]) => {
+        conteudo += `<div style="margin-bottom:4px;"><span style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#888;display:block;">${label}</span><span style="font-size:12px;font-weight:600;">${value}</span></div>`;
+      });
+      conteudo += `</div></div>`;
+    });
+
+    if (viewingEmployee.observacoes) {
+      conteudo += `<div style="margin-top:20px;"><h3 style="font-size:13px;font-weight:600;color:#1B2A4A;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">Observações</h3><p style="font-size:11px;background:#f8fafc;padding:8px 12px;border-radius:4px;">${safeDisplay(viewingEmployee.observacoes)}</p></div>`;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return toast.error("Popup bloqueado. Permita popups para imprimir.");
+    printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha do Colaborador — ${safeDisplay(viewingEmployee.nomeCompleto)}</title><style>
+      @media print { @page { margin: 15mm 12mm; size: A4 portrait; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 24px; }
+      .header-bar { background: #1B2A4A; color: white; padding: 12px 20px; border-radius: 6px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+      .header-bar h1 { font-size: 16px; font-weight: 700; }
+      .header-bar .sub { font-size: 10px; opacity: 0.8; }
+      .footer { margin-top: 30px; border-top: 2px solid #e2e8f0; padding-top: 10px; font-size: 9px; color: #999; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+      .footer .lgpd { font-style: italic; color: #b91c1c; }
+    </style></head><body>
+      <div class="header-bar"><div><h1>FC ENGENHARIA PROJETOS E CONSTRUÇÕES</h1><div class="sub">Ficha do Colaborador</div></div><div class="sub">Emitido em: ${dataEmissao}</div></div>
+      ${conteudo}
+      <div class="footer">
+        <span>ERP RH & DP — FC Engenharia</span>
+        <span>Documento gerado por: <strong>${nomeUsuario}</strong> em ${dataEmissao}</span>
+        <span class="lgpd">Este documento contém dados pessoais protegidos pela LGPD (Lei 13.709/2018). Uso restrito e confidencial.</span>
+      </div>
+    </body></html>`);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 500);
   };
 
   return (
@@ -1119,6 +1235,9 @@ export default function Colaboradores() {
                     </span>
                   </div>
                 </div>
+                <Button variant="outline" size="sm" onClick={handlePrintFicha} className="gap-2 shrink-0">
+                  <Printer className="h-4 w-4" /> Imprimir Ficha
+                </Button>
               </div>
 
               {/* ALERTA LISTA NEGRA */}

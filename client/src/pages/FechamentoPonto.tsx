@@ -303,11 +303,12 @@ export default function FechamentoPonto() {
       td { border: 1px solid #e2e8f0; padding: 5px 8px; white-space: nowrap; }
       tr:nth-child(even) { background: #fafafa; }
       h3 { page-break-after: avoid; }
-      .footer { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 9px; color: #999; display: flex; justify-content: space-between; }
+      .footer { margin-top: 24px; border-top: 2px solid #e2e8f0; padding-top: 10px; font-size: 9px; color: #999; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+      .footer .lgpd { font-style: italic; color: #b91c1c; }
     </style></head><body>
       <div class="header"><div><h1>${empresa}</h1><div class="sub">${titulo} — ${competencia}</div></div><div class="right">Emitido em: ${dataEmissao}<br/>${consolidadoInfo}${isConsolidado ? ' <span class="consolidado-badge">✓ CONSOLIDADO</span>' : ''}</div></div>
       ${conteudo}
-      <div class="footer"><span>ERP RH & DP — FC Engenharia</span><span>${titulo} — ${competencia}</span></div>
+      <div class="footer"><span>ERP RH & DP — FC Engenharia</span><span>Documento gerado por: <strong>${user?.name || user?.username || 'Usuário'}</strong> em ${dataEmissao}</span><span class="lgpd">Este documento contém dados pessoais protegidos pela LGPD (Lei 13.709/2018). Uso restrito e confidencial.</span></div>
     </body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
