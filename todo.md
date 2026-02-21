@@ -740,3 +740,6 @@
 - [x] Dialog de visualização em FULL SCREEN
 - [x] Numeração da advertência (1ª, 2ª, 3ª...) no documento
 - [x] 3 testemunhas com Nome e CPF/RG no documento de impressão
+
+## REVISÃO_13: Botão Voltar no Raio-X
+- [x] Adicionar botão de voltar à tela de seleção no Raio-X do Funcionário (página Relatórios)

@@ -7,7 +7,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   User, Stethoscope, GraduationCap, ClipboardList, ShieldAlert,
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
-  Printer, FileDown, X, AlertTriangle, FileText
+  Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft
 } from "lucide-react";
 import { useEffect } from "react";
 
@@ -203,6 +203,9 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
       {/* HEADER FIXO - BARRA SUPERIOR */}
       <div className="shrink-0 bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-6 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20 h-9 w-9 shrink-0" title="Voltar">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <div className="bg-white/20 p-2 rounded-lg">
             <User className="h-6 w-6" />
           </div>
@@ -218,8 +221,8 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
           <Button variant="ghost" size="sm" onClick={handlePDF} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
             <FileDown className="h-4 w-4" /> Gerar PDF
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20 ml-2 h-9 w-9">
-            <X className="h-5 w-5" />
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
+            <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>
         </div>
       </div>
