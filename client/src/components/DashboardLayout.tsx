@@ -28,6 +28,7 @@ import {
   ChevronDown, ChevronRight,
   BarChart3, Settings,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
+  ClipboardList, UserSearch,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -61,6 +62,12 @@ const menuSections = [
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
+    ],
+  },
+  {
+    title: "Relatórios",
+    items: [
+      { icon: UserSearch, label: "Raio-X do Funcionário", path: "/relatorios/raio-x" },
     ],
   },
   {

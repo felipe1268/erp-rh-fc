@@ -696,3 +696,9 @@
 - [x] Upload de atestado médico (arquivo) no formulário de atestados
 - [x] Multi-seleção para deletar atestados em lote
 - [x] Integração: advertências do Fechamento de Ponto aparecem no Raio-X
+
+## REVISÃO_10: Seção Relatórios no Menu + Raio-X como Página Dedicada
+- [x] Criar seção "Relatórios" no menu lateral (abaixo de Operacional ou Dashboards)
+- [x] Criar página dedicada de Raio-X do Funcionário com seleção de colaborador
+- [x] Registrar rota no App.tsx
+- [x] Manter o Raio-X como componente reutilizável (dialog em outras telas + página dedicada)
