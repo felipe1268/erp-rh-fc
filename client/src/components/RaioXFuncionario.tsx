@@ -68,9 +68,16 @@ function calcDiasAniversario(dataNascimento: string | null | undefined): { anive
   if (proxAniv < hoje) proxAniv = new Date(hoje.getFullYear() + 1, nasc.getMonth(), nasc.getDate());
   const diff = Math.ceil((proxAniv.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
   if (diff === 0) return { aniversario: anivStr, diasFaltando: 0, texto: "🎂 HOJE!" };
-  if (diff <= 7) return { aniversario: anivStr, diasFaltando: diff, texto: `em ${diff} dia${diff > 1 ? "s" : ""}` };
-  if (diff <= 30) return { aniversario: anivStr, diasFaltando: diff, texto: `em ${diff} dias` };
-  return { aniversario: anivStr, diasFaltando: diff, texto: `em ${diff} dias` };
+  // Calcular meses e dias restantes
+  let meses = proxAniv.getMonth() - hoje.getMonth() + (proxAniv.getFullYear() - hoje.getFullYear()) * 12;
+  const tempDate = new Date(hoje.getFullYear(), hoje.getMonth() + meses, hoje.getDate());
+  let dias = Math.ceil((proxAniv.getTime() - tempDate.getTime()) / (1000 * 60 * 60 * 24));
+  if (dias < 0) { meses--; const tempDate2 = new Date(hoje.getFullYear(), hoje.getMonth() + meses, hoje.getDate()); dias = Math.ceil((proxAniv.getTime() - tempDate2.getTime()) / (1000 * 60 * 60 * 24)); }
+  let textoFalta = "";
+  if (meses > 0 && dias > 0) textoFalta = `em ${meses} ${meses > 1 ? "meses" : "mês"} e ${dias} dia${dias > 1 ? "s" : ""}`;
+  else if (meses > 0) textoFalta = `em ${meses} ${meses > 1 ? "meses" : "mês"}`;
+  else textoFalta = `em ${dias} dia${dias > 1 ? "s" : ""}`;
+  return { aniversario: anivStr, diasFaltando: diff, texto: textoFalta };
 }
 
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {

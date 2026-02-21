@@ -767,3 +767,6 @@
 - [x] Validação geral: tratar nulos, NaN, undefined antes de exibir qualquer dado
 - [x] REGRA: Sempre verificar informações antes de exibir ao usuário
 - [x] Varredura: corrigir Number() direto em valores monetários em FolhaPagamento e Raio-X (folha)
+
+## REVISÃO_17: Aniversário em meses e dias
+- [x] Alterar exibição de dias faltando para aniversário de "em X dias" para "em X meses e Y dias"
