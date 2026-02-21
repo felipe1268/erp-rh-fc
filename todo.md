@@ -526,3 +526,10 @@
 - [x] Desligados não aparecem nas contagens de vencidos/a vencer
 ### Pendente
 - [ ] Geração de PDF por obra e por funcionário para análise ponto a ponto
+
+## REVISÃO_01b: Rateio Automático por Obra no Upload DIXI
+- [x] No upload DIXI, ler o número Sn do equipamento de cada registro
+- [x] Cruzar Sn com a tabela de Equipamentos Dixi vinculados a Obras
+- [x] Gerar rateio automático de horas por obra no momento do upload
+- [x] Calcular custo por obra (horas × valor hora do funcionário)
+- [x] Exibir rateio na aba "Rateio por Obra" com dados reais gerados automaticamente

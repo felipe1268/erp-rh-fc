@@ -408,6 +408,71 @@ export const fechamentoPontoRouter = router({
         totalInconsistencies += inconsistencies.length;
         totalUnmatched = [...totalUnmatched, ...unmatchedNames];
 
+        // ===== RATEIO AUTOMÁTICO POR OBRA =====
+        // Agregar horas por funcionário para esta obra (identificada pelo Sn)
+        if (obraId && timeRecordsToInsert.length > 0) {
+          // Limpar rateio anterior para esta obra/mês
+          await db.delete(obraHorasRateio).where(
+            and(
+              eq(obraHorasRateio.companyId, input.companyId),
+              eq(obraHorasRateio.mesAno, input.mesReferencia),
+              eq(obraHorasRateio.obraId, obraId),
+            )
+          );
+
+          // Buscar valorHora dos funcionários
+          const empIds = Array.from(new Set(timeRecordsToInsert.map((r: any) => r.employeeId)));
+          const empValores = await db.select({
+            id: employees.id,
+            valorHora: employees.valorHora,
+          }).from(employees).where(inArray(employees.id, empIds));
+          const valorHoraMap: Record<number, number> = {};
+          for (const e of empValores) {
+            valorHoraMap[e.id] = parseFloat(String(e.valorHora || "0").replace(",", ".")) || 0;
+          }
+
+          // Agregar por funcionário
+          const rateioByEmp: Record<number, { horasNormais: number; horasExtras: number; totalHoras: number; dias: number }> = {};
+          for (const rec of timeRecordsToInsert) {
+            if (!rateioByEmp[rec.employeeId]) {
+              rateioByEmp[rec.employeeId] = { horasNormais: 0, horasExtras: 0, totalHoras: 0, dias: 0 };
+            }
+            const r = rateioByEmp[rec.employeeId];
+            r.dias++;
+            if (rec.horasTrabalhadas) {
+              const [h, m] = rec.horasTrabalhadas.split(":").map(Number);
+              const totalMin = (h || 0) * 60 + (m || 0);
+              r.totalHoras += totalMin;
+            }
+            if (rec.horasExtras && rec.horasExtras !== "0:00") {
+              const [h, m] = rec.horasExtras.split(":").map(Number);
+              r.horasExtras += (h || 0) * 60 + (m || 0);
+            }
+          }
+
+          // Calcular horas normais e inserir rateio
+          const rateioInserts: any[] = [];
+          for (const [empId, data] of Object.entries(rateioByEmp)) {
+            const normais = data.totalHoras - data.horasExtras;
+            rateioInserts.push({
+              companyId: input.companyId,
+              obraId,
+              employeeId: Number(empId),
+              dixiDeviceId: device?.id || null,
+              mesAno: input.mesReferencia,
+              horasNormais: minutesToHHMM(normais > 0 ? normais : 0),
+              horasExtras: minutesToHHMM(data.horasExtras),
+              horasNoturnas: "0:00",
+              totalHoras: minutesToHHMM(data.totalHoras),
+              diasTrabalhados: data.dias,
+            });
+          }
+
+          if (rateioInserts.length > 0) {
+            await db.insert(obraHorasRateio).values(rateioInserts);
+          }
+        }
+
         fileResults.push({
           fileName: file.fileName,
           deviceSerial,
