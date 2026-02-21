@@ -383,3 +383,7 @@
 - [x] Criar página CRUD de Setores (por empresa)
 - [x] Criar página CRUD de Funções (por empresa)
 - [x] Registrar rotas de Setores e Funções no App.tsx
+- [x] Bug: Selects concatenando placeholder com valor - corrigido usando value="none" ao invés de undefined
+- [x] Jornada de Trabalho: separada em 3 campos (Entrada, Intervalo, Saída)
+- [x] Reescrever Setores.tsx com layout padrão igual Obras (título, subtítulo, seletor empresa, busca, card)
+- [x] Reescrever Funcoes.tsx com layout padrão igual Obras

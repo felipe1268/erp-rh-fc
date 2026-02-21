@@ -171,6 +171,29 @@ export default function Colaboradores() {
       }
     });
     if (!f.companyId && companyId) f.companyId = String(companyId);
+    // Decompor jornadaTrabalho em campos separados (Entrada - Intervalo - Saída)
+    if (f.jornadaTrabalho) {
+      // Formato novo: "08:00 - 12:00 - 17:00" ou antigo "08:00 às 17:00" ou "44h semanais"
+      const dashParts = f.jornadaTrabalho.split(" - ");
+      const asParts = f.jornadaTrabalho.split(" às ");
+      if (dashParts.length === 3) {
+        f.jornadaEntrada = dashParts[0];
+        f.jornadaIntervalo = dashParts[1];
+        f.jornadaSaida = dashParts[2];
+      } else if (asParts.length === 2 && asParts[0].includes(":")) {
+        f.jornadaEntrada = asParts[0];
+        f.jornadaSaida = asParts[1];
+      }
+      // Se não é formato reconhecido (ex: "44h semanais"), limpa
+      if (!f.jornadaEntrada) {
+        delete f.jornadaTrabalho;
+      }
+    }
+    // Normalizar sexo antigo ("masculino"/"feminino" minúsculo) para "M"/"F"
+    if (f.sexo) {
+      const sexoMap: Record<string, string> = { masculino: "M", feminino: "F", m: "M", f: "F" };
+      f.sexo = sexoMap[f.sexo.toLowerCase()] || f.sexo;
+    }
     setForm(f);
     setCpfDuplicateAlert(null);
     setDialogOpen(true);
@@ -192,14 +215,22 @@ export default function Colaboradores() {
       return;
     }
     const targetCompanyId = form.companyId ? parseInt(form.companyId) : companyId!;
+    // Compor jornadaTrabalho a partir dos campos separados
+    const jornadaParts = [form.jornadaEntrada, form.jornadaIntervalo, form.jornadaSaida].filter(Boolean);
+    const jornadaStr = jornadaParts.length >= 2 ? jornadaParts.join(" - ") : "";
     if (editingId) {
-      const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, empresa: _emp, ...data } = form;
+      const { companyId: _cid, id: _id, createdAt: _ca, updatedAt: _ua, empresa: _emp, jornadaEntrada: _je, jornadaIntervalo: _ji, jornadaSaida: _js, ...data } = form;
       // Tratar obraAtualId "none" como null
       if (data.obraAtualId === "none") data.obraAtualId = "" as any;
+      // Limpar valores "none" dos selects
+      Object.keys(data).forEach(k => { if ((data as any)[k] === "none") (data as any)[k] = ""; });
+      (data as any).jornadaTrabalho = jornadaStr;
       updateMut.mutate({ id: editingId, companyId: targetCompanyId, data });
     } else {
-      const { empresa: _emp, ...createData } = form;
+      const { empresa: _emp, jornadaEntrada: _je, jornadaIntervalo: _ji, jornadaSaida: _js, ...createData } = form;
       if (createData.obraAtualId === "none") delete (createData as any).obraAtualId;
+      Object.keys(createData).forEach(k => { if ((createData as any)[k] === "none") (createData as any)[k] = ""; });
+      (createData as any).jornadaTrabalho = jornadaStr;
       createMut.mutate({ ...createData, companyId: targetCompanyId } as any);
     }
   };
@@ -482,9 +513,10 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Sexo</Label>
-                  <Select value={form.sexo || undefined} onValueChange={v => set("sexo", v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <Select value={form.sexo || "none"} onValueChange={v => set("sexo", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
                       <SelectItem value="M">Masculino</SelectItem>
                       <SelectItem value="F">Feminino</SelectItem>
                       <SelectItem value="Outro">Outro</SelectItem>
@@ -493,9 +525,10 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Estado Civil</Label>
-                  <Select value={form.estadoCivil || undefined} onValueChange={v => set("estadoCivil", v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <Select value={form.estadoCivil || "none"} onValueChange={v => set("estadoCivil", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
                       <SelectItem value="Solteiro">Solteiro(a)</SelectItem>
                       <SelectItem value="Casado">Casado(a)</SelectItem>
                       <SelectItem value="Divorciado">Divorciado(a)</SelectItem>
@@ -672,8 +705,8 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> Obra Atual</Label>
-                  <Select value={form.obraAtualId || undefined} onValueChange={v => set("obraAtualId", v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                  <Select value={form.obraAtualId || "none"} onValueChange={v => set("obraAtualId", v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem obra vinculada</SelectItem>
                       {(obras ?? []).map((o: any) => (
@@ -717,9 +750,10 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Tipo de Contrato</Label>
-                  <Select value={form.tipoContrato || undefined} onValueChange={v => set("tipoContrato", v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <Select value={form.tipoContrato || "none"} onValueChange={v => set("tipoContrato", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
                       <SelectItem value="CLT">CLT</SelectItem>
                       <SelectItem value="PJ">PJ</SelectItem>
                       <SelectItem value="Temporario">Temporário</SelectItem>
@@ -730,18 +764,30 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Entrada</Label>
-                  <Select value={(() => { const j = form.jornadaTrabalho ?? ""; const parts = j.split(" às "); return parts[0] || undefined; })()} onValueChange={v => { const saida = (form.jornadaTrabalho ?? "").split(" às ")[1] || "17:00"; set("jornadaTrabalho", `${v} às ${saida}`); }}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Horário" /></SelectTrigger>
+                  <Select value={form.jornadaEntrada || "none"} onValueChange={v => set("jornadaEntrada", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Horário</SelectItem>
                       {["05:00","06:00","07:00","07:30","08:00","08:30","09:00","10:00","11:00","12:00","13:00","14:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Saída</Label>
-                  <Select value={(() => { const j = form.jornadaTrabalho ?? ""; const parts = j.split(" às "); return parts[1] || undefined; })()} onValueChange={v => { const entrada = (form.jornadaTrabalho ?? "").split(" às ")[0] || "08:00"; set("jornadaTrabalho", `${entrada} às ${v}`); }}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Horário" /></SelectTrigger>
+                  <Label className="text-xs font-medium text-muted-foreground">Intervalo</Label>
+                  <Select value={form.jornadaIntervalo || "none"} onValueChange={v => set("jornadaIntervalo", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Horário</SelectItem>
+                      {["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Saída</Label>
+                  <Select value={form.jornadaSaida || "none"} onValueChange={v => set("jornadaSaida", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Horário</SelectItem>
                       {["12:00","13:00","14:00","15:00","16:00","17:00","17:30","18:00","19:00","20:00","21:00","22:00","23:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -757,9 +803,10 @@ export default function Colaboradores() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Banco</Label>
-                      <Select value={form.banco || undefined} onValueChange={v => set("banco", v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
+                      <Select value={form.banco || "none"} onValueChange={v => set("banco", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="none">Selecione o banco</SelectItem>
                           <SelectItem value="Caixa">Caixa Econômica Federal</SelectItem>
                           <SelectItem value="Santander">Santander</SelectItem>
                           <SelectItem value="Bradesco">Bradesco</SelectItem>
@@ -788,9 +835,10 @@ export default function Colaboradores() {
                     </div>
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Tipo de Conta</Label>
-                      <Select value={form.tipoConta || undefined} onValueChange={v => set("tipoConta", v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <Select value={form.tipoConta || "none"} onValueChange={v => set("tipoConta", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
                           <SelectItem value="Corrente">Corrente</SelectItem>
                           <SelectItem value="Poupanca">Poupança</SelectItem>
                           <SelectItem value="Salario">Conta Salário</SelectItem>
@@ -805,9 +853,10 @@ export default function Colaboradores() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Tipo de Chave PIX</Label>
-                      <Select value={form.tipoChavePix || undefined} onValueChange={v => set("tipoChavePix", v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <Select value={form.tipoChavePix || "none"} onValueChange={v => set("tipoChavePix", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
                           <SelectItem value="CPF">CPF</SelectItem>
                           <SelectItem value="Celular">Celular</SelectItem>
                           <SelectItem value="Email">E-mail</SelectItem>
