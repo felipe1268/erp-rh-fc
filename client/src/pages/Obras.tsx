@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Users } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2 } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -20,29 +20,22 @@ const STATUS_OPTIONS = [
   { value: "Cancelada", label: "Cancelada", color: "bg-red-100 text-red-800" },
 ];
 
-const ESTADOS_BR = [
-  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA",
-  "PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
-];
-
 type ObraForm = {
-  nome: string; codigo: string; cliente: string; responsavel: string;
-  endereco: string; cidade: string; estado: string; cep: string;
-  dataInicio: string; dataPrevisaoFim: string; dataFimReal: string;
-  status: string; valorContrato: string; observacoes: string;
+  nome: string; numOrcamento: string; snRelogioPonto: string;
+  status: string; cep: string; endereco: string;
+  dataInicio: string; dataPrevisaoFim: string; observacoes: string;
 };
 
 const emptyForm: ObraForm = {
-  nome: "", codigo: "", cliente: "", responsavel: "",
-  endereco: "", cidade: "", estado: "", cep: "",
-  dataInicio: "", dataPrevisaoFim: "", dataFimReal: "",
-  status: "Planejamento", valorContrato: "", observacoes: "",
+  nome: "", numOrcamento: "", snRelogioPonto: "",
+  status: "Planejamento", cep: "", endereco: "",
+  dataInicio: "", dataPrevisaoFim: "", observacoes: "",
 };
 
 export default function Obras() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
-const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
   const obras = obrasQ.data ?? [];
 
   const createMut = trpc.obras.create.useMutation({ onSuccess: () => { obrasQ.refetch(); setDialogOpen(false); toast.success("Obra criada com sucesso!"); } });
@@ -54,12 +47,13 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
   const [form, setForm] = useState<ObraForm>(emptyForm);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const filtered = useMemo(() => {
     let list = obras;
     if (search) {
       const s = search.toLowerCase();
-      list = list.filter((o: any) => o.nome?.toLowerCase().includes(s) || o.codigo?.toLowerCase().includes(s) || o.cliente?.toLowerCase().includes(s));
+      list = list.filter((o: any) => o.nome?.toLowerCase().includes(s) || o.numOrcamento?.toLowerCase().includes(s) || o.snRelogioPonto?.toLowerCase().includes(s));
     }
     if (statusFilter !== "Todos") {
       list = list.filter((o: any) => o.status === statusFilter);
@@ -71,23 +65,52 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
-      nome: obra.nome || "", codigo: obra.codigo || "", cliente: obra.cliente || "",
-      responsavel: obra.responsavel || "", endereco: obra.endereco || "",
-      cidade: obra.cidade || "", estado: obra.estado || "", cep: obra.cep || "",
+      nome: obra.nome || "", numOrcamento: obra.numOrcamento || obra.codigo || "",
+      snRelogioPonto: obra.snRelogioPonto || "", status: obra.status || "Planejamento",
+      cep: obra.cep || "", endereco: obra.endereco || "",
       dataInicio: obra.dataInicio || "", dataPrevisaoFim: obra.dataPrevisaoFim || "",
-      dataFimReal: obra.dataFimReal || "", status: obra.status || "Planejamento",
-      valorContrato: obra.valorContrato || "", observacoes: obra.observacoes || "",
+      observacoes: obra.observacoes || "",
     });
     setDialogOpen(true);
   };
 
+  const buscarCep = useCallback(async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, "");
+    if (cepLimpo.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const resp = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await resp.json();
+      if (data.erro) {
+        toast.error("CEP não encontrado");
+      } else {
+        const enderecoCompleto = [data.logradouro, data.bairro, data.localidade, data.uf].filter(Boolean).join(", ");
+        setForm(f => ({ ...f, endereco: enderecoCompleto }));
+        toast.success("Endereço preenchido automaticamente!");
+      }
+    } catch {
+      toast.error("Erro ao buscar CEP");
+    } finally {
+      setBuscandoCep(false);
+    }
+  }, []);
+
+  const handleCepChange = (value: string) => {
+    // Formatar CEP: 00000-000
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    setForm(f => ({ ...f, cep: formatted }));
+    if (digits.length === 8) {
+      buscarCep(digits);
+    }
+  };
+
   const handleSave = () => {
     if (!form.nome.trim()) { toast.error("Nome da obra é obrigatório"); return; }
-    // Converter strings vazias para undefined para evitar erro no banco (campos date não aceitam "")
     const cleanForm = Object.fromEntries(
       Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? undefined : v])
     ) as any;
-    cleanForm.nome = form.nome; // garantir que nome nunca é undefined
+    cleanForm.nome = form.nome;
     if (editingId) {
       updateMut.mutate({ id: editingId, ...cleanForm } as any);
     } else {
@@ -114,18 +137,15 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
             <h1 className="text-2xl font-bold tracking-tight">Obras</h1>
             <p className="text-muted-foreground text-sm">Cadastro e gestão de obras e projetos</p>
           </div>
-          <div className="flex items-center gap-3">
-            
-            <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              <Plus className="h-4 w-4 mr-2" /> Nova Obra
-            </Button>
-          </div>
+          <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
+            <Plus className="h-4 w-4 mr-2" /> Nova Obra
+          </Button>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por nome, código ou cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            <Input placeholder="Buscar por nome, nº orçamento ou Sn..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
@@ -155,27 +175,22 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-base truncate">{obra.nome}</h3>
-                      {obra.codigo && <p className="text-xs text-muted-foreground">Cód: {obra.codigo}</p>}
+                      {(obra.numOrcamento || obra.codigo) && <p className="text-xs text-muted-foreground">Orç: {obra.numOrcamento || obra.codigo}</p>}
                     </div>
                     {getStatusBadge(obra.status)}
                   </div>
-                  {obra.cliente && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                      <Users className="h-3.5 w-3.5" /> {obra.cliente}
-                    </div>
+                  {obra.snRelogioPonto && (
+                    <p className="text-xs text-muted-foreground mb-1">Sn: {obra.snRelogioPonto}</p>
                   )}
-                  {(obra.cidade || obra.estado) && (
+                  {obra.endereco && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                      <MapPin className="h-3.5 w-3.5" /> {[obra.cidade, obra.estado].filter(Boolean).join(" - ")}
+                      <MapPin className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{obra.endereco}</span>
                     </div>
                   )}
                   {obra.dataInicio && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                       <Calendar className="h-3.5 w-3.5" /> Início: {obra.dataInicio}
                     </div>
-                  )}
-                  {obra.valorContrato && (
-                    <p className="text-sm font-medium text-[#1B2A4A] mt-2">R$ {obra.valorContrato}</p>
                   )}
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                     <Button variant="outline" size="sm" onClick={() => openEdit(obra)}>
@@ -193,7 +208,7 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar Obra" : "Nova Obra"}</DialogTitle>
           </DialogHeader>
@@ -203,10 +218,14 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
               <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: Edifício Residencial Aurora" />
             </div>
             <div>
-              <Label>Código</Label>
-              <Input value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} placeholder="Ex: OBR-001" />
+              <Label>N° do Orçamento</Label>
+              <Input value={form.numOrcamento} onChange={e => setForm(f => ({ ...f, numOrcamento: e.target.value }))} placeholder="Ex: ORC-2026-001" />
             </div>
             <div>
+              <Label>Sn (Relógio de Ponto)</Label>
+              <Input value={form.snRelogioPonto} onChange={e => setForm(f => ({ ...f, snRelogioPonto: e.target.value }))} placeholder="Código de identificação do relógio" />
+            </div>
+            <div className="col-span-2">
               <Label>Status</Label>
               <Select value={form.status || "Planejamento"} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -216,50 +235,23 @@ const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId })
               </Select>
             </div>
             <div>
-              <Label>Cliente</Label>
-              <Input value={form.cliente} onChange={e => setForm(f => ({ ...f, cliente: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Responsável</Label>
-              <Input value={form.responsavel} onChange={e => setForm(f => ({ ...f, responsavel: e.target.value }))} />
-            </div>
-            <div className="col-span-2">
-              <Label>Endereço</Label>
-              <Input value={form.endereco} onChange={e => setForm(f => ({ ...f, endereco: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Cidade</Label>
-              <Input value={form.cidade} onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Select value={form.estado || "none"} onValueChange={v => setForm(f => ({ ...f, estado: v === "none" ? "" : v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Selecione</SelectItem>
-                  {ESTADOS_BR.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
               <Label>CEP</Label>
-              <Input value={form.cep} onChange={e => setForm(f => ({ ...f, cep: e.target.value }))} placeholder="00000-000" />
+              <div className="relative">
+                <Input value={form.cep} onChange={e => handleCepChange(e.target.value)} placeholder="00000-000" />
+                {buscandoCep && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
             </div>
             <div>
-              <Label>Valor do Contrato</Label>
-              <Input value={form.valorContrato} onChange={e => setForm(f => ({ ...f, valorContrato: e.target.value }))} placeholder="Ex: 1.500.000,00" />
+              <Label>Endereço</Label>
+              <Input value={form.endereco} onChange={e => setForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Preenchido automaticamente pelo CEP" />
             </div>
             <div>
               <Label>Data de Início</Label>
               <Input type="date" value={form.dataInicio} onChange={e => setForm(f => ({ ...f, dataInicio: e.target.value }))} />
             </div>
             <div>
-              <Label>Previsão de Término</Label>
+              <Label>Data de Término</Label>
               <Input type="date" value={form.dataPrevisaoFim} onChange={e => setForm(f => ({ ...f, dataPrevisaoFim: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Data de Conclusão Real</Label>
-              <Input type="date" value={form.dataFimReal} onChange={e => setForm(f => ({ ...f, dataFimReal: e.target.value }))} />
             </div>
             <div className="col-span-2">
               <Label>Observações</Label>

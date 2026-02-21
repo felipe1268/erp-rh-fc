@@ -1008,6 +1008,8 @@ export async function listSectors(companyId: number) {
 export async function createSector(data: { companyId: number; nome: string; descricao?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const existing = await db.select().from(sectors).where(and(eq(sectors.companyId, data.companyId), eq(sectors.nome, data.nome)));
+  if (existing.length > 0) throw new Error(`Já existe um setor com o nome "${data.nome}" nesta empresa.`);
   const result = await db.insert(sectors).values({
     companyId: data.companyId,
     nome: data.nome,
@@ -1045,6 +1047,8 @@ export async function listJobFunctions(companyId: number) {
 export async function createJobFunction(data: { companyId: number; nome: string; descricao?: string; cbo?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const existing = await db.select().from(jobFunctions).where(and(eq(jobFunctions.companyId, data.companyId), eq(jobFunctions.nome, data.nome)));
+  if (existing.length > 0) throw new Error(`Já existe uma função com o nome "${data.nome}" nesta empresa.`);
   const result = await db.insert(jobFunctions).values({
     companyId: data.companyId,
     nome: data.nome,

@@ -411,3 +411,9 @@
 - [x] Reestruturar campo jornada para tabela dia a dia (Seg-Dom) com Entrada, Intervalo (duração), Saída
 - [x] Atualizar backend para salvar/carregar jornada como JSON
 - [x] Atualizar visualização do colaborador para mostrar jornada dia a dia
+## Fase 33: Simplificar Obras + Bug Select Setor
+- [x] BUG: Select Setor concatenando valor duplicado - removido setor duplicado do banco + validação de duplicata
+- [x] Simplificar formulário de Obras: Nome, Nº Orçamento, Sn, Status, Endereço (CEP), Data Início, Data Término, Observações
+- [x] Remover campos desnecessários: Código, Cliente, Responsável, Cidade, Estado, Valor Contrato, Data Conclusão Real
+- [x] Adicionar campo Sn (código de identificação do relógio de ponto)
+- [x] Busca automática de endereço pelo CEP (ViaCEP)
