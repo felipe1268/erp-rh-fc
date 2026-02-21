@@ -914,3 +914,6 @@
 ## REVISÃO_25: Nº Interno na tabela de Colaboradores
 - [x] Adicionar coluna "Nº Interno" (codigoInterno JFC) na tabela de listagem de colaboradores
 - [x] Incluir número interno na busca/pesquisa de colaboradores
+
+## REVISÃO_26: Melhorar cores dos cards de métricas no Raio-X
+- [x] Cards de ASOs, Treinamentos, Atestados, Advertências, Meses Ponto, EPIs com cores mais vibrantes e aparência de botão clicável

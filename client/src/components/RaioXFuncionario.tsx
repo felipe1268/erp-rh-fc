@@ -362,20 +362,20 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
               {/* RESUMO RÁPIDO - CARDS */}
               <div className="grid grid-cols-4 lg:grid-cols-8 gap-3 mt-5">
                 {[
-                  { label: "ASOs", value: asos.length, bgColor: "bg-blue-100", textColor: "text-blue-700", iconColor: "text-blue-500", icon: Stethoscope },
-                  { label: "Vencidos", value: asosVencidos, bgColor: "bg-red-100", textColor: "text-red-700", iconColor: "text-red-500", icon: Stethoscope },
-                  { label: "A Vencer", value: asosAVencer, bgColor: "bg-amber-100", textColor: "text-amber-700", iconColor: "text-amber-500", icon: Stethoscope },
-                  { label: "Treinamentos", value: treinamentos.length, bgColor: "bg-emerald-100", textColor: "text-emerald-700", iconColor: "text-emerald-500", icon: GraduationCap },
-                  { label: "Atestados", value: atestados.length, bgColor: "bg-purple-100", textColor: "text-purple-700", iconColor: "text-purple-500", icon: ClipboardList },
-                  { label: "Advertências", value: advertencias.length, bgColor: advertencias.length >= 3 ? "bg-red-200" : "bg-orange-100", textColor: advertencias.length >= 3 ? "text-red-800" : "text-orange-700", iconColor: advertencias.length >= 3 ? "text-red-600" : "text-orange-500", icon: ShieldAlert },
-                  { label: "Meses Ponto", value: pontoResumo.length, bgColor: "bg-cyan-100", textColor: "text-cyan-700", iconColor: "text-cyan-500", icon: Clock },
-                  { label: "EPIs", value: epis.length, bgColor: "bg-teal-100", textColor: "text-teal-700", iconColor: "text-teal-500", icon: HardHat },
+                  { label: "ASOs", value: asos.length, tab: "asos", bgColor: "bg-gradient-to-br from-blue-500 to-blue-600", textColor: "text-white", iconColor: "text-blue-200", icon: Stethoscope },
+                  { label: "Vencidos", value: asosVencidos, tab: "asos", bgColor: "bg-gradient-to-br from-red-500 to-red-600", textColor: "text-white", iconColor: "text-red-200", icon: Stethoscope },
+                  { label: "A Vencer", value: asosAVencer, tab: "asos", bgColor: "bg-gradient-to-br from-amber-500 to-amber-600", textColor: "text-white", iconColor: "text-amber-200", icon: Stethoscope },
+                  { label: "Treinamentos", value: treinamentos.length, tab: "trein", bgColor: "bg-gradient-to-br from-emerald-500 to-emerald-600", textColor: "text-white", iconColor: "text-emerald-200", icon: GraduationCap },
+                  { label: "Atestados", value: atestados.length, tab: "atest", bgColor: "bg-gradient-to-br from-purple-500 to-purple-600", textColor: "text-white", iconColor: "text-purple-200", icon: ClipboardList },
+                  { label: "Advertências", value: advertencias.length, tab: "adv", bgColor: advertencias.length >= 3 ? "bg-gradient-to-br from-red-600 to-red-700" : "bg-gradient-to-br from-orange-500 to-orange-600", textColor: "text-white", iconColor: advertencias.length >= 3 ? "text-red-200" : "text-orange-200", icon: ShieldAlert },
+                  { label: "Meses Ponto", value: pontoResumo.length, tab: "ponto", bgColor: "bg-gradient-to-br from-cyan-500 to-cyan-600", textColor: "text-white", iconColor: "text-cyan-200", icon: Clock },
+                  { label: "EPIs", value: epis.length, tab: "epis", bgColor: "bg-gradient-to-br from-teal-500 to-teal-600", textColor: "text-white", iconColor: "text-teal-200", icon: HardHat },
                 ].map(c => (
-                  <div key={c.label} className={`${c.bgColor} rounded-xl p-3 text-center border border-white/50 transition-transform hover:scale-105`}>
+                  <button key={c.label} onClick={() => { const el = document.querySelector(`[data-value="${c.tab}"]`); if (el) (el as HTMLElement).click(); }} className={`${c.bgColor} rounded-xl p-3 text-center shadow-lg hover:shadow-xl transition-all hover:scale-105 hover:-translate-y-0.5 cursor-pointer border-0`}>
                     <c.icon className={`h-5 w-5 mx-auto mb-1 ${c.iconColor}`} />
                     <p className={`text-2xl font-bold ${c.textColor}`}>{c.value}</p>
-                    <p className="text-xs text-muted-foreground font-medium">{c.label}</p>
-                  </div>
+                    <p className={`text-xs font-semibold ${c.textColor} opacity-80`}>{c.label}</p>
+                  </button>
                 ))}
               </div>
             </div>
