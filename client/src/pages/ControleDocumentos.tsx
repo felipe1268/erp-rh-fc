@@ -11,11 +11,12 @@ import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 // ============ HELPERS ============
@@ -80,7 +81,9 @@ export default function ControleDocumentos() {
   const deleteAtest = trpc.docs.atestados.delete.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Atestado excluído!"); } });
   const uploadAtestDoc = trpc.docs.atestados.uploadDoc.useMutation({ onSuccess: () => { refetchAtest(); toast.success("Documento anexado!"); } });
 
-  const createAdv = trpc.docs.advertencias.create.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência cadastrada!"); } });
+  const createAdv = trpc.docs.advertencias.create.useMutation({ onSuccess: (result: any) => { refetchAdv(); if (result?.alerta) { toast.warning(result.alerta, { duration: 8000 }); } else { toast.success(`Advertência cadastrada! (${result?.sequencia || ''}ª do colaborador)`); } } });
+  const deleteAtestBatch = trpc.docs.atestadosDeleteBatch.useMutation({ onSuccess: (r: any) => { refetchAtest(); toast.success(`${r.deletados} atestado(s) excluído(s)!`); setSelectedAtestIds([]); } });
+  const { user: authUser } = useAuth();
   const updateAdv = trpc.docs.advertencias.update.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência atualizada!"); } });
   const deleteAdv = trpc.docs.advertencias.delete.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência excluída!"); } });
   const uploadAdvDoc = trpc.docs.advertencias.uploadDoc.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Documento anexado!"); } });
@@ -100,6 +103,8 @@ export default function ControleDocumentos() {
   const [editingTreinId, setEditingTreinId] = useState<number | null>(null);
   const [editingAtestId, setEditingAtestId] = useState<number | null>(null);
   const [editingAdvId, setEditingAdvId] = useState<number | null>(null);
+  const [selectedAtestIds, setSelectedAtestIds] = useState<number[]>([]);
+  const [advEmployeeCount, setAdvEmployeeCount] = useState<{total: number; proximaAcao: string; sugestaoTipo: string} | null>(null);
 
   // ============ FORM STATES ============
   const [asoForm, setAsoForm] = useState<any>({});
@@ -255,9 +260,31 @@ export default function ControleDocumentos() {
     if (editingAdvId) {
       updateAdv.mutate({ id: editingAdvId, ...advForm });
     } else {
-      createAdv.mutate({ companyId, ...advForm });
+      createAdv.mutate({ companyId, ...advForm, aplicadoPor: authUser?.name || authUser?.username || undefined });
     }
-    setShowAdvDialog(false); setAdvForm({}); setEditingAdvId(null);
+    setShowAdvDialog(false); setAdvForm({}); setEditingAdvId(null); setAdvEmployeeCount(null);
+  };
+
+  // Buscar contagem de advertências quando seleciona funcionário no dialog
+  const { data: advCountData } = trpc.docs.contagemAdvertencias.useQuery(
+    { employeeId: advForm.employeeId! },
+    { enabled: !!advForm.employeeId && showAdvDialog && !editingAdvId }
+  );
+
+  const handleDeleteAtestBatch = () => {
+    if (selectedAtestIds.length === 0) { toast.error("Selecione ao menos um atestado"); return; }
+    if (confirm(`Excluir ${selectedAtestIds.length} atestado(s) selecionado(s)?`)) {
+      deleteAtestBatch.mutate({ ids: selectedAtestIds });
+    }
+  };
+
+  const toggleAtestSelection = (id: number) => {
+    setSelectedAtestIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleAllAtest = () => {
+    if (selectedAtestIds.length === filteredAtest.length) setSelectedAtestIds([]);
+    else setSelectedAtestIds(filteredAtest.map((a: any) => a.id));
   };
 
   // ============ IMPORT ASO ============
@@ -546,15 +573,29 @@ export default function ControleDocumentos() {
           {/* ===================== ABA ATESTADOS ===================== */}
           <TabsContent value="atestados">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <CardTitle className="text-base">Atestados Médicos</CardTitle>
-                <Button size="sm" onClick={openNewAtest}><Plus className="h-4 w-4 mr-1" /> Novo Atestado</Button>
+              <CardHeader className="pb-3">
+                <div className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">Atestados Médicos</CardTitle>
+                  <div className="flex gap-2">
+                    {selectedAtestIds.length > 0 && (
+                      <Button size="sm" variant="destructive" onClick={handleDeleteAtestBatch} disabled={deleteAtestBatch.isPending}>
+                        <Trash2 className="h-4 w-4 mr-1" /> Excluir {selectedAtestIds.length} selecionado(s)
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={openNewAtest}><Plus className="h-4 w-4 mr-1" /> Novo Atestado</Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left">
+                        <th className="pb-2 w-8">
+                          <button onClick={toggleAllAtest} className="p-1 hover:bg-muted rounded" title="Selecionar todos">
+                            {selectedAtestIds.length === filteredAtest.length && filteredAtest.length > 0 ? <CheckSquare className="h-4 w-4 text-blue-600" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                          </button>
+                        </th>
                         <th className="pb-2 font-medium">Colaborador</th>
                         <th className="pb-2 font-medium">CPF</th>
                         <th className="pb-2 font-medium">Tipo</th>
@@ -563,14 +604,20 @@ export default function ControleDocumentos() {
                         <th className="pb-2 font-medium">Data Retorno</th>
                         <th className="pb-2 font-medium">CID</th>
                         <th className="pb-2 font-medium">Médico</th>
+                        <th className="pb-2 font-medium">Arquivo</th>
                         <th className="pb-2 font-medium">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredAtest.length === 0 ? (
-                        <tr><td colSpan={9} className="py-8 text-center text-muted-foreground">Nenhum atestado cadastrado</td></tr>
+                        <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Nenhum atestado cadastrado</td></tr>
                       ) : filteredAtest.map((a: any) => (
-                        <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${selectedAtestIds.includes(a.id) ? "bg-blue-50" : ""}`}>
+                          <td className="py-2">
+                            <button onClick={() => toggleAtestSelection(a.id)} className="p-1 hover:bg-muted rounded">
+                              {selectedAtestIds.includes(a.id) ? <CheckSquare className="h-4 w-4 text-blue-600" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                            </button>
+                          </td>
                           <td className="py-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
                           <td className="py-2">{a.tipo}</td>
@@ -583,18 +630,22 @@ export default function ControleDocumentos() {
                             {a.crm && <div className="text-xs text-muted-foreground">CRM: {a.crm}</div>}
                           </td>
                           <td className="py-2">
+                            {a.documentoUrl ? (
+                              <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                                <FileText className="h-3.5 w-3.5" /> Ver
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </td>
+                          <td className="py-2">
                             <div className="flex gap-1">
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAtest(a)}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("atest", a.id)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar Atestado" onClick={() => handleUploadDoc("atest", a.id)}>
                                 <FileUp className="h-3.5 w-3.5" />
                               </Button>
-                              {a.documentoUrl && (
-                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver documento" onClick={() => window.open(a.documentoUrl, "_blank")}>
-                                  <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir este atestado?")) deleteAtest.mutate({ id: a.id }); }}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -878,7 +929,7 @@ export default function ControleDocumentos() {
       </Dialog>
 
       {/* ===================== DIALOG: ADVERTÊNCIA (Criar/Editar) ===================== */}
-      <Dialog open={showAdvDialog} onOpenChange={v => { if (!v) { setShowAdvDialog(false); setEditingAdvId(null); } }}>
+      <Dialog open={showAdvDialog} onOpenChange={v => { if (!v) { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingAdvId ? "Editar Advertência" : "Nova Advertência"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
@@ -886,6 +937,37 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
               <EmployeeSelect value={advForm.employeeId} onChange={id => setAdvForm({ ...advForm, employeeId: id })} />
             </div>
+
+            {/* ALERTA DE CONTAGEM DE ADVERTÊNCIAS */}
+            {advCountData && !editingAdvId && advForm.employeeId && (
+              <div className={`col-span-2 rounded-lg p-3 border-2 ${
+                advCountData.total >= 3 ? "bg-red-50 border-red-300" : advCountData.total >= 2 ? "bg-amber-50 border-amber-300" : "bg-blue-50 border-blue-200"
+              }`}>
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className={`h-5 w-5 ${advCountData.total >= 3 ? "text-red-600" : advCountData.total >= 2 ? "text-amber-600" : "text-blue-600"}`} />
+                  <div>
+                    <p className={`text-sm font-bold ${advCountData.total >= 3 ? "text-red-800" : advCountData.total >= 2 ? "text-amber-800" : "text-blue-800"}`}>
+                      Este colaborador já possui {advCountData.total} advertência(s)
+                    </p>
+                    <p className={`text-xs ${advCountData.total >= 3 ? "text-red-700" : advCountData.total >= 2 ? "text-amber-700" : "text-blue-700"}`}>
+                      {advCountData.proximaAcao}
+                    </p>
+                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                      <span>Verbais: {advCountData.verbais}</span>
+                      <span>Escritas: {advCountData.escritas}</span>
+                      <span>Suspensões: {advCountData.suspensoes}</span>
+                    </div>
+                  </div>
+                </div>
+                {advCountData.total >= 3 && (
+                  <p className="text-xs font-bold text-red-700 mt-2 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    APÓS A 3ª ADVERTÊNCIA O COLABORADOR ESTÁ APTO A RECEBER SUSPENSÃO (Art. 474 CLT)
+                  </p>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="text-sm font-medium">Tipo *</label>
               <Select value={advForm.tipoAdvertencia || ""} onValueChange={v => setAdvForm({ ...advForm, tipoAdvertencia: v })}>
@@ -903,6 +985,12 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">Data da Ocorrência *</label>
               <Input type="date" value={advForm.dataOcorrencia || ""} onChange={e => setAdvForm({ ...advForm, dataOcorrencia: e.target.value })} />
             </div>
+            {advForm.tipoAdvertencia === "Suspensao" && (
+              <div>
+                <label className="text-sm font-medium">Dias de Suspensão *</label>
+                <Input type="number" min={1} max={30} value={advForm.diasSuspensao || ""} onChange={e => setAdvForm({ ...advForm, diasSuspensao: parseInt(e.target.value) || 0 })} placeholder="1 a 30 dias (Art. 474 CLT)" />
+              </div>
+            )}
             <div className="col-span-2">
               <label className="text-sm font-medium">Motivo *</label>
               <Textarea value={advForm.motivo || ""} onChange={e => setAdvForm({ ...advForm, motivo: e.target.value })} rows={2} placeholder="Descreva o motivo da advertência..." />
@@ -917,7 +1005,7 @@ export default function ControleDocumentos() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowAdvDialog(false); setEditingAdvId(null); }}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); }}>Cancelar</Button>
             <Button onClick={handleSubmitAdv} disabled={createAdv.isPending || updateAdv.isPending}>
               {(createAdv.isPending || updateAdv.isPending) ? "Salvando..." : editingAdvId ? "Atualizar" : "Salvar"}
             </Button>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -538,6 +538,10 @@ export const controleDocumentosRouter = router({
             descricao: warnings.descricao,
             testemunhas: warnings.testemunhas,
             documentoUrl: warnings.documentoUrl,
+            sequencia: warnings.sequencia,
+            aplicadoPor: warnings.aplicadoPor,
+            diasSuspensao: warnings.diasSuspensao,
+            origemModulo: warnings.origemModulo,
           })
           .from(warnings)
           .leftJoin(employees, eq(warnings.employeeId, employees.id))
@@ -550,25 +554,46 @@ export const controleDocumentosRouter = router({
         z.object({
           companyId: z.number(),
           employeeId: z.number(),
-          tipoAdvertencia: z.enum(["Verbal", "Escrita", "Suspensao", "OSS"]),
+          tipoAdvertencia: z.enum(["Verbal", "Escrita", "Suspensao", "JustaCausa", "OSS"]),
           dataOcorrencia: z.string(),
           motivo: z.string(),
           descricao: z.string().optional(),
           testemunhas: z.string().optional(),
+          aplicadoPor: z.string().optional(),
+          diasSuspensao: z.number().optional(),
+          origemModulo: z.string().optional(),
+          origemId: z.number().optional(),
         })
       )
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
+        // Calcular sequência automática
+        const existentes = await db.select({ id: warnings.id }).from(warnings)
+          .where(and(eq(warnings.employeeId, input.employeeId), eq(warnings.companyId, input.companyId)));
+        const sequencia = existentes.length + 1;
+        
         await db.insert(warnings).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
           tipoAdvertencia: input.tipoAdvertencia,
+          sequencia,
           dataOcorrencia: input.dataOcorrencia,
           motivo: input.motivo,
           descricao: input.descricao || null,
           testemunhas: input.testemunhas || null,
+          aplicadoPor: input.aplicadoPor || null,
+          diasSuspensao: input.diasSuspensao || null,
+          origemModulo: input.origemModulo || null,
+          origemId: input.origemId || null,
         });
-        return { success: true };
+        
+        // Retornar contagem e alerta
+        const totalAdv = sequencia;
+        let alerta = null;
+        if (totalAdv === 3) alerta = "ATENÇÃO: Esta é a 3ª advertência. O colaborador está apto a receber SUSPENSÃO conforme Art. 474 da CLT.";
+        else if (totalAdv > 3) alerta = `ATENÇÃO: Colaborador já possui ${totalAdv} advertências. Avaliar suspensão ou justa causa.`;
+        
+        return { success: true, sequencia, totalAdvertencias: totalAdv, alerta };
       }),
 
     update: protectedProcedure
@@ -576,11 +601,13 @@ export const controleDocumentosRouter = router({
         z.object({
           id: z.number(),
           employeeId: z.number().optional(),
-          tipoAdvertencia: z.enum(["Verbal", "Escrita", "Suspensao", "OSS"]).optional(),
+          tipoAdvertencia: z.enum(["Verbal", "Escrita", "Suspensao", "JustaCausa", "OSS"]).optional(),
           dataOcorrencia: z.string().optional(),
           motivo: z.string().optional(),
           descricao: z.string().optional(),
           testemunhas: z.string().optional(),
+          aplicadoPor: z.string().optional(),
+          diasSuspensao: z.number().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -740,11 +767,102 @@ export const controleDocumentosRouter = router({
       const verbais = advs.filter(a => a.tipoAdvertencia === "Verbal").length;
       const escritas = advs.filter(a => a.tipoAdvertencia === "Escrita").length;
       const suspensoes = advs.filter(a => a.tipoAdvertencia === "Suspensao").length;
+      const justaCausa = advs.filter(a => a.tipoAdvertencia === "JustaCausa").length;
       let proximaAcao = "Nenhuma pendência";
       let sugestaoTipo = "Verbal";
-      if (verbais >= 3 && escritas === 0) { proximaAcao = "Aplicar Advertência por Escrito"; sugestaoTipo = "Escrita"; }
-      else if (escritas >= 1 && suspensoes === 0) { proximaAcao = "Aplicar Suspensão Disciplinar"; sugestaoTipo = "Suspensao"; }
-      else if (suspensoes >= 1) { proximaAcao = "Avaliar Rescisão por Justa Causa"; sugestaoTipo = "JustaCausa"; }
-      return { verbais, escritas, suspensoes, total: advs.length, proximaAcao, sugestaoTipo, historico: advs };
+      const totalAdv = verbais + escritas;
+      if (totalAdv >= 3 && suspensoes === 0) { proximaAcao = "ALERTA: 3+ advertências — Apto a receber SUSPENSÃO (Art. 474 CLT)"; sugestaoTipo = "Suspensao"; }
+      else if (suspensoes >= 1 && justaCausa === 0) { proximaAcao = "Avaliar Rescisão por Justa Causa (Art. 482 CLT)"; sugestaoTipo = "JustaCausa"; }
+      else if (totalAdv >= 1 && totalAdv < 3) { proximaAcao = `${totalAdv}/3 advertências antes da suspensão`; sugestaoTipo = totalAdv >= 2 ? "Escrita" : "Verbal"; }
+      return { verbais, escritas, suspensoes, justaCausa, total: advs.length, proximaAcao, sugestaoTipo, historico: advs };
+    }),
+
+  // ===================== MODELOS DE DOCUMENTOS (TEMPLATES) =====================
+  templates: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        return db.select().from(documentTemplates)
+          .where(eq(documentTemplates.companyId, input.companyId))
+          .orderBy(documentTemplates.tipo);
+      }),
+
+    getByTipo: protectedProcedure
+      .input(z.object({ companyId: z.number(), tipo: z.string() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const rows = await db.select().from(documentTemplates)
+          .where(and(
+            eq(documentTemplates.companyId, input.companyId),
+            eq(documentTemplates.tipo, input.tipo as any),
+            eq(documentTemplates.ativo, 1),
+          ));
+        if (rows.length > 0) return rows[0];
+        // Retornar modelo padrão CLT se não houver customizado
+        const tipoMap: Record<string, string> = {
+          advertencia_verbal: "Verbal",
+          advertencia_escrita: "Escrita",
+          suspensao: "Suspensao",
+          justa_causa: "JustaCausa",
+        };
+        const modeloKey = tipoMap[input.tipo] || "Verbal";
+        const modelo = (MODELOS_ADVERTENCIA as any)[modeloKey];
+        if (modelo) return { id: 0, companyId: input.companyId, tipo: input.tipo, titulo: modelo.titulo, conteudo: modelo.texto, ativo: 1, isDefault: true };
+        return null;
+      }),
+
+    upsert: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        tipo: z.enum(['advertencia_verbal','advertencia_escrita','suspensao','justa_causa','outros']),
+        titulo: z.string(),
+        conteudo: z.string(),
+        userName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // Verificar se já existe
+        const existing = await db.select().from(documentTemplates)
+          .where(and(
+            eq(documentTemplates.companyId, input.companyId),
+            eq(documentTemplates.tipo, input.tipo),
+          ));
+        if (existing.length > 0) {
+          await db.update(documentTemplates).set({
+            titulo: input.titulo,
+            conteudo: input.conteudo,
+            atualizadoPor: input.userName || null,
+          }).where(eq(documentTemplates.id, existing[0].id));
+          return { success: true, id: existing[0].id };
+        }
+        const result = await db.insert(documentTemplates).values({
+          companyId: input.companyId,
+          tipo: input.tipo,
+          titulo: input.titulo,
+          conteudo: input.conteudo,
+          criadoPor: input.userName || null,
+        });
+        return { success: true, id: Number(result[0].insertId) };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(documentTemplates).where(eq(documentTemplates.id, input.id));
+        return { success: true };
+      }),
+  }),
+
+  // ===================== DELETE EM LOTE (ATESTADOS) =====================
+  atestadosDeleteBatch: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()) }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      for (const id of input.ids) {
+        await db.delete(atestados).where(eq(atestados.id, id));
+      }
+      return { success: true, deletados: input.ids.length };
     }),
 });

@@ -770,13 +770,17 @@ export const warnings = mysqlTable("warnings", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
 	employeeId: int().notNull(),
-	tipoAdvertencia: mysqlEnum(['Verbal','Escrita','Suspensao','OSS']).notNull(),
-	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	tipoAdvertencia: mysqlEnum(['Verbal','Escrita','Suspensao','JustaCausa','OSS']).notNull(),
+	sequencia: int().default(1),
 	dataOcorrencia: date({ mode: 'string' }).notNull(),
 	motivo: text().notNull(),
 	descricao: text(),
 	testemunhas: text(),
+	aplicadoPor: varchar({ length: 255 }),
+	diasSuspensao: int(),
 	documentoUrl: text(),
+	origemModulo: varchar({ length: 50 }),
+	origemId: int(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
@@ -831,6 +835,25 @@ export type InsertCompany = typeof companies.$inferInsert;
 export type InsertEmployee = typeof employees.$inferInsert;
 export type InsertEmployeeHistory = typeof employeeHistory.$inferInsert;
 export type InsertUserProfile = typeof userProfiles.$inferInsert;
+// ============================================================
+// Modelos de Documentos (Advertência, Suspensão, etc.) - Editáveis pelo Admin Master
+// ============================================================
+export const documentTemplates = mysqlTable("document_templates", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	tipo: mysqlEnum(['advertencia_verbal','advertencia_escrita','suspensao','justa_causa','outros']).notNull(),
+	titulo: varchar({ length: 255 }).notNull(),
+	conteudo: text().notNull(),
+	ativo: tinyint().default(1).notNull(),
+	criadoPor: varchar({ length: 255 }),
+	atualizadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("doc_templates_company_tipo").on(table.companyId, table.tipo),
+]);
+
 export type InsertPermission = typeof permissions.$inferInsert;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
 export type InsertObra = typeof obras.$inferInsert;

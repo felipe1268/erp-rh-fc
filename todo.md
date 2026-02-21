@@ -684,3 +684,15 @@
 - [x] Atualizar integração DIXI: lookup de SN busca na nova tabela obra_sns
 - [x] Atualizar rateio por obra para exibir todos os SNs vinculados
 - [x] Testes de validação de unicidade de SN
+
+## REVISÃO_09: Raio-X Full Screen + Advertências CLT + Upload Atestados
+- [x] Raio-X do Funcionário em tela cheia (full screen) com layout responsivo
+- [x] Botões de Impressão e Gerar PDF no Raio-X com footer LGPD
+- [x] Centralizar advertências: toda advertência vai para ficha do funcionário
+- [x] Contador de advertências com alerta de suspensão após 3ª advertência
+- [x] Modelo de Advertência conforme CLT, texto editável pelo Admin Master
+- [x] Modelo de Suspensão conforme CLT, texto editável pelo Admin Master
+- [x] Schema: tabela de modelos de documentos (advertência, suspensão, etc.)
+- [x] Upload de atestado médico (arquivo) no formulário de atestados
+- [x] Multi-seleção para deletar atestados em lote
+- [x] Integração: advertências do Fechamento de Ponto aparecem no Raio-X
