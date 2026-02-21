@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Bar, Doughnut } from "react-chartjs-2";
 import "@/components/ChartSetup";
 import { CHART_COLORS, CHART_PALETTE, defaultBarOptions, defaultDoughnutOptions, defaultHBarOptions } from "@/components/ChartSetup";
@@ -8,7 +9,8 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, TriangleAlert } from "lucide-react";
 
 export default function DashRiscos() {
-  const [companyId, setCompanyId] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId;
   const [setor, setSetor] = useState("Todos");
   const cid = companyId ? Number(companyId) : 0;
   const { data, isLoading } = trpc.dashboards.riscos.useQuery(
@@ -30,7 +32,7 @@ export default function DashRiscos() {
           <TriangleAlert className="h-6 w-6 text-yellow-500" />
           <h1 className="text-2xl font-bold">Dashboard Riscos</h1>
         </div>
-        <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} showYear={false} />
+        <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} showYear={false} />
         <EmptyDashboard />
       </div>
     );
@@ -44,10 +46,10 @@ export default function DashRiscos() {
         <TriangleAlert className="h-6 w-6 text-yellow-500" />
         <h1 className="text-2xl font-bold">Dashboard Riscos</h1>
       </div>
-      <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} showYear={false}>
+      <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} showYear={false}>
         <Select value={setor} onValueChange={setSetor}>
           <SelectTrigger className="w-48 bg-card border-border">
-            <SelectValue placeholder="Setor" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="Todos">Todos os Setores</SelectItem>

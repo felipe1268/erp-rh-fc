@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { FileText } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const actionColors: Record<string, string> = {
   CREATE: "bg-green-400/10 text-green-400",
@@ -18,9 +19,8 @@ const actionLabels: Record<string, string> = {
 };
 
 export default function Auditoria() {
-  const [selectedCompany, setSelectedCompany] = useState<string>("all");
-  const { data: companies } = trpc.companies.list.useQuery();
-  const companyId = selectedCompany !== "all" ? parseInt(selectedCompany) : undefined;
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
 
   const { data: logs, isLoading } = trpc.audit.list.useQuery({ companyId, limit: 200 });
 
@@ -32,17 +32,7 @@ export default function Auditoria() {
             <h1 className="text-2xl font-bold tracking-tight">Auditoria do Sistema</h1>
             <p className="text-muted-foreground text-sm mt-1">Registro de todas as ações realizadas no sistema</p>
           </div>
-          <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-            <SelectTrigger className="w-56 bg-card border-border">
-              <SelectValue placeholder="Filtrar por empresa" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as empresas</SelectItem>
-              {companies?.map(c => (
-                <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
         </div>
 
         {isLoading ? (

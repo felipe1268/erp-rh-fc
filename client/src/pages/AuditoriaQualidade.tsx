@@ -10,12 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ClipboardCheck, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function AuditoriaQualidade() {
-  const [companyId] = useState(() => {
-    const saved = localStorage.getItem("selectedCompanyId");
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [activeTab, setActiveTab] = useState("auditorias");
 
   return (
@@ -99,7 +98,7 @@ function AuditoriasTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2"><Label>Título *</Label><Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título da auditoria" /></div>
             <div><Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Interna">Interna</SelectItem><SelectItem value="Externa">Externa</SelectItem><SelectItem value="Cliente">Cliente</SelectItem><SelectItem value="Certificadora">Certificadora</SelectItem></SelectContent>
               </Select>
@@ -108,7 +107,7 @@ function AuditoriasTab({ companyId }: { companyId: number }) {
             <div><Label>Auditor</Label><Input value={form.auditor} onChange={e => setForm({ ...form, auditor: e.target.value })} /></div>
             <div><Label>Setor</Label><Input value={form.setor} onChange={e => setForm({ ...form, setor: e.target.value })} /></div>
             <div><Label>Resultado</Label>
-              <Select value={form.resultado} onValueChange={v => setForm({ ...form, resultado: v })}>
+              <Select value={form.resultado || "none"} onValueChange={v => setForm({ ...form, resultado: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Conforme">Conforme</SelectItem><SelectItem value="Nao_Conforme">Não Conforme</SelectItem><SelectItem value="Observacao">Observação</SelectItem></SelectContent>
               </Select>
@@ -178,13 +177,13 @@ function DesviosTab({ companyId }: { companyId: number }) {
             <div className="col-span-2"><Label>Título *</Label><Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título do desvio" /></div>
             <div className="col-span-2"><Label>Descrição</Label><Input value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></div>
             <div><Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="NC_Maior">NC Maior</SelectItem><SelectItem value="NC_Menor">NC Menor</SelectItem><SelectItem value="Observacao">Observação</SelectItem><SelectItem value="Oportunidade_Melhoria">Oportunidade de Melhoria</SelectItem></SelectContent>
               </Select>
             </div>
             <div><Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <Select value={form.status || "none"} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Aberto">Aberto</SelectItem><SelectItem value="Em_Andamento">Em Andamento</SelectItem><SelectItem value="Fechado">Fechado</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
               </Select>
@@ -259,7 +258,7 @@ function AcoesTab({ companyId }: { companyId: number }) {
             <div><Label>Como? (How)</Label><Input value={form.como} onChange={e => setForm({ ...form, como: e.target.value })} /></div>
             <div><Label>Quanto Custa? (How Much)</Label><Input value={form.quantoCusta} onChange={e => setForm({ ...form, quantoCusta: e.target.value })} /></div>
             <div><Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <Select value={form.status || "none"} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Em_Andamento">Em Andamento</SelectItem><SelectItem value="Concluido">Concluído</SelectItem></SelectContent>
               </Select>

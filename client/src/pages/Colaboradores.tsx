@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
-import { useDefaultCompany } from "@/hooks/useDefaultCompany";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -51,8 +51,8 @@ function formatDate(val: unknown): string {
 }
 
 export default function Colaboradores() {
-  const { getInitialCompany } = useDefaultCompany();
-  const [selectedCompany, setSelectedCompany] = useState<string>("");
+  const { selectedCompanyId, companies } = useCompany();
+  const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -67,7 +67,6 @@ export default function Colaboradores() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const { data: companies } = trpc.companies.list.useQuery();
   const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
   const { data: obras } = trpc.obras.list.useQuery({ companyId: companyId ?? 0 }, { enabled: !!companyId });
 
@@ -77,11 +76,6 @@ export default function Colaboradores() {
   const [importResult, setImportResult] = useState<any>(null);
   const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
-    if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(getInitialCompany(companies));
-    }
-  }, [companies, selectedCompany, getInitialCompany]);
 
   const utils = trpc.useUtils();
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
@@ -275,16 +269,7 @@ export default function Colaboradores() {
             <p className="text-muted-foreground text-sm mt-1">Cadastro e gestão de colaboradores</p>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-              <SelectTrigger className="w-56 bg-card border-border">
-                <SelectValue placeholder="Empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies?.map(c => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
             <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!companyId} className="gap-2">
               <Upload className="h-4 w-4" /> Importar Excel
             </Button>
@@ -460,7 +445,7 @@ export default function Colaboradores() {
             </div>
             <Select value={form.companyId || selectedCompany} onValueChange={v => set("companyId", v)}>
               <SelectTrigger className="bg-card border-border">
-                <SelectValue placeholder="Selecione a empresa" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {companies?.map(c => (

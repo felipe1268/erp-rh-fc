@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,12 +14,11 @@ import {
   Siren, Scale, MapPin, Pencil, Trash2, Eye, Upload, FileText, Paperclip, X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function SST() {
-  const [companyId] = useState(() => {
-    const saved = localStorage.getItem("selectedCompanyId");
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [activeTab, setActiveTab] = useState("asos");
 
   return (
@@ -151,14 +150,14 @@ function ASOTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
-              <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
+              <Select value={String(form.employeeId) || "none"} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Selecione o colaborador</SelectItem>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Admissional">Admissional</SelectItem>
@@ -171,7 +170,7 @@ function ASOTab({ companyId }: { companyId: number }) {
             </div>
             <div>
               <Label>Resultado</Label>
-              <Select value={form.resultado} onValueChange={v => setForm({ ...form, resultado: v })}>
+              <Select value={form.resultado || "none"} onValueChange={v => setForm({ ...form, resultado: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Apto">Apto</SelectItem>
@@ -307,9 +306,9 @@ function TrainingTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
-              <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
+              <Select value={String(form.employeeId) || "none"} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Selecione o colaborador</SelectItem>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>Nome do Treinamento</Label><Input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></div>
@@ -480,16 +479,16 @@ function AccidentTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
-              <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
+              <Select value={String(form.employeeId) || "none"} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Selecione o colaborador</SelectItem>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>Data</Label><Input type="date" value={form.dataAcidente} onChange={e => setForm({ ...form, dataAcidente: e.target.value })} /></div>
             <div><Label>Hora</Label><Input type="time" value={form.horaAcidente} onChange={e => setForm({ ...form, horaAcidente: e.target.value })} /></div>
             <div>
               <Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Tipico">Típico</SelectItem>
@@ -500,7 +499,7 @@ function AccidentTab({ companyId }: { companyId: number }) {
             </div>
             <div>
               <Label>Gravidade</Label>
-              <Select value={form.gravidade} onValueChange={v => setForm({ ...form, gravidade: v })}>
+              <Select value={form.gravidade || "none"} onValueChange={v => setForm({ ...form, gravidade: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Leve">Leve</SelectItem>
@@ -513,9 +512,10 @@ function AccidentTab({ companyId }: { companyId: number }) {
             <div><Label>Local</Label><Input value={form.localAcidente} onChange={e => setForm({ ...form, localAcidente: e.target.value })} /></div>
             <div>
               <Label>Parte do Corpo</Label>
-              <Select value={form.parteCorpoAtingida || undefined} onValueChange={v => setForm({ ...form, parteCorpoAtingida: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <Select value={form.parteCorpoAtingida  || "none"} onValueChange={v => setForm({ ...form, parteCorpoAtingida: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Selecione</SelectItem>
                   <SelectItem value="Cabeca">Cabeça</SelectItem>
                   <SelectItem value="Olhos">Olhos</SelectItem>
                   <SelectItem value="Pescoco">Pescoço</SelectItem>
@@ -614,14 +614,14 @@ function WarningTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador</Label>
-              <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
+              <Select value={String(form.employeeId) || "none"} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Selecione o colaborador</SelectItem>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Verbal">Verbal</SelectItem>
@@ -715,7 +715,7 @@ function RiskTab({ companyId }: { companyId: number }) {
             <div><Label>Agente de Risco</Label><Input value={form.agenteRisco} onChange={e => setForm({ ...form, agenteRisco: e.target.value })} /></div>
             <div>
               <Label>Tipo</Label>
-              <Select value={form.tipoRisco} onValueChange={v => setForm({ ...form, tipoRisco: v })}>
+              <Select value={form.tipoRisco || "none"} onValueChange={v => setForm({ ...form, tipoRisco: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Fisico">Físico</SelectItem>
@@ -728,7 +728,7 @@ function RiskTab({ companyId }: { companyId: number }) {
             </div>
             <div>
               <Label>Grau</Label>
-              <Select value={form.grauRisco} onValueChange={v => setForm({ ...form, grauRisco: v })}>
+              <Select value={form.grauRisco || "none"} onValueChange={v => setForm({ ...form, grauRisco: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Baixo">Baixo</SelectItem>
@@ -755,7 +755,7 @@ function RiskTab({ companyId }: { companyId: number }) {
 // PAINEL DE DOCUMENTOS DO TREINAMENTO
 // ============================================================
 function TrainingDocsPanel({ training, employees }: { training: any; employees: any[] }) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
   const { data: docs = [], isLoading } = trpc.trainingDocs.list.useQuery({ trainingId: training.id });
   const createMut = trpc.trainingDocs.create.useMutation({
@@ -833,4 +833,3 @@ function TrainingDocsPanel({ training, employees }: { training: any; employees: 
 }
 
 // Need React import for useRef
-import React from "react";

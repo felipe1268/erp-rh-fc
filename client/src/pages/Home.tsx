@@ -1,27 +1,16 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, ShieldCheck, HardHat, Truck, ClipboardCheck, Activity, Clock, BarChart3 } from "lucide-react";
-import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useDefaultCompany } from "@/hooks/useDefaultCompany";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function Home() {
   const { user } = useAuth();
-  const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [, navigate] = useLocation();
-  const { getInitialCompany } = useDefaultCompany();
-
-  const { data: companies } = trpc.companies.list.useQuery();
-  const companyId = selectedCompany ? parseInt(selectedCompany) : companies?.[0]?.id;
-
-  useEffect(() => {
-    if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(getInitialCompany(companies));
-    }
-  }, [companies, selectedCompany, getInitialCompany]);
+  const { selectedCompanyId, companies: companiesList } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
 
   const { data: stats } = trpc.employees.stats.useQuery(
     { companyId: companyId! },
@@ -78,20 +67,7 @@ export default function Home() {
               Bem-vindo(a), {user?.name ?? "Usuário"}
             </p>
           </div>
-          <div className="w-full sm:w-72">
-            <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-              <SelectTrigger className="bg-card border-border">
-                <SelectValue placeholder="Selecione a empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies?.map(c => (
-                  <SelectItem key={c.id} value={String(c.id)}>
-                    {c.nomeFantasia || c.razaoSocial}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+
         </div>
 
         {companyId ? (

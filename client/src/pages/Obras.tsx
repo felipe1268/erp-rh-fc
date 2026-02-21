@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Users } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const STATUS_OPTIONS = [
   { value: "Planejamento", label: "Planejamento", color: "bg-blue-100 text-blue-800" },
@@ -39,12 +40,9 @@ const emptyForm: ObraForm = {
 };
 
 export default function Obras() {
-  const companiesQ = trpc.companies.list.useQuery();
-  const companies = companiesQ.data ?? [];
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
-  const companyId = selectedCompanyId ?? companies[0]?.id ?? 0;
-
-  const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
   const obras = obrasQ.data ?? [];
 
   const createMut = trpc.obras.create.useMutation({ onSuccess: () => { obrasQ.refetch(); setDialogOpen(false); toast.success("Obra criada com sucesso!"); } });
@@ -112,16 +110,7 @@ export default function Obras() {
             <p className="text-muted-foreground text-sm">Cadastro e gestão de obras e projetos</p>
           </div>
           <div className="flex items-center gap-3">
-            {companies.length > 1 && (
-              <Select value={String(companyId)} onValueChange={v => setSelectedCompanyId(Number(v))}>
-                <SelectTrigger className="w-[260px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {companies.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            
             <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
               <Plus className="h-4 w-4 mr-2" /> Nova Obra
             </Button>
@@ -214,7 +203,7 @@ export default function Obras() {
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+              <Select value={form.status || "none"} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
@@ -240,7 +229,7 @@ export default function Obras() {
             <div>
               <Label>Estado</Label>
               <Select value={form.estado || "none"} onValueChange={v => setForm(f => ({ ...f, estado: v === "none" ? "" : v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Selecione</SelectItem>
                   {ESTADOS_BR.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
 import "@/components/ChartSetup";
 import { CHART_COLORS, CHART_PALETTE, MONTHS_PT, defaultBarOptions, defaultDoughnutOptions, defaultHBarOptions } from "@/components/ChartSetup";
@@ -12,7 +13,8 @@ const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2,
 const fmtCurrency = (v: number) => `R$ ${fmt(v)}`;
 
 export default function DashHorasExtras() {
-  const [companyId, setCompanyId] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId;
   const [year, setYear] = useState(new Date().getFullYear());
   const cid = companyId ? Number(companyId) : 0;
   const { data, isLoading } = trpc.dashboards.horasExtras.useQuery(
@@ -27,7 +29,7 @@ export default function DashHorasExtras() {
           <Clock className="h-6 w-6 text-orange-500" />
           <h1 className="text-2xl font-bold">Dashboard Horas Extras</h1>
         </div>
-        <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} selectedYear={year} setSelectedYear={setYear} />
+        <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} selectedYear={year} setSelectedYear={setYear} />
         <EmptyDashboard />
       </div>
     );
@@ -40,7 +42,7 @@ export default function DashHorasExtras() {
         <h1 className="text-2xl font-bold">Dashboard Horas Extras</h1>
         <Badge variant="outline" className="text-orange-600 border-orange-300">{year}</Badge>
       </div>
-      <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} selectedYear={year} setSelectedYear={setYear} />
+      <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} selectedYear={year} setSelectedYear={setYear} />
       {isLoading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
       ) : !data ? (

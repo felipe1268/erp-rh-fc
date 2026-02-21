@@ -1,7 +1,4 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { trpc } from "@/lib/trpc";
-import { useState, useEffect } from "react";
-import { useDefaultCompany } from "@/hooks/useDefaultCompany";
 
 interface DashboardFiltersProps {
   selectedCompany: string;
@@ -20,32 +17,11 @@ export function DashboardFilters({
   showYear = true,
   children,
 }: DashboardFiltersProps) {
-  const { data: companies } = trpc.companies.list.useQuery();
-  const { getInitialCompany } = useDefaultCompany();
-
-  useEffect(() => {
-    if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(getInitialCompany(companies));
-    }
-  }, [companies, selectedCompany, setSelectedCompany, getInitialCompany]);
-
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-        <SelectTrigger className="w-56 bg-card border-border">
-          <SelectValue placeholder="Selecione a empresa" />
-        </SelectTrigger>
-        <SelectContent>
-          {companies?.map(c => (
-            <SelectItem key={c.id} value={String(c.id)}>
-              {c.nomeFantasia || c.razaoSocial}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
       {showYear && setSelectedYear ? (
         <Select value={String(selectedYear || currentYear)} onValueChange={v => setSelectedYear(Number(v))}>
           <SelectTrigger className="w-32 bg-card border-border">

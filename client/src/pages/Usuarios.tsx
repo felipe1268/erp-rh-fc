@@ -10,7 +10,7 @@ import { Lock, Plus, Settings, Trash2, Shield } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PROFILE_TYPES, ERP_MODULES, MODULE_KEYS } from "../../../shared/modules";
-import { useDefaultCompany } from "@/hooks/useDefaultCompany";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const profileLabels: Record<string, string> = {
   adm_master: "ADM Master",
@@ -29,8 +29,8 @@ const profileColors: Record<string, string> = {
 };
 
 export default function Usuarios() {
-  const { getInitialCompany } = useDefaultCompany();
-  const [selectedCompany, setSelectedCompany] = useState<string>("");
+  const { selectedCompanyId } = useCompany();
+  const selectedCompany = selectedCompanyId;
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [permDialogOpen, setPermDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -38,14 +38,7 @@ export default function Usuarios() {
   const [editingProfileId, setEditingProfileId] = useState<number | null>(null);
   const [permissionsState, setPermissionsState] = useState<Record<string, { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }>>({});
 
-  const { data: companies } = trpc.companies.list.useQuery();
   const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
-
-  useEffect(() => {
-    if (companies && companies.length > 0 && !selectedCompany) {
-      setSelectedCompany(getInitialCompany(companies));
-    }
-  }, [companies, selectedCompany, getInitialCompany]);
 
   const utils = trpc.useUtils();
   const { data: allUsers } = trpc.profiles.listUsers.useQuery();
@@ -123,17 +116,7 @@ export default function Usuarios() {
             <p className="text-muted-foreground text-sm mt-1">Gerencie perfis de acesso por empresa</p>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-              <SelectTrigger className="w-56 bg-card border-border">
-                <SelectValue placeholder="Empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies?.map(c => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={() => { setSelectedUserId(""); setSelectedProfileType(""); setCreateDialogOpen(true); }} disabled={!companyId} className="gap-2">
+<Button onClick={() => { setSelectedUserId(""); setSelectedProfileType(""); setCreateDialogOpen(true); }} disabled={!companyId} className="gap-2">
               <Plus className="h-4 w-4" /> Novo Perfil
             </Button>
           </div>
@@ -230,9 +213,10 @@ export default function Usuarios() {
           <div className="space-y-4 py-4">
             <div>
               <Label>Usuário</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="bg-input"><SelectValue placeholder="Selecione o usuário" /></SelectTrigger>
+              <Select value={selectedUserId || "none"} onValueChange={v => setSelectedUserId(v === "none" ? "" : v)}>
+                <SelectTrigger className="bg-input"><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Selecione o usuário</SelectItem>
                   {allUsers?.map(u => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.name ?? u.email ?? u.openId}</SelectItem>
                   ))}
@@ -241,9 +225,10 @@ export default function Usuarios() {
             </div>
             <div>
               <Label>Tipo de Perfil</Label>
-              <Select value={selectedProfileType} onValueChange={setSelectedProfileType}>
-                <SelectTrigger className="bg-input"><SelectValue placeholder="Selecione o perfil" /></SelectTrigger>
+              <Select value={selectedProfileType || "none"} onValueChange={v => setSelectedProfileType(v === "none" ? "" : v)}>
+                <SelectTrigger className="bg-input"><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Selecione o perfil</SelectItem>
                   {Object.entries(PROFILE_TYPES).map(([key, p]) => (
                     <SelectItem key={key} value={key}>{p.label}</SelectItem>
                   ))}

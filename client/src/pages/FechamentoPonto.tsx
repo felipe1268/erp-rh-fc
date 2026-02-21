@@ -6,14 +6,12 @@ import { trpc } from "@/lib/trpc";
 import { Clock, Upload, FileSpreadsheet, Users, CalendarDays } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function FechamentoPonto() {
-  const companiesQ = trpc.companies.list.useQuery();
-  const companies = companiesQ.data ?? [];
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
-  const companyId = selectedCompanyId ?? companies[0]?.id ?? 0;
-
-  const now = new Date();
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+const now = new Date();
   const [mesAno, setMesAno] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
 
   // Registros de ponto serão carregados após upload DIXI
@@ -40,16 +38,7 @@ export default function FechamentoPonto() {
             <p className="text-muted-foreground text-sm">Controle e fechamento mensal de ponto dos colaboradores</p>
           </div>
           <div className="flex items-center gap-3">
-            {companies.length > 1 && (
-              <Select value={String(companyId)} onValueChange={v => setSelectedCompanyId(Number(v))}>
-                <SelectTrigger className="w-[260px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {companies.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            
           </div>
         </div>
 

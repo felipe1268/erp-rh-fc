@@ -387,3 +387,6 @@
 - [x] Jornada de Trabalho: separada em 3 campos (Entrada, Intervalo, Saída)
 - [x] Reescrever Setores.tsx com layout padrão igual Obras (título, subtítulo, seletor empresa, busca, card)
 - [x] Reescrever Funcoes.tsx com layout padrão igual Obras
+- [x] Criar seletor de empresa global fixo no topo (header) que vale para todas as páginas
+- [x] Remover seletores de empresa locais de cada página (usar Context global)
+- [x] VARREDURA COMPLETA: corrigir TODOS os Selects com placeholder concatenado em TODAS as páginas do sistema

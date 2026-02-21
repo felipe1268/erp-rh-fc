@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Bar } from "react-chartjs-2";
 import "@/components/ChartSetup";
 import { CHART_COLORS, MONTHS_PT, defaultBarOptions, defaultHBarOptions } from "@/components/ChartSetup";
@@ -7,7 +8,8 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, HardHat } from "lucide-react";
 
 export default function DashEpi() {
-  const [companyId, setCompanyId] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId;
   const [year, setYear] = useState(new Date().getFullYear());
   const cid = companyId ? Number(companyId) : 0;
   const { data, isLoading } = trpc.dashboards.epi.useQuery(
@@ -22,7 +24,7 @@ export default function DashEpi() {
           <HardHat className="h-6 w-6 text-orange-500" />
           <h1 className="text-2xl font-bold">Dashboard EPI</h1>
         </div>
-        <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} selectedYear={year} setSelectedYear={setYear} />
+        <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} selectedYear={year} setSelectedYear={setYear} />
         <EmptyDashboard />
       </div>
     );
@@ -34,7 +36,7 @@ export default function DashEpi() {
         <HardHat className="h-6 w-6 text-orange-500" />
         <h1 className="text-2xl font-bold">Dashboard EPI</h1>
       </div>
-      <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} selectedYear={year} setSelectedYear={setYear} />
+      <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} selectedYear={year} setSelectedYear={setYear} />
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>

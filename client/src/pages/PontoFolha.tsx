@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 import {
   Clock, Plus, Upload, FileSpreadsheet, DollarSign, CreditCard, Trash2,
   FileText, CheckCircle2, AlertCircle, Loader2, Settings, Download,
@@ -35,10 +36,8 @@ const UPLOAD_CATEGORIES = [
 type CategoryValue = typeof UPLOAD_CATEGORIES[number]["value"];
 
 export default function PontoFolha() {
-  const [companyId] = useState(() => {
-    const saved = localStorage.getItem("selectedCompanyId");
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [activeTab, setActiveTab] = useState("uploads");
 
   return (
@@ -842,12 +841,12 @@ function ExtrasTab({ companyId }: { companyId: number }) {
           <div className="space-y-4">
             <div>
               <Label>Funcionário</Label>
-              <Select value={form.employeeId} onValueChange={v => {
+              <Select value={form.employeeId || "none"} onValueChange={v => {
                 setForm(prev => ({ ...prev, employeeId: v }));
                 const emp = employees.data?.find(e => e.id === parseInt(v));
                 if (emp?.valorHora) setForm(prev => ({ ...prev, valorHoraBase: emp.valorHora || "" }));
               }}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {employees.data?.map(e => (
                     <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>
@@ -860,7 +859,7 @@ function ExtrasTab({ companyId }: { companyId: number }) {
             </div>
             <div>
               <Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm(prev => ({ ...prev, tipo: v }))}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm(prev => ({ ...prev, tipo: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Horas_Extras">Horas Extras</SelectItem>
@@ -1028,8 +1027,8 @@ function VrTab({ companyId }: { companyId: number }) {
           <div className="space-y-4">
             <div>
               <Label>Funcionário</Label>
-              <Select value={form.employeeId} onValueChange={v => setForm(prev => ({ ...prev, employeeId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <Select value={form.employeeId || "none"} onValueChange={v => setForm(prev => ({ ...prev, employeeId: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {employees.data?.map(e => (
                     <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>

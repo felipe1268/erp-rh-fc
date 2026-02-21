@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Bar, Doughnut } from "react-chartjs-2";
 import "@/components/ChartSetup";
 import { CHART_COLORS, CHART_PALETTE, defaultBarOptions, defaultDoughnutOptions } from "@/components/ChartSetup";
@@ -7,7 +8,8 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, Flame } from "lucide-react";
 
 export default function DashExtintoresHidrantes() {
-  const [companyId, setCompanyId] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId;
   const cid = companyId ? Number(companyId) : 0;
   const { data, isLoading } = trpc.dashboards.extintoresHidrantes.useQuery(
     { companyId: cid },
@@ -21,7 +23,7 @@ export default function DashExtintoresHidrantes() {
           <Flame className="h-6 w-6 text-red-500" />
           <h1 className="text-2xl font-bold">Dashboard Extintores e Hidrantes</h1>
         </div>
-        <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} showYear={false} />
+        <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} showYear={false} />
         <EmptyDashboard />
       </div>
     );
@@ -33,7 +35,7 @@ export default function DashExtintoresHidrantes() {
         <Flame className="h-6 w-6 text-red-500" />
         <h1 className="text-2xl font-bold">Dashboard Extintores e Hidrantes</h1>
       </div>
-      <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} showYear={false} />
+      <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} showYear={false} />
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>

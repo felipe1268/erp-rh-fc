@@ -10,12 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Vote, Plus, Trash2, AlertTriangle, Calendar, Users } from "lucide-react";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function Cipa() {
-  const [companyId] = useState(() => {
-    const saved = localStorage.getItem("selectedCompanyId");
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [activeTab, setActiveTab] = useState("membros");
 
   return (
@@ -106,19 +105,19 @@ function MembrosTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="col-span-2">
               <Label>Colaborador *</Label>
-              <Select value={String(form.employeeId)} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
+              <Select value={String(form.employeeId) || "none"} onValueChange={v => setForm({ ...form, employeeId: parseInt(v) })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Selecione o colaborador</SelectItem>{employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>Eleição</Label>
-              <Select value={String(form.electionId)} onValueChange={v => setForm({ ...form, electionId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <Select value={String(form.electionId) || "none"} onValueChange={v => setForm({ ...form, electionId: parseInt(v) })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{elections.map((el: any) => <SelectItem key={el.id} value={String(el.id)}>Gestão {el.mandatoInicio ? new Date(el.mandatoInicio).getFullYear() : ""}/{el.mandatoFim ? new Date(el.mandatoFim).getFullYear() : ""}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>Cargo</Label>
-              <Select value={form.cargo} onValueChange={v => setForm({ ...form, cargo: v })}>
+              <Select value={form.cargo || "none"} onValueChange={v => setForm({ ...form, cargo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Presidente">Presidente</SelectItem>
@@ -130,13 +129,13 @@ function MembrosTab({ companyId }: { companyId: number }) {
               </Select>
             </div>
             <div><Label>Representação</Label>
-              <Select value={form.representacao} onValueChange={v => setForm({ ...form, representacao: v })}>
+              <Select value={form.representacao || "none"} onValueChange={v => setForm({ ...form, representacao: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Empregador">Empregador</SelectItem><SelectItem value="Empregados">Empregados</SelectItem></SelectContent>
               </Select>
             </div>
             <div><Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <Select value={form.status || "none"} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Ativo">Ativo</SelectItem><SelectItem value="Desligado">Desligado</SelectItem><SelectItem value="Substituido">Substituído</SelectItem></SelectContent>
               </Select>
@@ -210,7 +209,7 @@ function EleicoesTab({ companyId }: { companyId: number }) {
             <div><Label>Data Eleição</Label><Input type="date" value={form.dataEleicao} onChange={e => setForm({ ...form, dataEleicao: e.target.value })} /></div>
             <div><Label>Data Posse</Label><Input type="date" value={form.dataPosse} onChange={e => setForm({ ...form, dataPosse: e.target.value })} /></div>
             <div><Label>Status</Label>
-              <Select value={form.statusEleicao} onValueChange={v => setForm({ ...form, statusEleicao: v })}>
+              <Select value={form.statusEleicao || "none"} onValueChange={v => setForm({ ...form, statusEleicao: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Planejamento">Planejamento</SelectItem><SelectItem value="Inscricao">Inscrição</SelectItem><SelectItem value="Campanha">Campanha</SelectItem><SelectItem value="Votacao">Votação</SelectItem><SelectItem value="Apuracao">Apuração</SelectItem><SelectItem value="Concluida">Concluída</SelectItem></SelectContent>
               </Select>

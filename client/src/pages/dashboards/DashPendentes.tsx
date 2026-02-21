@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import "@/components/ChartSetup";
 import { DashboardFilters, StatCard, EmptyDashboard } from "@/components/DashboardFilters";
 import { trpc } from "@/lib/trpc";
 import { Loader2, AlertTriangle } from "lucide-react";
 
 export default function DashPendentes() {
-  const [companyId, setCompanyId] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId;
   const cid = companyId ? Number(companyId) : 0;
   const { data, isLoading } = trpc.dashboards.pendentes.useQuery(
     { companyId: cid },
@@ -19,7 +21,7 @@ export default function DashPendentes() {
           <AlertTriangle className="h-6 w-6 text-amber-500" />
           <h1 className="text-2xl font-bold">Dashboard Pendências</h1>
         </div>
-        <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} showYear={false} />
+        <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} showYear={false} />
         <EmptyDashboard />
       </div>
     );
@@ -31,7 +33,7 @@ export default function DashPendentes() {
         <AlertTriangle className="h-6 w-6 text-amber-500" />
         <h1 className="text-2xl font-bold">Dashboard Pendências</h1>
       </div>
-      <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} showYear={false} />
+      <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} showYear={false} />
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>

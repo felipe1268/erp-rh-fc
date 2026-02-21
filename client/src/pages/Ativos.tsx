@@ -10,12 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Wrench, Plus, Search, Truck, FlameKindling, Droplets, Trash2, AlertTriangle } from "lucide-react";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function Ativos() {
-  const [companyId] = useState(() => {
-    const saved = localStorage.getItem("selectedCompanyId");
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [activeTab, setActiveTab] = useState("frota");
 
   return (
@@ -107,7 +106,7 @@ function FrotaTab({ companyId }: { companyId: number }) {
             <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} /></div>
             <div><Label>Ano Fabricação</Label><Input value={form.anoFabricacao} onChange={e => setForm({ ...form, anoFabricacao: e.target.value })} placeholder="Ex: 2024" /></div>
             <div><Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Carro">Carro</SelectItem>
@@ -123,7 +122,7 @@ function FrotaTab({ companyId }: { companyId: number }) {
             <div><Label>Chassi</Label><Input value={form.chassi} onChange={e => setForm({ ...form, chassi: e.target.value })} /></div>
             <div><Label>Próx. Manutenção</Label><Input type="date" value={form.proximaManutencao} onChange={e => setForm({ ...form, proximaManutencao: e.target.value })} /></div>
             <div><Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <Select value={form.status || "none"} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Ativo">Ativo</SelectItem><SelectItem value="Inativo">Inativo</SelectItem><SelectItem value="Manutencao">Manutenção</SelectItem></SelectContent>
               </Select>
@@ -191,7 +190,7 @@ function EquipamentosTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Nome</Label><Input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></div>
             <div><Label>Patrimônio</Label><Input value={form.patrimonio} onChange={e => setForm({ ...form, patrimonio: e.target.value })} /></div>
-            <div><Label>Tipo</Label><Input value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} /></div>
+            <div><Label>Tipo</Label><Input value={form.tipo || "none"} onChange={e => setForm({ ...form, tipo: e.target.value })} /></div>
             <div><Label>Marca</Label><Input value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} /></div>
             <div><Label>Modelo</Label><Input value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} /></div>
             <div><Label>Nº Série</Label><Input value={form.numeroSerie} onChange={e => setForm({ ...form, numeroSerie: e.target.value })} /></div>
@@ -199,7 +198,7 @@ function EquipamentosTab({ companyId }: { companyId: number }) {
             <div><Label>Data Aquisição</Label><Input type="date" value={form.dataAquisicao} onChange={e => setForm({ ...form, dataAquisicao: e.target.value })} /></div>
             <div><Label>Próx. Manutenção</Label><Input type="date" value={form.proximaManutencao} onChange={e => setForm({ ...form, proximaManutencao: e.target.value })} /></div>
             <div><Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <Select value={form.status || "none"} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Ativo">Ativo</SelectItem><SelectItem value="Inativo">Inativo</SelectItem><SelectItem value="Manutencao">Manutenção</SelectItem></SelectContent>
               </Select>
@@ -268,7 +267,7 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div><Label>Número</Label><Input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} placeholder="Ex: EXT-001" /></div>
             <div><Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="PQS">PQS</SelectItem><SelectItem value="CO2">CO2</SelectItem><SelectItem value="AP">Água Pressurizada</SelectItem><SelectItem value="Espuma">Espuma</SelectItem></SelectContent>
               </Select>
@@ -280,7 +279,7 @@ function ExtintoresTab({ companyId }: { companyId: number }) {
             <div><Label>Teste Hidrostático</Label><Input type="date" value={form.dataTesteHidrostatico} onChange={e => setForm({ ...form, dataTesteHidrostatico: e.target.value })} /></div>
             <div><Label>Validade Teste</Label><Input type="date" value={form.validadeTesteHidrostatico} onChange={e => setForm({ ...form, validadeTesteHidrostatico: e.target.value })} /></div>
             <div><Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <Select value={form.status || "none"} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="OK">OK</SelectItem><SelectItem value="Vencido">Vencido</SelectItem><SelectItem value="Manutencao">Manutenção</SelectItem></SelectContent>
               </Select>
@@ -350,13 +349,13 @@ function HidrantesTab({ companyId }: { companyId: number }) {
             <div><Label>Número</Label><Input value={form.numero} onChange={e => setForm({ ...form, numero: e.target.value })} placeholder="Ex: HID-001" /></div>
             <div><Label>Localização</Label><Input value={form.localizacao} onChange={e => setForm({ ...form, localizacao: e.target.value })} /></div>
             <div><Label>Tipo</Label>
-              <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
+              <Select value={form.tipo || "none"} onValueChange={v => setForm({ ...form, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="Coluna">Coluna</SelectItem><SelectItem value="Parede">Parede</SelectItem><SelectItem value="Subterraneo">Subterrâneo</SelectItem></SelectContent>
               </Select>
             </div>
             <div><Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <Select value={form.status || "none"} onValueChange={v => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="OK">OK</SelectItem><SelectItem value="Manutencao">Manutenção</SelectItem><SelectItem value="Inativo">Inativo</SelectItem></SelectContent>
               </Select>

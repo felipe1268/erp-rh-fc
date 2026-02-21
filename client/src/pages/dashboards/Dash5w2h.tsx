@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Bar, Doughnut } from "react-chartjs-2";
 import "@/components/ChartSetup";
 import { CHART_COLORS, MONTHS_PT, defaultBarOptions, defaultDoughnutOptions } from "@/components/ChartSetup";
@@ -7,7 +8,8 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, ListChecks } from "lucide-react";
 
 export default function Dash5w2h() {
-  const [companyId, setCompanyId] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId;
   const [year, setYear] = useState(new Date().getFullYear());
   const cid = companyId ? Number(companyId) : 0;
   const { data, isLoading } = trpc.dashboards.planos5w2h.useQuery(
@@ -46,7 +48,7 @@ export default function Dash5w2h() {
           <ListChecks className="h-6 w-6 text-indigo-500" />
           <h1 className="text-2xl font-bold">Dashboard 5W2H</h1>
         </div>
-        <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} selectedYear={year} setSelectedYear={setYear} />
+        <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} selectedYear={year} setSelectedYear={setYear} />
         <EmptyDashboard />
       </div>
     );
@@ -63,7 +65,7 @@ export default function Dash5w2h() {
         <ListChecks className="h-6 w-6 text-indigo-500" />
         <h1 className="text-2xl font-bold">Dashboard 5W2H</h1>
       </div>
-      <DashboardFilters selectedCompany={companyId} setSelectedCompany={setCompanyId} selectedYear={year} setSelectedYear={setYear} />
+      <DashboardFilters selectedCompany={companyId} setSelectedCompany={() => {}} selectedYear={year} setSelectedYear={setYear} />
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>

@@ -8,13 +8,12 @@ import { trpc } from "@/lib/trpc";
 import { FolderOpen, Search, GraduationCap, Stethoscope, HardHat, ShieldCheck, AlertTriangle, Plus } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function ControleDocumentos() {
-  const companiesQ = trpc.companies.list.useQuery();
-  const companies = companiesQ.data ?? [];
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
-  const companyId = selectedCompanyId ?? companies[0]?.id ?? 0;
-  const [search, setSearch] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+const [search, setSearch] = useState("");
 
   const trainingsQ = trpc.sst.trainings.list.useQuery({ companyId }, { enabled: !!companyId });
   const asosQ = trpc.sst.asos.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -54,16 +53,7 @@ export default function ControleDocumentos() {
             <p className="text-muted-foreground text-sm">Treinamentos, Exames (ASOs), EPIs e documentação SST</p>
           </div>
           <div className="flex items-center gap-3">
-            {companies.length > 1 && (
-              <Select value={String(companyId)} onValueChange={v => setSelectedCompanyId(Number(v))}>
-                <SelectTrigger className="w-[260px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {companies.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            
           </div>
         </div>
 

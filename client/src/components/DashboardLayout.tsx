@@ -35,6 +35,8 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const menuSections = [
   {
@@ -338,22 +340,39 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        {isMobile ? (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <CompanyHeader isMobile={isMobile} activeLabel={activeMenuItem?.label ?? "Menu"} />
         <main className="flex-1 p-6">{children}</main>
       </SidebarInset>
     </>
+  );
+}
+
+function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLabel: string }) {
+  const { selectedCompanyId, setSelectedCompanyId, companies } = useCompany();
+
+  return (
+    <div className="flex border-b h-14 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+      <div className="flex items-center gap-2">
+        {isMobile ? <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" /> : null}
+        <span className="tracking-tight text-foreground font-medium text-sm">
+          {activeLabel}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-muted-foreground" />
+        <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+          <SelectTrigger className="w-64 bg-card border-border h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {companies?.map((c: any) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.nomeFantasia || c.razaoSocial}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
   );
 }

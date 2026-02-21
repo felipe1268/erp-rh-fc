@@ -10,28 +10,15 @@ import { trpc } from "@/lib/trpc";
 import { Plus, Search, Pencil, Trash2, Layers } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
-import { useDefaultCompany } from "@/hooks/useDefaultCompany";
+import { useCompany } from "@/contexts/CompanyContext";
 
 type SetorForm = { nome: string; descricao: string };
 const emptyForm: SetorForm = { nome: "", descricao: "" };
 
 export default function Setores() {
-  const companiesQ = trpc.companies.list.useQuery();
-  const companies = companiesQ.data ?? [];
-  const { defaultCompanyId } = useDefaultCompany();
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!selectedCompanyId && companies.length > 0) {
-      const defId = defaultCompanyId ? Number(defaultCompanyId) : null;
-      const match = companies.find((c: any) => c.id === defId);
-      setSelectedCompanyId(match ? defId : companies[0].id);
-    }
-  }, [companies, defaultCompanyId, selectedCompanyId]);
-
-  const companyId = selectedCompanyId ?? companies[0]?.id ?? 0;
-
-  const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyId });
   const setores = setoresQ.data ?? [];
 
   const createMut = trpc.sectors.create.useMutation({ onSuccess: () => { setoresQ.refetch(); setDialogOpen(false); toast.success("Setor criado com sucesso!"); } });
@@ -80,16 +67,7 @@ export default function Setores() {
             <p className="text-muted-foreground text-sm">Cadastro e gestão de setores</p>
           </div>
           <div className="flex items-center gap-3">
-            {companies.length > 1 && (
-              <Select value={String(companyId)} onValueChange={v => setSelectedCompanyId(Number(v))}>
-                <SelectTrigger className="w-[260px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {companies.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+
             <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
               <Plus className="h-4 w-4 mr-2" /> Novo Setor
             </Button>
