@@ -1213,8 +1213,13 @@ export const fechamentoPontoRouter = router({
         obraId: timeRecords.obraId,
         obraNome: obras.nome,
         entrada1: timeRecords.entrada1,
+        saida1: timeRecords.saida1,
+        entrada2: timeRecords.entrada2,
         saida2: timeRecords.saida2,
+        entrada3: timeRecords.entrada3,
+        saida3: timeRecords.saida3,
         horasTrabalhadas: timeRecords.horasTrabalhadas,
+        ajusteManual: timeRecords.ajusteManual,
       })
         .from(timeRecords)
         .leftJoin(employees, eq(timeRecords.employeeId, employees.id))
@@ -1223,37 +1228,68 @@ export const fechamentoPontoRouter = router({
         .orderBy(sql`${timeRecords.employeeId} ASC, ${timeRecords.data} ASC`);
 
       // Group by employee+date and find conflicts
-      const byEmpDate: Record<string, Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null; entrada1: string | null; saida2: string | null }>> = {};
+      const byEmpDate: Record<string, Array<typeof recs[0]>> = {};
       const empNames: Record<number, string> = {};
       for (const r of recs) {
         const key = `${r.employeeId}|${r.data}`;
         if (!byEmpDate[key]) byEmpDate[key] = [];
-        byEmpDate[key].push({ obraId: r.obraId, obraNome: r.obraNome, horasTrabalhadas: r.horasTrabalhadas, entrada1: r.entrada1, saida2: r.saida2 });
+        byEmpDate[key].push(r);
         if (r.employeeName) empNames[r.employeeId] = r.employeeName;
       }
+
+      // Função para verificar sobreposição de horários entre obras
+      const parseTimeMin = (t: string | null) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+      const checkOverlap = (entries: typeof recs) => {
+        const intervalos: { obraId: number | null; inicio: number; fim: number }[] = [];
+        for (const r of entries) {
+          if (r.entrada1 && r.saida1) intervalos.push({ obraId: r.obraId, inicio: parseTimeMin(r.entrada1), fim: parseTimeMin(r.saida1) });
+          if (r.entrada2 && r.saida2) intervalos.push({ obraId: r.obraId, inicio: parseTimeMin(r.entrada2), fim: parseTimeMin(r.saida2) });
+          if (r.entrada3 && r.saida3) intervalos.push({ obraId: r.obraId, inicio: parseTimeMin(r.entrada3), fim: parseTimeMin(r.saida3) });
+        }
+        for (let i = 0; i < intervalos.length; i++) {
+          for (let j = i + 1; j < intervalos.length; j++) {
+            const a = intervalos[i], b = intervalos[j];
+            if (a.obraId !== b.obraId && a.inicio < b.fim && b.inicio < a.fim) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
 
       const conflitos: Array<{
         employeeId: number;
         employeeName: string;
         data: string;
+        hasOverlap: boolean;
         obras: Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null }>;
+        records: Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null; entrada1: string | null; saida1: string | null; entrada2: string | null; saida2: string | null; entrada3: string | null; saida3: string | null; ajusteManual: number | null }>;
       }> = [];
 
       for (const [key, entries] of Object.entries(byEmpDate)) {
         if (entries.length > 1) {
-          // Multiple obras on same day = conflict
           const obraIds = new Set(entries.map(e => e.obraId));
           if (obraIds.size > 1) {
             const [empId, data] = key.split('|');
+            const overlap = checkOverlap(entries);
             conflitos.push({
               employeeId: Number(empId),
               employeeName: empNames[Number(empId)] || 'Desconhecido',
               data,
-              obras: entries,
+              hasOverlap: overlap,
+              obras: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas })),
+              records: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas, entrada1: e.entrada1, saida1: e.saida1, entrada2: e.entrada2, saida2: e.saida2, entrada3: e.entrada3, saida3: e.saida3, ajusteManual: e.ajusteManual })),
             });
           }
         }
       }
+
+      // Ordenar: sobreposições primeiro (precisam resolução manual)
+      conflitos.sort((a, b) => (b.hasOverlap ? 1 : 0) - (a.hasOverlap ? 1 : 0));
 
       return conflitos;
     }),
@@ -1410,15 +1446,74 @@ export const fechamentoPontoRouter = router({
       }
 
       if (input.acao === "confirmar_deslocamento") {
-        // Marcar todos os registros deste dia com justificativa de deslocamento confirmado
-        await db.update(timeRecords)
-          .set({ justificativa: `[Deslocamento confirmado por ${resolvidoPor}] ${input.justificativa || "Deslocamento real entre obras"}` })
-          .where(and(
-            eq(timeRecords.companyId, input.companyId),
-            eq(timeRecords.employeeId, input.employeeId),
-            eq(timeRecords.data, input.data),
-          ));
-        return { success: true, message: `Deslocamento entre obras confirmado e registrado.` };
+        // Buscar todos os registros deste dia para este funcionário
+        const registros = await db.select().from(timeRecords).where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.employeeId, input.employeeId),
+          eq(timeRecords.data, input.data),
+        ));
+
+        const parseTime = (t: string | null) => {
+          if (!t) return 0;
+          const [h, m] = t.split(':').map(Number);
+          return (h || 0) * 60 + (m || 0);
+        };
+
+        // Extrair todos os intervalos de cada registro para verificar sobreposição
+        const intervalos: { recId: number; obraId: number | null; inicio: number; fim: number }[] = [];
+        for (const r of registros) {
+          if (r.entrada1 && r.saida1) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada1), fim: parseTime(r.saida1) });
+          if (r.entrada2 && r.saida2) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada2), fim: parseTime(r.saida2) });
+          if (r.entrada3 && r.saida3) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada3), fim: parseTime(r.saida3) });
+        }
+
+        // Verificar sobreposição entre obras DIFERENTES
+        for (let i = 0; i < intervalos.length; i++) {
+          for (let j = i + 1; j < intervalos.length; j++) {
+            const a = intervalos[i], b = intervalos[j];
+            if (a.obraId !== b.obraId) {
+              // Sobreposição: inicio_A < fim_B E inicio_B < fim_A
+              if (a.inicio < b.fim && b.inicio < a.fim) {
+                throw new TRPCError({ 
+                  code: 'BAD_REQUEST', 
+                  message: `Horários sobrepostos entre obras! O funcionário não pode estar em duas obras ao mesmo tempo. Resolva manualmente escolhendo qual obra manter.` 
+                });
+              }
+            }
+          }
+        }
+
+        // Sem sobreposição — deslocamento real válido. Calcular rateio proporcional.
+        const calcMinutes = (rec: typeof registros[0]) => {
+          let mins = 0;
+          if (rec.entrada1 && rec.saida1) mins += parseTime(rec.saida1) - parseTime(rec.entrada1);
+          if (rec.entrada2 && rec.saida2) mins += parseTime(rec.saida2) - parseTime(rec.entrada2);
+          if (rec.entrada3 && rec.saida3) mins += parseTime(rec.saida3) - parseTime(rec.entrada3);
+          return Math.max(mins, 0);
+        };
+
+        const obrasMinutos = registros.map(r => ({ id: r.id, obraId: r.obraId, minutos: calcMinutes(r) }));
+        const totalMinutos = obrasMinutos.reduce((s, o) => s + o.minutos, 0);
+        const totalHorasStr = totalMinutos > 0 
+          ? `${Math.floor(totalMinutos / 60).toString().padStart(2, '0')}:${(totalMinutos % 60).toString().padStart(2, '0')}`
+          : '00:00';
+
+        for (const obra of obrasMinutos) {
+          const proporcao = totalMinutos > 0 ? ((obra.minutos / totalMinutos) * 100).toFixed(1) : '0';
+          const horasStr = `${Math.floor(obra.minutos / 60).toString().padStart(2, '0')}:${(obra.minutos % 60).toString().padStart(2, '0')}`;
+          await db.update(timeRecords)
+            .set({ 
+              justificativa: `[Deslocamento confirmado por ${resolvidoPor}] ${input.justificativa || "Deslocamento real entre obras"} | Rateio: ${horasStr} (${proporcao}%)`,
+              horasTrabalhadas: horasStr,
+            })
+            .where(eq(timeRecords.id, obra.id));
+        }
+
+        return { 
+          success: true, 
+          message: `Deslocamento entre obras confirmado com rateio proporcional. ${obrasMinutos.length} registros atualizados. Total: ${totalHorasStr}.`,
+          rateio: obrasMinutos.map(o => ({ obraId: o.obraId, minutos: o.minutos, proporcao: totalMinutos > 0 ? ((o.minutos / totalMinutos) * 100).toFixed(1) : '0' })),
+        };
       }
 
       if (input.acao === "excluir_registro" && input.obraIdExcluir) {
@@ -1605,18 +1700,79 @@ export const fechamentoPontoRouter = router({
 
       const conflitos = Object.values(grouped).filter(g => g.count > 1);
       let resolved = 0;
+      const skippedOverlaps: { employeeId: number; data: string; employeeName?: string }[] = [];
+
+      const parseTime = (t: string | null) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+
+      // Função para verificar sobreposição de horários entre obras
+      const hasOverlap = (registros: any[]) => {
+        const intervalos: { obraId: number | null; inicio: number; fim: number }[] = [];
+        for (const r of registros) {
+          if (r.entrada1 && r.saida1) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada1), fim: parseTime(r.saida1) });
+          if (r.entrada2 && r.saida2) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada2), fim: parseTime(r.saida2) });
+          if (r.entrada3 && r.saida3) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada3), fim: parseTime(r.saida3) });
+        }
+        for (let i = 0; i < intervalos.length; i++) {
+          for (let j = i + 1; j < intervalos.length; j++) {
+            const a = intervalos[i], b = intervalos[j];
+            if (a.obraId !== b.obraId && a.inicio < b.fim && b.inicio < a.fim) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
 
       for (const c of conflitos) {
-        await db.update(timeRecords)
-          .set({ justificativa: `[Deslocamento confirmado em lote por ${resolvidoPor}] ${input.justificativa || "Deslocamento real entre obras"}` })
-          .where(and(
-            eq(timeRecords.companyId, input.companyId),
-            eq(timeRecords.employeeId, c.employeeId),
-            eq(timeRecords.data, c.data!),
-          ));
+        // Buscar registros completos
+        const registros = await db.select().from(timeRecords).where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.employeeId, c.employeeId),
+          eq(timeRecords.data, c.data!),
+        ));
+
+        // Verificar sobreposição — se houver, PULAR e exigir resolução manual
+        if (hasOverlap(registros)) {
+          // Buscar nome do funcionário para a mensagem
+          const emp = await db.select({ nomeCompleto: employees.nomeCompleto }).from(employees).where(eq(employees.id, c.employeeId)).limit(1);
+          skippedOverlaps.push({ employeeId: c.employeeId, data: c.data, employeeName: emp[0]?.nomeCompleto || `ID ${c.employeeId}` });
+          continue;
+        }
+
+        // Sem sobreposição — deslocamento real válido, calcular rateio proporcional
+        const obrasMinutos = registros.map(r => {
+          let mins = 0;
+          if (r.entrada1 && r.saida1) mins += parseTime(r.saida1) - parseTime(r.entrada1);
+          if (r.entrada2 && r.saida2) mins += parseTime(r.saida2) - parseTime(r.entrada2);
+          if (r.entrada3 && r.saida3) mins += parseTime(r.saida3) - parseTime(r.entrada3);
+          return { id: r.id, minutos: Math.max(mins, 0) };
+        });
+        const totalMinutos = obrasMinutos.reduce((s, o) => s + o.minutos, 0);
+
+        for (const obra of obrasMinutos) {
+          const proporcao = totalMinutos > 0 ? ((obra.minutos / totalMinutos) * 100).toFixed(1) : '0';
+          const horasStr = `${Math.floor(obra.minutos / 60).toString().padStart(2, '0')}:${(obra.minutos % 60).toString().padStart(2, '0')}`;
+          await db.update(timeRecords)
+            .set({ 
+              justificativa: `[Deslocamento confirmado em lote por ${resolvidoPor}] ${input.justificativa || "Deslocamento real entre obras"} | Rateio: ${horasStr} (${proporcao}%)`,
+              horasTrabalhadas: horasStr,
+            })
+            .where(eq(timeRecords.id, obra.id));
+        }
         resolved++;
       }
 
-      return { success: true, resolved };
+      return { 
+        success: true, 
+        resolved, 
+        skippedOverlaps,
+        message: skippedOverlaps.length > 0 
+          ? `${resolved} conflito(s) resolvido(s) com rateio proporcional. ${skippedOverlaps.length} conflito(s) com SOBREPOSIÇÃO DE HORÁRIOS precisam ser resolvidos manualmente (o funcionário não pode estar em 2 obras ao mesmo tempo).`
+          : `${resolved} conflito(s) resolvido(s) com rateio proporcional.`
+      };
     }),
 });

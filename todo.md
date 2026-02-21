@@ -828,3 +828,57 @@
 - [x] Frontend: campo read-only para usuários normais, editável apenas por ADM Master com ícone Lock
 - [x] Migração: gerar códigos JFC001-JFC132 para todos os 132 funcionários existentes
 - [x] Teste visual: campo JFC002 aparecendo corretamente na edição do funcionário ACACIO LESCURA DE CAMARGO
+
+## REVISÃO_22: Melhorias Massivas na Folha de Pagamento
+### Layout e UX
+- [ ] Redesenhar layout da tela de detalhes da folha - mais agradável e responsivo
+- [ ] Adicionar coluna "Função" de cada colaborador na listagem
+- [ ] Filtros avançados de inconsistências (por tipo, por status, por obra)
+- [ ] Verificação dinâmica: ao atualizar dados, re-verificar se inconsistências persistem
+
+### Custos por Obra
+- [ ] Separar custos do funcionário por obra (baseado no controle de ponto)
+- [ ] Filtro por obra na folha de pagamento (como no controle de ponto)
+- [ ] Alocar custo de mão de obra no projeto correto (vale e pagamento)
+
+### Horas Extras
+- [ ] Separar valores de horas extras de cada funcionário
+- [ ] Ranking de obra que mais faz horas extras por período (dia, semana, mês, trimestre, semestre, ano)
+- [ ] Relatório de horas extras por funcionário e por obra
+
+### Complemento Salarial (Pagamento por Fora)
+- [ ] Schema: campos recebeComplemento (boolean) e valorComplemento (decimal) no cadastro do funcionário
+- [ ] Frontend: botão/toggle no cadastro perguntando se recebe complemento
+- [ ] Se sim, habilitar aba/campo para digitar o valor do complemento
+- [ ] Somar complemento ao valor da contabilidade na folha
+
+### Acordo Individual de Horas Extras
+- [ ] Schema: campos acordoHoraExtra (boolean) e configuração de % por tipo de HE
+- [ ] Frontend: botão/toggle no cadastro perguntando se tem acordo de HE
+- [ ] Se sim, abrir janela para configurar critérios (% de acréscimo customizado)
+- [ ] Valores padrão CLT congelados: HE 50%, HE 100%, Noturno 20%, etc.
+- [ ] Se acordo marcado, liberar edição dos % para zerar ou reduzir
+- [ ] Aplicar percentuais customizados no cálculo de horas extras do funcionário
+
+## REVISÃO_23: Bloqueio de Consolidação + Resolução em Lote (Múltiplas Obras e Conflitos)
+- [ ] Backend: bloquear consolidação se houver inconsistências pendentes, múltiplas obras ou conflitos não resolvidos
+- [ ] Backend: rota para resolver todas as múltiplas obras de uma vez
+- [ ] Backend: rota para resolver todos os conflitos de obra de uma vez
+- [ ] Frontend: botão "Resolver Todas" na seção de Múltiplas Obras
+- [ ] Frontend: botão "Resolver Todos" na seção de Conflitos de Obra/Dia
+- [ ] Frontend: bloqueio visual do botão Consolidar com mensagem explicativa das pendências
+- [ ] Frontend: seleção múltipla para resolver várias de uma vez
+
+## REVISÃO_23: Correções Críticas Fechamento de Ponto + Folha
+- [x] Fix: Total Líquido do Pagamento mostra R$ 0,00 (parser com fallback para Líquido standalone)
+- [x] Fix: Botão "Confirmar Deslocamento Real" funciona corretamente (com validação de sobreposição)
+- [ ] Implementar rateio proporcional por tempo em cada obra ao confirmar deslocamento real
+- [ ] Botão "Resolver Todas" na seção de Múltiplas Obras (resolver em lote)
+- [ ] Botão "Resolver Todos" na seção de Conflitos de Obra (resolver em lote)
+- [ ] Bloqueio de consolidação se houver inconsistências pendentes, múltiplas obras ou conflitos não resolvidos
+
+## Fase 23: Validação de Sobreposição de Horários em Conflitos de Obra
+- [x] Validação de sobreposição de horários: barrar "Confirmar Deslocamento" quando horários se sobrepõem entre obras
+- [x] Resolução em lote (resolveAllConflitos) deve pular conflitos com sobreposição e retornar lista dos que precisam resolução manual
+- [x] Frontend: exibir erro claro quando há sobreposição, indicar que o usuário deve escolher manualmente qual obra manter
+- [x] Frontend: diferenciar visualmente conflitos com sobreposição (vermelho) vs deslocamento real válido (verde)

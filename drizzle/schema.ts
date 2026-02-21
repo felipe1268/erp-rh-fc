@@ -331,6 +331,18 @@ export const employees = mysqlTable("employees", {
 	obraAtualId: int(),
 	codigoContabil: varchar({ length: 20 }),
 	codigoInterno: varchar({ length: 10 }),
+	// Complemento salarial (pagamento por fora)
+	recebeComplemento: tinyint().default(0).notNull(),
+	valorComplemento: varchar({ length: 20 }),
+	descricaoComplemento: varchar({ length: 255 }),
+	// Acordo individual de horas extras
+	acordoHoraExtra: tinyint().default(0).notNull(),
+	heNormal50: varchar({ length: 10 }).default('50'),
+	heNoturna: varchar({ length: 10 }).default('20'),
+	he100: varchar({ length: 10 }).default('100'),
+	heFeriado: varchar({ length: 10 }).default('100'),
+	heInterjornada: varchar({ length: 10 }).default('50'),
+	obsAcordoHe: text(),
 });
 
 export const epiDeliveries = mysqlTable("epi_deliveries", {

@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
-  timeRecords, pontoConsolidacao
+  timeRecords, pontoConsolidacao, obras
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -197,16 +197,28 @@ function parseAnaliticoPDF(text: string): Array<{
     }
 
     // Folha line with bases and Líquido
-    // Pattern: "Folha  0,00  0,00  0,00  0,00  baseIrrf  irrf  Líquido ->  valor"
-    const folhaMatch = trimmed.match(/Folha\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+L[ií]quido\s*-?\s*>\s*([\d.,]+)/);
+    // Adiantamento: Folha + 6 nums + Líquido -> valor (baseInss, valorInss, baseFgts, valorFgts, baseIrrf, valorIrrf)
+    // Pagamento: Folha + 7 nums + Líquido -> valor (baseInss, valorInss, baseFgts, valorFgts, baseIrrf, valorIrrf, extra)
+    const folhaMatch = trimmed.match(/Folha\s+([\d.,]+(?:\s+[\d.,]+)*)\s+L[ií]quido\s*-?\s*>\s*([\d.,]+)/);
     if (folhaMatch) {
-      current.baseInss = folhaMatch[1];
-      current.valorInss = folhaMatch[2];
-      current.baseFgts = folhaMatch[3];
-      current.valorFgts = folhaMatch[4];
-      current.baseIrrf = folhaMatch[5];
-      current.valorIrrf = folhaMatch[6];
-      current.liquido = folhaMatch[7];
+      const nums = folhaMatch[1].trim().split(/\s+/);
+      // Last number before Líquido varies: 6 nums (adiantamento) or 7 nums (pagamento)
+      if (nums.length >= 6) {
+        current.baseInss = nums[0];
+        current.valorInss = nums[1];
+        current.baseFgts = nums[2];
+        current.valorFgts = nums[3];
+        current.baseIrrf = nums[nums.length - 2];
+        current.valorIrrf = nums[nums.length - 1];
+      }
+      current.liquido = folhaMatch[2];
+      continue;
+    }
+
+    // Fallback: Líquido standalone (sem "Folha" antes) — ex: "Líquido -> 1.234,56" ou "Líquido  1.234,56"
+    const liquidoStandalone = trimmed.match(/L[ií]quido\s*[-=]?\s*>?\s*([\d.,]+)/);
+    if (liquidoStandalone && current.liquido === "0") {
+      current.liquido = liquidoStandalone[1];
       continue;
     }
 
@@ -563,7 +575,257 @@ export const folhaPagamentoRouter = router({
     }),
 
   // ============================================================
-  // IMPORTAR FOLHA (upload de PDF + parse + match)
+  // IMPORTAR FOLHA AUTO (múltiplos PDFs com detecção automática)
+  // Usuário só escolhe Vale ou Pagamento, o sistema detecta o tipo
+  // ============================================================
+  importarFolhaAuto: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
+      tipoLancamento: z.enum(["vale", "pagamento"]),
+      arquivos: z.array(z.object({
+        fileName: z.string(),
+        fileBase64: z.string(),
+        mimeType: z.string(),
+      })).min(1).max(5),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+
+      // Get all employees for matching
+      const allEmployees = await db.select().from(employees)
+        .where(eq(employees.companyId, input.companyId));
+
+      // Find or create lancamento for this month/type
+      let lancamento = await db.select().from(folhaLancamentos)
+        .where(and(
+          eq(folhaLancamentos.companyId, input.companyId),
+          eq(folhaLancamentos.mesReferencia, input.mesReferencia),
+          eq(folhaLancamentos.tipoLancamento, input.tipoLancamento),
+        ))
+        .then((r: any[]) => r[0]);
+
+      if (!lancamento) {
+        const [newLanc] = await db.insert(folhaLancamentos).values({
+          companyId: input.companyId,
+          mesReferencia: input.mesReferencia,
+          tipoLancamento: input.tipoLancamento,
+          status: "importado",
+          importadoPor: ctx.user?.name || "Sistema",
+          importadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
+        });
+        lancamento = { id: Number((newLanc as any).insertId) };
+      }
+      const lancamentoId = lancamento.id;
+
+      // Process each file
+      let analiticoData: any[] = [];
+      let sinteticoData: any[] = [];
+      const uploadIds: number[] = [];
+      const processedFiles: Array<{ fileName: string; tipo: string; registros: number }> = [];
+
+      for (const arquivo of input.arquivos) {
+        const buffer = Buffer.from(arquivo.fileBase64, "base64");
+
+        // Upload to S3
+        const randomSuffix = Math.random().toString(36).substring(2, 10);
+        const fileKey = `folha/${input.companyId}/${input.mesReferencia}/${input.tipoLancamento}-${randomSuffix}-${arquivo.fileName}`;
+        const { url } = await storagePut(fileKey, buffer, arquivo.mimeType);
+
+        // Extract text
+        const text = extractTextFromPDF(buffer);
+
+        // AUTO-DETECT: Analítico tem "Admissão em" e "Salário base", Sintético tem "Relação de líquido"
+        const isAnalitico = text.includes("Admiss\u00e3o em") || text.includes("Admissao em") || text.includes("Sal\u00e1rio base") || text.includes("Salario base") || text.includes("Espelho e resumo");
+        const isSintetico = text.includes("Rela\u00e7\u00e3o de l\u00edquido") || text.includes("Relacao de liquido") || text.includes("Rela\u00e7\u00e3o de Liquido");
+
+        const tipoDetectado = isAnalitico ? "analitico" : isSintetico ? "sintetico" : "desconhecido";
+
+        // If we can't detect, try parsing both and see which yields results
+        let finalTipo = tipoDetectado;
+        if (tipoDetectado === "desconhecido") {
+          const tryAnalitico = parseAnaliticoPDF(text);
+          const trySintetico = parseSinteticoPDF(text);
+          if (tryAnalitico.length > trySintetico.length) finalTipo = "analitico";
+          else if (trySintetico.length > 0) finalTipo = "sintetico";
+          else finalTipo = "analitico"; // default
+        }
+
+        const categoryMap: Record<string, any> = {
+          "vale-analitico": "espelho_adiantamento_analitico",
+          "vale-sintetico": "adiantamento_sintetico",
+          "pagamento-analitico": "espelho_folha_analitico",
+          "pagamento-sintetico": "folha_sintetico",
+        };
+
+        const [uploadRecord] = await db.insert(payrollUploads).values({
+          companyId: input.companyId,
+          category: categoryMap[`${input.tipoLancamento}-${finalTipo}`] || "espelho_adiantamento_analitico",
+          month: input.mesReferencia,
+          fileName: arquivo.fileName,
+          fileUrl: url,
+          fileKey: fileKey,
+          fileSize: buffer.length,
+          mimeType: arquivo.mimeType,
+          uploadStatus: "processado",
+        });
+        const upId = Number((uploadRecord as any).insertId);
+        uploadIds.push(upId);
+
+        if (finalTipo === "analitico") {
+          const parsed = parseAnaliticoPDF(text);
+          analiticoData = parsed;
+          processedFiles.push({ fileName: arquivo.fileName, tipo: "Anal\u00edtico (Espelho)", registros: parsed.length });
+          // Link upload
+          await db.update(folhaLancamentos)
+            .set({ analiticoUploadId: upId })
+            .where(eq(folhaLancamentos.id, lancamentoId));
+        } else {
+          const parsed = parseSinteticoPDF(text);
+          sinteticoData = parsed;
+          processedFiles.push({ fileName: arquivo.fileName, tipo: "Sint\u00e9tico (Lista)", registros: parsed.length });
+          // Link upload
+          await db.update(folhaLancamentos)
+            .set({ sinteticoUploadId: upId })
+            .where(eq(folhaLancamentos.id, lancamentoId));
+        }
+
+        // Update upload record
+        await db.update(payrollUploads)
+          .set({ uploadStatus: "processado", recordsProcessed: finalTipo === "analitico" ? analiticoData.length : sinteticoData.length })
+          .where(eq(payrollUploads.id, upId));
+      }
+
+      // Process analítico data (main data source)
+      let matchResult: any = { matched: 0, unmatched: 0, divergentes: 0, codigosAtualizados: 0 };
+      let totalFuncionarios = 0;
+
+      if (analiticoData.length > 0) {
+        // Delete existing itens for this lancamento (re-import)
+        await db.delete(folhaItens)
+          .where(eq(folhaItens.folhaLancamentoId, lancamentoId));
+
+        // Create itens from analítico
+        const itensToInsert = analiticoData.map(p => {
+          // Try to find funcao from sintético data
+          const sinteticoMatch = sinteticoData.find(s => s.codigo === p.codigo || normalizeNome(s.nome) === normalizeNome(p.nome));
+          return {
+            folhaLancamentoId: lancamentoId,
+            companyId: input.companyId,
+            codigoContabil: p.codigo,
+            nomeColaborador: p.nome,
+            dataAdmissao: p.dataAdmissao ? p.dataAdmissao.split("/").reverse().join("-") : null,
+            salarioBase: p.salarioBase,
+            horasMensais: p.horasMensais,
+            funcao: sinteticoMatch?.funcao || "",
+            sf: p.sf,
+            ir: p.ir,
+            proventos: JSON.stringify(p.proventos),
+            descontos: JSON.stringify(p.descontos),
+            totalProventos: p.totalProventos,
+            totalDescontos: p.totalDescontos,
+            baseInss: p.baseInss,
+            valorInss: p.valorInss,
+            baseFgts: p.baseFgts,
+            valorFgts: p.valorFgts,
+            baseIrrf: p.baseIrrf,
+            valorIrrf: p.valorIrrf,
+            liquido: p.liquido,
+            matchStatus: "unmatched" as const,
+          };
+        });
+
+        matchResult = await matchItensComCadastro(db, input.companyId, itensToInsert, allEmployees, true);
+
+        for (const item of itensToInsert) {
+          await db.insert(folhaItens).values(item as any);
+        }
+
+        const totalLiquido = analiticoData.reduce((s, p) => s + parseBRL(p.liquido), 0);
+        const totalProventos = analiticoData.reduce((s, p) => s + parseBRL(p.totalProventos), 0);
+        const totalDescontos = analiticoData.reduce((s, p) => s + parseBRL(p.totalDescontos), 0);
+        totalFuncionarios = analiticoData.length;
+
+        await db.update(folhaLancamentos).set({
+          totalFuncionarios,
+          totalProventos: formatBRL(totalProventos),
+          totalDescontos: formatBRL(totalDescontos),
+          totalLiquido: formatBRL(totalLiquido),
+          totalDivergencias: matchResult.unmatched + matchResult.divergentes,
+        }).where(eq(folhaLancamentos.id, lancamentoId));
+
+      } else if (sinteticoData.length > 0) {
+        // Only sintético uploaded - create basic itens
+        await db.delete(folhaItens)
+          .where(eq(folhaItens.folhaLancamentoId, lancamentoId));
+
+        const itensToInsert = sinteticoData.map(p => ({
+          folhaLancamentoId: lancamentoId,
+          companyId: input.companyId,
+          codigoContabil: p.codigo,
+          nomeColaborador: p.nome,
+          dataAdmissao: p.dataAdmissao ? p.dataAdmissao.split("/").reverse().join("-") : null,
+          funcao: p.funcao,
+          liquido: p.liquido,
+          matchStatus: "unmatched" as const,
+        }));
+
+        matchResult = await matchItensComCadastro(db, input.companyId, itensToInsert, allEmployees, true);
+
+        for (const item of itensToInsert) {
+          await db.insert(folhaItens).values(item as any);
+        }
+
+        const totalLiquido = sinteticoData.reduce((s, p) => s + parseBRL(p.liquido), 0);
+        totalFuncionarios = sinteticoData.length;
+
+        await db.update(folhaLancamentos).set({
+          totalFuncionarios,
+          totalLiquido: formatBRL(totalLiquido),
+          totalDivergencias: matchResult.unmatched + matchResult.divergentes,
+        }).where(eq(folhaLancamentos.id, lancamentoId));
+      }
+
+      // Also update códigos from sintético if we have both
+      if (sinteticoData.length > 0 && analiticoData.length > 0) {
+        for (const p of sinteticoData) {
+          if (!p.codigo) continue;
+          const nomeNorm = normalizeNome(p.nome);
+          const emp = allEmployees.find((e: any) => normalizeNome(e.nomeCompleto) === nomeNorm);
+          if (emp && (!emp.codigoContabil || emp.codigoContabil !== p.codigo)) {
+            await db.update(employees)
+              .set({ codigoContabil: p.codigo })
+              .where(eq(employees.id, emp.id));
+          }
+          // Update funcao in itens
+          await db.update(folhaItens)
+            .set({ funcao: p.funcao })
+            .where(and(
+              eq(folhaItens.folhaLancamentoId, lancamentoId),
+              eq(folhaItens.codigoContabil, p.codigo),
+            ));
+        }
+      }
+
+      return {
+        success: true,
+        lancamentoId,
+        totalFuncionarios,
+        arquivosProcessados: processedFiles,
+        match: {
+          matched: matchResult.matched,
+          unmatched: matchResult.unmatched,
+          divergentes: matchResult.divergentes,
+          codigosAtualizados: matchResult.codigosAtualizados,
+        },
+        unmatchedNames: matchResult.details
+          ?.filter((d: any) => d.matchStatus === "unmatched")
+          .map((d: any) => ({ nome: d.nome, codigo: d.codigo })) || [],
+      };
+    }),
+
+  // ============================================================
+  // IMPORTAR FOLHA (upload de PDF + parse + match) - LEGACY
   // Simplificado: apenas analítico e sintético
   // ============================================================
   importarFolha: protectedProcedure
@@ -1009,6 +1271,240 @@ export const folhaPagamentoRouter = router({
         .set({ codigoContabil: input.codigoContabil })
         .where(eq(employees.id, input.employeeId));
       return { success: true };
+    }),
+
+  // ============================================================
+  // CUSTOS POR OBRA (baseado no ponto)
+  // ============================================================
+  custosPorObra: protectedProcedure
+    .input(z.object({
+      folhaLancamentoId: z.number(),
+      companyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Get folha itens with employee data
+      const itens = await db.select().from(folhaItens)
+        .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
+
+      const empIds = itens.filter(i => i.employeeId).map(i => i.employeeId!);
+      if (empIds.length === 0) return { obrasResumo: [], semObra: [], totalGeral: "0,00" };
+
+      // Get employees
+      const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+      const empMap = new Map(emps.map(e => [e.id, e]));
+
+      // Get time records for the month
+      const pontoRecords = await db.select().from(timeRecords)
+        .where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.mesReferencia, input.mesReferencia),
+          inArray(timeRecords.employeeId, empIds),
+        ));
+
+      // Get all obras
+      const allObras = await db.select().from(obras)
+        .where(eq(obras.companyId, input.companyId));
+      const obraMap = new Map(allObras.map(o => [o.id, o]));
+
+      // Group ponto by employee and obra
+      const empObraHoras = new Map<number, Map<number | null, { horasTrab: number; horasExtras: number; dias: number }>>();
+      for (const rec of pontoRecords) {
+        if (!rec.employeeId) continue;
+        if (!empObraHoras.has(rec.employeeId)) empObraHoras.set(rec.employeeId, new Map());
+        const obraKey = rec.obraId || null;
+        const obraGroup = empObraHoras.get(rec.employeeId)!;
+        const existing = obraGroup.get(obraKey) || { horasTrab: 0, horasExtras: 0, dias: 0 };
+        const horas = rec.horasTrabalhadas ? parseFloat(rec.horasTrabalhadas.replace(":", ".")) : 0;
+        const he = rec.horasExtras ? parseFloat(rec.horasExtras.replace(":", ".")) : 0;
+        existing.horasTrab += horas;
+        existing.horasExtras += he;
+        if (horas > 0) existing.dias++;
+        obraGroup.set(obraKey, existing);
+      }
+
+      // Calculate cost per obra
+      const obraCustos = new Map<number | null, {
+        obraId: number | null;
+        obraNome: string;
+        funcionarios: Array<{ id: number; nome: string; funcao: string; horas: number; horasExtras: number; dias: number; custoEstimado: string; liquido: string }>;
+        totalCusto: number;
+        totalHoras: number;
+        totalHE: number;
+      }>();
+
+      for (const item of itens) {
+        if (!item.employeeId) continue;
+        const emp = empMap.get(item.employeeId);
+        const empObras = empObraHoras.get(item.employeeId);
+        const liquidoVal = parseBRL(item.liquido || "0");
+
+        if (!empObras || empObras.size === 0) {
+          // Sem ponto - alocar em "Sem Obra"
+          const key = null;
+          if (!obraCustos.has(key)) obraCustos.set(key, { obraId: null, obraNome: "Sem Obra Vinculada", funcionarios: [], totalCusto: 0, totalHoras: 0, totalHE: 0 });
+          const grupo = obraCustos.get(key)!;
+          grupo.funcionarios.push({
+            id: item.employeeId,
+            nome: item.nomeColaborador,
+            funcao: emp?.funcao || item.funcao || "",
+            horas: 0, horasExtras: 0, dias: 0,
+            custoEstimado: formatBRL(liquidoVal),
+            liquido: item.liquido || "0,00",
+          });
+          grupo.totalCusto += liquidoVal;
+          continue;
+        }
+
+        // Calculate total hours for proportional allocation
+        let totalHorasEmp = 0;
+        for (const [, data] of Array.from(empObras)) totalHorasEmp += data.horasTrab;
+
+        for (const [obraId, data] of Array.from(empObras)) {
+          const proporcao = totalHorasEmp > 0 ? data.horasTrab / totalHorasEmp : 1;
+          const custoAlocado = liquidoVal * proporcao;
+
+          if (!obraCustos.has(obraId)) {
+            const ob = obraId ? obraMap.get(obraId) : null;
+            obraCustos.set(obraId, {
+              obraId,
+              obraNome: ob ? ob.nome : "Sem Obra Vinculada",
+              funcionarios: [],
+              totalCusto: 0,
+              totalHoras: 0,
+              totalHE: 0,
+            });
+          }
+          const grupo = obraCustos.get(obraId)!;
+          grupo.funcionarios.push({
+            id: item.employeeId,
+            nome: item.nomeColaborador,
+            funcao: emp?.funcao || item.funcao || "",
+            horas: Math.round(data.horasTrab * 10) / 10,
+            horasExtras: Math.round(data.horasExtras * 10) / 10,
+            dias: data.dias,
+            custoEstimado: formatBRL(custoAlocado),
+            liquido: item.liquido || "0,00",
+          });
+          grupo.totalCusto += custoAlocado;
+          grupo.totalHoras += data.horasTrab;
+          grupo.totalHE += data.horasExtras;
+        }
+      }
+
+      const obrasResumo = Array.from(obraCustos.values())
+        .filter(o => o.obraId !== null)
+        .sort((a, b) => b.totalCusto - a.totalCusto)
+        .map(o => ({
+          ...o,
+          totalCusto: formatBRL(o.totalCusto),
+          totalHoras: Math.round(o.totalHoras * 10) / 10,
+          totalHE: Math.round(o.totalHE * 10) / 10,
+        }));
+
+      const semObra = obraCustos.get(null);
+      const totalGeral = formatBRL(Array.from(obraCustos.values()).reduce((s, o) => s + o.totalCusto, 0));
+
+      return {
+        obrasResumo,
+        semObra: semObra ? {
+          ...semObra,
+          totalCusto: formatBRL(semObra.totalCusto),
+          totalHoras: Math.round(semObra.totalHoras * 10) / 10,
+          totalHE: Math.round(semObra.totalHE * 10) / 10,
+        } : null,
+        totalGeral,
+      };
+    }),
+
+  // ============================================================
+  // HORAS EXTRAS POR FUNCIONÁRIO E OBRA
+  // ============================================================
+  horasExtrasPorFuncionario: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      const pontoRecords = await db.select().from(timeRecords)
+        .where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.mesReferencia, input.mesReferencia),
+        ));
+
+      const empIds = Array.from(new Set(pontoRecords.filter(r => r.employeeId).map(r => r.employeeId)));
+      if (empIds.length === 0) return { funcionarios: [], rankingObras: [] };
+
+      const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+      const empMap = new Map(emps.map(e => [e.id, e]));
+
+      const allObras = await db.select().from(obras).where(eq(obras.companyId, input.companyId));
+      const obraMap = new Map(allObras.map(o => [o.id, o]));
+
+      // Group by employee
+      const empHE = new Map<number, { totalHE: number; totalNoturnas: number; detalhePorObra: Map<number | null, number> }>();
+      for (const rec of pontoRecords) {
+        if (!rec.employeeId) continue;
+        if (!empHE.has(rec.employeeId)) empHE.set(rec.employeeId, { totalHE: 0, totalNoturnas: 0, detalhePorObra: new Map() });
+        const data = empHE.get(rec.employeeId)!;
+        const he = rec.horasExtras ? parseFloat(rec.horasExtras.replace(":", ".")) : 0;
+        const hn = rec.horasNoturnas ? parseFloat(rec.horasNoturnas.replace(":", ".")) : 0;
+        data.totalHE += he;
+        data.totalNoturnas += hn;
+        const obraKey = rec.obraId || null;
+        data.detalhePorObra.set(obraKey, (data.detalhePorObra.get(obraKey) || 0) + he);
+      }
+
+      // Build funcionarios list
+      const funcionarios = Array.from(empHE.entries())
+        .filter(([, data]) => data.totalHE > 0)
+        .map(([empId, data]) => {
+          const emp = empMap.get(empId);
+          const porObra = Array.from(data.detalhePorObra.entries())
+            .filter(([, he]) => he > 0)
+            .map(([obraId, he]) => ({
+              obraId,
+              obraNome: obraId ? (obraMap.get(obraId)?.nome || "Obra " + obraId) : "Sem Obra",
+              horasExtras: Math.round(he * 10) / 10,
+            }))
+            .sort((a, b) => b.horasExtras - a.horasExtras);
+
+          return {
+            employeeId: empId,
+            nome: emp?.nomeCompleto || "Desconhecido",
+            funcao: emp?.funcao || "",
+            codigoInterno: emp?.codigoInterno || "",
+            totalHE: Math.round(data.totalHE * 10) / 10,
+            totalNoturnas: Math.round(data.totalNoturnas * 10) / 10,
+            acordoHE: emp?.acordoHoraExtra === 1,
+            porObra,
+          };
+        })
+        .sort((a, b) => b.totalHE - a.totalHE);
+
+      // Ranking de obras por HE
+      const obraHETotal = new Map<number | null, number>();
+      for (const rec of pontoRecords) {
+        const he = rec.horasExtras ? parseFloat(rec.horasExtras.replace(":", ".")) : 0;
+        if (he > 0) {
+          const key = rec.obraId || null;
+          obraHETotal.set(key, (obraHETotal.get(key) || 0) + he);
+        }
+      }
+
+      const rankingObras = Array.from(obraHETotal.entries())
+        .map(([obraId, totalHE]) => ({
+          obraId,
+          obraNome: obraId ? (obraMap.get(obraId)?.nome || "Obra " + obraId) : "Sem Obra",
+          totalHE: Math.round(totalHE * 10) / 10,
+        }))
+        .sort((a, b) => b.totalHE - a.totalHE);
+
+      return { funcionarios, rankingObras };
     }),
 
   // ============================================================

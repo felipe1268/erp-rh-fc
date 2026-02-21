@@ -170,9 +170,13 @@ export default function FechamentoPonto() {
     onError: (err) => toast.error("Erro: " + err.message),
   });
   const resolveAllConflitosMut = trpc.fechamentoPonto.resolveAllConflitos.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       conflitos.refetch(); stats.refetch(); summary.refetch();
-      toast.success(`${data.resolved} conflitos resolvidos como deslocamento confirmado!`);
+      if (data.skippedOverlaps && data.skippedOverlaps.length > 0) {
+        toast.warning(data.message, { duration: 10000 });
+      } else {
+        toast.success(data.message || `${data.resolved} conflitos resolvidos com rateio proporcional!`);
+      }
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
@@ -692,6 +696,7 @@ export default function FechamentoPonto() {
                               <th className="p-2 font-medium">Funcionário</th>
                               <th className="p-2 font-medium">Data</th>
                               <th className="p-2 font-medium">Dia</th>
+                              <th className="p-2 font-medium">Status</th>
                               <th className="p-2 font-medium">Obras em Conflito</th>
                               <th className="p-2 font-medium text-center">Horas</th>
                               <th className="p-2 font-medium text-center">Ações</th>
@@ -699,7 +704,7 @@ export default function FechamentoPonto() {
                           </thead>
                           <tbody>
                             {conflitos.data.map((c: any, idx: number) => (
-                              <tr key={idx} className="border-b last:border-0 hover:bg-orange-50/30">
+                              <tr key={idx} className={`border-b last:border-0 hover:bg-orange-50/30 ${c.hasOverlap ? "border-l-4 border-l-red-500 bg-red-50/20" : "border-l-4 border-l-green-500"}`}>
                                 <td className="p-2">
                                   <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(c.employeeId)}>
                                     {c.employeeName}
@@ -708,9 +713,20 @@ export default function FechamentoPonto() {
                                 <td className="p-2">{c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td>
                                 <td className="p-2 text-muted-foreground">{dayOfWeek(c.data)}</td>
                                 <td className="p-2">
+                                  {c.hasOverlap ? (
+                                    <Badge className="text-xs bg-red-100 text-red-800 border border-red-300">
+                                      <XCircle className="h-3 w-3 mr-1" /> Sobreposição
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="text-xs bg-green-100 text-green-800 border border-green-300">
+                                      <CheckCircle className="h-3 w-3 mr-1" /> Válido
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="p-2">
                                   <div className="flex flex-wrap gap-1">
                                     {c.obras.map((o: any, i: number) => (
-                                      <Badge key={i} variant="outline" className="text-xs border-orange-300 text-orange-700 bg-orange-50">
+                                      <Badge key={i} variant="outline" className={`text-xs ${c.hasOverlap ? "border-red-300 text-red-700 bg-red-50" : "border-green-300 text-green-700 bg-green-50"}`}>
                                         {o.obraNome || "Sem Obra"} ({o.horasTrabalhadas || "0:00"})
                                       </Badge>
                                     ))}
@@ -953,13 +969,28 @@ export default function FechamentoPonto() {
                       <span className="font-medium">{resolvidos.length}</span>
                       <span className="text-muted-foreground">resolvidas</span>
                     </div>
-                    {conflitosList.length > 0 && (
-                      <div className="flex items-center gap-1.5 text-sm">
-                        <div className="h-3 w-3 rounded-full bg-orange-500"></div>
-                        <span className="font-medium">{conflitosList.length}</span>
-                        <span className="text-muted-foreground">conflitos de obra</span>
-                      </div>
-                    )}
+                    {conflitosList.length > 0 && (() => {
+                      const overlaps = conflitosList.filter((c: any) => c.hasOverlap).length;
+                      const valid = conflitosList.length - overlaps;
+                      return (
+                        <>
+                          {overlaps > 0 && (
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <div className="h-3 w-3 rounded-full bg-red-600"></div>
+                              <span className="font-medium text-red-700">{overlaps}</span>
+                              <span className="text-red-600">sobreposições (manual)</span>
+                            </div>
+                          )}
+                          {valid > 0 && (
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                              <span className="font-medium text-green-700">{valid}</span>
+                              <span className="text-green-600">deslocamentos válidos</span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     <div className="ml-auto flex gap-2">
                       {totalPendentes > 0 && !isConsolidado && (
                         <Button size="sm" variant="outline" className="gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50"
@@ -1280,6 +1311,7 @@ export default function FechamentoPonto() {
                           <tr className="border-b text-left bg-muted/30">
                             <th className="p-2 font-medium">Colaborador</th>
                             <th className="p-2 font-medium">Data</th>
+                            <th className="p-2 font-medium">Status</th>
                             <th className="p-2 font-medium">Obras</th>
                             <th className="p-2 font-medium text-center">Registros</th>
                             <th className="p-2 font-medium text-center">Ações</th>
@@ -1289,9 +1321,10 @@ export default function FechamentoPonto() {
                           {conflitosList.map((c: any, idx: number) => {
                             const key = `${c.employeeId}|${c.data}`;
                             const isExpanded = expandedConflict === key;
+                            const isOverlap = c.hasOverlap;
                             return (
                               <React.Fragment key={key}>
-                                <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isExpanded ? "bg-orange-50" : ""}`}
+                                <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isExpanded ? (isOverlap ? "bg-red-50" : "bg-green-50") : ""} ${isOverlap ? "border-l-4 border-l-red-500" : "border-l-4 border-l-green-500"}`}
                                   onClick={() => setExpandedConflict(isExpanded ? null : key)}>
                                   <td className="p-2">
                                     <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(c.employeeId); }}>
@@ -1301,6 +1334,17 @@ export default function FechamentoPonto() {
                                   <td className="p-2">
                                     {c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
                                     <span className="text-muted-foreground ml-1 text-xs">({dayOfWeek(c.data)})</span>
+                                  </td>
+                                  <td className="p-2">
+                                    {isOverlap ? (
+                                      <Badge className="text-xs bg-red-100 text-red-800 border border-red-300">
+                                        <XCircle className="h-3 w-3 mr-1" /> Sobreposição
+                                      </Badge>
+                                    ) : (
+                                      <Badge className="text-xs bg-green-100 text-green-800 border border-green-300">
+                                        <CheckCircle className="h-3 w-3 mr-1" /> Desloc. Válido
+                                      </Badge>
+                                    )}
                                   </td>
                                   <td className="p-2">
                                     <div className="flex flex-wrap gap-1">
@@ -1316,8 +1360,8 @@ export default function FechamentoPonto() {
                                   </td>
                                   <td className="p-2 text-center">
                                     <div className="flex items-center justify-center gap-1">
-                                      {!isConsolidado && (
-                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-orange-700 hover:bg-orange-50"
+                                      {!isConsolidado && !isOverlap && (
+                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-green-700 hover:bg-green-50"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             if (confirm(`Confirmar deslocamento entre obras para ${c.employeeName} em ${c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : c.data}?`)) {
@@ -1327,14 +1371,26 @@ export default function FechamentoPonto() {
                                           <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirmar
                                         </Button>
                                       )}
+                                      {isOverlap && (
+                                        <span className="text-xs text-red-600 font-medium">Resolver manual</span>
+                                      )}
                                       <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                                     </div>
                                   </td>
                                 </tr>
                                 {isExpanded && (
                                   <tr>
-                                    <td colSpan={5} className="p-0">
-                                      <div className="bg-orange-50/50 border-t border-orange-200 p-4">
+                                    <td colSpan={6} className="p-0">
+                                      <div className={`border-t p-4 ${isOverlap ? "bg-red-50/50 border-red-200" : "bg-green-50/50 border-green-200"}`}>
+                                        {isOverlap && (
+                                          <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded-lg flex items-center gap-2">
+                                            <AlertCircle className="h-4 w-4 text-red-700 flex-shrink-0" />
+                                            <p className="text-xs text-red-800 font-medium">
+                                              SOBREPOSIÇÃO DE HORÁRIOS: O funcionário aparece em 2 obras no mesmo período. 
+                                              Escolha manualmente qual obra manter ou exclua o registro incorreto.
+                                            </p>
+                                          </div>
+                                        )}
                                         <table className="w-full text-xs">
                                           <thead>
                                             <tr className="bg-white border-b">
@@ -1362,17 +1418,41 @@ export default function FechamentoPonto() {
                                           </tbody>
                                         </table>
                                         {!isConsolidado && (
-                                          <div className="mt-3 flex gap-2">
-                                            <Button size="sm" className="gap-1.5 text-xs bg-orange-600 hover:bg-orange-700"
-                                              onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Deslocamento confirmado" })}
-                                              disabled={resolveConflitoMut.isPending}>
-                                              <MapPin className="h-3.5 w-3.5" /> Confirmar Deslocamento
-                                            </Button>
-                                            <Button size="sm" variant="outline" className="gap-1.5 text-xs"
-                                              onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Manter obra principal" })}
-                                              disabled={resolveConflitoMut.isPending}>
-                                              <Building2 className="h-3.5 w-3.5" /> Manter Obra Principal
-                                            </Button>
+                                          <div className="mt-3 space-y-2">
+                                            {isOverlap ? (
+                                              <div className="p-3 bg-red-50 border border-red-300 rounded-lg">
+                                                <p className="text-xs text-red-800 font-bold mb-2 flex items-center gap-1">
+                                                  <AlertCircle className="h-3.5 w-3.5" /> Resolução obrigatória: Escolha qual obra manter
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                  {(c.records || c.obras || []).map((o: any, oi: number) => (
+                                                    <Button key={oi} size="sm" variant="outline" className="gap-1.5 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                                                      onClick={() => {
+                                                        if (!o.obraId) return toast.error("Obra sem ID");
+                                                        if (confirm(`Manter APENAS na obra "${o.obraNome}" e remover registros das outras obras?`)) {
+                                                          resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: o.obraId, justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome} (sobreposição resolvida)` });
+                                                        }
+                                                      }}
+                                                      disabled={resolveConflitoMut.isPending}>
+                                                      <Building2 className="h-3.5 w-3.5" /> Manter: {o.obraNome?.substring(0, 20)}
+                                                    </Button>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <div className="flex gap-2">
+                                                <Button size="sm" className="gap-1.5 text-xs bg-green-600 hover:bg-green-700"
+                                                  onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Deslocamento confirmado" })}
+                                                  disabled={resolveConflitoMut.isPending}>
+                                                  <MapPin className="h-3.5 w-3.5" /> Confirmar Deslocamento Real (Rateio Proporcional)
+                                                </Button>
+                                                <Button size="sm" variant="outline" className="gap-1.5 text-xs"
+                                                  onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Manter obra principal" })}
+                                                  disabled={resolveConflitoMut.isPending}>
+                                                  <Building2 className="h-3.5 w-3.5" /> Manter Obra Principal
+                                                </Button>
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                       </div>
@@ -1423,10 +1503,11 @@ export default function FechamentoPonto() {
                         {empConflitos.map((c: any, idx: number) => {
                           const conflictKey = `${c.employeeId}|${c.data}`;
                           const isExpanded = expandedConflict === conflictKey;
+                          const isOverlap = c.hasOverlap;
                           return (
-                            <div key={idx} className={`bg-white border rounded-lg overflow-hidden transition-all ${isExpanded ? "border-orange-400 shadow-md" : "border-orange-200"}`}>
+                            <div key={idx} className={`bg-white border rounded-lg overflow-hidden transition-all ${isExpanded ? (isOverlap ? "border-red-400 shadow-md" : "border-green-400 shadow-md") : (isOverlap ? "border-red-200" : "border-green-200")} ${isOverlap ? "border-l-4 border-l-red-500" : "border-l-4 border-l-green-500"}`}>
                               <button
-                                className="w-full p-3 flex items-center justify-between hover:bg-orange-50/50 transition-colors text-left"
+                                className={`w-full p-3 flex items-center justify-between transition-colors text-left ${isOverlap ? "hover:bg-red-50/50" : "hover:bg-green-50/50"}`}
                                 onClick={() => { setExpandedConflict(isExpanded ? null : conflictKey); setConflictJustificativa(""); }}
                               >
                                 <div>
@@ -1435,20 +1516,33 @@ export default function FechamentoPonto() {
                                   </p>
                                   <div className="flex gap-1 mt-1 flex-wrap">
                                     {c.obras.map((o: any, i: number) => (
-                                      <Badge key={i} variant="outline" className="text-xs border-orange-300 text-orange-700">
+                                      <Badge key={i} variant="outline" className={`text-xs ${isOverlap ? "border-red-300 text-red-700" : "border-green-300 text-green-700"}`}>
                                         {o.obraNome || "Sem Obra"} — {o.horasTrabalhadas || "0:00"}
                                       </Badge>
                                     ))}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <Badge className="bg-orange-600 text-white text-xs">2+ obras</Badge>
-                                  <ChevronRight className={`h-4 w-4 text-orange-600 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                  {isOverlap ? (
+                                    <Badge className="bg-red-600 text-white text-xs"><XCircle className="h-3 w-3 mr-1" /> Sobreposição</Badge>
+                                  ) : (
+                                    <Badge className="bg-green-600 text-white text-xs"><CheckCircle className="h-3 w-3 mr-1" /> Desloc. Válido</Badge>
+                                  )}
+                                  <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""} ${isOverlap ? "text-red-600" : "text-green-600"}`} />
                                 </div>
                               </button>
                               {isExpanded && (
-                                <div className="border-t border-orange-200 p-4 bg-orange-50/30 space-y-3">
-                                  <p className="text-xs text-orange-800 font-medium">Escolha como resolver este conflito:</p>
+                                <div className={`border-t p-4 space-y-3 ${isOverlap ? "border-red-200 bg-red-50/30" : "border-green-200 bg-green-50/30"}`}>
+                                  {isOverlap ? (
+                                    <div className="p-2 bg-red-100 border border-red-300 rounded-lg flex items-center gap-2">
+                                      <AlertCircle className="h-4 w-4 text-red-700 flex-shrink-0" />
+                                      <p className="text-xs text-red-800 font-bold">
+                                        SOBREPOSIÇÃO DE HORÁRIOS: O funcionário não pode estar em 2 obras ao mesmo tempo. Escolha qual obra manter.
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-green-800 font-medium">Horários não se sobrepõem — deslocamento real válido. Escolha como resolver:</p>
+                                  )}
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {c.obras.map((o: any, i: number) => (
                                       <button
@@ -1456,11 +1550,13 @@ export default function FechamentoPonto() {
                                         className="border-2 border-blue-200 bg-blue-50 rounded-lg p-3 text-left hover:border-blue-400 hover:bg-blue-100 transition-all group"
                                         onClick={() => {
                                           if (!o.obraId) return toast.error("Obra sem ID");
-                                          resolveConflitoMut.mutate({
-                                            companyId, employeeId: c.employeeId, data: c.data,
-                                            acao: "manter_obra", obraIdManter: o.obraId,
-                                            justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome}`,
-                                          });
+                                          if (confirm(`Manter APENAS na obra "${o.obraNome}" e remover registros das outras obras?`)) {
+                                            resolveConflitoMut.mutate({
+                                              companyId, employeeId: c.employeeId, data: c.data,
+                                              acao: "manter_obra", obraIdManter: o.obraId,
+                                              justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome}${isOverlap ? " (sobreposição resolvida)" : ""}`,
+                                            });
+                                          }
                                         }}
                                         disabled={resolveConflitoMut.isPending}
                                       >
@@ -1472,23 +1568,25 @@ export default function FechamentoPonto() {
                                       </button>
                                     ))}
                                   </div>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="flex-1 border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
-                                      onClick={() => {
-                                        resolveConflitoMut.mutate({
-                                          companyId, employeeId: c.employeeId, data: c.data,
-                                          acao: "confirmar_deslocamento",
-                                          justificativa: conflictJustificativa || "Deslocamento real entre obras confirmado",
-                                        });
-                                      }}
-                                      disabled={resolveConflitoMut.isPending}
-                                    >
-                                      <CheckCircle className="h-4 w-4 mr-1" /> Confirmar Deslocamento Real
-                                    </Button>
-                                  </div>
+                                  {!isOverlap && (
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
+                                        onClick={() => {
+                                          resolveConflitoMut.mutate({
+                                            companyId, employeeId: c.employeeId, data: c.data,
+                                            acao: "confirmar_deslocamento",
+                                            justificativa: conflictJustificativa || "Deslocamento real entre obras confirmado",
+                                          });
+                                        }}
+                                        disabled={resolveConflitoMut.isPending}
+                                      >
+                                        <CheckCircle className="h-4 w-4 mr-1" /> Confirmar Deslocamento Real (Rateio Proporcional)
+                                      </Button>
+                                    </div>
+                                  )}
                                   <div className="flex gap-2">
                                     {c.obras.map((o: any, i: number) => (
                                       <Button

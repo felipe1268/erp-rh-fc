@@ -361,6 +361,8 @@ export default function Colaboradores() {
         ["Salário Base", viewingEmployee.salarioBase ? formatMoeda(viewingEmployee.salarioBase) : "-"],
         ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
         ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
+        ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
+        ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.hePercentual50 ?? 50}% / ${viewingEmployee.hePercentual100 ?? 100}% / ${viewingEmployee.hePercentualNoturno ?? 20}%` : "Padrão CLT (50/100/20%)"],
       ]},
       { title: "Documentos", fields: [
         ["CTPS", safeDisplay(viewingEmployee.ctps)],
@@ -1122,6 +1124,126 @@ export default function Colaboradores() {
                   </table>
                 </div>
               </div>
+
+              {/* Complemento Salarial */}
+              <div className="mt-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <h4 className="text-sm font-semibold text-primary">Complemento Salarial</h4>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={String(form.recebeComplemento) === "1"}
+                      onCheckedChange={(checked) => {
+                        set("recebeComplemento", checked ? "1" : "0");
+                        if (!checked) set("valorComplemento", "");
+                      }}
+                    />
+                    <Label className="text-xs text-muted-foreground cursor-pointer">Funcionário recebe complemento salarial (por fora)</Label>
+                  </div>
+                </div>
+                {String(form.recebeComplemento) === "1" && (
+                  <div className="bg-amber-50/50 border border-amber-200 rounded-lg p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <Label className="text-xs font-medium text-amber-800">Valor do Complemento (R$)</Label>
+                        <Input
+                          value={form.valorComplemento ?? ""}
+                          onChange={e => set("valorComplemento", formatMoedaInput(e.target.value))}
+                          placeholder="500,00"
+                          className="bg-white mt-1 border-amber-300 focus:border-amber-500"
+                        />
+                        <span className="text-[10px] text-amber-700 mt-0.5 block">Este valor será somado ao líquido da folha para o financeiro</span>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs font-medium text-amber-800">Observação</Label>
+                        <Input
+                          value={form.complementoObs ?? ""}
+                          onChange={e => set("complementoObs", e.target.value)}
+                          placeholder="Ex: Bônus de produtividade, ajuste salarial..."
+                          className="bg-white mt-1 border-amber-300 focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Acordo Individual de Horas Extras */}
+              <div className="mt-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <h4 className="text-sm font-semibold text-primary">Horas Extras — Percentuais</h4>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={String(form.acordoHoraExtra) === "1"}
+                      onCheckedChange={(checked) => {
+                        set("acordoHoraExtra", checked ? "1" : "0");
+                        if (!checked) {
+                          set("hePercentual50", "50");
+                          set("hePercentual100", "100");
+                          set("hePercentualNoturno", "20");
+                        }
+                      }}
+                    />
+                    <Label className="text-xs text-muted-foreground cursor-pointer">Acordo individual de hora extra (valores diferenciados)</Label>
+                  </div>
+                </div>
+                <div className={`border rounded-lg p-4 ${String(form.acordoHoraExtra) === "1" ? 'bg-blue-50/50 border-blue-200' : 'bg-muted/30 border-border'}`}>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">HE Dias Úteis (%)</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={form.hePercentual50 ?? "50"}
+                          onChange={e => set("hePercentual50", e.target.value)}
+                          className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
+                          readOnly={String(form.acordoHoraExtra) !== "1"}
+                        />
+                        <span className="text-sm font-medium text-muted-foreground">%</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT padrão: 50%</span>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">HE Domingos/Feriados (%)</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={form.hePercentual100 ?? "100"}
+                          onChange={e => set("hePercentual100", e.target.value)}
+                          className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
+                          readOnly={String(form.acordoHoraExtra) !== "1"}
+                        />
+                        <span className="text-sm font-medium text-muted-foreground">%</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT padrão: 100%</span>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Adicional Noturno (%)</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={form.hePercentualNoturno ?? "20"}
+                          onChange={e => set("hePercentualNoturno", e.target.value)}
+                          className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
+                          readOnly={String(form.acordoHoraExtra) !== "1"}
+                        />
+                        <span className="text-sm font-medium text-muted-foreground">%</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT padrão: 20%</span>
+                    </div>
+                  </div>
+                  {String(form.acordoHoraExtra) === "1" && (
+                    <div className="mt-3 p-2 bg-blue-100/50 rounded text-xs text-blue-800">
+                      <strong>Acordo ativo:</strong> Os percentuais acima serão usados no cálculo de horas extras deste funcionário ao invés dos valores padrão da CLT.
+                    </div>
+                  )}
+                </div>
+              </div>
             </TabsContent>
 
             {/* ===== ABA BANCÁRIO ===== */}
@@ -1301,6 +1423,8 @@ export default function Colaboradores() {
                   ["Salário Base", viewingEmployee.salarioBase ? formatMoeda(viewingEmployee.salarioBase) : "-"],
                   ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
                   ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
+                  ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
+                  ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.hePercentual50 ?? 50}% / ${viewingEmployee.hePercentual100 ?? 100}% / ${viewingEmployee.hePercentualNoturno ?? 20}%` : "Padrão CLT (50/100/20%)"],
                 ]},
                 { title: "Documentos", fields: [
                   ["CTPS", safeDisplay(viewingEmployee.ctps)],

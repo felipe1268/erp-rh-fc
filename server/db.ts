@@ -203,11 +203,13 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "tipoChavePix", "chavePix", "contaPix", "bancoPix",
     "status", "listaNegra", "motivoListaNegra", "dataListaNegra",
     "obraAtualId", "fotoUrl", "observacoes", "codigoContabil", "codigoInterno",
+    "recebeComplemento", "valorComplemento", "complementoObs",
+    "acordoHoraExtra", "hePercentual50", "hePercentual100", "hePercentualNoturno",
   ]);
   // Campos booleanos
   const booleanFields = new Set(["listaNegra"]);
   // Campos inteiros
-  const intFields = new Set(["obraAtualId"]);
+  const intFields = new Set(["obraAtualId", "recebeComplemento", "acordoHoraExtra", "hePercentual50", "hePercentual100", "hePercentualNoturno"]);
   // Sanitizar: remover campos inválidos e converter tipos
   const { id: _id, companyId: _cid, createdAt: _ca, updatedAt: _ua, ...cleanData } = data as any;
   const sanitized: Record<string, any> = {};
