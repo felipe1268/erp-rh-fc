@@ -1230,3 +1230,10 @@
 ## Rev. 53: Cores suaves no Raio-X do Funcionário
 - [x] Trocar cores dos cards de métricas para tons pastel/leves (azul claro, verde suave, cinza, etc.)
 - [x] Manter visual agradável e profissional sem cores chamativas
+
+## Rev. 54: Painel de Alertas Detalhado
+- [x] Clicar no botão "X alertas requerem atenção" abre painel com todos os alertas
+- [x] Painel responsivo (desktop, tablet, mobile)
+- [x] Alertas categorizados (ASOs Vencidos, ASOs Vencendo, Sem ASO, Férias, Processos)
+- [x] Possibilidade de navegar direto para o item do alerta (botão por categoria)
+- [x] Botão Imprimir no painel de alertas

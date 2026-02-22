@@ -1,14 +1,17 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import {
   Users, Building2, UserCheck, Palmtree, UserX, AlertTriangle, Clock,
   BarChart3, Landmark, Gavel, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, TrendingUp, ShieldAlert, Activity,
-  ChevronRight, HeartPulse, Briefcase, Scale
+  ChevronRight, HeartPulse, Briefcase, Scale, X, ExternalLink,
+  Printer
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -25,6 +28,7 @@ export default function Home() {
   const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const [alertasOpen, setAlertasOpen] = useState(false);
 
   const { data: homeData, isLoading } = trpc.home.getData.useQuery(
     { companyId: companyId! },
@@ -52,11 +56,24 @@ export default function Home() {
             </p>
           </div>
           {totalAlertas > 0 && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            <button
+              onClick={() => setAlertasOpen(true)}
+              className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-2 hover:bg-red-100 hover:border-red-300 transition-colors cursor-pointer"
+            >
               <ShieldAlert className="h-5 w-5 text-red-600" />
               <span className="text-sm font-semibold text-red-700">{totalAlertas} alerta{totalAlertas !== 1 ? "s" : ""} requer{totalAlertas !== 1 ? "em" : ""} atenção</span>
-            </div>
+              <ChevronRight className="h-4 w-4 text-red-400" />
+            </button>
           )}
+
+          {/* ========== PAINEL DE ALERTAS ========== */}
+          <AlertasDialog
+            open={alertasOpen}
+            onClose={() => setAlertasOpen(false)}
+            homeData={homeData}
+            stats={s}
+            navigate={navigate}
+          />
         </div>
 
         {companyId ? (
@@ -473,6 +490,196 @@ export default function Home() {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// Painel de Alertas Detalhado
+// ============================================================
+function AlertasDialog({
+  open,
+  onClose,
+  homeData,
+  stats,
+  navigate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  homeData: any;
+  stats: any;
+  navigate: (path: string) => void;
+}) {
+  const s = stats;
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Montar lista unificada de alertas
+  const alertGroups = [
+    {
+      title: "ASOs Vencidos",
+      icon: FileWarning,
+      color: "text-red-600",
+      bgColor: "bg-red-50",
+      borderColor: "border-red-200",
+      count: s?.asosVencidos ?? 0,
+      items: (homeData?.asosAlerta ?? []).filter((a: any) => a.vencido).map((a: any) => ({
+        label: a.nome,
+        sublabel: a.funcao || "",
+        detail: `Vencido há ${Math.abs(a.diasRestantes)} dias`,
+        detailColor: "text-red-600 font-bold",
+      })),
+      action: () => { onClose(); navigate("/controle-documentos"); },
+      actionLabel: "Ver Controle de Documentos",
+    },
+    {
+      title: "ASOs Vencendo (próx. 60 dias)",
+      icon: HeartPulse,
+      color: "text-orange-600",
+      bgColor: "bg-orange-50",
+      borderColor: "border-orange-200",
+      count: s?.asosVencendo ?? 0,
+      items: (homeData?.asosAlerta ?? []).filter((a: any) => !a.vencido).map((a: any) => ({
+        label: a.nome,
+        sublabel: a.funcao || "",
+        detail: `${a.diasRestantes} dias restantes`,
+        detailColor: a.diasRestantes <= 15 ? "text-orange-600 font-semibold" : "text-muted-foreground",
+      })),
+      action: () => { onClose(); navigate("/controle-documentos"); },
+      actionLabel: "Ver Controle de Documentos",
+    },
+    {
+      title: "Funcionários sem ASO",
+      icon: AlertTriangle,
+      color: "text-amber-600",
+      bgColor: "bg-amber-50",
+      borderColor: "border-amber-200",
+      count: s?.semAso ?? 0,
+      items: (homeData?.semAso ?? []).map((e: any) => ({
+        label: e.nome,
+        sublabel: e.funcao || "",
+        detail: "Sem ASO cadastrado",
+        detailColor: "text-amber-600",
+      })),
+      action: () => { onClose(); navigate("/controle-documentos"); },
+      actionLabel: "Cadastrar ASO",
+    },
+    {
+      title: "Férias - Período Aquisitivo",
+      icon: CalendarClock,
+      color: "text-yellow-600",
+      bgColor: "bg-yellow-50",
+      borderColor: "border-yellow-200",
+      count: s?.feriasAlerta ?? 0,
+      items: (homeData?.feriasAlerta ?? []).map((f: any) => ({
+        label: f.nome,
+        sublabel: `${f.periodoAquisitivo}º período aquisitivo`,
+        detail: f.diasParaVencer <= 0 ? "VENCIDO" : `${f.diasParaVencer} dias para vencer`,
+        detailColor: f.urgente ? "text-red-600 font-bold" : "text-yellow-600",
+      })),
+      action: () => { onClose(); navigate("/colaboradores"); },
+      actionLabel: "Ver Colaboradores",
+    },
+    {
+      title: "Processos Trabalhistas - Risco Alto/Crítico",
+      icon: Gavel,
+      color: "text-purple-600",
+      bgColor: "bg-purple-50",
+      borderColor: "border-purple-200",
+      count: s?.processosRiscoAlto ?? 0,
+      items: (homeData?.proximasAudiencias ?? []).filter((p: any) => p.risco === "alto" || p.risco === "critico").map((p: any) => ({
+        label: p.reclamante,
+        sublabel: p.numeroProcesso,
+        detail: p.dataAudiencia ? `Audiência em ${p.dias}d (${new Date(p.dataAudiencia + "T00:00:00").toLocaleDateString("pt-BR")})` : "Sem audiência agendada",
+        detailColor: p.dias <= 7 ? "text-red-600 font-bold" : p.dias <= 30 ? "text-orange-600" : "text-muted-foreground",
+      })),
+      action: () => { onClose(); navigate("/processos-trabalhistas"); },
+      actionLabel: "Ver Processos",
+    },
+  ].filter(g => g.count > 0);
+
+  const totalAlertas = alertGroups.reduce((acc, g) => acc + g.count, 0);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+              <ShieldAlert className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-bold">Central de Alertas</DialogTitle>
+              <p className="text-sm text-muted-foreground">{totalAlertas} alerta{totalAlertas !== 1 ? "s" : ""} requer{totalAlertas !== 1 ? "em" : ""} atenção</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+              <Printer className="h-4 w-4" /> Imprimir
+            </Button>
+          </div>
+        </div>
+
+        {/* Resumo rápido */}
+        <div className="px-6 py-3 bg-muted/30 border-b">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+            {alertGroups.map((g, i) => (
+              <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${g.bgColor} border ${g.borderColor}`}>
+                <g.icon className={`h-4 w-4 ${g.color} shrink-0`} />
+                <div>
+                  <p className={`text-lg font-bold ${g.color}`}>{g.count}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">{g.title.split(" - ")[0]}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Lista de alertas por categoria */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {alertGroups.map((group, gi) => (
+            <div key={gi}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <group.icon className={`h-4 w-4 ${group.color}`} />
+                  <h3 className="text-sm font-semibold">{group.title}</h3>
+                  <Badge variant="secondary" className="text-[10px]">{group.count}</Badge>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={group.action}
+                >
+                  {group.actionLabel} <ExternalLink className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="space-y-1">
+                {group.items.map((item: any, ii: number) => (
+                  <div
+                    key={ii}
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 rounded-lg ${group.bgColor} border ${group.borderColor} gap-1`}
+                  >
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium">{item.label}</span>
+                      {item.sublabel && <span className="text-xs text-muted-foreground ml-2">{item.sublabel}</span>}
+                    </div>
+                    <span className={`text-xs font-mono shrink-0 ${item.detailColor}`}>{item.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t bg-muted/20 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Atualizado em {new Date().toLocaleString("pt-BR")}</p>
+          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
