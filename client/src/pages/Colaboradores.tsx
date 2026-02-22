@@ -115,6 +115,8 @@ export default function Colaboradores() {
   const formCompanyIdNum = form.companyId ? parseInt(form.companyId) : companyId;
   const { data: setoresList } = trpc.sectors.list.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
   const { data: funcoesList } = trpc.jobFunctions.list.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
+  const { data: contasBancariasEmpresa } = trpc.folha.listarContasBancarias.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
+  const contasAtivas = (contasBancariasEmpresa || []).filter((c: any) => c.ativo !== 0);
 
   // Import Excel
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -1298,6 +1300,27 @@ export default function Colaboradores() {
                           <SelectItem value="Salario">Conta Salário</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Conta da Empresa para Pagamento</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Conta Bancária da Empresa</Label>
+                      <Select value={String(form.contaBancariaEmpresaId || "none")} onValueChange={v => set("contaBancariaEmpresaId", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhuma (não definida)</SelectItem>
+                          {contasAtivas.map((c: any) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.banco} — Ag: {c.agencia} / Cc: {c.conta}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">Define por qual conta da construtora este colaborador será pago</p>
                     </div>
                   </div>
                 </div>

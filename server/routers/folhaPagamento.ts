@@ -1642,7 +1642,58 @@ export const folhaPagamentoRouter = router({
         }));
 
       const semObra = obraCustos.get(null);
-      const totalGeral = formatBRL(Array.from(obraCustos.values()).reduce((s, o) => s + o.totalCusto, 0));
+      const totalGeralNum = Array.from(obraCustos.values()).reduce((s, o) => s + o.totalCusto, 0);
+      const totalGeral = formatBRL(totalGeralNum);
+
+      // Totais globais de horas
+      const allObraValues = Array.from(obraCustos.values());
+      const totalHorasNormaisGeral = allObraValues.reduce((s, o) => s + o.totalHoras, 0);
+      const totalHEGeral = allObraValues.reduce((s, o) => s + o.totalHE, 0);
+      const totalHorasGeral = totalHorasNormaisGeral + totalHEGeral;
+      const pctHorasNormais = totalHorasGeral > 0 ? Math.round((totalHorasNormaisGeral / totalHorasGeral) * 1000) / 10 : 0;
+      const pctHorasExtras = totalHorasGeral > 0 ? Math.round((totalHEGeral / totalHorasGeral) * 1000) / 10 : 0;
+      const totalFuncionarios = new Set(allObraValues.flatMap(o => o.funcionarios.map(f => f.id))).size;
+
+      // ---- Comparativos: mês anterior e mesmo mês do ano anterior ----
+      const [anoRef, mesRef] = input.mesReferencia.split("-").map(Number);
+      const mesAnterior = mesRef === 1 ? `${anoRef - 1}-12` : `${anoRef}-${String(mesRef - 1).padStart(2, "0")}`;
+      const anoAnteriorMesmoMes = `${anoRef - 1}-${String(mesRef).padStart(2, "0")}`;
+
+      const calcComparativo = async (mesComp: string) => {
+        const pontoComp = await db.select().from(timeRecords)
+          .where(and(
+            eq(timeRecords.companyId, input.companyId),
+            eq(timeRecords.mesReferencia, mesComp),
+          ));
+        let horasN = 0, horasE = 0, custoTotal = 0;
+        const empIdsComp = Array.from(new Set(pontoComp.filter(r => r.employeeId).map(r => r.employeeId!)));
+        for (const rec of pontoComp) {
+          horasN += hhmmToDecimal(rec.horasTrabalhadas);
+          horasE += hhmmToDecimal(rec.horasExtras);
+        }
+        // Buscar folha do mês comparativo para custo
+        const folhaComp = await db.select().from(folhaLancamentos)
+          .where(and(
+            eq(folhaLancamentos.companyId, input.companyId),
+            eq(folhaLancamentos.mesReferencia, mesComp),
+          ));
+        if (folhaComp.length > 0) {
+          const folhaCompItens = await db.select().from(folhaItens)
+            .where(eq(folhaItens.folhaLancamentoId, folhaComp[0].id));
+          custoTotal = folhaCompItens.reduce((s, fi) => s + parseBRL(fi.liquido || "0"), 0);
+        }
+        return { horasNormais: Math.round(horasN * 10) / 10, horasExtras: Math.round(horasE * 10) / 10, custoTotal, qtdFuncionarios: empIdsComp.length };
+      };
+
+      const [compMesAnterior, compAnoAnterior] = await Promise.all([
+        calcComparativo(mesAnterior),
+        calcComparativo(anoAnteriorMesmoMes),
+      ]);
+
+      const calcVariacao = (atual: number, anterior: number) => {
+        if (anterior === 0) return atual > 0 ? 100 : 0;
+        return Math.round(((atual - anterior) / anterior) * 1000) / 10;
+      };
 
       return {
         obrasResumo,
@@ -1653,6 +1704,31 @@ export const folhaPagamentoRouter = router({
           totalHE: Math.round(semObra.totalHE * 10) / 10,
         } : null,
         totalGeral,
+        resumoGlobal: {
+          totalHorasNormais: Math.round(totalHorasNormaisGeral * 10) / 10,
+          totalHorasExtras: Math.round(totalHEGeral * 10) / 10,
+          totalHoras: Math.round(totalHorasGeral * 10) / 10,
+          pctHorasNormais,
+          pctHorasExtras,
+          totalFuncionarios,
+          totalCustoNum: totalGeralNum,
+        },
+        comparativos: {
+          mesAnterior: {
+            label: mesAnterior,
+            ...compMesAnterior,
+            variacaoCusto: calcVariacao(totalGeralNum, compMesAnterior.custoTotal),
+            variacaoHE: calcVariacao(totalHEGeral, compMesAnterior.horasExtras),
+            variacaoHorasNormais: calcVariacao(totalHorasNormaisGeral, compMesAnterior.horasNormais),
+          },
+          anoAnterior: {
+            label: anoAnteriorMesmoMes,
+            ...compAnoAnterior,
+            variacaoCusto: calcVariacao(totalGeralNum, compAnoAnterior.custoTotal),
+            variacaoHE: calcVariacao(totalHEGeral, compAnoAnterior.horasExtras),
+            variacaoHorasNormais: calcVariacao(totalHorasNormaisGeral, compAnoAnterior.horasNormais),
+          },
+        },
       };
     }),
 

@@ -1072,3 +1072,14 @@
 ## Rev. 40 fix: Contas Bancárias
 - [x] Remover campo "Apelido (identificação interna)" da tela de Contas Bancárias
 - [x] Remover campo "CNPJ do Titular" da tela de Contas Bancárias
+
+## Rev. 40 fix: Conta da Empresa para Pagamento
+- [x] Adicionar campo "Conta da Empresa para Pagamento" na aba Bancário do colaborador
+- [x] Select com as contas bancárias ativas da empresa (módulo Contas Bancárias)
+- [ ] Permitir gerar relatório agrupado por banco de pagamento
+
+## Rev. 40 fix: Custos por Obra - Horas e Comparativos
+- [x] Adicionar card de Total Horas Normais nos resumos de Custos por Obra
+- [x] Adicionar percentual de horas normais e extras em relação ao total
+- [x] Comparativo com mês anterior (acréscimo/redução)
+- [x] Comparativo com mesmo mês do ano anterior (acréscimo/redução)

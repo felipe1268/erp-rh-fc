@@ -573,27 +573,98 @@ export default function FolhaPagamento() {
             <>
               {/* Summary cards */}
               {(() => {
+                const rg = (custosPorObra.data as any).resumoGlobal;
+                const comp = (custosPorObra.data as any).comparativos;
                 const allObras = [...custosPorObra.data.obrasResumo, ...(custosPorObra.data.semObra ? [custosPorObra.data.semObra] : [])];
-                const totalFuncs = allObras.reduce((s, o: any) => s + (o.funcionarios?.length || 0), 0);
-                const totalHE = allObras.reduce((s, o: any) => s + (o.totalHE || 0), 0);
+                const totalFuncs = rg?.totalFuncionarios ?? allObras.reduce((s: number, o: any) => s + (o.funcionarios?.length || 0), 0);
+                const totalHN = rg?.totalHorasNormais ?? allObras.reduce((s: number, o: any) => s + (o.totalHoras || 0), 0);
+                const totalHE = rg?.totalHorasExtras ?? allObras.reduce((s: number, o: any) => s + (o.totalHE || 0), 0);
+                const pctHN = rg?.pctHorasNormais ?? 0;
+                const pctHE = rg?.pctHorasExtras ?? 0;
+                const VariacaoTag = ({ valor }: { valor: number }) => {
+                  if (valor === 0) return <span className="text-xs text-gray-400">—</span>;
+                  const isUp = valor > 0;
+                  return <span className={`text-xs font-semibold ${isUp ? "text-red-600" : "text-green-600"}`}>{isUp ? "▲" : "▼"} {Math.abs(valor).toFixed(1)}%</span>;
+                };
+                const mesAnteriorLabel = comp?.mesAnterior?.label ? formatMesAno(comp.mesAnterior.label) : "Mês anterior";
+                const anoAnteriorLabel = comp?.anoAnterior?.label ? formatMesAno(comp.anoAnterior.label) : "Ano anterior";
                 return (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                      <p className="text-xl font-bold text-blue-700">{custosPorObra.data.obrasResumo.length}</p>
-                      <p className="text-xs text-muted-foreground">Obras</p>
+                  <div className="space-y-3">
+                    {/* Cards principais */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                      <div className="bg-blue-50 rounded-lg p-3 text-center">
+                        <p className="text-xl font-bold text-blue-700">{custosPorObra.data.obrasResumo.length}</p>
+                        <p className="text-xs text-muted-foreground">Obras</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3 text-center">
+                        <p className="text-xl font-bold text-green-700">{formatBRL(custosPorObra.data.totalGeral)}</p>
+                        <p className="text-xs text-muted-foreground">Custo Total</p>
+                      </div>
+                      <div className="bg-purple-50 rounded-lg p-3 text-center">
+                        <p className="text-xl font-bold text-purple-700">{totalFuncs}</p>
+                        <p className="text-xs text-muted-foreground">Funcionários</p>
+                      </div>
+                      <div className="bg-sky-50 rounded-lg p-3 text-center">
+                        <p className="text-xl font-bold text-sky-700">{totalHN.toFixed(1)}h</p>
+                        <p className="text-xs text-muted-foreground">Horas Normais <span className="font-semibold">({pctHN}%)</span></p>
+                      </div>
+                      <div className="bg-amber-50 rounded-lg p-3 text-center">
+                        <p className="text-xl font-bold text-amber-700">{totalHE.toFixed(1)}h</p>
+                        <p className="text-xs text-muted-foreground">Horas Extras <span className="font-semibold">({pctHE}%)</span></p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-xl font-bold text-gray-700">{(totalHN + totalHE).toFixed(1)}h</p>
+                        <p className="text-xs text-muted-foreground">Total Horas</p>
+                      </div>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                      <p className="text-xl font-bold text-green-700">{formatBRL(custosPorObra.data.totalGeral)}</p>
-                      <p className="text-xs text-muted-foreground">Custo Total</p>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-3 text-center">
-                      <p className="text-xl font-bold text-purple-700">{totalFuncs}</p>
-                      <p className="text-xs text-muted-foreground">Funcionários</p>
-                    </div>
-                    <div className="bg-amber-50 rounded-lg p-3 text-center">
-                      <p className="text-xl font-bold text-amber-700">{totalHE.toFixed(1)}h</p>
-                      <p className="text-xs text-muted-foreground">Horas Extras</p>
-                    </div>
+
+                    {/* Comparativos */}
+                    {comp && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Mês anterior */}
+                        <div className="border rounded-lg p-3 bg-white">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Comparativo com {mesAnteriorLabel}</p>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                              <p className="text-sm font-bold">Custo</p>
+                              <VariacaoTag valor={comp.mesAnterior.variacaoCusto} />
+                              {comp.mesAnterior.custoTotal > 0 && <p className="text-[10px] text-muted-foreground">{formatBRL(String(comp.mesAnterior.custoTotal.toFixed(2)).replace(".", ","))}</p>}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold">H. Normais</p>
+                              <VariacaoTag valor={comp.mesAnterior.variacaoHorasNormais} />
+                              {comp.mesAnterior.horasNormais > 0 && <p className="text-[10px] text-muted-foreground">{comp.mesAnterior.horasNormais}h</p>}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold">H. Extras</p>
+                              <VariacaoTag valor={comp.mesAnterior.variacaoHE} />
+                              {comp.mesAnterior.horasExtras > 0 && <p className="text-[10px] text-muted-foreground">{comp.mesAnterior.horasExtras}h</p>}
+                            </div>
+                          </div>
+                        </div>
+                        {/* Ano anterior */}
+                        <div className="border rounded-lg p-3 bg-white">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Comparativo com {anoAnteriorLabel}</p>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                              <p className="text-sm font-bold">Custo</p>
+                              <VariacaoTag valor={comp.anoAnterior.variacaoCusto} />
+                              {comp.anoAnterior.custoTotal > 0 && <p className="text-[10px] text-muted-foreground">{formatBRL(String(comp.anoAnterior.custoTotal.toFixed(2)).replace(".", ","))}</p>}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold">H. Normais</p>
+                              <VariacaoTag valor={comp.anoAnterior.variacaoHorasNormais} />
+                              {comp.anoAnterior.horasNormais > 0 && <p className="text-[10px] text-muted-foreground">{comp.anoAnterior.horasNormais}h</p>}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold">H. Extras</p>
+                              <VariacaoTag valor={comp.anoAnterior.variacaoHE} />
+                              {comp.anoAnterior.horasExtras > 0 && <p className="text-[10px] text-muted-foreground">{comp.anoAnterior.horasExtras}h</p>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
