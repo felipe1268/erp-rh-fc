@@ -226,6 +226,18 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const sidebarScrollRef = useRef<HTMLDivElement>(null);
+
+  // Preservar posição do scroll do menu lateral ao navegar
+  const savedScrollTop = useRef(0);
+  useEffect(() => {
+    const el = sidebarScrollRef.current;
+    if (!el) return;
+    // Restaurar posição após re-render por mudança de rota
+    requestAnimationFrame(() => {
+      el.scrollTop = savedScrollTop.current;
+    });
+  }, [location]);
 
   // Carregar configuração personalizada do menu
   const menuConfigQuery = trpc.menuConfig.get.useQuery(undefined, { staleTime: 60000 });
@@ -322,7 +334,11 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
+          <SidebarContent
+            ref={sidebarScrollRef}
+            className="gap-0"
+            onScroll={(e) => { savedScrollTop.current = (e.target as HTMLDivElement).scrollTop; }}
+          >
             {effectiveSections.map(section => (
               <div key={section.title} className="mb-1">
                 {!isCollapsed ? (
