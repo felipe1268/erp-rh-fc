@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
+import PrintHeader from "@/components/PrintHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -62,6 +63,7 @@ const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: !!com
 
   return (
     <DashboardLayout>
+      <PrintHeader />
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>

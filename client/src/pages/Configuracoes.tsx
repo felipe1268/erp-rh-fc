@@ -2,13 +2,15 @@ import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
+import PrintHeader from "@/components/PrintHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info } from "lucide-react";
+import MenuConfigPanel from "@/components/MenuConfigPanel";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
 
 const MODULES_LIST = [
   { key: "colaboradores", label: "Colaboradores" },
@@ -37,7 +39,7 @@ const CATEGORIAS = [
   { key: "rescisao", label: "Rescisão", icon: UserX, color: "text-gray-600", bgColor: "bg-gray-50", borderColor: "border-gray-200" },
 ];
 
-type TabKey = "criterios" | "usuarios" | "senha" | "limpeza";
+type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel";
 
 export default function Configuracoes() {
   const { selectedCompanyId } = useCompany();
@@ -222,6 +224,7 @@ export default function Configuracoes() {
   };
 
   const tabs = [
+    { key: "painel" as TabKey, label: "Painel de Controle", icon: LayoutDashboard },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale },
     { key: "usuarios" as TabKey, label: "Usuários", icon: Users },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key },
@@ -319,6 +322,7 @@ export default function Configuracoes() {
 
   return (
     <DashboardLayout>
+      <PrintHeader />
       <div className="p-6 max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -345,6 +349,11 @@ export default function Configuracoes() {
             </button>
           ))}
         </div>
+
+        {/* TAB: Painel de Controle (Menu Configurável) */}
+        {activeTab === "painel" && (
+          <MenuConfigPanel />
+        )}
 
         {/* TAB: Critérios do Sistema */}
         {activeTab === "criterios" && (

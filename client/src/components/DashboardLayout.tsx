@@ -30,7 +30,8 @@ import {
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
   ClipboardList, UserSearch, Gavel, Wifi, HardHat,
 } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
@@ -53,6 +54,7 @@ const menuSections = [
       { icon: Landmark, label: "Obras", path: "/obras" },
       { icon: Layers, label: "Setores", path: "/setores" },
       { icon: Briefcase, label: "Funções", path: "/funcoes" },
+      { icon: Wifi, label: "Relógios de Ponto", path: "/relogios-ponto" },
     ],
   },
   {
@@ -68,7 +70,6 @@ const menuSections = [
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
-      { icon: Wifi, label: "Relógios de Ponto", path: "/relogios-ponto" },
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
     ],
   },
@@ -88,8 +89,12 @@ const menuSections = [
     title: "Dashboards",
     items: [
       { icon: BarChart3, label: "Todos os Dashboards", path: "/dashboards" },
-      { icon: Users, label: "Colaboradores", path: "/dashboards/colaboradores" },
+      { icon: Users, label: "Funcionários", path: "/dashboards/funcionarios" },
+      { icon: Clock, label: "Cartão de Ponto", path: "/dashboards/cartao-ponto" },
+      { icon: Wallet, label: "Folha de Pagamento", path: "/dashboards/folha-pagamento" },
       { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
+      { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },
+      { icon: Gavel, label: "Jurídico", path: "/dashboards/juridico" },
     ],
   },
   {
@@ -107,6 +112,34 @@ const menuSections = [
     ],
   },
 ];
+
+const ICON_MAP: Record<string, any> = {
+  "Painel": LayoutDashboard,
+  "Empresas": Building2,
+  "Colaboradores": Users,
+  "Obras": Landmark,
+  "Setores": Layers,
+  "Funções": Briefcase,
+  "Relógios de Ponto": Wifi,
+  "Contas Bancárias": ClipboardList,
+  "Fechamento de Ponto": Clock,
+  "Folha de Pagamento": Wallet,
+  "Controle de Documentos": FolderOpen,
+  "Vale Alimentação": UtensilsCrossed,
+  "Controle de EPIs": HardHat,
+  "Processos Trabalhistas": Gavel,
+  "Raio-X do Funcionário": UserSearch,
+  "Todos os Dashboards": BarChart3,
+  "Funcionários": Users,
+  "Cartão de Ponto": Clock,
+  "Horas Extras": Clock,
+  "EPIs": HardHat,
+  "Jurídico": Gavel,
+  "Usuários e Permissões": Lock,
+  "Auditoria do Sistema": FileText,
+  "Configurações": Settings,
+  "Avaliação de Desempenho": Star,
+};
 
 const allMenuItems = menuSections.flatMap(s => s.items);
 
@@ -191,7 +224,31 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = allMenuItems.find(item => item.path === location);
+
+  // Carregar configuração personalizada do menu
+  const menuConfigQuery = trpc.menuConfig.get.useQuery(undefined, { staleTime: 60000 });
+  const effectiveSections = useMemo(() => {
+    if (!menuConfigQuery.data) return menuSections;
+    // Mapear configuração salva de volta para o formato com ícones
+    return (menuConfigQuery.data as any[]).map((section: any) => ({
+      title: section.title,
+      items: section.items
+        .filter((item: any) => item.visible !== false)
+        .map((item: any) => {
+          // Encontrar o item original para pegar o ícone e propriedade "soon"
+          const original = allMenuItems.find(m => m.path === item.path);
+          return {
+            icon: ICON_MAP[item.label] || original?.icon || LayoutDashboard,
+            label: item.label,
+            path: item.path,
+            soon: (original as any)?.soon || false,
+          };
+        }),
+    })).filter((s: any) => s.items.length > 0);
+  }, [menuConfigQuery.data]);
+
+  const allEffectiveItems = effectiveSections.flatMap(s => s.items);
+  const activeMenuItem = allEffectiveItems.find(item => item.path === location) || allMenuItems.find(item => item.path === location);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
     Object.fromEntries(menuSections.map(s => [s.title, true]))
   );
@@ -259,7 +316,7 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
-            {menuSections.map(section => (
+            {effectiveSections.map(section => (
               <div key={section.title} className="mb-1">
                 {!isCollapsed ? (
                   <button
@@ -362,7 +419,8 @@ function DashboardLayoutContent({
 }
 
 function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLabel: string }) {
-  const { selectedCompanyId, setSelectedCompanyId, companies } = useCompany();
+  const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany } = useCompany();
+  const logoUrl = selectedCompany?.logoUrl;
 
   return (
     <div className="flex border-b h-14 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
@@ -373,7 +431,11 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <Building2 className="h-4 w-4 text-muted-foreground" />
+        {logoUrl ? (
+          <img src={logoUrl} alt="Logo" className="h-7 w-7 object-contain rounded" />
+        ) : (
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+        )}
         <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
           <SelectTrigger className="w-64 bg-card border-border h-9 text-sm">
             <SelectValue />
@@ -381,7 +443,14 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
           <SelectContent>
             {companies?.map((c: any) => (
               <SelectItem key={c.id} value={String(c.id)}>
-                {c.nomeFantasia || c.razaoSocial}
+                <div className="flex items-center gap-2">
+                  {c.logoUrl ? (
+                    <img src={c.logoUrl} alt="" className="h-5 w-5 object-contain rounded" />
+                  ) : (
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  {c.nomeFantasia || c.razaoSocial}
+                </div>
               </SelectItem>
             ))}
           </SelectContent>

@@ -27,17 +27,12 @@ import Epis from "./pages/Epis";
 import RaioXPage from "./pages/relatorios/RaioXPage";
 // Dashboards
 import DashboardIndex from "./pages/dashboards/DashboardIndex";
-import DashColaboradores from "./pages/dashboards/DashColaboradores";
+import DashFuncionarios from "./pages/dashboards/DashFuncionarios";
+import DashCartaoPonto from "./pages/dashboards/DashCartaoPonto";
+import DashFolhaPagamento from "./pages/dashboards/DashFolhaPagamento";
 import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
-import DashPendencias from "./pages/dashboards/DashPendencias";
-import DashTreinamentos from "./pages/dashboards/DashTreinamentos";
-import DashEpi from "./pages/dashboards/DashEpi";
-import DashAcidentes from "./pages/dashboards/DashAcidentes";
-import DashAuditorias from "./pages/dashboards/DashAuditorias";
-import Dash5w2h from "./pages/dashboards/Dash5w2h";
-import DashExtintoresHidrantes from "./pages/dashboards/DashExtintoresHidrantes";
-import DashDesvios from "./pages/dashboards/DashDesvios";
-import DashRiscos from "./pages/dashboards/DashRiscos";
+import DashEpis from "./pages/dashboards/DashEpis";
+import DashJuridico from "./pages/dashboards/DashJuridico";
 
 function Router() {
   return (
@@ -64,17 +59,12 @@ function Router() {
       <Route path={"/relatorios/raio-x"} component={RaioXPage} />
       {/* Dashboards */}
       <Route path={"/dashboards"} component={DashboardIndex} />
-      <Route path={"/dashboards/colaboradores"} component={DashColaboradores} />
+      <Route path={"/dashboards/funcionarios"} component={DashFuncionarios} />
+      <Route path={"/dashboards/cartao-ponto"} component={DashCartaoPonto} />
+      <Route path={"/dashboards/folha-pagamento"} component={DashFolhaPagamento} />
       <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
-      <Route path={"/dashboards/pendentes"} component={DashPendencias} />
-      <Route path={"/dashboards/treinamentos"} component={DashTreinamentos} />
-      <Route path={"/dashboards/epi"} component={DashEpi} />
-      <Route path={"/dashboards/acidentes"} component={DashAcidentes} />
-      <Route path={"/dashboards/auditorias"} component={DashAuditorias} />
-      <Route path={"/dashboards/5w2h"} component={Dash5w2h} />
-      <Route path={"/dashboards/extintores-hidrantes"} component={DashExtintoresHidrantes} />
-      <Route path={"/dashboards/desvios"} component={DashDesvios} />
-      <Route path={"/dashboards/riscos"} component={DashRiscos} />
+      <Route path={"/dashboards/epis"} component={DashEpis} />
+      <Route path={"/dashboards/juridico"} component={DashJuridico} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

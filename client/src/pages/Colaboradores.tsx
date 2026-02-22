@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
+import PrintHeader from "@/components/PrintHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -450,6 +451,7 @@ export default function Colaboradores() {
 
   return (
     <DashboardLayout>
+      <PrintHeader />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

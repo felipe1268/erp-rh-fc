@@ -195,6 +195,7 @@ export const companies = mysqlTable("companies", {
 	cep: varchar({ length: 10 }),
 	telefone: varchar({ length: 20 }),
 	email: varchar({ length: 320 }),
+	logoUrl: text(),
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
@@ -1087,4 +1088,17 @@ export const processosAndamentos = mysqlTable("processos_andamentos", {
 (table) => [
 	index("pa_processo").on(table.processoId),
 	index("pa_data").on(table.processoId, table.data),
+]);
+
+
+// Configuração personalizada do menu lateral (por usuário)
+export const menuConfig = mysqlTable("menu_config", {
+	id: int().autoincrement().notNull(),
+	userId: int().notNull(),
+	// JSON com a configuração completa do menu: seções, itens, ordem
+	configJson: text().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("mc_user").on(table.userId),
 ]);

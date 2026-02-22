@@ -1,0 +1,167 @@
+import DashboardLayout from "@/components/DashboardLayout";
+import DashChart, { DashKpi } from "@/components/DashChart";
+import PrintActions from "@/components/PrintActions";
+import { trpc } from "@/lib/trpc";
+import { useCompany } from "@/contexts/CompanyContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { DollarSign, TrendingUp, TrendingDown, Users, Wallet, Building2, Briefcase, Landmark } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Link } from "wouter";
+import { useState, useMemo } from "react";
+
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+export default function DashFolhaPagamento() {
+  const { selectedCompanyId } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
+  const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
+  const [mes, setMes] = useState(mesRef);
+  const { data, isLoading } = trpc.dashboards.folhaPagamento.useQuery({ companyId, mesReferencia: mes }, { enabled: companyId > 0 });
+
+  const mesLabel = useMemo(() => {
+    const [y, m] = mes.split("-");
+    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return `${meses[parseInt(m) - 1]}/${y}`;
+  }, [mes]);
+
+  if (isLoading) return (
+    <DashboardLayout>
+      <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+    </DashboardLayout>
+  );
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Link href="/dashboards" className="text-sm text-muted-foreground hover:text-foreground">Dashboards</Link>
+              <span className="text-muted-foreground">/</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard Folha de Pagamento</h1>
+            <p className="text-muted-foreground text-sm mt-1">Análise de custos e encargos — {mesLabel}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div>
+              <Label className="text-xs">Mês Referência</Label>
+              <Input type="month" value={mes} onChange={e => setMes(e.target.value)} className="w-40" />
+            </div>
+            <PrintActions title="Dashboard Folha de Pagamento" />
+          </div>
+        </div>
+
+        {!data ? (
+          <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
+        ) : (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <DashKpi label="Custo Total" value={fmtBRL(data.resumo.custoTotalMes)} icon={DollarSign} color="red" sub={`${data.resumo.totalFuncionarios} funcionários`} />
+              <DashKpi label="Total Proventos" value={fmtBRL(data.resumo.totalProventosMes)} icon={TrendingUp} color="green" />
+              <DashKpi label="Total Descontos" value={fmtBRL(data.resumo.totalDescontosMes)} icon={TrendingDown} color="orange" />
+              <DashKpi label="Líquido Total" value={fmtBRL(data.resumo.totalLiquidoMes)} icon={Wallet} color="blue" />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <DashKpi label="FGTS" value={fmtBRL(data.resumo.totalFgtsMes)} icon={Landmark} color="teal" />
+              <DashKpi label="INSS" value={fmtBRL(data.resumo.totalInssMes)} icon={Building2} color="purple" />
+              <DashKpi label="IRRF" value={fmtBRL(data.resumo.totalIrrfMes)} icon={DollarSign} color="slate" />
+            </div>
+
+            {/* Evolução mensal */}
+            {data.evolucaoMensal.length > 0 && (
+              <DashChart
+                title="Evolução Mensal da Folha (últimos 12 meses)"
+                type="line"
+                labels={data.evolucaoMensal.map(r => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
+                datasets={[
+                  { label: "Proventos", data: data.evolucaoMensal.map(r => r.proventos), borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.1)", fill: false, tension: 0.3 },
+                  { label: "Descontos", data: data.evolucaoMensal.map(r => r.descontos), borderColor: "#EF4444", backgroundColor: "rgba(239,68,68,0.1)", fill: false, tension: 0.3 },
+                  { label: "Líquido", data: data.evolucaoMensal.map(r => r.liquido), borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.1)", fill: true, tension: 0.3 },
+                ]}
+                height={300}
+              />
+            )}
+
+            {/* Encargos mensais */}
+            {data.evolucaoMensal.length > 0 && (
+              <DashChart
+                title="Encargos Mensais (FGTS + INSS)"
+                type="bar"
+                labels={data.evolucaoMensal.map(r => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
+                datasets={[
+                  { label: "FGTS", data: data.evolucaoMensal.map(r => r.fgts), backgroundColor: "#14B8A6" },
+                  { label: "INSS", data: data.evolucaoMensal.map(r => r.inss), backgroundColor: "#8B5CF6" },
+                ]}
+                height={280}
+              />
+            )}
+
+            {/* Custo por Função + Banco */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <DashChart
+                title="Custo por Função (Top 10)"
+                type="horizontalBar"
+                labels={data.porFuncao.map(f => f.funcao)}
+                datasets={[{ label: "Custo Total", data: data.porFuncao.map(f => f.custo), backgroundColor: "#3B82F6" }]}
+                height={280}
+              />
+              <DashChart
+                title="Pagamentos por Banco"
+                type="doughnut"
+                labels={data.porBanco.map(b => b.banco)}
+                datasets={[{ data: data.porBanco.map(b => b.valor) }]}
+                height={280}
+              />
+            </div>
+
+            {/* Top Salários */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-green-500" />
+                  Top 10 Maiores Salários Brutos — {mesLabel}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.topSalarios.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Nenhum dado de folha para o período</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-2 pr-4 font-medium text-muted-foreground">#</th>
+                          <th className="py-2 pr-4 font-medium text-muted-foreground">Nome</th>
+                          <th className="py-2 pr-4 font-medium text-muted-foreground">Função</th>
+                          <th className="py-2 pr-4 font-medium text-muted-foreground text-right">Bruto</th>
+                          <th className="py-2 font-medium text-muted-foreground text-right">Líquido</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.topSalarios.map((s, i) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-2 pr-4 font-bold text-muted-foreground">{i + 1}</td>
+                            <td className="py-2 pr-4 font-medium truncate max-w-[200px]">{s.nome}</td>
+                            <td className="py-2 pr-4 text-muted-foreground">{s.funcao}</td>
+                            <td className="py-2 pr-4 text-right font-semibold text-green-600">{fmtBRL(s.bruto)}</td>
+                            <td className="py-2 text-right font-semibold text-blue-600">{fmtBRL(s.liquido)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}

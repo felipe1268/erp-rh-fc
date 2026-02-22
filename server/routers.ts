@@ -38,6 +38,8 @@ import { controleDocumentosRouter } from "./routers/controleDocumentos";
 import { processosTrabRouter } from "./routers/processosTrabalhistas";
 import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
+import { menuConfigRouter } from "./routers/menuConfig";
+import { storagePut } from "./storage";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -60,6 +62,7 @@ export const appRouter = router({
   docs: controleDocumentosRouter,
   home: homeDataRouter,
   epis: episRouter,
+  menuConfig: menuConfigRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -103,6 +106,21 @@ export const appRouter = router({
       await deleteCompany(input.id);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "empresas", entityType: "company", entityId: input.id, details: `Empresa excluída` });
       return { success: true };
+    }),
+    uploadLogo: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      base64: z.string(),
+      mimeType: z.string(),
+      fileName: z.string(),
+    })).mutation(async ({ input, ctx }) => {
+      const buffer = Buffer.from(input.base64, "base64");
+      const suffix = Math.random().toString(36).slice(2, 10);
+      const ext = input.fileName.split(".").pop() || "png";
+      const key = `company-logos/${input.companyId}-${suffix}.${ext}`;
+      const { url } = await storagePut(key, buffer, input.mimeType);
+      await updateCompany(input.companyId, { logoUrl: url } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "empresas", entityType: "company", entityId: input.companyId, details: `Logo da empresa atualizado` });
+      return { url };
     }),
   }),
 

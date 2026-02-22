@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import PrintActions from "@/components/PrintActions";
+import PrintHeader from "@/components/PrintHeader";
 import {
   Plus, Search, Gavel, ArrowLeft, Calendar, AlertTriangle,
   Trash2, Pencil, Eye, ChevronDown, ChevronUp, Clock,
@@ -271,6 +272,7 @@ export default function ProcessosTrabalhistas() {
     const p = detalhe.data;
     return (
       <DashboardLayout>
+      <PrintHeader />
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -575,6 +577,7 @@ export default function ProcessosTrabalhistas() {
   if (viewMode === "novo") {
     return (
       <DashboardLayout>
+      <PrintHeader />
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => { setViewMode("lista"); resetForm(); }}>
@@ -819,6 +822,7 @@ export default function ProcessosTrabalhistas() {
   // ===== LISTA VIEW =====
   return (
     <DashboardLayout>
+      <PrintHeader />
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>

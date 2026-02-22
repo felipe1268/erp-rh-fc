@@ -1105,3 +1105,35 @@
 
 ### Testes
 - [x] Testes unitários para rotas de dashboards (10 procedures), EPIs e homeData (4 testes passando)
+
+## Rev. 42: Menu Configurável, Logo da Empresa, Reorganização Sidebar
+### Reorganização do Menu Lateral
+- [x] Mover "Relógios de Ponto" da seção Operacional para Cadastro
+- [x] Configuração personalizável do menu lateral (ADM Master pode reorganizar itens entre seções e reordenar)
+- [x] Salvar configuração do menu no banco de dados por usuário
+- [x] Tela de configuração do menu nas Configurações do sistema (tab Painel de Controle)
+
+### Logo da Empresa
+- [x] Adicionar campo logoUrl na tabela de empresas
+- [x] Upload de logo da empresa no cadastro de empresas (S3)
+- [x] Exibir logo da empresa selecionada no cabeçalho/sidebar do sistema
+- [x] Usar logo da empresa em todos os relatórios e impressões automaticamente (PrintHeader)
+- [x] Ao alterar o logo, todo o sistema reflete a mudança imediatamente
+
+## Rev. 42: REFORMULAÇÃO COMPLETA DOS DASHBOARDS
+### Apagar dashboards antigos que não funcionam
+- [x] Remover DashPendencias, DashTreinamentos, DashEpi, DashAcidentes, DashAuditorias, Dash5w2h, DashExtintoresHidrantes, DashDesvios, DashRiscos
+- [x] Remover rotas backend antigas dos dashboards que não funcionam
+
+### Novos Dashboards (6 dashboards completos)
+- [x] Dashboard Funcionários: idade, gênero, endereço (cidade/estado), função, tempo de empresa, mais velho/novo, ranking faltas, ranking advertências
+- [x] Dashboard Cartão de Ponto: frequência, atrasos, faltas, horas trabalhadas, por período/obra
+- [x] Dashboard Folha de Pagamento: custos totais, por empresa, por obra, evolução mensal, comparativos
+- [x] Dashboard Horas Extras: por funcionário, por obra, por período, custo total, ranking, tendências, % sobre folha
+- [x] Dashboard EPIs: entregas, vencimentos, por tipo, por funcionário, estoque
+- [x] Dashboard Jurídico: processos trabalhistas, valores em risco, status, prazos, audiências próximas
+
+### Atualizar sidebar e DashboardIndex
+- [x] Atualizar menu lateral com os 6 novos dashboards
+- [x] Recriar DashboardIndex como hub central com cards para cada dashboard
+- [x] Limpar rotas antigas do App.tsx

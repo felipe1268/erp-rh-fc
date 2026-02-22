@@ -1,0 +1,183 @@
+import DashboardLayout from "@/components/DashboardLayout";
+import DashChart, { DashKpi } from "@/components/DashChart";
+import PrintActions from "@/components/PrintActions";
+import { trpc } from "@/lib/trpc";
+import { useCompany } from "@/contexts/CompanyContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Gavel, DollarSign, AlertTriangle, Scale, Calendar, FileText, TrendingUp, ShieldAlert } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Link } from "wouter";
+
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+const RISCO_COLORS: Record<string, string> = {
+  "alto": "#EF4444", "medio": "#F59E0B", "baixo": "#22C55E", "remoto": "#6B7280",
+};
+
+export default function DashJuridico() {
+  const { selectedCompanyId } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
+  const { data, isLoading } = trpc.dashboards.juridico.useQuery({ companyId }, { enabled: companyId > 0 });
+
+  if (isLoading) return (
+    <DashboardLayout>
+      <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+    </DashboardLayout>
+  );
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Link href="/dashboards" className="text-sm text-muted-foreground hover:text-foreground">Dashboards</Link>
+              <span className="text-muted-foreground">/</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard Jurídico</h1>
+            <p className="text-muted-foreground text-sm mt-1">Processos trabalhistas, valores e riscos</p>
+          </div>
+          <PrintActions title="Dashboard Jurídico" />
+        </div>
+
+        {!data ? (
+          <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
+        ) : (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <DashKpi label="Total Processos" value={data.resumo.totalProcessos} icon={Gavel} color="blue" />
+              <DashKpi label="Ativos" value={data.resumo.processosAtivos} icon={AlertTriangle} color="red" />
+              <DashKpi label="Encerrados" value={data.resumo.processosEncerrados} icon={FileText} color="green" />
+              <DashKpi label="Valor em Risco" value={fmtBRL(data.resumo.valorEmRisco)} icon={ShieldAlert} color="orange" />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <DashKpi label="Valor da Causa" value={fmtBRL(data.resumo.totalValorCausa)} icon={DollarSign} color="red" />
+              <DashKpi label="Condenação" value={fmtBRL(data.resumo.totalValorCondenacao)} icon={Scale} color="purple" />
+              <DashKpi label="Acordos" value={fmtBRL(data.resumo.totalValorAcordo)} icon={TrendingUp} color="teal" />
+              <DashKpi label="Valor Pago" value={fmtBRL(data.resumo.totalValorPago)} icon={DollarSign} color="slate" />
+            </div>
+
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <DashChart
+                title="Processos por Status"
+                type="doughnut"
+                labels={data.porStatus.map(s => s.label)}
+                datasets={[{ data: data.porStatus.map(s => s.value), backgroundColor: ["#3B82F6", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6", "#6B7280"] }]}
+                height={240}
+              />
+              <DashChart
+                title="Processos por Risco"
+                type="doughnut"
+                labels={data.porRisco.map(r => r.label)}
+                datasets={[{ data: data.porRisco.map(r => r.value), backgroundColor: data.porRisco.map(r => RISCO_COLORS[r.label] || "#6B7280") }]}
+                height={240}
+              />
+              <DashChart
+                title="Processos por Fase"
+                type="pie"
+                labels={data.porFase.map(f => f.label)}
+                datasets={[{ data: data.porFase.map(f => f.value) }]}
+                height={240}
+              />
+            </div>
+
+            {/* Tipo de Ação */}
+            {data.porTipo.length > 0 && (
+              <DashChart
+                title="Processos por Tipo de Ação"
+                type="horizontalBar"
+                labels={data.porTipo.map(t => t.label)}
+                datasets={[{ label: "Processos", data: data.porTipo.map(t => t.value), backgroundColor: "#3B82F6" }]}
+                height={Math.max(200, data.porTipo.length * 35)}
+              />
+            )}
+
+            {/* Valor em Risco por Nível */}
+            {data.valorPorRisco.length > 0 && (
+              <DashChart
+                title="Valor em Risco por Nível"
+                type="bar"
+                labels={data.valorPorRisco.map(r => r.risco)}
+                datasets={[{ label: "Valor (R$)", data: data.valorPorRisco.map(r => r.valor), backgroundColor: data.valorPorRisco.map(r => RISCO_COLORS[r.risco] || "#6B7280") }]}
+                height={260}
+              />
+            )}
+
+            {/* Evolução mensal */}
+            {data.evolucaoMensal.length > 0 && (
+              <DashChart
+                title="Novos Processos por Mês (data de distribuição)"
+                type="bar"
+                labels={data.evolucaoMensal.map(r => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
+                datasets={[{ label: "Processos", data: data.evolucaoMensal.map(r => r.count), backgroundColor: "#EF4444" }]}
+                height={260}
+              />
+            )}
+
+            {/* Top Pedidos */}
+            {data.topPedidos.length > 0 && (
+              <DashChart
+                title="Pedidos Mais Comuns nos Processos"
+                type="horizontalBar"
+                labels={data.topPedidos.map(p => p.pedido.length > 35 ? p.pedido.slice(0, 35) + "..." : p.pedido)}
+                datasets={[{ label: "Ocorrências", data: data.topPedidos.map(p => p.count), backgroundColor: "#8B5CF6" }]}
+                height={Math.max(200, data.topPedidos.length * 30)}
+              />
+            )}
+
+            {/* Próximas Audiências */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-blue-500" />
+                  Próximas Audiências
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.proximasAudiencias.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma audiência agendada</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Data</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Processo</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Reclamante</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Vara</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Risco</th>
+                          <th className="py-2 font-medium text-muted-foreground">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.proximasAudiencias.map((a, i) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-2 pr-3 font-semibold">{a.data ? new Date(a.data + "T00:00:00").toLocaleDateString("pt-BR") : "-"}</td>
+                            <td className="py-2 pr-3 text-xs font-mono">{a.numero}</td>
+                            <td className="py-2 pr-3 font-medium truncate max-w-[150px]">{a.reclamante}</td>
+                            <td className="py-2 pr-3 text-muted-foreground text-xs">{a.vara}</td>
+                            <td className="py-2 pr-3">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${a.risco === "alto" ? "bg-red-100 text-red-700" : a.risco === "medio" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                                {a.risco}
+                              </span>
+                            </td>
+                            <td className="py-2 text-xs text-muted-foreground">{a.status?.replace(/_/g, " ")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}

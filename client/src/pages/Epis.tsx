@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
+import PrintHeader from "@/components/PrintHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,7 @@ export default function Epis() {
   if (viewMode === "novo_epi") {
     return (
       <DashboardLayout>
+      <PrintHeader />
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => setViewMode("catalogo")}>
@@ -165,6 +167,7 @@ export default function Epis() {
   if (viewMode === "nova_entrega") {
     return (
       <DashboardLayout>
+      <PrintHeader />
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => setViewMode("entregas")}>
@@ -254,6 +257,7 @@ export default function Epis() {
   // ============================================================
   return (
     <DashboardLayout>
+      <PrintHeader />
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

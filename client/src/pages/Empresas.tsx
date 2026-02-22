@@ -1,14 +1,15 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
+import PrintHeader from "@/components/PrintHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { Building2, Plus, Pencil, Trash2, Search, Loader2, Star, ArrowLeft } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, Search, Loader2, Star, ArrowLeft, Upload, ImageIcon } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useDefaultCompany } from "@/hooks/useDefaultCompany";
 import { formatCNPJ, formatTelefone } from "@/lib/formatters";
@@ -69,6 +70,26 @@ export default function Empresas() {
     onSuccess: () => { utils.companies.list.invalidate(); toast.success("Empresa excluída!"); },
     onError: (e) => toast.error("Erro ao excluir: " + e.message),
   });
+  const uploadLogoMut = trpc.companies.uploadLogo.useMutation({
+    onSuccess: () => { utils.companies.list.invalidate(); toast.success("Logo atualizado com sucesso!"); },
+    onError: (e) => toast.error("Erro ao enviar logo: " + e.message),
+  });
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoCompanyId, setLogoCompanyId] = useState<number | null>(null);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, companyId: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Selecione um arquivo de imagem."); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Imagem deve ter no máximo 5MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      uploadLogoMut.mutate({ companyId, base64, mimeType: file.type, fileName: file.name });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   const fetchCnpjData = useCallback(async (cnpj: string) => {
     const digits = cnpj.replace(/\D/g, "");
@@ -156,6 +177,7 @@ export default function Empresas() {
 
   return (
     <DashboardLayout>
+      <PrintHeader />
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -191,8 +213,18 @@ export default function Empresas() {
                   ) : null}
                   <CardHeader className={`flex flex-row items-start justify-between pb-2 ${isDefaultCompany ? "pt-7" : ""}`}>
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Building2 className="h-5 w-5 text-primary" />
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden relative group/logo cursor-pointer"
+                        onClick={() => { setLogoCompanyId(c.id); logoInputRef.current?.click(); }}
+                        title="Clique para alterar o logo"
+                      >
+                        {(c as any).logoUrl ? (
+                          <img src={(c as any).logoUrl} alt="Logo" className="h-full w-full object-contain" />
+                        ) : (
+                          <Building2 className="h-5 w-5 text-primary" />
+                        )}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity">
+                          <Upload className="h-3.5 w-3.5 text-white" />
+                        </div>
                       </div>
                       <div>
                         <CardTitle className="text-sm font-semibold">{c.nomeFantasia || c.razaoSocial}</CardTitle>
@@ -308,6 +340,31 @@ export default function Empresas() {
               <Input value={form.email} onChange={e => set("email", e.target.value)} placeholder="email@empresa.com" className="bg-input" />
             </div>
           </div>
+          {/* Upload de Logo */}
+          {editingId && (
+            <div className="mt-4 p-4 border border-dashed border-border rounded-lg">
+              <Label className="text-sm font-medium flex items-center gap-2 mb-2">
+                <ImageIcon className="h-4 w-4" /> Logo da Empresa
+              </Label>
+              <p className="text-xs text-muted-foreground mb-3">O logo será usado em relatórios, impressões e cabeçalhos do sistema.</p>
+              <div className="flex items-center gap-4">
+                {companies?.find(c => c.id === editingId) && (companies.find(c => c.id === editingId) as any)?.logoUrl ? (
+                  <img src={(companies.find(c => c.id === editingId) as any).logoUrl} alt="Logo atual" className="h-16 w-16 object-contain border rounded" />
+                ) : (
+                  <div className="h-16 w-16 border rounded flex items-center justify-center bg-muted">
+                    <Building2 className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
+                <div>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => { setLogoCompanyId(editingId); logoInputRef.current?.click(); }} disabled={uploadLogoMut.isPending}>
+                    {uploadLogoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {uploadLogoMut.isPending ? "Enviando..." : "Enviar Logo"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-1">PNG, JPG ou SVG. Máx 5MB.</p>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending || cnpjLoading}>
@@ -316,6 +373,13 @@ export default function Empresas() {
           </div>
         </div>
       </FullScreenDialog>
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => logoCompanyId && handleLogoUpload(e, logoCompanyId)}
+      />
     </DashboardLayout>
   );
 }

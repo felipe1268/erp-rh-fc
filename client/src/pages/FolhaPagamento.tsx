@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintActions from "@/components/PrintActions";
+import PrintHeader from "@/components/PrintHeader";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo, useCallback } from "react";
 import { toast } from "sonner";
@@ -318,6 +319,7 @@ export default function FolhaPagamento() {
   if (viewMode === "detalhes" && viewLancId) {
     return (
       <DashboardLayout>
+      <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -542,6 +544,7 @@ export default function FolhaPagamento() {
   if (viewMode === "custos_obra") {
     return (
       <DashboardLayout>
+      <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -893,6 +896,7 @@ export default function FolhaPagamento() {
   if (viewMode === "horas_extras") {
     return (
       <DashboardLayout>
+      <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -1058,6 +1062,7 @@ export default function FolhaPagamento() {
   if (viewMode === "verificacao" && viewLancId) {
     return (
       <DashboardLayout>
+      <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -1174,6 +1179,7 @@ export default function FolhaPagamento() {
   // ===== MAIN VIEW (resumo) =====
   return (
     <DashboardLayout>
+      <PrintHeader />
       {fileInputs}
       <div className="space-y-6">
         {/* HEADER */}
