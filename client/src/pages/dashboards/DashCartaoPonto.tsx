@@ -163,8 +163,8 @@ export default function DashCartaoPonto() {
                         <div
                           key={i}
                           className="flex items-center justify-between py-2 px-2 border-b border-border/50 last:border-0 rounded hover:bg-red-50 cursor-pointer transition-colors"
-                          onClick={() => r.employeeId && navigate(`/colaboradores?id=${r.employeeId}&tab=ponto`)}
-                          title="Clique para ver o Raio-X do funcionário"
+                          onClick={() => r.employeeId && navigate(`/fechamento-ponto?funcionario=${r.employeeId}&mes=${mes}`)}
+                          title="Clique para ver os registros de ponto deste funcionário"
                         >
                           <div className="flex items-center gap-2.5">
                             <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
@@ -207,8 +207,8 @@ export default function DashCartaoPonto() {
                         <div
                           key={i}
                           className="flex items-center justify-between py-2 px-2 border-b border-border/50 last:border-0 rounded hover:bg-amber-50 cursor-pointer transition-colors"
-                          onClick={() => r.employeeId && navigate(`/colaboradores?id=${r.employeeId}&tab=ponto`)}
-                          title="Clique para ver o Raio-X do funcionário"
+                          onClick={() => r.employeeId && navigate(`/fechamento-ponto?funcionario=${r.employeeId}&mes=${mes}`)}
+                          title="Clique para ver os registros de ponto deste funcionário"
                         >
                           <div className="flex items-center gap-2.5">
                             <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>

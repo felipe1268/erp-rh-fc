@@ -540,7 +540,7 @@ export default function Colaboradores() {
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Nº Interno</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nome</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground min-w-[160px] whitespace-nowrap">CPF</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground min-w-[180px] whitespace-nowrap">CPF</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Função</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Setor</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -559,7 +559,7 @@ export default function Colaboradores() {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs font-bold text-primary">{emp.codigoInterno || "-"}</td>
                     <td className="px-4 py-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
-                    <td className="px-4 py-3 text-muted-foreground min-w-[160px] whitespace-nowrap font-mono">{formatCPF(emp.cpf)}</td>
+                    <td className="px-4 py-3 text-muted-foreground min-w-[180px] whitespace-nowrap font-mono text-sm">{formatCPF(emp.cpf)}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3">

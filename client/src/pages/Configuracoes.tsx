@@ -11,7 +11,9 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const MODULES_LIST = [
   { key: "colaboradores", label: "Colaboradores" },
@@ -40,7 +42,7 @@ const CATEGORIAS = [
   { key: "rescisao", label: "Rescisão", icon: UserX, color: "text-gray-600", bgColor: "bg-gray-50", borderColor: "border-gray-200" },
 ];
 
-type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel" | "regras";
+type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes";
 
 export default function Configuracoes() {
   const { selectedCompanyId } = useCompany();
@@ -230,6 +232,7 @@ export default function Configuracoes() {
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale },
     { key: "usuarios" as TabKey, label: "Usuários", icon: Users },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key },
+    { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2 },
   ];
 
@@ -564,6 +567,11 @@ export default function Configuracoes() {
           </Card>
         )}
 
+        {/* TAB: Notificações E-mail */}
+        {activeTab === "notificacoes" && (
+          <NotificacoesEmailTab companyId={companyId} />
+        )}
+
         {/* TAB: Limpeza */}
         {activeTab === "limpeza" && (
           <Card className="border-red-200">
@@ -665,5 +673,232 @@ export default function Configuracoes() {
         </FullScreenDialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// COMPONENTE: Notificações por E-mail
+// ============================================================
+function NotificacoesEmailTab({ companyId }: { companyId: number }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [notifContratacao, setNotifContratacao] = useState(true);
+  const [notifDemissao, setNotifDemissao] = useState(true);
+  const [notifTransferencia, setNotifTransferencia] = useState(false);
+  const [notifAfastamento, setNotifAfastamento] = useState(false);
+
+  const recipientsQuery = trpc.notifications.listRecipients.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  const createMut = trpc.notifications.createRecipient.useMutation({
+    onSuccess: () => { toast.success("Destinatário adicionado!"); resetForm(); recipientsQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateMut = trpc.notifications.updateRecipient.useMutation({
+    onSuccess: () => { toast.success("Destinatário atualizado!"); resetForm(); recipientsQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteMut = trpc.notifications.deleteRecipient.useMutation({
+    onSuccess: () => { toast.success("Destinatário removido!"); recipientsQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function resetForm() {
+    setShowForm(false); setEditId(null); setNome(""); setEmail("");
+    setNotifContratacao(true); setNotifDemissao(true);
+    setNotifTransferencia(false); setNotifAfastamento(false);
+  }
+
+  function handleEdit(r: any) {
+    setEditId(r.id); setNome(r.nome); setEmail(r.email);
+    setNotifContratacao(r.notificarContratacao); setNotifDemissao(r.notificarDemissao);
+    setNotifTransferencia(r.notificarTransferencia); setNotifAfastamento(r.notificarAfastamento);
+    setShowForm(true);
+  }
+
+  function handleSave() {
+    if (!nome.trim() || !email.trim()) { toast.error("Nome e e-mail são obrigatórios"); return; }
+    if (editId) {
+      updateMut.mutate({ id: editId, nome, email, notificarContratacao: notifContratacao, notificarDemissao: notifDemissao, notificarTransferencia: notifTransferencia, notificarAfastamento: notifAfastamento });
+    } else {
+      createMut.mutate({ companyId, nome, email, notificarContratacao: notifContratacao, notificarDemissao: notifDemissao, notificarTransferencia: notifTransferencia, notificarAfastamento: notifAfastamento });
+    }
+  }
+
+  function handleToggleActive(r: any) {
+    updateMut.mutate({ id: r.id, ativo: !r.ativo });
+  }
+
+  const recipients = recipientsQuery.data || [];
+  const activeCount = recipients.filter((r: any) => r.ativo).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <Bell className="w-5 h-5 text-blue-600" />
+            Notificações por E-mail
+          </h2>
+          <p className="text-sm text-gray-500">
+            Cadastre os e-mails que devem receber avisos automáticos de contratação, demissão e outras movimentações.
+          </p>
+        </div>
+        <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
+          <Plus className="w-4 h-4 mr-1" /> Novo Destinatário
+        </Button>
+      </div>
+
+      {/* Resumo */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-blue-700">{recipients.length}</p>
+          <p className="text-xs text-gray-500">Total Cadastrados</p>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-green-700">{activeCount}</p>
+          <p className="text-xs text-gray-500">Ativos</p>
+        </div>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-emerald-700">{recipients.filter((r: any) => r.ativo && r.notificarContratacao).length}</p>
+          <p className="text-xs text-gray-500">Recebem Contratação</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-red-700">{recipients.filter((r: any) => r.ativo && r.notificarDemissao).length}</p>
+          <p className="text-xs text-gray-500">Recebem Demissão</p>
+        </div>
+      </div>
+
+      {/* Formulário */}
+      {showForm && (
+        <Card className="border-blue-200">
+          <CardContent className="p-5 space-y-4">
+            <h3 className="font-semibold text-gray-800">{editId ? "Editar Destinatário" : "Novo Destinatário"}</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Nome *</Label>
+                <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: João da Silva" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">E-mail *</Label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Ex: joao@empresa.com" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-700 mb-2 block">Tipos de Notificação</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-green-50 transition-colors">
+                  <Switch checked={notifContratacao} onCheckedChange={setNotifContratacao} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Contratação</p>
+                    <p className="text-xs text-gray-400">Aviso quando novo funcionário for cadastrado</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-red-50 transition-colors">
+                  <Switch checked={notifDemissao} onCheckedChange={setNotifDemissao} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Demissão</p>
+                    <p className="text-xs text-gray-400">Aviso quando funcionário for desligado</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                  <Switch checked={notifTransferencia} onCheckedChange={setNotifTransferencia} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Transferência</p>
+                    <p className="text-xs text-gray-400">Aviso quando funcionário mudar de obra/setor</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-amber-50 transition-colors">
+                  <Switch checked={notifAfastamento} onCheckedChange={setNotifAfastamento} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Afastamento</p>
+                    <p className="text-xs text-gray-400">Aviso quando funcionário for afastado</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+              <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending} className="bg-blue-600 hover:bg-blue-700">
+                {(createMut.isPending || updateMut.isPending) ? "Salvando..." : editId ? "Atualizar" : "Adicionar"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lista de destinatários */}
+      {recipientsQuery.isLoading ? (
+        <div className="text-center py-12 text-gray-400">Carregando destinatários...</div>
+      ) : recipients.length === 0 ? (
+        <Card className="border-dashed border-2 border-gray-300">
+          <CardContent className="p-8 text-center">
+            <Mail className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 mb-2">Nenhum destinatário cadastrado</p>
+            <p className="text-xs text-gray-400 mb-4">Adicione e-mails para receber notificações automáticas de movimentações de pessoal.</p>
+            <Button onClick={() => { resetForm(); setShowForm(true); }} variant="outline">
+              <Plus className="w-4 h-4 mr-1" /> Adicionar Primeiro Destinatário
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {recipients.map((r: any) => (
+            <div key={r.id} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${r.ativo ? "bg-white hover:bg-gray-50" : "bg-gray-50 opacity-60"}`}>
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${r.ativo ? "bg-blue-600" : "bg-gray-400"}`}>
+                  {r.nome.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-800 truncate">{r.nome}</p>
+                  <p className="text-sm text-gray-500 truncate">{r.email}</p>
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {r.notificarContratacao && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-medium">Contratação</span>}
+                  {r.notificarDemissao && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-medium">Demissão</span>}
+                  {r.notificarTransferencia && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">Transferência</span>}
+                  {r.notificarAfastamento && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium">Afastamento</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 ml-4">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleToggleActive(r)} title={r.ativo ? "Desativar" : "Ativar"}>
+                  {r.ativo ? <ToggleRight className="w-5 h-5 text-green-600" /> : <ToggleLeft className="w-5 h-5 text-gray-400" />}
+                </Button>
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleEdit(r)}>
+                  <Settings className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="text-xs text-red-500 hover:text-red-700" onClick={() => {
+                  if (confirm(`Remover ${r.nome} da lista de notificações?`)) deleteMut.mutate({ id: r.id });
+                }}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Informação sobre funcionamento */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">Como funciona?</p>
+              <ul className="space-y-1 text-xs text-blue-700">
+                <li>• <strong>Contratação:</strong> E-mail enviado automaticamente quando um novo funcionário é cadastrado com status "Ativo"</li>
+                <li>• <strong>Demissão:</strong> E-mail enviado quando o status de um funcionário é alterado para "Desligado"</li>
+                <li>• <strong>Transferência:</strong> E-mail enviado quando um funcionário muda de obra ou setor</li>
+                <li>• <strong>Afastamento:</strong> E-mail enviado quando um funcionário é registrado como afastado</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

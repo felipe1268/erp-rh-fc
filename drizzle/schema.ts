@@ -809,7 +809,7 @@ export const folhaLancamentos = mysqlTable("folha_lancamentos", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
 	mesReferencia: varchar({ length: 7 }).notNull(),
-	tipoLancamento: mysqlEnum(['vale','pagamento']).notNull(),
+	tipoLancamento: mysqlEnum(['vale','pagamento','decimo_terceiro_1','decimo_terceiro_2']).notNull(),
 	status: mysqlEnum(['importado','validado','consolidado']).default('importado').notNull(),
 	// Arquivos importados
 	analiticoUploadId: int(),
@@ -1198,4 +1198,26 @@ export const insuranceAlertsLog = mysqlTable("insurance_alerts_log", {
 	index("ial_employee").on(table.employeeId),
 	index("ial_tipo").on(table.companyId, table.tipoMovimentacao),
 	index("ial_data").on(table.companyId, table.createdAt),
+]);
+
+
+// NOTIFICAÇÕES - DESTINATÁRIOS DE E-MAIL
+// ============================================================
+export const notificationRecipients = mysqlTable("notification_recipients", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	email: varchar({ length: 255 }).notNull(),
+	// Tipos de notificação que este destinatário recebe
+	notificarContratacao: boolean().default(true).notNull(),
+	notificarDemissao: boolean().default(true).notNull(),
+	notificarTransferencia: boolean().default(false).notNull(),
+	notificarAfastamento: boolean().default(false).notNull(),
+	ativo: boolean().default(true).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("nr_company").on(table.companyId),
+	index("nr_email").on(table.email),
 ]);

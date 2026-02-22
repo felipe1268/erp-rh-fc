@@ -57,7 +57,9 @@ export default function FolhaPagamento() {
   // Upload refs (direto no seletor de arquivos)
   const valeInputRef = useRef<HTMLInputElement>(null);
   const pagInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState<"vale" | "pagamento" | null>(null);
+  const decimo1InputRef = useRef<HTMLInputElement>(null);
+  const decimo2InputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<"vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2" | null>(null);
 
   // Views
   const [viewMode, setViewMode] = useState<ViewMode>("resumo");
@@ -223,7 +225,7 @@ export default function FolhaPagamento() {
   };
 
   // ===== HANDLERS =====
-  const handleFileSelect = useCallback(async (files: FileList | null, tipo: "vale" | "pagamento") => {
+  const handleFileSelect = useCallback(async (files: FileList | null, tipo: "vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2") => {
     if (!files || files.length === 0) return;
     setUploading(tipo);
 
@@ -248,6 +250,8 @@ export default function FolhaPagamento() {
     // Reset input
     if (tipo === "vale" && valeInputRef.current) valeInputRef.current.value = "";
     if (tipo === "pagamento" && pagInputRef.current) pagInputRef.current.value = "";
+    if (tipo === "decimo_terceiro_1" && decimo1InputRef.current) decimo1InputRef.current.value = "";
+    if (tipo === "decimo_terceiro_2" && decimo2InputRef.current) decimo2InputRef.current.value = "";
   }, [companyId, mesAno, importarAutoMut]);
 
   function openView(mode: ViewMode, lancId?: number, tipo?: string) {
@@ -304,6 +308,10 @@ export default function FolhaPagamento() {
 
   const vale = statusMes.data?.vale;
   const pagamento = statusMes.data?.pagamento;
+  const decimoTerceiro1 = statusMes.data?.decimoTerceiro1;
+  const decimoTerceiro2 = statusMes.data?.decimoTerceiro2;
+  const isNovembro = mesSelecionado === 11;
+  const isDezembro = mesSelecionado === 12;
 
   // Hidden file inputs for direct upload
   const fileInputs = (
@@ -312,6 +320,10 @@ export default function FolhaPagamento() {
         onChange={e => handleFileSelect(e.target.files, "vale")} />
       <input ref={pagInputRef} type="file" accept=".pdf" multiple className="sr-only"
         onChange={e => handleFileSelect(e.target.files, "pagamento")} />
+      <input ref={decimo1InputRef} type="file" accept=".pdf" multiple className="sr-only"
+        onChange={e => handleFileSelect(e.target.files, "decimo_terceiro_1")} />
+      <input ref={decimo2InputRef} type="file" accept=".pdf" multiple className="sr-only"
+        onChange={e => handleFileSelect(e.target.files, "decimo_terceiro_2")} />
     </>
   );
 
@@ -1433,6 +1445,220 @@ export default function FolhaPagamento() {
             </CardContent>
           </Card>
         </div>
+
+        {/* CARDS 13º SALÁRIO - Só aparecem em Nov e Dez */}
+        {(isNovembro || isDezembro) && (
+          <div className={`grid gap-4 ${isNovembro ? 'md:grid-cols-1' : isDezembro ? 'md:grid-cols-2' : ''}`}>
+            {/* 1ª PARCELA - Novembro */}
+            {isNovembro && (
+              <Card className={`border-2 ${decimoTerceiro1 ? 'border-purple-200' : 'border-dashed border-purple-300'}`}>
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                        <span className="text-lg font-black text-purple-600">13</span>
+                      </div>
+                      <div>
+                        <p className="font-bold text-base">13º Salário — 1ª Parcela</p>
+                        <p className="text-xs text-muted-foreground">Pago até 30/Nov (CLT Art. 2º Lei 4.749/65)</p>
+                      </div>
+                    </div>
+                    {decimoTerceiro1 && (
+                      <Badge className={decimoTerceiro1.status === 'consolidado' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}>
+                        {decimoTerceiro1.status === 'consolidado' && <Lock className="h-3 w-3 mr-1" />}
+                        {decimoTerceiro1.status.charAt(0).toUpperCase() + decimoTerceiro1.status.slice(1)}
+                      </Badge>
+                    )}
+                  </div>
+                  {decimoTerceiro1 ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="bg-purple-50 rounded-lg p-2 text-center">
+                          <p className="text-lg font-bold text-purple-700">{decimoTerceiro1.totalFuncionarios}</p>
+                          <p className="text-[10px] text-muted-foreground">Funcionários</p>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-2 text-center">
+                          <p className="text-base font-bold text-purple-700">{formatBRL(decimoTerceiro1.totalLiquido)}</p>
+                          <p className="text-[10px] text-muted-foreground">Total Líquido</p>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-2 text-center">
+                          <p className={`text-lg font-bold ${(decimoTerceiro1.totalDivergencias || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {decimoTerceiro1.totalDivergencias || 0}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">Divergências</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView('detalhes', decimoTerceiro1.id, '13º 1ª Parcela')}>
+                          <Eye className="h-3 w-3 mr-1" /> Detalhes
+                        </Button>
+                        {decimoTerceiro1.status !== 'consolidado' && (
+                          <Button size="sm" variant="outline" className="text-xs h-8 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: decimoTerceiro1.id })}>
+                            <Lock className="h-3 w-3 mr-1" /> Consolidar
+                          </Button>
+                        )}
+                        {decimoTerceiro1.status === 'consolidado' && isAdmin && (
+                          <Button size="sm" variant="outline" className="text-xs h-8 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: decimoTerceiro1.id })}>
+                            <Unlock className="h-3 w-3 mr-1" /> Desconsolidar
+                          </Button>
+                        )}
+                        {decimoTerceiro1.status !== 'consolidado' && isAdmin && (
+                          <Button size="sm" variant="outline" className="text-xs h-8 text-red-600" onClick={() => {
+                            if (confirm('Excluir lançamento de 13º 1ª Parcela?')) excluirMut.mutate({ folhaLancamentoId: decimoTerceiro1.id });
+                          }}>
+                            <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                          </Button>
+                        )}
+                      </div>
+                      {decimoTerceiro1.status !== 'consolidado' && (
+                        <Button size="sm" variant="ghost" className="text-xs w-full text-purple-700 hover:bg-purple-50"
+                          disabled={uploading === 'decimo_terceiro_1'}
+                          onClick={() => decimo1InputRef.current?.click()}>
+                          {uploading === 'decimo_terceiro_1' ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Reimportar PDFs</>}
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <span className="text-4xl font-black text-purple-200 block mb-3">13</span>
+                      <p className="text-sm text-muted-foreground mb-3">Nenhum lançamento de 13º 1ª Parcela</p>
+                      <Button className="bg-purple-600 hover:bg-purple-700"
+                        disabled={uploading === 'decimo_terceiro_1'}
+                        onClick={() => decimo1InputRef.current?.click()}>
+                        {uploading === 'decimo_terceiro_1' ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-2" /> Importar 13º 1ª Parcela</>}
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground mt-2">Selecione os PDFs da 1ª parcela do 13º salário.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 2ª PARCELA - Dezembro */}
+            {isDezembro && (
+              <>
+                {/* 1ª Parcela em Dez (caso não tenha sido importada em Nov) */}
+                <Card className={`border-2 ${decimoTerceiro1 ? 'border-purple-200' : 'border-dashed border-purple-300'}`}>
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                          <span className="text-lg font-black text-purple-600">13</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-base">13º Salário — 1ª Parcela</p>
+                          <p className="text-xs text-muted-foreground">Referência Nov/{anoSelecionado}</p>
+                        </div>
+                      </div>
+                      {decimoTerceiro1 && (
+                        <Badge className="bg-purple-100 text-purple-700">
+                          {decimoTerceiro1.status.charAt(0).toUpperCase() + decimoTerceiro1.status.slice(1)}
+                        </Badge>
+                      )}
+                    </div>
+                    {decimoTerceiro1 ? (
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-purple-50 rounded-lg p-2 text-center">
+                          <p className="text-lg font-bold text-purple-700">{decimoTerceiro1.totalFuncionarios}</p>
+                          <p className="text-[10px] text-muted-foreground">Funcionários</p>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-2 text-center">
+                          <p className="text-base font-bold text-purple-700">{formatBRL(decimoTerceiro1.totalLiquido)}</p>
+                          <p className="text-[10px] text-muted-foreground">Total Líquido</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-3">1ª Parcela não importada. Importe em Novembro.</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* 2ª Parcela */}
+                <Card className={`border-2 ${decimoTerceiro2 ? 'border-indigo-200' : 'border-dashed border-indigo-300'}`}>
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-10 w-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                          <span className="text-lg font-black text-indigo-600">13</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-base">13º Salário — 2ª Parcela</p>
+                          <p className="text-xs text-muted-foreground">Pago até 20/Dez (CLT Art. 1º Lei 4.749/65)</p>
+                        </div>
+                      </div>
+                      {decimoTerceiro2 && (
+                        <Badge className={decimoTerceiro2.status === 'consolidado' ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'}>
+                          {decimoTerceiro2.status === 'consolidado' && <Lock className="h-3 w-3 mr-1" />}
+                          {decimoTerceiro2.status.charAt(0).toUpperCase() + decimoTerceiro2.status.slice(1)}
+                        </Badge>
+                      )}
+                    </div>
+                    {decimoTerceiro2 ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-2 text-sm">
+                          <div className="bg-indigo-50 rounded-lg p-2 text-center">
+                            <p className="text-lg font-bold text-indigo-700">{decimoTerceiro2.totalFuncionarios}</p>
+                            <p className="text-[10px] text-muted-foreground">Funcionários</p>
+                          </div>
+                          <div className="bg-indigo-50 rounded-lg p-2 text-center">
+                            <p className="text-base font-bold text-indigo-700">{formatBRL(decimoTerceiro2.totalLiquido)}</p>
+                            <p className="text-[10px] text-muted-foreground">Total Líquido</p>
+                          </div>
+                          <div className="bg-indigo-50 rounded-lg p-2 text-center">
+                            <p className={`text-lg font-bold ${(decimoTerceiro2.totalDivergencias || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {decimoTerceiro2.totalDivergencias || 0}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Divergências</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5 flex-wrap">
+                          <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView('detalhes', decimoTerceiro2.id, '13º 2ª Parcela')}>
+                            <Eye className="h-3 w-3 mr-1" /> Detalhes
+                          </Button>
+                          {decimoTerceiro2.status !== 'consolidado' && (
+                            <Button size="sm" variant="outline" className="text-xs h-8 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: decimoTerceiro2.id })}>
+                              <Lock className="h-3 w-3 mr-1" /> Consolidar
+                            </Button>
+                          )}
+                          {decimoTerceiro2.status === 'consolidado' && isAdmin && (
+                            <Button size="sm" variant="outline" className="text-xs h-8 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: decimoTerceiro2.id })}>
+                              <Unlock className="h-3 w-3 mr-1" /> Desconsolidar
+                            </Button>
+                          )}
+                          {decimoTerceiro2.status !== 'consolidado' && isAdmin && (
+                            <Button size="sm" variant="outline" className="text-xs h-8 text-red-600" onClick={() => {
+                              if (confirm('Excluir lançamento de 13º 2ª Parcela?')) excluirMut.mutate({ folhaLancamentoId: decimoTerceiro2.id });
+                            }}>
+                              <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                            </Button>
+                          )}
+                        </div>
+                        {decimoTerceiro2.status !== 'consolidado' && (
+                          <Button size="sm" variant="ghost" className="text-xs w-full text-indigo-700 hover:bg-indigo-50"
+                            disabled={uploading === 'decimo_terceiro_2'}
+                            onClick={() => decimo2InputRef.current?.click()}>
+                            {uploading === 'decimo_terceiro_2' ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Reimportar PDFs</>}
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6">
+                        <span className="text-4xl font-black text-indigo-200 block mb-3">13</span>
+                        <p className="text-sm text-muted-foreground mb-3">Nenhum lançamento de 13º 2ª Parcela</p>
+                        <Button className="bg-indigo-600 hover:bg-indigo-700"
+                          disabled={uploading === 'decimo_terceiro_2'}
+                          onClick={() => decimo2InputRef.current?.click()}>
+                          {uploading === 'decimo_terceiro_2' ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-2" /> Importar 13º 2ª Parcela</>}
+                        </Button>
+                        <p className="text-[10px] text-muted-foreground mt-2">Selecione os PDFs da 2ª parcela do 13º salário.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        )}
 
         {/* RESUMO TOTAL DO MÊS */}
         {(vale || pagamento) && (() => {

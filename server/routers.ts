@@ -43,6 +43,7 @@ import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
 import { menuConfigRouter } from "./routers/menuConfig";
 import { goldenRulesRouter } from "./routers/goldenRules";
+import { notificationsRouter } from "./routers/notifications";
 import { storagePut } from "./storage";
 
 // Helper: generic CRUD builder
@@ -68,6 +69,7 @@ export const appRouter = router({
   epis: episRouter,
   menuConfig: menuConfigRouter,
   goldenRules: goldenRulesRouter,
+  notifications: notificationsRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

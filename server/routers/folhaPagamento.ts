@@ -579,6 +579,8 @@ export const folhaPagamentoRouter = router({
 
       const vale = lancamentos.find(l => l.tipoLancamento === "vale");
       const pagamento = lancamentos.find(l => l.tipoLancamento === "pagamento");
+      const decimoTerceiro1 = lancamentos.find(l => l.tipoLancamento === "decimo_terceiro_1");
+      const decimoTerceiro2 = lancamentos.find(l => l.tipoLancamento === "decimo_terceiro_2");
 
       // Check ponto consolidation
       const pontoConsolidado = await db.select().from(pontoConsolidacao)
@@ -621,6 +623,32 @@ export const folhaPagamentoRouter = router({
           analiticoUploadId: pagamento.analiticoUploadId,
           sinteticoUploadId: pagamento.sinteticoUploadId,
         } : null,
+        decimoTerceiro1: decimoTerceiro1 ? {
+          id: decimoTerceiro1.id,
+          status: decimoTerceiro1.status,
+          totalFuncionarios: decimoTerceiro1.totalFuncionarios,
+          totalLiquido: decimoTerceiro1.totalLiquido,
+          totalProventos: decimoTerceiro1.totalProventos,
+          totalDescontos: decimoTerceiro1.totalDescontos,
+          totalDivergencias: decimoTerceiro1.totalDivergencias,
+          divergenciasResolvidas: decimoTerceiro1.divergenciasResolvidas,
+          importadoEm: decimoTerceiro1.importadoEm,
+          analiticoUploadId: decimoTerceiro1.analiticoUploadId,
+          sinteticoUploadId: decimoTerceiro1.sinteticoUploadId,
+        } : null,
+        decimoTerceiro2: decimoTerceiro2 ? {
+          id: decimoTerceiro2.id,
+          status: decimoTerceiro2.status,
+          totalFuncionarios: decimoTerceiro2.totalFuncionarios,
+          totalLiquido: decimoTerceiro2.totalLiquido,
+          totalProventos: decimoTerceiro2.totalProventos,
+          totalDescontos: decimoTerceiro2.totalDescontos,
+          totalDivergencias: decimoTerceiro2.totalDivergencias,
+          divergenciasResolvidas: decimoTerceiro2.divergenciasResolvidas,
+          importadoEm: decimoTerceiro2.importadoEm,
+          analiticoUploadId: decimoTerceiro2.analiticoUploadId,
+          sinteticoUploadId: decimoTerceiro2.sinteticoUploadId,
+        } : null,
         pontoConsolidado: pontoConsolidado.length > 0 && pontoConsolidado[0].status === "consolidado",
         uploads: uploads.map(u => ({
           id: u.id,
@@ -642,7 +670,7 @@ export const folhaPagamentoRouter = router({
     .input(z.object({
       companyId: z.number(),
       mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
-      tipoLancamento: z.enum(["vale", "pagamento"]),
+      tipoLancamento: z.enum(["vale", "pagamento", "decimo_terceiro_1", "decimo_terceiro_2"]),
       arquivos: z.array(z.object({
         fileName: z.string(),
         fileBase64: z.string(),
@@ -982,7 +1010,7 @@ export const folhaPagamentoRouter = router({
     .input(z.object({
       companyId: z.number(),
       mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
-      tipoLancamento: z.enum(["vale", "pagamento"]),
+      tipoLancamento: z.enum(["vale", "pagamento", "decimo_terceiro_1", "decimo_terceiro_2"]),
       tipoArquivo: z.enum(["analitico", "sintetico"]),
       fileName: z.string(),
       fileBase64: z.string(),
@@ -1934,9 +1962,9 @@ export const folhaPagamentoRouter = router({
           sql`${folhaLancamentos.mesReferencia} LIKE ${`${input.ano}-%`}`,
         ));
 
-      const meses: Record<string, { vale: string | null; pagamento: string | null }> = {};
+      const meses: Record<string, { vale: string | null; pagamento: string | null; decimo_terceiro_1: string | null; decimo_terceiro_2: string | null }> = {};
       for (const l of lancamentos) {
-        if (!meses[l.mesReferencia]) meses[l.mesReferencia] = { vale: null, pagamento: null };
+        if (!meses[l.mesReferencia]) meses[l.mesReferencia] = { vale: null, pagamento: null, decimo_terceiro_1: null, decimo_terceiro_2: null };
         meses[l.mesReferencia][l.tipoLancamento] = l.status;
       }
 
