@@ -540,7 +540,7 @@ export default function Colaboradores() {
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Nº Interno</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nome</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">CPF</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground min-w-[160px] whitespace-nowrap">CPF</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Função</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Setor</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -559,7 +559,7 @@ export default function Colaboradores() {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs font-bold text-primary">{emp.codigoInterno || "-"}</td>
                     <td className="px-4 py-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatCPF(emp.cpf)}</td>
+                    <td className="px-4 py-3 text-muted-foreground min-w-[160px] whitespace-nowrap font-mono">{formatCPF(emp.cpf)}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3">
@@ -641,6 +641,14 @@ export default function Colaboradores() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* NOME DO FUNCIONÁRIO - espelho da aba Pessoal, visível em todas as abas */}
+          {form.nomeCompleto && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-2 flex items-center gap-2">
+              <Users className="h-4 w-4 text-blue-600 shrink-0" />
+              <span className="text-sm font-bold text-blue-900 tracking-wide uppercase">{form.nomeCompleto}</span>
+            </div>
+          )}
 
           <Tabs defaultValue="pessoal" className="w-full">
             <TabsList className="w-full flex bg-secondary/80 rounded-lg p-1 gap-1">

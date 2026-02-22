@@ -1346,4 +1346,9 @@
 - [x] Ranking de Faltas em DIAS (não horas) no Dashboard Cartão de Ponto
 - [x] Cards e rankings clicáveis no Dashboard Cartão de Ponto (navegar para origem dos dados)
 - [x] Atrasos com tolerância CLT Art.58 §1º (10min/dia) no Dashboard Cartão de Ponto - formato hh:mm
-- [ ] Exibir nome completo do funcionário em todas as abas do cadastro (espelho da aba Pessoal)
+- [x] Exibir nome completo do funcionário em todas as abas do cadastro (espelho da aba Pessoal)
+- [ ] Aumentar largura da coluna CPF na tabela de colaboradores
+- [ ] Aumentar largura da coluna CPF na tabela de colaboradores
+- [ ] Adicionar campos de 13º Salário (1ª e 2ª parcela) na Folha de Pagamento
+- [ ] Corrigir número de revisão que não está atualizando
+- [ ] Ranking faltas/atrasos deve navegar para Fechamento de Ponto filtrado pelo funcionário (não para cadastro)
