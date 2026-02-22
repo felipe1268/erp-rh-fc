@@ -227,6 +227,7 @@ function DashboardLayoutContent({
           const original = allMenuItems.find(m => m.path === item.path);
           return {
             icon: ICON_MAP[item.label] || original?.icon || LayoutDashboard,
+            // Path is stable even when label is renamed
             label: item.label,
             path: item.path,
             soon: (original as any)?.soon || false,

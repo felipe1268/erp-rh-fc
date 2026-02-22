@@ -670,7 +670,7 @@ export const appRouter = router({
       const { eq } = await import("drizzle-orm");
       const existing = await db.select().from(users).where(eq(users.username, input.username));
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Username já existe" });
-      const defaultPwd = input.password || "fc2026";
+      const defaultPwd = input.password || "asdf1020";
       const hashed = bcrypt.hashSync(defaultPwd, 10);
       const openId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const result = await db.insert(users).values({
@@ -688,8 +688,17 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { users } = await import("../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-      const [user] = await db.select().from(users).where(eq(users.username, input.username));
+      const { eq, or, sql } = await import("drizzle-orm");
+      const loginInput = input.username.trim();
+      // Buscar por username OU email (case-insensitive)
+      const results = await db.select().from(users).where(
+        or(
+          sql`LOWER(${users.username}) = LOWER(${loginInput})`,
+          sql`LOWER(${users.email}) = LOWER(${loginInput})`
+        )
+      );
+      // Priorizar usuário com loginMethod = 'local' e senha definida
+      let user = results.find(u => u.loginMethod === 'local' && u.password) || results.find(u => u.password) || results[0];
       if (!user || !user.password) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
       const valid = bcrypt.compareSync(input.password, user.password);
       if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
@@ -727,7 +736,7 @@ export const appRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { users } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
-      const defaultPwd = "fc2026";
+      const defaultPwd = "asdf1020";
       const hashed = bcrypt.hashSync(defaultPwd, 10);
       await db.update(users).set({ password: hashed, mustChangePassword: 1 } as any).where(eq(users.id, input.userId));
       return { success: true, defaultPassword: defaultPwd };

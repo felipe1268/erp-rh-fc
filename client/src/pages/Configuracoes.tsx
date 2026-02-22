@@ -582,7 +582,7 @@ export default function Configuracoes() {
                               {/* Resetar Senha */}
                               {u.loginMethod === "local" && (
                                 <Button size="sm" variant="outline" className="text-xs h-7 px-2 text-amber-700 border-amber-300" title="Resetar Senha"
-                                  onClick={() => { if (confirm(`Resetar senha de ${u.name}? Nova senha: fc2026`)) resetPwdMutation.mutate({ userId: u.id }); }}>
+                                  onClick={() => { if (confirm(`Resetar senha de ${u.name}? Nova senha padrão: asdf1020`)) resetPwdMutation.mutate({ userId: u.id }); }}>
                                   <Key className="h-3 w-3" />
                                 </Button>
                               )}
@@ -678,7 +678,7 @@ export default function Configuracoes() {
                 <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@empresa.com" />
               </div>
               <div>
-                <label className="text-sm font-medium">Senha (padrão: fc2026)</label>
+                <label className="text-sm font-medium">Senha (padrão: asdf1020)</label>
                 <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Deixe vazio para senha padrão" />
               </div>
               <div>

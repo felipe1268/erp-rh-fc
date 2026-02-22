@@ -227,7 +227,7 @@ export default function Login() {
                 </Button>
 
                 <p className="text-center text-xs text-gray-400 pt-2">
-                  Senha padrão para primeiro acesso: <span className="font-mono font-medium text-gray-500">fc2026</span>
+                  Senha padrão para primeiro acesso: <span className="font-mono font-medium text-gray-500">asdf1020</span>
                 </p>
               </div>
             )}

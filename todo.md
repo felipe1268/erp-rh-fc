@@ -1462,3 +1462,6 @@
 - [x] Adicionar rota /lixeira no menu lateral (Administração)
 - [ ] Corrigir TS errors no goldenRules batch generation (fn.nome -> fn.name)
 - [x] Permitir renomear itens do menu na tela de Configurações > Menu (somente ADM Master)
+- [x] BUG CRÍTICO: Login local corrigido - aceita username OU email, case-insensitive, senha resetada para asdf1020
+- [x] Resetar senha do usuário felipe@fcengenhariacivil.com.br para asdf1020 (senha padrão oficial)
+- [x] Adicionar botão "Resetar Senha" na tela de Configurações > Usuários (já existia, atualizado para senha asdf1020)

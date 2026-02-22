@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, name, username, email, password, loginMethod, role, mustChangePassword FROM users WHERE username LIKE '%felipe%' OR email LIKE '%felipe%' OR name LIKE '%Felipe%' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, name, username, email, password, loginMethod, role, mustChangePassword FROM users WHERE username LIKE '%felipe%' OR email LIKE '%felipe%' OR name LIKE '%Felipe%' LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Felipe Alves",
+      "username": "NULL",
+      "email": "felipe1268@gmail.com",
+      "password": "NULL",
+      "loginMethod": "apple",
+      "role": "admin_master",
+      "mustChangePassword": "1"
+    },
+    {
+      "id": "601043",
+      "name": "Felipe Costa Alves",
+      "username": "Felipe Alves",
+      "email": "felipe@fcengenhariacivil.com.br",
+      "password": "$2b$10$6hCp6zaae2t4m3J9AwR7WeHgQjADIuQT0RhxASy5s9YTfjwKt8g8C",
+      "loginMethod": "local",
+      "role": "admin_master",
+      "mustChangePassword": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tusername\temail\tpassword\tloginMethod\trole\tmustChangePassword\n1\tFelipe Alves\tNULL\tfelipe1268@gmail.com\tNULL\tapple\tadmin_master\t1\n601043\tFelipe Costa Alves\tFelipe Alves\tfelipe@fcengenhariacivil.com.br\t$2b$10$6hCp6zaae2t4m3J9AwR7WeHgQjADIuQT0RhxASy5s9YTfjwKt8g8C\tlocal\tadmin_master\t1\n",
+  "stderr": "",
+  "execution_time_ms": 70
+}

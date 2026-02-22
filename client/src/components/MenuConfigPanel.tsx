@@ -25,6 +25,20 @@ const ICON_MAP: Record<string, any> = {
   "Avaliação de Desempenho": Star,
 };
 
+const PATH_ICON_MAP: Record<string, any> = {
+  "/": LayoutDashboard, "/empresas": Building2, "/colaboradores": Users,
+  "/obras": Landmark, "/setores": Layers, "/funcoes": Briefcase,
+  "/relogios-ponto": Wifi, "/contas-bancarias": ClipboardList,
+  "/fechamento-ponto": Clock, "/folha-pagamento": Wallet,
+  "/controle-documentos": FolderOpen, "/vale-alimentacao": UtensilsCrossed,
+  "/epis": HardHat, "/processos-trabalhistas": Gavel,
+  "/relatorios/raio-x": UserSearch, "/dashboards": BarChart3,
+  "/dashboards/funcionarios": Users, "/dashboards/cartao-ponto": Clock,
+  "/dashboards/folha-pagamento": Wallet, "/dashboards/horas-extras": Clock,
+  "/dashboards/epis": HardHat, "/dashboards/juridico": Gavel,
+  "/usuarios": Lock, "/auditoria": FileText, "/configuracoes": Settings,
+  "/avaliacao": Star,
+};
 const DEFAULT_MENU = [
   { title: "Principal", items: [{ label: "Painel", path: "/", visible: true }] },
   { title: "Cadastro", items: [
@@ -62,7 +76,7 @@ const DEFAULT_MENU = [
   { title: "Em Breve", items: [{ label: "Avaliação de Desempenho", path: "/avaliacao", visible: true }] },
 ];
 
-type MenuItem = { label: string; path: string; visible: boolean };
+type MenuItem = { label: string; path: string; visible: boolean; originalLabel?: string };
 type MenuSection = { title: string; items: MenuItem[] };
 
 // Drag data types
@@ -441,7 +455,7 @@ export default function MenuConfigPanel() {
                       </div>
                     )}
                     {section.items.map((item, iIdx) => {
-                      const IconComp = ICON_MAP[item.label] || LayoutDashboard;
+                      const IconComp = ICON_MAP[item.label] || ICON_MAP[item.originalLabel || ""] || PATH_ICON_MAP[item.path] || LayoutDashboard;
                       const isDraggingThis = dragData?.type === "item" && dragData.sectionIdx === sIdx && dragData.itemIdx === iIdx;
 
                       return (
