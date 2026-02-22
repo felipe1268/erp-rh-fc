@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS golden_rules (\n  id INT AUTO_INCREMENT NOT NULL,\n  companyId INT NOT NULL,\n  titulo VARCHAR(200) NOT NULL,\n  descricao TEXT NOT NULL,\n  categoria ENUM('seguranca', 'qualidade', 'rh', 'operacional', 'juridico', 'financeiro', 'geral') DEFAULT 'geral' NOT NULL,\n  prioridade ENUM('critica', 'alta', 'media', 'baixa') DEFAULT 'alta' NOT NULL,\n  isActive TINYINT DEFAULT 1 NOT NULL,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,\n  PRIMARY KEY (id)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS golden_rules (\n  id INT AUTO_INCREMENT NOT NULL,\n  companyId INT NOT NULL,\n  titulo VARCHAR(200) NOT NULL,\n  descricao TEXT NOT NULL,\n  categoria ENUM('seguranca', 'qualidade', 'rh', 'operacional', 'juridico', 'financeiro', 'geral') DEFAULT 'geral' NOT NULL,\n  prioridade ENUM('critica', 'alta', 'media', 'baixa') DEFAULT 'alta' NOT NULL,\n  isActive TINYINT DEFAULT 1 NOT NULL,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,\n  PRIMARY KEY (id)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 426
+}

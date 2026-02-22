@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
+import GoldenRulesPanel from "@/components/GoldenRulesPanel";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield } from "lucide-react";
 
 const MODULES_LIST = [
   { key: "colaboradores", label: "Colaboradores" },
@@ -39,7 +40,7 @@ const CATEGORIAS = [
   { key: "rescisao", label: "Rescisão", icon: UserX, color: "text-gray-600", bgColor: "bg-gray-50", borderColor: "border-gray-200" },
 ];
 
-type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel";
+type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel" | "regras";
 
 export default function Configuracoes() {
   const { selectedCompanyId } = useCompany();
@@ -225,6 +226,7 @@ export default function Configuracoes() {
 
   const tabs = [
     { key: "painel" as TabKey, label: "Painel de Controle", icon: LayoutDashboard },
+    { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale },
     { key: "usuarios" as TabKey, label: "Usuários", icon: Users },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key },
@@ -353,6 +355,11 @@ export default function Configuracoes() {
         {/* TAB: Painel de Controle (Menu Configurável) */}
         {activeTab === "painel" && (
           <MenuConfigPanel />
+        )}
+
+        {/* TAB: Regras de Ouro */}
+        {activeTab === "regras" && (
+          <GoldenRulesPanel />
         )}
 
         {/* TAB: Critérios do Sistema */}

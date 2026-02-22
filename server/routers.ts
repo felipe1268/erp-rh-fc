@@ -39,6 +39,7 @@ import { processosTrabRouter } from "./routers/processosTrabalhistas";
 import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
 import { menuConfigRouter } from "./routers/menuConfig";
+import { goldenRulesRouter } from "./routers/goldenRules";
 import { storagePut } from "./storage";
 
 // Helper: generic CRUD builder
@@ -63,6 +64,7 @@ export const appRouter = router({
   home: homeDataRouter,
   epis: episRouter,
   menuConfig: menuConfigRouter,
+  goldenRules: goldenRulesRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -157,14 +159,14 @@ export const appRouter = router({
   jobFunctions: router({
     list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => listJobFunctions(input.companyId)),
     create: protectedProcedure.input(z.object({
-      companyId: z.number(), nome: z.string().min(1), descricao: z.string().optional(), cbo: z.string().optional(),
+      companyId: z.number(), nome: z.string().min(1), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
       const result = await createJobFunction(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "cadastro", entityType: "jobFunction", entityId: result.id, details: `Função criada: ${input.nome}` });
       return result;
     }),
     update: protectedProcedure.input(z.object({
-      id: z.number(), companyId: z.number(), nome: z.string().optional(), descricao: z.string().optional(), cbo: z.string().optional(), isActive: z.boolean().optional(),
+      id: z.number(), companyId: z.number(), nome: z.string().optional(), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(), isActive: z.boolean().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, companyId, ...data } = input;
       await updateJobFunction(id, companyId, data);

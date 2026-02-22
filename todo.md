@@ -1137,3 +1137,16 @@
 - [x] Atualizar menu lateral com os 6 novos dashboards
 - [x] Recriar DashboardIndex como hub central com cards para cada dashboard
 - [x] Limpar rotas antigas do App.tsx
+
+## Rev. 43: Funções com IA + Demitidos
+- [x] Campo descrição obrigatório no cadastro de funções
+- [x] Botão IA "Gerar Descrição" no cadastro de funções (usa LLM para gerar descritivo baseado no nome/CBO)
+- [x] Preencher descrições de todas as 40 funções existentes via IA (atividades, responsabilidades, requisitos conforme CBO)
+- [x] Alterar campo descricao de varchar(255) para TEXT
+- [x] Pente fino: unificar funções duplicadas e preencher CBOs de todas (32 funções únicas)
+- [x] Inserir 102 funcionários demitidos (Out/2025 a Fev/2026) com código contábil e função (101 novos + 1 atualizado)
+- [x] Cadastrar 18 funções novas que vieram nos PDFs de demitidos
+- [x] Criar tabela e CRUD de Regras de Ouro da empresa em Configurações
+- [x] IA consulta Regras de Ouro antes de gerar qualquer sugestão (nunca quebra regras da empresa)
+- [x] Adicionar campo Ordem de Serviço (NR-1) no cadastro de funções (riscos, EPIs obrigatórios, procedimentos de segurança)
+- [x] IA gera Ordem de Serviço automaticamente junto com a descrição da função

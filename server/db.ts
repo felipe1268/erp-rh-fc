@@ -1061,7 +1061,7 @@ export async function listJobFunctions(companyId: number) {
   return db.select().from(jobFunctions).where(eq(jobFunctions.companyId, companyId)).orderBy(jobFunctions.nome);
 }
 
-export async function createJobFunction(data: { companyId: number; nome: string; descricao?: string; cbo?: string }) {
+export async function createJobFunction(data: { companyId: number; nome: string; descricao?: string; ordemServico?: string; cbo?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const existing = await db.select().from(jobFunctions).where(and(eq(jobFunctions.companyId, data.companyId), eq(jobFunctions.nome, data.nome)));
@@ -1070,17 +1070,19 @@ export async function createJobFunction(data: { companyId: number; nome: string;
     companyId: data.companyId,
     nome: data.nome,
     descricao: data.descricao || null,
+    ordemServico: data.ordemServico || null,
     cbo: data.cbo || null,
   });
   return { id: result[0].insertId };
 }
 
-export async function updateJobFunction(id: number, companyId: number, data: { nome?: string; descricao?: string; cbo?: string; isActive?: boolean }) {
+export async function updateJobFunction(id: number, companyId: number, data: { nome?: string; descricao?: string; ordemServico?: string; cbo?: string; isActive?: boolean }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const updateData: Record<string, unknown> = {};
   if (data.nome !== undefined) updateData.nome = data.nome;
   if (data.descricao !== undefined) updateData.descricao = data.descricao;
+  if (data.ordemServico !== undefined) updateData.ordemServico = data.ordemServico;
   if (data.cbo !== undefined) updateData.cbo = data.cbo;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   await db.update(jobFunctions).set(updateData).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));

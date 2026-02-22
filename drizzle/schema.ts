@@ -456,7 +456,8 @@ export const jobFunctions = mysqlTable("job_functions", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
 	nome: varchar({ length: 100 }).notNull(),
-	descricao: varchar({ length: 255 }),
+	descricao: text(),
+	ordemServico: text(),
 	cbo: varchar({ length: 10 }),
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
@@ -1102,3 +1103,17 @@ export const menuConfig = mysqlTable("menu_config", {
 (table) => [
 	index("mc_user").on(table.userId),
 ]);
+
+export const goldenRules = mysqlTable("golden_rules", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	titulo: varchar({ length: 200 }).notNull(),
+	descricao: text().notNull(),
+	categoria: mysqlEnum(['seguranca', 'qualidade', 'rh', 'operacional', 'juridico', 'financeiro', 'geral']).default('geral').notNull(),
+	prioridade: mysqlEnum(['critica', 'alta', 'media', 'baixa']).default('alta').notNull(),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+export type InsertGoldenRule = typeof goldenRules.$inferInsert;
+export type SelectGoldenRule = typeof goldenRules.$inferSelect;
