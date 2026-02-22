@@ -107,9 +107,9 @@ export const episRouter = router({
 
   deleteDelivery: protectedProcedure
     .input(z.object({ id: z.number(), epiId: z.number(), quantidade: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      await db.delete(epiDeliveries).where(eq(epiDeliveries.id, input.id));
+      await db.update(epiDeliveries).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(epiDeliveries.id, input.id));
       // Devolver ao estoque
       await db.update(epis)
         .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })

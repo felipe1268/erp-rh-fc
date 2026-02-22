@@ -1451,3 +1451,13 @@
 - [x] Criar rota backend + botão frontend para gerar Descrição/OS NR-1 com IA em lote para todas as funções incompletas
 - [x] Adicionar ações de editar, excluir e alterar perfil dos usuários na tela Configurações > Usuários
 - [x] Corrigir verificações de permissão para reconhecer admin_master como tendo todas as permissões de admin
+- [ ] Remover campo obrigatório de obra no cadastro de relógio de ponto (apenas cadastrar SN)
+- [ ] Adicionar seleção de relógio de ponto no cadastro de obras (mostrar apenas relógios não vinculados)
+- [x] Adicionar campo de alterar senha na tela de Editar Usuário
+- [x] Implementar sistema de Lixeira/Recuperação com soft delete para Admin Master
+- [x] Converter todas as operações DELETE para soft delete (set deletedAt/deletedBy/deletedByUserId)
+- [x] Adicionar campos deletedAt/deletedBy/deletedByUserId em todas as tabelas (users, asos, atestados, trainings, warnings, goldenRules, documentTemplates, epiDeliveries)
+- [x] Filtrar registros excluídos (isNull(deletedAt)) em todas as queries SELECT
+- [x] Criar tela de Lixeira com listagem, filtros, restauração e exclusão permanente
+- [x] Adicionar rota /lixeira no menu lateral (Administração)
+- [ ] Corrigir TS errors no goldenRules batch generation (fn.nome -> fn.name)

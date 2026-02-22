@@ -91,7 +91,7 @@ export async function updateCompany(id: number, data: Partial<InsertCompany>) {
 export async function getCompanies() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(companies).orderBy(companies.razaoSocial);
+  return db.select().from(companies).where(isNull(companies.deletedAt)).orderBy(companies.razaoSocial);
 }
 
 export async function getCompanyById(id: number) {
@@ -101,10 +101,20 @@ export async function getCompanyById(id: number) {
   return result[0];
 }
 
-export async function deleteCompany(id: number) {
+export async function deleteCompany(id: number, userId?: number, userName?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(companies).where(eq(companies.id, id));
+  await db.update(companies).set({
+    deletedAt: sql`NOW()`,
+    deletedBy: userName || null,
+    deletedByUserId: userId || null,
+  } as any).where(eq(companies.id, id));
+}
+
+export async function restoreCompany(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(companies).set({ deletedAt: null, deletedBy: null, deletedByUserId: null } as any).where(eq(companies.id, id));
 }
 
 // ============================================================
@@ -943,7 +953,7 @@ export async function createDixiDevice(data: any) {
 export async function getDixiDevices(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(dixiDevices).where(eq(dixiDevices.companyId, companyId));
+  return db.select().from(dixiDevices).where(and(eq(dixiDevices.companyId, companyId), isNull(dixiDevices.deletedAt)));
 }
 
 export async function updateDixiDevice(id: number, data: any) {
@@ -952,10 +962,20 @@ export async function updateDixiDevice(id: number, data: any) {
   await db.update(dixiDevices).set(data).where(eq(dixiDevices.id, id));
 }
 
-export async function deleteDixiDevice(id: number) {
+export async function deleteDixiDevice(id: number, userId?: number, userName?: string) {
   const db = await getDb();
   if (!db) return;
-  await db.delete(dixiDevices).where(eq(dixiDevices.id, id));
+  await db.update(dixiDevices).set({
+    deletedAt: sql`NOW()`,
+    deletedBy: userName || null,
+    deletedByUserId: userId || null,
+  } as any).where(eq(dixiDevices.id, id));
+}
+
+export async function restoreDixiDevice(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(dixiDevices).set({ deletedAt: null, deletedBy: null, deletedByUserId: null } as any).where(eq(dixiDevices.id, id));
 }
 
 // ============================================================
@@ -1027,7 +1047,7 @@ export async function createObra(data: InsertObra) {
 export async function getObras(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(obras).where(eq(obras.companyId, companyId)).orderBy(desc(obras.createdAt));
+  return db.select().from(obras).where(and(eq(obras.companyId, companyId), isNull(obras.deletedAt))).orderBy(desc(obras.createdAt));
 }
 
 export async function getObraById(id: number) {
@@ -1043,16 +1063,26 @@ export async function updateObra(id: number, data: Partial<InsertObra>) {
   await db.update(obras).set(data).where(eq(obras.id, id));
 }
 
-export async function deleteObra(id: number) {
+export async function deleteObra(id: number, userId?: number, userName?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(obras).where(eq(obras.id, id));
+  await db.update(obras).set({
+    deletedAt: sql`NOW()`,
+    deletedBy: userName || null,
+    deletedByUserId: userId || null,
+  } as any).where(eq(obras.id, id));
+}
+
+export async function restoreObra(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(obras).set({ deletedAt: null, deletedBy: null, deletedByUserId: null } as any).where(eq(obras.id, id));
 }
 
 export async function getObrasByCompanyActive(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(obras).where(and(eq(obras.companyId, companyId), eq(obras.isActive, 1))).orderBy(obras.nome);
+  return db.select().from(obras).where(and(eq(obras.companyId, companyId), eq(obras.isActive, 1), isNull(obras.deletedAt))).orderBy(obras.nome);
 }
 
 // Funcionários alocados na obra
@@ -1111,7 +1141,7 @@ export async function getObraHorasRateio(companyId: number, mesAno: string, obra
 export async function listSectors(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(sectors).where(eq(sectors.companyId, companyId)).orderBy(sectors.nome);
+  return db.select().from(sectors).where(and(eq(sectors.companyId, companyId), isNull(sectors.deletedAt))).orderBy(sectors.nome);
 }
 
 export async function createSector(data: { companyId: number; nome: string; descricao?: string }) {
@@ -1137,10 +1167,20 @@ export async function updateSector(id: number, companyId: number, data: { nome?:
   await db.update(sectors).set(updateData).where(and(eq(sectors.id, id), eq(sectors.companyId, companyId)));
 }
 
-export async function deleteSector(id: number, companyId: number) {
+export async function deleteSector(id: number, companyId: number, userId?: number, userName?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(sectors).where(and(eq(sectors.id, id), eq(sectors.companyId, companyId)));
+  await db.update(sectors).set({
+    deletedAt: sql`NOW()`,
+    deletedBy: userName || null,
+    deletedByUserId: userId || null,
+  } as any).where(and(eq(sectors.id, id), eq(sectors.companyId, companyId)));
+}
+
+export async function restoreSector(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(sectors).set({ deletedAt: null, deletedBy: null, deletedByUserId: null } as any).where(eq(sectors.id, id));
 }
 
 // ============================================================
@@ -1150,7 +1190,7 @@ export async function deleteSector(id: number, companyId: number) {
 export async function listJobFunctions(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(jobFunctions).where(eq(jobFunctions.companyId, companyId)).orderBy(jobFunctions.nome);
+  return db.select().from(jobFunctions).where(and(eq(jobFunctions.companyId, companyId), isNull(jobFunctions.deletedAt))).orderBy(jobFunctions.nome);
 }
 
 export async function createJobFunction(data: { companyId: number; nome: string; descricao?: string; ordemServico?: string; cbo?: string }) {
@@ -1180,10 +1220,20 @@ export async function updateJobFunction(id: number, companyId: number, data: { n
   await db.update(jobFunctions).set(updateData).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));
 }
 
-export async function deleteJobFunction(id: number, companyId: number) {
+export async function deleteJobFunction(id: number, companyId: number, userId?: number, userName?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.delete(jobFunctions).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));
+  await db.update(jobFunctions).set({
+    deletedAt: sql`NOW()`,
+    deletedBy: userName || null,
+    deletedByUserId: userId || null,
+  } as any).where(and(eq(jobFunctions.id, id), eq(jobFunctions.companyId, companyId)));
+}
+
+export async function restoreJobFunction(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(jobFunctions).set({ deletedAt: null, deletedBy: null, deletedByUserId: null } as any).where(eq(jobFunctions.id, id));
 }
 
 
@@ -1247,7 +1297,7 @@ export async function checkSnAvailability(companyId: number, sn: string, exclude
   return { available: true };
 }
 
-export async function addSnToObra(data: { companyId: number; obraId: number; sn: string; apelido?: string }) {
+export async function addSnToObra(data: { companyId: number; obraId?: number; sn: string; apelido?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const [result] = await db.insert(obraSns).values({

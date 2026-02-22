@@ -5,7 +5,7 @@ import { fechamentoPontoRouter } from "./routers/fechamentoPonto";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import {
-  createCompany, updateCompany, getCompanies, getCompanyById, deleteCompany,
+  createCompany, updateCompany, getCompanies, getCompanyById, deleteCompany, restoreCompany,
   createEmployee, updateEmployee, getEmployees, getEmployeeById, deleteEmployee, softDeleteEmployee, restoreEmployee, getDeletedEmployees, permanentDeleteEmployee, getEmployeeStats,
   createEmployeeHistory, getEmployeeHistory,
   createUserProfile, getUserProfiles, getUserProfilesByCompany, updateUserProfile, deleteUserProfile,
@@ -16,15 +16,15 @@ import {
   createTimeRecord, getTimeRecords, bulkCreateTimeRecords, createPayroll, getPayrolls, updatePayroll, deletePayroll,
   // Documentos e Uploads
   createPayrollUpload, getPayrollUploads, updatePayrollUploadStatus, deletePayrollUpload,
-  createDixiDevice, getDixiDevices, updateDixiDevice, deleteDixiDevice,
+  createDixiDevice, getDixiDevices, updateDixiDevice, deleteDixiDevice, restoreDixiDevice,
   checkDuplicateCpf, checkBlacklist, getBlacklistedEmployees,
   // Obras
-  createObra, getObras, getObraById, updateObra, deleteObra, getObrasByCompanyActive,
+  createObra, getObras, getObraById, updateObra, deleteObra, restoreObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
   getObraSns, getObraSnsByCompany, getActiveSnsByCompany, checkSnAvailability, addSnToObra, updateSnObra, removeSnFromObra, releaseObraSns, findObraBySn,
   // Setores e Funções
-  listSectors, createSector, updateSector, deleteSector,
-  listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction,
+  listSectors, createSector, updateSector, deleteSector, restoreSector,
+  listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction, restoreJobFunction,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
@@ -111,8 +111,8 @@ export const appRouter = router({
       return { success: true };
     }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
-      await deleteCompany(input.id);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "empresas", entityType: "company", entityId: input.id, details: `Empresa excluída` });
+      await deleteCompany(input.id, ctx.user.id, ctx.user.name ?? "Sistema");
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "empresas", entityType: "company", entityId: input.id, details: `Empresa excluída (lixeira)` });
       return { success: true };
     }),
     uploadLogo: protectedProcedure.input(z.object({
@@ -153,8 +153,8 @@ export const appRouter = router({
       return { success: true };
     }),
     delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
-      await deleteSector(input.id, input.companyId);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "cadastro", entityType: "sector", entityId: input.id, details: `Setor excluído` });
+      await deleteSector(input.id, input.companyId, ctx.user.id, ctx.user.name ?? "Sistema");
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "cadastro", entityType: "sector", entityId: input.id, details: `Setor excluído (lixeira)` });
       return { success: true };
     }),
   }),
@@ -180,8 +180,8 @@ export const appRouter = router({
       return { success: true };
     }),
     delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
-      await deleteJobFunction(input.id, input.companyId);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "cadastro", entityType: "jobFunction", entityId: input.id, details: `Função excluída` });
+      await deleteJobFunction(input.id, input.companyId, ctx.user.id, ctx.user.name ?? "Sistema");
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "cadastro", entityType: "jobFunction", entityId: input.id, details: `Função excluída (lixeira)` });
       return { success: true };
     }),
   }),
@@ -469,7 +469,10 @@ export const appRouter = router({
     list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDixiDevices(input.companyId)),
     create: protectedProcedure.input(z.any()).mutation(({ input }) => createDixiDevice(input)),
     update: protectedProcedure.input(z.any()).mutation(({ input }: any) => { updateDixiDevice(input.id, input); return { success: true }; }),
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { deleteDixiDevice(input.id); return { success: true }; }),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+      await deleteDixiDevice(input.id, ctx.user.id, ctx.user.name ?? "Sistema");
+      return { success: true };
+    }),
   }),
 
   // ============================================================
@@ -488,13 +491,14 @@ export const appRouter = router({
         "obras", "obra_funcionarios",
       ]),
       ids: z.array(z.number()).min(1),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ input, ctx }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const { sql } = await import("drizzle-orm");
       const idList = input.ids.join(",");
-      await db.execute(sql.raw(`DELETE FROM \`${input.table}\` WHERE id IN (${idList})`));
+      // Soft delete: marca deletedAt em vez de remover permanentemente
+      await db.execute(sql.raw(`UPDATE \`${input.table}\` SET deletedAt = NOW(), deletedBy = '${(ctx.user.name ?? 'Sistema').replace(/'/g, "''")}', deletedByUserId = ${ctx.user.id} WHERE id IN (${idList})`));
       return { success: true, deleted: input.ids.length };
     }),
   }),
@@ -577,7 +581,11 @@ export const appRouter = router({
       }
       return updateObra(id, data as any);
     }),
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => deleteObra(input.id)),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+      await deleteObra(input.id, ctx.user.id, ctx.user.name ?? "Sistema");
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "obras", entityType: "obra", entityId: input.id, details: `Obra excluída (lixeira)` });
+      return { success: true };
+    }),
     // Funcionários alocados
     funcionarios: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraFuncionarios(input.obraId)),
     allocateEmployee: protectedProcedure.input(z.object({
@@ -607,7 +615,7 @@ export const appRouter = router({
     })).query(({ input }) => checkSnAvailability(input.companyId, input.sn, input.excludeObraId)),
     addSn: protectedProcedure.input(z.object({
       companyId: z.number(),
-      obraId: z.number(),
+      obraId: z.number().optional(),
       sn: z.string().min(1),
       apelido: z.string().optional(),
     })).mutation(async ({ input }) => {
@@ -744,6 +752,8 @@ export const appRouter = router({
       name: z.string().min(1).optional(),
       email: z.string().email().optional(),
       username: z.string().min(3).optional(),
+      newPassword: z.string().min(6).optional(),
+      role: z.enum(["admin", "user", "admin_master"]).optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode editar usuários" });
       const { getDb } = await import("./db");
@@ -755,10 +765,21 @@ export const appRouter = router({
       if (input.name) updateData.name = input.name;
       if (input.email) updateData.email = input.email;
       if (input.username) updateData.username = input.username;
+      if (input.role) {
+        if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar perfil" });
+        updateData.role = input.role;
+      }
+      if (input.newPassword) {
+        if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar senhas" });
+        const bcrypt = await import("bcryptjs");
+        updateData.password = await bcrypt.hash(input.newPassword, 10);
+      }
       if (Object.keys(updateData).length > 0) {
         await db.update(users).set(updateData).where(eq(users.id, input.userId));
       }
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Usuário editado: ${JSON.stringify(updateData)}` });
+      const logDetails = { ...updateData };
+      if (logDetails.password) logDetails.password = "[REDACTED]";
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Usuário editado: ${JSON.stringify(logDetails)}` });
       return { success: true };
     }),
     deleteUser: protectedProcedure.input(z.object({
@@ -772,8 +793,9 @@ export const appRouter = router({
       const { users } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
       const [user] = await db.select().from(users).where(eq(users.id, input.userId));
-      await db.delete(users).where(eq(users.id, input.userId));
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Usuário ${user?.name || 'desconhecido'} excluído` });
+      const { sql } = await import("drizzle-orm");
+      await db.update(users).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(users.id, input.userId));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Usuário ${user?.name || 'desconhecido'} excluído (lixeira)` });
       return { success: true };
     }),
   }),
@@ -1019,6 +1041,146 @@ export const appRouter = router({
 
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "configuracoes", entityType: "criterios", entityId: input.companyId, details: `Critérios padrão CLT inicializados (${defaults.length} itens)` });
       return { success: true, message: "Critérios padrão inicializados", created: defaults.length };
+    }),
+  }),
+
+  // ============================================================
+  // LIXEIRA (TRASH) - Listar e restaurar itens excluídos
+  // ============================================================
+  trash: router({
+    // Listar todos os itens excluídos de todas as entidades
+    listAll: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      const { isNotNull, eq, desc } = await import("drizzle-orm");
+      const { companies, employees, obras, sectors, jobFunctions, dixiDevices, asos, atestados, trainings, warnings, goldenRules, documentTemplates, epiDeliveries, users } = await import("../drizzle/schema");
+
+      const items: any[] = [];
+
+      // Empresas excluídas
+      const delCompanies = await db.select().from(companies).where(isNotNull(companies.deletedAt));
+      delCompanies.forEach((c: any) => items.push({ id: c.id, entity: 'company', label: c.razaoSocial || c.nomeFantasia, deletedAt: c.deletedAt, deletedBy: c.deletedBy }));
+
+      // Funcionários excluídos
+      const delEmployees = await db.select().from(employees).where(and(eq(employees.companyId, input.companyId), isNotNull(employees.deletedAt)));
+      delEmployees.forEach((e: any) => items.push({ id: e.id, entity: 'employee', label: e.nomeCompleto || e.cpf, deletedAt: e.deletedAt, deletedBy: e.deletedBy }));
+
+      // Obras excluídas
+      const delObras = await db.select().from(obras).where(and(eq(obras.companyId, input.companyId), isNotNull(obras.deletedAt)));
+      delObras.forEach((o: any) => items.push({ id: o.id, entity: 'obra', label: o.nome, deletedAt: o.deletedAt, deletedBy: o.deletedBy }));
+
+      // Setores excluídos
+      const delSectors = await db.select().from(sectors).where(and(eq(sectors.companyId, input.companyId), isNotNull(sectors.deletedAt)));
+      delSectors.forEach((s: any) => items.push({ id: s.id, entity: 'sector', label: s.nome, deletedAt: s.deletedAt, deletedBy: s.deletedBy }));
+
+      // Funções excluídas
+      const delFunctions = await db.select().from(jobFunctions).where(and(eq(jobFunctions.companyId, input.companyId), isNotNull(jobFunctions.deletedAt)));
+      delFunctions.forEach((f: any) => items.push({ id: f.id, entity: 'jobFunction', label: f.nome, deletedAt: f.deletedAt, deletedBy: f.deletedBy }));
+
+      // Relógios de ponto excluídos
+      const delDevices = await db.select().from(dixiDevices).where(and(eq(dixiDevices.companyId, input.companyId), isNotNull(dixiDevices.deletedAt)));
+      delDevices.forEach((d: any) => items.push({ id: d.id, entity: 'dixiDevice', label: d.nome || d.serialNumber, deletedAt: d.deletedAt, deletedBy: d.deletedBy }));
+
+      // ASOs excluídos
+      const delAsos = await db.select().from(asos).where(and(eq(asos.companyId, input.companyId), isNotNull(asos.deletedAt)));
+      delAsos.forEach((a: any) => items.push({ id: a.id, entity: 'aso', label: `ASO #${a.id} (Func. #${a.employeeId})`, deletedAt: a.deletedAt, deletedBy: a.deletedBy }));
+
+      // Atestados excluídos
+      const delAtestados = await db.select().from(atestados).where(and(eq(atestados.companyId, input.companyId), isNotNull(atestados.deletedAt)));
+      delAtestados.forEach((a: any) => items.push({ id: a.id, entity: 'atestado', label: `Atestado #${a.id} (Func. #${a.employeeId})`, deletedAt: a.deletedAt, deletedBy: a.deletedBy }));
+
+      // Treinamentos excluídos
+      const delTrainings = await db.select().from(trainings).where(and(eq(trainings.companyId, input.companyId), isNotNull(trainings.deletedAt)));
+      delTrainings.forEach((t: any) => items.push({ id: t.id, entity: 'training', label: `Treinamento #${t.id} — ${t.nome || ''}`, deletedAt: t.deletedAt, deletedBy: t.deletedBy }));
+
+      // Advertências excluídas
+      const delWarnings = await db.select().from(warnings).where(and(eq(warnings.companyId, input.companyId), isNotNull(warnings.deletedAt)));
+      delWarnings.forEach((w: any) => items.push({ id: w.id, entity: 'warning', label: `Advertência #${w.id} (Func. #${w.employeeId})`, deletedAt: w.deletedAt, deletedBy: w.deletedBy }));
+
+      // Regras de ouro excluídas
+      const delRules = await db.select().from(goldenRules).where(and(eq(goldenRules.companyId, input.companyId), isNotNull(goldenRules.deletedAt)));
+      delRules.forEach((r: any) => items.push({ id: r.id, entity: 'goldenRule', label: r.titulo, deletedAt: r.deletedAt, deletedBy: r.deletedBy }));
+
+      // Modelos de documentos excluídos
+      const delTemplates = await db.select().from(documentTemplates).where(and(eq(documentTemplates.companyId, input.companyId), isNotNull(documentTemplates.deletedAt)));
+      delTemplates.forEach((t: any) => items.push({ id: t.id, entity: 'documentTemplate', label: `Modelo: ${t.nome || t.tipo}`, deletedAt: t.deletedAt, deletedBy: t.deletedBy }));
+
+      // Entregas de EPI excluídas
+      const delEpiDeliveries = await db.select().from(epiDeliveries).where(and(eq(epiDeliveries.companyId, input.companyId), isNotNull(epiDeliveries.deletedAt)));
+      delEpiDeliveries.forEach((e: any) => items.push({ id: e.id, entity: 'epiDelivery', label: `Entrega EPI #${e.id}`, deletedAt: e.deletedAt, deletedBy: e.deletedBy }));
+
+      // Usuários excluídos
+      const delUsers = await db.select().from(users).where(isNotNull(users.deletedAt));
+      delUsers.forEach((u: any) => items.push({ id: u.id, entity: 'user', label: u.name || u.email, deletedAt: u.deletedAt, deletedBy: u.deletedBy }));
+
+      // Ordenar por data de exclusão (mais recente primeiro)
+      items.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
+      return items;
+    }),
+
+    // Restaurar item da lixeira
+    restore: protectedProcedure.input(z.object({ id: z.number(), entity: z.string(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { sql: sqlFn } = await import("drizzle-orm");
+
+      const entityMap: Record<string, string> = {
+        company: 'companies',
+        employee: 'employees',
+        obra: 'obras',
+        sector: 'sectors',
+        jobFunction: 'job_functions',
+        dixiDevice: 'dixi_devices',
+        aso: 'asos',
+        atestado: 'atestados',
+        training: 'trainings',
+        warning: 'warnings',
+        goldenRule: 'golden_rules',
+        documentTemplate: 'document_templates',
+        epiDelivery: 'epi_deliveries',
+        user: 'users',
+      };
+
+      const tableName = entityMap[input.entity];
+      if (!tableName) throw new TRPCError({ code: "BAD_REQUEST", message: "Entidade inválida" });
+
+      await db.execute(sqlFn.raw(`UPDATE \`${tableName}\` SET deletedAt = NULL, deletedBy = NULL, deletedByUserId = NULL WHERE id = ${input.id}`));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "RESTORE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Item restaurado da lixeira: ${input.entity} #${input.id}` });
+      return { success: true };
+    }),
+
+    // Exclusão permanente
+    permanentDelete: protectedProcedure.input(z.object({ id: z.number(), entity: z.string(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { sql: sqlFn } = await import("drizzle-orm");
+
+      const entityMap: Record<string, string> = {
+        company: 'companies',
+        employee: 'employees',
+        obra: 'obras',
+        sector: 'sectors',
+        jobFunction: 'job_functions',
+        dixiDevice: 'dixi_devices',
+        aso: 'asos',
+        atestado: 'atestados',
+        training: 'trainings',
+        warning: 'warnings',
+        goldenRule: 'golden_rules',
+        documentTemplate: 'document_templates',
+        epiDelivery: 'epi_deliveries',
+        user: 'users',
+      };
+
+      const tableName = entityMap[input.entity];
+      if (!tableName) throw new TRPCError({ code: "BAD_REQUEST", message: "Entidade inválida" });
+
+      await db.execute(sqlFn.raw(`DELETE FROM \`${tableName}\` WHERE id = ${input.id}`));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "PERMANENT_DELETE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Item excluído permanentemente: ${input.entity} #${input.id}` });
+      return { success: true };
     }),
   }),
 });

@@ -81,6 +81,9 @@ export const asos = mysqlTable("asos", {
 	documentoUrl: text(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
 
 export const atestados = mysqlTable("atestados", {
@@ -98,6 +101,9 @@ export const atestados = mysqlTable("atestados", {
 	documentoUrl: text(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
 
 export const auditLogs = mysqlTable("audit_logs", {
@@ -200,12 +206,14 @@ export const companies = mysqlTable("companies", {
 	nextCodigoInterno: int().default(1).notNull(),
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+		updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 },
 (table) => [
 	index("companies_cnpj_unique").on(table.cnpj),
 ]);
-
 export const dds = mysqlTable("dds", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
@@ -247,9 +255,11 @@ export const dixiDevices = mysqlTable("dixi_devices", {
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-	obraId: int(),
+		obraId: int(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
-
 export const employeeHistory = mysqlTable("employee_history", {
 	id: int().autoincrement().notNull(),
 	employeeId: int().notNull(),
@@ -374,8 +384,10 @@ export const epiDeliveries = mysqlTable("epi_deliveries", {
 	motivo: varchar({ length: 255 }),
 	observacoes: text(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
-
 export const epis = mysqlTable("epis", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
@@ -475,9 +487,11 @@ export const jobFunctions = mysqlTable("job_functions", {
 	cbo: varchar({ length: 10 }),
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+		updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
-
 export const monthlyPayrollSummary = mysqlTable("monthly_payroll_summary", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
@@ -569,8 +583,10 @@ export const obras = mysqlTable("obras", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	numOrcamento: varchar({ length: 50 }),
 	snRelogioPonto: varchar({ length: 50 }),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
-
 export const payroll = mysqlTable("payroll", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
@@ -645,9 +661,11 @@ export const sectors = mysqlTable("sectors", {
 	descricao: varchar({ length: 255 }),
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+		updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
-
 export const timeRecords = mysqlTable("time_records", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
@@ -734,8 +752,10 @@ export const trainings = mysqlTable("trainings", {
 	observacoes: text(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
-
 export const userProfiles = mysqlTable("user_profiles", {
 	id: int().autoincrement().notNull(),
 	userId: int().notNull(),
@@ -760,6 +780,9 @@ export const users = mysqlTable("users", {
 	password: varchar({ length: 255 }),
 	mustChangePassword: tinyint().default(1),
 	avatarUrl: text(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),
@@ -812,11 +835,13 @@ export const warnings = mysqlTable("warnings", {
 	diasSuspensao: int(),
 	documentoUrl: text(),
 	origemModulo: varchar({ length: 50 }),
-	origemId: int(),
+		origemId: int(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
-
 // ============================================================
 // FOLHA DE PAGAMENTO - LANÇAMENTOS IMPORTADOS DA CONTABILIDADE
 // ============================================================
@@ -925,7 +950,7 @@ export const pontoConsolidacao = mysqlTable("ponto_consolidacao", {
 export const obraSns = mysqlTable("obra_sns", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
-	obraId: int().notNull(),
+	obraId: int(),
 	sn: varchar({ length: 50 }).notNull(),
 	apelido: varchar({ length: 100 }),
 	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),
@@ -960,6 +985,9 @@ export const documentTemplates = mysqlTable("document_templates", {
 	atualizadoPor: varchar({ length: 255 }),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 },
 (table) => [
 	index("doc_templates_company_tipo").on(table.companyId, table.tipo),
@@ -1027,6 +1055,9 @@ export const companyBankAccounts = mysqlTable("company_bank_accounts", {
 	ativo: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 },
 (table) => [
 	index("cba_company").on(table.companyId),
@@ -1077,6 +1108,9 @@ export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
 	criadoPor: varchar({ length: 255 }),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 },
 (table) => [
 	index("pt_company").on(table.companyId),
@@ -1129,6 +1163,9 @@ export const goldenRules = mysqlTable("golden_rules", {
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
 });
 export type InsertGoldenRule = typeof goldenRules.$inferInsert;
 export type SelectGoldenRule = typeof goldenRules.$inferSelect;

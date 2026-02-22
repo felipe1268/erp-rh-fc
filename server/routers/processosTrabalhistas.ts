@@ -163,12 +163,14 @@ export const processosTrabRouter = router({
   // ============================================================
   excluir: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      // Excluir andamentos primeiro
-      await db.delete(processosAndamentos).where(eq(processosAndamentos.processoId, input.id));
-      // Excluir processo
-      await db.delete(processosTrabalhistas).where(eq(processosTrabalhistas.id, input.id));
+      // Soft delete: marca deletedAt em vez de remover permanentemente
+      await db.update(processosTrabalhistas).set({
+        deletedAt: sql`NOW()`,
+        deletedBy: ctx.user.name ?? 'Sistema',
+        deletedByUserId: ctx.user.id,
+      } as any).where(eq(processosTrabalhistas.id, input.id));
       return { success: true };
     }),
 

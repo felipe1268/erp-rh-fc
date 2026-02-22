@@ -155,12 +155,11 @@ export const controleDocumentosRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        await db.delete(asos).where(eq(asos.id, input.id));
+        await db.update(asos).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(asos.id, input.id));
         return { success: true };
       }),
-
     uploadDoc: protectedProcedure
       .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
       .mutation(async ({ input }) => {
@@ -371,12 +370,11 @@ export const controleDocumentosRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        await db.delete(atestados).where(eq(atestados.id, input.id));
+        await db.update(atestados).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(atestados.id, input.id));
         return { success: true };
       }),
-
     uploadDoc: protectedProcedure
       .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
       .mutation(async ({ input }) => {
@@ -499,9 +497,9 @@ export const controleDocumentosRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        await db.delete(trainings).where(eq(trainings.id, input.id));
+        await db.update(trainings).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(trainings.id, input.id));
         return { success: true };
       }),
 
@@ -622,9 +620,9 @@ export const controleDocumentosRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        await db.delete(warnings).where(eq(warnings.id, input.id));
+        await db.update(warnings).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(warnings.id, input.id));
         return { success: true };
       }),
 
@@ -982,9 +980,9 @@ export const controleDocumentosRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        await db.delete(documentTemplates).where(eq(documentTemplates.id, input.id));
+        await db.update(documentTemplates).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(documentTemplates.id, input.id));
         return { success: true };
       }),
   }),
@@ -992,10 +990,10 @@ export const controleDocumentosRouter = router({
   // ===================== DELETE EM LOTE (ATESTADOS) =====================
   atestadosDeleteBatch: protectedProcedure
     .input(z.object({ ids: z.array(z.number()) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       for (const id of input.ids) {
-        await db.delete(atestados).where(eq(atestados.id, id));
+        await db.update(atestados).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(atestados.id, id));
       }
       return { success: true, deletados: input.ids.length };
     }),

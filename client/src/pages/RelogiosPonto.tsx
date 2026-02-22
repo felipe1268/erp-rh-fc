@@ -99,11 +99,9 @@ export default function RelogiosPonto() {
 
   const handleSave = () => {
     if (!form.sn.trim()) { toast.error("Número de série (SN) é obrigatório"); return; }
-    if (!form.obraId) { toast.error("Selecione uma obra para vincular"); return; }
-
     addSnMut.mutate({
       companyId,
-      obraId: parseInt(form.obraId, 10),
+      obraId: form.obraId ? parseInt(form.obraId, 10) : undefined,
       sn: form.sn.trim(),
     });
   };
@@ -119,11 +117,10 @@ export default function RelogiosPonto() {
 
   const handleEditSave = () => {
     if (!editForm.sn.trim()) { toast.error("SN é obrigatório"); return; }
-    if (!editForm.obraId) { toast.error("Selecione uma obra"); return; }
     updateSnMut.mutate({
       id: editingId!,
       sn: editForm.sn.trim(),
-      obraId: parseInt(editForm.obraId, 10),
+      obraId: editForm.obraId ? parseInt(editForm.obraId, 10) : undefined,
       status: editForm.status,
     });
   };
@@ -437,7 +434,7 @@ export default function RelogiosPonto() {
             </div>
 
             <div>
-              <Label>Obra para Vincular *</Label>
+              <Label>Obra para Vincular (opcional)</Label>
               <Select
                 value={form.obraId || undefined}
                 onValueChange={v => setForm(f => ({ ...f, obraId: v }))}

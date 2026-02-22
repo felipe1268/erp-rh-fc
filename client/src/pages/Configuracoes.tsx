@@ -73,6 +73,8 @@ export default function Configuracoes() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editRole, setEditRole] = useState("");
 
   // Troca de senha
   const [showChangePwd, setShowChangePwd] = useState(false);
@@ -558,7 +560,7 @@ export default function Configuracoes() {
                             <div className="flex items-center gap-1 flex-wrap">
                               {/* Editar */}
                               <Button size="sm" variant="outline" className="text-xs h-7 px-2" title="Editar"
-                                onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); }}>
+                                onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); setEditPassword(""); setEditRole(u.role || "user"); }}>
                                 <Pencil className="h-3 w-3" />
                               </Button>
                               {/* Alterar Perfil */}
@@ -700,10 +702,17 @@ export default function Configuracoes() {
         {/* Dialog: Editar Usuário */}
         <FullScreenDialog open={!!editingUser} onClose={() => setEditingUser(null)} title="Editar Usuário" subtitle={`Editando: ${editingUser?.name || ''}`}>
           <div className="w-full max-w-2xl">
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium">Nome Completo</label>
-                <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nome do usuário" />
+            <div className="space-y-4">
+              {/* Dados Básicos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Nome Completo</label>
+                  <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nome do usuário" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Email</label>
+                  <Input value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@empresa.com" />
+                </div>
               </div>
               {editingUser?.loginMethod === "local" && (
                 <div>
@@ -711,13 +720,45 @@ export default function Configuracoes() {
                   <Input value={editUsername} onChange={e => setEditUsername(e.target.value)} placeholder="Username" />
                 </div>
               )}
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <Input value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@empresa.com" />
-              </div>
+
+              {/* Perfil (Role) - Apenas Admin Master pode alterar */}
+              {isMaster && editingUser?.id !== user?.id && (
+                <div>
+                  <label className="text-sm font-medium flex items-center gap-1"><Shield className="h-3.5 w-3.5" /> Perfil de Acesso</label>
+                  <Select value={editRole} onValueChange={setEditRole}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecione o perfil" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">Usuário</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="admin_master">Admin Master</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Nova Senha - Admin pode definir nova senha para o usuário */}
+              {(isMaster || user?.role === "admin") && (
+                <div className="border-t pt-3">
+                  <label className="text-sm font-medium flex items-center gap-1"><Key className="h-3.5 w-3.5" /> Nova Senha (deixe em branco para manter a atual)</label>
+                  <Input
+                    type="password"
+                    value={editPassword}
+                    onChange={e => setEditPassword(e.target.value)}
+                    placeholder="Digite a nova senha (mín. 6 caracteres)"
+                    className="mt-1"
+                  />
+                  {editPassword && editPassword.length < 6 && (
+                    <p className="text-xs text-red-500 mt-1">A senha deve ter no mínimo 6 caracteres</p>
+                  )}
+                </div>
+              )}
+
+              {/* Info do Usuário */}
               <div className="bg-gray-50 border rounded-lg p-3 text-sm">
                 <p className="text-gray-500"><strong>Método de Login:</strong> {editingUser?.loginMethod === "local" ? "Local (username/senha)" : editingUser?.loginMethod === "apple" ? "Apple ID" : "OAuth"}</p>
-                <p className="text-gray-500"><strong>Perfil:</strong> {editingUser?.role === "admin_master" ? "Admin Master" : editingUser?.role === "admin" ? "Admin" : "Usuário"}</p>
+                <p className="text-gray-500"><strong>Perfil Atual:</strong> {editingUser?.role === "admin_master" ? "Admin Master" : editingUser?.role === "admin" ? "Admin" : "Usuário"}</p>
                 <p className="text-gray-500"><strong>Último Acesso:</strong> {editingUser?.lastSignedIn ? new Date(editingUser.lastSignedIn).toLocaleDateString("pt-BR") : "Nunca"}</p>
               </div>
             </div>
@@ -725,11 +766,14 @@ export default function Configuracoes() {
               <Button variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
               <Button onClick={() => {
                 if (!editName.trim()) { toast.error("Nome é obrigatório"); return; }
+                if (editPassword && editPassword.length < 6) { toast.error("A senha deve ter no mínimo 6 caracteres"); return; }
                 updateUserMutation.mutate({
                   userId: editingUser.id,
                   name: editName.trim(),
                   email: editEmail.trim() || undefined,
                   username: editUsername.trim() || undefined,
+                  newPassword: editPassword.trim() || undefined,
+                  role: (isMaster && editingUser?.id !== user?.id && editRole !== editingUser?.role) ? editRole as any : undefined,
                 });
               }} disabled={updateUserMutation.isPending}>
                 {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}

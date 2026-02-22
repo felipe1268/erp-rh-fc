@@ -33,6 +33,7 @@ import DashFolhaPagamento from "./pages/dashboards/DashFolhaPagamento";
 import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
 import DashEpis from "./pages/dashboards/DashEpis";
 import DashJuridico from "./pages/dashboards/DashJuridico";
+import Lixeira from "./pages/Lixeira";
 
 function Router() {
   return (
@@ -55,6 +56,7 @@ function Router() {
       <Route path={"/controle-documentos"} component={ControleDocumentos} />
       <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
       <Route path={"/configuracoes"} component={Configuracoes} />
+      <Route path={"/lixeira"} component={Lixeira} />
       {/* Relatórios */}
       <Route path={"/relatorios/raio-x"} component={RaioXPage} />
       {/* Dashboards */}

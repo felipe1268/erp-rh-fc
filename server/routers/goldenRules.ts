@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { goldenRules, jobFunctions, companies } from "../../drizzle/schema";
-import { eq, and, desc, or, isNull } from "drizzle-orm";
+import { eq, and, desc, or, isNull, sql } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
 export const goldenRulesRouter = router({
@@ -55,10 +55,10 @@ export const goldenRulesRouter = router({
   // Excluir regra de ouro
   delete: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error('DB not available');
-      await db.delete(goldenRules).where(and(eq(goldenRules.id, input.id), eq(goldenRules.companyId, input.companyId)));
+      await db.update(goldenRules).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(and(eq(goldenRules.id, input.id), eq(goldenRules.companyId, input.companyId)));
       return { success: true };
     }),
 

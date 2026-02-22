@@ -2263,9 +2263,14 @@ export const folhaPagamentoRouter = router({
 
   excluirContaBancaria: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      await db.delete(companyBankAccounts).where(eq(companyBankAccounts.id, input.id));
+      // Soft delete
+      await db.update(companyBankAccounts).set({
+        deletedAt: sql`NOW()`,
+        deletedBy: ctx.user.name ?? 'Sistema',
+        deletedByUserId: ctx.user.id,
+      } as any).where(eq(companyBankAccounts.id, input.id));
       return { success: true };
     }),
 

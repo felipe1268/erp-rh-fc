@@ -28,7 +28,7 @@ import {
   ChevronDown, ChevronRight,
   BarChart3, Settings,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
-  ClipboardList, UserSearch, Gavel, Wifi, HardHat,
+  ClipboardList, UserSearch, Gavel, Wifi, HardHat, Trash2,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -103,6 +103,7 @@ const menuSections = [
       { icon: Lock, label: "Usuários e Permissões", path: "/usuarios" },
       { icon: FileText, label: "Auditoria do Sistema", path: "/auditoria" },
       { icon: Settings, label: "Configurações", path: "/configuracoes" },
+      { icon: Trash2, label: "Lixeira", path: "/lixeira" },
     ],
   },
   {
@@ -138,6 +139,7 @@ const ICON_MAP: Record<string, any> = {
   "Usuários e Permissões": Lock,
   "Auditoria do Sistema": FileText,
   "Configurações": Settings,
+  "Lixeira": Trash2,
   "Avaliação de Desempenho": Star,
 };
 
