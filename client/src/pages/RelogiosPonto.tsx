@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Trash2, Clock, Wifi, WifiOff, Building2, AlertTriangle } from "lucide-react";
+import { Plus, Search, Trash2, Clock, Wifi, WifiOff, Building2, AlertTriangle, Pencil, X, Save } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -16,23 +16,20 @@ import { Badge } from "@/components/ui/badge";
 
 type SnForm = {
   sn: string;
-  apelido: string;
   obraId: string;
+  status: string;
 };
 
-const emptyForm: SnForm = { sn: "", apelido: "", obraId: "" };
+const emptyForm: SnForm = { sn: "", obraId: "", status: "ativo" };
 
-// Flatten nested data from backend (obraSn nested object + obraNome/obraStatus)
 function flattenSn(raw: any) {
   if (raw.obraSn) {
-    // Nested format: { obraSn: { id, sn, obraId, ... }, obraNome, obraStatus }
     return {
       ...raw.obraSn,
       obraNome: raw.obraNome || null,
       obraStatus: raw.obraStatus || null,
     };
   }
-  // Already flat
   return raw;
 }
 
@@ -55,9 +52,14 @@ export default function RelogiosPonto() {
     (obrasQ.data ?? []).filter((o: any) => o.status === "Em Andamento"),
     [obrasQ.data]
   );
+  const todasObras = obrasQ.data ?? [];
 
   const addSnMut = trpc.obras.addSn.useMutation({
     onSuccess: () => { snsQ.refetch(); setDialogOpen(false); toast.success("Relógio de ponto cadastrado com sucesso!"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const updateSnMut = trpc.obras.updateSn.useMutation({
+    onSuccess: () => { snsQ.refetch(); setEditingId(null); toast.success("Relógio atualizado com sucesso!"); },
     onError: (err) => toast.error(err.message),
   });
   const removeSnMut = trpc.obras.removeSn.useMutation({
@@ -69,6 +71,8 @@ export default function RelogiosPonto() {
   const [form, setForm] = useState<SnForm>(emptyForm);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "ativo" | "inativo">("all");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<SnForm>(emptyForm);
 
   const filtered = useMemo(() => {
     let result = sns;
@@ -76,7 +80,6 @@ export default function RelogiosPonto() {
       const s = search.toLowerCase();
       result = result.filter((sn: any) =>
         (sn.sn || "").toLowerCase().includes(s) ||
-        (sn.apelido || "").toLowerCase().includes(s) ||
         (sn.obraNome || "").toLowerCase().includes(s)
       );
     }
@@ -102,8 +105,32 @@ export default function RelogiosPonto() {
       companyId,
       obraId: parseInt(form.obraId, 10),
       sn: form.sn.trim(),
-      apelido: form.apelido.trim() || undefined,
     });
+  };
+
+  const handleEdit = (sn: any) => {
+    setEditingId(sn.id);
+    setEditForm({
+      sn: sn.sn || "",
+      obraId: String(sn.obraId || ""),
+      status: sn.status || "ativo",
+    });
+  };
+
+  const handleEditSave = () => {
+    if (!editForm.sn.trim()) { toast.error("SN é obrigatório"); return; }
+    if (!editForm.obraId) { toast.error("Selecione uma obra"); return; }
+    updateSnMut.mutate({
+      id: editingId!,
+      sn: editForm.sn.trim(),
+      obraId: parseInt(editForm.obraId, 10),
+      status: editForm.status,
+    });
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditForm(emptyForm);
   };
 
   const handleDelete = (id: number, sn: string) => {
@@ -116,7 +143,7 @@ export default function RelogiosPonto() {
     <DashboardLayout>
       <PrintHeader />
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Relógios de Ponto</h1>
             <p className="text-muted-foreground text-sm">
@@ -188,7 +215,7 @@ export default function RelogiosPonto() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por SN, apelido ou obra..."
+              placeholder="Buscar por SN ou obra..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-10"
@@ -222,7 +249,6 @@ export default function RelogiosPonto() {
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="p-3 text-left font-medium">SN</th>
-                      <th className="p-3 text-left font-medium">Apelido</th>
                       <th className="p-3 text-left font-medium">Obra Vinculada</th>
                       <th className="p-3 text-left font-medium">Status Obra</th>
                       <th className="p-3 text-center font-medium">Status</th>
@@ -232,46 +258,129 @@ export default function RelogiosPonto() {
                   </thead>
                   <tbody>
                     {filtered.map((sn: any) => (
-                      <tr key={sn.id} className="border-b last:border-0 hover:bg-muted/30">
-                        <td className="p-3 font-mono font-bold text-base">{sn.sn || "—"}</td>
-                        <td className="p-3">{sn.apelido || "—"}</td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-teal-600" />
-                            <span className="font-medium">{sn.obraNome || `Obra #${sn.obraId}`}</span>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          {sn.obraStatus ? (
-                            <Badge variant={sn.obraStatus === "Em Andamento" ? "default" : "secondary"} className="text-xs">
-                              {sn.obraStatus}
+                      editingId === sn.id ? (
+                        /* LINHA DE EDIÇÃO INLINE */
+                        <tr key={sn.id} className="border-b bg-blue-50/50">
+                          <td className="p-2">
+                            <Input
+                              value={editForm.sn}
+                              onChange={e => setEditForm(f => ({ ...f, sn: e.target.value }))}
+                              className="font-mono h-9 text-sm"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <Select
+                              value={editForm.obraId || undefined}
+                              onValueChange={v => setEditForm(f => ({ ...f, obraId: v }))}
+                            >
+                              <SelectTrigger className="h-9 text-sm">
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {todasObras.map((obra: any) => (
+                                  <SelectItem key={obra.id} value={String(obra.id)}>
+                                    {obra.nome} {obra.status !== "Em Andamento" ? `(${obra.status})` : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="p-2 text-muted-foreground text-xs">—</td>
+                          <td className="p-2">
+                            <Select
+                              value={editForm.status}
+                              onValueChange={v => setEditForm(f => ({ ...f, status: v }))}
+                            >
+                              <SelectTrigger className="h-9 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="ativo">Ativo</SelectItem>
+                                <SelectItem value="inativo">Inativo</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="p-2 text-xs text-muted-foreground">
+                            {sn.dataVinculo ? new Date(sn.dataVinculo).toLocaleDateString("pt-BR") : "—"}
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 h-8 px-2"
+                                onClick={handleEditSave}
+                                disabled={updateSnMut.isPending}
+                              >
+                                <Save className="h-3.5 w-3.5 mr-1" /> Salvar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={handleEditCancel}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        /* LINHA NORMAL — clicável para editar */
+                        <tr
+                          key={sn.id}
+                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                          onClick={() => handleEdit(sn)}
+                        >
+                          <td className="p-3 font-mono font-bold text-base">{sn.sn || "—"}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-teal-600" />
+                              <span className="font-medium">{sn.obraNome || `Obra #${sn.obraId}`}</span>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            {sn.obraStatus ? (
+                              <Badge variant={sn.obraStatus === "Em Andamento" ? "default" : "secondary"} className="text-xs">
+                                {sn.obraStatus}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <Badge
+                              variant={sn.status === "ativo" ? "default" : "destructive"}
+                              className={`text-xs ${sn.status === "ativo" ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}`}
+                            >
+                              {sn.status === "ativo" ? "Ativo" : "Inativo"}
                             </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          <Badge
-                            variant={sn.status === "ativo" ? "default" : "destructive"}
-                            className={`text-xs ${sn.status === "ativo" ? "bg-green-100 text-green-800 hover:bg-green-200" : ""}`}
-                          >
-                            {sn.status === "ativo" ? "Ativo" : "Inativo"}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-xs text-muted-foreground">
-                          {sn.dataVinculo ? new Date(sn.dataVinculo).toLocaleDateString("pt-BR") : "—"}
-                        </td>
-                        <td className="p-3 text-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(sn.id, sn.sn)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover
-                          </Button>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="p-3 text-xs text-muted-foreground">
+                            {sn.dataVinculo ? new Date(sn.dataVinculo).toLocaleDateString("pt-BR") : "—"}
+                          </td>
+                          <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => handleEdit(sn)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive hover:text-destructive h-8 px-2"
+                                onClick={() => handleDelete(sn.id, sn.sn)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
                     ))}
                   </tbody>
                 </table>
@@ -297,8 +406,7 @@ export default function RelogiosPonto() {
               <h4 className="font-semibold text-sm text-amber-800">Sobre os Relógios de Ponto</h4>
               <p className="text-xs text-amber-700 mt-1">
                 O número SN (Serial Number) é o identificador único do relógio de ponto Dixi.
-                Cada SN só pode estar ativo em uma obra por vez. Quando uma obra é concluída ou paralisada,
-                os SNs são automaticamente liberados para reutilização em outras obras.
+                Cada SN só pode estar ativo em uma obra por vez. Clique em qualquer linha para editar o relógio.
                 O SN é usado para identificar automaticamente a obra durante a importação dos arquivos DIXI.
               </p>
             </div>
@@ -320,21 +428,12 @@ export default function RelogiosPonto() {
               <Input
                 value={form.sn}
                 onChange={e => setForm(f => ({ ...f, sn: e.target.value }))}
-                placeholder="Ex: 1234567890"
+                placeholder="Ex: AYSJ31011442"
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Número de série do relógio de ponto Dixi
               </p>
-            </div>
-
-            <div>
-              <Label>Apelido (opcional)</Label>
-              <Input
-                value={form.apelido}
-                onChange={e => setForm(f => ({ ...f, apelido: e.target.value }))}
-                placeholder="Ex: Relógio Portaria, Relógio Refeitório..."
-              />
             </div>
 
             <div>

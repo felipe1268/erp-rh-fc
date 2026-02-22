@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -706,6 +706,16 @@ export const controleDocumentosRouter = router({
       // Dados do funcionário
       const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
       if (!emp) return null;
+
+      // Descrição da Função (CBO + Descrição + Ordem de Serviço NR-1)
+      let funcaoDetalhes: any = null;
+      if (emp.funcao) {
+        const [jf] = await db.select().from(jobFunctions)
+          .where(and(eq(jobFunctions.companyId, emp.companyId), eq(jobFunctions.nome, emp.funcao)))
+          .limit(1);
+        if (jf) funcaoDetalhes = { nome: jf.nome, cbo: jf.cbo, descricao: jf.descricao, ordemServico: jf.ordemServico };
+      }
+
       // ASOs
       const empAsos = await db.select().from(asos).where(eq(asos.employeeId, input.employeeId)).orderBy(desc(asos.dataExame));
       const asosComStatus = empAsos.map(a => ({ ...a, ...calcularStatusASO(a.dataValidade || "") }));
@@ -715,20 +725,102 @@ export const controleDocumentosRouter = router({
       const empAtestados = await db.select().from(atestados).where(eq(atestados.employeeId, input.employeeId)).orderBy(desc(atestados.dataEmissao));
       // Advertências
       const empAdvertencias = await db.select().from(warnings).where(eq(warnings.employeeId, input.employeeId)).orderBy(desc(warnings.dataOcorrencia));
-      // Ponto (últimos 3 meses)
-      const tresMesesAtras = new Date();
-      tresMesesAtras.setMonth(tresMesesAtras.getMonth() - 3);
-      const empPonto = await db.select().from(timeRecords).where(and(eq(timeRecords.employeeId, input.employeeId))).orderBy(desc(timeRecords.data)).limit(90);
-      // Folha de pagamento (últimos 6 meses)
-      const empPayroll = await db.select().from(payroll).where(eq(payroll.employeeId, input.employeeId)).orderBy(desc(payroll.mesReferencia)).limit(6);
-      // EPIs entregues
-      const empEpis = await db.select({ id: epiDeliveries.id, epiId: epiDeliveries.epiId, quantidade: epiDeliveries.quantidade, dataEntrega: epiDeliveries.dataEntrega, dataDevolucao: epiDeliveries.dataDevolucao, motivo: epiDeliveries.motivo, nomeEpi: epis.nome }).from(epiDeliveries).leftJoin(epis, eq(epiDeliveries.epiId, epis.id)).where(eq(epiDeliveries.employeeId, input.employeeId)).orderBy(desc(epiDeliveries.dataEntrega));
-      // VR
-      const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia)).limit(6);
-      // Adiantamentos
-      const empAdiantamentos = await db.select().from(advances).where(eq(advances.employeeId, input.employeeId)).orderBy(desc(advances.mesReferencia)).limit(6);
+      // Ponto - TODOS os registros (sem limite)
+      const empPonto = await db.select().from(timeRecords).where(eq(timeRecords.employeeId, input.employeeId)).orderBy(desc(timeRecords.data));
+      // Folha de pagamento - TODOS os registros
+      const empPayroll = await db.select().from(payroll).where(eq(payroll.employeeId, input.employeeId)).orderBy(desc(payroll.mesReferencia));
+      // EPIs entregues - TODOS
+      const empEpis = await db.select({
+        id: epiDeliveries.id, epiId: epiDeliveries.epiId, quantidade: epiDeliveries.quantidade,
+        dataEntrega: epiDeliveries.dataEntrega, dataDevolucao: epiDeliveries.dataDevolucao,
+        motivo: epiDeliveries.motivo, nomeEpi: epis.nome, ca: epis.ca,
+      }).from(epiDeliveries)
+        .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
+        .where(eq(epiDeliveries.employeeId, input.employeeId))
+        .orderBy(desc(epiDeliveries.dataEntrega));
+      // VR - TODOS
+      const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia));
+      // Adiantamentos - TODOS
+      const empAdiantamentos = await db.select().from(advances).where(eq(advances.employeeId, input.employeeId)).orderBy(desc(advances.mesReferencia));
       // Rateio por obra
-      const empRateio = await db.select({ id: obraHorasRateio.id, obraId: obraHorasRateio.obraId, nomeObra: obras.nome, mesAno: obraHorasRateio.mesAno, horasNormais: obraHorasRateio.horasNormais, horasExtras: obraHorasRateio.horasExtras, totalHoras: obraHorasRateio.totalHoras, diasTrabalhados: obraHorasRateio.diasTrabalhados }).from(obraHorasRateio).leftJoin(obras, eq(obraHorasRateio.obraId, obras.id)).where(eq(obraHorasRateio.employeeId, input.employeeId)).orderBy(desc(obraHorasRateio.mesAno));
+      const empRateio = await db.select({
+        id: obraHorasRateio.id, obraId: obraHorasRateio.obraId, nomeObra: obras.nome,
+        mesAno: obraHorasRateio.mesAno, horasNormais: obraHorasRateio.horasNormais,
+        horasExtras: obraHorasRateio.horasExtras, totalHoras: obraHorasRateio.totalHoras,
+        diasTrabalhados: obraHorasRateio.diasTrabalhados,
+      }).from(obraHorasRateio)
+        .leftJoin(obras, eq(obraHorasRateio.obraId, obras.id))
+        .where(eq(obraHorasRateio.employeeId, input.employeeId))
+        .orderBy(desc(obraHorasRateio.mesAno));
+
+      // HORAS EXTRAS - TODOS os registros de pagamentos extras tipo HE
+      const empHorasExtras = await db.select().from(extraPayments)
+        .where(and(
+          eq(extraPayments.employeeId, input.employeeId),
+          eq(extraPayments.tipoExtra, "Horas_Extras"),
+        )).orderBy(desc(extraPayments.mesReferencia));
+
+      // HISTÓRICO FUNCIONAL - TODOS os eventos
+      const empHistorico = await db.select().from(employeeHistory)
+        .where(eq(employeeHistory.employeeId, input.employeeId))
+        .orderBy(desc(employeeHistory.dataEvento));
+
+      // ACIDENTES DE TRABALHO
+      const empAcidentes = await db.select().from(accidents)
+        .where(eq(accidents.employeeId, input.employeeId))
+        .orderBy(desc(accidents.dataAcidente));
+
+      // PROCESSOS TRABALHISTAS
+      const empProcessos = await db.select().from(processosTrabalhistas)
+        .where(eq(processosTrabalhistas.employeeId, input.employeeId))
+        .orderBy(desc(processosTrabalhistas.dataDistribuicao));
+
+      // Andamentos dos processos
+      let processosComAndamentos: any[] = [];
+      if (empProcessos.length > 0) {
+        processosComAndamentos = await Promise.all(empProcessos.map(async (proc) => {
+          const andamentos = await db.select().from(processosAndamentos)
+            .where(eq(processosAndamentos.processoId, proc.id))
+            .orderBy(desc(processosAndamentos.data));
+          return { ...proc, andamentos };
+        }));
+      }
+
+      // TIMELINE CRONOLÓGICA - Montar eventos de TODAS as fontes
+      const timeline: Array<{ data: string; tipo: string; descricao: string; cor: string; icone: string }> = [];
+
+      // Admissão
+      if (emp.dataAdmissao) timeline.push({ data: emp.dataAdmissao, tipo: "Admissão", descricao: `Admitido como ${emp.funcao || emp.cargo || "-"} no setor ${emp.setor || "-"}`, cor: "green", icone: "user-plus" });
+      // Demissão
+      if (emp.dataDemissao) timeline.push({ data: emp.dataDemissao, tipo: "Desligamento", descricao: `Desligado da empresa`, cor: "red", icone: "user-minus" });
+      // Histórico funcional
+      empHistorico.forEach(h => {
+        const tipoLabel: Record<string, string> = { Admissao: "Admissão", Promocao: "Promoção", Transferencia: "Transferência", Mudanca_Funcao: "Mudança de Função", Mudanca_Setor: "Mudança de Setor", Mudanca_Salario: "Alteração Salarial", Afastamento: "Afastamento", Retorno: "Retorno", Ferias: "Férias", Desligamento: "Desligamento", Outros: "Outros" };
+        let desc = tipoLabel[h.tipo] || h.tipo;
+        if (h.valorAnterior && h.valorNovo) desc += `: ${h.valorAnterior} → ${h.valorNovo}`;
+        if (h.descricao) desc += ` — ${h.descricao}`;
+        const corMap: Record<string, string> = { Promocao: "green", Mudanca_Salario: "blue", Mudanca_Funcao: "purple", Transferencia: "indigo", Afastamento: "amber", Retorno: "teal", Ferias: "cyan", Desligamento: "red" };
+        timeline.push({ data: h.dataEvento, tipo: tipoLabel[h.tipo] || h.tipo, descricao: desc, cor: corMap[h.tipo] || "gray", icone: "history" });
+      });
+      // ASOs
+      empAsos.forEach(a => timeline.push({ data: a.dataExame, tipo: "ASO", descricao: `${a.tipo || "Exame"} — ${a.resultado || "Pendente"}`, cor: "blue", icone: "stethoscope" }));
+      // Treinamentos
+      empTreinamentos.forEach(t => timeline.push({ data: t.dataRealizacao, tipo: "Treinamento", descricao: `${t.nome}${t.norma ? ` (${t.norma})` : ""}`, cor: "emerald", icone: "graduation-cap" }));
+      // Advertências
+      empAdvertencias.forEach(a => {
+        const tipoAdv = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
+        timeline.push({ data: a.dataOcorrencia, tipo: `Advertência (${tipoAdv})`, descricao: a.motivo || "-", cor: a.tipoAdvertencia === "Suspensao" || a.tipoAdvertencia === "JustaCausa" ? "red" : "orange", icone: "alert-triangle" });
+      });
+      // Atestados
+      empAtestados.forEach(a => timeline.push({ data: a.dataEmissao, tipo: "Atestado", descricao: `${a.tipo || "Médico"} — ${a.diasAfastamento || 0} dia(s)${a.cid ? ` (CID: ${a.cid})` : ""}`, cor: "purple", icone: "clipboard" }));
+      // Acidentes
+      empAcidentes.forEach(a => timeline.push({ data: a.dataAcidente, tipo: "Acidente", descricao: `${a.tipoAcidente} (${a.gravidade})${a.diasAfastamento ? ` — ${a.diasAfastamento} dias afastado` : ""}`, cor: "red", icone: "alert-circle" }));
+      // EPIs
+      empEpis.forEach(e => { if (e.dataEntrega) timeline.push({ data: e.dataEntrega, tipo: "EPI", descricao: `Entrega: ${e.nomeEpi || "EPI"}${e.ca ? ` (CA: ${e.ca})` : ""} — Qtd: ${e.quantidade || 1}`, cor: "teal", icone: "hard-hat" }); });
+
+      // Ordenar timeline por data (mais recente primeiro)
+      timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+
       // Contagem de advertências para progressão
       const advVerbais = empAdvertencias.filter(a => a.tipoAdvertencia === "Verbal").length;
       const advEscritas = empAdvertencias.filter(a => a.tipoAdvertencia === "Escrita").length;
@@ -737,15 +829,48 @@ export const controleDocumentosRouter = router({
       if (advVerbais >= 3 && advEscritas === 0) proximaAcao = "Sugestão: Aplicar Advertência por Escrito";
       else if (advEscritas >= 1 && advSuspensoes === 0) proximaAcao = "Sugestão: Aplicar Suspensão Disciplinar";
       else if (advSuspensoes >= 1) proximaAcao = "⚠️ Sugestão: Avaliar Rescisão por Justa Causa";
+
+      // Resumo de ponto agrupado por mês
+      const pontoResumoMap: Record<string, { diasTrabalhados: number; horasTrabalhadas: string; horasExtras: string; atrasos: string; faltas: number; ajustesManuais: number }> = {};
+      empPonto.forEach((p: any) => {
+        const mesRef = p.mesReferencia || (p.data ? p.data.substring(0, 7) : null);
+        if (!mesRef) return;
+        if (!pontoResumoMap[mesRef]) pontoResumoMap[mesRef] = { diasTrabalhados: 0, horasTrabalhadas: "0:00", horasExtras: "0:00", atrasos: "0:00", faltas: 0, ajustesManuais: 0 };
+        pontoResumoMap[mesRef].diasTrabalhados++;
+        if (p.ajusteManual) pontoResumoMap[mesRef].ajustesManuais++;
+      });
+      const pontoResumo = Object.entries(pontoResumoMap)
+        .map(([mesRef, dados]) => ({ mesReferencia: mesRef, ...dados }))
+        .sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
+
+      // Atrasos detalhados (registros de ponto com atraso)
+      const atrasosDetalhados = empPonto
+        .filter((p: any) => p.atrasos && p.atrasos !== "0:00" && p.atrasos !== "00:00")
+        .map((p: any) => ({ data: p.data, entrada1: p.entrada1, atraso: p.atrasos, mesReferencia: p.mesReferencia || (p.data ? p.data.substring(0, 7) : "") }));
+
+      // Faltas detalhadas
+      const faltasDetalhadas = empPonto
+        .filter((p: any) => p.faltas && Number(p.faltas) > 0)
+        .map((p: any) => ({ data: p.data, faltas: p.faltas, mesReferencia: p.mesReferencia || (p.data ? p.data.substring(0, 7) : "") }));
+
       return {
         funcionario: emp,
+        funcaoDetalhes,
         asos: asosComStatus,
         treinamentos: empTreinamentos,
         atestados: empAtestados,
         advertencias: empAdvertencias,
-        ponto: empPonto,
+        ponto: pontoResumo,
+        pontoDetalhado: empPonto,
+        atrasosDetalhados,
+        faltasDetalhadas,
         folhaPagamento: empPayroll,
         epis: empEpis,
+        horasExtras: empHorasExtras,
+        historicoFuncional: empHistorico,
+        acidentes: empAcidentes,
+        processos: processosComAndamentos,
+        timeline,
         valeAlimentacao: empVR,
         adiantamentos: empAdiantamentos,
         rateioObras: empRateio,

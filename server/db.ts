@@ -1169,6 +1169,22 @@ export async function addSnToObra(data: { companyId: number; obraId: number; sn:
   return { id: result.insertId };
 }
 
+export async function updateSnObra(id: number, data: { sn?: string; obraId?: number; status?: string; apelido?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const updateData: any = { updatedAt: new Date().toISOString() };
+  if (data.sn !== undefined) updateData.sn = data.sn;
+  if (data.obraId !== undefined) updateData.obraId = data.obraId;
+  if (data.status !== undefined) {
+    updateData.status = data.status;
+    if (data.status === "inativo") updateData.dataLiberacao = new Date().toISOString().split("T")[0];
+    else updateData.dataLiberacao = null;
+  }
+  if (data.apelido !== undefined) updateData.apelido = data.apelido || null;
+  await db.update(obraSns).set(updateData).where(eq(obraSns.id, id));
+  return { success: true };
+}
+
 export async function removeSnFromObra(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

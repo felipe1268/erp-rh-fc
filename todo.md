@@ -1150,3 +1150,83 @@
 - [x] IA consulta Regras de Ouro antes de gerar qualquer sugestão (nunca quebra regras da empresa)
 - [x] Adicionar campo Ordem de Serviço (NR-1) no cadastro de funções (riscos, EPIs obrigatórios, procedimentos de segurança)
 - [x] IA gera Ordem de Serviço automaticamente junto com a descrição da função
+
+## Rev. 44: 13º Salário na Folha de Pagamento
+- [ ] Novembro: campo adicional para upload da 1ª parcela do 13º (prazo até 30/11)
+- [ ] Dezembro: campo adicional para upload da 2ª parcela do 13º (prazo até 20/12)
+- [ ] Backend: suportar tipo de folha (normal, 13_primeira, 13_segunda)
+- [ ] Frontend: exibir campos extras de 13º nos meses de Nov e Dez
+- [ ] Dashboard Folha: incluir custos do 13º nos totais
+
+## Rev. 44b: Corrigir Dashboard Funcionários (tela em branco)
+- [ ] Diagnosticar e corrigir bug que faz dashboard aparecer em branco
+- [ ] Status dos Colaboradores (Ativos, Afastados, Férias, Desligados) - gráfico de barras
+- [ ] Setor dos Colaboradores (Obra, Escritório Central, Escritório Local)
+- [ ] Gênero (Masculinos vs Femininos com destaque visual)
+- [ ] Pirâmide etária por sexo e idade (14-20, 21-25, 26-30, 31-40, 41-50, 51-60, 61+)
+- [ ] Estatísticas: mais tempo de empresa, menos tempo, maior idade, menor idade
+- [ ] Ranking de funções (horizontal bars)
+- [ ] Ranking de advertências e faltas
+
+## Rev. 44c: Gráficos Interativos + Fix Dashboard Funcionários
+- [ ] Corrigir Dashboard Funcionários (tela em branco)
+- [ ] Tornar TODOS os gráficos interativos (clique filtra e atualiza KPIs/dados)
+- [ ] Regra de ouro: gráficos responsivos com drill-down em todos os dashboards
+
+## Rev. 45: Dashboard Horas Extras - Filtros Avançados
+- [ ] Filtro por Ano
+- [ ] Filtro por Mês
+- [ ] Filtro por Semana
+- [ ] Filtro por Dia
+- [ ] Filtro por Trimestre
+- [ ] Filtro por Semestre
+- [ ] Filtro por Obra
+- [ ] Filtro por Colaborador
+- [ ] Layout responsivo para análise clara
+- [ ] Gráficos interativos com drill-down
+- [ ] KPIs atualizados dinamicamente conforme filtros
+
+## Rev. 46: Raio-X do Funcionário - Dossiê Completo
+- [ ] Aba Horas Extras: todas HE do funcionário com detalhes (data, obra, horas, valor, %)
+- [ ] Descrição da Função completa no cabeçalho
+- [ ] Fichas de EPIs assinadas (entregas com data, CA, quantidade)
+- [ ] Histórico de Atrasos (dias, horários)
+- [ ] Histórico de Aumentos de Salário
+- [ ] Histórico de Faltas
+- [ ] Histórico de Atestados detalhado
+- [ ] Processos Trabalhistas vinculados
+- [ ] Histórico Funcional completo (promoções, mudanças de setor/função)
+- [ ] Timeline cronológica de TODOS os eventos
+- [ ] Cards de métricas atualizados com todas as informações
+
+## Rev. 47: Regras de Ouro - Seed no Banco
+- [x] Inserir as 10 Regras de Ouro no banco de dados (tabela golden_rules)
+- [x] Regras ficam disponíveis para uso futuro no Guia de Integração do Funcionário (40 registros: 10 por empresa)
+
+## Rev. 48: Importação Lista de Funcionários Ativos (PDF)
+- [x] Extrair dados do PDF de funcionários ativos (193 funcionários processados)
+- [x] Cruzar com base atual: identificar novos e ausentes
+- [x] Cadastrar funcionários novos que não estão no sistema
+- [x] Marcar como "Desligado" os que não estão na lista de ativos
+- [x] Preservar funcionários já marcados como Desligado/Lista_Negra
+
+## Rev. 49: Remover campo Apelido dos Relógios de Ponto
+- [x] Remover coluna "Apelido" da tabela de Relógios de Ponto no frontend
+
+## Rev. 50: Editar Relógio de Ponto
+- [x] Clicar na linha do relógio abre edição inline
+- [x] Tela de edição com campos: SN, Obra Vinculada, Status (Ativo/Inativo)
+- [x] Remover coluna Apelido da tabela
+- [x] Criar rota tRPC para update de relógio de ponto (updateSnObra)
+
+## Rev. 51: Funções clicáveis + Responsividade
+- [x] Clicar na função abre tela com informações completas (CBO, Descrição, OS NR-1, funcionários vinculados)
+- [ ] Garantir responsividade em todas as telas
+
+## Rev. 52: CBO Autocomplete na Função
+- [x] Campo Nome da Função digitável com autocomplete consultando base CBO do governo (2.450 ocupações)
+- [x] Campo CBO travado (somente leitura) preenchido automaticamente conforme função selecionada
+
+## Rev. 53: Cores suaves no Raio-X do Funcionário
+- [x] Trocar cores dos cards de métricas para tons pastel/leves (azul claro, verde suave, cinza, etc.)
+- [x] Manter visual agradável e profissional sem cores chamativas

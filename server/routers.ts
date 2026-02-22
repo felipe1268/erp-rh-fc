@@ -21,7 +21,7 @@ import {
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
-  getObraSns, getObraSnsByCompany, getActiveSnsByCompany, checkSnAvailability, addSnToObra, removeSnFromObra, releaseObraSns, findObraBySn,
+  getObraSns, getObraSnsByCompany, getActiveSnsByCompany, checkSnAvailability, addSnToObra, updateSnObra, removeSnFromObra, releaseObraSns, findObraBySn,
   // Setores e Funções
   listSectors, createSector, updateSector, deleteSector,
   listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction,
@@ -454,6 +454,7 @@ export const appRouter = router({
       }
       return addSnToObra(input);
     }),
+    updateSn: protectedProcedure.input(z.object({ id: z.number(), sn: z.string().optional(), obraId: z.number().optional(), status: z.string().optional(), apelido: z.string().optional() })).mutation(({ input }) => updateSnObra(input.id, { sn: input.sn, obraId: input.obraId, status: input.status, apelido: input.apelido })),
     removeSn: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => removeSnFromObra(input.id)),
     releaseSns: protectedProcedure.input(z.object({ obraId: z.number() })).mutation(({ input }) => releaseObraSns(input.obraId)),
   }),

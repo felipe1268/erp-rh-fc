@@ -75,7 +75,15 @@ async function getDashFuncionarios(companyId: number) {
     count: sql<number>`count(*)`,
   }).from(employees)
     .where(and(eq(employees.companyId, companyId), sql`dataNascimento IS NOT NULL`))
-    .groupBy(sql`faixa`, employees.sexo);
+    .groupBy(sql`CASE 
+      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 21 THEN '14-20'
+      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 26 THEN '21-25'
+      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 31 THEN '26-30'
+      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 41 THEN '31-40'
+      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 51 THEN '41-50'
+      WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 61 THEN '51-60'
+      ELSE '61+'
+    END`, employees.sexo);
 
   // Tempo de empresa (distribuição)
   const tenureDist = await db.select({
@@ -91,7 +99,15 @@ async function getDashFuncionarios(companyId: number) {
     count: sql<number>`count(*)`,
   }).from(employees)
     .where(and(eq(employees.companyId, companyId), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`))
-    .groupBy(sql`faixa`);
+    .groupBy(sql`CASE 
+      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 3 THEN '< 3 meses'
+      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 6 THEN '3-6 meses'
+      WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 12 THEN '6-12 meses'
+      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 2 THEN '1-2 anos'
+      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 5 THEN '2-5 anos'
+      WHEN TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 10 THEN '5-10 anos'
+      ELSE '10+ anos'
+    END`);
 
   // Admissões e demissões por mês (últimos 12 meses)
   const admissoesMensal = await db.select({
@@ -99,14 +115,14 @@ async function getDashFuncionarios(companyId: number) {
     count: sql<number>`count(*)`,
   }).from(employees)
     .where(and(eq(employees.companyId, companyId), sql`dataAdmissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
-    .groupBy(sql`mes`).orderBy(sql`mes`);
+    .groupBy(sql`DATE_FORMAT(dataAdmissao, '%Y-%m')`).orderBy(sql`DATE_FORMAT(dataAdmissao, '%Y-%m')`);
 
   const demissoesMensal = await db.select({
     mes: sql<string>`DATE_FORMAT(dataDemissao, '%Y-%m')`,
     count: sql<number>`count(*)`,
   }).from(employees)
     .where(and(eq(employees.companyId, companyId), sql`dataDemissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
-    .groupBy(sql`mes`).orderBy(sql`mes`);
+    .groupBy(sql`DATE_FORMAT(dataDemissao, '%Y-%m')`).orderBy(sql`DATE_FORMAT(dataDemissao, '%Y-%m')`);
 
   // Destaques
   const [oldest] = await db.select({
@@ -389,20 +405,76 @@ async function getDashFolhaPagamento(companyId: number, mesRef?: string) {
 // ============================================================
 // 4. DASHBOARD HORAS EXTRAS (análise detalhada)
 // ============================================================
-async function getDashHorasExtras(companyId: number, year?: number) {
+async function getDashHorasExtras(companyId: number, year?: number, filters?: {
+  month?: number; obraId?: number; employeeId?: number;
+  periodoTipo?: string; periodoValor?: string;
+}) {
   const db = await getDb();
   if (!db) return null;
   const targetYear = year || new Date().getFullYear();
-  const startDate = `${targetYear}-01`;
-  const endDate = `${targetYear}-12`;
+
+  // Calcular range de datas baseado nos filtros
+  let startDate = `${targetYear}-01`;
+  let endDate = `${targetYear}-12`;
+
+  if (filters?.periodoTipo && filters?.periodoValor) {
+    const pv = filters.periodoValor;
+    switch (filters.periodoTipo) {
+      case 'mes': {
+        const m = parseInt(pv);
+        if (m >= 1 && m <= 12) {
+          startDate = `${targetYear}-${String(m).padStart(2, '0')}`;
+          endDate = startDate;
+        }
+        break;
+      }
+      case 'trimestre': {
+        const q = parseInt(pv);
+        const qStart = (q - 1) * 3 + 1;
+        const qEnd = q * 3;
+        startDate = `${targetYear}-${String(qStart).padStart(2, '0')}`;
+        endDate = `${targetYear}-${String(qEnd).padStart(2, '0')}`;
+        break;
+      }
+      case 'semestre': {
+        const s = parseInt(pv);
+        startDate = s === 1 ? `${targetYear}-01` : `${targetYear}-07`;
+        endDate = s === 1 ? `${targetYear}-06` : `${targetYear}-12`;
+        break;
+      }
+      case 'semana': {
+        // periodoValor = "YYYY-Wnn" ou "YYYY-MM-DD" (data da segunda-feira)
+        // Filtramos por mês de referência que contenha essa semana
+        break;
+      }
+      case 'dia': {
+        // periodoValor = "YYYY-MM-DD"
+        if (pv.length >= 7) {
+          startDate = pv.substring(0, 7);
+          endDate = startDate;
+        }
+        break;
+      }
+    }
+  } else if (filters?.month) {
+    startDate = `${targetYear}-${String(filters.month).padStart(2, '0')}`;
+    endDate = startDate;
+  }
+
+  const conditions = [
+    eq(extraPayments.companyId, companyId),
+    eq(extraPayments.tipoExtra, "Horas_Extras"),
+    gte(extraPayments.mesReferencia, startDate),
+    lte(extraPayments.mesReferencia, endDate),
+  ];
+
+  // Filtro por colaborador
+  if (filters?.employeeId) {
+    conditions.push(eq(extraPayments.employeeId, filters.employeeId));
+  }
 
   const allHE = await db.select().from(extraPayments)
-    .where(and(
-      eq(extraPayments.companyId, companyId),
-      eq(extraPayments.tipoExtra, "Horas_Extras"),
-      gte(extraPayments.mesReferencia, startDate),
-      lte(extraPayments.mesReferencia, endDate),
-    ));
+    .where(and(...conditions));
 
   const allEmps = await db.select({
     id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
@@ -504,11 +576,50 @@ async function getDashHorasExtras(companyId: number, year?: number) {
 
   const pessoasComHE = Object.keys(porPessoa).length;
 
+  // Filtro por obra (filtrar allHE se obraId)
+  let filteredHE = allHE;
+  if (filters?.obraId) {
+    const empIdsNaObra = new Set(allEmps.filter(e => e.obraAtualId === filters.obraId).map(e => e.id));
+    filteredHE = allHE.filter(he => empIdsNaObra.has(he.employeeId));
+    // Recalcular totais com filtro
+    totalHoras = 0; totalValor = 0;
+    for (const he of filteredHE) {
+      totalHoras += parseFloat(he.quantidadeHoras || "0");
+      totalValor += parseFloat(he.valorTotal || "0");
+    }
+  }
+
+  // Listas para filtros no frontend
+  const obrasDisponiveis = allObras.map(o => ({ id: o.id, nome: o.nome })).sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+  const colaboradoresDisponiveis = allEmps
+    .filter(e => porPessoa[e.id])
+    .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao || e.cargo || "-" }))
+    .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+
+  // Detalhe por registro (para tabela detalhada)
+  const detalhes = filteredHE.map(he => {
+    const emp = empMap.get(he.employeeId);
+    const obraId = emp?.obraAtualId;
+    return {
+      id: he.id,
+      mesReferencia: he.mesReferencia,
+      nome: emp?.nomeCompleto || `#${he.employeeId}`,
+      funcao: emp?.funcao || emp?.cargo || "-",
+      setor: emp?.setor || "-",
+      obra: obraId ? (obraMap.get(obraId) || `Obra #${obraId}`) : "Sem Obra",
+      horas: parseFloat(he.quantidadeHoras || "0"),
+      percentual: he.percentualAcrescimo || "50",
+      valorHoraBase: parseFloat(he.valorHoraBase || "0"),
+      valorTotal: parseFloat(he.valorTotal || "0"),
+      descricao: he.descricao || "",
+    };
+  }).sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
+
   return {
     resumo: {
       totalHoras: Math.round(totalHoras * 100) / 100,
       totalValor: Math.round(totalValor * 100) / 100,
-      totalRegistros: allHE.length,
+      totalRegistros: filteredHE.length,
       pessoasComHE,
       mediaHorasPorPessoa: pessoasComHE > 0 ? Math.round((totalHoras / pessoasComHE) * 100) / 100 : 0,
       mediaValorPorPessoa: pessoasComHE > 0 ? Math.round((totalValor / pessoasComHE) * 100) / 100 : 0,
@@ -521,6 +632,11 @@ async function getDashHorasExtras(companyId: number, year?: number) {
     evolucaoMensal,
     percentuais: Object.entries(percentuais).map(([pct, count]) => ({ percentual: pct, count })).sort((a, b) => b.count - a.count),
     ano: targetYear,
+    filtros: {
+      obras: obrasDisponiveis,
+      colaboradores: colaboradoresDisponiveis,
+    },
+    detalhes: detalhes.slice(0, 200),
   };
 }
 
@@ -707,7 +823,15 @@ export const dashboardsRouter = router({
   funcionarios: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashFuncionarios(input.companyId)),
   cartaoPonto: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional() })).query(({ input }) => getDashCartaoPonto(input.companyId, input.mesReferencia)),
   folhaPagamento: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional() })).query(({ input }) => getDashFolhaPagamento(input.companyId, input.mesReferencia)),
-  horasExtras: protectedProcedure.input(z.object({ companyId: z.number(), year: z.number().optional() })).query(({ input }) => getDashHorasExtras(input.companyId, input.year)),
+  horasExtras: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    year: z.number().optional(),
+    month: z.number().optional(),
+    obraId: z.number().optional(),
+    employeeId: z.number().optional(),
+    periodoTipo: z.enum(['ano','semestre','trimestre','mes','semana','dia']).optional(),
+    periodoValor: z.string().optional(),
+  })).query(({ input }) => getDashHorasExtras(input.companyId, input.year, input)),
   epis: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashEpis(input.companyId)),
   juridico: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashJuridico(input.companyId)),
 });

@@ -7,14 +7,81 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Briefcase, Sparkles, FileText, Shield, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Briefcase, Sparkles, FileText, Shield, ChevronDown, ChevronUp, Loader2, Users } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 
 type FuncaoForm = { nome: string; descricao: string; ordemServico: string; cbo: string };
 const emptyForm: FuncaoForm = { nome: "", descricao: "", ordemServico: "", cbo: "" };
+
+type CboItem = { cod: string; desc: string };
+
+function useCboData() {
+  const [cboList, setCboList] = useState<CboItem[]>([]);
+  useEffect(() => {
+    fetch("/cbo.json")
+      .then(r => r.json())
+      .then((data: CboItem[]) => setCboList(data))
+      .catch(() => {});
+  }, []);
+  return cboList;
+}
+
+function CboAutocomplete({ value, onChange, onSelect }: { value: string; onChange: (v: string) => void; onSelect: (item: CboItem) => void }) {
+  const cboList = useCboData();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = useMemo(() => {
+    const s = (search || value).toLowerCase().trim();
+    if (!s || s.length < 2) return [];
+    return cboList.filter(c =>
+      c.desc.toLowerCase().includes(s) || c.cod.includes(s)
+    ).slice(0, 15);
+  }, [cboList, search, value]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <Input
+        value={value}
+        onChange={e => { onChange(e.target.value); setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Digite para buscar na base CBO do governo..."
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filtered.map(item => (
+            <button
+              key={item.cod}
+              type="button"
+              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-center justify-between gap-2 border-b last:border-0"
+              onClick={() => { onSelect(item); setOpen(false); setSearch(""); }}
+            >
+              <span className="font-medium">{item.desc}</span>
+              <span className="text-xs font-mono text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{item.cod}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && search.length >= 2 && filtered.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg p-3 text-sm text-muted-foreground">
+          Nenhuma CBO encontrada para "{search}"
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Funcoes() {
   const { selectedCompanyId } = useCompany();
@@ -103,6 +170,18 @@ export default function Funcoes() {
 
   const viewingFn = viewingId ? funcoes.find((f: any) => f.id === viewingId) : null;
 
+  // Buscar funcionários vinculados à função visualizada
+  const employeesQ = trpc.employees.list.useQuery(
+    { companyId },
+    { enabled: !!companyId && !!viewingId }
+  );
+  const funcionariosVinculados = useMemo(() => {
+    if (!viewingFn || !employeesQ.data) return [];
+    return employeesQ.data.filter((e: any) => 
+      e.funcao?.toUpperCase() === viewingFn.nome?.toUpperCase() && e.status === "Ativo"
+    );
+  }, [viewingFn, employeesQ.data]);
+
   // Stats
   const totalFuncoes = funcoes.length;
   const comDescricao = funcoes.filter((f: any) => f.descricao && f.descricao.trim().length > 20).length;
@@ -174,7 +253,7 @@ export default function Funcoes() {
               const hasDesc = fn.descricao && fn.descricao.trim().length > 20;
               const hasOS = fn.ordemServico && fn.ordemServico.trim().length > 20;
               return (
-                <Card key={fn.id} className="hover:shadow-md transition-shadow">
+                <Card key={fn.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setViewingId(fn.id)}>
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-[#1B2A4A]/10 flex items-center justify-center shrink-0">
@@ -182,7 +261,7 @@ export default function Funcoes() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-base">{fn.nome}</h3>
+                          <h3 className="font-semibold text-base hover:text-blue-700 transition-colors">{fn.nome}</h3>
                           {fn.cbo && <span className="text-xs text-muted-foreground font-mono bg-gray-100 px-1.5 py-0.5 rounded">CBO: {fn.cbo}</span>}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
@@ -196,10 +275,7 @@ export default function Funcoes() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setViewingId(fn.id)} className="text-gray-500 hover:text-blue-600">
-                          <FileText className="h-4 w-4" />
-                        </Button>
+                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                         <Button variant="ghost" size="sm" onClick={() => openEdit(fn)} className="text-gray-500 hover:text-blue-600">
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -245,14 +321,25 @@ export default function Funcoes() {
         <div className="max-w-2xl mx-auto">
           <div className="space-y-5">
             {/* Nome e CBO */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Nome da Função *</Label>
-                <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: Pedreiro, Eletricista..." />
+                <CboAutocomplete
+                  value={form.nome}
+                  onChange={v => setForm(f => ({ ...f, nome: v }))}
+                  onSelect={item => setForm(f => ({ ...f, nome: item.desc.toUpperCase(), cbo: item.cod }))}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Digite para buscar na base CBO do governo (2.450 ocupações)</p>
               </div>
               <div>
                 <Label>CBO (Classificação Brasileira de Ocupações)</Label>
-                <Input value={form.cbo} onChange={e => setForm(f => ({ ...f, cbo: e.target.value }))} placeholder="Ex: 7152-10" />
+                <Input
+                  value={form.cbo}
+                  readOnly
+                  className="bg-gray-50 font-mono cursor-not-allowed"
+                  placeholder="Preenchido automaticamente"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Preenchido automaticamente ao selecionar a função</p>
               </div>
             </div>
 
@@ -389,6 +476,42 @@ export default function Funcoes() {
               ) : (
                 <div className="bg-gray-50 border border-dashed rounded-lg p-4 text-sm text-gray-400 italic text-center">
                   Nenhuma Ordem de Serviço cadastrada. Edite a função para preencher.
+                </div>
+              )}
+            </div>
+
+            {/* Funcionários Vinculados */}
+            <div>
+              <h3 className="text-sm font-semibold text-teal-600 uppercase flex items-center gap-2 mb-2">
+                <Users className="w-4 h-4" />
+                Funcionários Ativos nesta Função ({funcionariosVinculados.length})
+              </h3>
+              {funcionariosVinculados.length > 0 ? (
+                <div className="bg-white border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-teal-50 border-b">
+                        <th className="p-2 text-left font-medium text-teal-900">Nome</th>
+                        <th className="p-2 text-left font-medium text-teal-900">CPF</th>
+                        <th className="p-2 text-left font-medium text-teal-900">Setor</th>
+                        <th className="p-2 text-left font-medium text-teal-900">Admissão</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {funcionariosVinculados.map((emp: any) => (
+                        <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="p-2 font-medium">{emp.nomeCompleto}</td>
+                          <td className="p-2 text-xs font-mono">{emp.cpf}</td>
+                          <td className="p-2 text-xs">{emp.setor || "—"}</td>
+                          <td className="p-2 text-xs">{emp.dataAdmissao ? new Date(emp.dataAdmissao + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-dashed rounded-lg p-4 text-sm text-gray-400 italic text-center">
+                  Nenhum funcionário ativo vinculado a esta função.
                 </div>
               )}
             </div>
