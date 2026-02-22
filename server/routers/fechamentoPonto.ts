@@ -1263,6 +1263,7 @@ export const fechamentoPontoRouter = router({
           )
         );
         for (const s of linkedSns) {
+          if (s.obraId == null) continue;
           if (!obraSnMap[s.obraId]) obraSnMap[s.obraId] = [];
           obraSnMap[s.obraId].push(s.sn);
         }

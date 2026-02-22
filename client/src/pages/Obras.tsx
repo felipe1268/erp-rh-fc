@@ -74,6 +74,7 @@ export default function Obras() {
     const map: Record<number, { sn: string; apelido: string | null; status: string }[]> = {};
     for (const item of allSns) {
       const obraId = item.obraSn.obraId;
+      if (obraId == null) continue;
       if (!map[obraId]) map[obraId] = [];
       map[obraId].push({ sn: item.obraSn.sn, apelido: item.obraSn.apelido, status: item.obraSn.status });
     }

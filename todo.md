@@ -1533,8 +1533,16 @@
 - [x] Frontend: relatório formatado com logo, dados da empresa, totais
 
 ## BUGS
-- [ ] Raio-X do Funcionário travado em "Carregando dados do funcionário..." após adição das queries de aviso prévio/férias/CIPA/PJ
+- [x] Raio-X do Funcionário travado em "Carregando dados do funcionário..." após adição das queries de aviso prévio/férias/CIPA/PJ
 - [x] Reorganizar aba Bancário: dados do funcionário primeiro, Conta da Empresa por último
 - [x] BUG: Após login interno, sistema redireciona para Manus OAuth após 10-15 segundos — corrigido token SDK + redirect para /login
 - [x] BUG: Erro "Please login (10001)" na página /login — corrigido: Login.tsx usa query direta + main.tsx ignora erro em /login
 - [x] Menu lateral: não mudar posição do scroll ao clicar em item — salvar e restaurar scrollTop
+- [x] BUG: vacation_periods query falha — coluna companyId não existe na tabela (recriadas 5 tabelas com camelCase)
+
+## Rev. 56 - Correções Urgentes
+- [x] Fix Raio-X do Funcionário travado em "Carregando dados do funcionário..."
+- [x] Fix database schema mismatch (snake_case vs camelCase columns) em vacation_periods, termination_notices, cipa_meetings, pj_contracts, pj_payments
+- [x] Fix coluna motivo_outro → motivoOutro na tabela atestados
+- [x] Fix erros TypeScript em fechamentoPonto.ts, Obras.tsx e db.ts
+- [x] Atualizar Rev. 55 → Rev. 56 em shared/version.ts

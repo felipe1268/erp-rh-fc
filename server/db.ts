@@ -1292,7 +1292,7 @@ export async function checkSnAvailability(companyId: number, sn: string, exclude
     : existing[0];
   
   if (conflict) {
-    return { available: false, usedByObra: conflict.obraNome || "Obra desconhecida", usedByObraId: conflict.obraId };
+    return { available: false, usedByObra: conflict.obraNome || "Obra desconhecida", usedByObraId: conflict.obraId ?? undefined };
   }
   return { available: true };
 }
