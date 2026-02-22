@@ -1535,3 +1535,4 @@
 ## BUGS
 - [ ] Raio-X do Funcionário travado em "Carregando dados do funcionário..." após adição das queries de aviso prévio/férias/CIPA/PJ
 - [x] Reorganizar aba Bancário: dados do funcionário primeiro, Conta da Empresa por último
+- [x] BUG: Após login interno, sistema redireciona para Manus OAuth após 10-15 segundos — corrigido token SDK + redirect para /login
