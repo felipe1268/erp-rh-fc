@@ -198,7 +198,7 @@ export default function Auditoria() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-bold text-gray-900">{emp.nomeCompleto}</h3>
                               <Badge variant="destructive" className="text-[10px]">Excluído</Badge>
-                              {emp.status === "Lista_Negra" ? <Badge className="bg-black text-white text-[10px]">Lista Negra</Badge> : null}
+                              {emp.status === "Lista_Negra" ? <Badge className="bg-black text-white text-[10px]">Blacklist</Badge> : null}
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 mt-2 text-xs text-gray-600">
                               <span><strong>CPF:</strong> {formatCPF(emp.cpf)}</span>

@@ -1952,7 +1952,7 @@ export default function FolhaPagamento() {
 
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowInconsistDialog(false)}>Fechar</Button>
-              <Button onClick={() => { setShowInconsistDialog(false); setViewMode("detalhes"); }}>
+              <Button onClick={() => { setShowInconsistDialog(false); setFilterStatus("divergente"); setViewMode("detalhes"); }}>
                 <Eye className="h-4 w-4 mr-1" /> Ver Detalhes
               </Button>
             </div>

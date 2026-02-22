@@ -15,7 +15,7 @@ const STATUS_OPTIONS = [
   { value: "Ferias", label: "Férias", icon: Palmtree, color: "bg-blue-50 text-blue-700 border-blue-300", activeColor: "bg-blue-600 text-white border-blue-600" },
   { value: "Licenca", label: "Licença", icon: Shield, color: "bg-purple-50 text-purple-700 border-purple-300", activeColor: "bg-purple-600 text-white border-purple-600" },
   { value: "Recluso", label: "Reclusos", icon: Ban, color: "bg-gray-50 text-gray-700 border-gray-400", activeColor: "bg-gray-600 text-white border-gray-600" },
-  { value: "Lista_Negra", label: "Lista Negra", icon: AlertTriangle, color: "bg-red-50 text-red-800 border-red-400", activeColor: "bg-red-800 text-white border-red-800" },
+  { value: "Lista_Negra", label: "Blacklist", icon: AlertTriangle, color: "bg-red-50 text-red-800 border-red-400", activeColor: "bg-red-800 text-white border-red-800" },
 ];
 
 const STATUS_BADGE_COLORS: Record<string, string> = {
@@ -152,7 +152,7 @@ export default function RaioXPage() {
               const badgeColor = STATUS_BADGE_COLORS[emp.status] || "bg-gray-100 text-gray-700";
               const statusLabel = emp.status === "Ferias" ? "Férias" 
                 : emp.status === "Licenca" ? "Licença"
-                : emp.status === "Lista_Negra" ? "Lista Negra"
+                : emp.status === "Lista_Negra" ? "Blacklist"
                 : emp.status || "Ativo";
               return (
                 <button

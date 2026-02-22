@@ -35,7 +35,7 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   Ativo: "Ativo", Ferias: "Férias", Afastado: "Afastado",
   Licenca: "Licença", Desligado: "Desligado", Recluso: "Recluso",
-  ListaNegra: "Lista Negra",
+  ListaNegra: "Blacklist",
 };
 
 function safeDisplay(value: unknown): string {
@@ -209,7 +209,7 @@ export default function Colaboradores() {
   useEffect(() => {
     const d = checkBlacklistMut.data as any;
     if (d && d.status === "ListaNegra") {
-      setBlacklistAlert(`⛔ ATENÇÃO: CPF encontrado na LISTA NEGRA! Funcionário "${d.nomeCompleto}" está proibido de ser contratado. Motivo: ${d.motivoListaNegra ?? "Não informado"}`);
+      setBlacklistAlert(`⛔ ATENÇÃO: CPF encontrado na BLACKLIST! Funcionário "${d.nomeCompleto}" está proibido de ser contratado. Motivo: ${d.motivoListaNegra ?? "Não informado"}`);
     } else {
       setBlacklistAlert(null);
     }
@@ -450,7 +450,7 @@ export default function Colaboradores() {
 
     if (viewingEmployee.status === "ListaNegra") {
       conteudo += `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:16px;">
-        <strong style="color:#dc2626;">FUNCIONÁRIO NA LISTA NEGRA</strong>
+        <strong style="color:#dc2626;">FUNCIONÁRIO NA BLACKLIST</strong>
         <p style="font-size:11px;color:#dc2626;margin:4px 0 0;">Este funcionário está proibido de ser contratado novamente.${viewingEmployee.motivoListaNegra ? " Motivo: " + viewingEmployee.motivoListaNegra : ""}</p></div>`;
     }
 
@@ -1517,7 +1517,7 @@ export default function Colaboradores() {
                   value={form.motivoDesligamento ?? ""}
                   onChange={e => set("motivoDesligamento", e.target.value)}
                   rows={3}
-                  placeholder="Opcional — descreva o motivo do desligamento (obrigatório se incluir na Lista Negra)"
+                  placeholder="Opcional — descreva o motivo do desligamento (obrigatório apenas se incluir na Blacklist)"
                   className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 mt-1"
                 />
               </div>
@@ -1528,17 +1528,17 @@ export default function Colaboradores() {
                   onCheckedChange={(checked) => set("listaNegra", checked ? "1" : "0")}
                 />
                 <Label htmlFor="listaNegra" className="text-xs font-medium text-red-700 cursor-pointer">
-                  Incluir na Lista Negra (não recontratar)
+                  Incluir na Blacklist (não recontratar)
                 </Label>
               </div>
               {form.listaNegra === "1" && (
                 <div className="mt-2">
-                  <Label className="text-xs font-medium text-red-700">Motivo da Lista Negra *</Label>
+                  <Label className="text-xs font-medium text-red-700">Motivo da Blacklist *</Label>
                   <textarea
                     value={form.motivoListaNegra ?? ""}
                     onChange={e => set("motivoListaNegra", e.target.value)}
                     rows={2}
-                    placeholder="Descreva por que este funcionário não poderá ser recontratado..."
+                    placeholder="Descreva por que este funcionário não poderá ser recontratado (obrigatório)..."
                     className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 mt-1"
                   />
                 </div>
@@ -1567,7 +1567,9 @@ export default function Colaboradores() {
             <AlertDialogDescription className="text-left">
               Você está alterando o status deste colaborador para <strong className="text-red-700">Desligado</strong>.
               <br /><br />
-              Preencha os campos obrigatórios de desligamento (categoria, data e motivo) que aparecerão no formulário abaixo e clique em <strong>Salvar</strong>.
+              Preencha os campos obrigatórios de desligamento (<strong>categoria</strong> e <strong>data</strong>) que aparecerão no formulário abaixo e clique em <strong>Salvar</strong>.
+              <br /><br />
+              <span className="text-xs">O motivo detalhado é opcional, exceto quando incluir na <strong>Blacklist</strong>.</span>
               <br /><br />
               <span className="text-xs text-muted-foreground">Esta ação será registrada na auditoria do sistema.</span>
             </AlertDialogDescription>
@@ -1623,12 +1625,12 @@ export default function Colaboradores() {
                 </Button>
               </div>
 
-              {/* ALERTA LISTA NEGRA */}
+              {/* ALERTA BLACKLIST */}
               {viewingEmployee.status === "ListaNegra" ? (
                 <div className="bg-red-600/10 border border-red-600/30 rounded-lg p-4 flex items-center gap-3">
                   <Ban className="h-6 w-6 text-red-600 shrink-0" />
                   <div>
-                    <p className="font-bold text-red-600">FUNCIONÁRIO NA LISTA NEGRA</p>
+                    <p className="font-bold text-red-600">FUNCIONÁRIO NA BLACKLIST</p>
                     <p className="text-sm text-red-500">Este funcionário está proibido de ser contratado novamente.</p>
                     {viewingEmployee.motivoListaNegra ? <p className="text-sm text-red-500 mt-1"><strong>Motivo:</strong> {safeDisplay(viewingEmployee.motivoListaNegra)}</p> : null}
                   </div>

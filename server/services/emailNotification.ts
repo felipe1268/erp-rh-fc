@@ -115,30 +115,53 @@ function getCompanyShortName(companyData: { razaoSocial: string; nomeFantasia: s
 }
 
 // ============================================================
-// CABEÇALHO E RODAPÉ PADRÃO DA EMPRESA
+// CABEÇALHO E RODAPÉ PADRÃO DA EMPRESA (limpo e organizado)
 // ============================================================
 function gerarCabecalho(companyData: { razaoSocial: string; nomeFantasia: string; cnpj: string }): string {
   const lines: string[] = [];
-  lines.push("═══════════════════════════════════════════════");
-  if (companyData.razaoSocial) lines.push(`  ${companyData.razaoSocial.toUpperCase()}`);
-  if (companyData.nomeFantasia && companyData.nomeFantasia !== companyData.razaoSocial) {
-    lines.push(`  ${companyData.nomeFantasia}`);
+  lines.push("────────────────────────────────────────────────");
+  if (companyData.nomeFantasia) {
+    lines.push(`  ${companyData.nomeFantasia.toUpperCase()}`);
+  }
+  if (companyData.razaoSocial && companyData.razaoSocial !== companyData.nomeFantasia) {
+    lines.push(`  ${companyData.razaoSocial}`);
   }
   if (companyData.cnpj) lines.push(`  CNPJ: ${companyData.cnpj}`);
-  lines.push("═══════════════════════════════════════════════");
+  lines.push("────────────────────────────────────────────────");
   return lines.join("\n");
 }
 
 function gerarRodape(companyData: { razaoSocial: string; nomeFantasia: string; email: string; telefone: string }): string {
   const lines: string[] = [];
-  lines.push("───────────────────────────────────────────────");
+  lines.push("────────────────────────────────────────────────");
+  lines.push("Atenciosamente,");
+  lines.push("");
   lines.push("Departamento Pessoal");
   lines.push(getCompanyDisplayName(companyData));
   if (companyData.email) lines.push(`E-mail: ${companyData.email}`);
   if (companyData.telefone) lines.push(`Tel: ${companyData.telefone}`);
-  lines.push("───────────────────────────────────────────────");
-  lines.push("Este é um comunicado automático gerado pelo sistema de gestão de pessoas.");
+  lines.push("────────────────────────────────────────────────");
+  lines.push("");
+  lines.push("Comunicado automático — Sistema de Gestão de Pessoas");
   lines.push("Em caso de dúvidas, entre em contato com o Departamento Pessoal.");
+  return lines.join("\n");
+}
+
+// ============================================================
+// BLOCO DE DADOS DO FUNCIONÁRIO (formatado para destaque)
+// ============================================================
+function gerarBlocoDados(label: string, dados: { campo: string; valor: string }[]): string {
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(`▸ ${label}`);
+  lines.push("┌──────────────────────────────────────────────┐");
+  for (const d of dados) {
+    if (d.valor) {
+      lines.push(`│  ${d.campo}: ${d.valor}`);
+    }
+  }
+  lines.push("└──────────────────────────────────────────────┘");
+  lines.push("");
   return lines.join("\n");
 }
 
@@ -152,33 +175,31 @@ function gerarTextoContratacao(dados: DadosFuncionario, companyData: any): { tit
   const hora = getHoraFormatada();
   const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `${empresaNome.toUpperCase()} - Nova Contratação - ${dados.nome}`;
+  const titulo = `${empresaNome.toUpperCase()} — Nova Contratação — ${dados.nome}`;
+
+  const blocoDados = gerarBlocoDados("DADOS DO COLABORADOR ADMITIDO", [
+    { campo: "Nome completo", valor: dados.nome },
+    { campo: "CPF", valor: formatCPF(dados.cpf) },
+    { campo: "Função", valor: dados.funcao || "" },
+    { campo: "Setor", valor: dados.setor || "" },
+    { campo: "Obra / Local", valor: dados.obra || "" },
+    { campo: "Data de Admissão", valor: dados.dataAdmissao || "" },
+  ]);
+
   const corpo = `${gerarCabecalho(companyData)}
 
 COMUNICADO DE CONTRATAÇÃO
 
 ${saudacao},
 
-Pelo presente, comunicamos que foi registrada a admissão do colaborador abaixo identificado no quadro de funcionários da empresa ${getCompanyDisplayName(companyData)}.
-
-DADOS DO COLABORADOR ADMITIDO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Nome: ${dados.nome}
-${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
-${dados.funcao ? `  Função: ${dados.funcao}` : ""}
-${dados.setor ? `  Setor: ${dados.setor}` : ""}
-${dados.obra ? `  Obra/Local de Trabalho: ${dados.obra}` : ""}
-${dados.dataAdmissao ? `  Data de Admissão: ${dados.dataAdmissao}` : ""}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PROVIDÊNCIAS NECESSÁRIAS:
-
-1. Inclusão no seguro de vida do grupo empresarial
-2. Agendamento de ASO admissional
-3. Programação de treinamentos obrigatórios (NRs aplicáveis)
-4. Entrega e registro de EPIs necessários para a função
-5. Cadastro no sistema de ponto eletrônico
-6. Atualização do quadro de pessoal
+Comunicamos a admissão do colaborador abaixo identificado no quadro de funcionários da empresa ${getCompanyDisplayName(companyData)}.
+${blocoDados}
+Providências necessárias:
+  • Inclusão no seguro de vida do grupo empresarial
+  • Agendamento de ASO admissional
+  • Programação de treinamentos obrigatórios (NRs aplicáveis)
+  • Entrega e registro de EPIs
+  • Cadastro no sistema de ponto eletrônico
 
 Registro efetuado em ${data}, às ${hora}.
 
@@ -193,40 +214,31 @@ function gerarTextoDemissao(dados: DadosFuncionario, companyData: any): { titulo
   const hora = getHoraFormatada();
   const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `${empresaNome.toUpperCase()} - URGENTE: Baixa Seguro de Vida - Desligamento ${dados.nome}`;
+  const titulo = `${empresaNome.toUpperCase()} — URGENTE: Baixa Seguro de Vida — ${dados.nome}`;
+
+  const blocoDados = gerarBlocoDados("DADOS DO COLABORADOR DESLIGADO", [
+    { campo: "Nome completo", valor: dados.nome },
+    { campo: "CPF", valor: formatCPF(dados.cpf) },
+    { campo: "Função", valor: dados.funcao || "" },
+    { campo: "Setor", valor: dados.setor || "" },
+    { campo: "Última Obra / Local", valor: dados.obra || "" },
+    { campo: "Data do Desligamento", valor: dados.dataDesligamento || "" },
+  ]);
+
   const corpo = `${gerarCabecalho(companyData)}
 
-COMUNICADO DE DESLIGAMENTO - BAIXA NO SEGURO DE VIDA
+COMUNICADO DE DESLIGAMENTO — BAIXA NO SEGURO DE VIDA
 
 ${saudacao},
 
-Pelo presente, comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa ${getCompanyDisplayName(companyData)}.
+Comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa ${getCompanyDisplayName(companyData)}.
 
-Solicitamos, com URGÊNCIA, que seja providenciada a BAIXA NO SEGURO DE VIDA do referido colaborador junto à seguradora contratada.
+Solicitamos, com URGÊNCIA, a providência da BAIXA NO SEGURO DE VIDA junto à seguradora contratada.
+${blocoDados}
+  ⚠  STATUS: DESLIGADO
 
-DADOS DO COLABORADOR DESLIGADO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Nome: ${dados.nome}
-${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
-${dados.funcao ? `  Função: ${dados.funcao}` : ""}
-${dados.setor ? `  Setor: ${dados.setor}` : ""}
-${dados.obra ? `  Última Obra/Local: ${dados.obra}` : ""}
-${dados.dataDesligamento ? `  Data do Desligamento: ${dados.dataDesligamento}` : ""}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-STATUS DO COLABORADOR: DESLIGADO
-
-AÇÃO IMEDIATA REQUERIDA:
-→ Providenciar a BAIXA NO SEGURO DE VIDA junto à seguradora
-→ Prazo recomendado: até 48 horas após o desligamento
-
-DEMAIS PROVIDÊNCIAS RESCISÓRIAS:
-1. Realização de ASO demissional dentro do prazo legal
-2. Recolhimento de todos os EPIs entregues ao colaborador
-3. Verificação de pendências documentais e cálculos rescisórios
-4. Conferência de FGTS e guias rescisórias
-5. Baixa no sistema de ponto eletrônico
-6. Atualização do quadro de pessoal
+  ➤  AÇÃO REQUERIDA: Baixa no Seguro de Vida
+  ➤  PRAZO: Até 48 horas após o desligamento
 
 Registro efetuado em ${data}, às ${hora}.
 
@@ -241,32 +253,31 @@ function gerarTextoTransferencia(dados: DadosFuncionario, companyData: any): { t
   const hora = getHoraFormatada();
   const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `${empresaNome.toUpperCase()} - Transferência de Colaborador - ${dados.nome}`;
+  const titulo = `${empresaNome.toUpperCase()} — Transferência — ${dados.nome}`;
+
+  const blocoDados = gerarBlocoDados("DADOS DA TRANSFERÊNCIA", [
+    { campo: "Colaborador", valor: dados.nome },
+    { campo: "CPF", valor: formatCPF(dados.cpf) },
+    { campo: "Função", valor: dados.funcao || "" },
+    { campo: "Obra Anterior", valor: dados.obraAnterior || "" },
+    { campo: "Nova Obra", valor: dados.obraNova || "" },
+    { campo: "Setor Anterior", valor: dados.setorAnterior || "" },
+    { campo: "Novo Setor", valor: dados.setorNovo || "" },
+  ]);
+
   const corpo = `${gerarCabecalho(companyData)}
 
 COMUNICADO DE TRANSFERÊNCIA
 
 ${saudacao},
 
-Pelo presente, comunicamos que o colaborador abaixo identificado teve sua lotação alterada conforme detalhamento a seguir.
-
-DADOS DA TRANSFERÊNCIA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Colaborador: ${dados.nome}
-${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
-${dados.funcao ? `  Função: ${dados.funcao}` : ""}
-${dados.obraAnterior ? `  Obra Anterior: ${dados.obraAnterior}` : ""}
-${dados.obraNova ? `  Nova Obra: ${dados.obraNova}` : ""}
-${dados.setorAnterior ? `  Setor Anterior: ${dados.setorAnterior}` : ""}
-${dados.setorNovo ? `  Novo Setor: ${dados.setorNovo}` : ""}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PROVIDÊNCIAS NECESSÁRIAS:
-1. Atualização do cartão de ponto no novo local de trabalho
-2. Verificação de treinamentos específicos para o novo posto
-3. Adequação de EPIs conforme riscos do novo ambiente de trabalho
-4. Comunicação à seguradora sobre alteração de local (se aplicável)
-5. Atualização do quadro de pessoal por obra
+Comunicamos que o colaborador abaixo identificado teve sua lotação alterada na empresa ${getCompanyDisplayName(companyData)}.
+${blocoDados}
+Providências necessárias:
+  • Atualização do cartão de ponto no novo local
+  • Verificação de treinamentos específicos para o novo posto
+  • Adequação de EPIs conforme riscos do novo ambiente
+  • Comunicação à seguradora (se aplicável)
 
 Registro efetuado em ${data}, às ${hora}.
 
@@ -281,34 +292,33 @@ function gerarTextoAfastamento(dados: DadosFuncionario, companyData: any): { tit
   const hora = getHoraFormatada();
   const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `${empresaNome.toUpperCase()} - Afastamento de Colaborador - ${dados.nome}`;
+  const titulo = `${empresaNome.toUpperCase()} — Afastamento — ${dados.nome}`;
+
+  const blocoDados = gerarBlocoDados("DADOS DO AFASTAMENTO", [
+    { campo: "Colaborador", valor: dados.nome },
+    { campo: "CPF", valor: formatCPF(dados.cpf) },
+    { campo: "Função", valor: dados.funcao || "" },
+    { campo: "Setor", valor: dados.setor || "" },
+    { campo: "Obra / Local", valor: dados.obra || "" },
+    { campo: "Motivo", valor: dados.motivoAfastamento || "" },
+  ]);
+
   const corpo = `${gerarCabecalho(companyData)}
 
 COMUNICADO DE AFASTAMENTO
 
 ${saudacao},
 
-Pelo presente, comunicamos que o colaborador abaixo identificado teve um afastamento registrado no sistema da empresa ${getCompanyDisplayName(companyData)}.
+Comunicamos que o colaborador abaixo identificado teve um afastamento registrado na empresa ${getCompanyDisplayName(companyData)}.
+${blocoDados}
+  ⚠  STATUS: AFASTADO
 
-DADOS DO AFASTAMENTO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Colaborador: ${dados.nome}
-${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
-${dados.funcao ? `  Função: ${dados.funcao}` : ""}
-${dados.setor ? `  Setor: ${dados.setor}` : ""}
-${dados.obra ? `  Obra/Local: ${dados.obra}` : ""}
-${dados.motivoAfastamento ? `  Motivo: ${dados.motivoAfastamento}` : ""}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-STATUS DO COLABORADOR: AFASTADO
-
-PROVIDÊNCIAS NECESSÁRIAS:
-1. Comunicação ao INSS (se afastamento superior a 15 dias)
-2. Comunicação à seguradora sobre o afastamento
-3. Atualização do controle de ponto e folha de pagamento
-4. Acompanhamento do prazo de retorno
-5. Agendamento de ASO de retorno ao trabalho (quando aplicável)
-6. Atualização do quadro de pessoal
+Providências necessárias:
+  • Comunicação ao INSS (se afastamento superior a 15 dias)
+  • Comunicação à seguradora sobre o afastamento
+  • Atualização do controle de ponto e folha de pagamento
+  • Acompanhamento do prazo de retorno
+  • Agendamento de ASO de retorno (quando aplicável)
 
 Registro efetuado em ${data}, às ${hora}.
 
@@ -331,7 +341,7 @@ export function gerarTextoNotificacao(
     case "demissao": return gerarTextoDemissao(dados, cd);
     case "transferencia": return gerarTextoTransferencia(dados, cd);
     case "afastamento": return gerarTextoAfastamento(dados, cd);
-    default: return { titulo: `${getCompanyShortName(cd).toUpperCase()} - Movimentação - ${dados.nome}`, corpo: `Movimentação registrada para ${dados.nome}` };
+    default: return { titulo: `${getCompanyShortName(cd).toUpperCase()} — Movimentação — ${dados.nome}`, corpo: `Movimentação registrada para ${dados.nome}` };
   }
 }
 

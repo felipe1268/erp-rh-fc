@@ -1429,3 +1429,10 @@
 - [x] E-mail: assunto deve conter nome da empresa ao invés de manus
 - [x] Raio-X: adicionar foto circular do colaborador no cabeçalho da tela
 - [x] Raio-X: adicionar foto circular do colaborador no PDF/impressão
+- [ ] Desligamento: motivo opcional para fim de contrato normal, obrigatório apenas para Blacklist
+- [ ] Renomear nomenclatura para "Blacklist" no código
+- [x] E-mail desligamento: remover seção "Demais Providências Rescisórias"
+- [x] E-mail desligamento: dados do funcionário em vermelho para destaque
+- [x] E-mail desligamento: layout mais limpo e organizado visualmente
+- [x] Ver Detalhes no alerta de divergências já abre na aba Detalhes com filtro Divergentes ativo
+- [x] Bug: Admin Master não consegue alterar critérios do sistema (mostra "Apenas admin pode alterar critérios")

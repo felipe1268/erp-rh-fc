@@ -202,10 +202,10 @@ export const appRouter = router({
           const dupInfo = (dup as any[])[0];
           throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado!\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nEmpresa: ${dupInfo.empresa || 'N/A'}\nStatus: ${dupInfo.status || 'N/A'}\n\nNão é possível cadastrar o mesmo CPF novamente em nenhuma empresa do grupo.` });
         }
-        // Verificar se está na Lista Negra
+        // Verificar se está na Blacklist
         const blacklisted = await checkBlacklist(input.cpf);
         if (blacklisted) {
-          throw new TRPCError({ code: "FORBIDDEN", message: `🚫 FUNCIONÁRIO NA LISTA NEGRA!\n\n${blacklisted.nomeCompleto} (CPF: ${input.cpf}) está na Lista Negra da empresa.\nMotivo: ${blacklisted.motivoListaNegra || 'Não informado'}\nData: ${blacklisted.dataListaNegra || 'N/A'}\nRegistrado por: ${(blacklisted as any).listaNegraPor || 'N/A'}\n\nPara reativar este funcionário, é necessária a aprovação de 2 diretores da empresa.` });
+          throw new TRPCError({ code: "FORBIDDEN", message: `🚫 FUNCIONÁRIO NA BLACKLIST!\n\n${blacklisted.nomeCompleto} (CPF: ${input.cpf}) está na Blacklist da empresa.\nMotivo: ${blacklisted.motivoListaNegra || 'Não informado'}\nData: ${blacklisted.dataListaNegra || 'N/A'}\nRegistrado por: ${(blacklisted as any).listaNegraPor || 'N/A'}\n\nPara reativar este funcionário, é necessária a aprovação de 2 diretores da empresa.` });
         }
       }
       // Verificar RG duplicado (se informado)
@@ -260,9 +260,9 @@ export const appRouter = router({
         if (!employeeData.categoriaDesligamento || !employeeData.categoriaDesligamento.trim()) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nA CATEGORIA do desligamento é obrigatória.\nSelecione uma das opções: Término de contrato, Justa causa, Pedido de demissão, Acordo mútuo, Fim de obra, Baixo desempenho, Indisciplina ou Outros.' });
         }
-        // Motivo detalhado só é obrigatório quando incluir na Lista Negra
+        // Motivo detalhado só é obrigatório quando incluir na Blacklist
         if (employeeData.listaNegra && (!employeeData.motivoDesligamento || !employeeData.motivoDesligamento.trim())) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO DETALHADO do desligamento é obrigatório quando o funcionário é incluído na Lista Negra.\nDescreva o motivo pelo qual o funcionário não poderá ser recontratado.' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO DETALHADO do desligamento é obrigatório quando o funcionário é incluído na Blacklist.\nDescreva o motivo pelo qual o funcionário não poderá ser recontratado.' });
         }
         // Registrar dados de auditoria do desligamento
         employeeData.desligadoPor = ctx.user.name ?? 'Sistema';
@@ -270,17 +270,17 @@ export const appRouter = router({
         employeeData.dataDesligamentoEfetiva = employeeData.dataDesligamentoEfetiva || new Date().toISOString().split('T')[0];
       }
       
-      // === LISTA NEGRA: CAMPOS OBRIGATÓRIOS ===
+      // === BLACKLIST: CAMPOS OBRIGATÓRIOS ===
       if (employeeData.listaNegra === 1 && empAnterior?.listaNegra !== 1) {
         if (!employeeData.motivoListaNegra || !employeeData.motivoListaNegra.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO da inclusão na Lista Negra é obrigatório.\nDescreva detalhadamente por que este funcionário não poderá ser recontratado.' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO da inclusão na Blacklist é obrigatório.\nDescreva detalhadamente por que este funcionário não poderá ser recontratado.' });
         }
         employeeData.listaNegraPor = ctx.user.name ?? 'Sistema';
         employeeData.listaNegraUserId = ctx.user.id;
         employeeData.dataListaNegra = new Date().toISOString().split('T')[0];
       }
       
-      // === REATIVAÇÃO DE LISTA NEGRA: REQUER APROVAÇÃO DUPLA ===
+      // === REATIVAÇÃO DE BLACKLIST: REQUER APROVAÇÃO DUPLA ===
       if (empAnterior?.listaNegra === 1 && employeeData.listaNegra === 0) {
         // Verificar se há aprovação dupla
         const db = await getDb();
@@ -292,7 +292,7 @@ export const appRouter = router({
             )
           );
           if (approvedReqs.length === 0) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: '🚫 REATIVAÇÃO BLOQUEADA!\n\nEste funcionário está na Lista Negra.\nPara removê-lo da Lista Negra, é necessária a aprovação de 2 diretores da empresa.\n\nSolicite a reativação pelo menu "Lista Negra" e aguarde as aprovações.' });
+            throw new TRPCError({ code: 'FORBIDDEN', message: '🚫 REATIVAÇÃO BLOQUEADA!\n\nEste funcionário está na Blacklist.\nPara removê-lo da Blacklist, é necessária a aprovação de 2 diretores da empresa.\n\nSolicite a reativação pelo menu "Blacklist" e aguarde as aprovações.' });
           }
         }
       }
@@ -864,7 +864,7 @@ export const appRouter = router({
         valor: z.string(),
       })),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar critérios" });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar critérios" });
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -892,7 +892,7 @@ export const appRouter = router({
       companyId: z.number(),
       categoria: z.string(),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode restaurar padrões" });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode restaurar padrões" });
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
