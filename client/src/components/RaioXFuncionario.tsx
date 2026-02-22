@@ -159,7 +159,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     // HEADER COM LOGO
     const statusColor = emp?.status === 'Ativo' ? 'background:#dcfce7;color:#166534' : emp?.status === 'Desligado' ? 'background:#fef2f2;color:#991b1b' : emp?.status === 'Ferias' ? 'background:#dbeafe;color:#1e40af' : emp?.status === 'Afastado' ? 'background:#fefce8;color:#854d0e' : 'background:#f3f4f6;color:#374151';
     html += `<div class="logo-bar"><img src="${logoUrl}" alt="Logo" /><div class="title"><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>CPF: ${formatCPF(emp?.cpf || "")}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ''}<p>${dataEmissao}</p></div></div>`;
-    html += `<div class="emp-name-bar"><h2>${emp?.nomeCompleto || "-"}</h2><span class="status-badge" style="${statusColor}">${emp?.status || "-"}</span></div>`;
+    html += `<div class="emp-name-bar">${emp?.fotoUrl ? `<img src="${emp.fotoUrl}" alt="Foto" style="width:60px;height:60px;object-fit:cover;object-position:top;border-radius:50%;border:3px solid #1B2A4A;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-right:12px;" />` : ''}<h2>${emp?.nomeCompleto || "-"}</h2><span class="status-badge" style="${statusColor}">${emp?.status || "-"}</span></div>`;
 
     // DADOS PESSOAIS
     html += `<div class="section"><div class="section-title">\u{1F464} Dados Pessoais</div><div class="info-grid">`;
@@ -322,7 +322,13 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
           <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20 h-9 w-9 shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="bg-white/20 p-2 rounded-lg"><User className="h-6 w-6" /></div>
+          <div className="h-10 w-10 rounded-full overflow-hidden bg-white/20 flex items-center justify-center shrink-0 border-2 border-white/40">
+            {emp?.fotoUrl ? (
+              <img src={emp.fotoUrl} alt="" className="w-full h-full object-cover object-top" />
+            ) : (
+              <User className="h-6 w-6" />
+            )}
+          </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">RAIO-X DO FUNCIONÁRIO</h1>
             {emp && <p className="text-sm text-white/80">{emp.nomeCompleto} — CPF: {formatCPF(emp.cpf)}</p>}
@@ -352,6 +358,16 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
             {/* DADOS PESSOAIS */}
             <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-xl p-6 border border-blue-200 shadow-sm">
               <div className="flex items-start justify-between gap-4">
+                {/* FOTO DO COLABORADOR */}
+                <div className="shrink-0">
+                  <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center">
+                    {emp.fotoUrl ? (
+                      <img src={emp.fotoUrl} alt="Foto" className="w-full h-full object-cover object-top" />
+                    ) : (
+                      <span className="text-3xl font-bold text-blue-400">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
+                    )}
+                  </div>
+                </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-4">
                     <h2 className="text-3xl font-bold text-blue-900">{emp.nomeCompleto}</h2>

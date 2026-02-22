@@ -1427,3 +1427,5 @@
 - [x] Foto do colaborador: mini avatar circular na tabela de listagem ao lado do nome
 - [x] E-mail: remetente deve mostrar nome da empresa ao invés de Manus Team
 - [x] E-mail: assunto deve conter nome da empresa ao invés de manus
+- [x] Raio-X: adicionar foto circular do colaborador no cabeçalho da tela
+- [x] Raio-X: adicionar foto circular do colaborador no PDF/impressão
