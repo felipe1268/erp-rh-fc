@@ -1,0 +1,7 @@
+Screenshot 2026-02-22:
+- Home page mostra Painel Principal com KPIs de RH e Operacional
+- Sidebar mostra todas as seções: Principal, Cadastro, Financeiro, Operacional
+- EPIs aparece no menu lateral sob Operacional
+- Dashboards acessíveis via sidebar
+- Sem erros TypeScript ou de compilação
+- Server rodando normalmente

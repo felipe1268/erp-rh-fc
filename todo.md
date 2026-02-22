@@ -1083,3 +1083,25 @@
 - [x] Adicionar percentual de horas normais e extras em relação ao total
 - [x] Comparativo com mês anterior (acréscimo/redução)
 - [x] Comparativo com mesmo mês do ano anterior (acréscimo/redução)
+
+## Rev. 41: Melhorias Gerais - Home, EPIs, Dashboards, Processos Trabalhistas, Relógios de Ponto
+### Schema e Backend
+- [x] Adicionar campos clienteCnpj, clienteRazaoSocial, clienteNomeFantasia na tabela processos_trabalhistas
+- [x] Atualizar rotas tRPC de processos trabalhistas para incluir campos de cliente
+- [x] Criar router completo de EPIs (CRUD + entregas + stats)
+- [x] Criar rota homeData para alimentar Home reestruturada (KPIs + alertas)
+- [x] Criar 8 novos dashboards no backend (Pendências, Treinamentos, EPI, Acidentes, Auditorias, 5W2H, Extintores/Hidrantes, Desvios)
+
+### Frontend
+- [x] Corrigir bug de Relógios de Ponto (dados nested: sn.obraSn.xxx → acesso correto)
+- [x] Reestruturar Home com KPIs acionáveis (RH, Operacional, Alertas, Aniversariantes, Movimentações)
+- [x] Adicionar campos Cliente/CNPJ no form de criação e detalhe de Processos Trabalhistas
+- [x] Criar página completa de EPIs (catálogo + entregas + stats)
+- [x] Adicionar EPIs no menu lateral do DashboardLayout
+- [x] Criar componente reutilizável DashChart (gráficos Chart.js + KPI cards)
+- [x] Criar 8 páginas de dashboards (Pendências, Treinamentos, EPI, Acidentes, Auditorias, 5W2H, Extintores/Hidrantes, Desvios)
+- [x] Dashboard de Riscos (placeholder - em desenvolvimento)
+- [x] Registrar todas as rotas de dashboards no App.tsx
+
+### Testes
+- [x] Testes unitários para rotas de dashboards (10 procedures), EPIs e homeData (4 testes passando)

@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { employees, extraPayments, payroll } from "../../drizzle/schema";
+import { employees, extraPayments, payroll, trainings, asos, accidents, audits, deviations, extinguishers, hydrants, actionPlans, epis, epiDeliveries } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count } from "drizzle-orm";
 
 // ============================================================
@@ -236,11 +236,172 @@ async function getDashHorasExtras(companyId: number, year?: number) {
   };
 }
 
+// 3. DASHBOARD PENDÊNCIAS
+async function getDashPendencias(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const hoje = new Date().toISOString().split("T")[0];
+  const allAsos = await db.select().from(asos).where(eq(asos.companyId, companyId));
+  const asosVencidos = allAsos.filter(a => a.dataValidade < hoje).length;
+  const asosAVencer30 = allAsos.filter(a => { const d = new Date(a.dataValidade + "T00:00:00"); const diff = (d.getTime() - Date.now()) / (1000*60*60*24); return diff >= 0 && diff <= 30; }).length;
+  const allTrainings = await db.select().from(trainings).where(eq(trainings.companyId, companyId));
+  const treinVencidos = allTrainings.filter(t => t.dataValidade && t.dataValidade < hoje).length;
+  const treinAVencer30 = allTrainings.filter(t => { if (!t.dataValidade) return false; const d = new Date(t.dataValidade + "T00:00:00"); const diff = (d.getTime() - Date.now()) / (1000*60*60*24); return diff >= 0 && diff <= 30; }).length;
+  const allExt = await db.select().from(extinguishers).where(eq(extinguishers.companyId, companyId));
+  const extVencidos = allExt.filter(e => e.statusExtintor === "Vencido" || (e.validadeRecarga && e.validadeRecarga < hoje)).length;
+  const allHid = await db.select().from(hydrants).where(eq(hydrants.companyId, companyId));
+  const hidManutencao = allHid.filter(h => h.statusHidrante === "Manutencao" || h.statusHidrante === "Inativo").length;
+  return {
+    asos: { vencidos: asosVencidos, aVencer30: asosAVencer30, ok: allAsos.length - asosVencidos, total: allAsos.length },
+    treinamentos: { vencidos: treinVencidos, aVencer30: treinAVencer30, ok: allTrainings.length - treinVencidos, total: allTrainings.length },
+    extintores: { vencidos: extVencidos, ok: allExt.length - extVencidos, total: allExt.length },
+    hidrantes: { manutencao: hidManutencao, ok: allHid.length - hidManutencao, total: allHid.length },
+  };
+}
+
+// 4. DASHBOARD TREINAMENTOS
+async function getDashTreinamentos(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const hoje = new Date().toISOString().split("T")[0];
+  const allT = await db.select().from(trainings).where(eq(trainings.companyId, companyId));
+  const allEmps = await db.select({ id: employees.id, nome: employees.nomeCompleto }).from(employees).where(eq(employees.companyId, companyId));
+  const empMap = new Map(allEmps.map(e => [e.id, e.nome]));
+  const statusDist = [
+    { label: "Válido", value: allT.filter(t => !t.dataValidade || t.dataValidade >= hoje).length },
+    { label: "Vencido", value: allT.filter(t => t.dataValidade && t.dataValidade < hoje).length },
+    { label: "A Vencer (30d)", value: allT.filter(t => { if (!t.dataValidade) return false; const d = new Date(t.dataValidade + "T00:00:00"); const diff = (d.getTime() - Date.now()) / (1000*60*60*24); return diff >= 0 && diff <= 30; }).length },
+  ];
+  const porNorma: Record<string, number> = {};
+  for (const t of allT) { const n = t.norma || "Sem Norma"; porNorma[n] = (porNorma[n] || 0) + 1; }
+  const normaDist = Object.entries(porNorma).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 10);
+  const porMes: Record<string, number> = {};
+  for (const t of allT) { const mes = t.dataRealizacao?.substring(0, 7) || "Desconhecido"; porMes[mes] = (porMes[mes] || 0) + 1; }
+  const evolucaoMensal = Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b)).map(([mes, count]) => ({ mes, count }));
+  const vencidos = allT.filter(t => t.dataValidade && t.dataValidade < hoje).map(t => ({ id: t.id, nome: t.nome, norma: t.norma, dataValidade: t.dataValidade, funcionario: empMap.get(t.employeeId) || "Desconhecido" })).sort((a, b) => (a.dataValidade || "").localeCompare(b.dataValidade || ""));
+  return { statusDist, normaDist, evolucaoMensal, vencidos: vencidos.slice(0, 20), total: allT.length };
+}
+
+// 5. DASHBOARD EPI
+async function getDashEpi(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const allEpis = await db.select().from(epis).where(eq(epis.companyId, companyId));
+  const allDel = await db.select().from(epiDeliveries).where(eq(epiDeliveries.companyId, companyId));
+  const hoje = new Date().toISOString().split("T")[0];
+  const estoqueTotal = allEpis.reduce((s, e) => s + (e.quantidadeEstoque || 0), 0);
+  const estoqueBaixo = allEpis.filter(e => (e.quantidadeEstoque || 0) <= 5).length;
+  const caVencido = allEpis.filter(e => e.validadeCa && e.validadeCa < hoje).length;
+  const porMes: Record<string, number> = {};
+  for (const d of allDel) { const mes = d.dataEntrega?.substring(0, 7) || "?"; porMes[mes] = (porMes[mes] || 0) + d.quantidade; }
+  const evolucaoMensal = Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b)).map(([mes, qtd]) => ({ mes, qtd }));
+  const porEpi: Record<number, { nome: string; qtd: number }> = {};
+  for (const d of allDel) { if (!porEpi[d.epiId]) { const ep = allEpis.find(e => e.id === d.epiId); porEpi[d.epiId] = { nome: ep?.nome || "EPI #" + d.epiId, qtd: 0 }; } porEpi[d.epiId].qtd += d.quantidade; }
+  const topEpis = Object.values(porEpi).sort((a, b) => b.qtd - a.qtd).slice(0, 10);
+  return { resumo: { totalItens: allEpis.length, estoqueTotal, estoqueBaixo, caVencido, totalEntregas: allDel.length }, evolucaoMensal, topEpis };
+}
+
+// 6. DASHBOARD ACIDENTES
+async function getDashAcidentes(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const allAcc = await db.select().from(accidents).where(eq(accidents.companyId, companyId));
+  const totalAfastamento = allAcc.reduce((s, a) => s + (a.diasAfastamento || 0), 0);
+  const comAfastamento = allAcc.filter(a => (a.diasAfastamento || 0) > 0).length;
+  const porTipo: Record<string, number> = {};
+  for (const a of allAcc) { const t = a.tipoAcidente || "Outro"; porTipo[t] = (porTipo[t] || 0) + 1; }
+  const tipoDist = Object.entries(porTipo).map(([label, value]) => ({ label: label.replace(/_/g, " "), value }));
+  const porGravidade: Record<string, number> = {};
+  for (const a of allAcc) { const g = a.gravidade || "Outro"; porGravidade[g] = (porGravidade[g] || 0) + 1; }
+  const gravidadeDist = Object.entries(porGravidade).map(([label, value]) => ({ label, value }));
+  const porMes: Record<string, number> = {};
+  for (const a of allAcc) { const mes = a.dataAcidente?.substring(0, 7) || "?"; porMes[mes] = (porMes[mes] || 0) + 1; }
+  const evolucaoMensal = Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b)).map(([mes, count]) => ({ mes, count }));
+  const sorted = [...allAcc].sort((a, b) => b.dataAcidente.localeCompare(a.dataAcidente));
+  const ultimoAcidente = sorted[0]?.dataAcidente;
+  const diasSemAcidente = ultimoAcidente ? Math.floor((Date.now() - new Date(ultimoAcidente + "T00:00:00").getTime()) / (1000*60*60*24)) : null;
+  return { resumo: { totalAcidentes: allAcc.length, totalAfastamento, comAfastamento, diasSemAcidente, ultimoAcidente }, tipoDist, gravidadeDist, evolucaoMensal };
+}
+
+// 7. DASHBOARD AUDITORIAS
+async function getDashAuditorias(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const allAud = await db.select().from(audits).where(eq(audits.companyId, companyId));
+  const allDev = await db.select().from(deviations).where(eq(deviations.companyId, companyId));
+  const porResultado: Record<string, number> = {};
+  for (const a of allAud) { const r = a.resultadoAuditoria || "Pendente"; porResultado[r] = (porResultado[r] || 0) + 1; }
+  const resultadoDist = Object.entries(porResultado).map(([label, value]) => ({ label: label.replace(/_/g, " "), value }));
+  const porTipo: Record<string, number> = {};
+  for (const a of allAud) { const t = a.tipoAuditoria || "Outro"; porTipo[t] = (porTipo[t] || 0) + 1; }
+  const tipoDist = Object.entries(porTipo).map(([label, value]) => ({ label, value }));
+  const ncAbertas = allDev.filter(d => d.statusDesvio === "Aberto" || d.statusDesvio === "Em_Andamento").length;
+  const ncFechadas = allDev.filter(d => d.statusDesvio === "Fechado").length;
+  return { resumo: { totalAuditorias: allAud.length, ncTotal: allDev.length, ncAbertas, ncFechadas }, resultadoDist, tipoDist };
+}
+
+// 8. DASHBOARD 5W2H
+async function getDash5w2h(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const allPlans = await db.select().from(actionPlans).where(eq(actionPlans.companyId, companyId));
+  const porStatus: Record<string, number> = {};
+  for (const p of allPlans) { const s = p.statusPlano || "Pendente"; porStatus[s] = (porStatus[s] || 0) + 1; }
+  const statusDist = Object.entries(porStatus).map(([label, value]) => ({ label: label.replace(/_/g, " "), value }));
+  const atrasados = allPlans.filter(p => p.quando && p.quando < new Date().toISOString().split("T")[0] && p.statusPlano !== "Concluido" && p.statusPlano !== "Cancelado").length;
+  const concluidos = allPlans.filter(p => p.statusPlano === "Concluido").length;
+  const taxaConclusao = allPlans.length > 0 ? Math.round((concluidos / allPlans.length) * 100) : 0;
+  return { resumo: { total: allPlans.length, atrasados, concluidos, taxaConclusao }, statusDist };
+}
+
+// 9. DASHBOARD EXTINTORES E HIDRANTES
+async function getDashExtintoresHidrantes(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const hoje = new Date().toISOString().split("T")[0];
+  const allExt = await db.select().from(extinguishers).where(eq(extinguishers.companyId, companyId));
+  const allHid = await db.select().from(hydrants).where(eq(hydrants.companyId, companyId));
+  const extPorTipo: Record<string, number> = {};
+  for (const e of allExt) { extPorTipo[e.tipoExtintor || "Outro"] = (extPorTipo[e.tipoExtintor || "Outro"] || 0) + 1; }
+  const extTipoDist = Object.entries(extPorTipo).map(([label, value]) => ({ label, value }));
+  const extPorStatus: Record<string, number> = {};
+  for (const e of allExt) { extPorStatus[e.statusExtintor || "OK"] = (extPorStatus[e.statusExtintor || "OK"] || 0) + 1; }
+  const extStatusDist = Object.entries(extPorStatus).map(([label, value]) => ({ label, value }));
+  const hidPorStatus: Record<string, number> = {};
+  for (const h of allHid) { hidPorStatus[h.statusHidrante || "OK"] = (hidPorStatus[h.statusHidrante || "OK"] || 0) + 1; }
+  const hidStatusDist = Object.entries(hidPorStatus).map(([label, value]) => ({ label, value }));
+  const extVencidos = allExt.filter(e => e.validadeRecarga && e.validadeRecarga < hoje).length;
+  return { extintores: { total: allExt.length, tipoDist: extTipoDist, statusDist: extStatusDist, vencidos: extVencidos }, hidrantes: { total: allHid.length, statusDist: hidStatusDist } };
+}
+
+// 10. DASHBOARD DESVIOS
+async function getDashDesvios(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const allDev = await db.select().from(deviations).where(eq(deviations.companyId, companyId));
+  const porStatus: Record<string, number> = {};
+  for (const d of allDev) { porStatus[d.statusDesvio || "Aberto"] = (porStatus[d.statusDesvio || "Aberto"] || 0) + 1; }
+  const statusDist = Object.entries(porStatus).map(([label, value]) => ({ label: label.replace(/_/g, " "), value }));
+  const porTipo: Record<string, number> = {};
+  for (const d of allDev) { porTipo[d.tipoDesvio || "Outro"] = (porTipo[d.tipoDesvio || "Outro"] || 0) + 1; }
+  const tipoDist = Object.entries(porTipo).map(([label, value]) => ({ label: label.replace(/_/g, " "), value }));
+  const porSetor: Record<string, number> = {};
+  for (const d of allDev) { porSetor[d.setor || "Sem Setor"] = (porSetor[d.setor || "Sem Setor"] || 0) + 1; }
+  const setorDist = Object.entries(porSetor).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+  const fechados = allDev.filter(d => d.statusDesvio === "Fechado").length;
+  const taxaResolucao = allDev.length > 0 ? Math.round((fechados / allDev.length) * 100) : 0;
+  return { resumo: { total: allDev.length, abertos: allDev.filter(d => d.statusDesvio === "Aberto").length, emAndamento: allDev.filter(d => d.statusDesvio === "Em_Andamento").length, fechados, taxaResolucao }, statusDist, tipoDist, setorDist };
+}
+
 export const dashboardsRouter = router({
-  colaboradores: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
-    .query(({ input }) => getDashColaboradores(input.companyId)),
-  horasExtras: protectedProcedure
-    .input(z.object({ companyId: z.number(), year: z.number().optional() }))
-    .query(({ input }) => getDashHorasExtras(input.companyId, input.year)),
+  colaboradores: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashColaboradores(input.companyId)),
+  horasExtras: protectedProcedure.input(z.object({ companyId: z.number(), year: z.number().optional() })).query(({ input }) => getDashHorasExtras(input.companyId, input.year)),
+  pendencias: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashPendencias(input.companyId)),
+  treinamentos: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashTreinamentos(input.companyId)),
+  epi: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashEpi(input.companyId)),
+  acidentes: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashAcidentes(input.companyId)),
+  auditorias: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashAuditorias(input.companyId)),
+  planos5w2h: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDash5w2h(input.companyId)),
+  extintoresHidrantes: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashExtintoresHidrantes(input.companyId)),
+  desvios: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashDesvios(input.companyId)),
 });

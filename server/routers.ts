@@ -36,6 +36,8 @@ import { payrollParsersRouter } from "./routers/payrollParsers";
 import { folhaPagamentoRouter } from "./routers/folhaPagamento";
 import { controleDocumentosRouter } from "./routers/controleDocumentos";
 import { processosTrabRouter } from "./routers/processosTrabalhistas";
+import { homeDataRouter } from "./routers/homeData";
+import { episRouter } from "./routers/epis";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -56,6 +58,8 @@ function crudRouter(opts: {
 export const appRouter = router({
   system: systemRouter,
   docs: controleDocumentosRouter,
+  home: homeDataRouter,
+  epis: episRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

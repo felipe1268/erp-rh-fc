@@ -22,12 +22,22 @@ import Funcoes from "./pages/Funcoes";
 import ContasBancarias from "./pages/ContasBancarias";
 import RelogiosPonto from "./pages/RelogiosPonto";
 import ProcessosTrabalhistas from "./pages/ProcessosTrabalhistas";
+import Epis from "./pages/Epis";
 // Relatórios
 import RaioXPage from "./pages/relatorios/RaioXPage";
 // Dashboards
 import DashboardIndex from "./pages/dashboards/DashboardIndex";
 import DashColaboradores from "./pages/dashboards/DashColaboradores";
 import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
+import DashPendencias from "./pages/dashboards/DashPendencias";
+import DashTreinamentos from "./pages/dashboards/DashTreinamentos";
+import DashEpi from "./pages/dashboards/DashEpi";
+import DashAcidentes from "./pages/dashboards/DashAcidentes";
+import DashAuditorias from "./pages/dashboards/DashAuditorias";
+import Dash5w2h from "./pages/dashboards/Dash5w2h";
+import DashExtintoresHidrantes from "./pages/dashboards/DashExtintoresHidrantes";
+import DashDesvios from "./pages/dashboards/DashDesvios";
+import DashRiscos from "./pages/dashboards/DashRiscos";
 
 function Router() {
   return (
@@ -42,6 +52,7 @@ function Router() {
       <Route path={"/contas-bancarias"} component={ContasBancarias} />
       <Route path={"/relogios-ponto"} component={RelogiosPonto} />
       <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
+      <Route path={"/epis"} component={Epis} />
       <Route path={"/usuarios"} component={Usuarios} />
       <Route path={"/auditoria"} component={Auditoria} />
       <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
@@ -55,6 +66,15 @@ function Router() {
       <Route path={"/dashboards"} component={DashboardIndex} />
       <Route path={"/dashboards/colaboradores"} component={DashColaboradores} />
       <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
+      <Route path={"/dashboards/pendentes"} component={DashPendencias} />
+      <Route path={"/dashboards/treinamentos"} component={DashTreinamentos} />
+      <Route path={"/dashboards/epi"} component={DashEpi} />
+      <Route path={"/dashboards/acidentes"} component={DashAcidentes} />
+      <Route path={"/dashboards/auditorias"} component={DashAuditorias} />
+      <Route path={"/dashboards/5w2h"} component={Dash5w2h} />
+      <Route path={"/dashboards/extintores-hidrantes"} component={DashExtintoresHidrantes} />
+      <Route path={"/dashboards/desvios"} component={DashDesvios} />
+      <Route path={"/dashboards/riscos"} component={DashRiscos} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -1050,6 +1050,10 @@ export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
 	risco: mysqlEnum(['baixo', 'medio', 'alto', 'critico']).default('medio').notNull(),
 	// Pedidos do reclamante (JSON array)
 	pedidos: json(), // Ex: ["Horas extras", "Adicional noturno", "Danos morais"]
+	// Cliente (corresponsável)
+	clienteCnpj: varchar({ length: 20 }),
+	clienteRazaoSocial: varchar({ length: 255 }),
+	clienteNomeFantasia: varchar({ length: 255 }),
 	// Observações
 	observacoes: text(),
 	// Metadados

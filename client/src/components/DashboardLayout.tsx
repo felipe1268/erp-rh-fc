@@ -28,7 +28,7 @@ import {
   ChevronDown, ChevronRight,
   BarChart3, Settings,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
-  ClipboardList, UserSearch, Gavel, Wifi,
+  ClipboardList, UserSearch, Gavel, Wifi, HardHat,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -69,6 +69,7 @@ const menuSections = [
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Wifi, label: "Relógios de Ponto", path: "/relogios-ponto" },
+      { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
     ],
   },
   {

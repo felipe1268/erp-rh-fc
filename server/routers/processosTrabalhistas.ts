@@ -102,6 +102,9 @@ export const processosTrabRouter = router({
       fase: z.enum(['conhecimento', 'recursal', 'execucao', 'encerrado']).default('conhecimento'),
       risco: z.enum(['baixo', 'medio', 'alto', 'critico']).default('medio'),
       pedidos: z.array(z.string()).optional(),
+      clienteCnpj: z.string().optional(),
+      clienteRazaoSocial: z.string().optional(),
+      clienteNomeFantasia: z.string().optional(),
       observacoes: z.string().optional(),
       criadoPor: z.string().optional(),
     }))
@@ -140,6 +143,9 @@ export const processosTrabRouter = router({
       fase: z.enum(['conhecimento', 'recursal', 'execucao', 'encerrado']).optional(),
       risco: z.enum(['baixo', 'medio', 'alto', 'critico']).optional(),
       pedidos: z.array(z.string()).optional(),
+      clienteCnpj: z.string().nullable().optional(),
+      clienteRazaoSocial: z.string().nullable().optional(),
+      clienteNomeFantasia: z.string().nullable().optional(),
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {

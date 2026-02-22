@@ -120,8 +120,12 @@ export default function ProcessosTrabalhistas() {
     fase: "conhecimento" as string,
     risco: "medio" as string,
     pedidos: [] as string[],
+    clienteCnpj: "",
+    clienteRazaoSocial: "",
+    clienteNomeFantasia: "",
     observacoes: "",
   });
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [novoPedido, setNovoPedido] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -208,7 +212,8 @@ export default function ProcessosTrabalhistas() {
       employeeId: 0, numeroProcesso: "", vara: "", comarca: "", tribunal: "",
       tipoAcao: "reclamatoria", reclamante: "", advogadoReclamante: "", advogadoEmpresa: "",
       valorCausa: "", dataDistribuicao: "", dataDesligamento: "", dataCitacao: "", dataAudiencia: "",
-      status: "em_andamento", fase: "conhecimento", risco: "medio", pedidos: [], observacoes: "",
+      status: "em_andamento", fase: "conhecimento", risco: "medio", pedidos: [],
+      clienteCnpj: "", clienteRazaoSocial: "", clienteNomeFantasia: "", observacoes: "",
     });
     setNovoPedido("");
     setEditingId(null);
@@ -226,6 +231,9 @@ export default function ProcessosTrabalhistas() {
       status: form.status as any,
       fase: form.fase as any,
       risco: form.risco as any,
+      clienteCnpj: form.clienteCnpj || undefined,
+      clienteRazaoSocial: form.clienteRazaoSocial || undefined,
+      clienteNomeFantasia: form.clienteNomeFantasia || undefined,
       criadoPor: user?.name || undefined,
     });
   }
@@ -413,6 +421,18 @@ export default function ProcessosTrabalhistas() {
                         if (novoPedido.trim()) { atualizarMut.mutate({ id: p.id, pedidos: [...(p.pedidos as string[] || []), novoPedido.trim()] }); setNovoPedido(""); }
                       }}><Plus className="h-3 w-3" /></Button>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Cliente Corresponsável */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2"><Building2 className="h-4 w-4" /> Cliente / Tomador</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <EditableField label="CNPJ" value={p.clienteCnpj} field="clienteCnpj" processoId={p.id} onSave={atualizarMut.mutate} />
+                    <EditableField label="Razão Social" value={p.clienteRazaoSocial} field="clienteRazaoSocial" processoId={p.id} onSave={atualizarMut.mutate} />
+                    <EditableField label="Nome Fantasia" value={p.clienteNomeFantasia} field="clienteNomeFantasia" processoId={p.id} onSave={atualizarMut.mutate} />
                   </CardContent>
                 </Card>
 
@@ -664,6 +684,61 @@ export default function ProcessosTrabalhistas() {
                   <label className="text-xs font-medium">Advogado da Empresa</label>
                   <input type="text" value={form.advogadoEmpresa} onChange={e => setForm(prev => ({ ...prev, advogadoEmpresa: e.target.value }))}
                     className="w-full border rounded px-3 py-2 text-sm bg-background" placeholder="Dr. Beltrano — OAB/SP 654321" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Cliente Corresponsável */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> Cliente / Tomador (Corresponsável)</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium">CNPJ do Cliente</label>
+                  <div className="flex gap-1">
+                    <input type="text" value={form.clienteCnpj} onChange={e => {
+                      let v = e.target.value.replace(/\D/g, "");
+                      if (v.length > 14) v = v.slice(0, 14);
+                      if (v.length > 12) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, "$1.$2.$3/$4-$5");
+                      else if (v.length > 8) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, "$1.$2.$3/$4");
+                      else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, "$1.$2.$3");
+                      else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, "$1.$2");
+                      setForm(prev => ({ ...prev, clienteCnpj: v }));
+                    }}
+                      className="flex-1 border rounded px-3 py-2 text-sm bg-background font-mono" placeholder="00.000.000/0000-00" />
+                    <Button size="sm" variant="outline" className="h-9 text-xs" disabled={buscandoCnpj || form.clienteCnpj.replace(/\D/g, "").length !== 14}
+                      onClick={async () => {
+                        const cnpjNum = form.clienteCnpj.replace(/\D/g, "");
+                        if (cnpjNum.length !== 14) return toast.error("CNPJ deve ter 14 dígitos");
+                        setBuscandoCnpj(true);
+                        try {
+                          const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNum}`);
+                          if (!resp.ok) throw new Error("CNPJ não encontrado");
+                          const data = await resp.json();
+                          setForm(prev => ({
+                            ...prev,
+                            clienteRazaoSocial: data.razao_social || "",
+                            clienteNomeFantasia: data.nome_fantasia || "",
+                          }));
+                          toast.success("Dados do CNPJ carregados!");
+                        } catch {
+                          toast.error("Não foi possível consultar o CNPJ. Preencha manualmente.");
+                        } finally {
+                          setBuscandoCnpj(false);
+                        }
+                      }}>
+                      {buscandoCnpj ? "..." : "Buscar"}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Razão Social</label>
+                  <input type="text" value={form.clienteRazaoSocial} onChange={e => setForm(prev => ({ ...prev, clienteRazaoSocial: e.target.value }))}
+                    className="w-full border rounded px-3 py-2 text-sm bg-background" placeholder="Razão social do cliente" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Nome Fantasia</label>
+                  <input type="text" value={form.clienteNomeFantasia} onChange={e => setForm(prev => ({ ...prev, clienteNomeFantasia: e.target.value }))}
+                    className="w-full border rounded px-3 py-2 text-sm bg-background" placeholder="Nome fantasia do cliente" />
                 </div>
               </CardContent>
             </Card>
