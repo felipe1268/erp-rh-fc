@@ -575,12 +575,13 @@ export default function Configuracoes() {
                   <div className="mb-4">
                     <Label className="text-sm font-medium text-gray-700 mb-1 block">Digite a senha de confirmação:</Label>
                     <Input
-                      type="password"
+                      type="text"
                       value={resetPassword}
-                      onChange={e => setResetPassword(e.target.value)}
-                      placeholder="Senha de confirmação"
+                      onChange={e => setResetPassword(e.target.value.toUpperCase())}
+                      placeholder="Digite RESETAR2026"
+                      className="font-mono tracking-wider"
                     />
-                    <p className="text-xs text-gray-400 mt-1">Senha: RESETAR2026</p>
+                    <p className="text-xs text-gray-400 mt-1">Digite exatamente: <span className="font-mono font-bold">RESETAR2026</span></p>
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => { setShowResetDialog(false); setResetPassword(""); }}>

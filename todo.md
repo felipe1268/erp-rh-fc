@@ -1576,3 +1576,14 @@
 - [x] Verificado: avisoPrevioFerias.ts, cipa.ts, pjContracts.ts já tinham filtro correto
 - [x] Verificado: db.ts getEmployees e getObras já tinham filtro correto
 - [x] Atualizar Rev. 58 → Rev. 59
+
+## Rev. 60 - Fix Senha Reset Numeração
+- [x] BUG: Senha RESETAR2026 não é aceita ao resetar numeração interna
+- [x] Campo alterado de password para text (usuário vê o que digita)
+- [x] Auto-uppercase no input para evitar erro de maiúsculas/minúsculas
+- [x] Trim no backend para evitar espaços acidentais
+- [x] Atualizar Rev. 59 → Rev. 60
+
+## Rev. 60 - Redesign Abas Raio-X
+- [ ] Redesenhar layout das abas do Raio-X do Funcionário (amontoadas/ilegíveis com 17 abas)
+- [ ] Implementar layout organizado e profissional para as abas

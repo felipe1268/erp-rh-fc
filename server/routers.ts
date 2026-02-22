@@ -159,7 +159,7 @@ export const appRouter = router({
       confirmPassword: z.string(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode resetar a numeração" });
-      if (input.confirmPassword !== "RESETAR2026") throw new TRPCError({ code: "BAD_REQUEST", message: "Senha de confirmação incorreta" });
+      if (input.confirmPassword.trim() !== "RESETAR2026") throw new TRPCError({ code: "BAD_REQUEST", message: "Senha de confirmação incorreta. Digite exatamente: RESETAR2026" });
       await updateCompany(input.companyId, { nextCodigoInterno: 1 } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna RESETADA para 1` });
       return { success: true };
