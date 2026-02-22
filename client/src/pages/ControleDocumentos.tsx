@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -421,6 +422,7 @@ export default function ControleDocumentos() {
             <h1 className="text-2xl font-bold tracking-tight">Controle de Documentos</h1>
             <p className="text-muted-foreground text-sm">Gestão de ASOs, Treinamentos, Atestados e Advertências</p>
           </div>
+          <PrintActions title="Controle de Documentos" />
         </div>
 
         {/* CARDS RESUMO */}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -319,10 +320,13 @@ export default function Configuracoes() {
   return (
     <DashboardLayout>
       <div className="p-6 max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Settings className="w-6 h-6" />
-          Configurações
-        </h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Settings className="w-6 h-6" />
+            Configurações
+          </h1>
+          <PrintActions title="Configurações" />
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg">

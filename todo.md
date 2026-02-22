@@ -963,3 +963,43 @@
 - [x] Adicionar coluna "% Aloc." na tabela de custos por obra
 - [x] Exibir percentual de alocação por funcionário em cada obra
 - [x] Incrementar versão para Rev. 37
+
+## FIX Rev. 37: Detecção de mês pegando data de admissão no PDF de pagamento
+- [x] Analisar texto extraído do PDF de pagamento para identificar padrão correto
+- [x] Priorizar padrão "referente ao mês de JANEIRO/2026" na detecção
+- [x] Mover detecção de data DD/MM/YYYY genérica para último recurso (evitar pegar admissão)
+- [x] Testar com PDFs de vale e pagamento
+
+## Rev. 38: Botões Imprimir/PDF/Excel na tela de Custos por Obra
+- [x] Botão Imprimir (window.print com CSS @media print)
+- [x] Botão Gerar PDF (html2canvas + jsPDF ou print-to-pdf)
+- [x] Botão Exportar Excel (xlsx com dados de custos por obra)
+- [x] Rota backend para gerar Excel de custos por obra
+- [x] Fix: detecção de mês no PDF de pagamento (priorizar "referente ao mês de NOME/ANO")
+
+## Rev. 38: Vinculação manual de obra + Bloqueio consolidação + Exportações
+- [x] Criar tabela manual_obra_assignments para vincular funcionário sem ponto a uma obra com justificativa
+- [x] Rota backend vincularObrasManualmente (employeeIds[], obraId, justificativa, mesReferencia)
+- [x] Rota backend removerVinculacaoManual
+- [x] Rota backend listarVinculacoesManuais
+- [x] UI: seleção múltipla com checkboxes + select de obra + justificativa na seção "Sem Obra Vinculada"
+- [x] UI: botão Imprimir (window.print com CSS @media print)
+- [x] UI: botão Gerar PDF
+- [x] UI: botão Exportar Excel com dados de custos por obra
+- [x] Fix: detecção de mês no PDF de pagamento (priorizar "referente ao mês de NOME/ANO")
+
+## Rev. 38: Verificação Cruzada filtros + Vinculação obra + Exportações
+- [x] Card "Sem Ponto" na Verificação Cruzada mostrando quantidade de funcionários sem registro de ponto
+- [x] Transformar todos os cards (Total, OK, Com Alertas, Com Ponto, Sem Ponto) em filtros clicáveis
+- [x] Vinculação manual de obra para funcionários sem obra (seleção múltipla + justificativa)
+- [ ] Bloqueio de consolidação se houver funcionários sem obra (pendente integração no backend)
+- [x] Botões Imprimir/PDF/Excel na tela de Custos por Obra
+- [x] Fix detecção de mês no PDF de pagamento
+
+## REGRA DE OURO: Botões Imprimir/PDF em TODAS as telas
+- [x] Criar componente reutilizável PrintActions (Imprimir + PDF + Excel opcional)
+- [x] Aplicar em: Colaboradores, Fechamento de Ponto, Folha de Pagamento (todas as sub-telas)
+- [x] Aplicar em: Controle de Documentos, Obras, ValeAlimentacao
+- [x] Aplicar em: Custos por Obra, Verificação Cruzada, Horas Extras
+- [x] Aplicar em: Configurações, Empresas, Setores, Funções, Auditoria, Usuários
+- [x] CSS @media print para ocultar sidebar, botões e elementos de UI

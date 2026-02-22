@@ -1,0 +1,15 @@
+Cabeçalho do PDF de pagamento (espelho folha mensal):
+"Espelho e resumo da folha mensal referente ao mês de JANEIRO/2026"
+"Empresa: FC ENGENHARIA E CONSTRUCAO LTDA"
+"Página: 1"
+"Guaratinguetá/SP - CNPJ:29.353.906/0001-71"
+
+Padrão a detectar: "referente ao mês de NOME_MES/ANO"
+Exemplo: "referente ao mês de JANEIRO/2026" → mês=01, ano=2026 → "2026-01"
+
+No PDF de vale (adiantamento), o padrão é:
+"20/01/2026  Adiantamento em:" → data DD/MM/YYYY no cabeçalho
+
+Problema atual: a função detectMesReferencia pega a primeira data DD/MM/YYYY no texto,
+que no PDF de pagamento é a data de admissão do primeiro funcionário (ex: 27/09/2022),
+não a data de referência da folha.

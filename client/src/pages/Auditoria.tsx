@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
@@ -32,7 +33,7 @@ export default function Auditoria() {
             <h1 className="text-2xl font-bold tracking-tight">Auditoria do Sistema</h1>
             <p className="text-muted-foreground text-sm mt-1">Registro de todas as ações realizadas no sistema</p>
           </div>
-
+          <PrintActions title="Auditoria do Sistema" />
         </div>
 
         {isLoading ? (

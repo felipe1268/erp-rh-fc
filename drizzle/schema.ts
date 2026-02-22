@@ -974,3 +974,22 @@ export const systemCriteria = mysqlTable("system_criteria", {
 	index("sys_criteria_company_cat").on(table.companyId, table.categoria),
 	index("sys_criteria_company_key").on(table.companyId, table.chave),
 ]);
+
+
+// Vinculação manual de funcionário a obra (quando não há registro de ponto)
+export const manualObraAssignments = mysqlTable("manual_obra_assignments", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	obraId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(), // "2026-01"
+	justificativa: text().notNull(),
+	percentual: int().default(100).notNull(), // percentual de alocação (0-100)
+	atribuidoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("moa_company_mes").on(table.companyId, table.mesReferencia),
+	index("moa_employee_mes").on(table.employeeId, table.mesReferencia),
+]);

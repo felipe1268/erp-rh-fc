@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -191,9 +192,12 @@ export default function Obras() {
             <h1 className="text-2xl font-bold tracking-tight">Obras</h1>
             <p className="text-muted-foreground text-sm">Cadastro e gestão de obras e projetos</p>
           </div>
-          <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
-            <Plus className="h-4 w-4 mr-2" /> Nova Obra
-          </Button>
+          <div className="flex items-center gap-2">
+            <PrintActions title="Obras" />
+            <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
+              <Plus className="h-4 w-4 mr-2" /> Nova Obra
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

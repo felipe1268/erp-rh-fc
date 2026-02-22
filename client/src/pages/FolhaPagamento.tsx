@@ -11,6 +11,7 @@ import {
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import PrintActions from "@/components/PrintActions";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo, useCallback } from "react";
 import { toast } from "sonner";
@@ -67,6 +68,12 @@ export default function FolhaPagamento() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterFuncao, setFilterFuncao] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [verificacaoFilter, setVerificacaoFilter] = useState<string>("all");
+  // Vinculação manual de obra
+  const [selectedSemObra, setSelectedSemObra] = useState<Set<number>>(new Set());
+  const [vinculacaoObraId, setVinculacaoObraId] = useState<number | null>(null);
+  const [vinculacaoJustificativa, setVinculacaoJustificativa] = useState("");
+  const [showVinculacaoPanel, setShowVinculacaoPanel] = useState(false);
 
   // ===== QUERIES =====
   const statusMes = trpc.folha.statusMes.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -88,6 +95,15 @@ export default function FolhaPagamento() {
     { companyId, mesReferencia: mesAno },
     { enabled: companyId > 0 && viewMode === "horas_extras" }
   );
+  const obrasListQuery = trpc.folha.listarVinculacoesManuais.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 && viewMode === "custos_obra" }
+  );
+  // Lista de obras para o select de vinculação
+  const obrasParaSelect = useMemo(() => {
+    if (!custosPorObra.data) return [];
+    return custosPorObra.data.obrasResumo.map((o: any) => ({ id: o.obraId, nome: o.obraNome }));
+  }, [custosPorObra.data]);
 
   // ===== MUTATIONS =====
   const importarAutoMut = trpc.folha.importarFolhaAuto.useMutation({
@@ -159,6 +175,33 @@ export default function FolhaPagamento() {
   const excluirMut = trpc.folha.excluirLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento excluído!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); setViewMode("resumo"); },
   });
+
+  const vincularObraMut = trpc.folha.vincularObrasManualmente.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.vinculados} funcionário(s) vinculado(s) com sucesso!`);
+      custosPorObra.refetch();
+      obrasListQuery.refetch();
+      setSelectedSemObra(new Set());
+      setVinculacaoObraId(null);
+      setVinculacaoJustificativa("");
+      setShowVinculacaoPanel(false);
+    },
+    onError: (err) => toast.error(`Erro ao vincular: ${err.message}`),
+  });
+
+  const handleVincularObra = () => {
+    if (selectedSemObra.size === 0) return toast.error("Selecione pelo menos um funcionário");
+    if (!vinculacaoObraId) return toast.error("Selecione uma obra");
+    if (vinculacaoJustificativa.trim().length < 5) return toast.error("Justificativa deve ter pelo menos 5 caracteres");
+    vincularObraMut.mutate({
+      companyId,
+      mesReferencia: mesAno,
+      obraId: vinculacaoObraId,
+      justificativa: vinculacaoJustificativa.trim(),
+      employeeIds: Array.from(selectedSemObra),
+      atribuidoPor: user?.name || undefined,
+    });
+  };
 
   // ===== HANDLERS =====
   const handleFileSelect = useCallback(async (files: FileList | null, tipo: "vale" | "pagamento") => {
@@ -259,14 +302,17 @@ export default function FolhaPagamento() {
       <DashboardLayout>
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold">Detalhes — {viewTipo}</h1>
-              <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)} | {filteredItens.length} funcionários</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold">Detalhes — {viewTipo}</h1>
+                <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)} | {filteredItens.length} funcionários</p>
+              </div>
             </div>
+            <PrintActions title={`Folha de Pagamento - ${viewTipo} - ${formatMesAno(mesAno)}`} />
           </div>
 
           {/* Stats bar — clicável como filtro */}
@@ -451,16 +497,21 @@ export default function FolhaPagamento() {
       <DashboardLayout>
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-[#1B2A4A]" /> Custos por Obra — {viewTipo === "vale" ? "Vale" : "Pagamento"}
-              </h1>
-              <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)} | Distribuição proporcional baseada no controle de ponto</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-[#1B2A4A]" /> Custos por Obra — {viewTipo === "vale" ? "Vale" : "Pagamento"}
+                </h1>
+                <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)} | Distribuição proporcional baseada no controle de ponto</p>
+              </div>
             </div>
+            <PrintActions title={`Custos por Obra — ${viewTipo === "vale" ? "Vale" : "Pagamento"} — ${formatMesAno(mesAno)}`} showExcel onExportExcel={() => {
+              toast.info("Exportação Excel em desenvolvimento", { duration: 3000 });
+            }} />
           </div>
 
           {custosPorObra.isLoading ? (
@@ -496,12 +547,13 @@ export default function FolhaPagamento() {
 
               {/* Obra cards */}
               <div className="space-y-3">
-                {[...custosPorObra.data.obrasResumo, ...(custosPorObra.data.semObra ? [custosPorObra.data.semObra] : [])].map((obra: any) => (
-                  <Card key={obra.obraId || "sem"} className="border-l-4 border-l-[#1B2A4A]">
+                {/* Obras com funcionários */}
+                {custosPorObra.data.obrasResumo.map((obra: any) => (
+                  <Card key={obra.obraId} className="border-l-4 border-l-[#1B2A4A]">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <h3 className="font-bold text-base">{obra.obraNome || "Sem Obra Vinculada"}</h3>
+                          <h3 className="font-bold text-base">{obra.obraNome}</h3>
                           <p className="text-xs text-muted-foreground">{obra.funcionarios?.length || 0} funcionários | {(obra.totalHoras || 0).toFixed(1)}h trabalhadas | {(obra.totalHE || 0).toFixed(1)}h extras</p>
                         </div>
                         <div className="text-right">
@@ -511,13 +563,11 @@ export default function FolhaPagamento() {
                           </p>
                         </div>
                       </div>
-                      {/* Progress bar */}
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div className="bg-[#1B2A4A] h-2 rounded-full" style={{
                           width: `${Math.min(100, (parseBRLNum(obra.totalCusto) / Math.max(parseBRLNum(custosPorObra.data.totalGeral), 0.01)) * 100)}%`
                         }} />
                       </div>
-                      {/* Funcionários da obra */}
                       {obra.funcionarios && obra.funcionarios.length > 0 && (
                         <div className="mt-3 overflow-x-auto">
                           <table className="w-full text-xs">
@@ -549,6 +599,159 @@ export default function FolhaPagamento() {
                     </CardContent>
                   </Card>
                 ))}
+
+                {/* Seção Sem Obra Vinculada - com vinculação manual */}
+                {custosPorObra.data.semObra && (custosPorObra.data.semObra as any).funcionarios?.length > 0 && ((() => {
+                  const semObraData = custosPorObra.data.semObra as any;
+                  return (
+                  <Card className="border-l-4 border-l-amber-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h3 className="font-bold text-base flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-500" />
+                            Sem Obra Vinculada
+                          </h3>
+                          <p className="text-xs text-muted-foreground">{semObraData.funcionarios.length} funcionários | {(semObraData.totalHoras || 0).toFixed(1)}h trabalhadas</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {!showVinculacaoPanel && (
+                            <Button size="sm" variant="outline" className="text-amber-600 border-amber-300 hover:bg-amber-50" onClick={() => setShowVinculacaoPanel(true)}>
+                              <Briefcase className="w-3.5 h-3.5 mr-1" /> Vincular Obra
+                            </Button>
+                          )}
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-amber-600">{formatBRL(semObraData.totalCusto)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {((parseBRLNum(semObraData.totalCusto) / Math.max(parseBRLNum(custosPorObra.data.totalGeral), 0.01)) * 100).toFixed(1)}% do total
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Painel de vinculação em lote */}
+                      {showVinculacaoPanel && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-3">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                              <Briefcase className="w-4 h-4 text-amber-600" />
+                              Vincular Funcionários Selecionados a uma Obra
+                            </h4>
+                            <Button size="sm" variant="ghost" onClick={() => { setShowVinculacaoPanel(false); setSelectedSemObra(new Set()); }}>
+                              <XCircle className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground mb-1 block">Obra destino *</label>
+                              <select
+                                className="w-full border rounded-md px-3 py-2 text-sm bg-white"
+                                value={vinculacaoObraId || ""}
+                                onChange={(e) => setVinculacaoObraId(e.target.value ? parseInt(e.target.value) : null)}
+                              >
+                                <option value="">Selecione a obra...</option>
+                                {obrasParaSelect.map((o: any) => (
+                                  <option key={o.id} value={o.id}>{o.nome}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground mb-1 block">Justificativa * (min. 5 caracteres)</label>
+                              <input
+                                type="text"
+                                className="w-full border rounded-md px-3 py-2 text-sm"
+                                placeholder="Ex: Funcionário sem ponto no período..."
+                                value={vinculacaoJustificativa}
+                                onChange={(e) => setVinculacaoJustificativa(e.target.value)}
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <Button
+                                size="sm"
+                                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                                onClick={handleVincularObra}
+                                disabled={vincularObraMut.isPending || selectedSemObra.size === 0}
+                              >
+                                {vincularObraMut.isPending ? "Vinculando..." : `Vincular ${selectedSemObra.size} selecionado(s)`}
+                              </Button>
+                            </div>
+                          </div>
+                          {selectedSemObra.size === 0 && (
+                            <p className="text-xs text-amber-700 mt-2 flex items-center gap-1">
+                              <Info className="w-3 h-3" /> Marque os funcionários na tabela abaixo para vinculá-los.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Progress bar */}
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-amber-500 h-2 rounded-full" style={{
+                          width: `${Math.min(100, (parseBRLNum(semObraData.totalCusto) / Math.max(parseBRLNum(custosPorObra.data.totalGeral), 0.01)) * 100)}%`
+                        }} />
+                      </div>
+
+                      {/* Tabela com checkboxes */}
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b text-left">
+                              {showVinculacaoPanel && (
+                                <th className="pb-1 w-8">
+                                  <input
+                                    type="checkbox"
+                                    className="rounded"
+                                    checked={selectedSemObra.size === semObraData.funcionarios.length && semObraData.funcionarios.length > 0}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedSemObra(new Set(semObraData.funcionarios.map((f: any) => f.id)));
+                                      } else {
+                                        setSelectedSemObra(new Set());
+                                      }
+                                    }}
+                                  />
+                                </th>
+                              )}
+                              <th className="pb-1 font-medium">Funcionário</th>
+                              <th className="pb-1 font-medium">Função</th>
+                              <th className="pb-1 font-medium text-right">Horas Trab.</th>
+                              <th className="pb-1 font-medium text-right">Horas Extras</th>
+                              <th className="pb-1 font-medium text-right">% Aloc.</th>
+                              <th className="pb-1 font-medium text-right">Custo Alocado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {semObraData.funcionarios.map((f: any) => (
+                              <tr key={f.id} className={`border-b last:border-0 ${showVinculacaoPanel ? "cursor-pointer hover:bg-amber-50/50" : ""} ${selectedSemObra.has(f.id) ? "bg-amber-100/50" : ""}`}
+                                onClick={() => {
+                                  if (!showVinculacaoPanel) return;
+                                  setSelectedSemObra(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(f.id)) next.delete(f.id); else next.add(f.id);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                {showVinculacaoPanel && (
+                                  <td className="py-1.5 w-8">
+                                    <input type="checkbox" className="rounded" checked={selectedSemObra.has(f.id)} readOnly />
+                                  </td>
+                                )}
+                                <td className="py-1.5 font-medium">{f.nome}</td>
+                                <td className="py-1.5 text-muted-foreground">{f.funcao || "—"}</td>
+                                <td className="py-1.5 text-right">{(f.horas || 0).toFixed(1)}h</td>
+                                <td className="py-1.5 text-right">{(f.horasExtras || 0) > 0 ? <span className="text-amber-600 font-medium">{f.horasExtras.toFixed(1)}h</span> : "—"}</td>
+                                <td className="py-1.5 text-right">{f.percentual != null ? <span className="text-blue-600 font-medium">{f.percentual.toFixed(1)}%</span> : "100%"}</td>
+                                <td className="py-1.5 text-right font-bold">{formatBRL(f.custoEstimado)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  );
+                })())}
               </div>
             </>
           ) : (
@@ -568,16 +771,19 @@ export default function FolhaPagamento() {
       <DashboardLayout>
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold flex items-center gap-2">
-                <Clock className="h-5 w-5 text-amber-600" /> Horas Extras — {formatMesAno(mesAno)}
-              </h1>
-              <p className="text-sm text-muted-foreground">Análise detalhada de horas extras por funcionário e por obra</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-amber-600" /> Horas Extras — {formatMesAno(mesAno)}
+                </h1>
+                <p className="text-sm text-muted-foreground">Análise detalhada de horas extras por funcionário e por obra</p>
+              </div>
             </div>
+            <PrintActions title={`Horas Extras - ${formatMesAno(mesAno)}`} showExcel onExportExcel={() => toast.info("Exportação Excel em desenvolvimento", { duration: 3000 })} />
           </div>
 
           {horasExtras.isLoading ? (
@@ -675,44 +881,48 @@ export default function FolhaPagamento() {
       <DashboardLayout>
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-green-700" /> Verificação Cruzada — Folha × Ponto × Cadastro
-              </h1>
-              <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-green-700" /> Verificação Cruzada — Folha × Ponto × Cadastro
+                </h1>
+                <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)}</p>
+              </div>
             </div>
+            <PrintActions title={`Verificação Cruzada - ${formatMesAno(mesAno)}`} />
           </div>
 
           {verificacao.isLoading ? (
             <div className="text-center py-12 text-muted-foreground">Processando verificação cruzada...</div>
           ) : verificacao.data ? (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-blue-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-blue-700">{verificacao.data.totalItens}</p>
-                  <p className="text-xs text-muted-foreground">Total na Folha</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-green-700">{verificacao.data.totalItens - verificacao.data.totalAlertas}</p>
-                  <p className="text-xs text-muted-foreground">OK</p>
-                </div>
-                <div className={`rounded-lg p-3 text-center ${verificacao.data.totalAlertas > 0 ? "bg-red-50" : "bg-green-50"}`}>
-                  <p className={`text-xl font-bold ${verificacao.data.totalAlertas > 0 ? "text-red-600" : "text-green-600"}`}>
-                    {verificacao.data.totalAlertas}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Com Alertas</p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-purple-700">
-                    {verificacao.data.verificacoes.filter((v: any) => v.ponto).length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Com Ponto</p>
-                </div>
-              </div>
+              {(() => {
+                const comPonto = verificacao.data.verificacoes.filter((v: any) => v.ponto).length;
+                const semPonto = verificacao.data.verificacoes.filter((v: any) => !v.ponto).length;
+                const ok = verificacao.data.totalItens - verificacao.data.totalAlertas;
+                const cards = [
+                  { key: "all", label: "Total na Folha", value: verificacao.data.totalItens, bg: "bg-blue-50", bgActive: "bg-blue-200 ring-2 ring-blue-500", text: "text-blue-700" },
+                  { key: "ok", label: "OK", value: ok, bg: "bg-green-50", bgActive: "bg-green-200 ring-2 ring-green-500", text: "text-green-700" },
+                  { key: "alertas", label: "Com Alertas", value: verificacao.data.totalAlertas, bg: verificacao.data.totalAlertas > 0 ? "bg-red-50" : "bg-green-50", bgActive: "bg-red-200 ring-2 ring-red-500", text: verificacao.data.totalAlertas > 0 ? "text-red-600" : "text-green-600" },
+                  { key: "comPonto", label: "Com Ponto", value: comPonto, bg: "bg-purple-50", bgActive: "bg-purple-200 ring-2 ring-purple-500", text: "text-purple-700" },
+                  { key: "semPonto", label: "Sem Ponto", value: semPonto, bg: "bg-gray-50", bgActive: "bg-gray-300 ring-2 ring-gray-500", text: "text-gray-700" },
+                ];
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    {cards.map(c => (
+                      <button key={c.key} onClick={() => setVerificacaoFilter(verificacaoFilter === c.key ? "all" : c.key)}
+                        className={`rounded-lg p-3 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-md border-0 ${verificacaoFilter === c.key && c.key !== "all" ? c.bgActive : c.bg}`}>
+                        <p className={`text-xl font-bold ${c.text}`}>{c.value}</p>
+                        <p className="text-xs text-muted-foreground font-medium">{c.label}</p>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
 
               <Card>
                 <CardContent className="p-0">
@@ -732,7 +942,14 @@ export default function FolhaPagamento() {
                         </tr>
                       </thead>
                       <tbody>
-                        {verificacao.data.verificacoes.map((v: any) => (
+                        {verificacao.data.verificacoes.filter((v: any) => {
+                          if (verificacaoFilter === "all") return true;
+                          if (verificacaoFilter === "ok") return v.alertas.length === 0;
+                          if (verificacaoFilter === "alertas") return v.alertas.length > 0;
+                          if (verificacaoFilter === "comPonto") return !!v.ponto;
+                          if (verificacaoFilter === "semPonto") return !v.ponto;
+                          return true;
+                        }).map((v: any) => (
                           <tr key={v.id} className={`border-b last:border-0 hover:bg-muted/30 ${v.alertas.length > 0 ? "bg-red-50/30" : ""}`}>
                             <td className="p-2.5 font-mono text-xs">{v.codigo || "—"}</td>
                             <td className="p-2.5 font-medium">{v.nome}</td>
@@ -786,10 +1003,11 @@ export default function FolhaPagamento() {
             <h1 className="text-2xl font-bold tracking-tight">Folha de Pagamento</h1>
             <p className="text-muted-foreground text-sm">Importação e verificação da folha da contabilidade</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <Button size="sm" variant="outline" onClick={() => openView("horas_extras")}>
               <Clock className="h-4 w-4 mr-1" /> Horas Extras
             </Button>
+            <PrintActions title={`Folha de Pagamento - ${formatMesAno(mesAno)}`} />
           </div>
         </div>
 

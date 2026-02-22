@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,7 +34,7 @@ const now = new Date();
             <p className="text-muted-foreground text-sm">Gestão de vale alimentação e refeição - IFood Benefícios</p>
           </div>
           <div className="flex items-center gap-3">
-            
+            <PrintActions title="Vale Alimentação" />
           </div>
         </div>
 

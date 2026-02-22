@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -454,7 +455,7 @@ export default function Colaboradores() {
             <p className="text-muted-foreground text-sm mt-1">Cadastro e gestão de colaboradores</p>
           </div>
           <div className="flex items-center gap-3">
-
+            <PrintActions title="Colaboradores" />
             <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!companyId} className="gap-2">
               <Upload className="h-4 w-4" /> Importar Excel
             </Button>

@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -117,7 +118,8 @@ export default function Usuarios() {
             <p className="text-muted-foreground text-sm mt-1">Gerencie perfis de acesso por empresa</p>
           </div>
           <div className="flex items-center gap-3">
-<Button onClick={() => { setSelectedUserId(""); setSelectedProfileType(""); setCreateDialogOpen(true); }} disabled={!companyId} className="gap-2">
+            <PrintActions title="Usuários e Permissões" />
+            <Button onClick={() => { setSelectedUserId(""); setSelectedProfileType(""); setCreateDialogOpen(true); }} disabled={!companyId} className="gap-2">
               <Plus className="h-4 w-4" /> Novo Perfil
             </Button>
           </div>

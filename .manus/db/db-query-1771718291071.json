@@ -1,0 +1,32 @@
+{
+  "query": "SHOW CREATE TABLE advances;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW CREATE TABLE advances;",
+  "rows": [
+    {
+      "Table": "advances",
+      "Create Table": "CREATE TABLE `advances` ("
+    }
+  ],
+  "messages": [
+    "  `id` int NOT NULL AUTO_INCREMENT,",
+    "  `companyId` int NOT NULL,",
+    "  `employeeId` int NOT NULL,",
+    "  `mesReferencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `valorAdiantamento` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `valorLiquido` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `descontoIR` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `bancoDestino` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `diasFaltas` int DEFAULT '0',",
+    "  `aprovado` enum('Pendente','Aprovado','Reprovado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Pendente',",
+    "  `motivoReprovacao` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `dataPagamento` date DEFAULT NULL,",
+    "  `observacoes` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=30001"
+  ],
+  "stdout": "Table\tCreate Table\nadvances\tCREATE TABLE `advances` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `companyId` int NOT NULL,\n  `employeeId` int NOT NULL,\n  `mesReferencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `valorAdiantamento` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `valorLiquido` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `descontoIR` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `bancoDestino` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `diasFaltas` int DEFAULT '0',\n  `aprovado` enum('Pendente','Aprovado','Reprovado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Pendente',\n  `motivoReprovacao` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `dataPagamento` date DEFAULT NULL,\n  `observacoes` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=30001\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}

@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
-  timeRecords, pontoConsolidacao, obras
+  timeRecords, pontoConsolidacao, obras, manualObraAssignments
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -638,47 +638,57 @@ export const folhaPagamentoRouter = router({
       };
 
       function detectMesReferencia(text: string, fileName: string): string | null {
-        // 1. Procurar "Adiantamento em: DD/MM/YYYY" ou "DD/MM/YYYY Adiantamento em:"
+        const headerText = text.substring(0, 1500);
+
+        // 1. PRIORIDADE MÁXIMA: "referente ao mês de JANEIRO/2026" (espelho folha mensal)
+        //    Também captura: "mês de JANEIRO/2026", "mes de JANEIRO 2026"
+        for (const [mesNome, mesNum] of Object.entries(mesesNome)) {
+          const regex = new RegExp(`(?:referente\\s+ao\\s+)?m[eê]s\\s+de\\s+${mesNome}[\\s/]*(20\\d{2})`, "i");
+          const match = headerText.match(regex);
+          if (match) return `${match[1]}-${mesNum}`;
+        }
+
+        // 2. "Adiantamento em: DD/MM/YYYY" ou "DD/MM/YYYY Adiantamento em:" (vale)
         const adiantMatch = text.match(/(\d{2})\/(\d{2})\/(\d{4})\s*(?:Adiantamento|Pagamento|Folha)\s*em/i)
           || text.match(/(?:Adiantamento|Pagamento|Folha)\s*em:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
         if (adiantMatch) {
-          // Formato: DD/MM/YYYY
           const groups = adiantMatch;
           if (groups[3] && groups[3].length === 4) {
-            // DD/MM/YYYY ... em
-            return `${groups[3]}-${groups[2]}`;
-          } else if (groups[1] && groups[2] && groups[3]) {
             return `${groups[3]}-${groups[2]}`;
           }
         }
 
-        // 2. Procurar "Competência: MM/YYYY" ou "Referência: MM/YYYY"
-        const compMatch = text.match(/(?:Competência|Competencia|Referência|Referencia)[:\s]*(\d{2})\/(\d{4})/i);
+        // 3. "Competência: MM/YYYY" ou "Referência: MM/YYYY"
+        const compMatch = headerText.match(/(?:Competência|Competencia|Referência|Referencia)[:\s]*(\d{2})\/(\d{4})/i);
         if (compMatch) return `${compMatch[2]}-${compMatch[1]}`;
 
-        // 3. Procurar data DD/MM/YYYY no início do texto (primeiras 500 chars)
-        const headerText = text.substring(0, 500);
-        const dateMatch = headerText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if (dateMatch) return `${dateMatch[3]}-${dateMatch[2]}`;
-
-        // 4. Procurar nome do mês no nome do arquivo (ex: "AdiantamentoJaneiro")
+        // 4. Nome do mês no nome do arquivo (ex: "FolhaJaneiro2026.pdf")
         const fileNameLower = fileName.toLowerCase();
         for (const [mesNome, mesNum] of Object.entries(mesesNome)) {
           if (fileNameLower.includes(mesNome)) {
-            // Tentar encontrar o ano no nome do arquivo
             const yearMatch = fileName.match(/(20\d{2})/);
             const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
             return `${year}-${mesNum}`;
           }
         }
 
-        // 5. Procurar nome do mês no conteúdo (primeiras 1000 chars)
-        const contentStart = text.substring(0, 1000).toLowerCase();
+        // 5. Nome do mês no conteúdo do cabeçalho (primeiras 1500 chars)
+        //    Só aceita se estiver próximo de um ano (NOME_MES/ANO ou NOME_MES ANO)
+        const headerLower = headerText.toLowerCase();
         for (const [mesNome, mesNum] of Object.entries(mesesNome)) {
-          if (contentStart.includes(mesNome)) {
-            const yearMatch = text.substring(0, 1000).match(/(20\d{2})/);
-            const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
-            return `${year}-${mesNum}`;
+          const regex = new RegExp(`${mesNome}[\\s/]*(20\\d{2})`, "i");
+          const match = headerLower.match(regex);
+          if (match) return `${match[1]}-${mesNum}`;
+        }
+
+        // 6. ÚLTIMO RECURSO: data DD/MM/YYYY no cabeçalho que NÃO seja "Admissão em"
+        //    Ignora datas que estejam logo após "Admissão em" ou "admissao em"
+        const lines = headerText.split("\n");
+        for (const line of lines.slice(0, 5)) { // Só primeiras 5 linhas
+          if (/admiss[aã]o/i.test(line)) continue; // Pular linhas com "Admissão"
+          const dateMatch = line.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+          if (dateMatch && parseInt(dateMatch[3]) >= 2024) {
+            return `${dateMatch[3]}-${dateMatch[2]}`;
           }
         }
 
@@ -1661,5 +1671,64 @@ export const folhaPagamentoRouter = router({
       }
 
       return meses;
+    }),
+
+  // ============================================================
+  // VINCULAÇÃO MANUAL DE OBRA
+  // ============================================================
+  listarVinculacoesManuais: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const vinculacoes = await db!.select()
+        .from(manualObraAssignments)
+        .where(and(
+          eq(manualObraAssignments.companyId, input.companyId),
+          eq(manualObraAssignments.mesReferencia, input.mesReferencia)
+        ));
+      return vinculacoes;
+    }),
+
+  vincularObrasManualmente: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      obraId: z.number(),
+      justificativa: z.string().min(5, "Justificativa deve ter pelo menos 5 caracteres"),
+      employeeIds: z.array(z.number()).min(1),
+      atribuidoPor: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Remover vinculações anteriores desses funcionários neste mês
+      for (const empId of input.employeeIds) {
+        await db!.delete(manualObraAssignments).where(and(
+          eq(manualObraAssignments.companyId, input.companyId),
+          eq(manualObraAssignments.employeeId, empId),
+          eq(manualObraAssignments.mesReferencia, input.mesReferencia)
+        ));
+      }
+      // Inserir novas vinculações
+      const rows = input.employeeIds.map(empId => ({
+        companyId: input.companyId,
+        employeeId: empId,
+        obraId: input.obraId,
+        mesReferencia: input.mesReferencia,
+        justificativa: input.justificativa,
+        percentual: 100,
+        atribuidoPor: input.atribuidoPor || null,
+      }));
+      if (rows.length > 0) {
+        await db!.insert(manualObraAssignments).values(rows);
+      }
+      return { vinculados: rows.length };
+    }),
+
+  removerVinculacaoManual: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db!.delete(manualObraAssignments).where(eq(manualObraAssignments.id, input.id));
+      return { ok: true };
     }),
 });

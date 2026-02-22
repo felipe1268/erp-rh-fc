@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `manual_obra_assignments` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `companyId` int NOT NULL,\n  `employeeId` int NOT NULL,\n  `obraId` int NOT NULL,\n  `mesReferencia` varchar(7) NOT NULL,\n  `justificativa` text NOT NULL,\n  `percentual` int NOT NULL DEFAULT 100,\n  `atribuidoPor` varchar(255) DEFAULT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`),\n  INDEX `moa_company_mes` (`companyId`, `mesReferencia`),\n  INDEX `moa_employee_mes` (`employeeId`, `mesReferencia`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `manual_obra_assignments` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `companyId` int NOT NULL,\n  `employeeId` int NOT NULL,\n  `obraId` int NOT NULL,\n  `mesReferencia` varchar(7) NOT NULL,\n  `justificativa` text NOT NULL,\n  `percentual` int NOT NULL DEFAULT 100,\n  `atribuidoPor` varchar(255) DEFAULT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`),\n  INDEX `moa_company_mes` (`companyId`, `mesReferencia`),\n  INDEX `moa_employee_mes` (`employeeId`, `mesReferencia`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 112
+}

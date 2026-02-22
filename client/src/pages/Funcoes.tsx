@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -68,7 +69,7 @@ const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: !!com
             <p className="text-muted-foreground text-sm">Cadastro e gestão de funções/cargos</p>
           </div>
           <div className="flex items-center gap-3">
-            
+            <PrintActions title="Funções" />
             <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
               <Plus className="h-4 w-4 mr-2" /> Nova Função
             </Button>

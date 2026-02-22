@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintActions from "@/components/PrintActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -161,9 +162,12 @@ export default function Empresas() {
             <h1 className="text-2xl font-bold tracking-tight">Empresas</h1>
             <p className="text-muted-foreground text-sm mt-1">Gerencie as empresas do grupo</p>
           </div>
-          <Button onClick={openNew} className="gap-2">
-            <Plus className="h-4 w-4" /> Nova Empresa
-          </Button>
+          <div className="flex items-center gap-2">
+            <PrintActions title="Empresas" />
+            <Button onClick={openNew} className="gap-2">
+              <Plus className="h-4 w-4" /> Nova Empresa
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
