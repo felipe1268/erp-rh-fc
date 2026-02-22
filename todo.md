@@ -1584,6 +1584,9 @@
 - [x] Trim no backend para evitar espaços acidentais
 - [x] Atualizar Rev. 59 → Rev. 60
 
-## Rev. 60 - Redesign Abas Raio-X
-- [ ] Redesenhar layout das abas do Raio-X do Funcionário (amontoadas/ilegíveis com 17 abas)
-- [ ] Implementar layout organizado e profissional para as abas
+## Rev. 61 - Redesign Abas Raio-X
+- [x] Redesenhar layout das abas do Raio-X do Funcionário (amontoadas/ilegíveis com 17 abas)
+- [x] Implementar layout organizado em grid 2x2 com 4 categorias: Geral, SST, Financeiro, Disciplinar/Saída
+- [x] Labels coloridos por categoria com bordas temáticas
+- [x] Todas as 17 abas acessíveis e funcionais
+- [x] Atualizar Rev. 60 → Rev. 61

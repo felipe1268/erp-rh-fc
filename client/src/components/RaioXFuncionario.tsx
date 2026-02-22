@@ -512,36 +512,105 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
               </div>
             )}
 
-            {/* ABAS */}
+            {/* ABAS - Agrupadas por Categoria */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-muted/50 p-1.5 rounded-lg">
-                {[
-                  { value: "timeline", label: "Timeline", icon: History, count: timeline.length, activeClass: "bg-indigo-100 text-indigo-800" },
-                  { value: "asos", label: "ASOs", icon: Stethoscope, count: asos.length, activeClass: "bg-blue-100 text-blue-800" },
-                  { value: "trein", label: "Treinamentos", icon: GraduationCap, count: treinamentos.length, activeClass: "bg-emerald-100 text-emerald-800" },
-                  { value: "atest", label: "Atestados", icon: ClipboardList, count: atestados.length, activeClass: "bg-purple-100 text-purple-800" },
-                  { value: "adv", label: "Advertências", icon: ShieldAlert, count: advertencias.length, activeClass: "bg-orange-100 text-orange-800" },
-                  { value: "ponto", label: "Ponto", icon: Clock, count: pontoResumo.length, activeClass: "bg-cyan-100 text-cyan-800" },
-                  { value: "folha", label: "Folha", icon: DollarSign, count: folhaPagamento.length, activeClass: "bg-indigo-100 text-indigo-800" },
-                  { value: "he", label: "Horas Extras", icon: Zap, count: horasExtras.length, activeClass: "bg-orange-100 text-orange-800" },
-                  { value: "epis", label: "EPIs", icon: HardHat, count: episEntregas.length, activeClass: "bg-teal-100 text-teal-800" },
-                  { value: "acidentes", label: "Acidentes", icon: AlertTriangle, count: acidentes.length, activeClass: "bg-red-100 text-red-800" },
-                  { value: "processos", label: "Processos", icon: Scale, count: processos.length, activeClass: "bg-red-100 text-red-800" },
-                  { value: "historico", label: "Hist. Funcional", icon: TrendingUp, count: historicoFuncional.length, activeClass: "bg-green-100 text-green-800" },
-                  { value: "funcao", label: "Função/OS", icon: FileText, count: funcaoDetalhes ? 1 : 0, activeClass: "bg-blue-100 text-blue-800" },
-                  { value: "aviso", label: "Aviso Prévio", icon: AlertTriangle, count: avisosPrevios.length, activeClass: "bg-orange-100 text-orange-800" },
-                  { value: "ferias", label: "Férias", icon: Palmtree, count: ferias.length, activeClass: "bg-cyan-100 text-cyan-800" },
-                  { value: "cipa", label: "CIPA", icon: Shield, count: cipa.length, activeClass: "bg-green-100 text-green-800" },
-                  { value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length, activeClass: "bg-purple-100 text-purple-800" },
-                ].map(tab => {
-                  const Icon = tab.icon;
-                  return (
-                    <TabsTrigger key={tab.value} value={tab.value} className={`gap-1 text-xs font-medium data-[state=active]:${tab.activeClass} flex-1 min-w-[90px]`}>
-                      <Icon className="h-3.5 w-3.5" /> {tab.label} ({tab.count})
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
+              {(() => {
+                const tabGroups = [
+                  {
+                    label: "Geral",
+                    color: "indigo",
+                    tabs: [
+                      { value: "timeline", label: "Timeline", icon: History, count: timeline.length },
+                      { value: "historico", label: "Hist. Funcional", icon: TrendingUp, count: historicoFuncional.length },
+                      { value: "funcao", label: "Função/OS", icon: FileText, count: funcaoDetalhes ? 1 : 0 },
+                    ],
+                  },
+                  {
+                    label: "SST",
+                    color: "blue",
+                    tabs: [
+                      { value: "asos", label: "ASOs", icon: Stethoscope, count: asos.length },
+                      { value: "trein", label: "Treinamentos", icon: GraduationCap, count: treinamentos.length },
+                      { value: "epis", label: "EPIs", icon: HardHat, count: episEntregas.length },
+                      { value: "acidentes", label: "Acidentes", icon: AlertTriangle, count: acidentes.length },
+                      { value: "cipa", label: "CIPA", icon: Shield, count: cipa.length },
+                    ],
+                  },
+                  {
+                    label: "Financeiro",
+                    color: "emerald",
+                    tabs: [
+                      { value: "ponto", label: "Ponto", icon: Clock, count: pontoResumo.length },
+                      { value: "folha", label: "Folha", icon: DollarSign, count: folhaPagamento.length },
+                      { value: "he", label: "Horas Extras", icon: Zap, count: horasExtras.length },
+                      { value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length },
+                    ],
+                  },
+                  {
+                    label: "Disciplinar / Saída",
+                    color: "red",
+                    tabs: [
+                      { value: "atest", label: "Atestados", icon: ClipboardList, count: atestados.length },
+                      { value: "adv", label: "Advertências", icon: ShieldAlert, count: advertencias.length },
+                      { value: "processos", label: "Processos", icon: Scale, count: processos.length },
+                      { value: "aviso", label: "Aviso Prévio", icon: AlertTriangle, count: avisosPrevios.length },
+                      { value: "ferias", label: "Férias", icon: Palmtree, count: ferias.length },
+                    ],
+                  },
+                ];
+
+                const activeColorMap: Record<string, string> = {
+                  indigo: "bg-indigo-600 text-white shadow-sm",
+                  blue: "bg-blue-600 text-white shadow-sm",
+                  emerald: "bg-emerald-600 text-white shadow-sm",
+                  red: "bg-red-600 text-white shadow-sm",
+                };
+                const labelColorMap: Record<string, string> = {
+                  indigo: "text-indigo-700 border-indigo-300",
+                  blue: "text-blue-700 border-blue-300",
+                  emerald: "text-emerald-700 border-emerald-300",
+                  red: "text-red-700 border-red-300",
+                };
+
+                return (
+                  <div className="bg-gray-50 rounded-xl border border-gray-200 p-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                      {tabGroups.map((group) => (
+                        <div key={group.label}>
+                          <div className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 pb-1 border-b ${labelColorMap[group.color]}`}>
+                            {group.label}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {group.tabs.map((tab) => {
+                              const Icon = tab.icon;
+                              const isActive = activeTab === tab.value;
+                              return (
+                                <button
+                                  key={tab.value}
+                                  onClick={() => setActiveTab(tab.value)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all whitespace-nowrap ${
+                                    isActive
+                                      ? activeColorMap[group.color]
+                                      : "bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 hover:bg-gray-100"
+                                  }`}
+                                >
+                                  <Icon className="h-3 w-3 shrink-0" />
+                                  <span>{tab.label}</span>
+                                  {tab.count > 0 && (
+                                    <span className={`ml-0.5 px-1 py-0 rounded-full text-[9px] font-bold leading-tight ${
+                                      isActive ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
+                                    }`}>{tab.count}</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ============ TIMELINE ============ */}
               <TabsContent value="timeline" className="mt-4">
