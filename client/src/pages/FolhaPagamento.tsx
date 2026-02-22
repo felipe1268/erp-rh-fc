@@ -48,7 +48,8 @@ type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verifi
 export default function FolhaPagamento() {
   const { selectedCompanyId } = useCompany();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "admin_master";
+  const isMaster = user?.role === "admin_master";
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -1802,17 +1803,7 @@ export default function FolhaPagamento() {
         )}
 
         {/* ===== DIALOG DE INCONSISTÊNCIAS COM ANÁLISE IA ===== */}
-        <Dialog open={showInconsistDialog} onOpenChange={setShowInconsistDialog}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-700">
-                <AlertTriangle className="h-5 w-5" />
-                Consolidação Bloqueada
-              </DialogTitle>
-              <DialogDescription className="text-sm">
-                O sistema identificou inconsistências que precisam ser resolvidas antes da consolidação.
-              </DialogDescription>
-            </DialogHeader>
+        <FullScreenDialog open={showInconsistDialog} onClose={() => setShowInconsistDialog(false)} title="Consolidação Bloqueada" subtitle="O sistema identificou inconsistências que precisam ser resolvidas antes da consolidação." icon={<AlertTriangle className="h-5 w-5 text-white" />}>
             
             {inconsistDialogData && (() => {
               const msg = inconsistDialogData.message;
@@ -1941,7 +1932,8 @@ export default function FolhaPagamento() {
                     </div>
                   </div>
 
-                  {/* DICA EXTRA */}
+                  {/* DICA EXTRA - Apenas para Admin Master */}
+                  {isMaster && (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex items-start gap-2">
                       <Wrench className="h-4 w-4 text-gray-500 mt-0.5 shrink-0" />
@@ -1953,18 +1945,18 @@ export default function FolhaPagamento() {
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               );
             })()}
 
-            <DialogFooter className="gap-2">
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowInconsistDialog(false)}>Fechar</Button>
               <Button onClick={() => { setShowInconsistDialog(false); setViewMode("detalhes"); }}>
                 <Eye className="h-4 w-4 mr-1" /> Ver Detalhes
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+        </FullScreenDialog>
       </div>
     </DashboardLayout>
   );

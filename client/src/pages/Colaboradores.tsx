@@ -105,6 +105,8 @@ export default function Colaboradores() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [blacklistAlert, setBlacklistAlert] = useState<string | null>(null);
   const [cpfDuplicateAlert, setCpfDuplicateAlert] = useState<string | null>(null);
+  const [desligamentoDialogOpen, setDesligamentoDialogOpen] = useState(false);
+  const [previousStatus, setPreviousStatus] = useState<string>("");
 
   // Seleção múltipla
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -1008,7 +1010,15 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Status</Label>
-                  <Select value={form.status ?? "Ativo"} onValueChange={v => set("status", v)}>
+                  <Select value={form.status ?? "Ativo"} onValueChange={v => {
+                    if (v === "Desligado" && (form.status || "Ativo") !== "Desligado") {
+                      setPreviousStatus(form.status || "Ativo");
+                      set("status", v);
+                      setDesligamentoDialogOpen(true);
+                    } else {
+                      set("status", v);
+                    }
+                  }}>
                     <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {EMPLOYEE_STATUS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
@@ -1458,6 +1468,74 @@ export default function Colaboradores() {
             />
           </div>
 
+          {/* Bloco de Desligamento (visível quando status = Desligado) */}
+          {form.status === "Desligado" && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <h3 className="text-sm font-bold text-red-800 mb-3 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> Dados do Desligamento
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-xs font-medium text-red-700">Categoria do Desligamento *</Label>
+                  <Select value={form.categoriaDesligamento || "none"} onValueChange={v => set("categoriaDesligamento", v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-white mt-1 border-red-300"><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione...</SelectItem>
+                      <SelectItem value="Término de contrato">Término de contrato</SelectItem>
+                      <SelectItem value="Justa causa">Justa causa</SelectItem>
+                      <SelectItem value="Pedido de demissão">Pedido de demissão</SelectItem>
+                      <SelectItem value="Acordo mútuo">Acordo mútuo</SelectItem>
+                      <SelectItem value="Fim de obra">Fim de obra</SelectItem>
+                      <SelectItem value="Baixo desempenho">Baixo desempenho</SelectItem>
+                      <SelectItem value="Indisciplina">Indisciplina</SelectItem>
+                      <SelectItem value="Outros">Outros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-red-700">Data Efetiva do Desligamento *</Label>
+                  <Input type="date" value={form.dataDesligamentoEfetiva ?? new Date().toISOString().split("T")[0]} onChange={e => set("dataDesligamentoEfetiva", e.target.value)} className="bg-white mt-1 border-red-300" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-red-700">Data Demissão (Registro)</Label>
+                  <Input type="date" value={form.dataDemissao ?? new Date().toISOString().split("T")[0]} onChange={e => set("dataDemissao", e.target.value)} className="bg-white mt-1 border-red-300" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <Label className="text-xs font-medium text-red-700">Motivo Detalhado do Desligamento *</Label>
+                <textarea
+                  value={form.motivoDesligamento ?? ""}
+                  onChange={e => set("motivoDesligamento", e.target.value)}
+                  rows={3}
+                  placeholder="Descreva o motivo pelo qual o funcionário está sendo desligado..."
+                  className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 mt-1"
+                />
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <Checkbox
+                  id="listaNegra"
+                  checked={form.listaNegra === "1"}
+                  onCheckedChange={(checked) => set("listaNegra", checked ? "1" : "0")}
+                />
+                <Label htmlFor="listaNegra" className="text-xs font-medium text-red-700 cursor-pointer">
+                  Incluir na Lista Negra (não recontratar)
+                </Label>
+              </div>
+              {form.listaNegra === "1" && (
+                <div className="mt-2">
+                  <Label className="text-xs font-medium text-red-700">Motivo da Lista Negra *</Label>
+                  <textarea
+                    value={form.motivoListaNegra ?? ""}
+                    onChange={e => set("motivoListaNegra", e.target.value)}
+                    rows={2}
+                    placeholder="Descreva por que este funcionário não poderá ser recontratado..."
+                    className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 mt-1"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button
@@ -1468,6 +1546,36 @@ export default function Colaboradores() {
             </Button>
           </div>
       </FullScreenDialog>
+
+      {/* DIALOG DE CONFIRMAÇÃO DE DESLIGAMENTO */}
+      <AlertDialog open={desligamentoDialogOpen} onOpenChange={setDesligamentoDialogOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="h-5 w-5" /> Confirmar Desligamento
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              Você está alterando o status deste colaborador para <strong className="text-red-700">Desligado</strong>.
+              <br /><br />
+              Preencha os campos obrigatórios de desligamento (categoria, data e motivo) que aparecerão no formulário abaixo e clique em <strong>Salvar</strong>.
+              <br /><br />
+              <span className="text-xs text-muted-foreground">Esta ação será registrada na auditoria do sistema.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              set("status", previousStatus);
+              setDesligamentoDialogOpen(false);
+            }}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => setDesligamentoDialogOpen(false)}
+            >
+              Preencher Dados de Desligamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ============================================================ */}
       {/* VIEW DIALOG - FICHA DO COLABORADOR */}

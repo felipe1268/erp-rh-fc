@@ -750,7 +750,7 @@ export const users = mysqlTable("users", {
 	name: text(),
 	email: varchar({ length: 320 }),
 	loginMethod: varchar({ length: 64 }),
-	role: mysqlEnum(['user','admin']).default('user').notNull(),
+	role: mysqlEnum(['user','admin','admin_master']).default('user').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	lastSignedIn: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),

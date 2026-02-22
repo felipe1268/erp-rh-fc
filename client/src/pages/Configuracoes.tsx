@@ -60,7 +60,7 @@ export default function Configuracoes() {
   const [newUsername, setNewUsername] = useState("");
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<"user" | "admin">("user");
+  const [newRole, setNewRole] = useState<"user" | "admin" | "admin_master">("user");
   const [newPassword, setNewPassword] = useState("");
 
   // Troca de senha
@@ -511,8 +511,8 @@ export default function Configuracoes() {
                             </span>
                           </td>
                           <td className="py-2 pr-4">
-                            <span className={`px-2 py-0.5 rounded text-xs ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
-                              {u.role === "admin" ? "Admin" : "Usuário"}
+                            <span className={`px-2 py-0.5 rounded text-xs ${u.role === "admin_master" ? "bg-purple-100 text-purple-700" : u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
+                              {u.role === "admin_master" ? "Admin Master" : u.role === "admin" ? "Admin" : "Usuário"}
                             </span>
                           </td>
                           <td className="py-2 pr-4 text-gray-500">
@@ -614,9 +614,10 @@ export default function Configuracoes() {
               </div>
               <div>
                 <label className="text-sm font-medium">Perfil</label>
-                <select className="w-full border rounded px-3 py-2 text-sm" value={newRole} onChange={e => setNewRole(e.target.value as "user" | "admin")}>
+                <select className="w-full border rounded px-3 py-2 text-sm" value={newRole} onChange={e => setNewRole(e.target.value as "user" | "admin" | "admin_master")}>
                   <option value="user">Usuário</option>
                   <option value="admin">Administrador</option>
+                  <option value="admin_master">Admin Master</option>
                 </select>
               </div>
             </div>

@@ -39,7 +39,8 @@ function formatMesAno(mesAno: string): string {
 export default function FechamentoPonto() {
   const { selectedCompanyId } = useCompany();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "admin_master";
+  const isMaster = user?.role === "admin_master";
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -76,6 +77,7 @@ export default function FechamentoPonto() {
   const [expandedInconsistency, setExpandedInconsistency] = useState<number | null>(null);
   const [incFilterType, setIncFilterType] = useState<string>("all");
   const [incFilterStatus, setIncFilterStatus] = useState<string>("pendente");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // ===== QUERIES =====
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -210,8 +212,16 @@ export default function FechamentoPonto() {
       const conflitosEmpIds = new Set((conflitos.data || []).map((c: any) => c.employeeId));
       data = data.filter((e: any) => conflitosEmpIds.has(e.employeeId));
     }
+    // Filtro de status (Conforme / Com Problema)
+    if (statusFilter === "conforme") {
+      const conflitosEmpIds = new Set((conflitos.data || []).map((c: any) => c.employeeId));
+      data = data.filter((e: any) => !conflitosEmpIds.has(e.employeeId) && !e.multiplasObras);
+    } else if (statusFilter === "problema") {
+      const conflitosEmpIds = new Set((conflitos.data || []).map((c: any) => c.employeeId));
+      data = data.filter((e: any) => conflitosEmpIds.has(e.employeeId) || e.multiplasObras);
+    }
     return data;
-  }, [summary.data, searchTerm, filterObra, cardFilter, conflitos.data]);
+  }, [summary.data, searchTerm, filterObra, cardFilter, conflitos.data, statusFilter]);
 
   // ===== HANDLERS =====
   const handleFilesSelected = async (files: File[]) => {
@@ -791,12 +801,23 @@ export default function FechamentoPonto() {
                               </SelectContent>
                             </Select>
                           </div>
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                              <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Todos os Status" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Todos os Status</SelectItem>
+                                <SelectItem value="conforme">Conforme (OK)</SelectItem>
+                                <SelectItem value="problema">Com Problema</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                           <div className="relative">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8 w-48 h-9" />
                           </div>
-                          {(cardFilter || filterObra !== "all") && (
-                            <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCardFilter(null); setFilterObra("all"); setSearchTerm(""); }}>
+                          {(cardFilter || filterObra !== "all" || statusFilter !== "all") && (
+                            <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCardFilter(null); setFilterObra("all"); setSearchTerm(""); setStatusFilter("all"); }}>
                               <XCircle className="h-3.5 w-3.5 mr-1" /> Limpar
                             </Button>
                           )}

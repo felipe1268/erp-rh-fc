@@ -206,6 +206,7 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
+  const { selectedCompany } = useCompany();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -291,9 +292,13 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png" alt="FC" className="h-8 object-contain" />
+                  {selectedCompany?.logoUrl ? (
+                    <img src={selectedCompany.logoUrl} alt={selectedCompany.nomeFantasia || selectedCompany.razaoSocial} className="h-8 object-contain" />
+                  ) : (
+                    <Building2 className="h-6 w-6 text-sidebar-foreground/70 shrink-0" />
+                  )}
                   <span className="font-bold tracking-tight truncate text-[#D4A843] text-sm uppercase">
-                    FC Engenharia
+                    {selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "ERP RH & DP"}
                   </span>
                 </div>
               ) : null}

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { formatCPF, formatMoeda } from "@/lib/formatters";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useCompany } from "@/contexts/CompanyContext";
 import {
   User, Stethoscope, GraduationCap, ClipboardList, ShieldAlert,
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
@@ -94,6 +95,7 @@ interface RaioXProps {
 
 export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXProps) {
   const { user } = useAuth();
+  const { selectedCompany } = useCompany();
   const [activeTab, setActiveTab] = useState("timeline");
   const { data: raioX, isLoading } = trpc.docs.raioX.useQuery(
     { employeeId: employeeId! },
@@ -146,12 +148,18 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const css = `@page{size:A4 portrait;margin:12mm 15mm 20mm 15mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4;padding-bottom:40px}.header{background:#1e40af;color:white;padding:16px 20px;border-radius:6px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}.header h1{font-size:18px;margin-bottom:2px}.header-right{text-align:right;font-size:9px;opacity:0.9}.section{margin-bottom:10px;page-break-inside:avoid}.section-title{font-size:12px;font-weight:700;color:#1e40af;border-bottom:2px solid #3b82f6;padding-bottom:3px;margin-bottom:6px;display:flex;align-items:center;gap:6px}.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px;margin-bottom:8px}.info-item{font-size:10px}.info-item strong{color:#374151}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#eff6ff;color:#1e40af;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #dbeafe}td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:600}.badge-green{background:#dcfce7;color:#166534}.badge-red{background:#fef2f2;color:#991b1b}.badge-yellow{background:#fefce8;color:#854d0e}.badge-blue{background:#eff6ff;color:#1e40af}.badge-orange{background:#fff7ed;color:#9a3412}.alert-box{background:#fef2f2;border:1px solid #fecaca;border-radius:4px;padding:8px 10px;margin-bottom:8px;font-size:9px;color:#991b1b}.footer{position:fixed;bottom:0;left:0;right:0;padding:6px 15mm;border-top:2px solid #1e40af;font-size:8px;display:flex;justify-content:space-between;background:white}.lgpd{color:#dc2626;font-weight:600}`;
+    const logoUrl = selectedCompany?.logoUrl || "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png";
+    const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC Engenharia";
+    const cnpjEmpresa = selectedCompany?.cnpj || "";
+
+    const css = `@page{size:A4 portrait;margin:12mm 15mm 20mm 15mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4;padding-bottom:40px}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:16px;border-radius:6px}.logo-bar img{height:50px;object-fit:contain}.logo-bar .title{color:white;flex:1}.logo-bar .title h1{font-size:16px;font-weight:bold;letter-spacing:1.5px;margin-bottom:2px}.logo-bar .title p{font-size:10px;opacity:0.85}.logo-bar .info-right{color:white;text-align:right;font-size:9px;opacity:0.9}.logo-bar .info-right p{margin-bottom:2px}.emp-name-bar{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:10px 16px;margin-bottom:14px;border-radius:0 4px 4px 0;display:flex;justify-content:space-between;align-items:center}.emp-name-bar h2{font-size:15px;font-weight:700;color:#1B2A4A}.emp-name-bar .status-badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:600}.section{margin-bottom:10px;page-break-inside:avoid}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:6px;display:flex;align-items:center;gap:6px}.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px;margin-bottom:8px}.info-item{font-size:10px}.info-item strong{color:#374151}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #d1d9e6}td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:600}.badge-green{background:#dcfce7;color:#166534}.badge-red{background:#fef2f2;color:#991b1b}.badge-yellow{background:#fefce8;color:#854d0e}.badge-blue{background:#e8edf4;color:#1B2A4A}.badge-orange{background:#fff7ed;color:#9a3412}.alert-box{background:#fef2f2;border:1px solid #fecaca;border-radius:4px;padding:8px 10px;margin-bottom:8px;font-size:9px;color:#991b1b}.footer{position:fixed;bottom:0;left:0;right:0;padding:6px 15mm;border-top:2px solid #1B2A4A;font-size:8px;display:flex;justify-content:space-between;background:white}.lgpd{color:#dc2626;font-weight:600}`;
 
     let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Raio-X - ${emp?.nomeCompleto || ""}</title><style>${css}</style></head><body>`;
 
-    // HEADER
-    html += `<div class="header"><div><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p style="font-size:13px;margin-top:2px">${emp?.nomeCompleto || "-"}</p></div><div class="header-right"><p>CPF: ${formatCPF(emp?.cpf || "")}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ""}</div></div>`;
+    // HEADER COM LOGO
+    const statusColor = emp?.status === 'Ativo' ? 'background:#dcfce7;color:#166534' : emp?.status === 'Desligado' ? 'background:#fef2f2;color:#991b1b' : emp?.status === 'Ferias' ? 'background:#dbeafe;color:#1e40af' : emp?.status === 'Afastado' ? 'background:#fefce8;color:#854d0e' : 'background:#f3f4f6;color:#374151';
+    html += `<div class="logo-bar"><img src="${logoUrl}" alt="Logo" /><div class="title"><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>CPF: ${formatCPF(emp?.cpf || "")}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ''}<p>${dataEmissao}</p></div></div>`;
+    html += `<div class="emp-name-bar"><h2>${emp?.nomeCompleto || "-"}</h2><span class="status-badge" style="${statusColor}">${emp?.status || "-"}</span></div>`;
 
     // DADOS PESSOAIS
     html += `<div class="section"><div class="section-title">\u{1F464} Dados Pessoais</div><div class="info-grid">`;
@@ -298,7 +306,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     }
 
     // FOOTER
-    html += `<div class="footer"><span>ERP RH & DP \u2014 FC Engenharia</span><span>Gerado por: ${userName} em ${dataEmissao}</span><span class="lgpd">Dados protegidos pela LGPD (Lei 13.709/2018)</span></div></body></html>`;
+    html += `<div class="footer"><span>ERP RH & DP \u2014 ${nomeEmpresa}</span><span>Gerado por: ${userName} em ${dataEmissao}</span><span class="lgpd">Dados protegidos pela LGPD (Lei 13.709/2018)</span></div></body></html>`;
 
     printWindow.document.write(html);
     printWindow.document.close();

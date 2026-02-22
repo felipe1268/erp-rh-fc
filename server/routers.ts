@@ -650,7 +650,7 @@ export const appRouter = router({
       username: z.string().min(3),
       name: z.string().min(1),
       email: z.string().email().optional(),
-      role: z.enum(["user", "admin"]).default("user"),
+      role: z.enum(["user", "admin", "admin_master"]).default("user"),
       password: z.string().optional(),
     })).mutation(async ({ input }) => {
       const bcrypt = await import("bcryptjs");

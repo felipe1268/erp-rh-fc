@@ -1402,3 +1402,11 @@
 - [x] Lixeira: Implementar aba Lixeira na tela de Auditoria do Sistema
 - [x] Lixeira: Botão Restaurar com confirmação e registro no log de auditoria
 - [x] Bug: Impressão/PDF do Raio-X do Funcionário mostra tela branca (apenas cabeçalho e rodapé visíveis)
+- [x] Filtro de status na tela Fechamento de Ponto (Todos / Conforme / Com Inconsistências)
+- [x] Bug: Ao mudar status para Desligado, abrir dialog para selecionar categoria de desligamento (Término de contrato, Justa causa, Pedido de demissão, Acordo mútuo, Fim de obra, Baixo desempenho, Indisciplina, Outros), data e motivo
+- [x] Melhorar layout de impressão do Raio-X: logo da empresa no cabeçalho + cores consistentes (#1B2A4A)
+- [x] Sidebar: Mostrar logo e nome da empresa selecionada dinamicamente (não fixo FC Engenharia)
+- [x] Converter TODOS os dialogs pequenos para FullScreenDialog (Consolidação Bloqueada, etc.)
+- [x] Implementar 3 níveis de permissão: admin_master / admin / user no schema e backend
+- [x] Dica do Sistema (configurações avançadas) só visível para admin_master
+- [x] Promover usuário owner para admin_master automaticamente
