@@ -35,6 +35,7 @@ import { importExcelRouter } from "./routers/importExcel";
 import { payrollParsersRouter } from "./routers/payrollParsers";
 import { folhaPagamentoRouter } from "./routers/folhaPagamento";
 import { controleDocumentosRouter } from "./routers/controleDocumentos";
+import { processosTrabRouter } from "./routers/processosTrabalhistas";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -329,6 +330,11 @@ export const appRouter = router({
   // FECHAMENTO DE PONTO (upload DIXI, cálculo horas, inconsistências)
   // ============================================================
   fechamentoPonto: fechamentoPontoRouter,
+
+  // ============================================================
+  // PROCESSOS TRABALHISTAS
+  // ============================================================
+  processos: processosTrabRouter,
 
   // ============================================================
   // OBRAS

@@ -1025,3 +1025,41 @@
 - [x] Cadastro de Contas Bancárias da empresa (schema + rotas backend)
 - [x] Campo contaBancariaEmpresaId no cadastro do funcionário
 - [ ] Separação/agrupamento por banco na folha de pagamento
+
+## Rev. 40: Contas Bancárias + Excel funcional + Agrupamento por banco
+- [x] Tela de Contas Bancárias no menu lateral (CRUD completo)
+- [x] Adicionar rota /contas-bancarias no App.tsx
+- [x] Adicionar item no menu lateral (DashboardLayout)
+- [x] Botão Excel funcional na tela de Custos por Obra (conectar à rota backend)
+- [x] Agrupamento/filtro por banco na tela de Detalhes da folha (enriquecido listarItens com info de conta bancária)
+- [x] Incrementar versão para Rev. 40
+- [x] Tela Relógios de Ponto (Sn) na seção Operacional com CRUD e vinculação à obra
+- [ ] Mover Contas Bancárias para seção CADASTRO (não Financeiro)
+
+## BUG Rev. 39: Horas Extras
+- [x] BUG: Valor Estimado HE mostrando R$ 0,00 para todos os funcionários (corrigido cálculo no backend)
+- [x] BUG: Obra mostrando "—" para todos os funcionários na tela de Horas Extras (corrigido)
+
+## Rev. 40: Sistema de Perfis de Usuário (3 níveis)
+- [ ] Expandir enum de roles para: usuario, adm, adm_master
+- [ ] Criar tabela de permissões granulares por perfil (módulo, ação: visualizar/preencher/editar/excluir/aprovar)
+- [ ] Tela de configuração de permissões por perfil (ADM Master define o que cada perfil pode fazer)
+- [ ] Alçadas de aprovação configuráveis por perfil
+- [ ] Middleware de verificação de permissões granulares no backend
+- [ ] Frontend: ocultar/desabilitar ações conforme permissão do usuário logado
+- [ ] Atualizar select de Perfil no cadastro de usuário (Usuário, ADM, ADM Master)
+
+## Rev. 40: Módulo Processos Trabalhistas
+- [x] Criar tabela processos_trabalhistas (funcionarioId, numeroProcesso, vara, comarca, advogado, valorCausa, status, dataDistribuicao, etc.)
+- [x] Criar tabela processos_movimentacoes (processoId, data, descricao, tipo, anexo)
+- [x] Vincular apenas a funcionários com status "Desligado"
+- [x] CRUD completo de processos trabalhistas no backend
+- [x] CRUD de movimentações/andamentos do processo
+- [x] Tela de Processos Trabalhistas no menu lateral
+- [x] Dashboard de processos (total ativo, valor total em risco, por status)
+- [x] Alertas de prazos e audiências (próximas audiências destacadas)
+- [x] Botões Imprimir/PDF (via PrintActions)
+
+## Rev. 40: Liberdade nos campos de HE (sem restrição CLT)
+- [x] Verificado: campos de HE já são livres (type=text sem max/min)
+- [x] Verificado: backend aceita qualquer valor string sem validação numérica

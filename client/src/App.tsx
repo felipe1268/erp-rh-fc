@@ -19,6 +19,9 @@ import ControleDocumentos from "./pages/ControleDocumentos";
 import ValeAlimentacao from "./pages/ValeAlimentacao";
 import Setores from "./pages/Setores";
 import Funcoes from "./pages/Funcoes";
+import ContasBancarias from "./pages/ContasBancarias";
+import RelogiosPonto from "./pages/RelogiosPonto";
+import ProcessosTrabalhistas from "./pages/ProcessosTrabalhistas";
 // Relatórios
 import RaioXPage from "./pages/relatorios/RaioXPage";
 // Dashboards
@@ -36,6 +39,9 @@ function Router() {
       <Route path={"/obras"} component={Obras} />
       <Route path={"/setores"} component={Setores} />
       <Route path={"/funcoes"} component={Funcoes} />
+      <Route path={"/contas-bancarias"} component={ContasBancarias} />
+      <Route path={"/relogios-ponto"} component={RelogiosPonto} />
+      <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
       <Route path={"/usuarios"} component={Usuarios} />
       <Route path={"/auditoria"} component={Auditoria} />
       <Route path={"/fechamento-ponto"} component={FechamentoPonto} />

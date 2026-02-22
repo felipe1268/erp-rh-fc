@@ -177,6 +177,23 @@ export default function FolhaPagamento() {
     onSuccess: () => { toast.success("Lançamento excluído!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); setViewMode("resumo"); },
   });
 
+  const exportarCustosObraMut = trpc.folha.exportarCustosObra.useMutation({
+    onSuccess: (data) => {
+      if (!data.base64) { toast.error("Nenhum dado para exportar"); return; }
+      const byteCharacters = atob(data.base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = data.filename; a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel exportado com sucesso!");
+    },
+    onError: (err) => toast.error(`Erro ao exportar: ${err.message}`),
+  });
+
   const vincularObraMut = trpc.folha.vincularObrasManualmente.useMutation({
     onSuccess: (data) => {
       toast.success(`${data.vinculados} funcionário(s) vinculado(s) com sucesso!`);
@@ -540,7 +557,13 @@ export default function FolhaPagamento() {
               </div>
             </div>
             <PrintActions title={`Custos por Obra — ${viewTipo === "vale" ? "Vale" : "Pagamento"} — ${formatMesAno(mesAno)}`} showExcel onExportExcel={() => {
-              toast.info("Exportação Excel em desenvolvimento", { duration: 3000 });
+              if (!viewLancId) return;
+              exportarCustosObraMut.mutate({
+                folhaLancamentoId: viewLancId,
+                companyId,
+                mesReferencia: mesAno,
+                tipo: viewTipo,
+              });
             }} />
           </div>
 
@@ -813,7 +836,7 @@ export default function FolhaPagamento() {
                 <p className="text-sm text-muted-foreground">Análise detalhada de horas extras por funcionário e por obra</p>
               </div>
             </div>
-            <PrintActions title={`Horas Extras - ${formatMesAno(mesAno)}`} showExcel onExportExcel={() => toast.info("Exportação Excel em desenvolvimento", { duration: 3000 })} />
+            <PrintActions title={`Horas Extras - ${formatMesAno(mesAno)}`} />
           </div>
 
           {horasExtras.isLoading ? (

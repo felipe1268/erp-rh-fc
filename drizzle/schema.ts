@@ -1014,3 +1014,73 @@ export const companyBankAccounts = mysqlTable("company_bank_accounts", {
 (table) => [
 	index("cba_company").on(table.companyId),
 ]);
+
+
+// ============================================================
+// PROCESSOS TRABALHISTAS
+// ============================================================
+export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(), // FK para employees (funcionário desligado)
+	// Dados do processo
+	numeroProcesso: varchar({ length: 50 }).notNull(), // Número do processo judicial
+	vara: varchar({ length: 100 }), // Vara do Trabalho
+	comarca: varchar({ length: 100 }), // Cidade/Comarca
+	tribunal: varchar({ length: 100 }), // Ex: TRT-2, TRT-15
+	tipoAcao: mysqlEnum(['reclamatoria', 'indenizatoria', 'rescisao_indireta', 'acidente_trabalho', 'doenca_ocupacional', 'assedio', 'outros']).default('reclamatoria').notNull(),
+	// Partes
+	reclamante: varchar({ length: 255 }).notNull(), // Nome do reclamante (funcionário)
+	advogadoReclamante: varchar({ length: 255 }),
+	advogadoEmpresa: varchar({ length: 255 }),
+	// Valores
+	valorCausa: varchar({ length: 20 }), // Valor da causa
+	valorCondenacao: varchar({ length: 20 }), // Valor da condenação (se houver)
+	valorAcordo: varchar({ length: 20 }), // Valor do acordo (se houver)
+	valorPago: varchar({ length: 20 }), // Valor efetivamente pago
+	// Datas
+	dataDistribuicao: date({ mode: 'string' }), // Data da distribuição do processo
+	dataDesligamento: date({ mode: 'string' }), // Data do desligamento do funcionário
+	dataCitacao: date({ mode: 'string' }), // Data da citação da empresa
+	dataAudiencia: date({ mode: 'string' }), // Próxima audiência
+	dataEncerramento: date({ mode: 'string' }), // Data de encerramento/trânsito em julgado
+	// Status e classificação
+	status: mysqlEnum(['em_andamento', 'aguardando_audiencia', 'aguardando_pericia', 'acordo', 'sentenca', 'recurso', 'execucao', 'arquivado', 'encerrado']).default('em_andamento').notNull(),
+	fase: mysqlEnum(['conhecimento', 'recursal', 'execucao', 'encerrado']).default('conhecimento').notNull(),
+	risco: mysqlEnum(['baixo', 'medio', 'alto', 'critico']).default('medio').notNull(),
+	// Pedidos do reclamante (JSON array)
+	pedidos: json(), // Ex: ["Horas extras", "Adicional noturno", "Danos morais"]
+	// Observações
+	observacoes: text(),
+	// Metadados
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("pt_company").on(table.companyId),
+	index("pt_employee").on(table.employeeId),
+	index("pt_status").on(table.companyId, table.status),
+	index("pt_numero").on(table.numeroProcesso),
+]);
+
+// Andamentos do processo trabalhista (timeline)
+export const processosAndamentos = mysqlTable("processos_andamentos", {
+	id: int().autoincrement().notNull(),
+	processoId: int().notNull(), // FK para processos_trabalhistas
+	data: date({ mode: 'string' }).notNull(),
+	tipo: mysqlEnum(['audiencia', 'despacho', 'sentenca', 'recurso', 'pericia', 'acordo', 'pagamento', 'citacao', 'intimacao', 'peticao', 'outros']).default('outros').notNull(),
+	descricao: text().notNull(),
+	// Resultado (se aplicável)
+	resultado: varchar({ length: 255 }),
+	// Documentos vinculados
+	documentoUrl: varchar({ length: 500 }),
+	documentoNome: varchar({ length: 255 }),
+	// Metadados
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("pa_processo").on(table.processoId),
+	index("pa_data").on(table.processoId, table.data),
+]);

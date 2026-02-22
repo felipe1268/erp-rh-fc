@@ -28,7 +28,7 @@ import {
   ChevronDown, ChevronRight,
   BarChart3, Settings,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
-  ClipboardList, UserSearch,
+  ClipboardList, UserSearch, Gavel, Wifi,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -56,12 +56,25 @@ const menuSections = [
     ],
   },
   {
+    title: "Financeiro",
+    items: [
+      { icon: ClipboardList, label: "Contas Bancárias", path: "/contas-bancarias" },
+    ],
+  },
+  {
     title: "Operacional",
     items: [
       { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
+      { icon: Wifi, label: "Relógios de Ponto", path: "/relogios-ponto" },
+    ],
+  },
+  {
+    title: "Jurídico",
+    items: [
+      { icon: Gavel, label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
     ],
   },
   {

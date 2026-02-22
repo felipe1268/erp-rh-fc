@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
-  timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts
+  timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -532,10 +532,32 @@ export const folhaPagamentoRouter = router({
       }
       const empMap = new Map(emps.map(e => [e.id, e]));
 
-      return itens.map(item => ({
-        ...item,
-        employee: item.employeeId ? empMap.get(item.employeeId) : null,
-      }));
+      // Buscar contas bancárias da empresa para enriquecer com info de banco
+      const companyIds = Array.from(new Set(itens.map(i => i.companyId)));
+      let bankAccounts: any[] = [];
+      if (companyIds.length > 0) {
+        bankAccounts = await db.select().from(companyBankAccounts)
+          .where(inArray(companyBankAccounts.companyId, companyIds));
+      }
+      const bankMap = new Map(bankAccounts.map(b => [b.id, b]));
+
+      return itens.map(item => {
+        const emp = item.employeeId ? empMap.get(item.employeeId) : null;
+        const contaBancoId = emp?.contaBancariaEmpresaId;
+        const contaBanco = contaBancoId ? bankMap.get(contaBancoId) : null;
+        return {
+          ...item,
+          employee: emp || null,
+          contaBancaria: contaBanco ? {
+            id: contaBanco.id,
+            banco: contaBanco.banco,
+            codigoBanco: contaBanco.codigoBanco,
+            agencia: contaBanco.agencia,
+            conta: contaBanco.conta,
+            apelido: contaBanco.apelido,
+          } : null,
+        };
+      });
     }),
 
   // ============================================================
@@ -1660,14 +1682,76 @@ export const folhaPagamentoRouter = router({
       const allObras = await db.select().from(obras).where(eq(obras.companyId, input.companyId));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
-      // Group by employee
-      const empHE = new Map<number, { totalHE: number; totalNoturnas: number; detalhePorObra: Map<number | null, number> }>();
+      // Buscar critérios de HE da empresa
+      const criteriosHE = await db.select().from(systemCriteria)
+        .where(and(
+          eq(systemCriteria.companyId, input.companyId),
+          eq(systemCriteria.categoria, 'horas_extras')
+        ));
+      const criterioMap = new Map(criteriosHE.map(c => [c.chave, c.valor]));
+      const pctDiasUteis = parseFloat(criterioMap.get('he_dias_uteis') || '50');
+      const pctDomFeriados = parseFloat(criterioMap.get('he_domingos_feriados') || '100');
+
+      // Buscar salário/hora da folha (mais preciso que cadastro)
+      const folhaItems = await db.select({
+        employeeId: folhaItens.employeeId,
+        salarioBase: folhaItens.salarioBase,
+        horasMensais: folhaItens.horasMensais,
+      }).from(folhaItens)
+        .innerJoin(folhaLancamentos, eq(folhaItens.folhaLancamentoId, folhaLancamentos.id))
+        .where(and(
+          eq(folhaItens.companyId, input.companyId),
+          eq(folhaLancamentos.mesReferencia, input.mesReferencia),
+          eq(folhaLancamentos.tipoLancamento, 'pagamento'),
+        ));
+      const folhaSalarioMap = new Map<number, number>(); // empId -> valorHora
+      for (const fi of folhaItems) {
+        if (fi.employeeId && fi.salarioBase) {
+          const salHora = parseBRL(fi.salarioBase);
+          if (salHora > 0) folhaSalarioMap.set(fi.employeeId, salHora);
+        }
+      }
+
+      // Helper: determinar se uma data é domingo ou feriado
+      function isDomFeriado(dateStr: string): boolean {
+        const d = new Date(dateStr + 'T12:00:00Z');
+        return d.getUTCDay() === 0 || d.getUTCDay() === 6; // Sábado e Domingo = 100%
+      }
+
+      // Converter HH:MM para horas decimais
+      function hhmmToHours(val: string | null): number {
+        if (!val) return 0;
+        const parts = val.split(':');
+        if (parts.length === 2) {
+          return parseInt(parts[0]) + parseInt(parts[1]) / 60;
+        }
+        return parseFloat(val.replace(':', '.')) || 0;
+      }
+
+      // Group by employee com separação HE50/HE100
+      const empHE = new Map<number, {
+        he50: number; he100: number; totalHE: number; totalNoturnas: number;
+        detalhePorObra: Map<number | null, number>;
+        obraPrincipalId: number | null;
+      }>();
       for (const rec of pontoRecords) {
         if (!rec.employeeId) continue;
-        if (!empHE.has(rec.employeeId)) empHE.set(rec.employeeId, { totalHE: 0, totalNoturnas: 0, detalhePorObra: new Map() });
+        if (!empHE.has(rec.employeeId)) {
+          empHE.set(rec.employeeId, {
+            he50: 0, he100: 0, totalHE: 0, totalNoturnas: 0,
+            detalhePorObra: new Map(), obraPrincipalId: null
+          });
+        }
         const data = empHE.get(rec.employeeId)!;
-        const he = rec.horasExtras ? parseFloat(rec.horasExtras.replace(":", ".")) : 0;
-        const hn = rec.horasNoturnas ? parseFloat(rec.horasNoturnas.replace(":", ".")) : 0;
+        const he = hhmmToHours(rec.horasExtras);
+        const hn = hhmmToHours(rec.horasNoturnas);
+        if (he > 0) {
+          if (isDomFeriado(rec.data)) {
+            data.he100 += he;
+          } else {
+            data.he50 += he;
+          }
+        }
         data.totalHE += he;
         data.totalNoturnas += hn;
         const obraKey = rec.obraId || null;
@@ -1688,14 +1772,43 @@ export const folhaPagamentoRouter = router({
             }))
             .sort((a, b) => b.horasExtras - a.horasExtras);
 
+          // Obra principal = a com mais HE
+          const obraPrincipal = porObra.length > 0 ? porObra[0] : null;
+
+          // Calcular valor estimado
+          // Buscar valor/hora: primeiro da folha, depois do cadastro
+          let valorHora = folhaSalarioMap.get(empId) || 0;
+          if (valorHora === 0 && emp?.valorHora) {
+            valorHora = parseBRL(emp.valorHora);
+          }
+          if (valorHora === 0 && emp?.salarioBase) {
+            const salBase = parseBRL(emp.salarioBase);
+            const horasMes = emp.horasMensais ? parseBRL(emp.horasMensais) : 220;
+            if (horasMes > 0) valorHora = salBase / horasMes;
+          }
+
+          const he50Rounded = Math.round(data.he50 * 10) / 10;
+          const he100Rounded = Math.round(data.he100 * 10) / 10;
+
+          // Valor estimado = (HE50 * valorHora * (1 + pct50/100)) + (HE100 * valorHora * (1 + pct100/100))
+          const valorEstimado = valorHora > 0
+            ? (data.he50 * valorHora * (1 + pctDiasUteis / 100)) + (data.he100 * valorHora * (1 + pctDomFeriados / 100))
+            : 0;
+
           return {
             employeeId: empId,
             nome: emp?.nomeCompleto || "Desconhecido",
             funcao: emp?.funcao || "",
             codigoInterno: emp?.codigoInterno || "",
             totalHE: Math.round(data.totalHE * 10) / 10,
+            he50: he50Rounded,
+            he100: he100Rounded,
             totalNoturnas: Math.round(data.totalNoturnas * 10) / 10,
             acordoHE: emp?.acordoHoraExtra === 1,
+            valorHora: Math.round(valorHora * 100) / 100,
+            valorEstimado: Math.round(valorEstimado * 100) / 100,
+            obraId: obraPrincipal?.obraId || null,
+            obraNome: obraPrincipal?.obraNome || null,
             porObra,
           };
         })
@@ -1704,7 +1817,7 @@ export const folhaPagamentoRouter = router({
       // Ranking de obras por HE
       const obraHETotal = new Map<number | null, number>();
       for (const rec of pontoRecords) {
-        const he = rec.horasExtras ? parseFloat(rec.horasExtras.replace(":", ".")) : 0;
+        const he = hhmmToHours(rec.horasExtras);
         if (he > 0) {
           const key = rec.obraId || null;
           obraHETotal.set(key, (obraHETotal.get(key) || 0) + he);
