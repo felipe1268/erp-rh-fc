@@ -1707,8 +1707,11 @@ export const folhaPagamentoRouter = router({
       const folhaSalarioMap = new Map<number, number>(); // empId -> valorHora
       for (const fi of folhaItems) {
         if (fi.employeeId && fi.salarioBase) {
-          const salHora = parseBRL(fi.salarioBase);
-          if (salHora > 0) folhaSalarioMap.set(fi.employeeId, salHora);
+          const salBase = parseBRL(fi.salarioBase);
+          const horasMes = fi.horasMensais ? parseBRL(fi.horasMensais) : 220;
+          if (salBase > 0 && horasMes > 0) {
+            folhaSalarioMap.set(fi.employeeId, salBase / horasMes);
+          }
         }
       }
 

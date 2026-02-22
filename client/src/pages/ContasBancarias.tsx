@@ -19,8 +19,6 @@ type ContaForm = {
   agencia: string;
   conta: string;
   tipoConta: "corrente" | "poupanca";
-  apelido: string;
-  cnpjTitular: string;
 };
 
 const emptyForm: ContaForm = {
@@ -29,8 +27,6 @@ const emptyForm: ContaForm = {
   agencia: "",
   conta: "",
   tipoConta: "corrente",
-  apelido: "",
-  cnpjTitular: "",
 };
 
 const BANCOS_COMUNS = [
@@ -79,7 +75,7 @@ export default function ContasBancarias() {
     const s = search.toLowerCase();
     return contas.filter((c: any) =>
       c.banco?.toLowerCase().includes(s) ||
-      (c.apelido || "").toLowerCase().includes(s) ||
+
       (c.agencia || "").includes(s) ||
       (c.conta || "").includes(s) ||
       (c.codigoBanco || "").includes(s)
@@ -100,8 +96,7 @@ export default function ContasBancarias() {
       agencia: conta.agencia || "",
       conta: conta.conta || "",
       tipoConta: conta.tipoConta || "corrente",
-      apelido: conta.apelido || "",
-      cnpjTitular: conta.cnpjTitular || "",
+
     });
     setDialogOpen(true);
   };
@@ -126,8 +121,7 @@ export default function ContasBancarias() {
         agencia: form.agencia,
         conta: form.conta,
         tipoConta: form.tipoConta,
-        apelido: form.apelido || undefined,
-        cnpjTitular: form.cnpjTitular || undefined,
+
       });
     } else {
       createMut.mutate({
@@ -137,8 +131,7 @@ export default function ContasBancarias() {
         agencia: form.agencia,
         conta: form.conta,
         tipoConta: form.tipoConta,
-        apelido: form.apelido || undefined,
-        cnpjTitular: form.cnpjTitular || undefined,
+
       });
     }
   };
@@ -219,7 +212,7 @@ export default function ContasBancarias() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por banco, apelido, agência ou conta..."
+              placeholder="Buscar por banco, agência ou conta..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-10"
@@ -267,7 +260,7 @@ export default function ContasBancarias() {
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-semibold text-base truncate">
-                          {conta.apelido || conta.banco}
+                          {conta.banco}
                         </h3>
                         <div className="flex items-center gap-2 flex-wrap">
                           {conta.codigoBanco && (
@@ -284,12 +277,7 @@ export default function ContasBancarias() {
                   </div>
 
                   <div className="space-y-1.5 text-sm">
-                    {conta.apelido && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Banco:</span>
-                        <span className="font-medium">{conta.banco}</span>
-                      </div>
-                    )}
+
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">Agência:</span>
                       <span className="font-mono font-medium">{conta.agencia}</span>
@@ -302,12 +290,7 @@ export default function ContasBancarias() {
                       <span className="text-muted-foreground">Tipo:</span>
                       <span className="capitalize">{conta.tipoConta === "poupanca" ? "Poupança" : "Corrente"}</span>
                     </div>
-                    {conta.cnpjTitular && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">CNPJ:</span>
-                        <span className="font-mono text-xs">{conta.cnpjTitular}</span>
-                      </div>
-                    )}
+
                   </div>
 
                   <div className="flex items-center gap-2 mt-4 pt-3 border-t">
@@ -424,23 +407,7 @@ export default function ContasBancarias() {
               </div>
             </div>
 
-            <div>
-              <Label>Apelido (identificação interna)</Label>
-              <Input
-                value={form.apelido}
-                onChange={e => setForm(f => ({ ...f, apelido: e.target.value }))}
-                placeholder="Ex: CEF Principal, Santander Folha..."
-              />
-            </div>
 
-            <div>
-              <Label>CNPJ do Titular</Label>
-              <Input
-                value={form.cnpjTitular}
-                onChange={e => setForm(f => ({ ...f, cnpjTitular: e.target.value }))}
-                placeholder="Ex: 12.345.678/0001-90"
-              />
-            </div>
           </div>
 
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">

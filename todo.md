@@ -1063,3 +1063,12 @@
 ## Rev. 40: Liberdade nos campos de HE (sem restrição CLT)
 - [x] Verificado: campos de HE já são livres (type=text sem max/min)
 - [x] Verificado: backend aceita qualquer valor string sem validação numérica
+
+## BUG Rev. 40: Valor Estimado HE incorreto
+- [x] BUG: Valor Estimado de HE retornando valores absurdos (corrigido: folhaSalarioMap usava salárioBase como valorHora)
+- [x] Investigar fórmula de cálculo no backend (horasExtrasPorFuncionario)
+- [x] Corrigir cálculo: valorHora = salário / (jornada mensal em horas), valorHE = horas × valorHora × (1 + percentual)
+
+## Rev. 40 fix: Contas Bancárias
+- [x] Remover campo "Apelido (identificação interna)" da tela de Contas Bancárias
+- [x] Remover campo "CNPJ do Titular" da tela de Contas Bancárias
