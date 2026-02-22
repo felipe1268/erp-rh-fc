@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
-  timeRecords, pontoConsolidacao, obras, manualObraAssignments
+  timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -1339,6 +1340,44 @@ export const folhaPagamentoRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+
+      // Verificar se há funcionários sem obra vinculada
+      const lancamento = await db.select().from(folhaLancamentos)
+        .where(eq(folhaLancamentos.id, input.folhaLancamentoId));
+      if (lancamento.length > 0) {
+        const lanc = lancamento[0];
+        const itensLanc = await db.select().from(folhaItens)
+          .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
+        const empIdsLanc = itensLanc.filter(i => i.employeeId).map(i => i.employeeId!);
+        
+        if (empIdsLanc.length > 0 && lanc.companyId && lanc.mesReferencia) {
+          // Buscar registros de ponto
+          const pontoRecs = await db.select().from(timeRecords)
+            .where(and(
+              eq(timeRecords.companyId, lanc.companyId),
+              eq(timeRecords.mesReferencia, lanc.mesReferencia),
+              inArray(timeRecords.employeeId, empIdsLanc),
+            ));
+          const empComPonto = new Set(pontoRecs.map(r => r.employeeId));
+          
+          // Buscar vinculações manuais
+          const vinculacoes = await db.select().from(manualObraAssignments)
+            .where(and(
+              eq(manualObraAssignments.companyId, lanc.companyId),
+              eq(manualObraAssignments.mesReferencia, lanc.mesReferencia),
+            ));
+          const empComVinculacao = new Set(vinculacoes.map(v => v.employeeId));
+          
+          const semObra = empIdsLanc.filter(id => !empComPonto.has(id) && !empComVinculacao.has(id));
+          if (semObra.length > 0) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Não é possível consolidar: ${semObra.length} funcionário(s) sem obra vinculada. Vincule todos os funcionários a uma obra antes de consolidar.`,
+            });
+          }
+        }
+      }
+
       await db.update(folhaLancamentos)
         .set({
           status: "consolidado",
@@ -1417,7 +1456,7 @@ export const folhaPagamentoRouter = router({
         .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
 
       const empIds = itens.filter(i => i.employeeId).map(i => i.employeeId!);
-      if (empIds.length === 0) return { obrasResumo: [], semObra: [], totalGeral: "0,00" };
+      if (empIds.length === 0) return { obrasResumo: [], semObra: null, totalGeral: "0,00" };
 
       // Get employees
       const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
@@ -1435,6 +1474,14 @@ export const folhaPagamentoRouter = router({
       const allObras = await db.select().from(obras)
         .where(eq(obras.companyId, input.companyId));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
+
+      // Get vinculações manuais para este mês
+      const vinculacoesManuais = await db.select().from(manualObraAssignments)
+        .where(and(
+          eq(manualObraAssignments.companyId, input.companyId),
+          eq(manualObraAssignments.mesReferencia, input.mesReferencia)
+        ));
+      const vinculacaoManualMap = new Map(vinculacoesManuais.map(v => [v.employeeId, v]));
 
       // Helper: converte "HH:MM" para horas decimais (ex: "8:30" -> 8.5)
       const hhmmToDecimal = (hhmm: string | null): number => {
@@ -1465,7 +1512,7 @@ export const folhaPagamentoRouter = router({
       const obraCustos = new Map<number | null, {
         obraId: number | null;
         obraNome: string;
-        funcionarios: Array<{ id: number; nome: string; funcao: string; horas: number; horasExtras: number; dias: number; custoEstimado: string; liquido: string; percentual?: number }>;
+        funcionarios: Array<{ id: number; nome: string; funcao: string; horas: number; horasExtras: number; dias: number; custoEstimado: string; liquido: string; percentual?: number; vinculacaoManual?: boolean; justificativa?: string | null }>;
         totalCusto: number;
         totalHoras: number;
         totalHE: number;
@@ -1478,19 +1525,50 @@ export const folhaPagamentoRouter = router({
         const liquidoVal = parseBRL(item.liquido || "0");
 
         if (!empObras || empObras.size === 0) {
-          // Sem ponto - alocar em "Sem Obra"
-          const key = null;
-          if (!obraCustos.has(key)) obraCustos.set(key, { obraId: null, obraNome: "Sem Obra Vinculada", funcionarios: [], totalCusto: 0, totalHoras: 0, totalHE: 0 });
-          const grupo = obraCustos.get(key)!;
-          grupo.funcionarios.push({
-            id: item.employeeId,
-            nome: item.nomeColaborador,
-            funcao: emp?.funcao || item.funcao || "",
-            horas: 0, horasExtras: 0, dias: 0,
-            custoEstimado: formatBRL(liquidoVal),
-            liquido: item.liquido || "0,00",
-          });
-          grupo.totalCusto += liquidoVal;
+          // Sem ponto - verificar se tem vinculação manual
+          const vinculacaoManual = vinculacaoManualMap.get(item.employeeId);
+          if (vinculacaoManual) {
+            // Vinculação manual - alocar na obra destino
+            const obraId = vinculacaoManual.obraId;
+            if (!obraCustos.has(obraId)) {
+              const ob = obraMap.get(obraId);
+              obraCustos.set(obraId, {
+                obraId,
+                obraNome: ob ? ob.nome : `Obra #${obraId}`,
+                funcionarios: [],
+                totalCusto: 0,
+                totalHoras: 0,
+                totalHE: 0,
+              });
+            }
+            const grupo = obraCustos.get(obraId)!;
+            grupo.funcionarios.push({
+              id: item.employeeId,
+              nome: item.nomeColaborador,
+              funcao: emp?.funcao || item.funcao || "",
+              horas: 0, horasExtras: 0, dias: 0,
+              custoEstimado: formatBRL(liquidoVal),
+              liquido: item.liquido || "0,00",
+              percentual: 100,
+              vinculacaoManual: true,
+              justificativa: vinculacaoManual.justificativa,
+            });
+            grupo.totalCusto += liquidoVal;
+          } else {
+            // Sem ponto e sem vinculação manual - alocar em "Sem Obra"
+            const key = null;
+            if (!obraCustos.has(key)) obraCustos.set(key, { obraId: null, obraNome: "Sem Obra Vinculada", funcionarios: [], totalCusto: 0, totalHoras: 0, totalHE: 0 });
+            const grupo = obraCustos.get(key)!;
+            grupo.funcionarios.push({
+              id: item.employeeId,
+              nome: item.nomeColaborador,
+              funcao: emp?.funcao || item.funcao || "",
+              horas: 0, horasExtras: 0, dias: 0,
+              custoEstimado: formatBRL(liquidoVal),
+              liquido: item.liquido || "0,00",
+            });
+            grupo.totalCusto += liquidoVal;
+          }
           continue;
         }
 
@@ -1730,5 +1808,223 @@ export const folhaPagamentoRouter = router({
       const db = await getDb();
       await db!.delete(manualObraAssignments).where(eq(manualObraAssignments.id, input.id));
       return { ok: true };
+    }),
+
+  // ============================================================
+  // EXPORTAR CUSTOS POR OBRA EM EXCEL
+  // ============================================================
+  exportarCustosObra: protectedProcedure
+    .input(z.object({
+      folhaLancamentoId: z.number(),
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      tipo: z.string(), // "vale" ou "pagamento"
+    }))
+    .mutation(async ({ input }) => {
+      const ExcelJS = (await import("exceljs")).default;
+      const db = (await getDb())!;
+
+      // Reutilizar lógica de custosPorObra
+      const itens = await db.select().from(folhaItens)
+        .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
+      const empIds = itens.filter(i => i.employeeId).map(i => i.employeeId!);
+      if (empIds.length === 0) return { base64: "", filename: "vazio.xlsx" };
+
+      const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+      const empMap = new Map(emps.map(e => [e.id, e]));
+
+      const pontoRecords = await db.select().from(timeRecords)
+        .where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.mesReferencia, input.mesReferencia),
+          inArray(timeRecords.employeeId, empIds),
+        ));
+
+      const allObras = await db.select().from(obras).where(eq(obras.companyId, input.companyId));
+      const obraMap = new Map(allObras.map(o => [o.id, o]));
+
+      const vinculacoesManuais = await db.select().from(manualObraAssignments)
+        .where(and(
+          eq(manualObraAssignments.companyId, input.companyId),
+          eq(manualObraAssignments.mesReferencia, input.mesReferencia)
+        ));
+      const vinculacaoManualMap = new Map(vinculacoesManuais.map(v => [v.employeeId, v]));
+
+      const hhmmToDecimal = (hhmm: string | null): number => {
+        if (!hhmm || hhmm === "0:00" || hhmm === "0") return 0;
+        const parts = hhmm.split(":");
+        return parseInt(parts[0] || "0") + parseInt(parts[1] || "0") / 60;
+      };
+
+      // Agrupar ponto por empregado e obra
+      const empObraHoras = new Map<number, Map<number | null, { horasTrab: number; horasExtras: number }>>();
+      for (const rec of pontoRecords) {
+        if (!rec.employeeId) continue;
+        if (!empObraHoras.has(rec.employeeId)) empObraHoras.set(rec.employeeId, new Map());
+        const obraKey = rec.obraId || null;
+        const obraGroup = empObraHoras.get(rec.employeeId)!;
+        const existing = obraGroup.get(obraKey) || { horasTrab: 0, horasExtras: 0 };
+        existing.horasTrab += hhmmToDecimal(rec.horasTrabalhadas);
+        existing.horasExtras += hhmmToDecimal(rec.horasExtras);
+        obraGroup.set(obraKey, existing);
+      }
+
+      // Montar dados por obra
+      const obraRows = new Map<string, Array<{ nome: string; funcao: string; horas: number; he: number; pct: number; custo: number; vinculacaoManual: boolean }>>(); 
+      for (const item of itens) {
+        if (!item.employeeId) continue;
+        const emp = empMap.get(item.employeeId);
+        const empObras = empObraHoras.get(item.employeeId);
+        const liquidoVal = parseBRL(item.liquido || "0");
+
+        if (!empObras || empObras.size === 0) {
+          const vinc = vinculacaoManualMap.get(item.employeeId);
+          const obraNome = vinc ? (obraMap.get(vinc.obraId)?.nome || "Obra Manual") : "Sem Obra Vinculada";
+          if (!obraRows.has(obraNome)) obraRows.set(obraNome, []);
+          obraRows.get(obraNome)!.push({ nome: item.nomeColaborador, funcao: emp?.funcao || "", horas: 0, he: 0, pct: 100, custo: liquidoVal, vinculacaoManual: !!vinc });
+        } else {
+          let totalH = 0;
+          for (const [, d] of Array.from(empObras)) totalH += d.horasTrab;
+          for (const [obraId, data] of Array.from(empObras)) {
+            const prop = totalH > 0 ? data.horasTrab / totalH : 1;
+            const ob = obraId ? obraMap.get(obraId) : null;
+            const obraNome = ob ? ob.nome : "Sem Obra Vinculada";
+            if (!obraRows.has(obraNome)) obraRows.set(obraNome, []);
+            obraRows.get(obraNome)!.push({ nome: item.nomeColaborador, funcao: emp?.funcao || "", horas: Math.round(data.horasTrab * 10) / 10, he: Math.round(data.horasExtras * 10) / 10, pct: Math.round(prop * 1000) / 10, custo: liquidoVal * prop, vinculacaoManual: false });
+          }
+        }
+      }
+
+      // Gerar Excel
+      const workbook = new ExcelJS.Workbook();
+      const mesLabel = input.mesReferencia.replace(/^(\d{4})-(\d{2})$/, (_, y: string, m: string) => {
+        const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        return `${meses[parseInt(m)]} ${y}`;
+      });
+
+      for (const [obraNome, rows] of Array.from(obraRows.entries())) {
+        const sheetName = obraNome.substring(0, 31).replace(/[\[\]\*\?\/\\:]/g, "-");
+        const ws = workbook.addWorksheet(sheetName);
+        ws.columns = [
+          { header: 'Funcionário', key: 'nome', width: 40 },
+          { header: 'Função', key: 'funcao', width: 25 },
+          { header: 'Horas Trab.', key: 'horas', width: 15 },
+          { header: 'Horas Extras', key: 'he', width: 15 },
+          { header: '% Aloc.', key: 'pct', width: 12 },
+          { header: 'Custo Alocado', key: 'custo', width: 18 },
+          { header: 'Vinc. Manual', key: 'vinculacaoManual', width: 15 },
+        ];
+        // Estilizar header
+        ws.getRow(1).font = { bold: true };
+        ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+        ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+        let totalCusto = 0;
+        for (const row of rows.sort((a, b) => a.nome.localeCompare(b.nome))) {
+          ws.addRow({ nome: row.nome, funcao: row.funcao, horas: row.horas, he: row.he, pct: row.pct, custo: row.custo, vinculacaoManual: row.vinculacaoManual ? 'Sim' : '' });
+          totalCusto += row.custo;
+        }
+        // Linha de total
+        const totalRow = ws.addRow({ nome: 'TOTAL', funcao: '', horas: '', he: '', pct: '', custo: totalCusto, vinculacaoManual: '' });
+        totalRow.font = { bold: true };
+        totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+
+        // Formatar coluna custo como moeda
+        ws.getColumn('custo').numFmt = '#,##0.00';
+      }
+
+      // Aba resumo
+      const resumoWs = workbook.addWorksheet('Resumo');
+      resumoWs.columns = [
+        { header: 'Obra', key: 'obra', width: 40 },
+        { header: 'Funcionários', key: 'qtd', width: 15 },
+        { header: 'Total Custo', key: 'custo', width: 20 },
+        { header: '% do Total', key: 'pct', width: 15 },
+      ];
+      resumoWs.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      resumoWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+      let grandTotal = 0;
+      for (const [, rows] of Array.from(obraRows.entries())) grandTotal += rows.reduce((s, r) => s + r.custo, 0);
+      for (const [obraNome, rows] of Array.from(obraRows.entries()).sort((a, b) => b[1].reduce((s, r) => s + r.custo, 0) - a[1].reduce((s, r) => s + r.custo, 0))) {
+        const custoObra = rows.reduce((s, r) => s + r.custo, 0);
+        resumoWs.addRow({ obra: obraNome, qtd: rows.length, custo: custoObra, pct: grandTotal > 0 ? Math.round(custoObra / grandTotal * 1000) / 10 : 0 });
+      }
+      const totalResumo = resumoWs.addRow({ obra: 'TOTAL GERAL', qtd: itens.filter(i => i.employeeId).length, custo: grandTotal, pct: 100 });
+      totalResumo.font = { bold: true };
+      resumoWs.getColumn('custo').numFmt = '#,##0.00';
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const base64 = Buffer.from(buffer as ArrayBuffer).toString('base64');
+      const filename = `custos_obra_${input.tipo}_${input.mesReferencia}.xlsx`;
+      return { base64, filename };
+    }),
+
+  // ============================================================
+  // CONTAS BANCÁRIAS DA EMPRESA
+  // ============================================================
+  listarContasBancarias: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      return db.select().from(companyBankAccounts)
+        .where(eq(companyBankAccounts.companyId, input.companyId));
+    }),
+
+  criarContaBancaria: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      banco: z.string().min(1),
+      codigoBanco: z.string().optional(),
+      agencia: z.string().min(1),
+      conta: z.string().min(1),
+      tipoConta: z.enum(['corrente', 'poupanca']).default('corrente'),
+      apelido: z.string().optional(),
+      cnpjTitular: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const result = await db.insert(companyBankAccounts).values(input);
+      return { id: result[0].insertId };
+    }),
+
+  atualizarContaBancaria: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      banco: z.string().min(1).optional(),
+      codigoBanco: z.string().optional(),
+      agencia: z.string().min(1).optional(),
+      conta: z.string().min(1).optional(),
+      tipoConta: z.enum(['corrente', 'poupanca']).optional(),
+      apelido: z.string().optional(),
+      cnpjTitular: z.string().optional(),
+      ativo: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      const db = (await getDb())!;
+      await db.update(companyBankAccounts).set(data).where(eq(companyBankAccounts.id, id));
+      return { success: true };
+    }),
+
+  excluirContaBancaria: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.delete(companyBankAccounts).where(eq(companyBankAccounts.id, input.id));
+      return { success: true };
+    }),
+
+  // Vincular funcionário a conta bancária da empresa
+  vincularContaBancariaFuncionario: protectedProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      contaBancariaEmpresaId: z.number().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.update(employees)
+        .set({ contaBancariaEmpresaId: input.contaBancariaEmpresaId })
+        .where(eq(employees.id, input.employeeId));
+      return { success: true };
     }),
 });

@@ -1003,3 +1003,25 @@
 - [x] Aplicar em: Custos por Obra, Verificação Cruzada, Horas Extras
 - [x] Aplicar em: Configurações, Empresas, Setores, Funções, Auditoria, Usuários
 - [x] CSS @media print para ocultar sidebar, botões e elementos de UI
+
+## Rev. 39: Bloqueio consolidação + Integração vinculações manuais + Excel
+- [x] Integrar vinculações manuais no cálculo de custos por obra (funcionários vinculados manualmente saem de "Sem Obra")
+- [x] Bloqueio de consolidação se houver funcionários sem obra vinculada
+- [x] Rota backend para exportação Excel (.xlsx) de custos por obra
+- [ ] Frontend: botão Excel na tela de custos chama rota backend dedicada
+- [ ] Frontend: mensagem de bloqueio na consolidação quando há funcionários sem obra
+- [x] Incrementar versão para Rev. 39
+
+## Rev. 39 (atualizado): Filtro HE por obra + Botões responsivos + Bloqueio + Vinculações + Excel
+- [x] Filtro por obra na tela de Horas Extras (clicar na obra no ranking filtra a tabela)
+- [ ] Botões responsivos ao clique (feedback visual loading/active)
+- [x] Integrar vinculações manuais no cálculo de custos por obra
+- [x] Bloqueio de consolidação se houver funcionários sem obra vinculada
+- [x] Rota backend para exportação Excel (.xlsx) de custos por obra
+- [ ] Frontend: botão Excel chama rota backend dedicada
+- [x] Incrementar versão para Rev. 39
+- [x] Card Resumo Total do Mês abaixo dos cards Vale/Pagamento (Vale + Pagamento + HE = Total)
+- [x] Rodapé somatório dinâmico nos Detalhes (Proventos, Descontos, Líquido) que atualiza com filtros
+- [x] Cadastro de Contas Bancárias da empresa (schema + rotas backend)
+- [x] Campo contaBancariaEmpresaId no cadastro do funcionário
+- [ ] Separação/agrupamento por banco na folha de pagamento

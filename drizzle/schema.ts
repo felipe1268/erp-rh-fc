@@ -343,6 +343,7 @@ export const employees = mysqlTable("employees", {
 	heFeriado: varchar({ length: 10 }).default('100'),
 	heInterjornada: varchar({ length: 10 }).default('50'),
 	obsAcordoHe: text(),
+	contaBancariaEmpresaId: int(), // FK para company_bank_accounts - qual conta da empresa paga este funcionário
 });
 
 export const epiDeliveries = mysqlTable("epi_deliveries", {
@@ -992,4 +993,24 @@ export const manualObraAssignments = mysqlTable("manual_obra_assignments", {
 (table) => [
 	index("moa_company_mes").on(table.companyId, table.mesReferencia),
 	index("moa_employee_mes").on(table.employeeId, table.mesReferencia),
+]);
+
+
+// Contas Bancárias da Empresa (para débito de pagamentos)
+export const companyBankAccounts = mysqlTable("company_bank_accounts", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	banco: varchar({ length: 100 }).notNull(), // Ex: "Caixa Econômica Federal", "Santander"
+	codigoBanco: varchar({ length: 10 }), // Ex: "104", "033"
+	agencia: varchar({ length: 20 }).notNull(),
+	conta: varchar({ length: 30 }).notNull(),
+	tipoConta: mysqlEnum(['corrente', 'poupanca']).default('corrente').notNull(),
+	apelido: varchar({ length: 100 }), // Ex: "CEF Principal", "Santander Folha"
+	cnpjTitular: varchar({ length: 20 }),
+	ativo: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("cba_company").on(table.companyId),
 ]);

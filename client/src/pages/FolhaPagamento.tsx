@@ -74,6 +74,7 @@ export default function FolhaPagamento() {
   const [vinculacaoObraId, setVinculacaoObraId] = useState<number | null>(null);
   const [vinculacaoJustificativa, setVinculacaoJustificativa] = useState("");
   const [showVinculacaoPanel, setShowVinculacaoPanel] = useState(false);
+  const [heObraFilter, setHeObraFilter] = useState<string>("all");
 
   // ===== QUERIES =====
   const statusMes = trpc.folha.statusMes.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -484,6 +485,35 @@ export default function FolhaPagamento() {
                     <div className="text-center py-8 text-muted-foreground text-sm">Nenhum item encontrado.</div>
                   )}
                 </div>
+                {/* Rodapé somatório dinâmico */}
+                {filteredItens.length > 0 && (() => {
+                  const totalProventos = filteredItens.reduce((s: number, i: any) => s + parseBRLNum(i.totalProventos), 0);
+                  const totalDescontos = filteredItens.reduce((s: number, i: any) => s + parseBRLNum(i.totalDescontos), 0);
+                  const totalLiquido = filteredItens.reduce((s: number, i: any) => s + parseBRLNum(i.liquido), 0);
+                  return (
+                    <div className="border-t-2 border-[#1B2A4A] bg-[#1B2A4A]/5 p-4 rounded-b-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-[#1B2A4A]">TOTAL ({filteredItens.length} funcionários)</span>
+                        </div>
+                        <div className="flex items-center gap-8">
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Proventos</p>
+                            <p className="text-sm font-bold text-green-700">{formatBRL(totalProventos)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Descontos</p>
+                            <p className="text-sm font-bold text-red-600">{formatBRL(totalDescontos)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Líquido</p>
+                            <p className="text-lg font-black text-[#1B2A4A]">{formatBRL(totalLiquido)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}
@@ -798,25 +828,38 @@ export default function FolhaPagamento() {
                       <BarChart3 className="h-4 w-4 text-amber-600" /> Ranking de Obras — Horas Extras
                     </h3>
                     <div className="space-y-2">
-                      {horasExtras.data.rankingObras.map((obra: any, idx: number) => (
-                        <div key={obra.obraId || "sem"} className="flex items-center gap-3">
-                          <span className={`font-bold text-lg w-8 text-center ${idx === 0 ? "text-amber-600" : idx === 1 ? "text-gray-500" : idx === 2 ? "text-orange-700" : "text-muted-foreground"}`}>
-                            {idx + 1}º
-                          </span>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-sm">{obra.obraNome || "Sem Obra"}</span>
-                              <span className="font-bold text-amber-700">{obra.totalHE.toFixed(1)}h</span>
+                      {horasExtras.data.rankingObras.map((obra: any, idx: number) => {
+                        const obraKey = obra.obraId ? String(obra.obraId) : "sem";
+                        const isActive = heObraFilter === obraKey;
+                        return (
+                          <button key={obraKey}
+                            onClick={() => setHeObraFilter(isActive ? "all" : obraKey)}
+                            className={`flex items-center gap-3 w-full text-left rounded-lg p-2 transition-all cursor-pointer ${
+                              isActive ? "bg-amber-100 ring-2 ring-amber-500 shadow-sm" : "hover:bg-muted/50"
+                            }`}>
+                            <span className={`font-bold text-lg w-8 text-center ${idx === 0 ? "text-amber-600" : idx === 1 ? "text-gray-500" : idx === 2 ? "text-orange-700" : "text-muted-foreground"}`}>
+                              {idx + 1}º
+                            </span>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-sm">{obra.obraNome || "Sem Obra"}</span>
+                                <span className="font-bold text-amber-700">{obra.totalHE.toFixed(1)}h</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div className="bg-amber-500 h-2 rounded-full" style={{
+                                  width: `${Math.min(100, (obra.totalHE / (horasExtras.data.rankingObras[0]?.totalHE || 1)) * 100)}%`
+                                }} />
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">{obra.totalHE.toFixed(1)}h extras</p>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div className="bg-amber-500 h-2 rounded-full" style={{
-                                width: `${Math.min(100, (obra.totalHE / (horasExtras.data.rankingObras[0]?.totalHE || 1)) * 100)}%`
-                              }} />
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">{obra.totalHE.toFixed(1)}h extras</p>
-                          </div>
-                        </div>
-                      ))}
+                          </button>
+                        );
+                      })}
+                      {heObraFilter !== "all" && (
+                        <button onClick={() => setHeObraFilter("all")} className="text-xs text-amber-700 underline mt-1 cursor-pointer">
+                          Limpar filtro
+                        </button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -828,8 +871,18 @@ export default function FolhaPagamento() {
                   <CardContent className="p-0">
                     <div className="p-4 border-b">
                       <h3 className="font-bold text-sm flex items-center gap-2">
-                        <Users className="h-4 w-4" /> Funcionários com Horas Extras ({horasExtras.data.funcionarios.length})
+                        <Users className="h-4 w-4" /> Funcionários com Horas Extras
+                        {heObraFilter !== "all" && <Badge variant="outline" className="ml-2 text-amber-700 border-amber-300">Filtrado por obra</Badge>}
                       </h3>
+                      <span className="text-xs text-muted-foreground">
+                        {(() => {
+                          const filtered = heObraFilter === "all" ? horasExtras.data.funcionarios : horasExtras.data.funcionarios.filter((f: any) => {
+                            if (heObraFilter === "sem") return !f.obraId;
+                            return String(f.obraId) === heObraFilter;
+                          });
+                          return `${filtered.length} funcionário${filtered.length !== 1 ? "s" : ""}`;
+                        })()}
+                      </span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -845,19 +898,51 @@ export default function FolhaPagamento() {
                           </tr>
                         </thead>
                         <tbody>
-                          {horasExtras.data.funcionarios.map((f: any) => (
-                            <tr key={f.employeeId} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="p-2.5 font-medium">{f.nome}</td>
-                              <td className="p-2.5 text-xs text-muted-foreground">{f.funcao || "—"}</td>
-                              <td className="p-2.5 text-xs">{f.obraNome || "—"}</td>
-                              <td className="p-2.5 text-right">{f.he50 > 0 ? `${f.he50.toFixed(1)}h` : "—"}</td>
-                              <td className="p-2.5 text-right">{f.he100 > 0 ? `${f.he100.toFixed(1)}h` : "—"}</td>
-                              <td className="p-2.5 text-right font-bold text-amber-700">{f.totalHE.toFixed(1)}h</td>
-                              <td className="p-2.5 text-right font-bold">{formatBRL(f.valorEstimado)}</td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            const funcs = heObraFilter === "all" ? horasExtras.data.funcionarios : horasExtras.data.funcionarios.filter((f: any) => {
+                              if (heObraFilter === "sem") return !f.obraId;
+                              return String(f.obraId) === heObraFilter;
+                            });
+                            return funcs.map((f: any) => (
+                              <tr key={f.employeeId} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="p-2.5 font-medium">{f.nome}</td>
+                                <td className="p-2.5 text-xs text-muted-foreground">{f.funcao || "—"}</td>
+                                <td className="p-2.5 text-xs">{f.obraNome || "—"}</td>
+                                <td className="p-2.5 text-right">{f.he50 > 0 ? `${f.he50.toFixed(1)}h` : "—"}</td>
+                                <td className="p-2.5 text-right">{f.he100 > 0 ? `${f.he100.toFixed(1)}h` : "—"}</td>
+                                <td className="p-2.5 text-right font-bold text-amber-700">{f.totalHE.toFixed(1)}h</td>
+                                <td className="p-2.5 text-right font-bold">{formatBRL(f.valorEstimado)}</td>
+                              </tr>
+                            ));
+                          })()}
                         </tbody>
                       </table>
+                      {/* Rodapé somatório HE */}
+                      {horasExtras.data.funcionarios.length > 0 && (() => {
+                        const funcs = heObraFilter === "all" ? horasExtras.data.funcionarios : horasExtras.data.funcionarios.filter((f: any) => {
+                          if (heObraFilter === "sem") return !f.obraId;
+                          return String(f.obraId) === heObraFilter;
+                        });
+                        const totalHE = funcs.reduce((s: number, f: any) => s + f.totalHE, 0);
+                        const totalValor = funcs.reduce((s: number, f: any) => s + (f.valorEstimado || 0), 0);
+                        return (
+                          <div className="border-t-2 border-amber-600 bg-amber-50 p-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold text-amber-800">TOTAL ({funcs.length} funcionários)</span>
+                              <div className="flex items-center gap-8">
+                                <div className="text-right">
+                                  <p className="text-xs text-muted-foreground">Total HE</p>
+                                  <p className="text-sm font-bold text-amber-700">{totalHE.toFixed(1)}h</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-muted-foreground">Valor Estimado</p>
+                                  <p className="text-lg font-black text-amber-800">{formatBRL(totalValor)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CardContent>
                 </Card>
@@ -1248,6 +1333,52 @@ export default function FolhaPagamento() {
             </CardContent>
           </Card>
         </div>
+
+        {/* RESUMO TOTAL DO MÊS */}
+        {(vale || pagamento) && (() => {
+          const valeLiquido = vale ? parseBRLNum(vale.totalLiquido) : 0;
+          const pagLiquido = pagamento ? parseBRLNum(pagamento.totalLiquido) : 0;
+          const totalMes = valeLiquido + pagLiquido;
+          return (
+            <Card className="border-2 border-[#1B2A4A]/30 bg-gradient-to-r from-[#1B2A4A]/5 to-[#1B2A4A]/10">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-[#1B2A4A] flex items-center justify-center">
+                      <BarChart3 className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-base text-[#1B2A4A]">Resumo Total do Mês</p>
+                      <p className="text-xs text-muted-foreground">{formatMesAno(mesAno)}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                  <div className="bg-orange-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Vale / Adiantamento</p>
+                    <p className="text-lg font-bold text-orange-700">{formatBRL(valeLiquido)}</p>
+                    {vale && <p className="text-[10px] text-muted-foreground">{vale.totalFuncionarios} funcionários</p>}
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Pagamento</p>
+                    <p className="text-lg font-bold text-green-700">{formatBRL(pagLiquido)}</p>
+                    {pagamento && <p className="text-[10px] text-muted-foreground">{pagamento.totalFuncionarios} funcionários</p>}
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Horas Extras</p>
+                    <p className="text-lg font-bold text-amber-700">—</p>
+                    <p className="text-[10px] text-muted-foreground">Ver detalhes</p>
+                  </div>
+                  <div className="bg-[#1B2A4A]/10 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Total Geral</p>
+                    <p className="text-xl font-black text-[#1B2A4A]">{formatBRL(totalMes)}</p>
+                    <p className="text-[10px] text-muted-foreground">Vale + Pagamento</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* INFO PONTO */}
         {statusMes.data?.pontoConsolidado && (
