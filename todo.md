@@ -1436,3 +1436,5 @@
 - [x] E-mail desligamento: layout mais limpo e organizado visualmente
 - [x] Ver Detalhes no alerta de divergências já abre na aba Detalhes com filtro Divergentes ativo
 - [x] Bug: Admin Master não consegue alterar critérios do sistema (mostra "Apenas admin pode alterar critérios")
+- [ ] Bug: Documentos (ASOs, Treinamentos, Atestados, Advertências) permanecem após exclusão do funcionário
+- [ ] Implementar cascade delete ou filtro para documentos de funcionários excluídos/desligados

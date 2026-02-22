@@ -310,6 +310,24 @@ export async function getDeletedEmployees(companyId?: number) {
 export async function permanentDeleteEmployee(id: number, companyId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Cascade delete: remover todos os documentos e registros relacionados ao funcionário
+  await db.delete(asos).where(eq(asos.employeeId, id));
+  await db.delete(trainings).where(eq(trainings.employeeId, id));
+  await db.delete(atestados).where(eq(atestados.employeeId, id));
+  await db.delete(warnings).where(eq(warnings.employeeId, id));
+  await db.delete(accidents).where(eq(accidents.employeeId, id));
+  await db.delete(epiDeliveries).where(eq(epiDeliveries.employeeId, id));
+  await db.delete(timeRecords).where(eq(timeRecords.employeeId, id));
+  await db.delete(timeInconsistencies).where(eq(timeInconsistencies.employeeId, id));
+  await db.delete(payroll).where(eq(payroll.employeeId, id));
+  await db.delete(vrBenefits).where(eq(vrBenefits.employeeId, id));
+  await db.delete(advances).where(eq(advances.employeeId, id));
+  await db.delete(extraPayments).where(eq(extraPayments.employeeId, id));
+  await db.delete(obraFuncionarios).where(eq(obraFuncionarios.employeeId, id));
+  await db.delete(obraHorasRateio).where(eq(obraHorasRateio.employeeId, id));
+  await db.delete(employeeHistory).where(eq(employeeHistory.employeeId, id));
+  await db.delete(trainingDocuments).where(eq(trainingDocuments.employeeId, id));
+  // Finalmente, excluir o funcionário
   await db.delete(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 
@@ -380,7 +398,9 @@ export async function getAuditLogs(companyId?: number, limit = 100) {
 // ============================================================
 import {
   asos, trainings, epis, epiDeliveries, accidents, warnings, risks,
-  timeRecords, payroll,
+  timeRecords, payroll, atestados, vrBenefits, advances, extraPayments,
+  folhaItens, manualObraAssignments, insuranceAlertsLog, notificationLogs,
+  cipaMembers as cipaMembersTable, timeInconsistencies, processosTrabalhistas,
   vehicles, equipment, extinguishers, hydrants,
   audits, deviations, actionPlans, chemicals, dds,
   cipaElections, cipaMembers,
@@ -796,14 +816,19 @@ export async function getSSTStats(companyId: number) {
   const today = new Date().toISOString().split("T")[0];
   const firstDayMonth = today.substring(0, 7) + "-01";
 
+  // Filtrar apenas documentos de funcionários não excluídos (deletedAt IS NULL)
   const [asosVencidos] = await db.select({ count: sql<number>`count(*)` }).from(asos)
-    .where(and(eq(asos.companyId, companyId), sql`${asos.dataValidade} < ${today}`));
+    .innerJoin(employees, eq(asos.employeeId, employees.id))
+    .where(and(eq(asos.companyId, companyId), isNull(employees.deletedAt), sql`${asos.dataValidade} < ${today}`));
   const [treinamentosVencer] = await db.select({ count: sql<number>`count(*)` }).from(trainings)
-    .where(and(eq(trainings.companyId, companyId), sql`${trainings.dataValidade} < ${today}`));
+    .innerJoin(employees, eq(trainings.employeeId, employees.id))
+    .where(and(eq(trainings.companyId, companyId), isNull(employees.deletedAt), sql`${trainings.dataValidade} < ${today}`));
   const [acidentesMes] = await db.select({ count: sql<number>`count(*)` }).from(accidents)
-    .where(and(eq(accidents.companyId, companyId), sql`${accidents.dataAcidente} >= ${firstDayMonth}`));
+    .innerJoin(employees, eq(accidents.employeeId, employees.id))
+    .where(and(eq(accidents.companyId, companyId), isNull(employees.deletedAt), sql`${accidents.dataAcidente} >= ${firstDayMonth}`));
   const [advertenciasMes] = await db.select({ count: sql<number>`count(*)` }).from(warnings)
-    .where(and(eq(warnings.companyId, companyId), sql`${warnings.dataOcorrencia} >= ${firstDayMonth}`));
+    .innerJoin(employees, eq(warnings.employeeId, employees.id))
+    .where(and(eq(warnings.companyId, companyId), isNull(employees.deletedAt), sql`${warnings.dataOcorrencia} >= ${firstDayMonth}`));
 
   return {
     asosVencidos: Number(asosVencidos?.count ?? 0),

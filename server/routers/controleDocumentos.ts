@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions } from "../../drizzle/schema";
-import { eq, and, desc, sql, ne } from "drizzle-orm";
+import { eq, and, desc, sql, ne, isNull } from "drizzle-orm";
 import { storagePut } from "../storage";
 
 // Modelos de advertência padrão CLT
@@ -69,8 +69,8 @@ export const controleDocumentosRouter = router({
             createdAt: asos.createdAt,
           })
           .from(asos)
-          .leftJoin(employees, eq(asos.employeeId, employees.id))
-          .where(eq(asos.companyId, input.companyId))
+          .innerJoin(employees, eq(asos.employeeId, employees.id))
+          .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt)))
           .orderBy(employees.nomeCompleto);
 
         return rows.map((r: any) => ({
@@ -308,8 +308,8 @@ export const controleDocumentosRouter = router({
             documentoUrl: atestados.documentoUrl,
           })
           .from(atestados)
-          .leftJoin(employees, eq(atestados.employeeId, employees.id))
-          .where(eq(atestados.companyId, input.companyId))
+          .innerJoin(employees, eq(atestados.employeeId, employees.id))
+          .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt)))
           .orderBy(desc(atestados.dataEmissao));
       }),
 
@@ -416,8 +416,8 @@ export const controleDocumentosRouter = router({
             observacoes: trainings.observacoes,
           })
           .from(trainings)
-          .leftJoin(employees, eq(trainings.employeeId, employees.id))
-          .where(eq(trainings.companyId, input.companyId))
+          .innerJoin(employees, eq(trainings.employeeId, employees.id))
+          .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt)))
           .orderBy(desc(trainings.dataRealizacao));
 
         return rows.map((r: any) => {
@@ -545,8 +545,8 @@ export const controleDocumentosRouter = router({
             origemModulo: warnings.origemModulo,
           })
           .from(warnings)
-          .leftJoin(employees, eq(warnings.employeeId, employees.id))
-          .where(eq(warnings.companyId, input.companyId))
+          .innerJoin(employees, eq(warnings.employeeId, employees.id))
+          .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt)))
           .orderBy(desc(warnings.dataOcorrencia));
       }),
 
@@ -646,32 +646,38 @@ export const controleDocumentosRouter = router({
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
         const db = (await getDb())!;
+      // Filtrar apenas documentos de funcionários não excluídos (deletedAt IS NULL)
       const [asoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
-        .where(eq(asos.companyId, input.companyId));
+        .innerJoin(employees, eq(asos.employeeId, employees.id))
+        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt)));
 
       const [treinamentoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(trainings)
-        .where(eq(trainings.companyId, input.companyId));
+        .innerJoin(employees, eq(trainings.employeeId, employees.id))
+        .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt)));
 
       const [atestadoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(atestados)
-        .where(eq(atestados.companyId, input.companyId));
+        .innerJoin(employees, eq(atestados.employeeId, employees.id))
+        .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt)));
 
       const [advertenciaCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(warnings)
-        .where(eq(warnings.companyId, input.companyId));
+        .innerJoin(employees, eq(warnings.employeeId, employees.id))
+        .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt)));
 
       // ASOs vencidos
       const hoje = new Date().toISOString().split("T")[0];
       const [asosVencidos] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
-        .where(and(eq(asos.companyId, input.companyId), sql`${asos.dataValidade} < ${hoje}`));
+        .innerJoin(employees, eq(asos.employeeId, employees.id))
+        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), sql`${asos.dataValidade} < ${hoje}`));
 
       // ASOs a vencer em 30 dias
       const em30dias = new Date();
@@ -680,9 +686,11 @@ export const controleDocumentosRouter = router({
       const [asosAVencer] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
+        .innerJoin(employees, eq(asos.employeeId, employees.id))
         .where(
           and(
             eq(asos.companyId, input.companyId),
+            isNull(employees.deletedAt),
             sql`${asos.dataValidade} >= ${hoje}`,
             sql`${asos.dataValidade} <= ${em30diasStr}`
           )
