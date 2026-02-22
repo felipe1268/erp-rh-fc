@@ -555,12 +555,43 @@ export default function Configuracoes() {
                             {u.lastSignedIn ? new Date(u.lastSignedIn).toLocaleDateString("pt-BR") : "-"}
                           </td>
                           <td className="py-2">
-                            {u.loginMethod === "local" ? (
-                              <Button size="sm" variant="outline" className="text-xs"
-                                onClick={() => { if (confirm(`Resetar senha de ${u.name}?`)) resetPwdMutation.mutate({ userId: u.id }); }}>
-                                Resetar Senha
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {/* Editar */}
+                              <Button size="sm" variant="outline" className="text-xs h-7 px-2" title="Editar"
+                                onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); }}>
+                                <Pencil className="h-3 w-3" />
                               </Button>
-                            ) : null}
+                              {/* Alterar Perfil */}
+                              {isMaster && u.id !== user?.id && (
+                                <select
+                                  className="text-xs border rounded px-1 py-1 h-7 bg-white"
+                                  value={u.role || "user"}
+                                  onChange={(e) => {
+                                    if (confirm(`Alterar perfil de ${u.name} para ${e.target.value === 'admin_master' ? 'Admin Master' : e.target.value === 'admin' ? 'Admin' : 'Usuário'}?`)) {
+                                      updateRoleMutation.mutate({ userId: u.id, role: e.target.value as "user" | "admin" | "admin_master" });
+                                    }
+                                  }}
+                                >
+                                  <option value="user">Usuário</option>
+                                  <option value="admin">Admin</option>
+                                  <option value="admin_master">Admin Master</option>
+                                </select>
+                              )}
+                              {/* Resetar Senha */}
+                              {u.loginMethod === "local" && (
+                                <Button size="sm" variant="outline" className="text-xs h-7 px-2 text-amber-700 border-amber-300" title="Resetar Senha"
+                                  onClick={() => { if (confirm(`Resetar senha de ${u.name}? Nova senha: fc2026`)) resetPwdMutation.mutate({ userId: u.id }); }}>
+                                  <Key className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {/* Excluir */}
+                              {isMaster && u.id !== user?.id && (
+                                <Button size="sm" variant="outline" className="text-xs h-7 px-2 text-red-600 border-red-300 hover:bg-red-50" title="Excluir"
+                                  onClick={() => { if (confirm(`Excluir usuário ${u.name}? Esta ação não pode ser desfeita.`)) deleteUserMutation.mutate({ userId: u.id }); }}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -661,6 +692,47 @@ export default function Configuracoes() {
               <Button variant="outline" onClick={() => setShowCreateUser(false)}>Cancelar</Button>
               <Button onClick={handleCreateUser} disabled={createUserMutation.isPending}>
                 {createUserMutation.isPending ? "Criando..." : "Criar Usuário"}
+              </Button>
+            </div>
+          </div>
+        </FullScreenDialog>
+
+        {/* Dialog: Editar Usuário */}
+        <FullScreenDialog open={!!editingUser} onClose={() => setEditingUser(null)} title="Editar Usuário" subtitle={`Editando: ${editingUser?.name || ''}`}>
+          <div className="w-full max-w-2xl">
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Nome Completo</label>
+                <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nome do usuário" />
+              </div>
+              {editingUser?.loginMethod === "local" && (
+                <div>
+                  <label className="text-sm font-medium">Username</label>
+                  <Input value={editUsername} onChange={e => setEditUsername(e.target.value)} placeholder="Username" />
+                </div>
+              )}
+              <div>
+                <label className="text-sm font-medium">Email</label>
+                <Input value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@empresa.com" />
+              </div>
+              <div className="bg-gray-50 border rounded-lg p-3 text-sm">
+                <p className="text-gray-500"><strong>Método de Login:</strong> {editingUser?.loginMethod === "local" ? "Local (username/senha)" : editingUser?.loginMethod === "apple" ? "Apple ID" : "OAuth"}</p>
+                <p className="text-gray-500"><strong>Perfil:</strong> {editingUser?.role === "admin_master" ? "Admin Master" : editingUser?.role === "admin" ? "Admin" : "Usuário"}</p>
+                <p className="text-gray-500"><strong>Último Acesso:</strong> {editingUser?.lastSignedIn ? new Date(editingUser.lastSignedIn).toLocaleDateString("pt-BR") : "Nunca"}</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+              <Button variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
+              <Button onClick={() => {
+                if (!editName.trim()) { toast.error("Nome é obrigatório"); return; }
+                updateUserMutation.mutate({
+                  userId: editingUser.id,
+                  name: editName.trim(),
+                  email: editEmail.trim() || undefined,
+                  username: editUsername.trim() || undefined,
+                });
+              }} disabled={updateUserMutation.isPending}>
+                {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}
               </Button>
             </div>
           </div>

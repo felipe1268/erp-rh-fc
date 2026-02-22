@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `email_templates` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `companyId` int NOT NULL,\n  `tipo` varchar(50) NOT NULL,\n  `assunto` varchar(255) NOT NULL,\n  `corpo` text NOT NULL,\n  `ativo` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `email_templates` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `companyId` int NOT NULL,\n  `tipo` varchar(50) NOT NULL,\n  `assunto` varchar(255) NOT NULL,\n  `corpo` text NOT NULL,\n  `ativo` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 485
+}

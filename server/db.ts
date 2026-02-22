@@ -311,22 +311,43 @@ export async function permanentDeleteEmployee(id: number, companyId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   // Cascade delete: remover todos os documentos e registros relacionados ao funcionário
+  // 1. Documentos e SST
   await db.delete(asos).where(eq(asos.employeeId, id));
   await db.delete(trainings).where(eq(trainings.employeeId, id));
+  await db.delete(trainingDocuments).where(eq(trainingDocuments.employeeId, id));
   await db.delete(atestados).where(eq(atestados.employeeId, id));
   await db.delete(warnings).where(eq(warnings.employeeId, id));
   await db.delete(accidents).where(eq(accidents.employeeId, id));
   await db.delete(epiDeliveries).where(eq(epiDeliveries.employeeId, id));
+  // 2. Ponto e Folha
   await db.delete(timeRecords).where(eq(timeRecords.employeeId, id));
   await db.delete(timeInconsistencies).where(eq(timeInconsistencies.employeeId, id));
   await db.delete(payroll).where(eq(payroll.employeeId, id));
+  await db.delete(monthlyPayrollSummary).where(eq(monthlyPayrollSummary.employeeId, id));
+  await db.delete(folhaItens).where(eq(folhaItens.employeeId, id));
+  // 3. Benefícios e Pagamentos
   await db.delete(vrBenefits).where(eq(vrBenefits.employeeId, id));
   await db.delete(advances).where(eq(advances.employeeId, id));
   await db.delete(extraPayments).where(eq(extraPayments.employeeId, id));
+  // 4. Obras e Lotação
   await db.delete(obraFuncionarios).where(eq(obraFuncionarios.employeeId, id));
   await db.delete(obraHorasRateio).where(eq(obraHorasRateio.employeeId, id));
+  await db.delete(manualObraAssignments).where(eq(manualObraAssignments.employeeId, id));
+  // 5. Histórico e Processos
   await db.delete(employeeHistory).where(eq(employeeHistory.employeeId, id));
-  await db.delete(trainingDocuments).where(eq(trainingDocuments.employeeId, id));
+  // Processos trabalhistas: primeiro excluir andamentos, depois processos
+  const empProcessos = await db.select({ id: processosTrabalhistas.id }).from(processosTrabalhistas).where(eq(processosTrabalhistas.employeeId, id));
+  for (const p of empProcessos) {
+    await db.delete(processosAndamentos).where(eq(processosAndamentos.processoId, p.id));
+  }
+  await db.delete(processosTrabalhistas).where(eq(processosTrabalhistas.employeeId, id));
+  // 6. CIPA
+  await db.delete(cipaMembersTable).where(eq(cipaMembersTable.employeeId, id));
+  // 7. Alertas e Logs (não críticos, mas limpam referências)
+  await db.delete(insuranceAlertsLog).where(eq(insuranceAlertsLog.employeeId, id));
+  await db.delete(blacklistReactivationRequests).where(eq(blacklistReactivationRequests.employeeId, id));
+  // notification_logs tem employeeId nullable, limpar referências
+  await db.execute(sql`UPDATE notification_logs SET employeeId = NULL WHERE employeeId = ${id}`);
   // Finalmente, excluir o funcionário
   await db.delete(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
@@ -400,7 +421,8 @@ import {
   asos, trainings, epis, epiDeliveries, accidents, warnings, risks,
   timeRecords, payroll, atestados, vrBenefits, advances, extraPayments,
   folhaItens, manualObraAssignments, insuranceAlertsLog, notificationLogs,
-  cipaMembers as cipaMembersTable, timeInconsistencies, processosTrabalhistas,
+  cipaMembers as cipaMembersTable, timeInconsistencies, processosTrabalhistas, processosAndamentos,
+  blacklistReactivationRequests, monthlyPayrollSummary,
   vehicles, equipment, extinguishers, hydrants,
   audits, deviations, actionPlans, chemicals, dds,
   cipaElections, cipaMembers,

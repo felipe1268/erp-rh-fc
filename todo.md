@@ -1438,3 +1438,16 @@
 - [x] Bug: Admin Master não consegue alterar critérios do sistema (mostra "Apenas admin pode alterar critérios")
 - [ ] Bug: Documentos (ASOs, Treinamentos, Atestados, Advertências) permanecem após exclusão do funcionário
 - [ ] Implementar cascade delete ou filtro para documentos de funcionários excluídos/desligados
+- [x] Bug: Limpeza do banco de dados falha por ordem de exclusão (FK constraints) - corrigir ordem
+- [ ] Adicionar campo editável de texto padrão para cada tipo de notificação (Contratação, Demissão, Transferência, Afastamento) na aba E-mail
+
+- [x] Refazer planilha modelo de importação de colaboradores com todos os campos corretos
+- [x] Incluir campo "Código Contábil" na planilha modelo e no código de importação
+- [x] Garantir que todos os campos da planilha modelo correspondem ao schema do banco de dados
+- [x] Adicionar botão de impressão na página de detalhes da função (Descrição + Ordem de Serviço NR-1)
+- [x] Adicionar botão de impressão da ficha da função (Descrição + OS NR-1) no Raio-X do colaborador
+- [x] IA ao gerar Descrição/OS NR-1 deve incluir automaticamente dados da empresa selecionada no texto
+- [x] Corrigir IA para usar dados reais da empresa (nome, CNPJ, data) ao gerar Descrição/OS NR-1 em vez de placeholders genéricos
+- [x] Criar rota backend + botão frontend para gerar Descrição/OS NR-1 com IA em lote para todas as funções incompletas
+- [x] Adicionar ações de editar, excluir e alterar perfil dos usuários na tela Configurações > Usuários
+- [x] Corrigir verificações de permissão para reconhecer admin_master como tendo todas as permissões de admin

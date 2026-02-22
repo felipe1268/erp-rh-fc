@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Briefcase, Sparkles, FileText, Shield, ChevronDown, ChevronUp, Loader2, Users, AlertTriangle, Filter } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Briefcase, Sparkles, FileText, Shield, ChevronDown, ChevronUp, Loader2, Users, AlertTriangle, Filter, Printer } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -86,7 +86,7 @@ function CboAutocomplete({ value, onChange, onSelect }: { value: string; onChang
 type FilterType = "todas" | "incompletas" | "sem_cbo" | "sem_descricao" | "sem_os";
 
 export default function Funcoes() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: !!companyId });
   const funcoes = funcoesQ.data ?? [];
@@ -95,6 +95,34 @@ export default function Funcoes() {
   const updateMut = trpc.jobFunctions.update.useMutation({ onSuccess: () => { funcoesQ.refetch(); setDialogOpen(false); toast.success("Função atualizada!"); } });
   const deleteMut = trpc.jobFunctions.delete.useMutation({ onSuccess: () => { funcoesQ.refetch(); toast.success("Função excluída!"); } });
   const generateDescMut = trpc.goldenRules.generateJobDescription.useMutation();
+  const batchGenerateMut = trpc.goldenRules.generateBatchJobDescriptions.useMutation();
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState("");
+
+  const handleBatchGenerate = async () => {
+    const semDesc = funcoes.filter((f: any) => !f.descricao || !f.ordemServico);
+    if (semDesc.length === 0) {
+      toast.info("Todas as funções já possuem Descrição e Ordem de Serviço!");
+      return;
+    }
+    if (!confirm(`Gerar Descrição e OS NR-1 com IA para ${semDesc.length} função(ões) incompleta(s)?\n\nIsso pode levar alguns minutos.`)) return;
+    setBatchGenerating(true);
+    setBatchProgress(`Gerando para ${semDesc.length} funções...`);
+    try {
+      const result = await batchGenerateMut.mutateAsync({ companyId });
+      funcoesQ.refetch();
+      if (result.erros.length > 0) {
+        toast.warning(`${result.geradas} de ${result.total} geradas. ${result.erros.length} erro(s).`);
+      } else {
+        toast.success(`${result.geradas} função(ões) preenchida(s) com sucesso pela IA!`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar em lote");
+    } finally {
+      setBatchGenerating(false);
+      setBatchProgress("");
+    }
+  };
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -198,6 +226,32 @@ export default function Funcoes() {
 
   const viewingFn = viewingId ? funcoes.find((f: any) => f.id === viewingId) : null;
 
+  // Impressão da ficha da função
+  const handlePrintFuncao = (fn: any, nomeColaborador?: string) => {
+    if (!fn) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) { toast.error("Popup bloqueado. Permita popups para imprimir."); return; }
+    const logoUrl = selectedCompany?.logoUrl || "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png";
+    const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC Engenharia";
+    const cnpjEmpresa = selectedCompany?.cnpj || "";
+    const dataEmissao = new Date().toLocaleString("pt-BR");
+    const css = `@page{size:A4 portrait;margin:15mm 18mm 25mm 18mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a1a;line-height:1.5;padding-bottom:50px}.header{background:#1B2A4A;padding:16px 24px;display:flex;align-items:center;gap:18px;border-radius:6px;margin-bottom:20px}.header img{height:52px;object-fit:contain}.header .info{color:white;flex:1}.header .info h1{font-size:14px;font-weight:700;letter-spacing:1.5px;margin-bottom:2px}.header .info p{font-size:10px;opacity:0.85}.header .date{color:white;text-align:right;font-size:9px;opacity:0.8}.funcao-title{background:linear-gradient(135deg,#f0f4f8,#e8edf4);border-left:5px solid #1B2A4A;padding:14px 20px;margin-bottom:20px;border-radius:0 6px 6px 0}.funcao-title h2{font-size:18px;font-weight:800;color:#1B2A4A;text-transform:uppercase;letter-spacing:0.5px}.funcao-title .cbo{font-size:12px;color:#4a5568;margin-top:2px}.funcao-title .colab{font-size:12px;color:#2563eb;font-weight:600;margin-top:4px}.section{margin-bottom:18px;page-break-inside:avoid}.section-header{font-size:13px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:4px;margin-bottom:10px;display:flex;align-items:center;gap:8px}.section-content{font-size:11px;line-height:1.6;color:#374151;text-align:justify;white-space:pre-wrap;padding:12px 16px;border-radius:6px}.desc-box{background:#f9fafb;border:1px solid #e5e7eb}.os-box{background:#fffbeb;border:1px solid #fde68a}.assinatura{margin-top:40px;display:flex;justify-content:space-between;gap:40px;padding-top:20px}.assinatura .linha{flex:1;text-align:center;border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#4a5568}.footer{position:fixed;bottom:0;left:0;right:0;padding:8px 18mm;border-top:2px solid #1B2A4A;font-size:8px;display:flex;justify-content:space-between;background:white}.lgpd{color:#dc2626;font-weight:600}`;
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha da Função - ${fn.nome}</title><style>${css}</style></head><body>`;
+    html += `<div class="header"><img src="${logoUrl}" alt="Logo" /><div class="info"><h1>FICHA DA FUNÇÃO</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="date"><p>${dataEmissao}</p></div></div>`;
+    html += `<div class="funcao-title"><h2>${fn.nome}</h2>${fn.cbo ? `<div class="cbo">CBO: ${fn.cbo}</div>` : ''}${nomeColaborador ? `<div class="colab">Colaborador: ${nomeColaborador}</div>` : ''}</div>`;
+    if (fn.descricao) {
+      html += `<div class="section"><div class="section-header">📋 DESCRIÇÃO DA FUNÇÃO E ATIVIDADES</div><div class="section-content desc-box">${fn.descricao}</div></div>`;
+    }
+    if (fn.ordemServico) {
+      html += `<div class="section"><div class="section-header">🛡️ ORDEM DE SERVIÇO — NR-1</div><div class="section-content os-box">${fn.ordemServico}</div></div>`;
+    }
+    html += `<div class="assinatura"><div class="linha">Responsável RH / SST</div>${nomeColaborador ? `<div class="linha">${nomeColaborador}<br/><small>Colaborador — Declaro que recebi, li e compreendi as informações acima</small></div>` : '<div class="linha">Colaborador</div>'}</div>`;
+    html += `<div class="footer"><span>ERP RH & DP — ${nomeEmpresa}</span><span>Gerado em ${dataEmissao}</span><span class="lgpd">Documento interno — LGPD (Lei 13.709/2018)</span></div></body></html>`;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 600);
+  };
+
   // Buscar funcionários vinculados à função visualizada
   const employeesQ = trpc.employees.list.useQuery(
     { companyId },
@@ -237,6 +291,20 @@ export default function Funcoes() {
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <PrintActions title="Funções" />
+            {incompletas > 0 && (
+              <Button
+                variant="outline"
+                onClick={handleBatchGenerate}
+                disabled={batchGenerating}
+                className="text-purple-700 border-purple-300 hover:bg-purple-50"
+              >
+                {batchGenerating ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {batchProgress || 'Gerando...'}</>
+                ) : (
+                  <><Sparkles className="h-4 w-4 mr-2" /> Gerar Todos com IA ({incompletas})</>
+                )}
+              </Button>
+            )}
             <Button onClick={openNew} className="bg-[#1B2A4A] hover:bg-[#243660]">
               <Plus className="h-4 w-4 mr-2" /> Nova Função
             </Button>
@@ -612,6 +680,9 @@ export default function Funcoes() {
 
             <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t">
               <Button variant="outline" onClick={() => setViewingId(null)}>Fechar</Button>
+              <Button variant="outline" onClick={() => handlePrintFuncao(viewingFn)} className="text-green-700 border-green-300 hover:bg-green-50">
+                <Printer className="h-4 w-4 mr-2" /> Imprimir Ficha
+              </Button>
               <Button onClick={() => { setViewingId(null); openEdit(viewingFn); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
                 <Pencil className="h-4 w-4 mr-2" /> Editar Função
               </Button>

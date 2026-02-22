@@ -993,10 +993,68 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                   <div className="space-y-4">
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Briefcase className="h-5 w-5 text-blue-500" />
-                          {funcaoDetalhes.nome} {funcaoDetalhes.cbo ? <Badge variant="outline" className="ml-2">CBO: {funcaoDetalhes.cbo}</Badge> : null}
-                        </CardTitle>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Briefcase className="h-5 w-5 text-blue-500" />
+                            {funcaoDetalhes.nome} {funcaoDetalhes.cbo ? <Badge variant="outline" className="ml-2">CBO: {funcaoDetalhes.cbo}</Badge> : null}
+                          </CardTitle>
+                          <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => {
+                            const companyName = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || 'Empresa';
+                            const empName = emp?.nomeCompleto || 'Colaborador';
+                            const empCargo = emp?.funcao || emp?.cargo || funcaoDetalhes.nome || '';
+                            const empMatricula = emp?.codigoInterno || emp?.matricula || '';
+                            const printW = window.open('', '_blank');
+                            if (!printW) return;
+                            printW.document.write(`<!DOCTYPE html><html><head><title>Ficha da Função - ${empName}</title>
+                              <style>
+                                @media print { @page { margin: 15mm; } }
+                                body { font-family: Arial, sans-serif; font-size: 12px; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+                                .header { text-align: center; border-bottom: 3px solid #1B2A4A; padding-bottom: 15px; margin-bottom: 20px; }
+                                .header h1 { color: #1B2A4A; font-size: 18px; margin: 0; }
+                                .header p { color: #666; font-size: 11px; margin: 4px 0 0; }
+                                .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f8f9fa; padding: 12px; border-radius: 6px; margin-bottom: 20px; }
+                                .info-item { font-size: 11px; }
+                                .info-item strong { color: #1B2A4A; }
+                                .section { margin-bottom: 20px; }
+                                .section h2 { font-size: 14px; color: #1B2A4A; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 10px; }
+                                .section-content { background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #1B2A4A; white-space: pre-line; line-height: 1.6; }
+                                .section-os .section-content { border-left-color: #d97706; background: #fffbeb; }
+                                .signature { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; text-align: center; }
+                                .signature div { border-top: 1px solid #333; padding-top: 8px; font-size: 11px; }
+                                .footer { text-align: center; font-size: 9px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px; }
+                              </style></head><body>
+                              <div class="header">
+                                <h1>${companyName}</h1>
+                                <p>FICHA DA FUNÇÃO — DESCRIÇÃO DE ATIVIDADES E ORDEM DE SERVIÇO (NR-1)</p>
+                              </div>
+                              <div class="info-grid">
+                                <div class="info-item"><strong>Colaborador:</strong> ${empName}</div>
+                                <div class="info-item"><strong>Matrícula:</strong> ${empMatricula || '-'}</div>
+                                <div class="info-item"><strong>Função:</strong> ${funcaoDetalhes.nome}</div>
+                                <div class="info-item"><strong>CBO:</strong> ${funcaoDetalhes.cbo || '-'}</div>
+                                <div class="info-item"><strong>Setor:</strong> ${emp?.setor || '-'}</div>
+                                <div class="info-item"><strong>Data:</strong> ${new Date().toLocaleDateString('pt-BR')}</div>
+                              </div>
+                              <div class="section">
+                                <h2>Descrição da Função e Atividades</h2>
+                                <div class="section-content">${funcaoDetalhes.descricao || 'Sem descrição cadastrada'}</div>
+                              </div>
+                              ${funcaoDetalhes.ordemServico ? `<div class="section section-os">
+                                <h2>Ordem de Serviço — NR-1</h2>
+                                <div class="section-content">${funcaoDetalhes.ordemServico}</div>
+                              </div>` : ''}
+                              <div class="signature">
+                                <div>${empName}<br/><small>Colaborador</small></div>
+                                <div>Responsável RH<br/><small>${companyName}</small></div>
+                              </div>
+                              <div class="footer">Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} — ${companyName}</div>
+                            </body></html>`);
+                            printW.document.close();
+                            setTimeout(() => printW.print(), 300);
+                          }}>
+                            <Printer className="h-3.5 w-3.5" /> Imprimir Ficha
+                          </Button>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">

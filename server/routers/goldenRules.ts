@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { goldenRules, jobFunctions } from "../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { goldenRules, jobFunctions, companies } from "../../drizzle/schema";
+import { eq, and, desc, or, isNull } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
 export const goldenRulesRouter = router({
@@ -73,7 +73,13 @@ export const goldenRulesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('DB not available');
 
-      // 1. Buscar todas as Regras de Ouro ativas da empresa
+      // 1. Buscar dados da empresa
+      const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+      const nomeEmpresa = company?.nomeFantasia || company?.razaoSocial || 'Empresa';
+      const cnpjEmpresa = company?.cnpj || '';
+      const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+      // 2. Buscar todas as Regras de Ouro ativas da empresa
       const rules = await db.select().from(goldenRules)
         .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1)));
 
@@ -81,9 +87,12 @@ export const goldenRulesRouter = router({
         ? rules.map((r: any) => `[${r.categoria.toUpperCase()} - ${r.prioridade.toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
         : 'Nenhuma regra de ouro cadastrada.';
 
-      // 2. Chamar a IA para gerar descrição + Ordem de Serviço
+      // 3. Chamar a IA para gerar descrição + Ordem de Serviço
       const prompt = `Você é um especialista em Recursos Humanos e Segurança do Trabalho no Brasil.
 
+EMPRESA: ${nomeEmpresa}
+CNPJ: ${cnpjEmpresa}
+DATA DE EMISSÃO: ${dataHoje}
 FUNÇÃO: ${input.nomeFuncao}
 ${input.cbo ? `CBO: ${input.cbo}` : ''}
 SETOR: Construção Civil
@@ -91,15 +100,15 @@ SETOR: Construção Civil
 REGRAS DE OURO DA EMPRESA (INVIOLÁVEIS - nunca sugira algo que contradiga estas regras):
 ${regrasTexto}
 
-Gere dois textos em português brasileiro:
+Gere dois textos em português brasileiro. IMPORTANTE: Use os dados REAIS da empresa acima (nome "${nomeEmpresa}", CNPJ "${cnpjEmpresa}", data "${dataHoje}") nos textos. NÃO use placeholders como "[Nome da Empresa]" ou "[Data]".
 
-1. **DESCRIÇÃO DA FUNÇÃO**: Descreva as atividades principais, responsabilidades, competências necessárias e requisitos da função conforme a Classificação Brasileira de Ocupações (CBO). Seja objetivo e completo. Inclua:
+1. **DESCRIÇÃO DA FUNÇÃO**: Comece com "DESCRIÇÃO DA FUNÇÃO: ${input.nomeFuncao}${input.cbo ? ` CBO: ${input.cbo}` : ''}". Descreva as atividades principais, responsabilidades, competências necessárias e requisitos da função conforme a Classificação Brasileira de Ocupações (CBO). Seja objetivo e completo. Inclua:
    - Atividades principais (mínimo 5)
    - Responsabilidades do cargo
    - Competências técnicas necessárias
    - Requisitos mínimos (formação, experiência)
 
-2. **ORDEM DE SERVIÇO (NR-1)**: Conforme a Norma Regulamentadora NR-1 (Disposições Gerais e Gerenciamento de Riscos Ocupacionais), elabore a Ordem de Serviço para esta função contendo:
+2. **ORDEM DE SERVIÇO (NR-1)**: Comece com "ORDEM DE SERVIÇO (NR-1) — ${input.nomeFuncao}${input.cbo ? ` CBO: ${input.cbo}` : ''}". Logo abaixo inclua: Empresa: ${nomeEmpresa}, CNPJ: ${cnpjEmpresa}, Data de Emissão: ${dataHoje}, Revisão: 00. Conforme a Norma Regulamentadora NR-1 (Disposições Gerais e Gerenciamento de Riscos Ocupacionais), elabore a Ordem de Serviço para esta função contendo:
    - Descrição das atividades e procedimentos de trabalho
    - Riscos ocupacionais identificados (físicos, químicos, biológicos, ergonômicos, de acidentes)
    - Medidas de prevenção e controle
@@ -108,7 +117,7 @@ Gere dois textos em português brasileiro:
    - Normas Regulamentadoras aplicáveis (NR-6, NR-12, NR-18, NR-35, etc.)
    - Obrigações do trabalhador quanto à segurança
 
-IMPORTANTE: Respeite rigorosamente todas as Regras de Ouro da empresa listadas acima. Nunca sugira procedimentos que contradigam essas regras.
+IMPORTANTE: Respeite rigorosamente todas as Regras de Ouro da empresa listadas acima. Nunca sugira procedimentos que contradigam essas regras. Use SEMPRE o nome real da empresa "${nomeEmpresa}" e a data real "${dataHoje}" nos textos.
 
 Responda EXATAMENTE no formato JSON abaixo:`;
 
@@ -143,5 +152,108 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         descricao: parsed.descricao,
         ordemServico: parsed.ordemServico,
       };
+    }),
+
+  // IA: Gerar descrição + OS em lote para todas as funções incompletas
+  generateBatchJobDescriptions: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('DB not available');
+
+      // 1. Buscar dados da empresa
+      const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+      const nomeEmpresa = company?.nomeFantasia || company?.razaoSocial || 'Empresa';
+      const cnpjEmpresa = company?.cnpj || '';
+      const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+      // 2. Buscar regras de ouro
+      const rules = await db.select().from(goldenRules)
+        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1)));
+      const regrasTexto = rules.length > 0
+        ? rules.map((r: any) => `[${r.categoria.toUpperCase()} - ${r.prioridade.toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
+        : 'Nenhuma regra de ouro cadastrada.';
+
+      // 3. Buscar funções incompletas (sem descrição OU sem ordemServico)
+      const allFunctions = await db.select().from(jobFunctions)
+        .where(and(
+          eq(jobFunctions.companyId, input.companyId),
+          eq(jobFunctions.isActive, 1)
+        ));
+      const incomplete = allFunctions.filter((f: any) => !f.descricao || !f.ordemServico);
+
+      if (incomplete.length === 0) {
+        return { total: 0, geradas: 0, erros: [] as string[] };
+      }
+
+      const erros: string[] = [];
+      let geradas = 0;
+
+      // 4. Processar cada função sequencialmente (para não sobrecarregar a IA)
+      for (const fn of incomplete) {
+        try {
+          const prompt = `Você é um especialista em Recursos Humanos e Segurança do Trabalho no Brasil.
+
+EMPRESA: ${nomeEmpresa}
+CNPJ: ${cnpjEmpresa}
+DATA DE EMISSÃO: ${dataHoje}
+FUNÇÃO: ${fn.nome}
+${fn.cbo ? `CBO: ${fn.cbo}` : ''}
+SETOR: Construção Civil
+
+REGRAS DE OURO DA EMPRESA (INVIOLÁVEIS):
+${regrasTexto}
+
+Gere dois textos em português brasileiro. Use os dados REAIS da empresa (nome "${nomeEmpresa}", CNPJ "${cnpjEmpresa}", data "${dataHoje}"). NÃO use placeholders como "[Nome da Empresa]" ou "[Data]".
+
+1. DESCRIÇÃO DA FUNÇÃO: Comece com "DESCRIÇÃO DA FUNÇÃO: ${fn.nome}${fn.cbo ? ` CBO: ${fn.cbo}` : ''}". Descreva atividades principais, responsabilidades, competências e requisitos conforme CBO.
+
+2. ORDEM DE SERVIÇO (NR-1): Comece com "ORDEM DE SERVIÇO (NR-1) — ${fn.nome}${fn.cbo ? ` CBO: ${fn.cbo}` : ''}". Inclua: Empresa: ${nomeEmpresa}, CNPJ: ${cnpjEmpresa}, Data de Emissão: ${dataHoje}, Revisão: 00. Elabore conforme NR-1 com riscos, EPIs, procedimentos de emergência e NRs aplicáveis.
+
+Responda em JSON válido:`;
+
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "Você é um especialista em RH e SST brasileiro. Responda sempre em JSON válido." },
+              { role: "user", content: prompt },
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "job_description",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    descricao: { type: "string", description: "Descrição completa da função" },
+                    ordemServico: { type: "string", description: "Ordem de Serviço NR-1 completa" },
+                  },
+                  required: ["descricao", "ordemServico"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          });
+
+          const rawContent = response.choices?.[0]?.message?.content;
+          if (!rawContent) throw new Error("Resposta vazia da IA");
+          const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
+          const parsed = JSON.parse(content);
+
+          // Atualizar apenas campos vazios
+          const updateData: any = {};
+          if (!fn.descricao && parsed.descricao) updateData.descricao = parsed.descricao;
+          if (!fn.ordemServico && parsed.ordemServico) updateData.ordemServico = parsed.ordemServico;
+
+          if (Object.keys(updateData).length > 0) {
+            await db.update(jobFunctions).set(updateData).where(eq(jobFunctions.id, fn.id));
+            geradas++;
+          }
+        } catch (err: any) {
+          erros.push(`${fn.nome}: ${err.message || 'Erro desconhecido'}`);
+        }
+      }
+
+      return { total: incomplete.length, geradas, erros };
     }),
 });

@@ -1332,3 +1332,29 @@ export const blacklistReactivationRequests = mysqlTable("blacklist_reactivation_
 	index("brr_employee").on(table.employeeId),
 	index("brr_status").on(table.companyId, table.status),
 ]);
+
+
+// ============================================================
+// TEMPLATES DE E-MAIL PERSONALIZÁVEIS
+// ============================================================
+export const emailTemplates = mysqlTable("email_templates", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	tipo: mysqlEnum(['contratacao', 'demissao', 'transferencia', 'afastamento']).notNull(),
+	// Campos editáveis do template
+	assunto: varchar({ length: 500 }), // Assunto customizado (null = usar padrão)
+	saudacao: text(), // Texto de saudação/introdução (null = usar padrão)
+	corpoTexto: text(), // Corpo principal do e-mail (null = usar padrão)
+	providencias: text(), // Lista de providências (null = usar padrão)
+	rodape: text(), // Texto do rodapé (null = usar padrão)
+	// Controle
+	ativo: boolean().default(true).notNull(),
+	atualizadoPor: varchar({ length: 255 }),
+	atualizadoPorId: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("et_company").on(table.companyId),
+	index("et_company_tipo").on(table.companyId, table.tipo),
+]);

@@ -1133,7 +1133,7 @@ export const fechamentoPontoRouter = router({
       tipo: z.enum(["tudo", "registros", "inconsistencias", "rateio"]),
     }))
     .mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin") throw new Error("Apenas administradores podem limpar a base de dados");
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new Error("Apenas administradores podem limpar a base de dados");
       const db = (await getDb())!;
       if (input.tipo === "tudo" || input.tipo === "registros") {
         await db.delete(timeRecords).where(and(eq(timeRecords.companyId, input.companyId), eq(timeRecords.mesReferencia, input.mesReferencia)));

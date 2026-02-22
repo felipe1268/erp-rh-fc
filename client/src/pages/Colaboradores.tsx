@@ -1001,11 +1001,11 @@ export default function Colaboradores() {
                         value={form.codigoInterno ?? ""}
                         onChange={e => set("codigoInterno", e.target.value.toUpperCase())}
                         className="bg-input mt-1 font-mono font-bold text-primary"
-                        readOnly={user?.role !== 'admin'}
-                        disabled={user?.role !== 'admin'}
+                        readOnly={user?.role !== 'admin' && user?.role !== 'admin_master'}
+                        disabled={user?.role !== 'admin' && user?.role !== 'admin_master'}
                       />
                       <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                        {user?.role === 'admin' ? 'Somente ADM Master pode alterar' : 'Gerado automaticamente • Imutável'}
+                        {(user?.role === 'admin' || user?.role === 'admin_master') ? 'Somente ADM Master pode alterar' : 'Gerado automaticamente • Imutável'}
                       </span>
                     </div>
                   ) : (

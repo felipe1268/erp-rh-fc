@@ -795,27 +795,58 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { sql } = await import("drizzle-orm");
-      const tableMap: Record<string, string> = {
-        colaboradores: "employees",
-        obras: "obras",
-        setores: "setores",
-        funcoes: "funcoes",
-        folha_pagamento: "payroll",
-        registros_ponto: "time_records",
-        uploads_folha: "payroll_uploads",
-        documentos: "employee_documents",
-        historico: "employee_history",
-        pagamentos_extras: "extra_payments",
-        adiantamentos: "advance_payments",
-        vr_beneficios: "vr_benefits",
+      // Mapeamento de módulos para tabelas (com tabelas dependentes)
+      const moduleTablesMap: Record<string, string[]> = {
+        colaboradores: [
+          // Tabelas dependentes primeiro (ordem de exclusão segura)
+          "insurance_alerts_log", "notification_logs", "blacklist_reactivation_requests",
+          "asos", "trainings", "training_documents", "atestados", "warnings",
+          "accidents", "epi_deliveries", "time_records", "time_inconsistencies",
+          "payroll", "vr_benefits", "advances", "extra_payments",
+          "monthly_payroll_summary", "folha_itens",
+          "obra_funcionarios", "obra_horas_rateio", "manual_obra_assignments",
+          "employee_history", "cipa_members",
+          "processos_andamentos", "processos_trabalhistas",
+          "employees"
+        ],
+        obras: ["obra_funcionarios", "obra_horas_rateio", "manual_obra_assignments", "obra_sns", "obras"],
+        setores: ["sectors"],
+        funcoes: ["job_functions"],
+        folha_pagamento: ["folha_itens", "monthly_payroll_summary", "payroll", "folha_lancamentos"],
+        registros_ponto: ["time_inconsistencies", "time_records", "ponto_consolidacao"],
+        uploads_folha: ["payroll_uploads"],
+        documentos: ["asos", "trainings", "training_documents", "atestados", "warnings", "accidents", "epi_deliveries"],
+        historico: ["employee_history"],
+        pagamentos_extras: ["extra_payments"],
+        adiantamentos: ["advances"],
+        vr_beneficios: ["vr_benefits"],
+        processos: ["processos_andamentos", "processos_trabalhistas"],
       };
+      // Desabilitar FK checks para evitar erros de ordem de exclusão
+      await db.execute(sql.raw(`SET FOREIGN_KEY_CHECKS = 0`));
       let cleaned = 0;
-      for (const mod of input.modules) {
-        const tableName = tableMap[mod];
-        if (tableName) {
-          await db.execute(sql.raw(`DELETE FROM \`${tableName}\``));
-          cleaned++;
+      try {
+        const alreadyCleaned = new Set<string>();
+        for (const mod of input.modules) {
+          const tables = moduleTablesMap[mod];
+          if (tables) {
+            for (const tableName of tables) {
+              if (!alreadyCleaned.has(tableName)) {
+                try {
+                  await db.execute(sql.raw(`DELETE FROM \`${tableName}\``));
+                  alreadyCleaned.add(tableName);
+                } catch (e) {
+                  // Tabela pode não existir ainda, ignorar
+                  console.warn(`Aviso: não foi possível limpar tabela ${tableName}:`, e);
+                }
+              }
+            }
+            cleaned++;
+          }
         }
+      } finally {
+        // Sempre reabilitar FK checks
+        await db.execute(sql.raw(`SET FOREIGN_KEY_CHECKS = 1`));
       }
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "configuracoes", entityType: "database", entityId: 0, details: `Limpeza geral: ${input.modules.join(", ")} (${cleaned} tabelas)` });
       return { success: true, tablesCleared: cleaned };
