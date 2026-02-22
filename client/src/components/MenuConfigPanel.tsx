@@ -469,7 +469,7 @@ export default function MenuConfigPanel() {
                             className={`flex items-center justify-between py-2.5 px-3 rounded-lg transition-all duration-150 ${
                               isDraggingThis
                                 ? "opacity-30 scale-95"
-                                : item.visible
+                                : item.visible !== false
                                 ? "bg-gray-50 hover:bg-gray-100"
                                 : "bg-gray-50/50 opacity-50"
                             }`}
@@ -486,7 +486,7 @@ export default function MenuConfigPanel() {
                               <div className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200">
                                 <GripVertical className="h-3.5 w-3.5 text-gray-300" />
                               </div>
-                              <IconComp className={`h-4 w-4 ${item.visible ? "text-gray-600" : "text-gray-400"}`} />
+                              <IconComp className={`h-4 w-4 ${item.visible !== false ? "text-gray-600" : "text-gray-400"}`} />
                               {editingItem?.sectionIdx === sIdx && editingItem?.itemIdx === iIdx ? (
                                 <div className="flex items-center gap-1">
                                   <input
@@ -501,7 +501,7 @@ export default function MenuConfigPanel() {
                                 </div>
                               ) : (
                                 <span
-                                  className={`text-sm ${item.visible ? "text-gray-800 font-medium" : "text-gray-400 line-through"} ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
+                                  className={`text-sm ${item.visible !== false ? "text-gray-800 font-medium" : "text-gray-400 line-through"} ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
                                   onDoubleClick={(e) => { e.stopPropagation(); startEditItem(sIdx, iIdx); }}
                                   title={isMaster ? "Duplo clique para renomear" : ""}
                                 >

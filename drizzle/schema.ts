@@ -98,6 +98,8 @@ export const atestados = mysqlTable("atestados", {
 	medico: varchar({ length: 255 }),
 	crm: varchar({ length: 20 }),
 	descricao: text(),
+	motivo: varchar({ length: 100 }),
+	motivoOutro: text(),
 	documentoUrl: text(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
@@ -105,7 +107,6 @@ export const atestados = mysqlTable("atestados", {
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
 });
-
 export const auditLogs = mysqlTable("audit_logs", {
 	id: int().autoincrement().notNull(),
 	userId: int(),
@@ -1394,4 +1395,198 @@ export const emailTemplates = mysqlTable("email_templates", {
 (table) => [
 	index("et_company").on(table.companyId),
 	index("et_company_tipo").on(table.companyId, table.tipo),
+]);
+
+
+// ============================================================
+// AVISO PRÉVIO
+// ============================================================
+export const terminationNotices = mysqlTable("termination_notices", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	tipo: mysqlEnum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']).notNull(),
+	dataInicio: date({ mode: 'string' }).notNull(),
+	dataFim: date({ mode: 'string' }).notNull(),
+	diasAviso: int().notNull().default(30), // 30 + 3 por ano (max 90)
+	anosServico: int().default(0),
+	// Redução de jornada (Art. 488 CLT)
+	reducaoJornada: mysqlEnum(['2h_dia','7_dias_corridos','nenhuma']).default('nenhuma'),
+	// Previsão financeira
+	salarioBase: varchar({ length: 20 }),
+	previsaoRescisao: text(), // JSON com breakdown: saldo salário, 13º prop, férias prop, FGTS, multa 40%
+	valorEstimadoTotal: varchar({ length: 20 }),
+	// Status
+	status: mysqlEnum(['em_andamento','concluido','cancelado']).default('em_andamento').notNull(),
+	dataConclusao: date({ mode: 'string' }),
+	motivoCancelamento: text(),
+	// Observações
+	observacoes: text(),
+	criadoPor: varchar({ length: 255 }),
+	criadoPorUserId: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
+},
+(table) => [
+	index("tn_company").on(table.companyId),
+	index("tn_employee").on(table.employeeId),
+	index("tn_status").on(table.status),
+]);
+
+// ============================================================
+// CONTROLE DE FÉRIAS
+// ============================================================
+export const vacationPeriods = mysqlTable("vacation_periods", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	// Período aquisitivo
+	periodoAquisitivoInicio: date({ mode: 'string' }).notNull(),
+	periodoAquisitivoFim: date({ mode: 'string' }).notNull(),
+	// Período concessivo (12 meses após aquisitivo)
+	periodoConcessivoFim: date({ mode: 'string' }).notNull(),
+	// Dados das férias
+	dataInicio: date({ mode: 'string' }),
+	dataFim: date({ mode: 'string' }),
+	diasGozo: int().default(30),
+	// Fracionamento (até 3 períodos - Reforma Trabalhista)
+	fracionamento: int().default(1), // 1, 2 ou 3 períodos
+	periodo2Inicio: date({ mode: 'string' }),
+	periodo2Fim: date({ mode: 'string' }),
+	periodo3Inicio: date({ mode: 'string' }),
+	periodo3Fim: date({ mode: 'string' }),
+	// Abono pecuniário (1/3 em dinheiro)
+	abonoPecuniario: tinyint().default(0),
+	// Financeiro
+	valorFerias: varchar({ length: 20 }),
+	valorTercoConstitucional: varchar({ length: 20 }),
+	valorAbono: varchar({ length: 20 }),
+	valorTotal: varchar({ length: 20 }),
+	dataPagamento: date({ mode: 'string' }),
+	// Status
+	status: mysqlEnum(['pendente','agendada','em_gozo','concluida','vencida','cancelada']).default('pendente').notNull(),
+	vencida: tinyint().default(0), // flag para férias vencidas (não concedidas no prazo)
+	pagamentoEmDobro: tinyint().default(0), // se deve pagar em dobro
+	// Observações
+	observacoes: text(),
+	aprovadoPor: varchar({ length: 255 }),
+	aprovadoPorUserId: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
+},
+(table) => [
+	index("vp_company").on(table.companyId),
+	index("vp_employee").on(table.employeeId),
+	index("vp_status").on(table.status),
+	index("vp_concessivo").on(table.periodoConcessivoFim),
+]);
+
+// ============================================================
+// CIPA - Reuniões e Atas (complemento às tabelas existentes cipaElections + cipaMembers)
+// ============================================================
+export const cipaMeetings = mysqlTable("cipa_meetings", {
+	id: int().autoincrement().notNull(),
+	mandateId: int().notNull(),
+	companyId: int().notNull(),
+	// Reunião
+	tipo: mysqlEnum(['ordinaria','extraordinaria']).default('ordinaria').notNull(),
+	dataReuniao: date({ mode: 'string' }).notNull(),
+	horaInicio: varchar({ length: 10 }),
+	horaFim: varchar({ length: 10 }),
+	local: varchar({ length: 255 }),
+	pauta: text(),
+	// Ata
+	ataTexto: text(),
+	ataDocumentoUrl: text(),
+	// Presença
+	presentesJson: text(), // JSON array com IDs dos membros presentes
+	// Status
+	status: mysqlEnum(['agendada','realizada','cancelada']).default('agendada').notNull(),
+	observacoes: text(),
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("cmt_mandate").on(table.mandateId),
+	index("cmt_company").on(table.companyId),
+	index("cmt_data").on(table.dataReuniao),
+]);
+
+// ============================================================
+// CONTRATOS PJ
+// ============================================================
+export const pjContracts = mysqlTable("pj_contracts", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(), // colaborador PJ
+	// Dados do contrato
+	numeroContrato: varchar({ length: 50 }),
+	cnpjPrestador: varchar({ length: 20 }),
+	razaoSocialPrestador: varchar({ length: 255 }),
+	objetoContrato: text(),
+	// Vigência
+	dataInicio: date({ mode: 'string' }).notNull(),
+	dataFim: date({ mode: 'string' }).notNull(),
+	renovacaoAutomatica: tinyint().default(0),
+	// Financeiro
+	valorMensal: varchar({ length: 20 }),
+	percentualAdiantamento: int().default(40), // 40% no vale
+	percentualFechamento: int().default(60), // 60% no fechamento
+	diaAdiantamento: int().default(15), // dia do mês para adiantamento
+	diaFechamento: int().default(5), // dia do mês para fechamento
+	// Documento
+	modeloContratoUrl: text(), // URL do modelo/template
+	contratoAssinadoUrl: text(), // URL do contrato assinado
+	tipoAssinatura: mysqlEnum(['manual','digital','pendente']).default('pendente'),
+	// Status
+	status: mysqlEnum(['ativo','vencido','renovado','cancelado','pendente_assinatura']).default('pendente_assinatura').notNull(),
+	alertaVencimentoEnviado: tinyint().default(0),
+	// Histórico
+	contratoAnteriorId: int(), // FK para contrato anterior (renovação)
+	observacoes: text(),
+	criadoPor: varchar({ length: 255 }),
+	criadoPorUserId: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
+},
+(table) => [
+	index("pjc_company").on(table.companyId),
+	index("pjc_employee").on(table.employeeId),
+	index("pjc_status").on(table.status),
+	index("pjc_vencimento").on(table.dataFim),
+]);
+
+export const pjPayments = mysqlTable("pj_payments", {
+	id: int().autoincrement().notNull(),
+	contractId: int().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	// Pagamento
+	mesReferencia: varchar({ length: 7 }).notNull(), // "2026-01"
+	tipo: mysqlEnum(['adiantamento','fechamento','bonificacao']).notNull(),
+	valor: varchar({ length: 20 }).notNull(),
+	descricao: text(),
+	// Status
+	dataPagamento: date({ mode: 'string' }),
+	status: mysqlEnum(['pendente','pago','cancelado']).default('pendente').notNull(),
+	comprovanteUrl: text(),
+	observacoes: text(),
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("pjp_contract").on(table.contractId),
+	index("pjp_company_mes").on(table.companyId, table.mesReferencia),
+	index("pjp_employee").on(table.employeeId),
 ]);

@@ -44,6 +44,9 @@ import { episRouter } from "./routers/epis";
 import { menuConfigRouter } from "./routers/menuConfig";
 import { goldenRulesRouter } from "./routers/goldenRules";
 import { notificationsRouter } from "./routers/notifications";
+import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
+import { cipaRouter } from "./routers/cipa";
+import { pjContractsRouter } from "./routers/pjContracts";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -1038,6 +1041,8 @@ export const appRouter = router({
         { categoria: "rescisao", chave: "rescisao_multa_fgts", valor: "40", descricao: "Multa sobre FGTS na demissão sem justa causa", valorPadraoClt: "40", unidade: "%" },
         // FOLHA - Controles adicionais
         { categoria: "folha", chave: "folha_bloquear_consolidacao_inconsistencias", valor: "1", descricao: "Bloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        // ATESTADOS
+        { categoria: "atestados", chave: "atestado_motivo_obrigatorio", valor: "1", descricao: "Motivo do atestado obrigatório (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
       ];
 
       for (const d of defaults) {
@@ -1053,6 +1058,9 @@ export const appRouter = router({
     }),
   }),
 
+  avisoPrevio: avisoPrevioFeriasRouter,
+  cipa: cipaRouter,
+  pj: pjContractsRouter,
   // ============================================================
   // LIXEIRA (TRASH) - Listar e restaurar itens excluídos
   // ============================================================

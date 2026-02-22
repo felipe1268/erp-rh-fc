@@ -219,7 +219,7 @@ export default function ControleDocumentos() {
   const openNewAtest = () => { setEditingAtestId(null); setAtestForm({}); setShowAtestDialog(true); };
   const openEditAtest = (a: any) => {
     setEditingAtestId(a.id);
-    setAtestForm({ employeeId: a.employeeId, tipo: a.tipo || "", dataEmissao: a.dataEmissao || "", diasAfastamento: a.diasAfastamento || 0, dataRetorno: a.dataRetorno || "", cid: a.cid || "", medico: a.medico || "", crm: a.crm || "", descricao: a.descricao || "" });
+    setAtestForm({ employeeId: a.employeeId, tipo: a.tipo || "", dataEmissao: a.dataEmissao || "", diasAfastamento: a.diasAfastamento || 0, dataRetorno: a.dataRetorno || "", cid: a.cid || "", medico: a.medico || "", crm: a.crm || "", descricao: a.descricao || "", motivo: a.motivo || "", motivoOutro: a.motivoOutro || "" });
     setShowAtestDialog(true);
   };
 
@@ -687,6 +687,7 @@ export default function ControleDocumentos() {
                         <th className="pb-2 font-medium">Data Retorno</th>
                         <th className="pb-2 font-medium">CID</th>
                         <th className="pb-2 font-medium">Médico</th>
+                        <th className="pb-2 font-medium">Motivo</th>
                         <th className="pb-2 font-medium">Arquivo</th>
                         <th className="pb-2 font-medium">Ações</th>
                       </tr>
@@ -711,6 +712,9 @@ export default function ControleDocumentos() {
                           <td className="py-2">
                             {a.medico && <div className="text-xs">{a.medico}</div>}
                             {a.crm && <div className="text-xs text-muted-foreground">CRM: {a.crm}</div>}
+                          </td>
+                          <td className="py-2">
+                            <span className="text-xs">{a.motivo === "Outros" ? a.motivoOutro || "Outros" : a.motivo || "-"}</span>
                           </td>
                           <td className="py-2">
                             {a.documentoUrl ? (
@@ -1112,6 +1116,29 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">CRM</label>
               <Input value={atestForm.crm || ""} onChange={e => setAtestForm({ ...atestForm, crm: e.target.value })} />
             </div>
+            <div>
+              <label className="text-sm font-medium">Motivo do Atestado *</label>
+              <Select value={atestForm.motivo || ""} onValueChange={v => setAtestForm({ ...atestForm, motivo: v, motivoOutro: v !== "Outros" ? "" : atestForm.motivoOutro })}>
+                <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Consulta Médica">Consulta Médica</SelectItem>
+                  <SelectItem value="Doença">Doença</SelectItem>
+                  <SelectItem value="Acidente">Acidente</SelectItem>
+                  <SelectItem value="Cirurgia">Cirurgia</SelectItem>
+                  <SelectItem value="Acompanhamento Familiar">Acompanhamento Familiar</SelectItem>
+                  <SelectItem value="Exame">Exame</SelectItem>
+                  <SelectItem value="Tratamento">Tratamento</SelectItem>
+                  <SelectItem value="Saúde Mental">Saúde Mental</SelectItem>
+                  <SelectItem value="Outros">Outros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {atestForm.motivo === "Outros" && (
+              <div>
+                <label className="text-sm font-medium">Especifique o Motivo *</label>
+                <Input value={atestForm.motivoOutro || ""} onChange={e => setAtestForm({ ...atestForm, motivoOutro: e.target.value })} placeholder="Descreva o motivo" />
+              </div>
+            )}
             <div className="col-span-2">
               <label className="text-sm font-medium">Descrição</label>
               <Textarea value={atestForm.descricao || ""} onChange={e => setAtestForm({ ...atestForm, descricao: e.target.value })} rows={2} />

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -305,6 +305,8 @@ export const controleDocumentosRouter = router({
             crm: atestados.crm,
             descricao: atestados.descricao,
             documentoUrl: atestados.documentoUrl,
+            motivo: atestados.motivo,
+            motivoOutro: atestados.motivoOutro,
           })
           .from(atestados)
           .innerJoin(employees, eq(atestados.employeeId, employees.id))
@@ -325,6 +327,8 @@ export const controleDocumentosRouter = router({
           medico: z.string().optional(),
           crm: z.string().optional(),
           descricao: z.string().optional(),
+          motivo: z.string().optional(),
+          motivoOutro: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -340,6 +344,8 @@ export const controleDocumentosRouter = router({
           medico: input.medico || null,
           crm: input.crm || null,
           descricao: input.descricao || null,
+          motivo: input.motivo || null,
+          motivoOutro: input.motivoOutro || null,
         });
         return { success: true };
       }),
@@ -357,6 +363,8 @@ export const controleDocumentosRouter = router({
           medico: z.string().optional(),
           crm: z.string().optional(),
           descricao: z.string().optional(),
+          motivo: z.string().optional(),
+          motivoOutro: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
@@ -859,6 +867,47 @@ export const controleDocumentosRouter = router({
         .filter((p: any) => p.faltas && Number(p.faltas) > 0)
         .map((p: any) => ({ data: p.data, faltas: p.faltas, mesReferencia: p.mesReferencia || (p.data ? p.data.substring(0, 7) : "") }));
 
+      // AVISO PRÉVIO
+      const empAvisosPrevios = await db.select().from(terminationNotices)
+        .where(eq(terminationNotices.employeeId, input.employeeId))
+        .orderBy(desc(terminationNotices.dataInicio));
+
+      // FÉRIAS
+      const empFerias = await db.select().from(vacationPeriods)
+        .where(eq(vacationPeriods.employeeId, input.employeeId))
+        .orderBy(desc(vacationPeriods.dataInicio));
+
+      // CIPA
+      const empCipa = await db.select({
+        id: cipaMembers.id,
+        cargoCipa: cipaMembers.cargoCipa,
+        representacao: cipaMembers.representacao,
+        statusMembro: cipaMembers.statusMembro,
+        inicioEstabilidade: cipaMembers.inicioEstabilidade,
+        fimEstabilidade: cipaMembers.fimEstabilidade,
+        mandatoInicio: cipaElections.mandatoInicio,
+        mandatoFim: cipaElections.mandatoFim,
+      }).from(cipaMembers)
+        .leftJoin(cipaElections, eq(cipaMembers.electionId, cipaElections.id))
+        .where(eq(cipaMembers.employeeId, input.employeeId));
+
+      // PJ CONTRATOS
+      const empPjContratos = await db.select().from(pjContracts)
+        .where(and(eq(pjContracts.employeeId, input.employeeId), isNull(pjContracts.deletedAt)))
+        .orderBy(desc(pjContracts.dataInicio));
+
+      // PJ PAGAMENTOS
+      const empPjPagamentos = await db.select().from(pjPayments)
+        .where(eq(pjPayments.employeeId, input.employeeId))
+        .orderBy(desc(pjPayments.mesReferencia));
+
+      // Add new events to timeline
+      empAvisosPrevios.forEach(a => timeline.push({ data: a.dataInicio, tipo: "Aviso Prévio", descricao: `${a.tipo.startsWith('empregador') ? 'Pelo Empregador' : 'Pelo Empregado'} — ${a.diasAviso || 30} dias`, cor: "orange", icone: "alert-triangle" }));
+      empFerias.forEach(f => { if (f.dataInicio) timeline.push({ data: f.dataInicio, tipo: "Férias", descricao: `${f.diasGozo || 30} dias${f.abonoPecuniario ? ' + abono pecuniário' : ''}`, cor: "cyan", icone: "palmtree" }); });
+
+      // Re-sort timeline
+      timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+
       return {
         funcionario: emp,
         funcaoDetalhes,
@@ -881,6 +930,11 @@ export const controleDocumentosRouter = router({
         adiantamentos: empAdiantamentos,
         rateioObras: empRateio,
         progressaoAdvertencias: { verbais: advVerbais, escritas: advEscritas, suspensoes: advSuspensoes, proximaAcao },
+        avisosPrevios: empAvisosPrevios,
+        ferias: empFerias,
+        cipa: empCipa,
+        pjContratos: empPjContratos,
+        pjPagamentos: empPjPagamentos,
       };
     }),
 

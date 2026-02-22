@@ -34,6 +34,10 @@ import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
 import DashEpis from "./pages/dashboards/DashEpis";
 import DashJuridico from "./pages/dashboards/DashJuridico";
 import Lixeira from "./pages/Lixeira";
+import AvisoPrevio from "./pages/AvisoPrevio";
+import Ferias from "./pages/Ferias";
+import CipaCompleta from "./pages/CipaCompleta";
+import ModuloPJ from "./pages/ModuloPJ";
 
 function Router() {
   return (
@@ -57,6 +61,10 @@ function Router() {
       <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
       <Route path={"/configuracoes"} component={Configuracoes} />
       <Route path={"/lixeira"} component={Lixeira} />
+      <Route path={"/aviso-previo"} component={AvisoPrevio} />
+      <Route path={"/ferias"} component={Ferias} />
+      <Route path={"/cipa"} component={CipaCompleta} />
+      <Route path={"/modulo-pj"} component={ModuloPJ} />
       {/* Relatórios */}
       <Route path={"/relatorios/raio-x"} component={RaioXPage} />
       {/* Dashboards */}

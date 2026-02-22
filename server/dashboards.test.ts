@@ -13,22 +13,18 @@ describe("Dashboards Router", () => {
     
     // Check all expected procedures exist
     const procedures = Object.keys(dashboardsRouter._def.procedures);
-    expect(procedures).toContain("colaboradores");
+    expect(procedures).toContain("funcionarios");
+    expect(procedures).toContain("cartaoPonto");
+    expect(procedures).toContain("folhaPagamento");
     expect(procedures).toContain("horasExtras");
-    expect(procedures).toContain("pendencias");
-    expect(procedures).toContain("treinamentos");
-    expect(procedures).toContain("epi");
-    expect(procedures).toContain("acidentes");
-    expect(procedures).toContain("auditorias");
-    expect(procedures).toContain("planos5w2h");
-    expect(procedures).toContain("extintoresHidrantes");
-    expect(procedures).toContain("desvios");
+    expect(procedures).toContain("epis");
+    expect(procedures).toContain("juridico");
   });
 
-  it("should have 10 dashboard procedures total", async () => {
+  it("should have 6 dashboard procedures total", async () => {
     const { dashboardsRouter } = await import("./routers/dashboards");
     const procedures = Object.keys(dashboardsRouter._def.procedures);
-    expect(procedures.length).toBe(10);
+    expect(procedures.length).toBe(6);
   });
 });
 

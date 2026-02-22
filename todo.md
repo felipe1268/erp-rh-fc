@@ -1465,3 +1465,48 @@
 - [x] BUG CRÍTICO: Login local corrigido - aceita username OU email, case-insensitive, senha resetada para asdf1020
 - [x] Resetar senha do usuário felipe@fcengenhariacivil.com.br para asdf1020 (senha padrão oficial)
 - [x] Adicionar botão "Resetar Senha" na tela de Configurações > Usuários (já existia, atualizado para senha asdf1020)
+- [ ] BUG: Tela de login redireciona automaticamente para Manus OAuth após 5 segundos em vez de ficar no login local
+
+## MISSÃO 1 — Correção Menu Cinza
+- [x] Corrigir estilo cinza/tachado em itens renomeados no MenuConfigPanel
+
+## MISSÃO 2 — Motivo do Atestado
+- [x] Adicionar campo motivo (reason/reasonOther) na tabela atestados
+- [x] Criar lista de causas pré-definidas + opção "Outros"
+- [x] Adicionar critério de obrigatoriedade em Configurações (ADM Master)
+- [x] Atualizar backend e frontend de atestados
+
+## MISSÃO 3 — Aviso Prévio + Férias
+- [x] Criar tabela termination_notices (aviso prévio)
+- [x] Criar tabela vacation_periods (férias)
+- [x] Backend: CRUD aviso prévio com cálculo proporcional CLT
+- [x] Backend: opção 2h/dia ou 7 dias corridos
+- [x] Backend: previsão data rescisão + estimativa pagamento
+- [x] Backend: controle férias vencidas + alertas
+- [x] Frontend: tela Aviso Prévio (full, responsiva, filtros)
+- [x] Frontend: calendário férias mês a mês + fluxo caixa prévio
+- [x] Frontend: alertas férias vencendo/2ª férias
+- [ ] Integração com cartão de ponto (não gerar falta no aviso)
+
+## MISSÃO 4 — CIPA
+- [x] Criar tabelas cipa_mandates, cipa_members, cipa_meetings, cipa_minutes
+- [x] Backend: CRUD mandato, membros, reuniões, atas
+- [x] Backend: alerta automático por nº mínimo de funcionários (NR-5)
+- [x] Backend: estabilidade (1 ano após mandato)
+- [x] Frontend: tela CIPA (membros, mandato, eleição)
+- [x] Frontend: calendário reuniões + upload atas
+- [x] Frontend: alerta no painel quando precisa constituir CIPA
+
+## MISSÃO 5 — Módulo PJ
+- [x] Criar tabelas pj_contracts, pj_payments
+- [x] Backend: CRUD contratos, modelo pré-definido, preenchimento auto
+- [x] Backend: folha PJ (40% vale + 60% fechamento + bonificações)
+- [x] Backend: alertas 30 dias antes vencimento contrato
+- [x] Frontend: aba contrato automática ao cadastrar PJ
+- [x] Frontend: modelo contrato com impressão + anexo assinado
+- [x] Frontend: controle contratos (status, vencimento, renovação)
+
+## FINALIZAÇÃO
+- [x] Integrar tudo com Raio-X do Funcionário
+- [x] Adicionar rotas e itens no menu lateral
+- [x] Teste geral + checkpoint

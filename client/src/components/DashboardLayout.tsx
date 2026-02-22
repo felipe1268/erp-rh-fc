@@ -29,6 +29,7 @@ import {
   BarChart3, Settings,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
   ClipboardList, UserSearch, Gavel, Wifi, HardHat, Trash2,
+  AlertTriangle, Palmtree, Shield, FileSignature,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -71,6 +72,15 @@ const menuSections = [
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
+    ],
+  },
+  {
+    title: "Gestão de Pessoas",
+    items: [
+      { icon: AlertTriangle, label: "Aviso Prévio", path: "/aviso-previo" },
+      { icon: Palmtree, label: "Férias", path: "/ferias" },
+      { icon: Shield, label: "CIPA", path: "/cipa" },
+      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
     ],
   },
   {
@@ -141,6 +151,10 @@ const ICON_MAP: Record<string, any> = {
   "Configurações": Settings,
   "Lixeira": Trash2,
   "Avaliação de Desempenho": Star,
+  "Aviso Prévio": AlertTriangle,
+  "Férias": Palmtree,
+  "CIPA": Shield,
+  "Contratos PJ": FileSignature,
 };
 
 const allMenuItems = menuSections.flatMap(s => s.items);

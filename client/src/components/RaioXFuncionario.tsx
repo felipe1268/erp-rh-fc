@@ -10,7 +10,8 @@ import {
   User, Stethoscope, GraduationCap, ClipboardList, ShieldAlert,
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
-  History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity
+  History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
+  Palmtree, Shield, FileSignature
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -134,6 +135,11 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const valeAlimentacao = raioX?.valeAlimentacao || [];
   const adiantamentos = raioX?.adiantamentos || [];
   const rateioObras = raioX?.rateioObras || [];
+  const avisosPrevios = (raioX as any)?.avisosPrevios || [];
+  const ferias = (raioX as any)?.ferias || [];
+  const cipa = (raioX as any)?.cipa || [];
+  const pjContratos = (raioX as any)?.pjContratos || [];
+  const pjPagamentos = (raioX as any)?.pjPagamentos || [];
 
   const asosVencidos = asos.filter((a: any) => a.status === "VENCIDO").length;
   const asosAVencer = asos.filter((a: any) => a.status?.includes("DIAS PARA VENCER")).length;
@@ -292,6 +298,43 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
       html += `<div class="section"><div class="section-title">\u{1F4B0} Folha de Pagamento (${folhaPagamento.length})</div><table><thead><tr><th>Compet\u00EAncia</th><th>Sal\u00E1rio Base</th><th>H. Extras</th><th>Descontos</th><th>L\u00EDquido</th><th>Status</th></tr></thead><tbody>`;
       folhaPagamento.forEach((f: any) => {
         html += `<tr><td>${f.mesReferencia}</td><td style="text-align:right">${formatSalario(f.salarioBase)}</td><td style="text-align:right;color:#166534">${formatSalario(f.horasExtrasValor)}</td><td style="text-align:right;color:#dc2626">${formatSalario(f.totalDescontos)}</td><td style="text-align:right;font-weight:700;font-size:11px">${formatSalario(f.salarioLiquido)}</td><td>${f.status}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // AVISO PRÉVIO
+    if (avisosPrevios.length > 0) {
+      html += `<div class="section"><div class="section-title">\u26A0\uFE0F Aviso Prévio (${avisosPrevios.length})</div><table><thead><tr><th>Tipo</th><th>Início</th><th>Fim</th><th>Dias</th><th>Redução</th><th>Status</th></tr></thead><tbody>`;
+      avisosPrevios.forEach((a: any) => {
+        const tipoLabel: Record<string, string> = { empregador_trabalhado: 'Empregador (Trabalhado)', empregador_indenizado: 'Empregador (Indenizado)', empregado_trabalhado: 'Empregado (Trabalhado)', empregado_indenizado: 'Empregado (Indenizado)' };
+        html += `<tr><td>${tipoLabel[a.tipo] || a.tipo}</td><td>${formatDate(a.dataInicio)}</td><td>${formatDate(a.dataFim)}</td><td>${a.diasAviso || 30}</td><td>${a.reducaoJornada === '2h_dia' ? '2h/dia' : a.reducaoJornada === '7_dias_corridos' ? '7 dias corridos' : 'Nenhuma'}</td><td><span class="badge ${a.status === 'concluido' ? 'badge-green' : a.status === 'cancelado' ? 'badge-red' : 'badge-yellow'}">${a.status}</span></td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // FÉRIAS
+    if (ferias.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F3D6} Férias (${ferias.length})</div><table><thead><tr><th>Per. Aquisitivo</th><th>Início</th><th>Fim</th><th>Dias</th><th>Abono</th><th>Valor Total</th><th>Status</th></tr></thead><tbody>`;
+      ferias.forEach((f: any) => {
+        html += `<tr><td>${formatDate(f.periodoAquisitivoInicio)} a ${formatDate(f.periodoAquisitivoFim)}</td><td>${formatDate(f.dataInicio)}</td><td>${formatDate(f.dataFim)}</td><td>${f.diasGozo || 30}</td><td>${f.abonoPecuniario ? 'Sim' : 'Não'}</td><td>${f.valorTotal ? formatSalario(f.valorTotal) : '-'}</td><td><span class="badge ${f.status === 'concluida' ? 'badge-green' : f.status === 'vencida' ? 'badge-red' : f.status === 'em_gozo' ? 'badge-blue' : 'badge-yellow'}">${f.status}</span></td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // CIPA
+    if (cipa.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F6E1} CIPA (${cipa.length})</div><table><thead><tr><th>Cargo</th><th>Representação</th><th>Mandato</th><th>Estabilidade</th><th>Status</th></tr></thead><tbody>`;
+      cipa.forEach((c: any) => {
+        html += `<tr><td>${(c.cargoCipa || '').replace(/_/g, ' ')}</td><td>${c.representacao}</td><td>${formatDate(c.mandatoInicio)} a ${formatDate(c.mandatoFim)}</td><td>${formatDate(c.inicioEstabilidade)} a ${formatDate(c.fimEstabilidade)}</td><td><span class="badge ${c.statusMembro === 'Ativo' ? 'badge-green' : 'badge-red'}">${c.statusMembro}</span></td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // PJ CONTRATOS
+    if (pjContratos.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F4DD} Contratos PJ (${pjContratos.length})</div><table><thead><tr><th>Nº Contrato</th><th>Vigência</th><th>Valor Mensal</th><th>Adiant./Fech.</th><th>Status</th></tr></thead><tbody>`;
+      pjContratos.forEach((c: any) => {
+        html += `<tr><td>${c.numeroContrato || '-'}</td><td>${formatDate(c.dataInicio)} a ${formatDate(c.dataFim)}</td><td>${formatSalario(c.valorMensal || '0')}</td><td>${c.percentualAdiantamento || 40}% / ${c.percentualFechamento || 60}%</td><td><span class="badge ${c.status === 'ativo' ? 'badge-green' : c.status === 'encerrado' ? 'badge-red' : 'badge-yellow'}">${c.status}</span></td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -486,6 +529,10 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                   { value: "processos", label: "Processos", icon: Scale, count: processos.length, activeClass: "bg-red-100 text-red-800" },
                   { value: "historico", label: "Hist. Funcional", icon: TrendingUp, count: historicoFuncional.length, activeClass: "bg-green-100 text-green-800" },
                   { value: "funcao", label: "Função/OS", icon: FileText, count: funcaoDetalhes ? 1 : 0, activeClass: "bg-blue-100 text-blue-800" },
+                  { value: "aviso", label: "Aviso Prévio", icon: AlertTriangle, count: avisosPrevios.length, activeClass: "bg-orange-100 text-orange-800" },
+                  { value: "ferias", label: "Férias", icon: Palmtree, count: ferias.length, activeClass: "bg-cyan-100 text-cyan-800" },
+                  { value: "cipa", label: "CIPA", icon: Shield, count: cipa.length, activeClass: "bg-green-100 text-green-800" },
+                  { value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length, activeClass: "bg-purple-100 text-purple-800" },
                 ].map(tab => {
                   const Icon = tab.icon;
                   return (
@@ -1071,6 +1118,144 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                         </div>
                       </CardContent>
                     </Card>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ============ AVISO PRÉVIO ============ */}
+              <TabsContent value="aviso" className="mt-4">
+                {avisosPrevios.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">Nenhum aviso prévio registrado</div>
+                ) : (
+                  <div className="bg-white rounded-xl border p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-orange-500" /> Avisos Prévios — {avisosPrevios.length}</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b bg-muted/30"><th className="p-2 text-left">Tipo</th><th className="p-2 text-left">Início</th><th className="p-2 text-left">Fim</th><th className="p-2 text-center">Dias</th><th className="p-2 text-left">Redução</th><th className="p-2 text-right">Valor Estimado</th><th className="p-2 text-center">Status</th></tr></thead>
+                        <tbody>
+                          {avisosPrevios.map((a: any) => {
+                            const tipoLabel: Record<string, string> = { empregador_trabalhado: 'Empregador (Trabalhado)', empregador_indenizado: 'Empregador (Indenizado)', empregado_trabalhado: 'Empregado (Trabalhado)', empregado_indenizado: 'Empregado (Indenizado)' };
+                            return (
+                              <tr key={a.id} className="border-b last:border-0">
+                                <td className="p-2 font-medium">{tipoLabel[a.tipo] || a.tipo}</td>
+                                <td className="p-2">{formatDate(a.dataInicio)}</td>
+                                <td className="p-2">{formatDate(a.dataFim)}</td>
+                                <td className="p-2 text-center font-bold">{a.diasAviso || 30}</td>
+                                <td className="p-2">{a.reducaoJornada === '2h_dia' ? '2h/dia' : a.reducaoJornada === '7_dias_corridos' ? '7 dias corridos' : 'Nenhuma'}</td>
+                                <td className="p-2 text-right font-bold">{a.valorEstimadoTotal ? formatMoeda(a.valorEstimadoTotal) : '-'}</td>
+                                <td className="p-2 text-center"><Badge variant={a.status === 'concluido' ? 'default' : a.status === 'cancelado' ? 'destructive' : 'secondary'}>{a.status}</Badge></td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ============ FÉRIAS ============ */}
+              <TabsContent value="ferias" className="mt-4">
+                {ferias.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">Nenhum período de férias registrado</div>
+                ) : (
+                  <div className="bg-white rounded-xl border p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Palmtree className="h-5 w-5 text-cyan-500" /> Férias — {ferias.length} período(s)</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b bg-muted/30"><th className="p-2 text-left">Per. Aquisitivo</th><th className="p-2 text-left">Início</th><th className="p-2 text-left">Fim</th><th className="p-2 text-center">Dias</th><th className="p-2 text-center">Abono</th><th className="p-2 text-right">Valor Total</th><th className="p-2 text-center">Status</th></tr></thead>
+                        <tbody>
+                          {ferias.map((f: any) => (
+                            <tr key={f.id} className="border-b last:border-0">
+                              <td className="p-2 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
+                              <td className="p-2">{formatDate(f.dataInicio)}</td>
+                              <td className="p-2">{formatDate(f.dataFim)}</td>
+                              <td className="p-2 text-center font-bold">{f.diasGozo || 30}</td>
+                              <td className="p-2 text-center">{f.abonoPecuniario ? <Badge>Sim</Badge> : 'Não'}</td>
+                              <td className="p-2 text-right font-bold">{f.valorTotal ? formatMoeda(f.valorTotal) : '-'}</td>
+                              <td className="p-2 text-center"><Badge variant={f.status === 'concluida' ? 'default' : f.status === 'vencida' ? 'destructive' : f.status === 'em_gozo' ? 'default' : 'secondary'}>{f.status}</Badge></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ============ CIPA ============ */}
+              <TabsContent value="cipa" className="mt-4">
+                {cipa.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">Nenhuma participação em CIPA registrada</div>
+                ) : (
+                  <div className="bg-white rounded-xl border p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Shield className="h-5 w-5 text-green-500" /> CIPA — {cipa.length} mandato(s)</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b bg-muted/30"><th className="p-2 text-left">Cargo</th><th className="p-2 text-left">Representação</th><th className="p-2 text-left">Mandato</th><th className="p-2 text-left">Estabilidade</th><th className="p-2 text-center">Status</th></tr></thead>
+                        <tbody>
+                          {cipa.map((c: any) => (
+                            <tr key={c.id} className="border-b last:border-0">
+                              <td className="p-2 font-medium">{(c.cargoCipa || '').replace(/_/g, ' ')}</td>
+                              <td className="p-2">{c.representacao}</td>
+                              <td className="p-2 text-xs">{formatDate(c.mandatoInicio)} a {formatDate(c.mandatoFim)}</td>
+                              <td className="p-2 text-xs">{formatDate(c.inicioEstabilidade)} a {formatDate(c.fimEstabilidade)}</td>
+                              <td className="p-2 text-center"><Badge variant={c.statusMembro === 'Ativo' ? 'default' : 'destructive'}>{c.statusMembro}</Badge></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ============ PJ ============ */}
+              <TabsContent value="pj" className="mt-4">
+                {pjContratos.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">Nenhum contrato PJ registrado</div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-xl border p-6">
+                      <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-500" /> Contratos PJ — {pjContratos.length}</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b bg-muted/30"><th className="p-2 text-left">Nº Contrato</th><th className="p-2 text-left">Vigência</th><th className="p-2 text-right">Valor Mensal</th><th className="p-2 text-center">Adiant./Fech.</th><th className="p-2 text-center">Status</th></tr></thead>
+                          <tbody>
+                            {pjContratos.map((c: any) => (
+                              <tr key={c.id} className="border-b last:border-0">
+                                <td className="p-2 font-mono font-semibold">{c.numeroContrato || '-'}</td>
+                                <td className="p-2 text-xs">{formatDate(c.dataInicio)} a {formatDate(c.dataFim)}</td>
+                                <td className="p-2 text-right font-bold">{formatMoeda(c.valorMensal || '0')}</td>
+                                <td className="p-2 text-center text-xs">{c.percentualAdiantamento || 40}% / {c.percentualFechamento || 60}%</td>
+                                <td className="p-2 text-center"><Badge variant={c.status === 'ativo' ? 'default' : c.status === 'encerrado' ? 'destructive' : 'secondary'}>{c.status}</Badge></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    {pjPagamentos.length > 0 && (
+                      <div className="bg-white rounded-xl border p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><DollarSign className="h-5 w-5 text-purple-500" /> Pagamentos PJ — {pjPagamentos.length}</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead><tr className="border-b bg-muted/30"><th className="p-2 text-left">Mês Ref.</th><th className="p-2 text-left">Tipo</th><th className="p-2 text-right">Valor</th><th className="p-2 text-left">Data Pgto</th><th className="p-2 text-center">Status</th></tr></thead>
+                            <tbody>
+                              {pjPagamentos.map((p: any) => (
+                                <tr key={p.id} className="border-b last:border-0">
+                                  <td className="p-2">{p.mesReferencia}</td>
+                                  <td className="p-2"><Badge variant={p.tipo === 'adiantamento' ? 'secondary' : p.tipo === 'bonificacao' ? 'default' : 'outline'}>{p.tipo}</Badge></td>
+                                  <td className="p-2 text-right font-bold">{formatMoeda(p.valor || '0')}</td>
+                                  <td className="p-2 text-xs">{formatDate(p.dataPagamento)}</td>
+                                  <td className="p-2 text-center"><Badge variant={p.status === 'pago' ? 'default' : p.status === 'cancelado' ? 'destructive' : 'secondary'}>{p.status}</Badge></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </TabsContent>
