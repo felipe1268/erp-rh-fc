@@ -748,7 +748,7 @@ export const folhaPagamentoRouter = router({
 
       // Get all employees for matching
       const allEmployees = await db.select().from(employees)
-        .where(eq(employees.companyId, input.companyId));
+        .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
 
       // ===== DETECTAR MÊS REAL DOS PDFs =====
       // Primeiro, extrair texto de todos os PDFs para detectar o mês
@@ -1082,7 +1082,7 @@ export const folhaPagamentoRouter = router({
 
         // Get all employees for matching
         const allEmployees = await db.select().from(employees)
-          .where(eq(employees.companyId, input.companyId));
+          .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
 
         let recordsProcessed = 0;
         let parseResult: any = {};
@@ -1234,7 +1234,7 @@ export const folhaPagamentoRouter = router({
         .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
 
       const allEmployees = await db.select().from(employees)
-        .where(eq(employees.companyId, input.companyId));
+        .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
 
       const matchResult = await matchItensComCadastro(db, input.companyId, itens as any, allEmployees, true);
 
@@ -1557,7 +1557,7 @@ export const folhaPagamentoRouter = router({
 
       // Get all obras
       const allObras = await db.select().from(obras)
-        .where(eq(obras.companyId, input.companyId));
+        .where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
       // Get vinculações manuais para este mês
@@ -1818,7 +1818,7 @@ export const folhaPagamentoRouter = router({
       const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
       const empMap = new Map(emps.map(e => [e.id, e]));
 
-      const allObras = await db.select().from(obras).where(eq(obras.companyId, input.companyId));
+      const allObras = await db.select().from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
       // Buscar critérios de HE da empresa
@@ -2095,7 +2095,7 @@ export const folhaPagamentoRouter = router({
           inArray(timeRecords.employeeId, empIds),
         ));
 
-      const allObras = await db.select().from(obras).where(eq(obras.companyId, input.companyId));
+      const allObras = await db.select().from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
       const vinculacoesManuais = await db.select().from(manualObraAssignments)

@@ -23,7 +23,7 @@ export const homeDataRouter = router({
       // 1. BUSCAR TODOS OS FUNCIONÁRIOS ATIVOS
       // ============================================================
       const allEmps = await db.select().from(employees)
-        .where(eq(employees.companyId, input.companyId));
+        .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
 
       const ativos = allEmps.filter(e => e.status === "Ativo");
       const todosNaoDesligados = allEmps.filter(e => e.status !== "Desligado");
@@ -298,7 +298,10 @@ export const homeDataRouter = router({
       // 9. OBRAS ATIVAS
       // ============================================================
       const allObras = await db.select().from(obras)
-        .where(eq(obras.companyId, input.companyId));
+        .where(and(
+          eq(obras.companyId, input.companyId),
+          sql`${obras.deletedAt} IS NULL`,
+        ));
       const obrasAtivas = allObras.filter(o => o.status === "Em_Andamento" || (o.status as string) === "Em Andamento");
 
       // ============================================================

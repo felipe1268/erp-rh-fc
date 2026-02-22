@@ -1563,3 +1563,16 @@
 - [x] Backend: rota para resetar numeração (atualizar próximo número para 1)
 - [x] Integrar com geração automática de codigoInterno ao cadastrar colaborador (já existia)
 - [x] Atualizar Rev. 57 → Rev. 58
+
+## Rev. 59 - Auditoria Completa: Filtro deletedAt IS NULL em Todo o Sistema
+- [x] BUG: Dashboard mostra 9 obras ativas quando só existem 5 (query não filtrava deletedAt)
+- [x] Auditoria completa de TODAS as queries do sistema
+- [x] homeData.ts: corrigido employees e obras queries
+- [x] dashboards.ts: corrigidas 18+ queries (statusDist, sexDist, setorDist, funcaoDist, contratoDist, estadoCivilDist, cidadeDist, ageDist, tenureDist, admissoes, demissoes, oldest, youngest, longestTenure, shortestTenure, allEmps cartaoPonto, allEmps horasExtras, allEmps EPIs, allObras)
+- [x] fechamentoPonto.ts: corrigidas 3 queries (employees import, obras import, obras preview)
+- [x] folhaPagamento.ts: corrigidas 6 queries (3x employees matching, 3x obras listing)
+- [x] controleDocumentos.ts: corrigida query de employees para import
+- [x] processosTrabalhistas.ts: corrigida query de desligados
+- [x] Verificado: avisoPrevioFerias.ts, cipa.ts, pjContracts.ts já tinham filtro correto
+- [x] Verificado: db.ts getEmployees e getObras já tinham filtro correto
+- [x] Atualizar Rev. 58 → Rev. 59

@@ -518,7 +518,7 @@ export const fechamentoPontoRouter = router({
         nomeCompleto: employees.nomeCompleto,
         jornadaTrabalho: employees.jornadaTrabalho,
         matricula: employees.matricula,
-      }).from(employees).where(eq(employees.companyId, input.companyId));
+      }).from(employees).where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
 
       // Get all dixi devices for this company (to match SN -> obra)
       const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
@@ -535,7 +535,7 @@ export const fechamentoPontoRouter = router({
         id: obras.id,
         nome: obras.nome,
         snRelogioPonto: obras.snRelogioPonto,
-      }).from(obras).where(eq(obras.companyId, input.companyId));
+      }).from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
 
       let totalImported = 0;
       let totalInconsistencies = 0;
@@ -1566,7 +1566,7 @@ export const fechamentoPontoRouter = router({
         id: obras.id,
         nome: obras.nome,
         snRelogioPonto: obras.snRelogioPonto,
-      }).from(obras).where(eq(obras.companyId, input.companyId));
+      }).from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
 
       const results: Array<{
         fileName: string;

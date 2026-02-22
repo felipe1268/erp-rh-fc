@@ -278,6 +278,7 @@ export const processosTrabRouter = router({
         .where(and(
           eq(employees.companyId, input.companyId),
           eq(employees.status, 'Desligado'),
+          sql`${employees.deletedAt} IS NULL`,
         ));
       return desligados;
     }),

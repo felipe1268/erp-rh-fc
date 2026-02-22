@@ -197,7 +197,7 @@ export const controleDocumentosRouter = router({
         const emps = await db
           .select({ id: employees.id, nomeCompleto: employees.nomeCompleto })
           .from(employees)
-          .where(eq(employees.companyId, input.companyId));
+          .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
 
         const nameMap = new Map<string, number>();
         emps.forEach((e: any) => {
