@@ -1,0 +1,31 @@
+{
+  "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('termination_notices', 'vacation_periods', 'cipa_elections', 'cipa_members', 'cipa_meetings', 'pj_contracts', 'pj_payments');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('termination_notices', 'vacation_periods', 'cipa_elections', 'cipa_members', 'cipa_meetings', 'pj_contracts', 'pj_payments');",
+  "rows": [
+    {
+      "table_name": "vacation_periods"
+    },
+    {
+      "table_name": "termination_notices"
+    },
+    {
+      "table_name": "pj_payments"
+    },
+    {
+      "table_name": "pj_contracts"
+    },
+    {
+      "table_name": "cipa_members"
+    },
+    {
+      "table_name": "cipa_meetings"
+    },
+    {
+      "table_name": "cipa_elections"
+    }
+  ],
+  "messages": [],
+  "stdout": "table_name\nvacation_periods\ntermination_notices\npj_payments\npj_contracts\ncipa_members\ncipa_meetings\ncipa_elections\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

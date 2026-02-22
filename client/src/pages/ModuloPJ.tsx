@@ -15,7 +15,7 @@ import { formatCPF, formatMoeda } from "@/lib/formatters";
 import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar,
-  Users, TrendingUp, FileSignature, Ban,
+  Users, TrendingUp, FileSignature, Ban, Printer,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -106,6 +106,74 @@ export default function ModuloPJ() {
   const deletePagamento = trpc.pj.pagamentos.delete.useMutation({
     onSuccess: () => { refetchPagamentos(); toast.success("Lançamento excluído!"); },
   });
+
+  // Relatório PJ para exportação PDF
+  const { data: relatorio } = trpc.pj.relatorioPJ.useQuery(
+    { companyId, mesReferencia: mesRef },
+    { enabled: !!companyId && tab === "pagamentos" }
+  );
+
+  function exportarPDF() {
+    if (!relatorio || !relatorio.prestadores.length) {
+      toast.error("Nenhum dado para exportar neste mês.");
+      return;
+    }
+    const mesLabel = mesRef.split("-").reverse().join("/");
+    const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+    const fmtCPF = (v: string) => v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+    
+    let html = `<html><head><meta charset="utf-8"><title>Relatório PJ - ${mesLabel}</title>
+    <style>
+      @media print { body { margin: 0; } }
+      body { font-family: Arial, sans-serif; font-size: 11px; color: #333; padding: 20px; }
+      h1 { font-size: 18px; color: #1e3a5f; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; }
+      h2 { font-size: 14px; color: #1e3a5f; margin-top: 20px; }
+      .header-info { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 10px; color: #666; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+      th { background: #1e3a5f; color: white; padding: 6px 8px; text-align: left; font-size: 10px; }
+      td { padding: 5px 8px; border-bottom: 1px solid #ddd; font-size: 10px; }
+      tr:nth-child(even) { background: #f8f9fa; }
+      .total-row { font-weight: bold; background: #e8f0fe !important; }
+      .prestador-header { background: #f0f4ff; padding: 8px; margin-top: 12px; border-left: 3px solid #1e3a5f; }
+      .resumo-box { display: inline-block; background: #f0f4ff; padding: 8px 16px; margin: 4px; border-radius: 4px; text-align: center; }
+      .resumo-valor { font-size: 16px; font-weight: bold; color: #1e3a5f; }
+      .resumo-label { font-size: 9px; color: #666; }
+      .page-break { page-break-before: always; }
+    </style></head><body>`;
+    
+    html += `<h1>Relatório Consolidado PJ — ${mesLabel}</h1>`;
+    html += `<div class="header-info"><span>Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}</span><span>${relatorio.totais.qtdPrestadores} prestador(es) • ${relatorio.totais.qtdLancamentos} lançamento(s)</span></div>`;
+    
+    // Resumo geral
+    html += `<div style="text-align:center;margin:16px 0;">`;
+    html += `<div class="resumo-box"><div class="resumo-label">Adiantamento (40%)</div><div class="resumo-valor">${fmt(relatorio.totais.adiantamento)}</div></div>`;
+    html += `<div class="resumo-box"><div class="resumo-label">Fechamento (60%)</div><div class="resumo-valor">${fmt(relatorio.totais.fechamento)}</div></div>`;
+    if (relatorio.totais.bonificacao > 0) html += `<div class="resumo-box"><div class="resumo-label">Bonificações</div><div class="resumo-valor">${fmt(relatorio.totais.bonificacao)}</div></div>`;
+    html += `<div class="resumo-box" style="background:#1e3a5f;"><div class="resumo-label" style="color:#aaa;">TOTAL GERAL</div><div class="resumo-valor" style="color:white;font-size:20px;">${fmt(relatorio.totais.geral)}</div></div>`;
+    html += `</div>`;
+    
+    // Detalhamento por prestador
+    for (const p of relatorio.prestadores) {
+      html += `<div class="prestador-header"><strong>${p.nome}</strong> — ${p.razaoSocial} • CNPJ: ${p.cnpj} • CPF: ${fmtCPF(p.cpf)} • Valor Mensal: ${fmt(parseFloat(p.valorMensal || "0"))}</div>`;
+      html += `<table><thead><tr><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Status</th><th>Dt. Pagamento</th></tr></thead><tbody>`;
+      for (const pg of p.pagamentos) {
+        const tipoLabel = pg.tipo === "adiantamento" ? "Adiantamento" : pg.tipo === "fechamento" ? "Fechamento" : "Bonificação";
+        const statusLabel = pg.status === "pago" ? "✓ Pago" : pg.status === "pendente" ? "○ Pendente" : pg.status;
+        html += `<tr><td>${tipoLabel}</td><td>${pg.descricao || "-"}</td><td style="text-align:right">${fmt(parseFloat(pg.valor || "0"))}</td><td>${statusLabel}</td><td>${pg.dataPagamento ? new Date(pg.dataPagamento + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td></tr>`;
+      }
+      html += `<tr class="total-row"><td colspan="2">SUBTOTAL</td><td style="text-align:right">${fmt(p.totalGeral)}</td><td colspan="2"></td></tr>`;
+      html += `</tbody></table>`;
+    }
+    
+    html += `</body></html>`;
+    
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      setTimeout(() => printWindow.print(), 500);
+    }
+  }
 
   // Employee search
   const [empSearch, setEmpSearch] = useState("");
@@ -368,6 +436,9 @@ export default function ModuloPJ() {
                 </Button>
                 <Button onClick={() => { setPagForm({ mesReferencia: mesRef }); setShowPagamentoDialog(true); }}>
                   <Plus className="h-4 w-4 mr-2" /> Lançamento Manual
+                </Button>
+                <Button variant="outline" onClick={() => exportarPDF()} disabled={!(pagamentos as any[]).length}>
+                  <Printer className="h-4 w-4 mr-2" /> Exportar PDF
                 </Button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { employees, asos, warnings, processosTrabalhistas, obraSns, obras } from "../../drizzle/schema";
+import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, inArray } from "drizzle-orm";
 
 export const homeDataRouter = router({
@@ -147,6 +147,82 @@ export const homeDataRouter = router({
         .sort((a, b) => a.diasParaVencer - b.diasParaVencer);
 
       // ============================================================
+      // 4b. DASHBOARD DE FÉRIAS DETALHADO (férias agendadas/vencidas/a vencer)
+      // ============================================================
+      const allVacations = await db.select({
+        id: vacationPeriods.id,
+        employeeId: vacationPeriods.employeeId,
+        dataInicio: vacationPeriods.dataInicio,
+        dataFim: vacationPeriods.dataFim,
+        diasGozo: vacationPeriods.diasGozo,
+        status: vacationPeriods.status,
+        abonoPecuniario: vacationPeriods.abonoPecuniario,
+        valorTotal: vacationPeriods.valorTotal,
+      }).from(vacationPeriods)
+        .where(and(
+          eq(vacationPeriods.companyId, input.companyId),
+          sql`${vacationPeriods.deletedAt} IS NULL`,
+        ));
+
+      // Férias agendadas nos próximos 60 dias
+      const hoje60 = new Date(hoje);
+      hoje60.setDate(hoje60.getDate() + 60);
+      const hoje60Str = hoje60.toISOString().split('T')[0];
+
+      const feriasAgendadas = allVacations
+        .filter(v => v.status === 'agendada' && v.dataInicio && v.dataInicio >= hojeStr && v.dataInicio <= hoje60Str)
+        .map(v => {
+          const emp = ativos.find(e => e.id === v.employeeId);
+          const diasAteInicio = Math.ceil((new Date(v.dataInicio! + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+          return {
+            id: v.id,
+            employeeId: v.employeeId,
+            nome: emp?.nomeCompleto || 'Funcionário',
+            funcao: emp?.funcao || '-',
+            dataInicio: v.dataInicio,
+            dataFim: v.dataFim,
+            diasGozo: v.diasGozo,
+            abonoPecuniario: v.abonoPecuniario,
+            diasAteInicio,
+            valorTotal: v.valorTotal,
+          };
+        })
+        .sort((a, b) => a.diasAteInicio - b.diasAteInicio);
+
+      // Férias em andamento (funcionários de férias agora)
+      const feriasEmAndamento = allVacations
+        .filter(v => v.status === 'em_gozo' || (v.dataInicio && v.dataFim && v.dataInicio <= hojeStr && v.dataFim >= hojeStr && v.status !== 'cancelada'))
+        .map(v => {
+          const emp = allEmps.find(e => e.id === v.employeeId);
+          const diasRestantes = v.dataFim ? Math.ceil((new Date(v.dataFim + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+          return {
+            id: v.id,
+            employeeId: v.employeeId,
+            nome: emp?.nomeCompleto || 'Funcionário',
+            funcao: emp?.funcao || '-',
+            dataInicio: v.dataInicio,
+            dataFim: v.dataFim,
+            diasRestantes: Math.max(0, diasRestantes),
+          };
+        });
+
+      // Fluxo de caixa de férias nos próximos 3 meses
+      const hoje90 = new Date(hoje);
+      hoje90.setDate(hoje90.getDate() + 90);
+      const hoje90Str = hoje90.toISOString().split('T')[0];
+      const feriasCustoProximo = allVacations
+        .filter(v => v.dataInicio && v.dataInicio >= hojeStr && v.dataInicio <= hoje90Str && v.status !== 'cancelada')
+        .reduce((total, v) => total + (parseFloat(v.valorTotal || '0') || 0), 0);
+
+      const feriasDashboard = {
+        agendadas: feriasAgendadas,
+        emAndamento: feriasEmAndamento,
+        custoProximo90Dias: feriasCustoProximo,
+        totalVencendo: feriasAlerta.length,
+        totalUrgente: feriasAlerta.filter(f => f.urgente).length,
+      };
+
+      // ============================================================
       // 5. PRÓXIMAS AUDIÊNCIAS (Processos Trabalhistas)
       // ============================================================
       const processos = await db.select().from(processosTrabalhistas)
@@ -253,6 +329,7 @@ export const homeDataRouter = router({
         asosAlerta,
         semAso,
         feriasAlerta,
+        feriasDashboard,
         proximasAudiencias,
         movimentacoes,
         advertenciasRecentes,

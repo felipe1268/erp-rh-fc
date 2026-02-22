@@ -580,6 +580,111 @@ export const pjContractsRouter = router({
       }),
   }),
 
+  /** Relatório consolidado PJ para exportação PDF (retorna HTML formatado) */
+  relatorioPJ: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      
+      // Buscar todos os pagamentos do mês
+      const pagamentos = await db.select({
+        id: pjPayments.id,
+        contractId: pjPayments.contractId,
+        employeeId: pjPayments.employeeId,
+        mesReferencia: pjPayments.mesReferencia,
+        tipo: pjPayments.tipo,
+        valor: pjPayments.valor,
+        descricao: pjPayments.descricao,
+        dataPagamento: pjPayments.dataPagamento,
+        status: pjPayments.status,
+        employeeName: employees.nomeCompleto,
+        employeeCpf: employees.cpf,
+      })
+      .from(pjPayments)
+      .innerJoin(employees, eq(pjPayments.employeeId, employees.id))
+      .where(and(
+        eq(pjPayments.companyId, input.companyId),
+        eq(pjPayments.mesReferencia, input.mesReferencia),
+      ))
+      .orderBy(sql`${employees.nomeCompleto} ASC, ${pjPayments.tipo} ASC`);
+
+      // Buscar contratos ativos
+      const contratos = await db.select({
+        id: pjContracts.id,
+        employeeId: pjContracts.employeeId,
+        cnpj: pjContracts.cnpjPrestador,
+        razaoSocial: pjContracts.razaoSocialPrestador,
+        valorMensal: pjContracts.valorMensal,
+        percentualAdiantamento: pjContracts.percentualAdiantamento,
+        percentualFechamento: pjContracts.percentualFechamento,
+        employeeName: employees.nomeCompleto,
+      })
+      .from(pjContracts)
+      .innerJoin(employees, eq(pjContracts.employeeId, employees.id))
+      .where(and(
+        eq(pjContracts.companyId, input.companyId),
+        isNull(pjContracts.deletedAt),
+      ));
+
+      // Agrupar por prestador
+      const porPrestador: Record<number, {
+        nome: string;
+        cpf: string;
+        cnpj: string;
+        razaoSocial: string;
+        valorMensal: string;
+        pagamentos: typeof pagamentos;
+        totalAdiantamento: number;
+        totalFechamento: number;
+        totalBonificacao: number;
+        totalGeral: number;
+      }> = {};
+
+      for (const p of pagamentos) {
+        if (!porPrestador[p.employeeId]) {
+          const contrato = contratos.find(c => c.employeeId === p.employeeId);
+          porPrestador[p.employeeId] = {
+            nome: p.employeeName || 'Prestador',
+            cpf: p.employeeCpf || '',
+            cnpj: contrato?.cnpj || '-',
+            razaoSocial: contrato?.razaoSocial || '-',
+            valorMensal: contrato?.valorMensal || '0',
+            pagamentos: [],
+            totalAdiantamento: 0,
+            totalFechamento: 0,
+            totalBonificacao: 0,
+            totalGeral: 0,
+          };
+        }
+        const prest = porPrestador[p.employeeId];
+        prest.pagamentos.push(p);
+        const val = parseFloat(p.valor || '0');
+        if (p.tipo === 'adiantamento') prest.totalAdiantamento += val;
+        else if (p.tipo === 'fechamento') prest.totalFechamento += val;
+        else prest.totalBonificacao += val;
+        prest.totalGeral += val;
+      }
+
+      // Totais gerais
+      const totalGeral = Object.values(porPrestador).reduce((s, p) => s + p.totalGeral, 0);
+      const totalAdiantamento = Object.values(porPrestador).reduce((s, p) => s + p.totalAdiantamento, 0);
+      const totalFechamento = Object.values(porPrestador).reduce((s, p) => s + p.totalFechamento, 0);
+      const totalBonificacao = Object.values(porPrestador).reduce((s, p) => s + p.totalBonificacao, 0);
+
+      return {
+        mesReferencia: input.mesReferencia,
+        prestadores: Object.values(porPrestador),
+        totais: {
+          geral: totalGeral,
+          adiantamento: totalAdiantamento,
+          fechamento: totalFechamento,
+          bonificacao: totalBonificacao,
+          qtdPrestadores: Object.keys(porPrestador).length,
+          qtdLancamentos: pagamentos.length,
+        },
+      };
+    }),
+
   /** Modelo de contrato */
   modeloContrato: protectedProcedure.query(() => {
     return { modelo: MODELO_CONTRATO_PJ };

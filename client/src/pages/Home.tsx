@@ -11,7 +11,7 @@ import {
   BarChart3, Landmark, Gavel, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, TrendingUp, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, X, ExternalLink,
-  Printer
+  Printer, Plane, DollarSign, TreePalm
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -345,6 +345,65 @@ export default function Home() {
                               </span>
                             </div>
                           ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Dashboard de Férias - Agendadas e Em Andamento */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Plane className="h-4 w-4 text-blue-500" />
+                        Férias - Painel Rápido
+                        {(homeData?.feriasDashboard?.emAndamento?.length ?? 0) > 0 && (
+                          <Badge className="bg-blue-100 text-blue-700 text-[10px]">{homeData!.feriasDashboard.emAndamento.length} em gozo</Badge>
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {/* Em gozo agora */}
+                      {(homeData?.feriasDashboard?.emAndamento?.length ?? 0) > 0 && (
+                        <div className="mb-3">
+                          <p className="text-[10px] font-semibold text-blue-600 uppercase mb-1">De férias agora</p>
+                          <div className="space-y-1">
+                            {homeData!.feriasDashboard.emAndamento.slice(0, 4).map((f: any) => (
+                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-blue-50 border border-blue-100">
+                                <span className="font-medium">{f.nome}</span>
+                                <span className="text-blue-600 font-mono text-[10px]">volta em {f.diasRestantes}d</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Agendadas */}
+                      {(homeData?.feriasDashboard?.agendadas?.length ?? 0) > 0 ? (
+                        <div>
+                          <p className="text-[10px] font-semibold text-green-600 uppercase mb-1">Próximas agendadas</p>
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {homeData!.feriasDashboard.agendadas.slice(0, 5).map((f: any) => (
+                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded">
+                                <div>
+                                  <span className="font-medium">{f.nome}</span>
+                                  <span className="text-muted-foreground ml-1 text-[10px]">{f.diasGozo}d</span>
+                                </div>
+                                <span className="text-green-600 font-mono text-[10px]">em {f.diasAteInicio}d</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        (homeData?.feriasDashboard?.emAndamento?.length ?? 0) === 0 && (
+                          <p className="text-xs text-muted-foreground">Nenhuma férias agendada nos próximos 60 dias</p>
+                        )
+                      )}
+                      {/* Custo próximo */}
+                      {(homeData?.feriasDashboard?.custoProximo90Dias ?? 0) > 0 && (
+                        <div className="mt-2 pt-2 border-t flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-1"><DollarSign className="h-3 w-3" /> Custo próx. 90 dias</span>
+                          <span className="text-xs font-bold text-orange-600">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(homeData!.feriasDashboard.custoProximo90Dias)}
+                          </span>
                         </div>
                       )}
                     </CardContent>

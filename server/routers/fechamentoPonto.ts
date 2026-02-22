@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -311,6 +311,7 @@ function processRecords(
   obraId: number | null,
   companyId: number,
   criteria: CriteriaMap = DEFAULT_CRITERIA,
+  activeAvisos: Array<{ employeeId: number; dataInicio: string; dataFim: string; reducaoJornada: string | null }> = [],
 ) {
   // Group by person+day
   const grouped: Record<string, Record<string, string[]>> = {};
@@ -396,14 +397,39 @@ function processRecords(
       let horasExtras = 0;
       let atrasos = 0;
       let faltas = "0";
-      
+
+      // ===== INTEGRAÇÃO AVISO PRÉVIO =====
+      // Se o funcionário está em período de aviso prévio trabalhado, não gerar falta
+      // e aplicar redução de jornada conforme Art. 488 CLT
+      const avisoAtivo = activeAvisos.find(a => 
+        a.employeeId === emp.id && data >= a.dataInicio && data <= a.dataFim
+      );
+      if (avisoAtivo) {
+        // Aplicar redução de jornada do aviso prévio
+        if (avisoAtivo.reducaoJornada === '2h_dia') {
+          // Reduz 2 horas por dia da jornada esperada
+          expectedMinutes = Math.max(0, expectedMinutes - 120);
+        } else if (avisoAtivo.reducaoJornada === '7_dias_corridos') {
+          // Nos últimos 7 dias corridos, o funcionário não precisa comparecer
+          const fimAviso = new Date(avisoAtivo.dataFim + 'T12:00:00');
+          const dataAtual = new Date(data + 'T12:00:00');
+          const diffDias = Math.ceil((fimAviso.getTime() - dataAtual.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDias <= 7) {
+            // Últimos 7 dias: não exigir presença, não gerar falta
+            expectedMinutes = 0;
+          }
+        }
+        // Durante aviso prévio, não gerar falta se trabalhou menos
+        // (tolerância maior - o funcionário pode ter saído mais cedo legalmente)
+      }
+
       if (diffBruto > 0) {
         // Trabalhou mais que o esperado
         horasExtras = diffBruto > tolSaida ? diffBruto : 0;
       } else if (diffBruto < 0 && totalMinutes > 0) {
         const atrasoReal = Math.abs(diffBruto);
-        if (atrasoReal >= faltaApos) {
-          // Atraso muito grande: considerar falta
+        if (atrasoReal >= faltaApos && !avisoAtivo) {
+          // Atraso muito grande: considerar falta (exceto durante aviso prévio)
           faltas = "1";
           atrasos = 0;
         } else if (atrasoReal > tolAtraso) {
@@ -570,9 +596,24 @@ export const fechamentoPontoRouter = router({
         // Buscar critérios do sistema para aplicar nos cálculos
         const criteria = await getCriteriaMap(input.companyId);
 
+        // Buscar avisos prévios ativos (trabalhados) para não gerar falta
+        const activeAvisos = await db.select({
+          employeeId: terminationNotices.employeeId,
+          dataInicio: terminationNotices.dataInicio,
+          dataFim: terminationNotices.dataFim,
+          reducaoJornada: terminationNotices.reducaoJornada,
+        }).from(terminationNotices).where(
+          and(
+            eq(terminationNotices.companyId, input.companyId),
+            eq(terminationNotices.status, 'em_andamento'),
+            sql`${terminationNotices.tipo} IN ('empregador_trabalhado', 'empregado_trabalhado')`,
+            sql`${terminationNotices.deletedAt} IS NULL`,
+          )
+        );
+
         // Process records - mesReferencia is auto-detected from each record's date
         const { timeRecordsToInsert, inconsistencies, unmatchedNames } = processRecords(
-          records, empList as any, obraId, input.companyId, criteria
+          records, empList as any, obraId, input.companyId, criteria, activeAvisos
         );
 
         // Group records by mesReferencia (auto-detected)
@@ -816,6 +857,22 @@ export const fechamentoPontoRouter = router({
         if (r.ajusteManual) emp.temAjusteManual = true;
       }
 
+      // Fetch active termination notices for this company/month
+      const activeAvisos = await db.select({
+        employeeId: terminationNotices.employeeId,
+        dataInicio: terminationNotices.dataInicio,
+        dataFim: terminationNotices.dataFim,
+        reducaoJornada: terminationNotices.reducaoJornada,
+      }).from(terminationNotices).where(
+        and(
+          eq(terminationNotices.companyId, input.companyId),
+          eq(terminationNotices.status, 'em_andamento'),
+          sql`${terminationNotices.tipo} IN ('empregador_trabalhado', 'empregado_trabalhado')`,
+          sql`${terminationNotices.deletedAt} IS NULL`,
+        )
+      );
+      const avisoPrevioEmployeeIds = new Set(activeAvisos.map(a => a.employeeId));
+
       // Fetch obra names
       const allObraIds = new Set<number>();
       for (const emp of Object.values(byEmployee)) {
@@ -839,6 +896,7 @@ export const fechamentoPontoRouter = router({
           horasTrabalhadas: minutesToHHMM(emp.totalMinutosTrabalhados),
           horasExtras: minutesToHHMM(emp.totalMinutosExtras),
           atrasos: minutesToHHMM(emp.totalMinutosAtrasos),
+          emAvisoPrevio: avisoPrevioEmployeeIds.has(emp.employeeId),
         };
       });
     }),

@@ -1,0 +1,40 @@
+{
+  "query": "SHOW TABLES LIKE 'termination%'; SHOW TABLES LIKE 'vacation%'; SHOW TABLES LIKE 'cipa%'; SHOW TABLES LIKE 'pj_%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW TABLES LIKE 'termination%'; SHOW TABLES LIKE 'vacation%'; SHOW TABLES LIKE 'cipa%'; SHOW TABLES LIKE 'pj_%';",
+  "rows": [
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "termination_notices"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "Tables_in_W4MM458SKqYRWRGGQrfw8A (vacation%)"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "vacation_periods"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "Tables_in_W4MM458SKqYRWRGGQrfw8A (cipa%)"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "cipa_elections"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "cipa_meetings"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "cipa_members"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "Tables_in_W4MM458SKqYRWRGGQrfw8A (pj_%)"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "pj_contracts"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)": "pj_payments"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_W4MM458SKqYRWRGGQrfw8A (termination%)\ntermination_notices\nTables_in_W4MM458SKqYRWRGGQrfw8A (vacation%)\nvacation_periods\nTables_in_W4MM458SKqYRWRGGQrfw8A (cipa%)\ncipa_elections\ncipa_meetings\ncipa_members\nTables_in_W4MM458SKqYRWRGGQrfw8A (pj_%)\npj_contracts\npj_payments\n",
+  "stderr": "",
+  "execution_time_ms": 100
+}

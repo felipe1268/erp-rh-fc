@@ -1510,3 +1510,28 @@
 - [x] Integrar tudo com Raio-X do Funcionário
 - [x] Adicionar rotas e itens no menu lateral
 - [x] Teste geral + checkpoint
+
+## SUGESTÕES IMPLEMENTADAS
+
+### Regra de Ouro — Atualizar Revisão
+- [x] Atualizar Rev. 49 → Rev. 50 em shared/version.ts
+
+### Sugestão 1 — Integrar Aviso Prévio com Cartão de Ponto
+- [x] Backend: ao processar ponto, verificar se funcionário está em aviso prévio
+- [x] Backend: não gerar falta automática durante período de aviso trabalhado
+- [x] Backend: aplicar redução de jornada (2h/dia ou 7 dias corridos) no cálculo
+- [x] Frontend: indicador visual no cartão de ponto quando em aviso prévio
+
+### Sugestão 2 — Dashboard de Férias no Painel Principal
+- [x] Backend: procedure para buscar férias vencendo nos próximos 30/60 dias
+- [x] Frontend: card no Painel Principal com férias vencendo
+- [x] Frontend: férias em andamento + agendadas + custo próximocer
+
+### Sugestão 3 — Exportação PDF dos Pagamentos PJ
+- [x] Backend: procedure para gerar relatório consolidado PJ
+- [x] Frontend: botão de exportar PDF na página Módulo PJ
+- [x] Frontend: relatório formatado com logo, dados da empresa, totais
+
+## BUGS
+- [ ] Raio-X do Funcionário travado em "Carregando dados do funcionário..." após adição das queries de aviso prévio/férias/CIPA/PJ
+- [x] Reorganizar aba Bancário: dados do funcionário primeiro, Conta da Empresa por último
