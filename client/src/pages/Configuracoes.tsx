@@ -13,7 +13,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -81,6 +81,45 @@ export default function Configuracoes() {
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
+
+  // Numeração Interna
+  const [numPrefixo, setNumPrefixo] = useState("");
+  const [numProximo, setNumProximo] = useState(1);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [numDirty, setNumDirty] = useState(false);
+
+  const numberingQuery = trpc.companies.getNumbering.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const updateNumberingMutation = trpc.companies.updateNumbering.useMutation({
+    onSuccess: () => {
+      toast.success("Numeração atualizada com sucesso");
+      numberingQuery.refetch();
+      setNumDirty(false);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+  const resetNumberingMutation = trpc.companies.resetNumbering.useMutation({
+    onSuccess: () => {
+      toast.success("Numeração resetada para 1");
+      numberingQuery.refetch();
+      setShowResetDialog(false);
+      setResetPassword("");
+      setNumProximo(1);
+      setNumDirty(false);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  useEffect(() => {
+    if (numberingQuery.data) {
+      setNumPrefixo(numberingQuery.data.prefixoCodigo);
+      setNumProximo(numberingQuery.data.nextCodigoInterno);
+      setNumDirty(false);
+    }
+  }, [numberingQuery.data]);
 
   // Critérios
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
@@ -419,6 +458,146 @@ export default function Configuracoes() {
                 Baseado na CLT e convenções coletivas
               </div>
             </div>
+
+            {/* ========== NUMERAÇÃO INTERNA ========== */}
+            <div className="border rounded-lg overflow-hidden border-cyan-200">
+              <button
+                onClick={() => setExpandedCat(expandedCat === "_numeracao" ? null : "_numeracao")}
+                className="w-full flex items-center justify-between px-4 py-3 bg-cyan-50 hover:opacity-90 transition-opacity"
+              >
+                <div className="flex items-center gap-3">
+                  <Hash className="w-5 h-5 text-cyan-600" />
+                  <span className="font-semibold text-gray-800">Numeração Interna (Código do Colaborador)</span>
+                  {numPrefixo && (
+                    <span className="px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded text-xs font-medium">
+                      Próximo: {numPrefixo}{String(numProximo).padStart(3, '0')}
+                    </span>
+                  )}
+                </div>
+                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expandedCat === "_numeracao" ? "rotate-90" : ""}`} />
+              </button>
+
+              {expandedCat === "_numeracao" && (
+                <div className="bg-white p-4 space-y-4">
+                  <p className="text-sm text-gray-500">
+                    Configure o prefixo alfanumérico e o próximo número sequencial para geração automática do código interno dos colaboradores.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Prefixo */}
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700 mb-1 block">Prefixo</Label>
+                      <Input
+                        value={numPrefixo}
+                        onChange={e => { setNumPrefixo(e.target.value.toUpperCase()); setNumDirty(true); }}
+                        placeholder="Ex: JFC, FC, HC"
+                        maxLength={10}
+                        className="font-mono text-lg"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Letras e números (máx. 10 caracteres)</p>
+                    </div>
+
+                    {/* Próximo Número */}
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700 mb-1 block">Próximo Número</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={numProximo}
+                        onChange={e => { setNumProximo(Math.max(1, parseInt(e.target.value) || 1)); setNumDirty(true); }}
+                        className="font-mono text-lg"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Próximo número a ser gerado automaticamente</p>
+                    </div>
+
+                    {/* Preview */}
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700 mb-1 block">Preview</Label>
+                      <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border rounded-md">
+                        <span className="font-mono text-lg font-bold text-cyan-700">
+                          {numPrefixo}{String(numProximo).padStart(3, '0')}
+                        </span>
+                        <span className="text-xs text-gray-400">→</span>
+                        <span className="font-mono text-sm text-gray-500">
+                          {numPrefixo}{String(numProximo + 1).padStart(3, '0')}
+                        </span>
+                        <span className="text-xs text-gray-400">→</span>
+                        <span className="font-mono text-sm text-gray-500">
+                          {numPrefixo}{String(numProximo + 2).padStart(3, '0')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">Sequência dos próximos códigos</p>
+                    </div>
+                  </div>
+
+                  {/* Ações */}
+                  <div className="flex items-center justify-between pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowResetDialog(true)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      disabled={!isMaster}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                      Resetar Numeração (Zerar)
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!numPrefixo.trim()) { toast.error("Prefixo não pode ser vazio"); return; }
+                        updateNumberingMutation.mutate({ companyId, prefixoCodigo: numPrefixo.trim(), nextCodigoInterno: numProximo });
+                      }}
+                      disabled={!numDirty || updateNumberingMutation.isPending}
+                      className={numDirty ? "bg-blue-600 hover:bg-blue-700" : ""}
+                    >
+                      <Save className="w-3.5 h-3.5 mr-1" />
+                      {updateNumberingMutation.isPending ? "Salvando..." : "Salvar Numeração"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Dialog de Reset */}
+            {showResetDialog && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+                  <h3 className="text-lg font-bold text-red-600 flex items-center gap-2 mb-3">
+                    <AlertTriangle className="w-5 h-5" />
+                    Resetar Numeração Interna
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Esta ação vai zerar o contador de numeração interna para <strong>1</strong>.
+                    Os códigos já atribuídos aos colaboradores existentes <strong>não serão alterados</strong>.
+                    Novos colaboradores receberão códigos a partir de <strong>{numPrefixo}001</strong>.
+                  </p>
+                  <div className="mb-4">
+                    <Label className="text-sm font-medium text-gray-700 mb-1 block">Digite a senha de confirmação:</Label>
+                    <Input
+                      type="password"
+                      value={resetPassword}
+                      onChange={e => setResetPassword(e.target.value)}
+                      placeholder="Senha de confirmação"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Senha: RESETAR2026</p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setShowResetDialog(false); setResetPassword(""); }}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                      onClick={() => resetNumberingMutation.mutate({ companyId, confirmPassword: resetPassword })}
+                      disabled={resetNumberingMutation.isPending || !resetPassword}
+                    >
+                      {resetNumberingMutation.isPending ? "Resetando..." : "Confirmar Reset"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {criteriaQuery.isLoading ? (
               <div className="text-center py-12 text-gray-400">Carregando critérios...</div>

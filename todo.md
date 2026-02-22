@@ -1552,3 +1552,14 @@
 - [x] SidebarContent agora usa forwardRef para conectar ref ao DOM
 - [x] Scroll position e estado de seções expandidas persistem via variáveis de módulo (sobrevive remount)
 - [x] Atualizar Rev. 56 → Rev. 57
+
+## Rev. 58 - Configuração de Numeração Interna (Código Interno)
+- [x] Criar critérios de numeração interna em Configurações (Critérios do Sistema)
+- [x] Campo para alterar prefixo alfanumérico (ex: JFC → FC ou outro)
+- [x] Campo para definir próximo número sequencial
+- [x] Botão para resetar numeração (zerar para começar do 1)
+- [x] Preview da próxima numeração gerada (ex: "Próximo: FC001")
+- [x] Backend: rotas para salvar/buscar configuração de numeração
+- [x] Backend: rota para resetar numeração (atualizar próximo número para 1)
+- [x] Integrar com geração automática de codigoInterno ao cadastrar colaborador (já existia)
+- [x] Atualizar Rev. 57 → Rev. 58

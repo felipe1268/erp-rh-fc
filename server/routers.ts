@@ -133,6 +133,37 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "empresas", entityType: "company", entityId: input.companyId, details: `Logo da empresa atualizado` });
       return { url };
     }),
+    // Numeração Interna - Configuração
+    getNumbering: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input }) => {
+      const company = await getCompanyById(input.companyId);
+      if (!company) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada" });
+      return {
+        prefixoCodigo: (company as any).prefixoCodigo || 'EMP',
+        nextCodigoInterno: (company as any).nextCodigoInterno || 1,
+      };
+    }),
+    updateNumbering: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      prefixoCodigo: z.string().min(1).max(10),
+      nextCodigoInterno: z.number().min(1),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar a numeração" });
+      await updateCompany(input.companyId, { prefixoCodigo: input.prefixoCodigo, nextCodigoInterno: input.nextCodigoInterno } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna alterada: prefixo=${input.prefixoCodigo}, próximo=${input.nextCodigoInterno}` });
+      return { success: true };
+    }),
+    resetNumbering: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      confirmPassword: z.string(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode resetar a numeração" });
+      if (input.confirmPassword !== "RESETAR2026") throw new TRPCError({ code: "BAD_REQUEST", message: "Senha de confirmação incorreta" });
+      await updateCompany(input.companyId, { nextCodigoInterno: 1 } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna RESETADA para 1` });
+      return { success: true };
+    }),
   }),
 
   // ============================================================
