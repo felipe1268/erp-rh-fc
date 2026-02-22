@@ -1546,3 +1546,9 @@
 - [x] Fix coluna motivo_outro → motivoOutro na tabela atestados
 - [x] Fix erros TypeScript em fechamentoPonto.ts, Obras.tsx e db.ts
 - [x] Atualizar Rev. 55 → Rev. 56 em shared/version.ts
+
+## Rev. 57 - Correção Scroll do Menu Lateral
+- [x] Fix barra de rolagem do menu lateral não ficar fixa ao clicar em todos os itens (alguns resetam o scroll)
+- [x] SidebarContent agora usa forwardRef para conectar ref ao DOM
+- [x] Scroll position e estado de seções expandidas persistem via variáveis de módulo (sobrevive remount)
+- [x] Atualizar Rev. 56 → Rev. 57

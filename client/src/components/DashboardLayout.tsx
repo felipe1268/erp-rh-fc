@@ -159,6 +159,10 @@ const ICON_MAP: Record<string, any> = {
 
 const allMenuItems = menuSections.flatMap(s => s.items);
 
+// Variáveis em nível de módulo para persistir estado entre remounts
+let _sidebarScrollTop = 0;
+let _expandedSections: Record<string, boolean> | null = null;
+
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
@@ -229,14 +233,28 @@ function DashboardLayoutContent({
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
 
   // Preservar posição do scroll do menu lateral ao navegar
-  const savedScrollTop = useRef(0);
-  useEffect(() => {
-    const el = sidebarScrollRef.current;
-    if (!el) return;
-    // Restaurar posição após re-render por mudança de rota
+  // Usar variável de módulo para persistir entre remounts do componente
+  const restoreScroll = () => {
+    const scrollVal = _sidebarScrollTop;
     requestAnimationFrame(() => {
-      el.scrollTop = savedScrollTop.current;
+      requestAnimationFrame(() => {
+        if (sidebarScrollRef.current) {
+          sidebarScrollRef.current.scrollTop = scrollVal;
+        }
+      });
     });
+  };
+
+  // Restaurar scroll na montagem inicial do componente
+  useEffect(() => {
+    restoreScroll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restaurar scroll quando a rota muda
+  useEffect(() => {
+    restoreScroll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
   // Carregar configuração personalizada do menu
@@ -265,10 +283,14 @@ function DashboardLayoutContent({
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const activeMenuItem = allEffectiveItems.find(item => item.path === location) || allMenuItems.find(item => item.path === location);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
-    Object.fromEntries(menuSections.map(s => [s.title, true]))
+    _expandedSections ?? Object.fromEntries(menuSections.map(s => [s.title, true]))
   );
   const toggleSection = (title: string) => {
-    setExpandedSections(prev => ({ ...prev, [title]: !prev[title] }));
+    setExpandedSections(prev => {
+      const next = { ...prev, [title]: !prev[title] };
+      _expandedSections = next;
+      return next;
+    });
   };
   const isMobile = useIsMobile();
 
@@ -337,7 +359,7 @@ function DashboardLayoutContent({
           <SidebarContent
             ref={sidebarScrollRef}
             className="gap-0"
-            onScroll={(e) => { savedScrollTop.current = (e.target as HTMLDivElement).scrollTop; }}
+            onScroll={(e) => { _sidebarScrollTop = (e.target as HTMLDivElement).scrollTop; }}
           >
             {effectiveSections.map(section => (
               <div key={section.title} className="mb-1">
