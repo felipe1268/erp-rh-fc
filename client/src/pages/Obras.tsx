@@ -280,9 +280,9 @@ export default function Obras() {
       </div>
 
       <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Obra" : "Nova Obra"} icon={<Landmark className="h-5 w-5 text-white" />}>
-        <div className="max-w-2xl mx-auto">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+        <div className="w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
               <Label>Nome da Obra *</Label>
               <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: Edifício Residencial Aurora" />
             </div>
@@ -318,14 +318,14 @@ export default function Obras() {
               <Label>Data de Término</Label>
               <Input type="date" value={form.dataPrevisaoFim} onChange={e => setForm(f => ({ ...f, dataPrevisaoFim: e.target.value }))} />
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <Label>Observações</Label>
               <Textarea value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={3} />
             </div>
 
             {/* Seção de SNs (Relógios de Ponto) */}
             {editingId && (
-              <div className="col-span-2 border-t pt-4 mt-2">
+              <div className="sm:col-span-2 border-t pt-4 mt-2">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <Label className="text-base font-semibold">Relógios de Ponto (SNs)</Label>
@@ -432,7 +432,7 @@ export default function Obras() {
 
             {/* Aviso para obras novas */}
             {!editingId && (
-              <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="sm:col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-xs text-blue-800">
                   <Wifi className="h-3.5 w-3.5 inline mr-1" />
                   Após criar a obra, edite-a para vincular os relógios de ponto (SNs).

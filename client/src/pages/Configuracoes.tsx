@@ -586,7 +586,7 @@ export default function Configuracoes() {
 
         {/* Dialog: Criar Usuário */}
         <FullScreenDialog open={showCreateUser} onClose={() => setShowCreateUser(false)} title="Novo Usuário Local" subtitle="Crie um usuário com acesso por username e senha">
-          <div className="max-w-lg mx-auto">
+          <div className="w-full max-w-2xl">
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium">Nome Completo *</label>

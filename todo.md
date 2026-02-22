@@ -1237,3 +1237,113 @@
 - [x] Alertas categorizados (ASOs Vencidos, ASOs Vencendo, Sem ASO, Férias, Processos)
 - [x] Possibilidade de navegar direto para o item do alerta (botão por categoria)
 - [x] Botão Imprimir no painel de alertas
+
+## Rev. 55: Correção de dados + Gráficos clicáveis
+- [ ] Verificar e corrigir demissões erradas em março/2026
+- [ ] Preencher sexo M/F automaticamente por análise de nome
+- [ ] Definir setor OBRA para maioria, ESCRITÓRIO CENTRAL para funções administrativas
+- [ ] Gráficos clicáveis: ao clicar em qualquer item, abre lista de nomes (responsivo)
+- [ ] Aplicar em todos os gráficos do sistema (Dashboard Funcionários, Dashboard HE, etc.)
+
+## Rev. 56: Folha Pagamento + Alertas Full Screen + Dados
+- [ ] Diagnosticar por que não consolida folha de janeiro
+- [ ] Diagnosticar por que Dashboard Folha não mostra dados de janeiro
+- [ ] Central de Alertas converter para FULL SCREEN (não dialog pequeno)
+- [ ] Todas as telas/modais devem ser FULL SCREEN
+- [ ] Corrigir demissões erradas em março/2026
+- [ ] Preencher sexo M/F automaticamente por análise de nome
+- [ ] Definir setor OBRA/ESCRITÓRIO CENTRAL por função
+- [ ] Gráficos clicáveis: ao clicar em qualquer item, abre lista de nomes (responsivo)
+
+## Rev. 57: Alertas Automáticos de Seguro de Vida
+- [ ] Criar tabela insurance_alert_config (configuração de alertas de seguro por empresa)
+- [ ] Criar tabela insurance_alert_recipients (destinatários: corretor, diretoria, etc.)
+- [ ] Criar tabela insurance_alerts_log (histórico de alertas enviados)
+- [ ] Textos padrão editáveis para cada tipo de movimentação (Admissão, Afastamento, Reclusão, Desligamento)
+- [ ] Backend: rotas tRPC CRUD para configuração de seguro de vida
+- [ ] Backend: função de disparo automático de alerta ao mudar status do funcionário
+- [ ] Backend: integração com notificações (notifyOwner + registro interno)
+- [ ] Frontend: aba "Seguro de Vida" em Configurações → Critérios do Sistema
+- [ ] Frontend: formulário de destinatários (Corretor, Usuário, Diretoria)
+- [ ] Frontend: histórico de alertas enviados com filtros
+- [ ] Integrar disparo automático em: updateEmployee (mudança de status)
+- [ ] Integrar disparo automático em: createEmployee (admissão)
+- [ ] Testes unitários para fluxo de alertas de seguro
+
+## Rev. 58: Melhorar Dashboard Horas Extras - Filtros + Dados
+- [ ] Redesenhar filtros do Dashboard HE: barra de meses estilo Cartão de Ponto (Jan-Dez + setas ano)
+- [ ] Filtros avançados (Semestre, Trimestre, Semana, Dia) como opção secundária discreta
+- [ ] Investigar e corrigir valores zerados no Dashboard HE (Total Horas, Total HE, Pessoas, Média)
+- [ ] Manter filtros de Obra e Colaborador como selects compactos
+
+## Rev. 59: Drag & Drop no Gerenciador de Menu
+- [ ] Implementar arrastar e soltar itens do menu entre categorias (ex: Financeiro → Operacional)
+- [ ] Implementar arrastar e soltar para reordenar itens dentro da mesma categoria
+- [ ] Implementar arrastar e soltar para reordenar categorias inteiras
+- [ ] Visual feedback durante arrasto (highlight da zona de destino)
+- [ ] Remover botões "Mover para..." e setas, substituir por drag & drop intuitivo
+
+## Rev. 60: Consulta Automática de CA (Certificado de Aprovação) do MTE
+- [ ] Pesquisar e integrar API/base do MTE para consulta de CA
+- [ ] Criar rota tRPC para consultar CA no backend
+- [ ] Autopreenchimento no cadastro de EPI ao digitar número do CA (nome, fabricante, validade, natureza)
+- [ ] Feedback visual durante a consulta (loading, sucesso, erro)
+- [ ] Cache de consultas CA para evitar requisições repetidas
+
+## Rev. 61: Tela de Login/Apresentação Profissional
+- [ ] Redesenhar Home.tsx com layout split-screen profissional
+- [ ] Formulário visual de login (e-mail + senha) com botão Entrar via OAuth
+- [ ] Aba "Esqueci minha senha" com campo de e-mail e envio de recuperação
+- [ ] Visual impactante com branding FC Engenharia (gradiente, logo, animações sutis)
+- [ ] Responsivo para mobile
+
+## Rev. 62: Todas as Telas Full Screen
+-- [x] Auditar TODAS as páginas do sistema para verificar quais não são full screenn
+- [ ] Corrigir Funções (detalhe/modal) para full screen
+- [ ] Corrigir todas as demais páginas que não estão full screen
+- [ ] Garantir padrão consistente em todas as telas
+
+## Rev. 63: Funções - Filtro Incompletas + Responsivo
+- [ ] Adicionar filtro "Incompletas" na tela de Funções (sem CBO, sem descrição, sem OS)
+- [ ] Tornar tela de Funções responsiva (KPIs, tabela, formulários)
+- [x] Remover max-w limitante dos formulários de Funções
+- [x] Aplicar responsividade e full screen em todas as outras páginas com limitação (Colaboradores, ContasBancarias, ControleDocumentos, Empresas, Usuarios, FechamentoPonto, Configuracoes, Epis, Obras, RelogiosPonto, Setores)
+
+## Rev. 64: Corrigir Status dos Funcionários
+- [x] Colocar TODOS os funcionários da FC como Ativos (remover datas de demissão incorretas) — 170 corrigidos, total 295 ativos
+- [ ] Aguardar lista atualizada do usuário para fazer baixas corretas (pendente)
+
+## Rev. 65: Relógios de Ponto - Exclusão e SN Único
+- [ ] Permitir exclusão de relógios de ponto (botão lixeira funcional com confirmação)
+- [ ] Impedir SN duplicado — não permitir mesmo número SN vinculado a duas obras ativas
+- [ ] Validação no backend ao criar/editar relógio
+
+## Rev. 66: Upload DIXI - SN Não Identificado
+- [ ] Investigar por que o upload DIXI não identifica o SN do arquivo XLS
+- [ ] Corrigir lógica de extração de SN do arquivo DIXI
+
+## Rev. 67: Conflitos de Obra - Melhorias
+- [ ] Clicar na obra para ver ponto detalhado do dia (entrada/saída, horas)
+- [ ] Restaurar botão "Dividir custos proporcional ao tempo" para obras sem sobreposição de horário
+- [ ] Regra obrigatória: sobreposição de horário (mesmo dia + mesma hora em 2 obras) → usuário DEVE escolher uma obra ou marcar como falta
+- [ ] Adicionar opção "Marcar como Falta" além de escolher obra
+
+## Rev. 68: Ranking de Ponto + Score de Qualidade
+- [ ] Backend: calcular ranking de ponto por funcionário (erros vs acertos)
+- [ ] Backend: score de qualidade de ponto (% acerto, nota A-D)
+- [ ] Dashboard Funcionários: cards "Melhor Ponto" e "Mais Erros de Ponto"
+- [ ] Raio-X: seção "Qualidade de Ponto" com histórico mensal e score
+- [ ] Registrar score na ficha do funcionário para tomada de decisão futura
+
+## Rev. 69: Filtro de Período com Comparativo no Dashboard Funcionários
+- [ ] Adicionar filtro discreto de período: Dia, Semana, Mês, Trimestre, Ano (toggle compacto)
+- [ ] Backend: aceitar parâmetro de período e calcular dados para período atual + anterior
+- [ ] KPIs com indicadores de variação (↑↓ % vs período anterior)
+- [ ] Comparativo automático nos gráficos de turnover, advertências, atestados
+- [ ] Manter dados estáticos (total geral, gênero, função) sem filtro de período
+- [x] Substituir seletor de calendário complexo por setas simples ◀ ▶ em todos os dashboards
+- [x] Adicionar % de HE vs Horas Normais no card de Horas Extras do Dashboard Cartão de Ponto
+- [x] Ranking de Faltas em DIAS (não horas) no Dashboard Cartão de Ponto
+- [x] Cards e rankings clicáveis no Dashboard Cartão de Ponto (navegar para origem dos dados)
+- [x] Atrasos com tolerância CLT Art.58 §1º (10min/dia) no Dashboard Cartão de Ponto - formato hh:mm
+- [ ] Exibir nome completo do funcionário em todas as abas do cadastro (espelho da aba Pessoal)

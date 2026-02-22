@@ -1,14 +1,13 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
+import MonthSelector from "@/components/MonthSelector";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { DollarSign, TrendingUp, TrendingDown, Users, Wallet, Building2, Briefcase, Landmark } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Users, Wallet, Building2, Briefcase, Landmark, ExternalLink } from "lucide-react";
 import { Loader2 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
 
 function fmtBRL(v: number) {
@@ -21,6 +20,7 @@ export default function DashFolhaPagamento() {
   const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
   const [mes, setMes] = useState(mesRef);
   const { data, isLoading } = trpc.dashboards.folhaPagamento.useQuery({ companyId, mesReferencia: mes }, { enabled: companyId > 0 });
+  const [, navigate] = useLocation();
 
   const mesLabel = useMemo(() => {
     const [y, m] = mes.split("-");
@@ -47,10 +47,7 @@ export default function DashFolhaPagamento() {
             <p className="text-muted-foreground text-sm mt-1">Análise de custos e encargos — {mesLabel}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div>
-              <Label className="text-xs">Mês Referência</Label>
-              <Input type="month" value={mes} onChange={e => setMes(e.target.value)} className="w-40" />
-            </div>
+            <MonthSelector value={mes} onChange={setMes} />
             <PrintActions title="Dashboard Folha de Pagamento" />
           </div>
         </div>
@@ -61,10 +58,18 @@ export default function DashFolhaPagamento() {
           <>
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <DashKpi label="Custo Total" value={fmtBRL(data.resumo.custoTotalMes)} icon={DollarSign} color="red" sub={`${data.resumo.totalFuncionarios} funcionários`} />
-              <DashKpi label="Total Proventos" value={fmtBRL(data.resumo.totalProventosMes)} icon={TrendingUp} color="green" />
-              <DashKpi label="Total Descontos" value={fmtBRL(data.resumo.totalDescontosMes)} icon={TrendingDown} color="orange" />
-              <DashKpi label="Líquido Total" value={fmtBRL(data.resumo.totalLiquidoMes)} icon={Wallet} color="blue" />
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
+                <DashKpi label="Custo Total" value={fmtBRL(data.resumo.custoTotalMes)} icon={DollarSign} color="red" sub={`${data.resumo.totalFuncionarios} funcionários`} />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
+                <DashKpi label="Total Proventos" value={fmtBRL(data.resumo.totalProventosMes)} icon={TrendingUp} color="green" />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
+                <DashKpi label="Total Descontos" value={fmtBRL(data.resumo.totalDescontosMes)} icon={TrendingDown} color="orange" />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
+                <DashKpi label="Líquido Total" value={fmtBRL(data.resumo.totalLiquidoMes)} icon={Wallet} color="blue" />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -78,11 +83,11 @@ export default function DashFolhaPagamento() {
               <DashChart
                 title="Evolução Mensal da Folha (últimos 12 meses)"
                 type="line"
-                labels={data.evolucaoMensal.map(r => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
+                labels={data.evolucaoMensal.map((r: any) => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
                 datasets={[
-                  { label: "Proventos", data: data.evolucaoMensal.map(r => r.proventos), borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.1)", fill: false, tension: 0.3 },
-                  { label: "Descontos", data: data.evolucaoMensal.map(r => r.descontos), borderColor: "#EF4444", backgroundColor: "rgba(239,68,68,0.1)", fill: false, tension: 0.3 },
-                  { label: "Líquido", data: data.evolucaoMensal.map(r => r.liquido), borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.1)", fill: true, tension: 0.3 },
+                  { label: "Proventos", data: data.evolucaoMensal.map((r: any) => r.proventos), borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.1)", fill: false, tension: 0.3 },
+                  { label: "Descontos", data: data.evolucaoMensal.map((r: any) => r.descontos), borderColor: "#EF4444", backgroundColor: "rgba(239,68,68,0.1)", fill: false, tension: 0.3 },
+                  { label: "Líquido", data: data.evolucaoMensal.map((r: any) => r.liquido), borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.1)", fill: true, tension: 0.3 },
                 ]}
                 height={300}
               />
@@ -93,10 +98,10 @@ export default function DashFolhaPagamento() {
               <DashChart
                 title="Encargos Mensais (FGTS + INSS)"
                 type="bar"
-                labels={data.evolucaoMensal.map(r => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
+                labels={data.evolucaoMensal.map((r: any) => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
                 datasets={[
-                  { label: "FGTS", data: data.evolucaoMensal.map(r => r.fgts), backgroundColor: "#14B8A6" },
-                  { label: "INSS", data: data.evolucaoMensal.map(r => r.inss), backgroundColor: "#8B5CF6" },
+                  { label: "FGTS", data: data.evolucaoMensal.map((r: any) => r.fgts), backgroundColor: "#14B8A6" },
+                  { label: "INSS", data: data.evolucaoMensal.map((r: any) => r.inss), backgroundColor: "#8B5CF6" },
                 ]}
                 height={280}
               />
@@ -107,15 +112,15 @@ export default function DashFolhaPagamento() {
               <DashChart
                 title="Custo por Função (Top 10)"
                 type="horizontalBar"
-                labels={data.porFuncao.map(f => f.funcao)}
-                datasets={[{ label: "Custo Total", data: data.porFuncao.map(f => f.custo), backgroundColor: "#3B82F6" }]}
+                labels={data.porFuncao.map((f: any) => f.funcao)}
+                datasets={[{ label: "Custo Total", data: data.porFuncao.map((f: any) => f.custo), backgroundColor: "#3B82F6" }]}
                 height={280}
               />
               <DashChart
                 title="Pagamentos por Banco"
                 type="doughnut"
-                labels={data.porBanco.map(b => b.banco)}
-                datasets={[{ data: data.porBanco.map(b => b.valor) }]}
+                labels={data.porBanco.map((b: any) => b.banco)}
+                datasets={[{ data: data.porBanco.map((b: any) => b.valor) }]}
                 height={280}
               />
             </div>
@@ -144,8 +149,8 @@ export default function DashFolhaPagamento() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.topSalarios.map((s, i) => (
-                          <tr key={i} className="border-b border-border/50">
+                        {data.topSalarios.map((s: any, i: number) => (
+                          <tr key={i} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer" onClick={() => navigate("/folha-pagamento")}>
                             <td className="py-2 pr-4 font-bold text-muted-foreground">{i + 1}</td>
                             <td className="py-2 pr-4 font-medium truncate max-w-[200px]">{s.nome}</td>
                             <td className="py-2 pr-4 text-muted-foreground">{s.funcao}</td>

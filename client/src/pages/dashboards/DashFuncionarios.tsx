@@ -142,7 +142,7 @@ export default function DashFuncionarios() {
             title="Distribuição por Gênero"
             type="pie"
             labels={data.sexDist.map(s => s.label)}
-            datasets={[{ data: data.sexDist.map(s => s.value), backgroundColor: ["#3B82F6", "#EC4899", "#9CA3AF"] }]}
+            datasets={[{ data: data.sexDist.map(s => s.value), backgroundColor: data.sexDist.map(s => s.label === 'M' ? '#3B82F6' : s.label === 'F' ? '#EC4899' : '#9CA3AF') }]}
             height={240}
           />
           <DashChart

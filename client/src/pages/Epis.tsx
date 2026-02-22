@@ -116,7 +116,7 @@ export default function Epis() {
           </div>
 
           <Card>
-            <CardContent className="p-6 space-y-4 max-w-lg">
+            <CardContent className="p-6 space-y-4 w-full">
               <div>
                 <Label>Nome do EPI *</Label>
                 <Input value={epiForm.nome} onChange={e => setEpiForm(f => ({ ...f, nome: e.target.value }))}
@@ -177,7 +177,7 @@ export default function Epis() {
           </div>
 
           <Card>
-            <CardContent className="p-6 space-y-4 max-w-lg">
+            <CardContent className="p-6 space-y-4 w-full">
               <div>
                 <Label>EPI *</Label>
                 <Select value={entregaForm.epiId || undefined} onValueChange={v => setEntregaForm(f => ({ ...f, epiId: v }))}>

@@ -27,6 +27,9 @@ import {
   listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
+import { getDb } from "./db";
+import { obraSns } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
 import { validateCNPJ } from "../shared/cnpj";
@@ -454,7 +457,23 @@ export const appRouter = router({
       }
       return addSnToObra(input);
     }),
-    updateSn: protectedProcedure.input(z.object({ id: z.number(), sn: z.string().optional(), obraId: z.number().optional(), status: z.string().optional(), apelido: z.string().optional() })).mutation(({ input }) => updateSnObra(input.id, { sn: input.sn, obraId: input.obraId, status: input.status, apelido: input.apelido })),
+    updateSn: protectedProcedure.input(z.object({ id: z.number(), sn: z.string().optional(), obraId: z.number().optional(), status: z.string().optional(), apelido: z.string().optional(), companyId: z.number().optional() })).mutation(async ({ input }) => {
+      // Validar SN duplicado ao editar
+      if (input.sn && input.companyId) {
+        const check = await checkSnAvailability(input.companyId, input.sn);
+        if (!check.available) {
+          // Verificar se o conflito é com o próprio registro
+          const db = await getDb();
+          if (db) {
+            const [current] = await db.select({ id: obraSns.id, sn: obraSns.sn }).from(obraSns).where(eq(obraSns.id, input.id));
+            if (!current || current.sn !== input.sn) {
+              throw new Error(`SN "${input.sn}" já está em uso na obra "${check.usedByObra}". Não é permitido duplicar SN.`);
+            }
+          }
+        }
+      }
+      return updateSnObra(input.id, { sn: input.sn, obraId: input.obraId, status: input.status, apelido: input.apelido });
+    }),
     removeSn: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => removeSnFromObra(input.id)),
     releaseSns: protectedProcedure.input(z.object({ obraId: z.number() })).mutation(({ input }) => releaseObraSns(input.obraId)),
   }),

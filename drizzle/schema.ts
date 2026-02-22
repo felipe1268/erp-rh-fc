@@ -1117,3 +1117,85 @@ export const goldenRules = mysqlTable("golden_rules", {
 });
 export type InsertGoldenRule = typeof goldenRules.$inferInsert;
 export type SelectGoldenRule = typeof goldenRules.$inferSelect;
+
+
+// ============================================================
+// SEGURO DE VIDA - CONFIGURAÇÃO DE ALERTAS AUTOMÁTICOS
+// Dispara alertas para Corretor, Usuário e Diretoria
+// em cada movimentação: Admissão, Afastamento, Reclusão, Desligamento
+// ============================================================
+export const insuranceAlertConfig = mysqlTable("insurance_alert_config", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	isActive: tinyint().default(1).notNull(), // Liga/desliga o sistema de alertas
+	// Textos padrão para cada tipo de movimentação (editáveis pelo admin)
+	textoAdmissao: text(), // Texto do alerta para admissão
+	textoAfastamento: text(), // Texto do alerta para afastamento
+	textoReclusao: text(), // Texto do alerta para reclusão
+	textoDesligamento: text(), // Texto do alerta para desligamento
+	// Dados da seguradora/corretor
+	seguradora: varchar({ length: 255 }), // Nome da seguradora
+	apolice: varchar({ length: 100 }), // Número da apólice
+	observacoes: text(),
+	criadoPor: varchar({ length: 255 }),
+	atualizadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("iac_company").on(table.companyId),
+]);
+
+// Destinatários dos alertas de seguro de vida
+export const insuranceAlertRecipients = mysqlTable("insurance_alert_recipients", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	configId: int().notNull(), // FK para insurance_alert_config
+	tipoDestinatario: mysqlEnum(['corretor', 'diretoria', 'usuario_sistema', 'outro']).notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	email: varchar({ length: 320 }).notNull(),
+	telefone: varchar({ length: 20 }),
+	cargo: varchar({ length: 100 }),
+	recebeAdmissao: tinyint().default(1).notNull(),
+	recebeAfastamento: tinyint().default(1).notNull(),
+	recebeReclusao: tinyint().default(1).notNull(),
+	recebeDesligamento: tinyint().default(1).notNull(),
+	isActive: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("iar_company").on(table.companyId),
+	index("iar_config").on(table.configId),
+]);
+
+// Log de alertas enviados (auditoria completa)
+export const insuranceAlertsLog = mysqlTable("insurance_alerts_log", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(), // Funcionário que gerou o alerta
+	tipoMovimentacao: mysqlEnum(['admissao', 'afastamento', 'reclusao', 'desligamento']).notNull(),
+	statusAnterior: varchar({ length: 50 }), // Status antes da movimentação
+	statusNovo: varchar({ length: 50 }), // Status após a movimentação
+	textoAlerta: text().notNull(), // Texto completo do alerta enviado
+	// Dados do funcionário no momento do alerta (snapshot)
+	nomeFuncionario: varchar({ length: 255 }).notNull(),
+	cpfFuncionario: varchar({ length: 14 }),
+	funcaoFuncionario: varchar({ length: 100 }),
+	obraFuncionario: varchar({ length: 255 }),
+	// Destinatários que receberam
+	destinatarios: json(), // Array de {nome, email, tipo}
+	// Quem disparou
+	disparadoPor: varchar({ length: 255 }), // Usuário que fez a movimentação
+	disparoAutomatico: tinyint().default(1).notNull(), // 1 = automático, 0 = manual
+	// Status do envio
+	statusEnvio: mysqlEnum(['enviado', 'erro', 'pendente']).default('pendente').notNull(),
+	erroMensagem: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ial_company").on(table.companyId),
+	index("ial_employee").on(table.employeeId),
+	index("ial_tipo").on(table.companyId, table.tipoMovimentacao),
+	index("ial_data").on(table.companyId, table.createdAt),
+]);

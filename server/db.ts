@@ -1188,10 +1188,8 @@ export async function updateSnObra(id: number, data: { sn?: string; obraId?: num
 export async function removeSnFromObra(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(obraSns).set({
-    status: "inativo",
-    dataLiberacao: new Date().toISOString().split("T")[0],
-  }).where(eq(obraSns.id, id));
+  // DELETE real do banco
+  await db.delete(obraSns).where(eq(obraSns.id, id));
 }
 
 // Liberar todos os SNs de uma obra (quando status muda para Concluída/Paralisada/Cancelada)

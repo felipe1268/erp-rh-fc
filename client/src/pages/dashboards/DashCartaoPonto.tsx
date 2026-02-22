@@ -1,14 +1,13 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
+import MonthSelector from "@/components/MonthSelector";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Clock, Users, AlertTriangle, Timer, CalendarOff, TrendingDown, UserX } from "lucide-react";
+import { Clock, Users, AlertTriangle, Timer, CalendarOff, TrendingDown, UserX, ExternalLink, Info } from "lucide-react";
 import { Loader2 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
 
 export default function DashCartaoPonto() {
@@ -17,6 +16,7 @@ export default function DashCartaoPonto() {
   const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
   const [mes, setMes] = useState(mesRef);
   const { data, isLoading } = trpc.dashboards.cartaoPonto.useQuery({ companyId, mesReferencia: mes }, { enabled: companyId > 0 });
+  const [, navigate] = useLocation();
 
   const mesLabel = useMemo(() => {
     const [y, m] = mes.split("-");
@@ -33,6 +33,7 @@ export default function DashCartaoPonto() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -43,10 +44,7 @@ export default function DashCartaoPonto() {
             <p className="text-muted-foreground text-sm mt-1">Análise de frequência, faltas e atrasos — {mesLabel}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div>
-              <Label className="text-xs">Mês Referência</Label>
-              <Input type="month" value={mes} onChange={e => setMes(e.target.value)} className="w-40" />
-            </div>
+            <MonthSelector value={mes} onChange={setMes} />
             <PrintActions title="Dashboard Cartão de Ponto" />
           </div>
         </div>
@@ -55,18 +53,50 @@ export default function DashCartaoPonto() {
           <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
         ) : (
           <>
-            {/* KPIs */}
+            {/* KPIs - Linha 1 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <DashKpi label="Horas Trabalhadas" value={data.resumo.totalHorasTrab.toLocaleString("pt-BR")} icon={Clock} color="blue" sub={`${data.resumo.totalRegistros} registros`} />
-              <DashKpi label="Horas Extras" value={data.resumo.totalHorasExtras.toLocaleString("pt-BR")} icon={Timer} color="orange" />
-              <DashKpi label="Faltas (horas)" value={data.resumo.totalFaltas.toLocaleString("pt-BR")} icon={CalendarOff} color="red" />
-              <DashKpi label="Atrasos (horas)" value={data.resumo.totalAtrasos.toLocaleString("pt-BR")} icon={TrendingDown} color="yellow" />
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/fechamento-ponto")}>
+                <DashKpi label="Horas Trabalhadas" value={data.resumo.totalHorasTrab.toLocaleString("pt-BR")} icon={Clock} color="blue" sub={`${data.resumo.totalRegistros} registros`} />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/dashboards/horas-extras")}>
+                <DashKpi
+                  label="Horas Extras"
+                  value={data.resumo.totalHorasExtras.toLocaleString("pt-BR")}
+                  icon={Timer}
+                  color="orange"
+                  sub={`${data.resumo.percentualHE}% das horas normais`}
+                />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/fechamento-ponto")}>
+                <DashKpi
+                  label="Faltas"
+                  value={`${data.resumo.totalFaltasDias} dias`}
+                  icon={CalendarOff}
+                  color="red"
+                />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/fechamento-ponto")}>
+                <DashKpi
+                  label="Atrasos"
+                  value={data.resumo.totalAtrasosFormatado || "0h"}
+                  icon={TrendingDown}
+                  color="yellow"
+                  sub="CLT Art.58 §1º (tol. 10min)"
+                />
+              </div>
             </div>
 
+            {/* KPIs - Linha 2 */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <DashKpi label="Funcionários Ativos" value={data.resumo.totalFuncionariosAtivos} icon={Users} color="blue" />
-              <DashKpi label="Com Registro" value={data.resumo.funcionariosComRegistro} icon={Users} color="green" sub={`${data.resumo.totalFuncionariosAtivos > 0 ? Math.round((data.resumo.funcionariosComRegistro / data.resumo.totalFuncionariosAtivos) * 100) : 0}% do total`} />
-              <DashKpi label="Sem Registro" value={data.resumo.funcionariosSemRegistro} icon={UserX} color="red" sub="Sem batida no mês" />
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/colaboradores")}>
+                <DashKpi label="Funcionários Ativos" value={data.resumo.totalFuncionariosAtivos} icon={Users} color="blue" />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/fechamento-ponto")}>
+                <DashKpi label="Com Registro" value={data.resumo.funcionariosComRegistro} icon={Users} color="green" sub={`${data.resumo.totalFuncionariosAtivos > 0 ? Math.round((data.resumo.funcionariosComRegistro / data.resumo.totalFuncionariosAtivos) * 100) : 0}% do total`} />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/fechamento-ponto")}>
+                <DashKpi label="Sem Registro" value={data.resumo.funcionariosSemRegistro} icon={UserX} color="red" sub="Sem batida no mês" />
+              </div>
             </div>
 
             {/* Evolução diária */}
@@ -115,28 +145,40 @@ export default function DashCartaoPonto() {
 
             {/* Rankings */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Ranking de Faltas (em DIAS) */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <CalendarOff className="h-4 w-4 text-red-500" />
-                    Ranking de Faltas (Top 10)
+                    Ranking de Faltas — Top 10
+                    <span className="text-[10px] font-normal text-muted-foreground ml-auto">(em dias)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {data.rankingFaltas.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma falta registrada no período</p>
                   ) : (
-                    <div className="space-y-2">
-                      {data.rankingFaltas.map((r, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
-                            <div>
-                              <p className="text-sm font-medium truncate max-w-[180px]">{r.nome}</p>
+                    <div className="space-y-1">
+                      {data.rankingFaltas.map((r: any, i: number) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between py-2 px-2 border-b border-border/50 last:border-0 rounded hover:bg-red-50 cursor-pointer transition-colors"
+                          onClick={() => r.employeeId && navigate(`/colaboradores?id=${r.employeeId}&tab=ponto`)}
+                          title="Clique para ver o Raio-X do funcionário"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate max-w-[220px]">{r.nome}</p>
                               <p className="text-xs text-muted-foreground">{r.funcao}</p>
                             </div>
                           </div>
-                          <span className="text-sm font-bold text-red-600">{r.faltas}h</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-sm font-bold text-red-600">
+                              {r.faltasDias === 1 ? "1 dia" : `${r.faltasDias % 1 === 0 ? r.faltasDias : r.faltasDias.toFixed(1)} dias`}
+                            </span>
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -144,34 +186,55 @@ export default function DashCartaoPonto() {
                 </CardContent>
               </Card>
 
+              {/* Ranking de Atrasos (hh:mm com tolerância CLT) */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <TrendingDown className="h-4 w-4 text-amber-500" />
-                    Ranking de Atrasos (Top 10)
+                    Ranking de Atrasos — Top 10
+                    <span className="text-[10px] font-normal text-muted-foreground ml-auto flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      CLT Art.58 §1º (tol. 10min/dia)
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {data.rankingAtrasos.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">Nenhum atraso registrado no período</p>
+                    <p className="text-sm text-muted-foreground py-4 text-center">Nenhum atraso acima da tolerância legal</p>
                   ) : (
-                    <div className="space-y-2">
-                      {data.rankingAtrasos.map((r, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${i < 3 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
-                            <div>
-                              <p className="text-sm font-medium truncate max-w-[180px]">{r.nome}</p>
+                    <div className="space-y-1">
+                      {data.rankingAtrasos.map((r: any, i: number) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between py-2 px-2 border-b border-border/50 last:border-0 rounded hover:bg-amber-50 cursor-pointer transition-colors"
+                          onClick={() => r.employeeId && navigate(`/colaboradores?id=${r.employeeId}&tab=ponto`)}
+                          title="Clique para ver o Raio-X do funcionário"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate max-w-[220px]">{r.nome}</p>
                               <p className="text-xs text-muted-foreground">{r.funcao}</p>
                             </div>
                           </div>
-                          <span className="text-sm font-bold text-amber-600">{r.atrasos}h</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-sm font-bold text-amber-600">{r.atrasosFormatado}</span>
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Nota legal */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800">
+              <Info className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <strong>CLT Art. 58, §1º:</strong> Não serão descontadas nem computadas como jornada extraordinária as variações de horário no registro de ponto não excedentes de 5 minutos por marcação, observado o limite máximo de 10 minutos diários. Atrasos de até 10 minutos/dia estão dentro da tolerância legal e não são contabilizados neste dashboard.
+              </div>
             </div>
           </>
         )}

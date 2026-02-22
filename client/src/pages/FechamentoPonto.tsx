@@ -1809,7 +1809,7 @@ export default function FechamentoPonto() {
 
         {/* ===== UPLOAD DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showUploadDialog} onClose={() => setShowUploadDialog(false)} title="Upload de Arquivos DIXI" subtitle={`Competência: ${formatMesAno(mesAno)}`} icon={<Upload className="h-5 w-5 text-white" />}>
-          <div className="max-w-2xl mx-auto">
+          <div className="w-full">
             <div className="space-y-4 overflow-y-auto flex-1 pr-2">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                 <strong>Como funciona:</strong> Selecione os arquivos XLS exportados dos relógios DIXI.
@@ -1909,7 +1909,7 @@ export default function FechamentoPonto() {
 
         {/* ===== MANUAL ENTRY DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showManualDialog} onClose={() => setShowManualDialog(false)} title="Lançamento Manual" subtitle={`Competência: ${formatMesAno(mesAno)}`} icon={<PenLine className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-purple-800 to-purple-600">
-          <div className="max-w-md mx-auto">
+          <div className="w-full max-w-xl">
             <div className="space-y-3">
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-xs text-purple-800">
                 Registros manuais ficam <strong>destacados</strong> e são rastreados.
@@ -1960,7 +1960,7 @@ export default function FechamentoPonto() {
 
         {/* ===== RESOLVE INCONSISTENCY DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showResolveDialog} onClose={() => setShowResolveDialog(false)} title={resolveData.status === "advertencia" ? "Gerar Advertência" : "Resolver Inconsistência"} subtitle={selectedInconsistency ? selectedInconsistency.employeeName : ""} icon={resolveData.status === "advertencia" ? <Shield className="h-5 w-5 text-white" /> : <CheckCircle className="h-5 w-5 text-white" />} headerColor={resolveData.status === "advertencia" ? "bg-gradient-to-r from-red-800 to-red-600" : "bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a]"}>
-          <div className="max-w-md mx-auto">
+          <div className="w-full max-w-xl">
             {selectedInconsistency && (
               <div className="space-y-3">
                 <div className="bg-muted/50 rounded-lg p-3 text-sm">
@@ -2006,7 +2006,7 @@ export default function FechamentoPonto() {
 
         {/* ===== CONSOLIDAR MÊS DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showConsolidarDialog} onClose={() => setShowConsolidarDialog(false)} title={`Consolidar Mês — ${formatMesAno(mesAno)}`} icon={<Lock className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-green-800 to-green-600">
-          <div className="max-w-md mx-auto">
+          <div className="w-full max-w-xl">
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
                 <strong>Atenção:</strong> Ao consolidar, nenhuma alteração será permitida neste mês.
@@ -2044,7 +2044,7 @@ export default function FechamentoPonto() {
 
         {/* ===== DESCONSOLIDAR DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showDesconsolidarDialog} onClose={() => setShowDesconsolidarDialog(false)} title={`Desconsolidar Mês — ${formatMesAno(mesAno)}`} icon={<Unlock className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-amber-700 to-amber-500">
-          <div className="max-w-md mx-auto">
+          <div className="w-full max-w-xl">
             <div className="space-y-4">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
                 <strong>Atenção:</strong> Ao desconsolidar, o mês voltará a aceitar alterações.
@@ -2068,7 +2068,7 @@ export default function FechamentoPonto() {
 
         {/* ===== LIMPAR BASE DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showClearDialog} onClose={() => setShowClearDialog(false)} title={`Limpar Base — ${formatMesAno(mesAno)}`} icon={<Trash2 className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-red-800 to-red-600">
-          <div className="max-w-md mx-auto">
+          <div className="w-full max-w-xl">
             <div className="space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
                 <strong>Atenção:</strong> Esta ação é irreversível.

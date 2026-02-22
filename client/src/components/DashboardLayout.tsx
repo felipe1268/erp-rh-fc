@@ -168,27 +168,12 @@ export default function DashboardLayout({
   }
 
   if (!user) {
+    window.location.href = "/login";
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#1B2A4A]">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
-          <div className="flex flex-col items-center gap-6">
-            <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png" alt="FC Engenharia" className="h-20 object-contain" />
-            <h1 className="text-2xl font-semibold tracking-tight text-center text-white">
-              ERP RH & DP
-            </h1>
-            <p className="text-sm text-blue-200/70 text-center max-w-sm">
-              Sistema de Gestão de Recursos Humanos e Departamento Pessoal da FC Engenharia
-            </p>
-          </div>
-          <Button
-            onClick={() => {
-              window.location.href = getLoginUrl();
-            }}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all bg-[#D4A843] text-[#1B2A4A] hover:bg-[#C49A35] font-semibold"
-          >
-            Entrar no Sistema
-          </Button>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-[#D4A843] border-t-transparent rounded-full animate-spin" />
+          <p className="text-blue-200/70 text-sm">Redirecionando...</p>
         </div>
       </div>
     );

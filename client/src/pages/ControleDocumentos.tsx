@@ -947,7 +947,7 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: ASO (Criar/Editar) ===================== */}
       <FullScreenDialog open={showAsoDialog} onClose={() => { setShowAsoDialog(false); setEditingAsoId(null); }} title={editingAsoId ? "Editar ASO" : "Novo ASO"} icon={<Stethoscope className="h-5 w-5 text-white" />}>
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -1017,7 +1017,7 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: TREINAMENTO (Criar/Editar) ===================== */}
       <FullScreenDialog open={showTreinDialog} onClose={() => { setShowTreinDialog(false); setEditingTreinId(null); }} title={editingTreinId ? "Editar Treinamento" : "Novo Treinamento"} icon={<GraduationCap className="h-5 w-5 text-white" />}>
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -1067,7 +1067,7 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: ATESTADO (Criar/Editar) ===================== */}
       <FullScreenDialog open={showAtestDialog} onClose={() => { setShowAtestDialog(false); setEditingAtestId(null); }} title={editingAtestId ? "Editar Atestado" : "Novo Atestado"} icon={<FileText className="h-5 w-5 text-white" />}>
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -1128,7 +1128,7 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: ADVERTÊNCIA (Criar/Editar) ===================== */}
       <FullScreenDialog open={showAdvDialog} onClose={() => { setShowAdvDialog(false); setEditingAdvId(null); setAdvEmployeeCount(null); }} title={editingAdvId ? "Editar Advertência" : "Nova Advertência"} icon={<ShieldAlert className="h-5 w-5 text-white" />}>
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
@@ -1239,7 +1239,7 @@ export default function ControleDocumentos() {
 
       {/* ===================== DIALOG: IMPORTAR ASO ===================== */}
       <FullScreenDialog open={showImportAso} onClose={() => setShowImportAso(false)} title="Importar ASOs" icon={<Upload className="h-5 w-5 text-white" />}>
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full">
           <div className="space-y-4">
             <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
               <p className="font-medium">Como funciona:</p>

@@ -133,7 +133,7 @@ const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyI
       </div>
 
       <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Setor" : "Novo Setor"} icon={<Layers className="h-5 w-5 text-white" />}>
-        <div className="max-w-lg mx-auto">
+        <div className="w-full max-w-2xl">
           <div className="space-y-4">
             <div>
               <Label>Nome do Setor *</Label>

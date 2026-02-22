@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import MonthSelector from "@/components/MonthSelector";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import { Button } from "@/components/ui/button";
@@ -41,15 +42,7 @@ const now = new Date();
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-            <input
-              type="month"
-              value={mesAno}
-              onChange={e => setMesAno(e.target.value)}
-              className="border rounded-md px-3 py-2 text-sm"
-            />
-          </div>
+          <MonthSelector value={mesAno} onChange={setMesAno} />
           <Button variant="outline" onClick={() => toast("Em breve", { description: "Importação de planilha IFood em desenvolvimento." })}>
             <Upload className="h-4 w-4 mr-2" /> Importar IFood
           </Button>

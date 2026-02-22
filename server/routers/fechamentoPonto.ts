@@ -190,13 +190,23 @@ function parseDixiXLS(buffer: Buffer): {
   const records: any[] = [];
   let deviceSerial = "";
 
+  // First pass: extract SN from any row (even without nome)
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length < 3) continue;
+    const snVal = String(row[7] || row[6] || "").trim();
+    if (snVal && !deviceSerial) { deviceSerial = snVal; break; }
+  }
+
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.length < 3) continue;
 
     const dixiId = String(row[0] || "").trim();
     const nome = String(row[1] || "").trim();
-    if (!nome) continue;
+    // Se nome vazio, usar dixiId como identificador
+    const nomeOuId = nome || dixiId;
+    if (!nomeOuId) continue;
 
     let dataStr = "";
     let horaStr = "";
@@ -234,8 +244,8 @@ function parseDixiXLS(buffer: Buffer): {
     const sn = String(row[7] || row[6] || "").trim();
     if (sn && !deviceSerial) deviceSerial = sn;
 
-    if (dataStr && nome) {
-      records.push({ dixiId, nome, data: dataStr, hora: horaStr, modo, sn });
+    if (dataStr && nomeOuId) {
+      records.push({ dixiId, nome: nomeOuId, data: dataStr, hora: horaStr, modo, sn });
     }
   }
 
@@ -245,17 +255,28 @@ function parseDixiXLS(buffer: Buffer): {
 // Match employee name from DIXI to database
 function matchEmployee(
   dixiName: string,
-  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho?: any }>
+  employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho?: any; matricula?: string | null }>,
+  dixiId?: string
 ): { id: number; nomeCompleto: string; jornadaTrabalho?: any } | null {
   const normalized = normalizeNameForMatch(dixiName);
   const parts = normalized.split(" ");
 
-  // Exact match
+  // 1. Match by matricula (ID do relógio DIXI = matrícula do funcionário)
+  if (dixiId) {
+    const padded = dixiId.padStart(3, "0"); // "10" -> "010", "1" -> "001"
+    for (const emp of employeeList) {
+      if (emp.matricula && (emp.matricula === dixiId || emp.matricula === padded || emp.matricula.padStart(3, "0") === padded)) {
+        return emp;
+      }
+    }
+  }
+
+  // 2. Exact name match
   for (const emp of employeeList) {
     if (normalizeNameForMatch(emp.nomeCompleto) === normalized) return emp;
   }
 
-  // Match by first + last name
+  // 3. Match by first + last name
   if (parts.length >= 2) {
     const firstName = parts[0];
     const lastName = parts[parts.length - 1];
@@ -266,7 +287,7 @@ function matchEmployee(
     }
   }
 
-  // Partial match - first name + any other part
+  // 4. Partial match - first name + any other part
   if (parts.length >= 1) {
     const firstName = parts[0];
     for (const emp of employeeList) {
@@ -299,7 +320,7 @@ function processRecords(
     const key = normalizeNameForMatch(r.nome);
     if (!grouped[key]) {
       grouped[key] = {};
-      nameToEmployee[key] = matchEmployee(r.nome, employeeList);
+      nameToEmployee[key] = matchEmployee(r.nome, employeeList, r.dixiId);
     }
     if (!grouped[key][r.data]) grouped[key][r.data] = [];
     grouped[key][r.data].push(r.hora);
@@ -470,6 +491,7 @@ export const fechamentoPontoRouter = router({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
         jornadaTrabalho: employees.jornadaTrabalho,
+        matricula: employees.matricula,
       }).from(employees).where(eq(employees.companyId, input.companyId));
 
       // Get all dixi devices for this company (to match SN -> obra)
@@ -1568,7 +1590,7 @@ export const fechamentoPontoRouter = router({
       companyId: z.number(),
       employeeId: z.number(),
       data: z.string(), // YYYY-MM-DD
-      acao: z.enum(["manter_obra", "confirmar_deslocamento", "excluir_registro"]),
+      acao: z.enum(["manter_obra", "confirmar_deslocamento", "excluir_registro", "marcar_falta"]),
       obraIdManter: z.number().optional(), // para manter_obra: qual obra manter
       obraIdExcluir: z.number().optional(), // para excluir_registro: qual registro excluir
       justificativa: z.string().optional(),
@@ -1692,6 +1714,31 @@ export const fechamentoPontoRouter = router({
           eq(timeRecords.obraId, input.obraIdExcluir),
         ));
         return { success: true, message: `Registro da obra removido (erro de lançamento).` };
+      }
+
+      if (input.acao === "marcar_falta") {
+        // Remover TODOS os registros do dia e registrar como falta
+        await db.delete(timeRecords).where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.employeeId, input.employeeId),
+          eq(timeRecords.data, input.data),
+        ));
+        // Inserir um registro de falta (sem horários)
+        await db.insert(timeRecords).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          data: input.data,
+          mesReferencia: input.data.substring(0, 7),
+          obraId: null,
+          entrada1: null,
+          saida1: null,
+          entrada2: null,
+          saida2: null,
+          horasTrabalhadas: "00:00",
+          justificativa: `[FALTA - registrada por ${resolvidoPor}] ${input.justificativa || "Conflito de obra resolvido como falta"}`,
+          ajusteManual: 1,
+        });
+        return { success: true, message: `Dia marcado como FALTA. Todos os registros conflitantes foram removidos.` };
       }
 
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ação inválida ou parâmetros faltando.' });

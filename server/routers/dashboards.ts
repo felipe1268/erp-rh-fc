@@ -228,40 +228,75 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string) {
 
   // Totais
   let totalHorasTrab = 0, totalHorasExtras = 0, totalFaltas = 0, totalAtrasos = 0;
-  const porFuncionario: Record<number, { horasTrab: number; horasExtras: number; faltas: number; atrasos: number; dias: number }> = {};
+  let totalFaltasDias = 0, totalAtrasosComTolerancia = 0;
+  const porFuncionario: Record<number, { horasTrab: number; horasExtras: number; faltas: number; faltasDias: number; atrasos: number; atrasosMinutos: number; dias: number }> = {};
+
+  // CLT Art. 58, §1º: Tolerância de 10 minutos diários (não serão descontados atrasos <= 10min/dia)
+  const TOLERANCIA_CLT_MINUTOS = 10;
+
+  // Agrupar registros por funcionário+data para calcular tolerância diária
+  const registrosPorEmpDia: Record<string, typeof registros> = {};
+  for (const r of registros) {
+    const key = `${r.employeeId}_${r.data}`;
+    if (!registrosPorEmpDia[key]) registrosPorEmpDia[key] = [];
+    registrosPorEmpDia[key].push(r);
+  }
 
   for (const r of registros) {
     const ht = parseFloat(r.horasTrabalhadas || "0");
     const he = parseFloat(r.horasExtras || "0");
     const ft = parseFloat(r.faltas || "0");
-    const at = parseFloat(r.atrasos || "0");
+    const atRaw = parseFloat(r.atrasos || "0");
     totalHorasTrab += ht;
     totalHorasExtras += he;
     totalFaltas += ft;
-    totalAtrasos += at;
-    if (!porFuncionario[r.employeeId]) porFuncionario[r.employeeId] = { horasTrab: 0, horasExtras: 0, faltas: 0, atrasos: 0, dias: 0 };
+    if (!porFuncionario[r.employeeId]) porFuncionario[r.employeeId] = { horasTrab: 0, horasExtras: 0, faltas: 0, faltasDias: 0, atrasos: 0, atrasosMinutos: 0, dias: 0 };
     porFuncionario[r.employeeId].horasTrab += ht;
     porFuncionario[r.employeeId].horasExtras += he;
     porFuncionario[r.employeeId].faltas += ft;
-    porFuncionario[r.employeeId].atrasos += at;
+
+    // Contar dia de falta: se horasTrabalhadas == 0 e faltas > 0, conta como 1 dia
+    // Se horasTrabalhadas > 0 mas < 50% da jornada (4h), conta como 0.5 dia
+    if (ft > 0 && ht === 0) {
+      porFuncionario[r.employeeId].faltasDias += 1;
+      totalFaltasDias += 1;
+    } else if (ft > 0 && ht > 0 && ht < 4) {
+      porFuncionario[r.employeeId].faltasDias += 0.5;
+      totalFaltasDias += 0.5;
+    }
+
+    // Atrasos: aplicar tolerância CLT Art. 58 §1º
+    // Converter horas para minutos para comparar com tolerância
+    const atMinutos = Math.round(atRaw * 60);
+    if (atMinutos > TOLERANCIA_CLT_MINUTOS) {
+      // Acima da tolerância: conta o total (não só o excedente, conforme jurisprudência)
+      porFuncionario[r.employeeId].atrasos += atRaw;
+      porFuncionario[r.employeeId].atrasosMinutos += atMinutos;
+      totalAtrasos += atRaw;
+      totalAtrasosComTolerancia += atMinutos;
+    }
+    // Até 10min: tolerância legal, não conta
+
     porFuncionario[r.employeeId].dias++;
   }
 
-  // Ranking de faltas
+  // Ranking de faltas (em DIAS)
   const rankingFaltas = Object.entries(porFuncionario)
-    .filter(([, d]) => d.faltas > 0)
+    .filter(([, d]) => d.faltasDias > 0)
     .map(([empId, d]) => {
       const emp = empMap.get(Number(empId));
-      return { nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", faltas: d.faltas };
-    }).sort((a, b) => b.faltas - a.faltas).slice(0, 10);
+      return { employeeId: Number(empId), nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", faltasDias: d.faltasDias, faltasHoras: d.faltas };
+    }).sort((a, b) => b.faltasDias - a.faltasDias).slice(0, 10);
 
-  // Ranking de atrasos
+  // Ranking de atrasos (com tolerância CLT Art. 58 §1º - 10min/dia)
   const rankingAtrasos = Object.entries(porFuncionario)
-    .filter(([, d]) => d.atrasos > 0)
+    .filter(([, d]) => d.atrasosMinutos > 0)
     .map(([empId, d]) => {
       const emp = empMap.get(Number(empId));
-      return { nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", atrasos: d.atrasos };
-    }).sort((a, b) => b.atrasos - a.atrasos).slice(0, 10);
+      const horas = Math.floor(d.atrasosMinutos / 60);
+      const minutos = d.atrasosMinutos % 60;
+      return { employeeId: Number(empId), nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", atrasosMinutos: d.atrasosMinutos, atrasosFormatado: `${horas}h${minutos > 0 ? String(minutos).padStart(2, '0') + 'min' : ''}` };
+    }).sort((a, b) => b.atrasosMinutos - a.atrasosMinutos).slice(0, 10);
 
   // Horas por dia da semana
   const porDiaSemana: Record<string, { horas: number; registros: number }> = {
@@ -288,16 +323,29 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string) {
   const funcionariosComRegistro = Object.keys(porFuncionario).length;
   const funcionariosSemRegistro = allEmps.length - funcionariosComRegistro;
 
+  // % de Horas Extras sobre Horas Normais
+  const percentualHE = totalHorasTrab > 0 ? Math.round((totalHorasExtras / totalHorasTrab) * 10000) / 100 : 0;
+
+  // Formatar total de atrasos
+  const totalAtrasosH = Math.floor(totalAtrasosComTolerancia / 60);
+  const totalAtrasosM = totalAtrasosComTolerancia % 60;
+  const totalAtrasosFormatado = `${totalAtrasosH}h${totalAtrasosM > 0 ? String(totalAtrasosM).padStart(2, '0') + 'min' : ''}`;
+
   return {
     resumo: {
       totalHorasTrab: Math.round(totalHorasTrab * 100) / 100,
       totalHorasExtras: Math.round(totalHorasExtras * 100) / 100,
+      percentualHE,
       totalFaltas: Math.round(totalFaltas * 100) / 100,
+      totalFaltasDias: Math.round(totalFaltasDias * 10) / 10,
       totalAtrasos: Math.round(totalAtrasos * 100) / 100,
+      totalAtrasosFormatado,
+      totalAtrasosMinutos: totalAtrasosComTolerancia,
       totalRegistros: registros.length,
       funcionariosComRegistro,
       funcionariosSemRegistro,
       totalFuncionariosAtivos: allEmps.length,
+      toleranciaCLT: TOLERANCIA_CLT_MINUTOS,
     },
     rankingFaltas,
     rankingAtrasos,

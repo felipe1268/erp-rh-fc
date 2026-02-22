@@ -421,7 +421,7 @@ export default function RelogiosPonto() {
         title="Novo Relógio de Ponto"
         icon={<Clock className="h-5 w-5 text-white" />}
       >
-        <div className="max-w-lg mx-auto">
+        <div className="w-full max-w-2xl">
           <div className="space-y-4">
             <div>
               <Label>Número de Série (SN) *</Label>

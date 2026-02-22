@@ -274,7 +274,7 @@ export default function Empresas() {
       </div>
 
       <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Empresa" : "Nova Empresa"} icon={<Building2 className="h-5 w-5 text-white" />}>
-        <div className="max-w-3xl mx-auto">
+        <div className="w-full">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
             <div className="sm:col-span-2">
               <Label>CNPJ *</Label>

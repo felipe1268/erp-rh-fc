@@ -334,7 +334,7 @@ export default function ContasBancarias() {
         title={editingId ? "Editar Conta Bancária" : "Nova Conta Bancária"}
         icon={<Landmark className="h-5 w-5 text-white" />}
       >
-        <div className="max-w-lg mx-auto">
+        <div className="w-full max-w-2xl">
           <div className="space-y-4">
             {/* Seleção rápida de banco */}
             <div>

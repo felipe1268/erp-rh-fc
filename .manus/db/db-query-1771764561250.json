@@ -1,0 +1,98 @@
+{
+  "query": "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'folha_lancamentos' ORDER BY ORDINAL_POSITION",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'folha_lancamentos' ORDER BY ORDINAL_POSITION",
+  "rows": [
+    {
+      "COLUMN_NAME": "id",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "companyId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "mesReferencia",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "tipoLancamento",
+      "DATA_TYPE": "enum"
+    },
+    {
+      "COLUMN_NAME": "status",
+      "DATA_TYPE": "enum"
+    },
+    {
+      "COLUMN_NAME": "analiticoUploadId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "sinteticoUploadId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "totalFuncionarios",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "totalProventos",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "totalDescontos",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "totalLiquido",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "totalDivergencias",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "divergenciasResolvidas",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "importadoPor",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "importadoEm",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "validadoPor",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "validadoEm",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "consolidadoPor",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "consolidadoEm",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "observacoes",
+      "DATA_TYPE": "text"
+    },
+    {
+      "COLUMN_NAME": "createdAt",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "updatedAt",
+      "DATA_TYPE": "timestamp"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\tDATA_TYPE\nid\tint\ncompanyId\tint\nmesReferencia\tvarchar\ntipoLancamento\tenum\nstatus\tenum\nanaliticoUploadId\tint\nsinteticoUploadId\tint\ntotalFuncionarios\tint\ntotalProventos\tvarchar\ntotalDescontos\tvarchar\ntotalLiquido\tvarchar\ntotalDivergencias\tint\ndivergenciasResolvidas\tint\nimportadoPor\tvarchar\nimportadoEm\ttimestamp\nvalidadoPor\tvarchar\nvalidadoEm\ttimestamp\nconsolidadoPor\tvarchar\nconsolidadoEm\ttimestamp\nobservacoes\ttext\ncreatedAt\ttimestamp\nupdatedAt\ttimestamp\n",
+  "stderr": "",
+  "execution_time_ms": 345
+}

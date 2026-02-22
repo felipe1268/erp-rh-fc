@@ -211,7 +211,7 @@ export default function Usuarios() {
 
       {/* Create Profile Dialog */}
       <FullScreenDialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} title="Novo Perfil de Acesso" icon={<Plus className="h-5 w-5 text-white" />}>
-        <div className="max-w-3xl mx-auto">
+        <div className="w-full">
           <div className="space-y-4 py-4">
             <div>
               <Label>Usuário</Label>
@@ -254,7 +254,7 @@ export default function Usuarios() {
 
       {/* Permissions Dialog */}
       <FullScreenDialog open={permDialogOpen} onClose={() => setPermDialogOpen(false)} title="Configurar Permissões" icon={<Shield className="h-5 w-5 text-white" />}>
-        <div className="max-w-3xl mx-auto">
+        <div className="w-full">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

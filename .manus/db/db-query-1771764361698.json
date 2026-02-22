@@ -1,0 +1,550 @@
+{
+  "query": "SELECT id, nomeCompleto, cpf, status, dataAdmissao, dataDemissao, companyId FROM employees WHERE dataDemissao >= '2026-02-01' ORDER BY dataDemissao DESC LIMIT 60",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, cpf, status, dataAdmissao, dataDemissao, companyId FROM employees WHERE dataDemissao >= '2026-02-01' ORDER BY dataDemissao DESC LIMIT 60",
+  "rows": [
+    {
+      "id": "90497",
+      "nomeCompleto": "KELBEM CARLOS DE LIMA SILVA",
+      "cpf": "134.155.024-90",
+      "status": "Desligado",
+      "dataAdmissao": "2025-08-04",
+      "dataDemissao": "2026-03-21",
+      "companyId": "60002"
+    },
+    {
+      "id": "90473",
+      "nomeCompleto": "GILMAR SANTOS DO NASCIMENTO",
+      "cpf": "084.196.324-06",
+      "status": "Desligado",
+      "dataAdmissao": "2023-09-20",
+      "dataDemissao": "2026-03-21",
+      "companyId": "60002"
+    },
+    {
+      "id": "90521",
+      "nomeCompleto": "OSMAR MAGNO DE OLIVEIRA",
+      "cpf": "103.466.104-35",
+      "status": "Desligado",
+      "dataAdmissao": "2024-08-06",
+      "dataDemissao": "2026-03-21",
+      "companyId": "60002"
+    },
+    {
+      "id": "90462",
+      "nomeCompleto": "ELIZEU FRANCISCO DE SOUZA",
+      "cpf": "104.710.634-52",
+      "status": "Desligado",
+      "dataAdmissao": "2025-06-26",
+      "dataDemissao": "2026-03-21",
+      "companyId": "60002"
+    },
+    {
+      "id": "90481",
+      "nomeCompleto": "JAMIELSON GOMES DOS SANTOS SILVA",
+      "cpf": "123.193.034-99",
+      "status": "Desligado",
+      "dataAdmissao": "2025-07-01",
+      "dataDemissao": "2026-03-21",
+      "companyId": "60002"
+    },
+    {
+      "id": "90554",
+      "nomeCompleto": "WESLEY CASSIO LIBANIO DA SILVA",
+      "cpf": "126.586.844-10",
+      "status": "Desligado",
+      "dataAdmissao": "2025-08-04",
+      "dataDemissao": "2026-03-21",
+      "companyId": "60002"
+    },
+    {
+      "id": "90430",
+      "nomeCompleto": "ADRIANO PAZ FERREIRA",
+      "cpf": "067.237.744-69",
+      "status": "Desligado",
+      "dataAdmissao": "2025-08-04",
+      "dataDemissao": "2026-03-21",
+      "companyId": "60002"
+    },
+    {
+      "id": "90517",
+      "nomeCompleto": "DE OBRAS MYRIELLE FIALHO BORGES ARCANJO",
+      "cpf": "388.177.788-18",
+      "status": "Desligado",
+      "dataAdmissao": "2024-05-07",
+      "dataDemissao": "2026-03-20",
+      "companyId": "60002"
+    },
+    {
+      "id": "90514",
+      "nomeCompleto": "MAURICIO BENEDITO ELESBAO",
+      "cpf": "081.016.508-22",
+      "status": "Desligado",
+      "dataAdmissao": "2020-04-23",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90442",
+      "nomeCompleto": "ANTONIO RENATO DE SANTANA",
+      "cpf": "451.326.743-72",
+      "status": "Desligado",
+      "dataAdmissao": "2025-05-12",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90526",
+      "nomeCompleto": "PAULO ROBERTO DOS SANTOS ESPINELI",
+      "cpf": "401.440.528-14",
+      "status": "Desligado",
+      "dataAdmissao": "2025-06-09",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90540",
+      "nomeCompleto": "SILVANO MONTEIRO CORREA",
+      "cpf": "268.021.188-07",
+      "status": "Desligado",
+      "dataAdmissao": "2025-06-09",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90513",
+      "nomeCompleto": "MATHEUS DONIZETTI ALVES RODRIGUES",
+      "cpf": "547.148.568-80",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-01",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90559",
+      "nomeCompleto": "ZENAIDO DE SOUZA CHRISTINO FILHO",
+      "cpf": "034.084.447-73",
+      "status": "Desligado",
+      "dataAdmissao": "2025-10-14",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90544",
+      "nomeCompleto": "THOMAS BARBOSA DE MATOS JESUS",
+      "cpf": "432.490.578-94",
+      "status": "Desligado",
+      "dataAdmissao": "2025-08-19",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90475",
+      "nomeCompleto": "GIVALDO DOS SANTOS",
+      "cpf": "108.474.408-26",
+      "status": "Desligado",
+      "dataAdmissao": "2025-06-02",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90530",
+      "nomeCompleto": "RAFAEL ALEXANDRE MONTEIRO FERREIRA",
+      "cpf": "244.877.888-46",
+      "status": "Desligado",
+      "dataAdmissao": "2025-03-06",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90500",
+      "nomeCompleto": "LUIS CARLOS DA SILVA",
+      "cpf": "055.333.978-84",
+      "status": "Desligado",
+      "dataAdmissao": "2024-01-08",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90516",
+      "nomeCompleto": "MILTON CESAR DA COSTA",
+      "cpf": "199.147.638-80",
+      "status": "Desligado",
+      "dataAdmissao": "2024-07-10",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90539",
+      "nomeCompleto": "SERGIO AUGUSTO DE OLIVEIRA",
+      "cpf": "052.093.678-78",
+      "status": "Desligado",
+      "dataAdmissao": "1025-04-01",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90471",
+      "nomeCompleto": "GILBERTO DA COSTA BARBOZA",
+      "cpf": "302.330.158-17",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-01",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90529",
+      "nomeCompleto": "PEDRO HENRIQUE MARQUES NOGUEIRA",
+      "cpf": "115.108.656-83",
+      "status": "Desligado",
+      "dataAdmissao": "2025-08-25",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90468",
+      "nomeCompleto": "FRANCISCO EUDICE CARVALHO BIZERRA",
+      "cpf": "012.706.541-52",
+      "status": "Desligado",
+      "dataAdmissao": "2020-03-12",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90532",
+      "nomeCompleto": "RAY HENRIQUE MOREIRA BERNARDES",
+      "cpf": "526.224.498-01",
+      "status": "Desligado",
+      "dataAdmissao": "2025-05-19",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90434",
+      "nomeCompleto": "ALEX PAULO RODRIGUES",
+      "cpf": "027.664.011-05",
+      "status": "Desligado",
+      "dataAdmissao": "2025-03-17",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "90432",
+      "nomeCompleto": "ALEX ALESSANDRO MONTEIRO DA SILVA",
+      "cpf": "405.690.998-97",
+      "status": "Desligado",
+      "dataAdmissao": "2025-03-06",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90495",
+      "nomeCompleto": "JULIO CESAR LEMES DE OLIVEIRA",
+      "cpf": "358.639.068-80",
+      "status": "Desligado",
+      "dataAdmissao": "2025-10-14",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90454",
+      "nomeCompleto": "DESILDO DA COSTA SANTOS",
+      "cpf": "121.876.918-10",
+      "status": "Desligado",
+      "dataAdmissao": "2024-03-18",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90482",
+      "nomeCompleto": "JEAN CARLOS MARTINS",
+      "cpf": "421.624.018-60",
+      "status": "Desligado",
+      "dataAdmissao": "2025-03-17",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90445",
+      "nomeCompleto": "BRUNO RAFAEL BATISTA DA SILVA",
+      "cpf": "437.118.938-56",
+      "status": "Desligado",
+      "dataAdmissao": "2025-06-02",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90489",
+      "nomeCompleto": "JOÃO MACHADO DE AZEVEDO",
+      "cpf": "138.310.688-60",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-07",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90455",
+      "nomeCompleto": "DIEGO HENRIQUE ESPINELI DOS SANTOS",
+      "cpf": "392.434.018-82",
+      "status": "Desligado",
+      "dataAdmissao": "2025-08-19",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90453",
+      "nomeCompleto": "CLAUDIO SILVA",
+      "cpf": "234.020.938-20",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-14",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90448",
+      "nomeCompleto": "CARLOS ALBERTO GONÇALVES",
+      "cpf": "249.394.688-01",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-07",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90459",
+      "nomeCompleto": "EDSON FERNANDO MACHADO",
+      "cpf": "495.854.318-07",
+      "status": "Desligado",
+      "dataAdmissao": "2023-10-25",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90524",
+      "nomeCompleto": "PAULO HENRIQUE LIMA GUIMARÃES",
+      "cpf": "098.403.828-02",
+      "status": "Desligado",
+      "dataAdmissao": "2025-05-19",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90492",
+      "nomeCompleto": "JOSÉ ASTOR BATISTA",
+      "cpf": "065.436.158-42",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-01",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90452",
+      "nomeCompleto": "CLAUDIO JOSE GONCALVES DIAS",
+      "cpf": "065.672.578-81",
+      "status": "Desligado",
+      "dataAdmissao": "2024-10-30",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90558",
+      "nomeCompleto": "WILSON LUIZ RIBEIRO",
+      "cpf": "028.039.908-14",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-01",
+      "dataDemissao": "2026-03-14",
+      "companyId": "60002"
+    },
+    {
+      "id": "90480",
+      "nomeCompleto": "IVAN DOS SANTOS",
+      "cpf": "081.146.678-77",
+      "status": "Desligado",
+      "dataAdmissao": "2025-03-17",
+      "dataDemissao": "2026-03-13",
+      "companyId": "60002"
+    },
+    {
+      "id": "360006",
+      "nomeCompleto": "PAULO CESAR GALDINO DOS SANTOS",
+      "cpf": "062.426.598-67",
+      "status": "Desligado",
+      "dataAdmissao": "2014-02-03",
+      "dataDemissao": "2026-02-19",
+      "companyId": "60005"
+    },
+    {
+      "id": "360029",
+      "nomeCompleto": "ROBERTO DAMASIO",
+      "cpf": "071.209.708-28",
+      "status": "Desligado",
+      "dataAdmissao": "2025-04-07",
+      "dataDemissao": "2026-02-18",
+      "companyId": "60002"
+    },
+    {
+      "id": "360023",
+      "nomeCompleto": "JOSE ALBERTO SILVA",
+      "cpf": "268.776.648-84",
+      "status": "Desligado",
+      "dataAdmissao": "2024-07-15",
+      "dataDemissao": "2026-02-18",
+      "companyId": "60002"
+    },
+    {
+      "id": "90538",
+      "nomeCompleto": "ROGERIO DIAS DE FREITAS",
+      "cpf": "284.871.468-99",
+      "status": "Desligado",
+      "dataAdmissao": "2025-10-14",
+      "dataDemissao": "2026-02-18",
+      "companyId": "60002"
+    },
+    {
+      "id": "330098",
+      "nomeCompleto": "MELQUISEDEQUE SILVA BATISTA",
+      "cpf": "000.000.229-44",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330089",
+      "nomeCompleto": "GLAYSON SEVERINO DA SILVA",
+      "cpf": "000.000.220-08",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330092",
+      "nomeCompleto": "JOAO DARC DOS SANTOS",
+      "cpf": "000.000.223-40",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330093",
+      "nomeCompleto": "JOSE ALBERTO SILVA",
+      "cpf": "000.000.224-54",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330099",
+      "nomeCompleto": "NILO CESAR DOS SANTOS ARANTES",
+      "cpf": "000.000.230-72",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330087",
+      "nomeCompleto": "EWERTTON DA SILVA ARAUJO",
+      "cpf": "000.000.218-18",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330090",
+      "nomeCompleto": "ITALO CAUA PEDRO DA SILVA",
+      "cpf": "000.000.221-34",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330086",
+      "nomeCompleto": "EVERTON RICARDO DA SILVA COSTA",
+      "cpf": "000.000.217-71",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330084",
+      "nomeCompleto": "DAVYD JOSE SANTOS DE SOUSA",
+      "cpf": "000.000.215-64",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330088",
+      "nomeCompleto": "FERNANDO AMORIM VIEIRA",
+      "cpf": "000.000.219-49",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330091",
+      "nomeCompleto": "JOAO CAMPOS DA SILVA",
+      "cpf": "000.000.222-81",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330094",
+      "nomeCompleto": "JOSIAS HELENO DA SILVA",
+      "cpf": "000.000.225-14",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330083",
+      "nomeCompleto": "ARIEL DA SILVA",
+      "cpf": "000.000.214-66",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330097",
+      "nomeCompleto": "KELVIS ALVES PESSOA",
+      "cpf": "000.000.228-04",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330096",
+      "nomeCompleto": "JULIO CESAR DOS SANTOS",
+      "cpf": "000.000.227-08",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    },
+    {
+      "id": "330085",
+      "nomeCompleto": "EDUARDO HENRIQUE DA SILVA PAIVA",
+      "cpf": "000.000.216-05",
+      "status": "Desligado",
+      "dataAdmissao": "NULL",
+      "dataDemissao": "2026-02-15",
+      "companyId": "60002"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tcpf\tstatus\tdataAdmissao\tdataDemissao\tcompanyId\n90497\tKELBEM CARLOS DE LIMA SILVA\t134.155.024-90\tDesligado\t2025-08-04\t2026-03-21\t60002\n90473\tGILMAR SANTOS DO NASCIMENTO\t084.196.324-06\tDesligado\t2023-09-20\t2026-03-21\t60002\n90521\tOSMAR MAGNO DE OLIVEIRA\t103.466.104-35\tDesligado\t2024-08-06\t2026-03-21\t60002\n90462\tELIZEU FRANCISCO DE SOUZA\t104.710.634-52\tDesligado\t2025-06-26\t2026-03-21\t60002\n90481\tJAMIELSON GOMES DOS SANTOS SILVA\t123.193.034-99\tDesligado\t2025-07-01\t2026-03-21\t60002\n90554\tWESLEY CASSIO LIBANIO DA SILVA\t126.586.844-10\tDesligado\t2025-08-04\t2026-03-21\t60002\n90430\tADRIANO PAZ FERREIRA\t067.237.744-69\tDesligado\t2025-08-04\t2026-03-21\t60002\n90517\tDE OBRAS MYRIELLE FIALHO BORGES ARCANJO\t388.177.788-18\tDesligado\t2024-05-07\t2026-03-20\t60002\n90514\tMAURICIO BENEDITO ELESBAO\t081.016.508-22\tDesligado\t2020-04-23\t2026-03-15\t60002\n90442\tANTONIO RENATO DE SANTANA\t451.326.743-72\tDesligado\t2025-05-12\t2026-03-15\t60002\n90526\tPAULO ROBERTO DOS SANTOS ESPINELI\t401.440.528-14\tDesligado\t2025-06-09\t2026-03-15\t60002\n90540\tSILVANO MONTEIRO CORREA\t268.021.188-07\tDesligado\t2025-06-09\t2026-03-15\t60002\n90513\tMATHEUS DONIZETTI ALVES RODRIGUES\t547.148.568-80\tDesligado\t2025-04-01\t2026-03-15\t60002\n90559\tZENAIDO DE SOUZA CHRISTINO FILHO\t034.084.447-73\tDesligado\t2025-10-14\t2026-03-15\t60002\n90544\tTHOMAS BARBOSA DE MATOS JESUS\t432.490.578-94\tDesligado\t2025-08-19\t2026-03-15\t60002\n90475\tGIVALDO DOS SANTOS\t108.474.408-26\tDesligado\t2025-06-02\t2026-03-15\t60002\n90530\tRAFAEL ALEXANDRE MONTEIRO FERREIRA\t244.877.888-46\tDesligado\t2025-03-06\t2026-03-15\t60002\n90500\tLUIS CARLOS DA SILVA\t055.333.978-84\tDesligado\t2024-01-08\t2026-03-15\t60002\n90516\tMILTON CESAR DA COSTA\t199.147.638-80\tDesligado\t2024-07-10\t2026-03-15\t60002\n90539\tSERGIO AUGUSTO DE OLIVEIRA\t052.093.678-78\tDesligado\t1025-04-01\t2026-03-15\t60002\n90471\tGILBERTO DA COSTA BARBOZA\t302.330.158-17\tDesligado\t2025-04-01\t2026-03-15\t60002\n90529\tPEDRO HENRIQUE MARQUES NOGUEIRA\t115.108.656-83\tDesligado\t2025-08-25\t2026-03-15\t60002\n90468\tFRANCISCO EUDICE CARVALHO BIZERRA\t012.706.541-52\tDesligado\t2020-03-12\t2026-03-15\t60002\n90532\tRAY HENRIQUE MOREIRA BERNARDES\t526.224.498-01\tDesligado\t2025-05-19\t2026-03-15\t60002\n90434\tALEX PAULO RODRIGUES\t027.664.011-05\tDesligado\t2025-03-17\t2026-03-15\t60002\n90432\tALEX ALESSANDRO MONTEIRO DA SILVA\t405.690.998-97\tDesligado\t2025-03-06\t2026-03-14\t60002\n90495\tJULIO CESAR LEMES DE OLIVEIRA\t358.639.068-80\tDesligado\t2025-10-14\t2026-03-14\t60002\n90454\tDESILDO DA COSTA SANTOS\t121.876.918-10\tDesligado\t2024-03-18\t2026-03-14\t60002\n90482\tJEAN CARLOS MARTINS\t421.624.018-60\tDesligado\t2025-03-17\t2026-03-14\t60002\n90445\tBRUNO RAFAEL BATISTA DA SILVA\t437.118.938-56\tDesligado\t2025-06-02\t2026-03-14\t60002\n90489\tJOÃO MACHADO DE AZEVEDO\t138.310.688-60\tDesligado\t2025-04-07\t2026-03-14\t60002\n90455\tDIEGO HENRIQUE ESPINELI DOS SANTOS\t392.434.018-82\tDesligado\t2025-08-19\t2026-03-14\t60002\n90453\tCLAUDIO SILVA\t234.020.938-20\tDesligado\t2025-04-14\t2026-03-14\t60002\n90448\tCARLOS ALBERTO GONÇALVES\t249.394.688-01\tDesligado\t2025-04-07\t2026-03-14\t60002\n90459\tEDSON FERNANDO MACHADO\t495.854.318-07\tDesligado\t2023-10-25\t2026-03-14\t60002\n90524\tPAULO HENRIQUE LIMA GUIMARÃES\t098.403.828-02\tDesligado\t2025-05-19\t2026-03-14\t60002\n90492\tJOSÉ ASTOR BATISTA\t065.436.158-42\tDesligado\t2025-04-01\t2026-03-14\t60002\n90452\tCLAUDIO JOSE GONCALVES DIAS\t065.672.578-81\tDesligado\t2024-10-30\t2026-03-14\t60002\n90558\tWILSON LUIZ RIBEIRO\t028.039.908-14\tDesligado\t2025-04-01\t2026-03-14\t60002\n90480\tIVAN DOS SANTOS\t081.146.678-77\tDesligado\t2025-03-17\t2026-03-13\t60002\n360006\tPAULO CESAR GALDINO DOS SANTOS\t062.426.598-67\tDesligado\t2014-02-03\t2026-02-19\t60005\n360029\tROBERTO DAMASIO\t071.209.708-28\tDesligado\t2025-04-07\t2026-02-18\t60002\n360023\tJOSE ALBERTO SILVA\t268.776.648-84\tDesligado\t2024-07-15\t2026-02-18\t60002\n90538\tROGERIO DIAS DE FREITAS\t284.871.468-99\tDesligado\t2025-10-14\t2026-02-18\t60002\n330098\tMELQUISEDEQUE SILVA BATISTA\t000.000.229-44\tDesligado\tNULL\t2026-02-15\t60002\n330089\tGLAYSON SEVERINO DA SILVA\t000.000.220-08\tDesligado\tNULL\t2026-02-15\t60002\n330092\tJOAO DARC DOS SANTOS\t000.000.223-40\tDesligado\tNULL\t2026-02-15\t60002\n330093\tJOSE ALBERTO SILVA\t000.000.224-54\tDesligado\tNULL\t2026-02-15\t60002\n330099\tNILO CESAR DOS SANTOS ARANTES\t000.000.230-72\tDesligado\tNULL\t2026-02-15\t60002\n330087\tEWERTTON DA SILVA ARAUJO\t000.000.218-18\tDesligado\tNULL\t2026-02-15\t60002\n330090\tITALO CAUA PEDRO DA SILVA\t000.000.221-34\tDesligado\tNULL\t2026-02-15\t60002\n330086\tEVERTON RICARDO DA SILVA COSTA\t000.000.217-71\tDesligado\tNULL\t2026-02-15\t60002\n330084\tDAVYD JOSE SANTOS DE SOUSA\t000.000.215-64\tDesligado\tNULL\t2026-02-15\t60002\n330088\tFERNANDO AMORIM VIEIRA\t000.000.219-49\tDesligado\tNULL\t2026-02-15\t60002\n330091\tJOAO CAMPOS DA SILVA\t000.000.222-81\tDesligado\tNULL\t2026-02-15\t60002\n330094\tJOSIAS HELENO DA SILVA\t000.000.225-14\tDesligado\tNULL\t2026-02-15\t60002\n330083\tARIEL DA SILVA\t000.000.214-66\tDesligado\tNULL\t2026-02-15\t60002\n330097\tKELVIS ALVES PESSOA\t000.000.228-04\tDesligado\tNULL\t2026-02-15\t60002\n330096\tJULIO CESAR DOS SANTOS\t000.000.227-08\tDesligado\tNULL\t2026-02-15\t60002\n330085\tEDUARDO HENRIQUE DA SILVA PAIVA\t000.000.216-05\tDesligado\tNULL\t2026-02-15\t60002\n",
+  "stderr": "",
+  "execution_time_ms": 370
+}
