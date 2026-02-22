@@ -23,9 +23,9 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!isUnauthorized) return;
 
   // Redirecionar para a tela de login interna, não para o Manus OAuth
-  if (window.location.pathname !== "/login") {
-    window.location.href = "/login";
-  }
+  // Não redirecionar se já estiver na página de login (evita loop de erros)
+  if (window.location.pathname === "/login") return;
+  window.location.href = "/login";
 };
 
 queryClient.getQueryCache().subscribe(event => {

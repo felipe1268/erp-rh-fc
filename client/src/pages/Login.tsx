@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { useAuth } from "@/_core/hooks/useAuth";
+// useAuth removido - usar trpc.auth.me.useQuery direto para evitar erro global
 import { getLoginUrl } from "@/const";
 import {
   Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2,
@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 
 export default function Login() {
-  const { user } = useAuth();
+  // Não usar useAuth() aqui para evitar query auth.me que gera erro na página de login
+  // Verificar usuário logado via query direta com retry desabilitado
+  const meQuery = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  const user = meQuery.data ?? null;
   const [view, setView] = useState<"login" | "forgot" | "changePassword">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
