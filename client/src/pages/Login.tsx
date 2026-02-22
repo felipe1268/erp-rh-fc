@@ -11,9 +11,13 @@ import {
 } from "lucide-react";
 
 export default function Login() {
-  // Não usar useAuth() aqui para evitar query auth.me que gera erro na página de login
-  // Verificar usuário logado via query direta com retry desabilitado
-  const meQuery = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  // Verificar se já está logado sem disparar erro - usar enabled apenas se tiver cookie
+  const hasCookie = typeof document !== "undefined" && document.cookie.includes("app_session_id");
+  const meQuery = trpc.auth.me.useQuery(undefined, { 
+    retry: false, 
+    refetchOnWindowFocus: false,
+    enabled: hasCookie, // Só faz a query se tiver cookie de sessão
+  });
   const user = meQuery.data ?? null;
   const [view, setView] = useState<"login" | "forgot" | "changePassword">("login");
   const [username, setUsername] = useState("");

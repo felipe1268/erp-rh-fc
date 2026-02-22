@@ -28,9 +28,18 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   window.location.href = "/login";
 };
 
+// Verificar se o erro de auth deve ser silenciado (quando já está em /login)
+const isAuthErrorOnLoginPage = (error: unknown) => {
+  if (!(error instanceof TRPCClientError)) return false;
+  if (typeof window === "undefined") return false;
+  return error.message === UNAUTHED_ERR_MSG && window.location.pathname === "/login";
+};
+
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
+    // Não logar nem redirecionar erros de auth na página de login
+    if (isAuthErrorOnLoginPage(error)) return;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Query Error]", error);
   }
@@ -39,6 +48,7 @@ queryClient.getQueryCache().subscribe(event => {
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
+    if (isAuthErrorOnLoginPage(error)) return;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Mutation Error]", error);
   }
