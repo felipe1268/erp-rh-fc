@@ -171,16 +171,20 @@ export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // Gerar código interno JFC automaticamente
-  const [maxCodeResult] = await db.execute(
-    sql`SELECT codigoInterno FROM employees WHERE codigoInterno IS NOT NULL ORDER BY codigoInterno DESC LIMIT 1`
+  // Gerar código interno automaticamente usando prefixo da empresa + auto-incremento atômico
+  const companyId = data.companyId;
+  
+  // Buscar prefixo da empresa e incrementar nextCodigoInterno atomicamente
+  await db.execute(
+    sql`UPDATE companies SET nextCodigoInterno = nextCodigoInterno + 1 WHERE id = ${companyId}`
+  );
+  const [companyRows] = await db.execute(
+    sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum FROM companies WHERE id = ${companyId}`
   ) as any;
-  let nextNum = 1;
-  if (maxCodeResult && maxCodeResult.length > 0 && maxCodeResult[0]?.codigoInterno) {
-    const num = parseInt(maxCodeResult[0].codigoInterno.replace('JFC', ''));
-    if (!isNaN(num)) nextNum = num + 1;
-  }
-  const codigoInterno = 'JFC' + String(nextNum).padStart(3, '0');
+  
+  const prefixo = companyRows?.[0]?.prefixoCodigo || 'EMP';
+  const num = companyRows?.[0]?.usedNum || 1;
+  const codigoInterno = prefixo + String(num).padStart(3, '0');
   
   const result = await db.insert(employees).values({ ...data, codigoInterno });
   return { id: result[0].insertId, codigoInterno };
@@ -202,7 +206,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "banco", "bancoNome", "agencia", "conta", "tipoConta",
     "tipoChavePix", "chavePix", "contaPix", "bancoPix",
     "status", "listaNegra", "motivoListaNegra", "dataListaNegra",
-    "obraAtualId", "fotoUrl", "observacoes", "codigoContabil", "codigoInterno",
+    "obraAtualId", "fotoUrl", "observacoes", "codigoContabil",
     "recebeComplemento", "valorComplemento", "complementoObs",
     "acordoHoraExtra", "hePercentual50", "hePercentual100", "hePercentualNoturno",
     "contaBancariaEmpresaId",

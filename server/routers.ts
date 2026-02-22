@@ -260,8 +260,9 @@ export const appRouter = router({
         if (!employeeData.categoriaDesligamento || !employeeData.categoriaDesligamento.trim()) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nA CATEGORIA do desligamento é obrigatória.\nSelecione uma das opções: Término de contrato, Justa causa, Pedido de demissão, Acordo mútuo, Fim de obra, Baixo desempenho, Indisciplina ou Outros.' });
         }
-        if (!employeeData.motivoDesligamento || !employeeData.motivoDesligamento.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO DETALHADO do desligamento é obrigatório.\nDescreva o motivo pelo qual o funcionário está sendo desligado.' });
+        // Motivo detalhado só é obrigatório quando incluir na Lista Negra
+        if (employeeData.listaNegra && (!employeeData.motivoDesligamento || !employeeData.motivoDesligamento.trim())) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO DETALHADO do desligamento é obrigatório quando o funcionário é incluído na Lista Negra.\nDescreva o motivo pelo qual o funcionário não poderá ser recontratado.' });
         }
         // Registrar dados de auditoria do desligamento
         employeeData.desligadoPor = ctx.user.name ?? 'Sistema';
@@ -711,7 +712,7 @@ export const appRouter = router({
     resetPassword: protectedProcedure.input(z.object({
       userId: z.number(),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode resetar senhas" });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode resetar senhas" });
       const bcrypt = await import("bcryptjs");
       const { getDb } = await import("./db");
       const db = await getDb();
@@ -723,6 +724,58 @@ export const appRouter = router({
       await db.update(users).set({ password: hashed, mustChangePassword: 1 } as any).where(eq(users.id, input.userId));
       return { success: true, defaultPassword: defaultPwd };
     }),
+    updateRole: protectedProcedure.input(z.object({
+      userId: z.number(),
+      role: z.enum(["user", "admin", "admin_master"]),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar perfis" });
+      if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar seu próprio perfil" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      await db.update(users).set({ role: input.role } as any).where(eq(users.id, input.userId));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Perfil alterado para ${input.role}` });
+      return { success: true };
+    }),
+    updateUser: protectedProcedure.input(z.object({
+      userId: z.number(),
+      name: z.string().min(1).optional(),
+      email: z.string().email().optional(),
+      username: z.string().min(3).optional(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode editar usuários" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const updateData: any = {};
+      if (input.name) updateData.name = input.name;
+      if (input.email) updateData.email = input.email;
+      if (input.username) updateData.username = input.username;
+      if (Object.keys(updateData).length > 0) {
+        await db.update(users).set(updateData).where(eq(users.id, input.userId));
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Usuário editado: ${JSON.stringify(updateData)}` });
+      return { success: true };
+    }),
+    deleteUser: protectedProcedure.input(z.object({
+      userId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode excluir usuários" });
+      if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode excluir a si mesmo" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const [user] = await db.select().from(users).where(eq(users.id, input.userId));
+      await db.delete(users).where(eq(users.id, input.userId));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Usuário ${user?.name || 'desconhecido'} excluído` });
+      return { success: true };
+    }),
   }),
 
   // ============================================================
@@ -733,7 +786,7 @@ export const appRouter = router({
       confirmPassword: z.string(),
       modules: z.array(z.string()).min(1),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode limpar o banco" });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode limpar o banco" });
       const CLEAN_PASSWORD = "LIMPAR2026";
       if (input.confirmPassword !== CLEAN_PASSWORD) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha de confirmação incorreta" });

@@ -1410,3 +1410,20 @@
 - [x] Implementar 3 níveis de permissão: admin_master / admin / user no schema e backend
 - [x] Dica do Sistema (configurações avançadas) só visível para admin_master
 - [x] Promover usuário owner para admin_master automaticamente
+- [ ] Número Interno: auto-geração sequencial por empresa (nunca repete, somente leitura)
+- [ ] Número Interno: atualizar TODOS os colaboradores existentes que não possuem número interno
+- [ ] Número Interno: tornar campo somente leitura no frontend (não editável)
+- [ ] Número Interno: adicionar critério/configuração na aba Configurações
+- [ ] Número do Contador: verificar e garantir que todos os colaboradores tenham o código correto
+- [ ] Bug: ANDERSON BRAGA SILVA aparece na Folha mas não está cadastrado na base de Colaboradores
+- [ ] Usuários: Adicionar botões Editar, Excluir e Alterar Perfil na tabela de Usuários
+- [ ] Usuários: Melhorar layout da tabela - mais espaçamento, tela mais larga, sem texto encavalado
+- [x] Desligamento: Motivo Detalhado só obrigatório quando marcar Lista Negra (opcional para desligamento normal)
+- [x] E-mail desligamento: remover branding Manus, usar logo/dados da empresa do colaborador
+- [x] E-mail desligamento: texto formal técnico RH focado em dar baixa no seguro de vida
+- [ ] E-mail desligamento: template editável nos Critérios do Sistema (categoria rescisão)
+- [x] Foto do colaborador: ajuste automático com object-fit cover e centralização no rosto (object-position top)
+- [x] Foto do colaborador: formato circular ou arredondado com tamanho fixo
+- [x] Foto do colaborador: mini avatar circular na tabela de listagem ao lado do nome
+- [x] E-mail: remetente deve mostrar nome da empresa ao invés de Manus Team
+- [x] E-mail: assunto deve conter nome da empresa ao invés de manus

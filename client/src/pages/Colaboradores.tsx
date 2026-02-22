@@ -440,8 +440,8 @@ export default function Colaboradores() {
 
     let conteudo = `<div style="display:flex;align-items:center;gap:20px;padding-bottom:16px;border-bottom:3px solid #1B2A4A;margin-bottom:20px;">
       ${viewingEmployee.fotoUrl 
-        ? `<img src="${viewingEmployee.fotoUrl}" alt="Foto 3x4" style="width:72px;height:96px;object-fit:cover;border-radius:6px;border:2px solid #1B2A4A;" />`
-        : `<div style="width:72px;height:96px;border-radius:6px;background:#e8edf3;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#1B2A4A;border:2px solid #c5cdd8;">${viewingEmployee.nomeCompleto?.charAt(0) || "?"}</div>`
+        ? `<img src="${viewingEmployee.fotoUrl}" alt="Foto" style="width:80px;height:80px;object-fit:cover;object-position:top;border-radius:50%;border:3px solid #1B2A4A;box-shadow:0 2px 8px rgba(0,0,0,0.15);" />`
+        : `<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#dbeafe,#e0e7ff);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#1B2A4A;border:3px solid #c5cdd8;box-shadow:0 2px 8px rgba(0,0,0,0.1);">${(viewingEmployee.nomeCompleto?.charAt(0) || "?") + (viewingEmployee.nomeCompleto?.split(' ').pop()?.charAt(0) || "")}</div>`
       }
       <div><h2 style="font-size:18px;font-weight:700;color:#1B2A4A;margin:0;">${safeDisplay(viewingEmployee.nomeCompleto)}</h2>
       <p style="font-size:12px;color:#666;margin:4px 0 0;">${safeDisplay(viewingEmployee.funcao)} · ${safeDisplay(viewingEmployee.setor)}</p>
@@ -602,7 +602,18 @@ export default function Colaboradores() {
                       />
                     </td>
                     <td className="px-4 py-3 font-mono text-xs font-bold text-primary">{emp.codigoInterno || "-"}</td>
-                    <td className="px-4 py-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3 cursor-pointer" onClick={() => setRaioXEmployeeId(emp.id)}>
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-blue-100 flex items-center justify-center shrink-0 border-2 border-blue-200">
+                          {emp.fotoUrl ? (
+                            <img src={emp.fotoUrl} alt="" className="w-full h-full object-cover object-top" />
+                          ) : (
+                            <span className="text-xs font-bold text-blue-700">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
+                          )}
+                        </div>
+                        <span className="font-medium text-blue-700 hover:underline">{emp.nomeCompleto}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground min-w-[180px] whitespace-nowrap font-mono text-sm">{formatCPF(emp.cpf)}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
@@ -688,20 +699,19 @@ export default function Colaboradores() {
 
           {/* FOTO 3x4 + NOME DO FUNCIONÁRIO */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-4 py-3 mb-2 flex items-center gap-4">
-            {/* Foto 3x4 */}
+            {/* Foto 3x4 - Circular com centralização no rosto */}
             <div className="relative shrink-0">
-              <div className="w-[72px] h-[96px] rounded-md border-2 border-blue-300 overflow-hidden bg-white flex items-center justify-center cursor-pointer group"
+              <div className="w-[80px] h-[80px] rounded-full border-3 border-blue-400 overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center cursor-pointer group shadow-lg"
                 onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = (e: any) => { if (e.target.files?.[0]) handleFotoUpload(e.target.files[0]); }; inp.click(); }}
               >
                 {form.fotoUrl ? (
-                  <img src={form.fotoUrl} alt="Foto 3x4" className="w-full h-full object-cover" />
+                  <img src={form.fotoUrl} alt="Foto" className="w-full h-full object-cover object-top" />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-blue-400 group-hover:text-blue-600 transition-colors">
-                    <Camera className="h-6 w-6 mb-1" />
-                    <span className="text-[9px] font-medium">Foto 3x4</span>
+                    <Camera className="h-7 w-7" />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
                   <Camera className="h-5 w-5 text-white" />
                 </div>
               </div>
@@ -1502,12 +1512,12 @@ export default function Colaboradores() {
                 </div>
               </div>
               <div className="mt-3">
-                <Label className="text-xs font-medium text-red-700">Motivo Detalhado do Desligamento *</Label>
+                <Label className="text-xs font-medium text-red-700">Motivo Detalhado do Desligamento {form.listaNegra === "1" && <span className="text-red-500">*</span>}</Label>
                 <textarea
                   value={form.motivoDesligamento ?? ""}
                   onChange={e => set("motivoDesligamento", e.target.value)}
                   rows={3}
-                  placeholder="Descreva o motivo pelo qual o funcionário está sendo desligado..."
+                  placeholder="Opcional — descreva o motivo do desligamento (obrigatório se incluir na Lista Negra)"
                   className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 mt-1"
                 />
               </div>
@@ -1585,12 +1595,12 @@ export default function Colaboradores() {
             <div className="space-y-8">
               {/* Header */}
               <div className="flex items-center gap-6 pb-6 border-b-2 border-primary/20">
-                <div className="w-[80px] h-[107px] rounded-md border-2 border-primary/30 overflow-hidden bg-primary/5 flex items-center justify-center shrink-0">
+                <div className="w-[90px] h-[90px] rounded-full border-3 border-primary/40 overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shrink-0 shadow-lg">
                   {viewingEmployee.fotoUrl ? (
-                    <img src={viewingEmployee.fotoUrl} alt="Foto 3x4" className="w-full h-full object-cover" />
+                    <img src={viewingEmployee.fotoUrl} alt="Foto" className="w-full h-full object-cover object-top" />
                   ) : (
-                    <span className="text-3xl font-bold text-primary">
-                      {viewingEmployee.nomeCompleto?.charAt(0)}
+                    <span className="text-2xl font-bold text-primary">
+                      {viewingEmployee.nomeCompleto?.charAt(0)}{viewingEmployee.nomeCompleto?.split(' ').pop()?.charAt(0)}
                     </span>
                   )}
                 </div>

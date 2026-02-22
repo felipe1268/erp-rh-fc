@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
@@ -45,6 +47,9 @@ const CATEGORIAS = [
 type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes";
 
 export default function Configuracoes() {
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
+  const isAdmin = user?.role === "admin" || isMaster;
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const [activeTab, setActiveTab] = useState<TabKey>("criterios");
@@ -62,6 +67,12 @@ export default function Configuracoes() {
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<"user" | "admin" | "admin_master">("user");
   const [newPassword, setNewPassword] = useState("");
+
+  // Edição de usuário
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editUsername, setEditUsername] = useState("");
 
   // Troca de senha
   const [showChangePwd, setShowChangePwd] = useState(false);
@@ -144,6 +155,31 @@ export default function Configuracoes() {
   const resetPwdMutation = trpc.userManagement.resetPassword.useMutation({
     onSuccess: (data) => {
       toast.success(`Senha resetada! Nova senha padrão: ${data.defaultPassword}`);
+      usersQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateRoleMutation = trpc.userManagement.updateRole.useMutation({
+    onSuccess: () => {
+      toast.success("Perfil do usuário atualizado!");
+      usersQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateUserMutation = trpc.userManagement.updateUser.useMutation({
+    onSuccess: () => {
+      toast.success("Usuário atualizado!");
+      setEditingUser(null);
+      usersQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteUserMutation = trpc.userManagement.deleteUser.useMutation({
+    onSuccess: () => {
+      toast.success("Usuário excluído!");
       usersQuery.refetch();
     },
     onError: (err) => toast.error(err.message),

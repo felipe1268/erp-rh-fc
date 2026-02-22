@@ -1,0 +1,30 @@
+{
+  "query": "SELECT companyId, COUNT(*) as total, SUM(CASE WHEN codigoInterno IS NULL OR codigoInterno = '' THEN 1 ELSE 0 END) as sem_codigo FROM employees WHERE deletedAt IS NULL GROUP BY companyId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT companyId, COUNT(*) as total, SUM(CASE WHEN codigoInterno IS NULL OR codigoInterno = '' THEN 1 ELSE 0 END) as sem_codigo FROM employees WHERE deletedAt IS NULL GROUP BY companyId;",
+  "rows": [
+    {
+      "companyId": "60004",
+      "total": "14",
+      "sem_codigo": "14"
+    },
+    {
+      "companyId": "60002",
+      "total": "243",
+      "sem_codigo": "112"
+    },
+    {
+      "companyId": "90001",
+      "total": "3",
+      "sem_codigo": "3"
+    },
+    {
+      "companyId": "60005",
+      "total": "14",
+      "sem_codigo": "14"
+    }
+  ],
+  "messages": [],
+  "stdout": "companyId\ttotal\tsem_codigo\n60004\t14\t14\n60002\t243\t112\n90001\t3\t3\n60005\t14\t14\n",
+  "stderr": "",
+  "execution_time_ms": 348
+}

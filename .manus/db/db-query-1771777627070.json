@@ -1,0 +1,1610 @@
+{
+  "query": "SELECT id, nomeCompleto, cpf, codigoInterno, status, companyId FROM employees WHERE deletedAt IS NULL ORDER BY companyId, nomeCompleto LIMIT 200;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, cpf, codigoInterno, status, companyId FROM employees WHERE deletedAt IS NULL ORDER BY companyId, nomeCompleto LIMIT 200;",
+  "rows": [
+    {
+      "id": "90437",
+      "nomeCompleto": "ACACIO LESCURA DE CAMARGO",
+      "cpf": "383.091.708-23",
+      "codigoInterno": "JFC010",
+      "status": "Desligado",
+      "companyId": "60002"
+    },
+    {
+      "id": "330068",
+      "nomeCompleto": "ADAM FRANCISCO MARTINS ORESTES",
+      "cpf": "000.000.199-40",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90430",
+      "nomeCompleto": "ADRIANO PAZ FERREIRA",
+      "cpf": "067.237.744-69",
+      "codigoInterno": "JFC003",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330048",
+      "nomeCompleto": "AFONSO DA SILVA GUILHERME",
+      "cpf": "000.000.179-09",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90431",
+      "nomeCompleto": "AGOSTINHO DIJALMA FERREIRA",
+      "cpf": "183.907.808-10",
+      "codigoInterno": "JFC004",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330069",
+      "nomeCompleto": "AILTON LUIZ SALVADOR",
+      "cpf": "000.000.200-12",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330026",
+      "nomeCompleto": "ALAF FERREIRA SOARES",
+      "cpf": "000.000.157-46",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330001",
+      "nomeCompleto": "ALANNA CRISTINA RAMOS",
+      "cpf": "000.000.132-00",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330027",
+      "nomeCompleto": "ALEF BASILIO DOS REIS",
+      "cpf": "000.000.158-89",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90432",
+      "nomeCompleto": "ALEX ALESSANDRO MONTEIRO DA SILVA",
+      "cpf": "405.690.998-97",
+      "codigoInterno": "JFC005",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90433",
+      "nomeCompleto": "ALEX DA SILVA DOMINGOS",
+      "cpf": "489.909.558-90",
+      "codigoInterno": "JFC006",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90434",
+      "nomeCompleto": "ALEX PAULO RODRIGUES",
+      "cpf": "027.664.011-05",
+      "codigoInterno": "JFC007",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360028",
+      "nomeCompleto": "ALEX ROBSON CARNEIRO PINTO",
+      "cpf": "144.642.138-47",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330002",
+      "nomeCompleto": "ALLAN SANTOS DA SILVA",
+      "cpf": "000.000.133-29",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330070",
+      "nomeCompleto": "ALUIZIO JOSE OLIVEIRA DO NASCIMENTO",
+      "cpf": "000.000.201-91",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330028",
+      "nomeCompleto": "AMAURI FRANCISCO DA SILVA JUNIOR",
+      "cpf": "000.000.159-87",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90438",
+      "nomeCompleto": "ANDERSON DOS ANJOS ALKMIN JUNIOR",
+      "cpf": "458.465.648-79",
+      "codigoInterno": "JFC011",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90439",
+      "nomeCompleto": "ANDRÉ LUIZ BARLETTA DAS CHAGAS",
+      "cpf": "070.835.548-03",
+      "codigoInterno": "JFC012",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90440",
+      "nomeCompleto": "ANDREI DA SILVA",
+      "cpf": "315.449.308-52",
+      "codigoInterno": "JFC013",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330003",
+      "nomeCompleto": "ANTONIO MENDES NETO",
+      "cpf": "000.000.134-84",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90442",
+      "nomeCompleto": "ANTONIO RENATO DE SANTANA",
+      "cpf": "451.326.743-72",
+      "codigoInterno": "JFC015",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90443",
+      "nomeCompleto": "ANTONIO WAGNER BARBOSA DE SOUSA",
+      "cpf": "283.738.288-42",
+      "codigoInterno": "JFC016",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360039",
+      "nomeCompleto": "ARIEL DA SILVA",
+      "cpf": "442.495.578-80",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330049",
+      "nomeCompleto": "BENEDITO BARBOSA DE PAULA",
+      "cpf": "000.000.180-05",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90444",
+      "nomeCompleto": "BRUNO LUIS FARIA MACHADO",
+      "cpf": "339.752.168-83",
+      "codigoInterno": "JFC017",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90445",
+      "nomeCompleto": "BRUNO RAFAEL BATISTA DA SILVA",
+      "cpf": "437.118.938-56",
+      "codigoInterno": "JFC018",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360031",
+      "nomeCompleto": "BRUNO SERRA GALVÃO",
+      "cpf": "358.563.748-51",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90446",
+      "nomeCompleto": "CAIO AUGUSTO DA SILVA GARUFE",
+      "cpf": "421.511.388-10",
+      "codigoInterno": "JFC019",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330004",
+      "nomeCompleto": "CAIO FELIPE MARCOLINO GERMANO",
+      "cpf": "000.000.135-45",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330071",
+      "nomeCompleto": "CAIO HONORATA SATO",
+      "cpf": "000.000.202-77",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90447",
+      "nomeCompleto": "CAIO MATHEUS PEREIRA ANTUNES",
+      "cpf": "507.897.708-22",
+      "codigoInterno": "JFC020",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330005",
+      "nomeCompleto": "CAIRO DA GUIA LIMA",
+      "cpf": "000.000.136-70",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330029",
+      "nomeCompleto": "CARLOS ALBERTO DIAS FERREIRA JUNIOR",
+      "cpf": "000.000.160-88",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90448",
+      "nomeCompleto": "CARLOS ALBERTO GONÇALVES",
+      "cpf": "249.394.688-01",
+      "codigoInterno": "JFC021",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330072",
+      "nomeCompleto": "CARLOS EDUARDO DANTAS DO NASCIMENTO",
+      "cpf": "000.000.203-94",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330030",
+      "nomeCompleto": "CARLOS GILBERTO DE FREITAS",
+      "cpf": "000.000.161-06",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90436",
+      "nomeCompleto": "CARLOS VITORIANO TOBIAS",
+      "cpf": "054.474.594-94",
+      "codigoInterno": "JFC009",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90450",
+      "nomeCompleto": "CAROLINA DA SILVA PENA FIRME",
+      "cpf": "478.665.718-21",
+      "codigoInterno": "JFC023",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90451",
+      "nomeCompleto": "CATARINE APARECIDA CORREA LIMA",
+      "cpf": "384.986.088-48",
+      "codigoInterno": "JFC024",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330050",
+      "nomeCompleto": "CIRIO RODRIGUES DE OLIVEIRA",
+      "cpf": "000.000.181-11",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90452",
+      "nomeCompleto": "CLAUDIO JOSE GONCALVES DIAS",
+      "cpf": "065.672.578-81",
+      "codigoInterno": "JFC025",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90453",
+      "nomeCompleto": "CLAUDIO SILVA",
+      "cpf": "234.020.938-20",
+      "codigoInterno": "JFC026",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330051",
+      "nomeCompleto": "CRISTIANO DA SILVA MEDEIROS",
+      "cpf": "000.000.182-00",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330031",
+      "nomeCompleto": "DANIEL CAETANO VIEIRA",
+      "cpf": "000.000.162-95",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360016",
+      "nomeCompleto": "DAVYD JOSE SANTOS DE SOUSA",
+      "cpf": "693.126.484-20",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90517",
+      "nomeCompleto": "DE OBRAS MYRIELLE FIALHO BORGES ARCANJO",
+      "cpf": "388.177.788-18",
+      "codigoInterno": "JFC090",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360043",
+      "nomeCompleto": "DENIS AUGUSTO DE JESUS ARAUJO",
+      "cpf": "411.733.288-07",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330073",
+      "nomeCompleto": "DERIVAN CORREA PEREIRA",
+      "cpf": "000.000.204-69",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90454",
+      "nomeCompleto": "DESILDO DA COSTA SANTOS",
+      "cpf": "121.876.918-10",
+      "codigoInterno": "JFC027",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90455",
+      "nomeCompleto": "DIEGO HENRIQUE ESPINELI DOS SANTOS",
+      "cpf": "392.434.018-82",
+      "codigoInterno": "JFC028",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330052",
+      "nomeCompleto": "DIEGO HENRIQUE MENDES",
+      "cpf": "000.000.183-97",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330053",
+      "nomeCompleto": "DIOGO FRANCA SAMPAIO",
+      "cpf": "000.000.184-15",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90456",
+      "nomeCompleto": "DIOGO SOARES DA SILVA",
+      "cpf": "130.387.724-45",
+      "codigoInterno": "JFC029",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330006",
+      "nomeCompleto": "DONISETE CANDIDO VILELA",
+      "cpf": "000.000.137-47",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90457",
+      "nomeCompleto": "DOUGLAS DE SOUZA ROCHA",
+      "cpf": "298.269.958-35",
+      "codigoInterno": "JFC030",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90459",
+      "nomeCompleto": "EDSON FERNANDO MACHADO",
+      "cpf": "495.854.318-07",
+      "codigoInterno": "JFC032",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360025",
+      "nomeCompleto": "EDUARDO DA SILVA OLIVEIRA",
+      "cpf": "608.980.803-20",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360035",
+      "nomeCompleto": "EDUARDO HENRIQUE DA SILVA PAIVA",
+      "cpf": "157.143.124-14",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90460",
+      "nomeCompleto": "ELIAS VIEIRA DO NASCIMENTO",
+      "cpf": "399.004.768-08",
+      "codigoInterno": "JFC033",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90461",
+      "nomeCompleto": "ELIEL BRENDON DE LIMA MARQUES",
+      "cpf": "100.108.495-05",
+      "codigoInterno": "JFC034",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330074",
+      "nomeCompleto": "ELIVALDO LUIZ DA SILVA",
+      "cpf": "000.000.205-96",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90462",
+      "nomeCompleto": "ELIZEU FRANCISCO DE SOUZA",
+      "cpf": "104.710.634-52",
+      "codigoInterno": "JFC035",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90463",
+      "nomeCompleto": "EMERSON RODRIGO DOS SANTOS",
+      "cpf": "366.221.528-45",
+      "codigoInterno": "JFC036",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90464",
+      "nomeCompleto": "ERIC GUSTAVO DE SOUZA",
+      "cpf": "454.097.098-45",
+      "codigoInterno": "JFC037",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330007",
+      "nomeCompleto": "ERICKSON AUGUSTO MAGALHAES DE SOUSA",
+      "cpf": "000.000.138-75",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360040",
+      "nomeCompleto": "EVERTON RICARDO DA SILVA COSTA",
+      "cpf": "363.094.428-05",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360020",
+      "nomeCompleto": "EWERTTON DA SILVA ARAUJO",
+      "cpf": "702.920.754-80",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330054",
+      "nomeCompleto": "FABIO DOS SANTOS KELLY",
+      "cpf": "000.000.185-08",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330055",
+      "nomeCompleto": "FABIO LUIZ DIAS FREIRE",
+      "cpf": "000.000.186-04",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360015",
+      "nomeCompleto": "FELIPE COSTA ALVES",
+      "cpf": "362.506.888-54",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330075",
+      "nomeCompleto": "FELIPE RIBEIRO DA SILVA FERREIRA",
+      "cpf": "000.000.206-73",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360024",
+      "nomeCompleto": "FERNANDO AMORIM VIEIRA",
+      "cpf": "201.868.338-14",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330008",
+      "nomeCompleto": "FERNANDO MARQUES DE JESUS",
+      "cpf": "000.000.139-08",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90466",
+      "nomeCompleto": "FERNANDO RODRIGO DE CASTILHO PRADO",
+      "cpf": "399.329.138-71",
+      "codigoInterno": "JFC039",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330009",
+      "nomeCompleto": "FRANCISCO DA SILVA JUNIOR",
+      "cpf": "000.000.140-61",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90468",
+      "nomeCompleto": "FRANCISCO EUDICE CARVALHO BIZERRA",
+      "cpf": "012.706.541-52",
+      "codigoInterno": "JFC041",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330076",
+      "nomeCompleto": "GABRIEL GONCALVES",
+      "cpf": "000.000.207-78",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90469",
+      "nomeCompleto": "GENILSON DE SOUZA LOPES",
+      "cpf": "728.546.007-97",
+      "codigoInterno": "JFC042",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90470",
+      "nomeCompleto": "GERALDO MACHADO",
+      "cpf": "244.473.958-27",
+      "codigoInterno": "JFC043",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330056",
+      "nomeCompleto": "GERALDO MARCELINO DE OLIVEIRA",
+      "cpf": "000.000.187-29",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90471",
+      "nomeCompleto": "GILBERTO DA COSTA BARBOZA",
+      "cpf": "302.330.158-17",
+      "codigoInterno": "JFC044",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330032",
+      "nomeCompleto": "GILBERTO ROQUE MAGALHAES DE SOUZA",
+      "cpf": "000.000.163-19",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90490",
+      "nomeCompleto": "GILMAR PEREIRA DE BRITO",
+      "cpf": "183.174.368-02",
+      "codigoInterno": "JFC063",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90472",
+      "nomeCompleto": "GILMAR PEREIRA DE BRITO",
+      "cpf": "086.462.196-58",
+      "codigoInterno": "JFC045",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90473",
+      "nomeCompleto": "GILMAR SANTOS DO NASCIMENTO",
+      "cpf": "084.196.324-06",
+      "codigoInterno": "JFC046",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90474",
+      "nomeCompleto": "GISLEI RODRIGO DE CARVALHO",
+      "cpf": "378.344.588-41",
+      "codigoInterno": "JFC047",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90475",
+      "nomeCompleto": "GIVALDO DOS SANTOS",
+      "cpf": "108.474.408-26",
+      "codigoInterno": "JFC048",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360021",
+      "nomeCompleto": "GLAYSON SEVERINO DA SILVA",
+      "cpf": "113.111.554-65",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90476",
+      "nomeCompleto": "GLEDSON FERREIRA SANTOS",
+      "cpf": "319.065.078-05",
+      "codigoInterno": "JFC049",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330011",
+      "nomeCompleto": "GUILHERME DOS SANTOS FERREIRA LEMOS",
+      "cpf": "000.000.142-36",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330033",
+      "nomeCompleto": "IGOR DA CONCEICAO TOLEDO",
+      "cpf": "000.000.164-85",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90477",
+      "nomeCompleto": "IRAEL ALVES DE SOUZA",
+      "cpf": "026.290.844-18",
+      "codigoInterno": "JFC050",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90478",
+      "nomeCompleto": "ISABELA AUGUSTA DA SILVA VELLOSO",
+      "cpf": "558.057.098-80",
+      "codigoInterno": "JFC051",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90479",
+      "nomeCompleto": "ISAIAS COELHO MUYAGUTI MONTEIRO",
+      "cpf": "477.547.478-20",
+      "codigoInterno": "JFC052",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360036",
+      "nomeCompleto": "ITALO CAUA PEDRO DA SILVA",
+      "cpf": "161.589.484-54",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90480",
+      "nomeCompleto": "IVAN DOS SANTOS",
+      "cpf": "081.146.678-77",
+      "codigoInterno": "JFC053",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330077",
+      "nomeCompleto": "JACKSON SILVA DE LIMA",
+      "cpf": "000.000.208-89",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90481",
+      "nomeCompleto": "JAMIELSON GOMES DOS SANTOS SILVA",
+      "cpf": "123.193.034-99",
+      "codigoInterno": "JFC054",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90482",
+      "nomeCompleto": "JEAN CARLOS MARTINS",
+      "cpf": "421.624.018-60",
+      "codigoInterno": "JFC055",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90483",
+      "nomeCompleto": "JEAN CARLOS RIBEIRO DA SILVA",
+      "cpf": "271.184.008-58",
+      "codigoInterno": "JFC056",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330012",
+      "nomeCompleto": "JEFFERSON NATANAEL DOS SANTOS SOUZA",
+      "cpf": "000.000.143-95",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90484",
+      "nomeCompleto": "JEFTER EMANOEL CRISPINIANO DE MELO SILVA",
+      "cpf": "150.459.844-03",
+      "codigoInterno": "JFC057",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90465",
+      "nomeCompleto": "JEFTER EMANOEL CRISPINIANO DE MELO SILVA",
+      "cpf": "103.759.864-48",
+      "codigoInterno": "JFC038",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330013",
+      "nomeCompleto": "JESSE PINHEIRO DA SILVA",
+      "cpf": "000.000.144-88",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360042",
+      "nomeCompleto": "JHONATAS FELIPE GOMES LEITE",
+      "cpf": "351.999.448-86",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330014",
+      "nomeCompleto": "JOAO BALBINO APARECIDO CORREIA BORGES",
+      "cpf": "000.000.145-70",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90552",
+      "nomeCompleto": "JOAO CAMPOS DA SILVA",
+      "cpf": "516.423.168-90",
+      "codigoInterno": "JFC125",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330091",
+      "nomeCompleto": "JOAO CAMPOS DA SILVA",
+      "cpf": "000.000.222-81",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90486",
+      "nomeCompleto": "JOAO CARLOS DA SILVA CONCEICAO",
+      "cpf": "164.974.247-92",
+      "codigoInterno": "JFC059",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330034",
+      "nomeCompleto": "JOAO CLEBER DE OLIVEIRA SANTOS",
+      "cpf": "000.000.165-53",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330092",
+      "nomeCompleto": "JOAO DARC DOS SANTOS",
+      "cpf": "000.000.223-40",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90429",
+      "nomeCompleto": "JOAO DARC DOS SANTOS",
+      "cpf": "199.141.028-08",
+      "codigoInterno": "JFC002",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330035",
+      "nomeCompleto": "JOAO GABRIEL DO NASCIMENTO FREITAS",
+      "cpf": "000.000.166-55",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90487",
+      "nomeCompleto": "JOAO HENRIQUE SOARES",
+      "cpf": "350.648.228-98",
+      "codigoInterno": "JFC060",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90488",
+      "nomeCompleto": "JOAO JOSE DE PAULA OLIVEIRA",
+      "cpf": "313.338.308-66",
+      "codigoInterno": "JFC061",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90489",
+      "nomeCompleto": "JOÃO MACHADO DE AZEVEDO",
+      "cpf": "138.310.688-60",
+      "codigoInterno": "JFC062",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360017",
+      "nomeCompleto": "JOAO ODAIR DOMINGOS",
+      "cpf": "089.594.324-74",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360027",
+      "nomeCompleto": "JOÃO VITOR GOMES DE CARVALHO",
+      "cpf": "496.203.018-38",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330057",
+      "nomeCompleto": "JOAO VITOR GOMES MOREIRA",
+      "cpf": "000.000.188-99",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330058",
+      "nomeCompleto": "JOAO VITOR MARIANO CALIXTO DA SILVA",
+      "cpf": "000.000.189-03",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330078",
+      "nomeCompleto": "JOHN DAVID SIMIAO DE ALMEIDA",
+      "cpf": "000.000.209-35",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330079",
+      "nomeCompleto": "JONATHA RODRIGUES VICENTE",
+      "cpf": "000.000.210-53",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330059",
+      "nomeCompleto": "JORGE LUIS MANUEL",
+      "cpf": "000.000.190-76",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90491",
+      "nomeCompleto": "JORGE MARCELINO DA SILVA MOREIRA",
+      "cpf": "357.584.688-00",
+      "codigoInterno": "JFC064",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330015",
+      "nomeCompleto": "JOSE ADILSON SOUZA DE JESUS SANTOS",
+      "cpf": "000.000.146-15",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90501",
+      "nomeCompleto": "JOSE ALBERTO SILVA",
+      "cpf": "286.554.878-30",
+      "codigoInterno": "JFC074",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360023",
+      "nomeCompleto": "JOSE ALBERTO SILVA",
+      "cpf": "268.776.648-84",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90492",
+      "nomeCompleto": "JOSÉ ASTOR BATISTA",
+      "cpf": "065.436.158-42",
+      "codigoInterno": "JFC065",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330060",
+      "nomeCompleto": "JOSE EDUARDO DA SILVA",
+      "cpf": "000.000.191-80",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330016",
+      "nomeCompleto": "JOSE FERNANDES DA SILVA",
+      "cpf": "000.000.147-31",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330080",
+      "nomeCompleto": "JOSE GILDO JUVENCIO DA SILVA",
+      "cpf": "000.000.211-92",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360033",
+      "nomeCompleto": "JOSE LUCIO DE SOUZA",
+      "cpf": "756.936.236-53",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330017",
+      "nomeCompleto": "JOSE ROBERTO LOPES DE SIQUEIRA",
+      "cpf": "000.000.148-21",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330036",
+      "nomeCompleto": "JOSE TIAGO DE CASTRO ANJOS",
+      "cpf": "000.000.167-80",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90458",
+      "nomeCompleto": "JOSIAS HELENO DA SILVA",
+      "cpf": "042.201.975-59",
+      "codigoInterno": "JFC031",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360022",
+      "nomeCompleto": "JOSIAS HELENO DA SILVA",
+      "cpf": "033.441.454-79",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90493",
+      "nomeCompleto": "JOSUE DO NASCIMENTO ALVES",
+      "cpf": "269.866.658-73",
+      "codigoInterno": "JFC066",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90494",
+      "nomeCompleto": "JOVANILDO INACIO",
+      "cpf": "255.014.168-75",
+      "codigoInterno": "JFC067",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360032",
+      "nomeCompleto": "JULIANO RODRIGO DINIZ DE SOUSA",
+      "cpf": "371.901.628-52",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360026",
+      "nomeCompleto": "JULIO CESAR DOS SANTOS",
+      "cpf": "342.452.318-66",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90495",
+      "nomeCompleto": "JULIO CESAR LEMES DE OLIVEIRA",
+      "cpf": "358.639.068-80",
+      "codigoInterno": "JFC068",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90496",
+      "nomeCompleto": "JURANDI PEREIRA DOS SANTOS",
+      "cpf": "537.590.443-87",
+      "codigoInterno": "JFC069",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330061",
+      "nomeCompleto": "KAUAN FELIPE CARDOSO MARCHAN",
+      "cpf": "000.000.192-11",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360037",
+      "nomeCompleto": "KAUAN SANTIAGO DA SILVA SANTOS",
+      "cpf": "406.704.988-90",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90497",
+      "nomeCompleto": "KELBEM CARLOS DE LIMA SILVA",
+      "cpf": "134.155.024-90",
+      "codigoInterno": "JFC070",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90507",
+      "nomeCompleto": "KELLEN LARISSA LOURENCO CLARO",
+      "cpf": "331.664.528-42",
+      "codigoInterno": "JFC080",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90498",
+      "nomeCompleto": "KELLEN LARISSA LOURENCO CLARO",
+      "cpf": "489.701.768-88",
+      "codigoInterno": "JFC071",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360034",
+      "nomeCompleto": "KELVIS ALVES PESSOA",
+      "cpf": "178.269.274-63",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330018",
+      "nomeCompleto": "LENILDO PEDRO DA SILVA",
+      "cpf": "000.000.149-59",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330062",
+      "nomeCompleto": "LEONARDO CARDOSO FERREIRA",
+      "cpf": "000.000.193-97",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330063",
+      "nomeCompleto": "LUCAS MARTINS DE ARAUJO",
+      "cpf": "000.000.194-07",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90499",
+      "nomeCompleto": "LUCAS MATEUS RIBEIRO NEVES",
+      "cpf": "450.803.948-03",
+      "codigoInterno": "JFC072",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360018",
+      "nomeCompleto": "LUIS CARLOS DA SILVA",
+      "cpf": "050.191.328-96",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90500",
+      "nomeCompleto": "LUIS CARLOS DA SILVA",
+      "cpf": "055.333.978-84",
+      "codigoInterno": "JFC073",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90441",
+      "nomeCompleto": "LUIS CLAUDIO ANDRADE CARNEIRO",
+      "cpf": "092.826.728-83",
+      "codigoInterno": "JFC014",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90502",
+      "nomeCompleto": "LUIS GUSTAVO RODRIGUES DE CASTRO",
+      "cpf": "419.420.308-94",
+      "codigoInterno": "JFC075",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90503",
+      "nomeCompleto": "LUIS HENRIQUE DO NASCIMENTO",
+      "cpf": "434.791.418-03",
+      "codigoInterno": "JFC076",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330037",
+      "nomeCompleto": "LUIZ FERNANDO DE OLIVEIRA",
+      "cpf": "000.000.168-80",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90504",
+      "nomeCompleto": "LUIZ HENRIQUE DE MACEDO",
+      "cpf": "159.458.668-30",
+      "codigoInterno": "JFC077",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330019",
+      "nomeCompleto": "MAICON WELLINGTON ROCHA DE MOURA",
+      "cpf": "000.000.150-48",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90505",
+      "nomeCompleto": "MANOEL WAGNER ROCHA GUIMARAES",
+      "cpf": "303.495.308-90",
+      "codigoInterno": "JFC078",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90506",
+      "nomeCompleto": "MARCELO ALEXANDRE PEREIRA",
+      "cpf": "276.256.258-93",
+      "codigoInterno": "JFC079",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330064",
+      "nomeCompleto": "MARCELO GALVAO DE BRITO",
+      "cpf": "000.000.195-06",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90508",
+      "nomeCompleto": "MARCIO DE TOLEDO",
+      "cpf": "326.851.898-23",
+      "codigoInterno": "JFC081",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90509",
+      "nomeCompleto": "MARCIO ELOY DOS SANTOS",
+      "cpf": "782.247.566-53",
+      "codigoInterno": "JFC082",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330038",
+      "nomeCompleto": "MARCIO VENICIO DA SILVA",
+      "cpf": "000.000.169-01",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360019",
+      "nomeCompleto": "MARCO ANTONIO DOS SANTOS BATISTA",
+      "cpf": "598.452.875-49",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90510",
+      "nomeCompleto": "MARCO ANTONIO DOS SANTOS BATISTA",
+      "cpf": "199.149.678-84",
+      "codigoInterno": "JFC083",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330065",
+      "nomeCompleto": "MARCOS RAFAEL DE SOUZA",
+      "cpf": "000.000.196-99",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330039",
+      "nomeCompleto": "MARCOS VINICIOS GOMES DE MELO",
+      "cpf": "000.000.170-91",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90511",
+      "nomeCompleto": "MARIANA CASTILHO DE LIMA",
+      "cpf": "401.827.378-96",
+      "codigoInterno": "JFC084",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330040",
+      "nomeCompleto": "MATEUS FELIPE SILVA VALE",
+      "cpf": "000.000.171-90",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90512",
+      "nomeCompleto": "MATEUS OLIVEIRA BRITO PIRES",
+      "cpf": "443.679.498-93",
+      "codigoInterno": "JFC085",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90513",
+      "nomeCompleto": "MATHEUS DONIZETTI ALVES RODRIGUES",
+      "cpf": "547.148.568-80",
+      "codigoInterno": "JFC086",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330020",
+      "nomeCompleto": "MATHEUS MARIANO DA SILVA",
+      "cpf": "000.000.151-57",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90514",
+      "nomeCompleto": "MAURICIO BENEDITO ELESBAO",
+      "cpf": "081.016.508-22",
+      "codigoInterno": "JFC087",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90515",
+      "nomeCompleto": "MAYCON ADREAN POLYCARPO CORREA",
+      "cpf": "485.339.388-96",
+      "codigoInterno": "JFC088",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330098",
+      "nomeCompleto": "MELQUISEDEQUE SILVA BATISTA",
+      "cpf": "000.000.229-44",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90516",
+      "nomeCompleto": "MILTON CESAR DA COSTA",
+      "cpf": "199.147.638-80",
+      "codigoInterno": "JFC089",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90435",
+      "nomeCompleto": "MILTON CESAR DA COSTA",
+      "cpf": "259.915.518-55",
+      "codigoInterno": "JFC008",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330081",
+      "nomeCompleto": "NATHALYA CARDOSO DE PAULA SANTOS",
+      "cpf": "000.000.212-30",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90485",
+      "nomeCompleto": "NAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS",
+      "cpf": "746.007.614-72",
+      "codigoInterno": "JFC058",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90518",
+      "nomeCompleto": "NAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS",
+      "cpf": "388.809.058-05",
+      "codigoInterno": "JFC091",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90449",
+      "nomeCompleto": "NELSON MOREIRA GOMES",
+      "cpf": "150.209.888-12",
+      "codigoInterno": "JFC022",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90519",
+      "nomeCompleto": "NELSON MOREIRA GOMES",
+      "cpf": "185.666.988-27",
+      "codigoInterno": "JFC092",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "360041",
+      "nomeCompleto": "NILO CESAR DOS SANTOS ARANTES",
+      "cpf": "264.829.898-37",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90520",
+      "nomeCompleto": "ODAIR JOSE PEREIRA",
+      "cpf": "279.448.498-29",
+      "codigoInterno": "JFC093",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90467",
+      "nomeCompleto": "OSMAR MAGNO DE OLIVEIRA",
+      "cpf": "114.029.178-56",
+      "codigoInterno": "JFC040",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90521",
+      "nomeCompleto": "OSMAR MAGNO DE OLIVEIRA",
+      "cpf": "103.466.104-35",
+      "codigoInterno": "JFC094",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330041",
+      "nomeCompleto": "OTACILIO CLEMENTINO DA SILVA",
+      "cpf": "000.000.172-59",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330042",
+      "nomeCompleto": "PABLO DOS SANTOS OLIVEIRA",
+      "cpf": "000.000.173-74",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330043",
+      "nomeCompleto": "PABLO RODRIGO DA SILVA",
+      "cpf": "000.000.174-10",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90522",
+      "nomeCompleto": "PATRICIA SIMOES DE SOUSA",
+      "cpf": "257.924.718-19",
+      "codigoInterno": "JFC095",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90523",
+      "nomeCompleto": "PAULO DANIEL ALVES",
+      "cpf": "440.498.428-66",
+      "codigoInterno": "JFC096",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90524",
+      "nomeCompleto": "PAULO HENRIQUE LIMA GUIMARÃES",
+      "cpf": "098.403.828-02",
+      "codigoInterno": "JFC097",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90526",
+      "nomeCompleto": "PAULO ROBERTO DOS SANTOS ESPINELI",
+      "cpf": "401.440.528-14",
+      "codigoInterno": "JFC099",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90527",
+      "nomeCompleto": "PAULO ROSA DA SILVA",
+      "cpf": "080.956.908-64",
+      "codigoInterno": "JFC100",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90528",
+      "nomeCompleto": "PAULO VINICIUS SALES TEIXEIRA",
+      "cpf": "491.944.238-65",
+      "codigoInterno": "JFC101",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "90529",
+      "nomeCompleto": "PEDRO HENRIQUE MARQUES NOGUEIRA",
+      "cpf": "115.108.656-83",
+      "codigoInterno": "JFC102",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "330082",
+      "nomeCompleto": "PEDRO HENRIQUE PEREIRA SENE",
+      "cpf": "000.000.213-51",
+      "codigoInterno": "NULL",
+      "status": "Ativo",
+      "companyId": "60002"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tcpf\tcodigoInterno\tstatus\tcompanyId\n90437\tACACIO LESCURA DE CAMARGO\t383.091.708-23\tJFC010\tDesligado\t60002\n330068\tADAM FRANCISCO MARTINS ORESTES\t000.000.199-40\tNULL\tAtivo\t60002\n90430\tADRIANO PAZ FERREIRA\t067.237.744-69\tJFC003\tAtivo\t60002\n330048\tAFONSO DA SILVA GUILHERME\t000.000.179-09\tNULL\tAtivo\t60002\n90431\tAGOSTINHO DIJALMA FERREIRA\t183.907.808-10\tJFC004\tAtivo\t60002\n330069\tAILTON LUIZ SALVADOR\t000.000.200-12\tNULL\tAtivo\t60002\n330026\tALAF FERREIRA SOARES\t000.000.157-46\tNULL\tAtivo\t60002\n330001\tALANNA CRISTINA RAMOS\t000.000.132-00\tNULL\tAtivo\t60002\n330027\tALEF BASILIO DOS REIS\t000.000.158-89\tNULL\tAtivo\t60002\n90432\tALEX ALESSANDRO MONTEIRO DA SILVA\t405.690.998-97\tJFC005\tAtivo\t60002\n90433\tALEX DA SILVA DOMINGOS\t489.909.558-90\tJFC006\tAtivo\t60002\n90434\tALEX PAULO RODRIGUES\t027.664.011-05\tJFC007\tAtivo\t60002\n360028\tALEX ROBSON CARNEIRO PINTO\t144.642.138-47\tNULL\tAtivo\t60002\n330002\tALLAN SANTOS DA SILVA\t000.000.133-29\tNULL\tAtivo\t60002\n330070\tALUIZIO JOSE OLIVEIRA DO NASCIMENTO\t000.000.201-91\tNULL\tAtivo\t60002\n330028\tAMAURI FRANCISCO DA SILVA JUNIOR\t000.000.159-87\tNULL\tAtivo\t60002\n90438\tANDERSON DOS ANJOS ALKMIN JUNIOR\t458.465.648-79\tJFC011\tAtivo\t60002\n90439\tANDRÉ LUIZ BARLETTA DAS CHAGAS\t070.835.548-03\tJFC012\tAtivo\t60002\n90440\tANDREI DA SILVA\t315.449.308-52\tJFC013\tAtivo\t60002\n330003\tANTONIO MENDES NETO\t000.000.134-84\tNULL\tAtivo\t60002\n90442\tANTONIO RENATO DE SANTANA\t451.326.743-72\tJFC015\tAtivo\t60002\n90443\tANTONIO WAGNER BARBOSA DE SOUSA\t283.738.288-42\tJFC016\tAtivo\t60002\n360039\tARIEL DA SILVA\t442.495.578-80\tNULL\tAtivo\t60002\n330049\tBENEDITO BARBOSA DE PAULA\t000.000.180-05\tNULL\tAtivo\t60002\n90444\tBRUNO LUIS FARIA MACHADO\t339.752.168-83\tJFC017\tAtivo\t60002\n90445\tBRUNO RAFAEL BATISTA DA SILVA\t437.118.938-56\tJFC018\tAtivo\t60002\n360031\tBRUNO SERRA GALVÃO\t358.563.748-51\tNULL\tAtivo\t60002\n90446\tCAIO AUGUSTO DA SILVA GARUFE\t421.511.388-10\tJFC019\tAtivo\t60002\n330004\tCAIO FELIPE MARCOLINO GERMANO\t000.000.135-45\tNULL\tAtivo\t60002\n330071\tCAIO HONORATA SATO\t000.000.202-77\tNULL\tAtivo\t60002\n90447\tCAIO MATHEUS PEREIRA ANTUNES\t507.897.708-22\tJFC020\tAtivo\t60002\n330005\tCAIRO DA GUIA LIMA\t000.000.136-70\tNULL\tAtivo\t60002\n330029\tCARLOS ALBERTO DIAS FERREIRA JUNIOR\t000.000.160-88\tNULL\tAtivo\t60002\n90448\tCARLOS ALBERTO GONÇALVES\t249.394.688-01\tJFC021\tAtivo\t60002\n330072\tCARLOS EDUARDO DANTAS DO NASCIMENTO\t000.000.203-94\tNULL\tAtivo\t60002\n330030\tCARLOS GILBERTO DE FREITAS\t000.000.161-06\tNULL\tAtivo\t60002\n90436\tCARLOS VITORIANO TOBIAS\t054.474.594-94\tJFC009\tAtivo\t60002\n90450\tCAROLINA DA SILVA PENA FIRME\t478.665.718-21\tJFC023\tAtivo\t60002\n90451\tCATARINE APARECIDA CORREA LIMA\t384.986.088-48\tJFC024\tAtivo\t60002\n330050\tCIRIO RODRIGUES DE OLIVEIRA\t000.000.181-11\tNULL\tAtivo\t60002\n90452\tCLAUDIO JOSE GONCALVES DIAS\t065.672.578-81\tJFC025\tAtivo\t60002\n90453\tCLAUDIO SILVA\t234.020.938-20\tJFC026\tAtivo\t60002\n330051\tCRISTIANO DA SILVA MEDEIROS\t000.000.182-00\tNULL\tAtivo\t60002\n330031\tDANIEL CAETANO VIEIRA\t000.000.162-95\tNULL\tAtivo\t60002\n360016\tDAVYD JOSE SANTOS DE SOUSA\t693.126.484-20\tNULL\tAtivo\t60002\n90517\tDE OBRAS MYRIELLE FIALHO BORGES ARCANJO\t388.177.788-18\tJFC090\tAtivo\t60002\n360043\tDENIS AUGUSTO DE JESUS ARAUJO\t411.733.288-07\tNULL\tAtivo\t60002\n330073\tDERIVAN CORREA PEREIRA\t000.000.204-69\tNULL\tAtivo\t60002\n90454\tDESILDO DA COSTA SANTOS\t121.876.918-10\tJFC027\tAtivo\t60002\n90455\tDIEGO HENRIQUE ESPINELI DOS SANTOS\t392.434.018-82\tJFC028\tAtivo\t60002\n330052\tDIEGO HENRIQUE MENDES\t000.000.183-97\tNULL\tAtivo\t60002\n330053\tDIOGO FRANCA SAMPAIO\t000.000.184-15\tNULL\tAtivo\t60002\n90456\tDIOGO SOARES DA SILVA\t130.387.724-45\tJFC029\tAtivo\t60002\n330006\tDONISETE CANDIDO VILELA\t000.000.137-47\tNULL\tAtivo\t60002\n90457\tDOUGLAS DE SOUZA ROCHA\t298.269.958-35\tJFC030\tAtivo\t60002\n90459\tEDSON FERNANDO MACHADO\t495.854.318-07\tJFC032\tAtivo\t60002\n360025\tEDUARDO DA SILVA OLIVEIRA\t608.980.803-20\tNULL\tAtivo\t60002\n360035\tEDUARDO HENRIQUE DA SILVA PAIVA\t157.143.124-14\tNULL\tAtivo\t60002\n90460\tELIAS VIEIRA DO NASCIMENTO\t399.004.768-08\tJFC033\tAtivo\t60002\n90461\tELIEL BRENDON DE LIMA MARQUES\t100.108.495-05\tJFC034\tAtivo\t60002\n330074\tELIVALDO LUIZ DA SILVA\t000.000.205-96\tNULL\tAtivo\t60002\n90462\tELIZEU FRANCISCO DE SOUZA\t104.710.634-52\tJFC035\tAtivo\t60002\n90463\tEMERSON RODRIGO DOS SANTOS\t366.221.528-45\tJFC036\tAtivo\t60002\n90464\tERIC GUSTAVO DE SOUZA\t454.097.098-45\tJFC037\tAtivo\t60002\n330007\tERICKSON AUGUSTO MAGALHAES DE SOUSA\t000.000.138-75\tNULL\tAtivo\t60002\n360040\tEVERTON RICARDO DA SILVA COSTA\t363.094.428-05\tNULL\tAtivo\t60002\n360020\tEWERTTON DA SILVA ARAUJO\t702.920.754-80\tNULL\tAtivo\t60002\n330054\tFABIO DOS SANTOS KELLY\t000.000.185-08\tNULL\tAtivo\t60002\n330055\tFABIO LUIZ DIAS FREIRE\t000.000.186-04\tNULL\tAtivo\t60002\n360015\tFELIPE COSTA ALVES\t362.506.888-54\tNULL\tAtivo\t60002\n330075\tFELIPE RIBEIRO DA SILVA FERREIRA\t000.000.206-73\tNULL\tAtivo\t60002\n360024\tFERNANDO AMORIM VIEIRA\t201.868.338-14\tNULL\tAtivo\t60002\n330008\tFERNANDO MARQUES DE JESUS\t000.000.139-08\tNULL\tAtivo\t60002\n90466\tFERNANDO RODRIGO DE CASTILHO PRADO\t399.329.138-71\tJFC039\tAtivo\t60002\n330009\tFRANCISCO DA SILVA JUNIOR\t000.000.140-61\tNULL\tAtivo\t60002\n90468\tFRANCISCO EUDICE CARVALHO BIZERRA\t012.706.541-52\tJFC041\tAtivo\t60002\n330076\tGABRIEL GONCALVES\t000.000.207-78\tNULL\tAtivo\t60002\n90469\tGENILSON DE SOUZA LOPES\t728.546.007-97\tJFC042\tAtivo\t60002\n90470\tGERALDO MACHADO\t244.473.958-27\tJFC043\tAtivo\t60002\n330056\tGERALDO MARCELINO DE OLIVEIRA\t000.000.187-29\tNULL\tAtivo\t60002\n90471\tGILBERTO DA COSTA BARBOZA\t302.330.158-17\tJFC044\tAtivo\t60002\n330032\tGILBERTO ROQUE MAGALHAES DE SOUZA\t000.000.163-19\tNULL\tAtivo\t60002\n90490\tGILMAR PEREIRA DE BRITO\t183.174.368-02\tJFC063\tAtivo\t60002\n90472\tGILMAR PEREIRA DE BRITO\t086.462.196-58\tJFC045\tAtivo\t60002\n90473\tGILMAR SANTOS DO NASCIMENTO\t084.196.324-06\tJFC046\tAtivo\t60002\n90474\tGISLEI RODRIGO DE CARVALHO\t378.344.588-41\tJFC047\tAtivo\t60002\n90475\tGIVALDO DOS SANTOS\t108.474.408-26\tJFC048\tAtivo\t60002\n360021\tGLAYSON SEVERINO DA SILVA\t113.111.554-65\tNULL\tAtivo\t60002\n90476\tGLEDSON FERREIRA SANTOS\t319.065.078-05\tJFC049\tAtivo\t60002\n330011\tGUILHERME DOS SANTOS FERREIRA LEMOS\t000.000.142-36\tNULL\tAtivo\t60002\n330033\tIGOR DA CONCEICAO TOLEDO\t000.000.164-85\tNULL\tAtivo\t60002\n90477\tIRAEL ALVES DE SOUZA\t026.290.844-18\tJFC050\tAtivo\t60002\n90478\tISABELA AUGUSTA DA SILVA VELLOSO\t558.057.098-80\tJFC051\tAtivo\t60002\n90479\tISAIAS COELHO MUYAGUTI MONTEIRO\t477.547.478-20\tJFC052\tAtivo\t60002\n360036\tITALO CAUA PEDRO DA SILVA\t161.589.484-54\tNULL\tAtivo\t60002\n90480\tIVAN DOS SANTOS\t081.146.678-77\tJFC053\tAtivo\t60002\n330077\tJACKSON SILVA DE LIMA\t000.000.208-89\tNULL\tAtivo\t60002\n90481\tJAMIELSON GOMES DOS SANTOS SILVA\t123.193.034-99\tJFC054\tAtivo\t60002\n90482\tJEAN CARLOS MARTINS\t421.624.018-60\tJFC055\tAtivo\t60002\n90483\tJEAN CARLOS RIBEIRO DA SILVA\t271.184.008-58\tJFC056\tAtivo\t60002\n330012\tJEFFERSON NATANAEL DOS SANTOS SOUZA\t000.000.143-95\tNULL\tAtivo\t60002\n90484\tJEFTER EMANOEL CRISPINIANO DE MELO SILVA\t150.459.844-03\tJFC057\tAtivo\t60002\n90465\tJEFTER EMANOEL CRISPINIANO DE MELO SILVA\t103.759.864-48\tJFC038\tAtivo\t60002\n330013\tJESSE PINHEIRO DA SILVA\t000.000.144-88\tNULL\tAtivo\t60002\n360042\tJHONATAS FELIPE GOMES LEITE\t351.999.448-86\tNULL\tAtivo\t60002\n330014\tJOAO BALBINO APARECIDO CORREIA BORGES\t000.000.145-70\tNULL\tAtivo\t60002\n90552\tJOAO CAMPOS DA SILVA\t516.423.168-90\tJFC125\tAtivo\t60002\n330091\tJOAO CAMPOS DA SILVA\t000.000.222-81\tNULL\tAtivo\t60002\n90486\tJOAO CARLOS DA SILVA CONCEICAO\t164.974.247-92\tJFC059\tAtivo\t60002\n330034\tJOAO CLEBER DE OLIVEIRA SANTOS\t000.000.165-53\tNULL\tAtivo\t60002\n330092\tJOAO DARC DOS SANTOS\t000.000.223-40\tNULL\tAtivo\t60002\n90429\tJOAO DARC DOS SANTOS\t199.141.028-08\tJFC002\tAtivo\t60002\n330035\tJOAO GABRIEL DO NASCIMENTO FREITAS\t000.000.166-55\tNULL\tAtivo\t60002\n90487\tJOAO HENRIQUE SOARES\t350.648.228-98\tJFC060\tAtivo\t60002\n90488\tJOAO JOSE DE PAULA OLIVEIRA\t313.338.308-66\tJFC061\tAtivo\t60002\n90489\tJOÃO MACHADO DE AZEVEDO\t138.310.688-60\tJFC062\tAtivo\t60002\n360017\tJOAO ODAIR DOMINGOS\t089.594.324-74\tNULL\tAtivo\t60002\n360027\tJOÃO VITOR GOMES DE CARVALHO\t496.203.018-38\tNULL\tAtivo\t60002\n330057\tJOAO VITOR GOMES MOREIRA\t000.000.188-99\tNULL\tAtivo\t60002\n330058\tJOAO VITOR MARIANO CALIXTO DA SILVA\t000.000.189-03\tNULL\tAtivo\t60002\n330078\tJOHN DAVID SIMIAO DE ALMEIDA\t000.000.209-35\tNULL\tAtivo\t60002\n330079\tJONATHA RODRIGUES VICENTE\t000.000.210-53\tNULL\tAtivo\t60002\n330059\tJORGE LUIS MANUEL\t000.000.190-76\tNULL\tAtivo\t60002\n90491\tJORGE MARCELINO DA SILVA MOREIRA\t357.584.688-00\tJFC064\tAtivo\t60002\n330015\tJOSE ADILSON SOUZA DE JESUS SANTOS\t000.000.146-15\tNULL\tAtivo\t60002\n90501\tJOSE ALBERTO SILVA\t286.554.878-30\tJFC074\tAtivo\t60002\n360023\tJOSE ALBERTO SILVA\t268.776.648-84\tNULL\tAtivo\t60002\n90492\tJOSÉ ASTOR BATISTA\t065.436.158-42\tJFC065\tAtivo\t60002\n330060\tJOSE EDUARDO DA SILVA\t000.000.191-80\tNULL\tAtivo\t60002\n330016\tJOSE FERNANDES DA SILVA\t000.000.147-31\tNULL\tAtivo\t60002\n330080\tJOSE GILDO JUVENCIO DA SILVA\t000.000.211-92\tNULL\tAtivo\t60002\n360033\tJOSE LUCIO DE SOUZA\t756.936.236-53\tNULL\tAtivo\t60002\n330017\tJOSE ROBERTO LOPES DE SIQUEIRA\t000.000.148-21\tNULL\tAtivo\t60002\n330036\tJOSE TIAGO DE CASTRO ANJOS\t000.000.167-80\tNULL\tAtivo\t60002\n90458\tJOSIAS HELENO DA SILVA\t042.201.975-59\tJFC031\tAtivo\t60002\n360022\tJOSIAS HELENO DA SILVA\t033.441.454-79\tNULL\tAtivo\t60002\n90493\tJOSUE DO NASCIMENTO ALVES\t269.866.658-73\tJFC066\tAtivo\t60002\n90494\tJOVANILDO INACIO\t255.014.168-75\tJFC067\tAtivo\t60002\n360032\tJULIANO RODRIGO DINIZ DE SOUSA\t371.901.628-52\tNULL\tAtivo\t60002\n360026\tJULIO CESAR DOS SANTOS\t342.452.318-66\tNULL\tAtivo\t60002\n90495\tJULIO CESAR LEMES DE OLIVEIRA\t358.639.068-80\tJFC068\tAtivo\t60002\n90496\tJURANDI PEREIRA DOS SANTOS\t537.590.443-87\tJFC069\tAtivo\t60002\n330061\tKAUAN FELIPE CARDOSO MARCHAN\t000.000.192-11\tNULL\tAtivo\t60002\n360037\tKAUAN SANTIAGO DA SILVA SANTOS\t406.704.988-90\tNULL\tAtivo\t60002\n90497\tKELBEM CARLOS DE LIMA SILVA\t134.155.024-90\tJFC070\tAtivo\t60002\n90507\tKELLEN LARISSA LOURENCO CLARO\t331.664.528-42\tJFC080\tAtivo\t60002\n90498\tKELLEN LARISSA LOURENCO CLARO\t489.701.768-88\tJFC071\tAtivo\t60002\n360034\tKELVIS ALVES PESSOA\t178.269.274-63\tNULL\tAtivo\t60002\n330018\tLENILDO PEDRO DA SILVA\t000.000.149-59\tNULL\tAtivo\t60002\n330062\tLEONARDO CARDOSO FERREIRA\t000.000.193-97\tNULL\tAtivo\t60002\n330063\tLUCAS MARTINS DE ARAUJO\t000.000.194-07\tNULL\tAtivo\t60002\n90499\tLUCAS MATEUS RIBEIRO NEVES\t450.803.948-03\tJFC072\tAtivo\t60002\n360018\tLUIS CARLOS DA SILVA\t050.191.328-96\tNULL\tAtivo\t60002\n90500\tLUIS CARLOS DA SILVA\t055.333.978-84\tJFC073\tAtivo\t60002\n90441\tLUIS CLAUDIO ANDRADE CARNEIRO\t092.826.728-83\tJFC014\tAtivo\t60002\n90502\tLUIS GUSTAVO RODRIGUES DE CASTRO\t419.420.308-94\tJFC075\tAtivo\t60002\n90503\tLUIS HENRIQUE DO NASCIMENTO\t434.791.418-03\tJFC076\tAtivo\t60002\n330037\tLUIZ FERNANDO DE OLIVEIRA\t000.000.168-80\tNULL\tAtivo\t60002\n90504\tLUIZ HENRIQUE DE MACEDO\t159.458.668-30\tJFC077\tAtivo\t60002\n330019\tMAICON WELLINGTON ROCHA DE MOURA\t000.000.150-48\tNULL\tAtivo\t60002\n90505\tMANOEL WAGNER ROCHA GUIMARAES\t303.495.308-90\tJFC078\tAtivo\t60002\n90506\tMARCELO ALEXANDRE PEREIRA\t276.256.258-93\tJFC079\tAtivo\t60002\n330064\tMARCELO GALVAO DE BRITO\t000.000.195-06\tNULL\tAtivo\t60002\n90508\tMARCIO DE TOLEDO\t326.851.898-23\tJFC081\tAtivo\t60002\n90509\tMARCIO ELOY DOS SANTOS\t782.247.566-53\tJFC082\tAtivo\t60002\n330038\tMARCIO VENICIO DA SILVA\t000.000.169-01\tNULL\tAtivo\t60002\n360019\tMARCO ANTONIO DOS SANTOS BATISTA\t598.452.875-49\tNULL\tAtivo\t60002\n90510\tMARCO ANTONIO DOS SANTOS BATISTA\t199.149.678-84\tJFC083\tAtivo\t60002\n330065\tMARCOS RAFAEL DE SOUZA\t000.000.196-99\tNULL\tAtivo\t60002\n330039\tMARCOS VINICIOS GOMES DE MELO\t000.000.170-91\tNULL\tAtivo\t60002\n90511\tMARIANA CASTILHO DE LIMA\t401.827.378-96\tJFC084\tAtivo\t60002\n330040\tMATEUS FELIPE SILVA VALE\t000.000.171-90\tNULL\tAtivo\t60002\n90512\tMATEUS OLIVEIRA BRITO PIRES\t443.679.498-93\tJFC085\tAtivo\t60002\n90513\tMATHEUS DONIZETTI ALVES RODRIGUES\t547.148.568-80\tJFC086\tAtivo\t60002\n330020\tMATHEUS MARIANO DA SILVA\t000.000.151-57\tNULL\tAtivo\t60002\n90514\tMAURICIO BENEDITO ELESBAO\t081.016.508-22\tJFC087\tAtivo\t60002\n90515\tMAYCON ADREAN POLYCARPO CORREA\t485.339.388-96\tJFC088\tAtivo\t60002\n330098\tMELQUISEDEQUE SILVA BATISTA\t000.000.229-44\tNULL\tAtivo\t60002\n90516\tMILTON CESAR DA COSTA\t199.147.638-80\tJFC089\tAtivo\t60002\n90435\tMILTON CESAR DA COSTA\t259.915.518-55\tJFC008\tAtivo\t60002\n330081\tNATHALYA CARDOSO DE PAULA SANTOS\t000.000.212-30\tNULL\tAtivo\t60002\n90485\tNAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS\t746.007.614-72\tJFC058\tAtivo\t60002\n90518\tNAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS\t388.809.058-05\tJFC091\tAtivo\t60002\n90449\tNELSON MOREIRA GOMES\t150.209.888-12\tJFC022\tAtivo\t60002\n90519\tNELSON MOREIRA GOMES\t185.666.988-27\tJFC092\tAtivo\t60002\n360041\tNILO CESAR DOS SANTOS ARANTES\t264.829.898-37\tNULL\tAtivo\t60002\n90520\tODAIR JOSE PEREIRA\t279.448.498-29\tJFC093\tAtivo\t60002\n90467\tOSMAR MAGNO DE OLIVEIRA\t114.029.178-56\tJFC040\tAtivo\t60002\n90521\tOSMAR MAGNO DE OLIVEIRA\t103.466.104-35\tJFC094\tAtivo\t60002\n330041\tOTACILIO CLEMENTINO DA SILVA\t000.000.172-59\tNULL\tAtivo\t60002\n330042\tPABLO DOS SANTOS OLIVEIRA\t000.000.173-74\tNULL\tAtivo\t60002\n330043\tPABLO RODRIGO DA SILVA\t000.000.174-10\tNULL\tAtivo\t60002\n90522\tPATRICIA SIMOES DE SOUSA\t257.924.718-19\tJFC095\tAtivo\t60002\n90523\tPAULO DANIEL ALVES\t440.498.428-66\tJFC096\tAtivo\t60002\n90524\tPAULO HENRIQUE LIMA GUIMARÃES\t098.403.828-02\tJFC097\tAtivo\t60002\n90526\tPAULO ROBERTO DOS SANTOS ESPINELI\t401.440.528-14\tJFC099\tAtivo\t60002\n90527\tPAULO ROSA DA SILVA\t080.956.908-64\tJFC100\tAtivo\t60002\n90528\tPAULO VINICIUS SALES TEIXEIRA\t491.944.238-65\tJFC101\tAtivo\t60002\n90529\tPEDRO HENRIQUE MARQUES NOGUEIRA\t115.108.656-83\tJFC102\tAtivo\t60002\n330082\tPEDRO HENRIQUE PEREIRA SENE\t000.000.213-51\tNULL\tAtivo\t60002\n",
+  "stderr": "",
+  "execution_time_ms": 367
+}

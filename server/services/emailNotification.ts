@@ -1,12 +1,13 @@
 /**
- * Serviço de Notificação por E-mail - Templates Humanizados
+ * Serviço de Notificação por E-mail - Templates Profissionais com Branding da Empresa
  * 
- * Gera textos humanizados para notificações de movimentação de funcionários.
- * Saudação baseada no horário: "Excelente dia!", "Excelente tarde!", "Excelente noite!"
+ * Gera textos formais e técnicos para notificações de movimentação de funcionários.
+ * O assunto e corpo do e-mail incluem o nome da empresa (razão social / nome fantasia).
+ * O e-mail de demissão é focado exclusivamente na baixa do seguro de vida.
  * 
  * Tipos de movimentação:
  * - Contratação: novo funcionário cadastrado com status "Ativo"
- * - Demissão: status alterado para "Desligado"
+ * - Demissão: status alterado para "Desligado" (foco: baixa no seguro de vida)
  * - Transferência: mudança de obra ou setor
  * - Afastamento: status alterado para "Afastado", "Licenca" ou "Recluso"
  */
@@ -22,12 +23,11 @@ import crypto from "crypto";
 // ============================================================
 function getSaudacao(): string {
   const now = new Date();
-  // Ajustar para horário de Brasília (UTC-3)
   const brasilHour = (now.getUTCHours() - 3 + 24) % 24;
   
-  if (brasilHour >= 6 && brasilHour < 12) return "Excelente dia";
-  if (brasilHour >= 12 && brasilHour < 18) return "Excelente tarde";
-  return "Excelente noite";
+  if (brasilHour >= 6 && brasilHour < 12) return "Bom dia";
+  if (brasilHour >= 12 && brasilHour < 18) return "Boa tarde";
+  return "Boa noite";
 }
 
 function getDataFormatada(): string {
@@ -50,6 +50,15 @@ function getHoraFormatada(): string {
   });
 }
 
+function formatCPF(cpf?: string): string {
+  if (!cpf) return "";
+  const digits = cpf.replace(/\D/g, "");
+  if (digits.length === 11) {
+    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  }
+  return cpf;
+}
+
 // ============================================================
 // TIPOS
 // ============================================================
@@ -62,6 +71,7 @@ export interface DadosFuncionario {
   setor?: string;
   obra?: string;
   empresa?: string;
+  cnpj?: string;
   dataAdmissao?: string;
   dataDesligamento?: string;
   motivoAfastamento?: string;
@@ -72,146 +82,237 @@ export interface DadosFuncionario {
 }
 
 // ============================================================
-// TEMPLATES DE E-MAIL HUMANIZADOS
+// BUSCAR DADOS DA EMPRESA
+// ============================================================
+async function getCompanyData(companyId: number): Promise<{ razaoSocial: string; nomeFantasia: string; cnpj: string; logoUrl: string; email: string; telefone: string; endereco: string; cidade: string; estado: string }> {
+  try {
+    const db = await getDb();
+    if (!db) return { razaoSocial: "", nomeFantasia: "", cnpj: "", logoUrl: "", email: "", telefone: "", endereco: "", cidade: "", estado: "" };
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+    if (!company) return { razaoSocial: "", nomeFantasia: "", cnpj: "", logoUrl: "", email: "", telefone: "", endereco: "", cidade: "", estado: "" };
+    return {
+      razaoSocial: company.razaoSocial || "",
+      nomeFantasia: company.nomeFantasia || "",
+      cnpj: company.cnpj || "",
+      logoUrl: company.logoUrl || "",
+      email: company.email || "",
+      telefone: company.telefone || "",
+      endereco: company.endereco || "",
+      cidade: company.cidade || "",
+      estado: company.estado || "",
+    };
+  } catch {
+    return { razaoSocial: "", nomeFantasia: "", cnpj: "", logoUrl: "", email: "", telefone: "", endereco: "", cidade: "", estado: "" };
+  }
+}
+
+function getCompanyDisplayName(companyData: { razaoSocial: string; nomeFantasia: string }): string {
+  return companyData.razaoSocial || companyData.nomeFantasia || "Departamento Pessoal";
+}
+
+function getCompanyShortName(companyData: { razaoSocial: string; nomeFantasia: string }): string {
+  return companyData.nomeFantasia || companyData.razaoSocial || "Empresa";
+}
+
+// ============================================================
+// CABEÇALHO E RODAPÉ PADRÃO DA EMPRESA
+// ============================================================
+function gerarCabecalho(companyData: { razaoSocial: string; nomeFantasia: string; cnpj: string }): string {
+  const lines: string[] = [];
+  lines.push("═══════════════════════════════════════════════");
+  if (companyData.razaoSocial) lines.push(`  ${companyData.razaoSocial.toUpperCase()}`);
+  if (companyData.nomeFantasia && companyData.nomeFantasia !== companyData.razaoSocial) {
+    lines.push(`  ${companyData.nomeFantasia}`);
+  }
+  if (companyData.cnpj) lines.push(`  CNPJ: ${companyData.cnpj}`);
+  lines.push("═══════════════════════════════════════════════");
+  return lines.join("\n");
+}
+
+function gerarRodape(companyData: { razaoSocial: string; nomeFantasia: string; email: string; telefone: string }): string {
+  const lines: string[] = [];
+  lines.push("───────────────────────────────────────────────");
+  lines.push("Departamento Pessoal");
+  lines.push(getCompanyDisplayName(companyData));
+  if (companyData.email) lines.push(`E-mail: ${companyData.email}`);
+  if (companyData.telefone) lines.push(`Tel: ${companyData.telefone}`);
+  lines.push("───────────────────────────────────────────────");
+  lines.push("Este é um comunicado automático gerado pelo sistema de gestão de pessoas.");
+  lines.push("Em caso de dúvidas, entre em contato com o Departamento Pessoal.");
+  return lines.join("\n");
+}
+
+// ============================================================
+// TEMPLATES DE E-MAIL PROFISSIONAIS
 // ============================================================
 
-function gerarTextoContratacao(dados: DadosFuncionario): { titulo: string; corpo: string } {
+function gerarTextoContratacao(dados: DadosFuncionario, companyData: any): { titulo: string; corpo: string } {
   const saudacao = getSaudacao();
   const data = getDataFormatada();
   const hora = getHoraFormatada();
+  const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `🎉 Nova Contratação - ${dados.nome}`;
-  const corpo = `${saudacao}!
+  const titulo = `${empresaNome.toUpperCase()} - Nova Contratação - ${dados.nome}`;
+  const corpo = `${gerarCabecalho(companyData)}
 
-Gostaríamos de comunicar que um novo colaborador acaba de ser registrado em nosso sistema.
+COMUNICADO DE CONTRATAÇÃO
 
-📋 DADOS DA CONTRATAÇÃO
+${saudacao},
+
+Pelo presente, comunicamos que foi registrada a admissão do colaborador abaixo identificado no quadro de funcionários da empresa ${getCompanyDisplayName(companyData)}.
+
+DADOS DO COLABORADOR ADMITIDO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Colaborador: ${dados.nome}
-${dados.cpf ? `• CPF: ${dados.cpf}` : ""}
-${dados.funcao ? `• Função: ${dados.funcao}` : ""}
-${dados.setor ? `• Setor: ${dados.setor}` : ""}
-${dados.obra ? `• Obra/Local: ${dados.obra}` : ""}
-${dados.empresa ? `• Empresa: ${dados.empresa}` : ""}
-${dados.dataAdmissao ? `• Data de Admissão: ${dados.dataAdmissao}` : ""}
+  Nome: ${dados.nome}
+${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
+${dados.funcao ? `  Função: ${dados.funcao}` : ""}
+${dados.setor ? `  Setor: ${dados.setor}` : ""}
+${dados.obra ? `  Obra/Local de Trabalho: ${dados.obra}` : ""}
+${dados.dataAdmissao ? `  Data de Admissão: ${dados.dataAdmissao}` : ""}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Solicitamos que os setores envolvidos tomem as providências necessárias para a integração deste novo membro da equipe, incluindo:
-• Providenciar ASO admissional
-• Agendar treinamentos obrigatórios (NRs aplicáveis)
-• Entregar EPIs necessários para a função
-• Incluir no seguro de vida da empresa
+PROVIDÊNCIAS NECESSÁRIAS:
 
-📅 Registro realizado em ${data}, às ${hora}.
+1. Inclusão no seguro de vida do grupo empresarial
+2. Agendamento de ASO admissional
+3. Programação de treinamentos obrigatórios (NRs aplicáveis)
+4. Entrega e registro de EPIs necessários para a função
+5. Cadastro no sistema de ponto eletrônico
+6. Atualização do quadro de pessoal
 
-Atenciosamente,
-Sistema ERP RH - Gestão de Pessoas`;
+Registro efetuado em ${data}, às ${hora}.
+
+${gerarRodape(companyData)}`;
 
   return { titulo, corpo: corpo.replace(/\n{3,}/g, "\n\n") };
 }
 
-function gerarTextoDemissao(dados: DadosFuncionario): { titulo: string; corpo: string } {
+function gerarTextoDemissao(dados: DadosFuncionario, companyData: any): { titulo: string; corpo: string } {
   const saudacao = getSaudacao();
   const data = getDataFormatada();
   const hora = getHoraFormatada();
+  const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `⚠️ Desligamento - ${dados.nome}`;
-  const corpo = `${saudacao}!
+  const titulo = `${empresaNome.toUpperCase()} - URGENTE: Baixa Seguro de Vida - Desligamento ${dados.nome}`;
+  const corpo = `${gerarCabecalho(companyData)}
 
-Informamos que o colaborador abaixo teve seu desligamento registrado no sistema.
+COMUNICADO DE DESLIGAMENTO - BAIXA NO SEGURO DE VIDA
 
-📋 DADOS DO DESLIGAMENTO
+${saudacao},
+
+Pelo presente, comunicamos o desligamento do colaborador abaixo identificado do quadro de funcionários da empresa ${getCompanyDisplayName(companyData)}.
+
+Solicitamos, com URGÊNCIA, que seja providenciada a BAIXA NO SEGURO DE VIDA do referido colaborador junto à seguradora contratada.
+
+DADOS DO COLABORADOR DESLIGADO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Colaborador: ${dados.nome}
-${dados.cpf ? `• CPF: ${dados.cpf}` : ""}
-${dados.funcao ? `• Função: ${dados.funcao}` : ""}
-${dados.setor ? `• Setor: ${dados.setor}` : ""}
-${dados.obra ? `• Última Obra/Local: ${dados.obra}` : ""}
-${dados.empresa ? `• Empresa: ${dados.empresa}` : ""}
-${dados.dataDesligamento ? `• Data do Desligamento: ${dados.dataDesligamento}` : ""}
+  Nome: ${dados.nome}
+${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
+${dados.funcao ? `  Função: ${dados.funcao}` : ""}
+${dados.setor ? `  Setor: ${dados.setor}` : ""}
+${dados.obra ? `  Última Obra/Local: ${dados.obra}` : ""}
+${dados.dataDesligamento ? `  Data do Desligamento: ${dados.dataDesligamento}` : ""}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Solicitamos atenção aos seguintes procedimentos:
-• Realizar ASO demissional dentro do prazo legal
-• Recolher todos os EPIs entregues ao colaborador
-• Providenciar baixa no seguro de vida
-• Verificar pendências de documentação e rescisão
-• Conferir cálculos rescisórios e FGTS
+STATUS DO COLABORADOR: DESLIGADO
 
-📅 Registro realizado em ${data}, às ${hora}.
+AÇÃO IMEDIATA REQUERIDA:
+→ Providenciar a BAIXA NO SEGURO DE VIDA junto à seguradora
+→ Prazo recomendado: até 48 horas após o desligamento
 
-Atenciosamente,
-Sistema ERP RH - Gestão de Pessoas`;
+DEMAIS PROVIDÊNCIAS RESCISÓRIAS:
+1. Realização de ASO demissional dentro do prazo legal
+2. Recolhimento de todos os EPIs entregues ao colaborador
+3. Verificação de pendências documentais e cálculos rescisórios
+4. Conferência de FGTS e guias rescisórias
+5. Baixa no sistema de ponto eletrônico
+6. Atualização do quadro de pessoal
+
+Registro efetuado em ${data}, às ${hora}.
+
+${gerarRodape(companyData)}`;
 
   return { titulo, corpo: corpo.replace(/\n{3,}/g, "\n\n") };
 }
 
-function gerarTextoTransferencia(dados: DadosFuncionario): { titulo: string; corpo: string } {
+function gerarTextoTransferencia(dados: DadosFuncionario, companyData: any): { titulo: string; corpo: string } {
   const saudacao = getSaudacao();
   const data = getDataFormatada();
   const hora = getHoraFormatada();
+  const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `🔄 Transferência - ${dados.nome}`;
-  const corpo = `${saudacao}!
+  const titulo = `${empresaNome.toUpperCase()} - Transferência de Colaborador - ${dados.nome}`;
+  const corpo = `${gerarCabecalho(companyData)}
 
-Comunicamos que o colaborador abaixo teve uma transferência registrada no sistema.
+COMUNICADO DE TRANSFERÊNCIA
 
-📋 DADOS DA TRANSFERÊNCIA
+${saudacao},
+
+Pelo presente, comunicamos que o colaborador abaixo identificado teve sua lotação alterada conforme detalhamento a seguir.
+
+DADOS DA TRANSFERÊNCIA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Colaborador: ${dados.nome}
-${dados.cpf ? `• CPF: ${dados.cpf}` : ""}
-${dados.funcao ? `• Função: ${dados.funcao}` : ""}
-${dados.empresa ? `• Empresa: ${dados.empresa}` : ""}
-${dados.obraAnterior ? `• Obra Anterior: ${dados.obraAnterior}` : ""}
-${dados.obraNova ? `• Nova Obra: ${dados.obraNova}` : ""}
-${dados.setorAnterior ? `• Setor Anterior: ${dados.setorAnterior}` : ""}
-${dados.setorNovo ? `• Novo Setor: ${dados.setorNovo}` : ""}
+  Colaborador: ${dados.nome}
+${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
+${dados.funcao ? `  Função: ${dados.funcao}` : ""}
+${dados.obraAnterior ? `  Obra Anterior: ${dados.obraAnterior}` : ""}
+${dados.obraNova ? `  Nova Obra: ${dados.obraNova}` : ""}
+${dados.setorAnterior ? `  Setor Anterior: ${dados.setorAnterior}` : ""}
+${dados.setorNovo ? `  Novo Setor: ${dados.setorNovo}` : ""}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Solicitamos que os responsáveis pela nova lotação providenciem:
-• Atualização do cartão de ponto no novo local
-• Verificação de treinamentos específicos para o novo posto
-• Adequação de EPIs conforme riscos do novo ambiente
+PROVIDÊNCIAS NECESSÁRIAS:
+1. Atualização do cartão de ponto no novo local de trabalho
+2. Verificação de treinamentos específicos para o novo posto
+3. Adequação de EPIs conforme riscos do novo ambiente de trabalho
+4. Comunicação à seguradora sobre alteração de local (se aplicável)
+5. Atualização do quadro de pessoal por obra
 
-📅 Registro realizado em ${data}, às ${hora}.
+Registro efetuado em ${data}, às ${hora}.
 
-Atenciosamente,
-Sistema ERP RH - Gestão de Pessoas`;
+${gerarRodape(companyData)}`;
 
   return { titulo, corpo: corpo.replace(/\n{3,}/g, "\n\n") };
 }
 
-function gerarTextoAfastamento(dados: DadosFuncionario): { titulo: string; corpo: string } {
+function gerarTextoAfastamento(dados: DadosFuncionario, companyData: any): { titulo: string; corpo: string } {
   const saudacao = getSaudacao();
   const data = getDataFormatada();
   const hora = getHoraFormatada();
+  const empresaNome = getCompanyShortName(companyData);
 
-  const titulo = `🏥 Afastamento - ${dados.nome}`;
-  const corpo = `${saudacao}!
+  const titulo = `${empresaNome.toUpperCase()} - Afastamento de Colaborador - ${dados.nome}`;
+  const corpo = `${gerarCabecalho(companyData)}
 
-Informamos que o colaborador abaixo teve um afastamento registrado no sistema.
+COMUNICADO DE AFASTAMENTO
 
-📋 DADOS DO AFASTAMENTO
+${saudacao},
+
+Pelo presente, comunicamos que o colaborador abaixo identificado teve um afastamento registrado no sistema da empresa ${getCompanyDisplayName(companyData)}.
+
+DADOS DO AFASTAMENTO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Colaborador: ${dados.nome}
-${dados.cpf ? `• CPF: ${dados.cpf}` : ""}
-${dados.funcao ? `• Função: ${dados.funcao}` : ""}
-${dados.setor ? `• Setor: ${dados.setor}` : ""}
-${dados.obra ? `• Obra/Local: ${dados.obra}` : ""}
-${dados.empresa ? `• Empresa: ${dados.empresa}` : ""}
-${dados.motivoAfastamento ? `• Motivo: ${dados.motivoAfastamento}` : ""}
+  Colaborador: ${dados.nome}
+${dados.cpf ? `  CPF: ${formatCPF(dados.cpf)}` : ""}
+${dados.funcao ? `  Função: ${dados.funcao}` : ""}
+${dados.setor ? `  Setor: ${dados.setor}` : ""}
+${dados.obra ? `  Obra/Local: ${dados.obra}` : ""}
+${dados.motivoAfastamento ? `  Motivo: ${dados.motivoAfastamento}` : ""}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Solicitamos atenção aos seguintes pontos:
-• Verificar necessidade de comunicação ao INSS (se afastamento > 15 dias)
-• Atualizar controle de ponto e folha de pagamento
-• Comunicar a seguradora sobre o afastamento
-• Acompanhar prazo de retorno e agendar ASO de retorno
+STATUS DO COLABORADOR: AFASTADO
 
-📅 Registro realizado em ${data}, às ${hora}.
+PROVIDÊNCIAS NECESSÁRIAS:
+1. Comunicação ao INSS (se afastamento superior a 15 dias)
+2. Comunicação à seguradora sobre o afastamento
+3. Atualização do controle de ponto e folha de pagamento
+4. Acompanhamento do prazo de retorno
+5. Agendamento de ASO de retorno ao trabalho (quando aplicável)
+6. Atualização do quadro de pessoal
 
-Atenciosamente,
-Sistema ERP RH - Gestão de Pessoas`;
+Registro efetuado em ${data}, às ${hora}.
+
+${gerarRodape(companyData)}`;
 
   return { titulo, corpo: corpo.replace(/\n{3,}/g, "\n\n") };
 }
@@ -221,14 +322,16 @@ Sistema ERP RH - Gestão de Pessoas`;
 // ============================================================
 export function gerarTextoNotificacao(
   tipo: TipoMovimentacao,
-  dados: DadosFuncionario
+  dados: DadosFuncionario,
+  companyData?: any
 ): { titulo: string; corpo: string } {
+  const cd = companyData || { razaoSocial: dados.empresa || "", nomeFantasia: "", cnpj: dados.cnpj || "", logoUrl: "", email: "", telefone: "" };
   switch (tipo) {
-    case "contratacao": return gerarTextoContratacao(dados);
-    case "demissao": return gerarTextoDemissao(dados);
-    case "transferencia": return gerarTextoTransferencia(dados);
-    case "afastamento": return gerarTextoAfastamento(dados);
-    default: return { titulo: `Movimentação - ${dados.nome}`, corpo: `Movimentação registrada para ${dados.nome}` };
+    case "contratacao": return gerarTextoContratacao(dados, cd);
+    case "demissao": return gerarTextoDemissao(dados, cd);
+    case "transferencia": return gerarTextoTransferencia(dados, cd);
+    case "afastamento": return gerarTextoAfastamento(dados, cd);
+    default: return { titulo: `${getCompanyShortName(cd).toUpperCase()} - Movimentação - ${dados.nome}`, corpo: `Movimentação registrada para ${dados.nome}` };
   }
 }
 
@@ -244,6 +347,9 @@ export async function dispararNotificacao(
 ): Promise<{ enviados: number; erros: number; destinatarios: string[] }> {
   const db = await getDb();
   if (!db) return { enviados: 0, erros: 0, destinatarios: [] };
+
+  // Buscar dados completos da empresa para branding
+  const companyData = await getCompanyData(companyId);
 
   // Buscar destinatários ativos para este tipo de notificação
   const recipients = await db
@@ -269,8 +375,8 @@ export async function dispararNotificacao(
     return { enviados: 0, erros: 0, destinatarios: [] };
   }
 
-  // Gerar texto humanizado
-  const { titulo, corpo } = gerarTextoNotificacao(tipo, dados);
+  // Gerar texto com branding da empresa
+  const { titulo, corpo } = gerarTextoNotificacao(tipo, dados, companyData);
 
   // Enviar notificação via sistema Manus (notifyOwner)
   let enviados = 0;
@@ -280,8 +386,8 @@ export async function dispararNotificacao(
   let envioErro = "";
 
   try {
-    const destinatariosTexto = filteredRecipients.map(r => `${r.nome} <${r.email}>`).join(", ");
-    const corpoComDestinatarios = `${corpo}\n\n📧 Destinatários desta notificação:\n${destinatariosTexto}`;
+    const destinatariosTexto = filteredRecipients.map(r => `  • ${r.nome} <${r.email}>`).join("\n");
+    const corpoComDestinatarios = `${corpo}\n\nDestinatários desta notificação:\n${destinatariosTexto}`;
     
     const success = await notifyOwner({ title: titulo, content: corpoComDestinatarios });
     if (success) {
@@ -338,6 +444,7 @@ export async function dispararNotificacao(
       details: JSON.stringify({
         tipo,
         funcionario: dados.nome,
+        empresa: getCompanyDisplayName(companyData),
         destinatarios: filteredRecipients.map(r => ({ nome: r.nome, email: r.email })),
         enviados,
         erros,
@@ -382,22 +489,15 @@ export function mapStatusToTipoMovimentacao(
   statusAnterior: string | null,
   statusNovo: string
 ): TipoMovimentacao | null {
-  // Contratação: novo funcionário com status Ativo
   if (!statusAnterior && statusNovo === "Ativo") return "contratacao";
-  
-  // Demissão: qualquer status → Desligado
   if (statusNovo === "Desligado" && statusAnterior !== "Desligado") return "demissao";
-  
-  // Afastamento: qualquer status → Afastado, Licença ou Recluso
   if (["Afastado", "Licenca", "Recluso"].includes(statusNovo) && 
       !["Afastado", "Licenca", "Recluso"].includes(statusAnterior || "")) {
     return "afastamento";
   }
-  
   return null;
 }
 
-// Motivo legível para afastamento
 export function getMotivoAfastamento(status: string): string {
   switch (status) {
     case "Afastado": return "Afastamento (doença/acidente)";

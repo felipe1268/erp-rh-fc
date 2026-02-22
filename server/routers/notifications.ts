@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notificationRecipients, notificationLogs, menuLabels } from "../../drizzle/schema";
+import { notificationRecipients, notificationLogs, menuLabels, companies } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { dispararNotificacao, gerarTextoNotificacao } from "../services/emailNotification";
 
@@ -111,20 +111,40 @@ export const notificationsRouter = router({
   previewTexto: protectedProcedure
     .input(z.object({
       tipo: z.enum(["contratacao", "demissao", "transferencia", "afastamento"]),
+      companyId: z.number().optional(),
       nome: z.string().default("João da Silva"),
       cpf: z.string().default("000.000.000-00"),
       funcao: z.string().default("Servente"),
       setor: z.string().default("Obra"),
       empresa: z.string().default("FC Engenharia"),
     }))
-    .query(({ input }) => {
+    .query(async ({ input }) => {
+      let companyData: any = null;
+      if (input.companyId) {
+        try {
+          const db = await getDb();
+          if (db) {
+            const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+            if (company) {
+              companyData = {
+                razaoSocial: company.razaoSocial || "",
+                nomeFantasia: company.nomeFantasia || "",
+                cnpj: company.cnpj || "",
+                logoUrl: company.logoUrl || "",
+                email: company.email || "",
+                telefone: company.telefone || "",
+              };
+            }
+          }
+        } catch (e) { /* fallback to default */ }
+      }
       return gerarTextoNotificacao(input.tipo, {
         nome: input.nome,
         cpf: input.cpf,
         funcao: input.funcao,
         setor: input.setor,
         empresa: input.empresa,
-      });
+      }, companyData);
     }),
 
   // Teste de envio de notificação

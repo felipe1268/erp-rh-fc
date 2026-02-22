@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE companies SET prefixoCodigo = 'JFC' WHERE id = 60002; UPDATE companies SET prefixoCodigo = 'HC' WHERE id = 60004; UPDATE companies SET prefixoCodigo = 'JFP' WHERE id = 60005; UPDATE companies SET prefixoCodigo = 'LN' WHERE id = 90001; UPDATE companies SET nextCodigoInterno = COALESCE((SELECT MAX(CAST(REPLACE(REPLACE(REPLACE(codigoInterno, 'JFC', ''), 'HC', ''), 'JFP', '') AS UNSIGNED)) + 1 FROM employees WHERE companyId = 60002 AND codigoInterno IS NOT NULL AND codigoInterno != ''), 1) WHERE id = 60002;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute UPDATE companies SET prefixoCodigo = 'JFC' WHERE id = 60002; UPDATE companies SET prefixoCodigo = 'HC' WHERE id = 60004; UPDATE companies SET prefixoCodigo = 'JFP' WHERE id = 60005; UPDATE companies SET prefixoCodigo = 'LN' WHERE id = 90001; UPDATE companies SET nextCodigoInterno = COALESCE((SELECT MAX(CAST(REPLACE(REPLACE(REPLACE(codigoInterno, 'JFC', ''), 'HC', ''), 'JFP', '') AS UNSIGNED)) + 1 FROM employees WHERE companyId = 60002 AND codigoInterno IS NOT NULL AND codigoInterno != ''), 1) WHERE id = 60002;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 565
+}

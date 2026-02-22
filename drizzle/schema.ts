@@ -196,6 +196,8 @@ export const companies = mysqlTable("companies", {
 	telefone: varchar({ length: 20 }),
 	email: varchar({ length: 320 }),
 	logoUrl: text(),
+	prefixoCodigo: varchar({ length: 10 }).default('EMP'),
+	nextCodigoInterno: int().default(1).notNull(),
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
