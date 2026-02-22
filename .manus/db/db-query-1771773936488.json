@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE employees \n  ADD COLUMN listaNegraPor varchar(255) DEFAULT NULL,\n  ADD COLUMN listaNegraUserId int DEFAULT NULL,\n  ADD COLUMN desligadoPor varchar(255) DEFAULT NULL,\n  ADD COLUMN desligadoUserId int DEFAULT NULL,\n  ADD COLUMN dataDesligamentoEfetiva date DEFAULT NULL,\n  ADD COLUMN motivoDesligamento text DEFAULT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE employees \n  ADD COLUMN listaNegraPor varchar(255) DEFAULT NULL,\n  ADD COLUMN listaNegraUserId int DEFAULT NULL,\n  ADD COLUMN desligadoPor varchar(255) DEFAULT NULL,\n  ADD COLUMN desligadoUserId int DEFAULT NULL,\n  ADD COLUMN dataDesligamentoEfetiva date DEFAULT NULL,\n  ADD COLUMN motivoDesligamento text DEFAULT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1296
+}

@@ -6,7 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import {
   createCompany, updateCompany, getCompanies, getCompanyById, deleteCompany,
-  createEmployee, updateEmployee, getEmployees, getEmployeeById, deleteEmployee, getEmployeeStats,
+  createEmployee, updateEmployee, getEmployees, getEmployeeById, deleteEmployee, softDeleteEmployee, restoreEmployee, getDeletedEmployees, permanentDeleteEmployee, getEmployeeStats,
   createEmployeeHistory, getEmployeeHistory,
   createUserProfile, getUserProfiles, getUserProfilesByCompany, updateUserProfile, deleteUserProfile,
   setPermissions, getPermissions,
@@ -17,7 +17,7 @@ import {
   // Documentos e Uploads
   createPayrollUpload, getPayrollUploads, updatePayrollUploadStatus, deletePayrollUpload,
   createDixiDevice, getDixiDevices, updateDixiDevice, deleteDixiDevice,
-  checkDuplicateCpf,
+  checkDuplicateCpf, checkBlacklist, getBlacklistedEmployees,
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
@@ -28,8 +28,8 @@ import {
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
-import { obraSns } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { obraSns, employees, blacklistReactivationRequests } from "../drizzle/schema";
+import { eq, and, sql } from "drizzle-orm";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
 import { validateCNPJ } from "../shared/cnpj";
@@ -45,6 +45,7 @@ import { menuConfigRouter } from "./routers/menuConfig";
 import { goldenRulesRouter } from "./routers/goldenRules";
 import { notificationsRouter } from "./routers/notifications";
 import { storagePut } from "./storage";
+import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
 // Helper: generic CRUD builder
 function crudRouter(opts: {
@@ -193,12 +194,49 @@ export const appRouter = router({
     getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeById(input.id, input.companyId)),
     stats: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getEmployeeStats(input.companyId)),
     create: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }) => {
-      if (input.cpf) {
+      // === REGRA-MÃE DE UNICIDADE ===
+      // Valida CPF em TODAS as empresas do grupo (não apenas na empresa atual)
+      if (input.cpf && !input.cpf.startsWith('000.000')) {
         const dup = await checkDuplicateCpf(input.cpf);
-        if (dup && (dup as any[]).length > 0) throw new TRPCError({ code: "CONFLICT", message: `CPF já cadastrado para: ${(dup as any[])[0]?.nomeCompleto}` });
+        if (dup && (dup as any[]).length > 0) {
+          const dupInfo = (dup as any[])[0];
+          throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado!\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nEmpresa: ${dupInfo.empresa || 'N/A'}\nStatus: ${dupInfo.status || 'N/A'}\n\nNão é possível cadastrar o mesmo CPF novamente em nenhuma empresa do grupo.` });
+        }
+        // Verificar se está na Lista Negra
+        const blacklisted = await checkBlacklist(input.cpf);
+        if (blacklisted) {
+          throw new TRPCError({ code: "FORBIDDEN", message: `🚫 FUNCIONÁRIO NA LISTA NEGRA!\n\n${blacklisted.nomeCompleto} (CPF: ${input.cpf}) está na Lista Negra da empresa.\nMotivo: ${blacklisted.motivoListaNegra || 'Não informado'}\nData: ${blacklisted.dataListaNegra || 'N/A'}\nRegistrado por: ${(blacklisted as any).listaNegraPor || 'N/A'}\n\nPara reativar este funcionário, é necessária a aprovação de 2 diretores da empresa.` });
+        }
+      }
+      // Verificar RG duplicado (se informado)
+      if (input.rg && input.rg.trim()) {
+        const db = await getDb();
+        if (db) {
+          const rgDup = await db.select().from(employees).where(and(eq(employees.rg, input.rg), sql`${employees.rg} IS NOT NULL AND ${employees.rg} != ''`));
+          if (rgDup.length > 0) {
+            throw new TRPCError({ code: "CONFLICT", message: `⚠️ RG já cadastrado!\n\nO RG ${input.rg} pertence a: ${rgDup[0].nomeCompleto}\nStatus: ${rgDup[0].status || 'N/A'}\n\nVerifique se não é o mesmo funcionário.` });
+          }
+        }
       }
       const result = await createEmployee(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "colaboradores", entityType: "employee", entityId: result.id, details: `Colaborador criado: ${input.nomeCompleto}` });
+      // Disparo automático de notificação de contratação
+      if (input.status === "Ativo" && input.companyId) {
+        try {
+          const company = await getCompanyById(input.companyId);
+          await dispararNotificacao(input.companyId, "contratacao", {
+            nome: input.nomeCompleto || "",
+            cpf: input.cpf || "",
+            funcao: input.funcao || "",
+            setor: input.setor || "",
+            empresa: company?.razaoSocial || company?.nomeFantasia || "",
+            dataAdmissao: input.dataAdmissao || "",
+            employeeId: result.id,
+            statusAnterior: null as any,
+            statusNovo: "Ativo",
+          }, ctx.user.id, ctx.user.name ?? "Sistema");
+        } catch (e) { console.error("[Notificação] Erro ao disparar contratação:", e); }
+      }
       return result;
     }),
     update: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }: any) => {
@@ -208,13 +246,109 @@ export const appRouter = router({
       if (employeeData.codigoInterno !== undefined && ctx.user.role !== 'admin') {
         delete employeeData.codigoInterno;
       }
+      // Buscar dados ANTES da atualização para detectar mudança de status
+      let empAnterior: any = null;
+      try {
+        empAnterior = await getEmployeeById(input.id, input.companyId);
+      } catch (e) { /* ignore */ }
+      
+      const statusAnteriorCheck = empAnterior?.status || null;
+      const statusNovoCheck = employeeData.status || null;
+      
+      // === DESLIGAMENTO: CAMPOS OBRIGATÓRIOS ===
+      if (statusNovoCheck === 'Desligado' && statusAnteriorCheck !== 'Desligado') {
+        if (!employeeData.categoriaDesligamento || !employeeData.categoriaDesligamento.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nA CATEGORIA do desligamento é obrigatória.\nSelecione uma das opções: Término de contrato, Justa causa, Pedido de demissão, Acordo mútuo, Fim de obra, Baixo desempenho, Indisciplina ou Outros.' });
+        }
+        if (!employeeData.motivoDesligamento || !employeeData.motivoDesligamento.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO DETALHADO do desligamento é obrigatório.\nDescreva o motivo pelo qual o funcionário está sendo desligado.' });
+        }
+        // Registrar dados de auditoria do desligamento
+        employeeData.desligadoPor = ctx.user.name ?? 'Sistema';
+        employeeData.desligadoUserId = ctx.user.id;
+        employeeData.dataDesligamentoEfetiva = employeeData.dataDesligamentoEfetiva || new Date().toISOString().split('T')[0];
+      }
+      
+      // === LISTA NEGRA: CAMPOS OBRIGATÓRIOS ===
+      if (employeeData.listaNegra === 1 && empAnterior?.listaNegra !== 1) {
+        if (!employeeData.motivoListaNegra || !employeeData.motivoListaNegra.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Campo obrigatório!\n\nO MOTIVO da inclusão na Lista Negra é obrigatório.\nDescreva detalhadamente por que este funcionário não poderá ser recontratado.' });
+        }
+        employeeData.listaNegraPor = ctx.user.name ?? 'Sistema';
+        employeeData.listaNegraUserId = ctx.user.id;
+        employeeData.dataListaNegra = new Date().toISOString().split('T')[0];
+      }
+      
+      // === REATIVAÇÃO DE LISTA NEGRA: REQUER APROVAÇÃO DUPLA ===
+      if (empAnterior?.listaNegra === 1 && employeeData.listaNegra === 0) {
+        // Verificar se há aprovação dupla
+        const db = await getDb();
+        if (db) {
+          const approvedReqs = await db.select().from(blacklistReactivationRequests).where(
+            and(
+              eq(blacklistReactivationRequests.employeeId, input.id),
+              eq(blacklistReactivationRequests.status, 'aprovado')
+            )
+          );
+          if (approvedReqs.length === 0) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '🚫 REATIVAÇÃO BLOQUEADA!\n\nEste funcionário está na Lista Negra.\nPara removê-lo da Lista Negra, é necessária a aprovação de 2 diretores da empresa.\n\nSolicite a reativação pelo menu "Lista Negra" e aguarde as aprovações.' });
+          }
+        }
+      }
+      
       await updateEmployee(input.id, input.companyId, employeeData);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${employeeData.nomeCompleto || input.nomeCompleto || ""}` });
+      
+      // Disparo automático de notificação por mudança de status
+      const statusAnterior = empAnterior?.status || null;
+      const statusNovo = employeeData.status || null;
+      if (statusNovo && statusAnterior !== statusNovo) {
+        const tipoMov = mapStatusToTipoMovimentacao(statusAnterior, statusNovo);
+        if (tipoMov && input.companyId) {
+          try {
+            const company = await getCompanyById(input.companyId);
+            const nome = employeeData.nomeCompleto || empAnterior?.nomeCompleto || "";
+            await dispararNotificacao(input.companyId, tipoMov, {
+              nome,
+              cpf: employeeData.cpf || empAnterior?.cpf || "",
+              funcao: employeeData.funcao || empAnterior?.funcao || "",
+              setor: employeeData.setor || empAnterior?.setor || "",
+              empresa: company?.razaoSocial || company?.nomeFantasia || "",
+              dataDesligamento: statusNovo === "Desligado" ? (employeeData.dataDesligamento || new Date().toISOString().split("T")[0]) : undefined,
+              motivoAfastamento: ["Afastado", "Licenca", "Recluso"].includes(statusNovo) ? getMotivoAfastamento(statusNovo) : undefined,
+              employeeId: input.id,
+              statusAnterior: statusAnterior || undefined,
+              statusNovo,
+            }, ctx.user.id, ctx.user.name ?? "Sistema");
+          } catch (e) { console.error("[Notificação] Erro ao disparar mudança de status:", e); }
+        }
+      }
       return { success: true };
     }),
-    delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
-      await deleteEmployee(input.id, input.companyId);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador excluído` });
+    delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number(), reason: z.string().optional() })).mutation(async ({ input, ctx }) => {
+      // Buscar nome do colaborador antes de excluir
+      const emp = await getEmployeeById(input.id, input.companyId);
+      const empNome = emp?.nomeCompleto || `#${input.id}`;
+      await softDeleteEmployee(input.id, input.companyId, ctx.user.id, ctx.user.name ?? "Sistema", input.reason);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador excluído (lixeira): ${empNome}${input.reason ? ` — Motivo: ${input.reason}` : ""}` });
+      return { success: true };
+    }),
+    // Lixeira - listar excluídos
+    listDeleted: protectedProcedure.input(z.object({ companyId: z.number().optional() })).query(({ input }) => getDeletedEmployees(input.companyId)),
+    // Restaurar colaborador
+    restore: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      const emp = await getEmployeeById(input.id, input.companyId);
+      const empNome = emp?.nomeCompleto || `#${input.id}`;
+      await restoreEmployee(input.id, input.companyId);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "RESTORE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador restaurado da lixeira: ${empNome}` });
+      return { success: true };
+    }),
+    // Exclusão permanente
+    permanentDelete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).mutation(async ({ input, ctx }) => {
+      const emp = await getEmployeeById(input.id, input.companyId);
+      const empNome = emp?.nomeCompleto || `#${input.id}`;
+      await permanentDeleteEmployee(input.id, input.companyId);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "PERMANENT_DELETE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador excluído permanentemente: ${empNome}` });
       return { success: true };
     }),
     history: router({
@@ -222,6 +356,30 @@ export const appRouter = router({
       create: protectedProcedure.input(z.any()).mutation(({ input }) => createEmployeeHistory(input)),
     }),
     checkDuplicateCpf: protectedProcedure.input(z.object({ cpf: z.string(), companyId: z.number() })).query(({ input }) => checkDuplicateCpf(input.cpf, input.companyId)),
+    uploadFoto: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      base64: z.string(),
+      mimeType: z.string(),
+      fileName: z.string(),
+    })).mutation(async ({ input, ctx }) => {
+      const buffer = Buffer.from(input.base64, "base64");
+      const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const ext = input.fileName.split(".").pop() || "jpg";
+      const key = `employee-photos/${input.companyId}/${input.employeeId}-${suffix}.${ext}`;
+      const { url } = await storagePut(key, buffer, input.mimeType);
+      await updateEmployee(input.employeeId, input.companyId, { fotoUrl: url } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.employeeId, details: `Foto 3x4 atualizada` });
+      return { url };
+    }),
+    removeFoto: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      await updateEmployee(input.employeeId, input.companyId, { fotoUrl: null } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.employeeId, details: `Foto 3x4 removida` });
+      return { success: true };
+    }),
   }),
 
   // ============================================================
@@ -763,6 +921,8 @@ export const appRouter = router({
         { categoria: "rescisao", chave: "rescisao_aviso_previo_dias", valor: "30", descricao: "Dias de aviso prévio base", valorPadraoClt: "30", unidade: "dias" },
         { categoria: "rescisao", chave: "rescisao_aviso_adicional_ano", valor: "3", descricao: "Dias adicionais por ano trabalhado", valorPadraoClt: "3", unidade: "dias" },
         { categoria: "rescisao", chave: "rescisao_multa_fgts", valor: "40", descricao: "Multa sobre FGTS na demissão sem justa causa", valorPadraoClt: "40", unidade: "%" },
+        // FOLHA - Controles adicionais
+        { categoria: "folha", chave: "folha_bloquear_consolidacao_inconsistencias", valor: "1", descricao: "Bloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
       ];
 
       for (const d of defaults) {

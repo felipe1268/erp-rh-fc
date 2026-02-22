@@ -1,0 +1,18 @@
+{
+  "query": "SELECT cpf, COUNT(*) as qtd, GROUP_CONCAT(id ORDER BY id) as ids, GROUP_CONCAT(nomeCompleto ORDER BY id SEPARATOR ' | ') as nomes, GROUP_CONCAT(status ORDER BY id) as statuses, GROUP_CONCAT(companyId ORDER BY id) as companies FROM employees WHERE cpf IS NOT NULL AND cpf != '' AND cpf NOT LIKE '000.000%' GROUP BY cpf HAVING COUNT(*) > 1 ORDER BY qtd DESC LIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT cpf, COUNT(*) as qtd, GROUP_CONCAT(id ORDER BY id) as ids, GROUP_CONCAT(nomeCompleto ORDER BY id SEPARATOR ' | ') as nomes, GROUP_CONCAT(status ORDER BY id) as statuses, GROUP_CONCAT(companyId ORDER BY id) as companies FROM employees WHERE cpf IS NOT NULL AND cpf != '' AND cpf NOT LIKE '000.000%' GROUP BY cpf HAVING COUNT(*) > 1 ORDER BY qtd DESC LIMIT 50;",
+  "rows": [
+    {
+      "cpf": "362.506.888-54",
+      "qtd": "3",
+      "ids": "360015,360049,360061",
+      "nomes": "FELIPE COSTA ALVES | FELIPE COSTA ALVES | FELIPE DE COSTA ALVES",
+      "statuses": "Ativo,Ativo,Ativo",
+      "companies": "60002,60004,90001"
+    }
+  ],
+  "messages": [],
+  "stdout": "cpf\tqtd\tids\tnomes\tstatuses\tcompanies\n362.506.888-54\t3\t360015,360049,360061\tFELIPE COSTA ALVES | FELIPE COSTA ALVES | FELIPE DE COSTA ALVES\tAtivo,Ativo,Ativo\t60002,60004,90001\n",
+  "stderr": "",
+  "execution_time_ms": 349
+}

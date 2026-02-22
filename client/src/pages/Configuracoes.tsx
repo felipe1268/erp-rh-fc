@@ -11,7 +11,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -899,6 +899,234 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* HISTÓRICO DE NOTIFICAÇÕES ENVIADAS */}
+      <NotificacoesHistoricoSection companyId={companyId} />
+    </div>
+  );
+}
+
+// ============================================================
+// COMPONENTE: Histórico de Notificações Enviadas
+// ============================================================
+function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
+  const [tipoFiltro, setTipoFiltro] = useState<"todos" | "contratacao" | "demissao" | "transferencia" | "afastamento">("todos");
+  const [statusFiltro, setStatusFiltro] = useState<"todos" | "enviado" | "erro" | "pendente">("todos");
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewTipo, setPreviewTipo] = useState<"contratacao" | "demissao" | "transferencia" | "afastamento">("contratacao");
+
+  const logsQuery = trpc.notifications.listLogs.useQuery(
+    { companyId, limit: 100, tipoFiltro, statusFiltro },
+    { enabled: companyId > 0 }
+  );
+  const statsQuery = trpc.notifications.logStats.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const previewQuery = trpc.notifications.previewTexto.useQuery(
+    { tipo: previewTipo },
+    { enabled: showPreview }
+  );
+  const testeMut = trpc.notifications.testeEnvio.useMutation({
+    onSuccess: (data) => {
+      if (data.enviados > 0) toast.success(`Teste enviado para ${data.enviados} destinatário(s)!`);
+      else toast.error("Nenhum destinatário ativo para este tipo");
+      logsQuery.refetch();
+      statsQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const logs = logsQuery.data || [];
+  const stats = statsQuery.data || { total: 0, enviados: 0, erros: 0, lidos: 0 };
+
+  const tipoLabel: Record<string, string> = {
+    contratacao: "Contratação",
+    demissao: "Demissão",
+    transferencia: "Transferência",
+    afastamento: "Afastamento",
+  };
+  const tipoColor: Record<string, string> = {
+    contratacao: "bg-green-100 text-green-700",
+    demissao: "bg-red-100 text-red-700",
+    transferencia: "bg-blue-100 text-blue-700",
+    afastamento: "bg-amber-100 text-amber-700",
+  };
+  const statusIcon = (s: string) => {
+    if (s === "enviado") return <CheckCheck className="w-4 h-4 text-green-600" />;
+    if (s === "erro") return <AlertCircle className="w-4 h-4 text-red-600" />;
+    return <Clock className="w-4 h-4 text-gray-400" />;
+  };
+  const statusLabel = (s: string) => {
+    if (s === "enviado") return "Enviado";
+    if (s === "erro") return "Erro";
+    return "Pendente";
+  };
+
+  function formatDataHora(ts: string | null) {
+    if (!ts) return "-";
+    try {
+      const d = new Date(ts);
+      return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return ts; }
+  }
+
+  return (
+    <div className="space-y-4 mt-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <History className="w-5 h-5 text-indigo-600" />
+            Histórico de Notificações Enviadas
+          </h3>
+          <p className="text-sm text-gray-500">Registro de todas as notificações disparadas pelo sistema.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
+            <Eye className="w-4 h-4 mr-1" /> Preview
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { logsQuery.refetch(); statsQuery.refetch(); }}>
+            <RefreshCw className="w-4 h-4 mr-1" /> Atualizar
+          </Button>
+        </div>
+      </div>
+
+      {/* Estatísticas */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-indigo-700">{stats.total}</p>
+          <p className="text-xs text-gray-500">Total Enviadas</p>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-green-700">{stats.enviados}</p>
+          <p className="text-xs text-gray-500">✓ Enviados</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-red-700">{stats.erros}</p>
+          <p className="text-xs text-gray-500">✗ Erros</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+          <p className="text-2xl font-bold text-blue-700">{stats.lidos}</p>
+          <p className="text-xs text-gray-500">👁 Lidos</p>
+        </div>
+      </div>
+
+      {/* Preview de texto */}
+      {showPreview && (
+        <Card className="border-indigo-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-sm font-medium text-gray-700">Preview do texto para:</p>
+              {(["contratacao", "demissao", "transferencia", "afastamento"] as const).map(t => (
+                <Button key={t} size="sm" variant={previewTipo === t ? "default" : "outline"}
+                  className={`text-xs ${previewTipo === t ? "" : ""}`}
+                  onClick={() => setPreviewTipo(t)}>
+                  {tipoLabel[t]}
+                </Button>
+              ))}
+            </div>
+            {previewQuery.data ? (
+              <div className="bg-gray-50 rounded-lg p-4 border">
+                <p className="font-bold text-sm text-gray-800 mb-2">{previewQuery.data.titulo}</p>
+                <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed">{previewQuery.data.corpo}</pre>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-gray-400 text-sm">Carregando preview...</div>
+            )}
+            <div className="flex justify-end mt-3">
+              <Button size="sm" variant="outline" className="text-xs text-indigo-700"
+                disabled={testeMut.isPending}
+                onClick={() => testeMut.mutate({ companyId, tipo: previewTipo })}>
+                <Send className="w-3 h-3 mr-1" />
+                {testeMut.isPending ? "Enviando..." : "Enviar Teste"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filtros */}
+      <div className="flex gap-2 flex-wrap">
+        <select className="text-xs border rounded-lg px-3 py-1.5 bg-white" value={tipoFiltro} onChange={e => setTipoFiltro(e.target.value as any)}>
+          <option value="todos">Todos os tipos</option>
+          <option value="contratacao">Contratação</option>
+          <option value="demissao">Demissão</option>
+          <option value="transferencia">Transferência</option>
+          <option value="afastamento">Afastamento</option>
+        </select>
+        <select className="text-xs border rounded-lg px-3 py-1.5 bg-white" value={statusFiltro} onChange={e => setStatusFiltro(e.target.value as any)}>
+          <option value="todos">Todos os status</option>
+          <option value="enviado">Enviados</option>
+          <option value="erro">Erros</option>
+          <option value="pendente">Pendentes</option>
+        </select>
+      </div>
+
+      {/* Tabela de logs */}
+      {logsQuery.isLoading ? (
+        <div className="text-center py-8 text-gray-400">Carregando histórico...</div>
+      ) : logs.length === 0 ? (
+        <Card className="border-dashed border-2 border-gray-300">
+          <CardContent className="p-8 text-center">
+            <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">Nenhuma notificação enviada ainda</p>
+            <p className="text-xs text-gray-400 mt-1">As notificações aparecerão aqui automaticamente quando houver movimentações de funcionários.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Status</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Data/Hora</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Tipo</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Funcionário</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Destinatário</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Movimentação</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Disparado por</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {logs.map((log: any) => (
+                <tr key={log.id} className="hover:bg-gray-50">
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1" title={log.statusEnvio === "erro" ? log.erroMensagem : ""}>
+                      {statusIcon(log.statusEnvio)}
+                      <span className={`text-xs font-medium ${
+                        log.statusEnvio === "enviado" ? "text-green-700" :
+                        log.statusEnvio === "erro" ? "text-red-700" : "text-gray-500"
+                      }`}>{statusLabel(log.statusEnvio)}</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-600">{formatDataHora(log.enviadoEm)}</td>
+                  <td className="px-3 py-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${tipoColor[log.tipoMovimentacao] || "bg-gray-100 text-gray-700"}`}>
+                      {tipoLabel[log.tipoMovimentacao] || log.tipoMovimentacao}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <p className="text-xs font-medium text-gray-800">{log.employeeName}</p>
+                    {log.employeeCpf && <p className="text-[10px] text-gray-400">{log.employeeCpf}</p>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <p className="text-xs font-medium text-gray-800">{log.recipientName}</p>
+                    <p className="text-[10px] text-gray-400">{log.recipientEmail}</p>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-600">
+                    {log.statusAnterior && log.statusNovo ? (
+                      <span>{log.statusAnterior} → {log.statusNovo}</span>
+                    ) : log.statusNovo ? (
+                      <span>Novo: {log.statusNovo}</span>
+                    ) : "-"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-500">{log.disparadoPor || "Sistema"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

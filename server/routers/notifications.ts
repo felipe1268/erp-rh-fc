@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notificationRecipients } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { notificationRecipients, notificationLogs, menuLabels } from "../../drizzle/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { dispararNotificacao, gerarTextoNotificacao } from "../services/emailNotification";
 
 export const notificationsRouter = router({
-  // Listar destinatários de notificação por empresa
+  // ============================================================
+  // DESTINATÁRIOS
+  // ============================================================
   listRecipients: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
@@ -17,7 +20,6 @@ export const notificationsRouter = router({
       return rows;
     }),
 
-  // Criar destinatário
   createRecipient: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -34,7 +36,6 @@ export const notificationsRouter = router({
       return { id: result.insertId, success: true };
     }),
 
-  // Atualizar destinatário
   updateRecipient: protectedProcedure
     .input(z.object({
       id: z.number(),
@@ -53,12 +54,158 @@ export const notificationsRouter = router({
       return { success: true };
     }),
 
-  // Excluir destinatário
   deleteRecipient: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       await db!.delete(notificationRecipients).where(eq(notificationRecipients.id, input.id));
+      return { success: true };
+    }),
+
+  // ============================================================
+  // LOG DE NOTIFICAÇÕES ENVIADAS
+  // ============================================================
+  listLogs: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      limit: z.number().default(50),
+      tipoFiltro: z.enum(["todos", "contratacao", "demissao", "transferencia", "afastamento"]).default("todos"),
+      statusFiltro: z.enum(["todos", "enviado", "erro", "pendente"]).default("todos"),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      let query = db!
+        .select()
+        .from(notificationLogs)
+        .where(eq(notificationLogs.companyId, input.companyId))
+        .orderBy(desc(notificationLogs.enviadoEm))
+        .limit(input.limit);
+      
+      const rows = await query;
+      
+      // Filtrar no JS (mais simples que montar query dinâmica)
+      let filtered = rows;
+      if (input.tipoFiltro !== "todos") {
+        filtered = filtered.filter(r => r.tipoMovimentacao === input.tipoFiltro);
+      }
+      if (input.statusFiltro !== "todos") {
+        filtered = filtered.filter(r => r.statusEnvio === input.statusFiltro);
+      }
+      return filtered;
+    }),
+
+  logStats: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db!.select({
+        total: sql<number>`COUNT(*)`,
+        enviados: sql<number>`SUM(CASE WHEN statusEnvio = 'enviado' THEN 1 ELSE 0 END)`,
+        erros: sql<number>`SUM(CASE WHEN statusEnvio = 'erro' THEN 1 ELSE 0 END)`,
+        lidos: sql<number>`SUM(CASE WHEN lido = true THEN 1 ELSE 0 END)`,
+      }).from(notificationLogs).where(eq(notificationLogs.companyId, input.companyId));
+      return rows[0] || { total: 0, enviados: 0, erros: 0, lidos: 0 };
+    }),
+
+  // Preview de texto de notificação (para visualizar antes de enviar)
+  previewTexto: protectedProcedure
+    .input(z.object({
+      tipo: z.enum(["contratacao", "demissao", "transferencia", "afastamento"]),
+      nome: z.string().default("João da Silva"),
+      cpf: z.string().default("000.000.000-00"),
+      funcao: z.string().default("Servente"),
+      setor: z.string().default("Obra"),
+      empresa: z.string().default("FC Engenharia"),
+    }))
+    .query(({ input }) => {
+      return gerarTextoNotificacao(input.tipo, {
+        nome: input.nome,
+        cpf: input.cpf,
+        funcao: input.funcao,
+        setor: input.setor,
+        empresa: input.empresa,
+      });
+    }),
+
+  // Teste de envio de notificação
+  testeEnvio: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      tipo: z.enum(["contratacao", "demissao", "transferencia", "afastamento"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const result = await dispararNotificacao(
+        input.companyId,
+        input.tipo,
+        {
+          nome: "TESTE - Funcionário Exemplo",
+          cpf: "000.000.000-00",
+          funcao: "Servente",
+          setor: "Obra Teste",
+          empresa: "FC Engenharia",
+          employeeId: 0,
+          statusAnterior: "Ativo",
+          statusNovo: input.tipo === "demissao" ? "Desligado" : input.tipo === "afastamento" ? "Afastado" : "Ativo",
+        },
+        ctx.user.id,
+        ctx.user.name ?? "Sistema"
+      );
+      return result;
+    }),
+
+  // ============================================================
+  // MENU LABELS (Critérios - renomear itens do menu)
+  // ============================================================
+  listMenuLabels: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db!
+        .select()
+        .from(menuLabels)
+        .where(eq(menuLabels.companyId, input.companyId));
+      return rows;
+    }),
+
+  upsertMenuLabel: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      originalLabel: z.string().min(1),
+      customLabel: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // Tentar atualizar primeiro
+      const existing = await db!
+        .select()
+        .from(menuLabels)
+        .where(and(
+          eq(menuLabels.companyId, input.companyId),
+          eq(menuLabels.originalLabel, input.originalLabel),
+        ));
+      
+      if (existing.length > 0) {
+        await db!.update(menuLabels)
+          .set({ customLabel: input.customLabel })
+          .where(eq(menuLabels.id, existing[0].id));
+      } else {
+        await db!.insert(menuLabels).values(input);
+      }
+      return { success: true };
+    }),
+
+  resetMenuLabel: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      originalLabel: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db!.delete(menuLabels)
+        .where(and(
+          eq(menuLabels.companyId, input.companyId),
+          eq(menuLabels.originalLabel, input.originalLabel),
+        ));
       return { success: true };
     }),
 });

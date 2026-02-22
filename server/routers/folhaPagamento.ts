@@ -1391,16 +1391,51 @@ export const folhaPagamentoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
 
-      // Verificar se há funcionários sem obra vinculada
+      // Buscar lançamento
       const lancamento = await db.select().from(folhaLancamentos)
         .where(eq(folhaLancamentos.id, input.folhaLancamentoId));
-      if (lancamento.length > 0) {
-        const lanc = lancamento[0];
+      if (lancamento.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Lançamento não encontrado' });
+      }
+      const lanc = lancamento[0];
+
+      // ===== VERIFICAÇÃO DE INCONSISTÊNCIAS (critério do sistema) =====
+      if (lanc.companyId) {
+        const criterioBloquear = await db.select().from(systemCriteria)
+          .where(and(
+            eq(systemCriteria.companyId, lanc.companyId),
+            eq(systemCriteria.chave, 'folha_bloquear_consolidacao_inconsistencias')
+          )).limit(1);
+        
+        const bloquearAtivo = criterioBloquear.length > 0 ? criterioBloquear[0].valor === '1' : true; // padrão: bloquear
+        
+        if (bloquearAtivo) {
+          // Contar itens com divergências (matchStatus = 'divergente' ou 'unmatched')
+          const itensLancTodos = await db.select().from(folhaItens)
+            .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
+          const divergentes = itensLancTodos.filter(i => i.matchStatus === 'divergente');
+          const naoEncontrados = itensLancTodos.filter(i => i.matchStatus === 'unmatched');
+          const totalInconsistencias = divergentes.length + naoEncontrados.length;
+          
+          if (totalInconsistencias > 0) {
+            const detalhes: string[] = [];
+            if (divergentes.length > 0) detalhes.push(`${divergentes.length} funcionário(s) com divergências de dados`);
+            if (naoEncontrados.length > 0) detalhes.push(`${naoEncontrados.length} funcionário(s) não encontrados no cadastro`);
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Consolidação bloqueada: existem ${totalInconsistencias} inconsistência(s) pendentes.\n\n${detalhes.join('\n')}\n\nResolva todas as inconsistências antes de consolidar, ou desative esta verificação em Configurações > Critérios do Sistema > Folha de Pagamento.`,
+            });
+          }
+        }
+      }
+
+      // ===== VERIFICAÇÃO DE OBRA VINCULADA =====
+      if (lanc.companyId) {
         const itensLanc = await db.select().from(folhaItens)
           .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
         const empIdsLanc = itensLanc.filter(i => i.employeeId).map(i => i.employeeId!);
         
-        if (empIdsLanc.length > 0 && lanc.companyId && lanc.mesReferencia) {
+        if (empIdsLanc.length > 0 && lanc.mesReferencia) {
           // Buscar registros de ponto
           const pontoRecs = await db.select().from(timeRecords)
             .where(and(

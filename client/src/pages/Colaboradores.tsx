@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
@@ -144,6 +144,45 @@ export default function Colaboradores() {
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); toast.success("Colaborador excluído!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
+  const uploadFotoMut = trpc.employees.uploadFoto.useMutation({
+    onSuccess: (data: any) => {
+      utils.employees.list.invalidate();
+      if (editingId) utils.employees.getById.invalidate();
+      toast.success("Foto 3x4 atualizada!");
+      set("fotoUrl", data.url);
+    },
+    onError: (e: any) => toast.error("Erro ao enviar foto: " + e.message),
+  });
+  const removeFotoMut = trpc.employees.removeFoto.useMutation({
+    onSuccess: () => {
+      utils.employees.list.invalidate();
+      if (editingId) utils.employees.getById.invalidate();
+      toast.success("Foto removida!");
+      set("fotoUrl", "");
+    },
+    onError: (e: any) => toast.error("Erro ao remover foto: " + e.message),
+  });
+
+  const handleFotoUpload = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Selecione uma imagem válida."); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Imagem muito grande. Máximo 5MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      if (editingId && companyId) {
+        uploadFotoMut.mutate({ employeeId: editingId, companyId, base64, mimeType: file.type, fileName: file.name });
+      } else {
+        // Para novo funcionário, salvar base64 temporariamente no form
+        set("fotoUrl", reader.result as string);
+        set("_fotoBase64", base64);
+        set("_fotoMimeType", file.type);
+        set("_fotoFileName", file.name);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const deleteManyMut = trpc.batch.delete.useMutation({
     onSuccess: (data: any) => {
       utils.employees.list.invalidate();
@@ -398,7 +437,10 @@ export default function Colaboradores() {
     ];
 
     let conteudo = `<div style="display:flex;align-items:center;gap:20px;padding-bottom:16px;border-bottom:3px solid #1B2A4A;margin-bottom:20px;">
-      <div style="width:60px;height:60px;border-radius:50%;background:#e8edf3;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#1B2A4A;">${viewingEmployee.nomeCompleto?.charAt(0) || "?"}</div>
+      ${viewingEmployee.fotoUrl 
+        ? `<img src="${viewingEmployee.fotoUrl}" alt="Foto 3x4" style="width:72px;height:96px;object-fit:cover;border-radius:6px;border:2px solid #1B2A4A;" />`
+        : `<div style="width:72px;height:96px;border-radius:6px;background:#e8edf3;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#1B2A4A;border:2px solid #c5cdd8;">${viewingEmployee.nomeCompleto?.charAt(0) || "?"}</div>`
+      }
       <div><h2 style="font-size:18px;font-weight:700;color:#1B2A4A;margin:0;">${safeDisplay(viewingEmployee.nomeCompleto)}</h2>
       <p style="font-size:12px;color:#666;margin:4px 0 0;">${safeDisplay(viewingEmployee.funcao)} · ${safeDisplay(viewingEmployee.setor)}</p>
       <span style="display:inline-block;background:${viewingEmployee.status === 'Ativo' ? '#dcfce7' : viewingEmployee.status === 'ListaNegra' ? '#fecaca' : '#fef3c7'};color:${viewingEmployee.status === 'Ativo' ? '#166534' : viewingEmployee.status === 'ListaNegra' ? '#991b1b' : '#92400e'};padding:2px 10px;border-radius:4px;font-size:10px;font-weight:600;margin-top:4px;">${statusLabels[viewingEmployee.status] ?? viewingEmployee.status}</span>
@@ -642,13 +684,53 @@ export default function Colaboradores() {
             </Select>
           </div>
 
-          {/* NOME DO FUNCIONÁRIO - espelho da aba Pessoal, visível em todas as abas */}
-          {form.nomeCompleto && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-2 flex items-center gap-2">
-              <Users className="h-4 w-4 text-blue-600 shrink-0" />
-              <span className="text-sm font-bold text-blue-900 tracking-wide uppercase">{form.nomeCompleto}</span>
+          {/* FOTO 3x4 + NOME DO FUNCIONÁRIO */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-4 py-3 mb-2 flex items-center gap-4">
+            {/* Foto 3x4 */}
+            <div className="relative shrink-0">
+              <div className="w-[72px] h-[96px] rounded-md border-2 border-blue-300 overflow-hidden bg-white flex items-center justify-center cursor-pointer group"
+                onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = (e: any) => { if (e.target.files?.[0]) handleFotoUpload(e.target.files[0]); }; inp.click(); }}
+              >
+                {form.fotoUrl ? (
+                  <img src={form.fotoUrl} alt="Foto 3x4" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-blue-400 group-hover:text-blue-600 transition-colors">
+                    <Camera className="h-6 w-6 mb-1" />
+                    <span className="text-[9px] font-medium">Foto 3x4</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
+                  <Camera className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              {form.fotoUrl && (
+                <button
+                  type="button"
+                  className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (editingId && companyId) {
+                      removeFotoMut.mutate({ employeeId: editingId, companyId });
+                    } else {
+                      set("fotoUrl", ""); set("_fotoBase64", ""); set("_fotoMimeType", ""); set("_fotoFileName", "");
+                    }
+                  }}
+                >
+                  <XIcon className="h-3 w-3" />
+                </button>
+              )}
             </div>
-          )}
+            {/* Nome e info */}
+            <div className="flex-1 min-w-0">
+              {form.nomeCompleto ? (
+                <span className="text-sm font-bold text-blue-900 tracking-wide uppercase block truncate">{form.nomeCompleto}</span>
+              ) : (
+                <span className="text-sm text-muted-foreground italic">Novo Colaborador</span>
+              )}
+              {form.funcao && <span className="text-xs text-muted-foreground block mt-0.5">{form.funcao}</span>}
+              {(uploadFotoMut.isPending || removeFotoMut.isPending) && <span className="text-xs text-blue-500 animate-pulse mt-1 block">Processando foto...</span>}
+            </div>
+          </div>
 
           <Tabs defaultValue="pessoal" className="w-full">
             <TabsList className="w-full flex bg-secondary/80 rounded-lg p-1 gap-1">
@@ -1395,10 +1477,14 @@ export default function Colaboradores() {
             <div className="space-y-8">
               {/* Header */}
               <div className="flex items-center gap-6 pb-6 border-b-2 border-primary/20">
-                <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-3xl font-bold text-primary">
-                    {viewingEmployee.nomeCompleto?.charAt(0)}
-                  </span>
+                <div className="w-[80px] h-[107px] rounded-md border-2 border-primary/30 overflow-hidden bg-primary/5 flex items-center justify-center shrink-0">
+                  {viewingEmployee.fotoUrl ? (
+                    <img src={viewingEmployee.fotoUrl} alt="Foto 3x4" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-3xl font-bold text-primary">
+                      {viewingEmployee.nomeCompleto?.charAt(0)}
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1">
                   <h2 className="text-xl font-bold">{safeDisplay(viewingEmployee.nomeCompleto)}</h2>

@@ -1353,3 +1353,52 @@
 - [x] Ranking faltas/atrasos deve navegar para Fechamento de Ponto filtrado pelo funcionário (não para cadastro)
 - [x] Cards 13º Salário na Folha de Pagamento (1ª parcela=Nov, 2ª parcela=Dez)
 - [x] Notificações por e-mail de contratação/demissão em Configurações
+- [x] Substituir filtros avançados do Dashboard Horas Extras por seletor simples de mês com setas (igual Folha de Pagamento)
+- [ ] Nomes de funcionários clicáveis no Dashboard Funcionários (abre ficha de cadastro)
+- [ ] Reformular Resumo Total do Mês na Folha para formato tabela profissional (Colaboradores/Empregadores/Autônomos/Estagiários + Ativos/Admitidos/Demitidos/etc)
+- [ ] Nomes de funcionários clicáveis no Dashboard Funcionários (abre ficha de cadastro) - backend com employeeId
+- [ ] Sistema completo de gestão de usuários (criar, editar, excluir, desativar, alterar senhas)
+- [ ] Perfis de usuário com permissões granulares por módulo (Admin Master, Admin, Gestor, Operador, Consulta)
+- [ ] E-mails automáticos humanizados com saudação por horário (Excelente dia/tarde/noite)
+- [ ] Templates de e-mail editáveis na aba Notificações (Contratação, Demissão, Transferência, Afastamento)
+- [ ] Disparo automático de e-mail ao criar/alterar status de funcionário
+- [ ] Preview de e-mail na UI de Notificações
+- [ ] Tabela de log de notificações enviadas (notification_logs) com status de envio/leitura
+- [ ] Registro automático no log a cada disparo de notificação por mudança de status
+- [ ] Pixel de rastreamento para confirmação de leitura
+- [ ] Painel de histórico de notificações na aba Notificações E-mail com status visual (Enviado/Lido)
+- [ ] Editor de labels/nomes do menu nos Critérios do Sistema (renomear itens do sidebar)
+- [ ] Auto-refresh na tela de Detalhes da Folha (atualizar divergências sem sair da tela)
+- [ ] Critério "Bloquear consolidação com inconsistências pendentes" nos Critérios do Sistema
+- [ ] Validação no botão Consolidar com alerta de inconsistências
+- [ ] Assistente IA de inconsistências com sugestões didáticas de resolução
+- [ ] Melhorar textos de alerta de consolidação bloqueada com detalhes claros
+- [ ] Botão "Analisar com IA" ao lado de cada divergência
+- [ ] Campo de foto/avatar na tabela de Usuários do Sistema com upload e iniciais como fallback
+- [ ] Foto 3x4 no cadastro de funcionários (upload + exibição)
+- [ ] Foto 3x4 no relatório Raio-X do Funcionário
+- [ ] Remover funcionários duplicados do banco de dados
+- [ ] Regra-mãe de unicidade: CPF único global (todas empresas e status)
+- [ ] Regra-mãe de unicidade: RG único global
+- [ ] Regra-mãe de unicidade: cruzar dados pessoais (nome+nascimento) entre todas categorias
+- [ ] Validação visual no frontend ao cadastrar/editar com dados duplicados
+- [ ] Fluxo de desligamento com diálogo de Lista Negra (Blacklist)
+- [ ] Campo obrigatório de motivo para Lista Negra
+- [ ] Registro de auditoria: nome do usuário que desligou, data/hora, motivo
+- [ ] Todo desligamento exige motivo obrigatório categorizado
+- [ ] Workflow de reativação de Lista Negra com aprovação de 2 diretores
+- [ ] Dashboard de desligamentos com análise de motivos e tendências
+- [ ] Auditoria completa de desligamentos (quem, quando, motivo)
+- [ ] Dashboard interativo: cards clicáveis abrindo lista de funcionários
+- [ ] Dashboard interativo: gráficos clicáveis com drill-down
+- [ ] Dashboard interativo: rankings clicáveis abrindo detalhes
+- [ ] Dashboard interativo: cards de destaque clicáveis abrindo ficha
+- [x] Bug: Impressão/PDF do Raio-X do Funcionário mostra tela branca (apenas cabeçalho e rodapé visíveis)
+- [x] Soft Delete: Adicionar campo deletedAt no schema de employees (exclusão lógica)
+- [x] Soft Delete: Alterar rota de exclusão para marcar deletedAt em vez de DELETE permanente
+- [x] Soft Delete: Filtrar colaboradores excluídos em todas as queries (WHERE deletedAt IS NULL)
+- [x] Lixeira: Criar rota backend para listar colaboradores excluídos
+- [x] Lixeira: Criar rota backend para restaurar colaborador excluído
+- [x] Lixeira: Implementar aba Lixeira na tela de Auditoria do Sistema
+- [x] Lixeira: Botão Restaurar com confirmação e registro no log de auditoria
+- [x] Bug: Impressão/PDF do Raio-X do Funcionário mostra tela branca (apenas cabeçalho e rodapé visíveis)

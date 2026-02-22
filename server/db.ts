@@ -1,4 +1,4 @@
-import { eq, and, like, or, desc, sql } from "drizzle-orm";
+import { eq, and, like, or, desc, sql, isNull, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users,
@@ -236,7 +236,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
 export async function getEmployees(companyId: number, search?: string, status?: string) {
   const db = await getDb();
   if (!db) return [];
-  const conditions = [eq(employees.companyId, companyId)];
+  const conditions = [eq(employees.companyId, companyId), isNull(employees.deletedAt)];
   if (status && status !== "Todos") {
     conditions.push(eq(employees.status, status as any));
   }
@@ -265,6 +265,47 @@ export async function getEmployeeById(id: number, companyId: number) {
 export async function deleteEmployee(id: number, companyId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Soft delete: marca deletedAt em vez de remover permanentemente
+  await db.update(employees).set({ deletedAt: sql`NOW()` } as any).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
+}
+
+// Soft delete com informações do usuário
+export async function softDeleteEmployee(id: number, companyId: number, userId: number, userName: string, reason?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(employees).set({
+    deletedAt: sql`NOW()`,
+    deletedBy: userName,
+    deletedByUserId: userId,
+    deleteReason: reason || null,
+  } as any).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
+}
+
+// Restaurar colaborador excluído
+export async function restoreEmployee(id: number, companyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(employees).set({
+    deletedAt: null,
+    deletedBy: null,
+    deletedByUserId: null,
+    deleteReason: null,
+  } as any).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
+}
+
+// Listar colaboradores excluídos (lixeira)
+export async function getDeletedEmployees(companyId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [isNotNull(employees.deletedAt)];
+  if (companyId) conditions.push(eq(employees.companyId, companyId));
+  return db.select().from(employees).where(and(...conditions)).orderBy(desc(employees.deletedAt));
+}
+
+// Exclusão permanente (apenas para limpeza)
+export async function permanentDeleteEmployee(id: number, companyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
   await db.delete(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 
@@ -274,7 +315,7 @@ export async function getEmployeeStats(companyId: number) {
   const result = await db.select({
     status: employees.status,
     count: sql<number>`count(*)`,
-  }).from(employees).where(eq(employees.companyId, companyId)).groupBy(employees.status);
+  }).from(employees).where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt))).groupBy(employees.status);
   const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0 };
   result.forEach(r => {
     const c = Number(r.count);

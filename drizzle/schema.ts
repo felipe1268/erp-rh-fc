@@ -329,6 +329,13 @@ export const employees = mysqlTable("employees", {
 	motivoListaNegra: text(),
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataListaNegra: date({ mode: 'string' }),
+	listaNegraPor: varchar({ length: 255 }), // Nome do usuário que colocou na lista negra
+	listaNegraUserId: int(), // ID do usuário que colocou na lista negra
+	desligadoPor: varchar({ length: 255 }), // Nome do usuário que desligou
+	desligadoUserId: int(), // ID do usuário que desligou
+	dataDesligamentoEfetiva: date({ mode: 'string' }), // Data efetiva do desligamento
+	motivoDesligamento: text(), // Motivo do desligamento (descrição detalhada)
+	categoriaDesligamento: varchar({ length: 50 }), // Categoria: Término de contrato, Justa causa, Pedido de demissão, Acordo mútuo, Fim de obra, Baixo desempenho, Indisciplina, Outros
 	obraAtualId: int(),
 	codigoContabil: varchar({ length: 20 }),
 	codigoInterno: varchar({ length: 10 }),
@@ -345,6 +352,11 @@ export const employees = mysqlTable("employees", {
 	heInterjornada: varchar({ length: 10 }).default('50'),
 	obsAcordoHe: text(),
 	contaBancariaEmpresaId: int(), // FK para company_bank_accounts - qual conta da empresa paga este funcionário
+	// Soft Delete
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+	deletedByUserId: int(),
+	deleteReason: text(),
 });
 
 export const epiDeliveries = mysqlTable("epi_deliveries", {
@@ -745,6 +757,7 @@ export const users = mysqlTable("users", {
 	username: varchar({ length: 100 }),
 	password: varchar({ length: 255 }),
 	mustChangePassword: tinyint().default(1),
+	avatarUrl: text(),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),
@@ -1220,4 +1233,100 @@ export const notificationRecipients = mysqlTable("notification_recipients", {
 (table) => [
 	index("nr_company").on(table.companyId),
 	index("nr_email").on(table.email),
+]);
+
+
+// ============================================================
+// LOG DE NOTIFICAÇÕES ENVIADAS - RASTREAMENTO COMPLETO
+// ============================================================
+export const notificationLogs = mysqlTable("notification_logs", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	// Dados do funcionário que gerou a notificação
+	employeeId: int(),
+	employeeName: varchar({ length: 255 }).notNull(),
+	employeeCpf: varchar({ length: 20 }),
+	employeeFuncao: varchar({ length: 100 }),
+	// Tipo de movimentação
+	tipoMovimentacao: mysqlEnum(['contratacao', 'demissao', 'transferencia', 'afastamento']).notNull(),
+	statusAnterior: varchar({ length: 50 }),
+	statusNovo: varchar({ length: 50 }),
+	// Destinatário
+	recipientId: int(),
+	recipientName: varchar({ length: 255 }).notNull(),
+	recipientEmail: varchar({ length: 255 }).notNull(),
+	// Conteúdo
+	titulo: varchar({ length: 500 }).notNull(),
+	corpo: text(),
+	// Status do envio
+	statusEnvio: mysqlEnum(['enviado', 'erro', 'pendente']).default('pendente').notNull(),
+	erroMensagem: text(),
+	// Rastreamento de leitura
+	trackingId: varchar({ length: 64 }), // UUID único para pixel de rastreamento
+	lido: boolean().default(false).notNull(),
+	lidoEm: timestamp({ mode: 'string' }),
+	// Quem disparou
+	disparadoPor: varchar({ length: 255 }),
+	disparadoPorId: int(),
+	// Timestamps
+	enviadoEm: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("nl_company").on(table.companyId),
+	index("nl_employee").on(table.employeeId),
+	index("nl_tipo").on(table.companyId, table.tipoMovimentacao),
+	index("nl_tracking").on(table.trackingId),
+	index("nl_data").on(table.companyId, table.enviadoEm),
+]);
+
+export const menuLabels = mysqlTable("menu_labels", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	originalLabel: varchar({ length: 255 }).notNull(),
+	customLabel: varchar({ length: 255 }).notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("ml_company").on(table.companyId),
+]);
+
+// ============================================================
+// SOLICITAÇÕES DE REATIVAÇÃO DE LISTA NEGRA
+// Requer aprovação de 2 diretores para reativar funcionário da Lista Negra
+// ============================================================
+export const blacklistReactivationRequests = mysqlTable("blacklist_reactivation_requests", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	employeeName: varchar({ length: 255 }).notNull(),
+	employeeCpf: varchar({ length: 14 }),
+	// Quem solicitou
+	solicitadoPor: varchar({ length: 255 }).notNull(),
+	solicitadoPorId: int().notNull(),
+	motivoReativacao: text().notNull(), // Justificativa para reativação
+	// Status do pedido
+	status: mysqlEnum(['pendente', 'aprovado', 'rejeitado', 'cancelado']).default('pendente').notNull(),
+	// Aprovação 1
+	aprovador1Nome: varchar({ length: 255 }),
+	aprovador1Id: int(),
+	aprovador1Data: timestamp({ mode: 'string' }),
+	aprovador1Parecer: text(),
+	// Aprovação 2
+	aprovador2Nome: varchar({ length: 255 }),
+	aprovador2Id: int(),
+	aprovador2Data: timestamp({ mode: 'string' }),
+	aprovador2Parecer: text(),
+	// Rejeição (qualquer diretor pode rejeitar)
+	rejeitadoPor: varchar({ length: 255 }),
+	rejeitadoPorId: int(),
+	motivoRejeicao: text(),
+	// Timestamps
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("brr_company").on(table.companyId),
+	index("brr_employee").on(table.employeeId),
+	index("brr_status").on(table.companyId, table.status),
 ]);

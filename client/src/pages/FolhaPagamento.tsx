@@ -8,13 +8,14 @@ import {
   AlertTriangle, CheckCircle, FileText, Users, Lock, Unlock, Search,
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp,
-  Filter, Briefcase, BarChart3, ChevronDown, ChevronUp
+  Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -85,11 +86,11 @@ export default function FolhaPagamento() {
   const lancamentos = trpc.folha.listarLancamentos.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
   const itensDetail = trpc.folha.listarItens.useQuery(
     { folhaLancamentoId: viewLancId! },
-    { enabled: !!viewLancId && (viewMode === "detalhes" || viewMode === "verificacao") }
+    { enabled: !!viewLancId && (viewMode === "detalhes" || viewMode === "verificacao"), refetchOnWindowFocus: true }
   );
   const verificacao = trpc.folha.verificacaoCruzada.useQuery(
     { folhaLancamentoId: viewLancId!, companyId, mesReferencia: mesAno },
-    { enabled: !!viewLancId && viewMode === "verificacao" }
+    { enabled: !!viewLancId && viewMode === "verificacao", refetchOnWindowFocus: true }
   );
   const custosPorObra = trpc.folha.custosPorObra.useQuery(
     { folhaLancamentoId: viewLancId!, companyId, mesReferencia: mesAno },
@@ -170,8 +171,23 @@ export default function FolhaPagamento() {
     },
   });
 
+  // ===== ESTADO DO DIALOG DE INCONSISTÊNCIAS =====
+  const [showInconsistDialog, setShowInconsistDialog] = useState(false);
+  const [inconsistDialogData, setInconsistDialogData] = useState<{message: string, lancId: number} | null>(null);
+
   const consolidarMut = trpc.folha.consolidarLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento consolidado!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); },
+    onError: (err) => {
+      if (err.message.includes('Consolidação bloqueada') || err.message.includes('inconsistência')) {
+        setInconsistDialogData({ message: err.message, lancId: 0 });
+        setShowInconsistDialog(true);
+      } else if (err.message.includes('sem obra vinculada')) {
+        setInconsistDialogData({ message: err.message, lancId: 0 });
+        setShowInconsistDialog(true);
+      } else {
+        toast.error(err.message);
+      }
+    },
   });
   const desconsolidarMut = trpc.folha.desconsolidarLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento desconsolidado!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); },
@@ -385,6 +401,9 @@ export default function FolhaPagamento() {
               <option value="all">Todas as Funções</option>
               {funcoes.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
+            <Button size="sm" variant="outline" onClick={() => { itensDetail.refetch(); verificacao.refetch(); toast.info("Dados atualizados!"); }}>
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${itensDetail.isFetching ? "animate-spin" : ""}`} /> Atualizar
+            </Button>
             <Button size="sm" variant="outline" onClick={() => reprocessarMut.mutate({ folhaLancamentoId: viewLancId, companyId })}>
               <RefreshCw className={`h-3.5 w-3.5 mr-1 ${reprocessarMut.isPending ? "animate-spin" : ""}`} /> Re-Match
             </Button>
@@ -1451,8 +1470,9 @@ export default function FolhaPagamento() {
           <div className={`grid gap-4 ${isNovembro ? 'md:grid-cols-1' : isDezembro ? 'md:grid-cols-2' : ''}`}>
             {/* 1ª PARCELA - Novembro */}
             {isNovembro && (
-              <Card className={`border-2 ${decimoTerceiro1 ? 'border-purple-200' : 'border-dashed border-purple-300'}`}>
-                <CardContent className="p-5">
+              <Card className={`border-2 relative overflow-hidden ${decimoTerceiro1 ? 'border-purple-200' : 'border-dashed border-purple-300'}`}>
+                <span className="absolute -right-4 -bottom-6 text-[180px] font-black text-purple-500/[0.04] leading-none select-none pointer-events-none z-0">13</span>
+                <CardContent className="p-5 relative z-10">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
@@ -1538,8 +1558,9 @@ export default function FolhaPagamento() {
             {isDezembro && (
               <>
                 {/* 1ª Parcela em Dez (caso não tenha sido importada em Nov) */}
-                <Card className={`border-2 ${decimoTerceiro1 ? 'border-purple-200' : 'border-dashed border-purple-300'}`}>
-                  <CardContent className="p-5">
+                <Card className={`border-2 relative overflow-hidden ${decimoTerceiro1 ? 'border-purple-200' : 'border-dashed border-purple-300'}`}>
+                  <span className="absolute -right-4 -bottom-6 text-[180px] font-black text-purple-500/[0.04] leading-none select-none pointer-events-none z-0">13</span>
+                  <CardContent className="p-5 relative z-10">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
@@ -1574,8 +1595,9 @@ export default function FolhaPagamento() {
                 </Card>
 
                 {/* 2ª Parcela */}
-                <Card className={`border-2 ${decimoTerceiro2 ? 'border-indigo-200' : 'border-dashed border-indigo-300'}`}>
-                  <CardContent className="p-5">
+                <Card className={`border-2 relative overflow-hidden ${decimoTerceiro2 ? 'border-indigo-200' : 'border-dashed border-indigo-300'}`}>
+                  <span className="absolute -right-4 -bottom-6 text-[180px] font-black text-indigo-500/[0.04] leading-none select-none pointer-events-none z-0">13</span>
+                  <CardContent className="p-5 relative z-10">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <div className="h-10 w-10 rounded-lg bg-indigo-100 flex items-center justify-center">
@@ -1660,46 +1682,97 @@ export default function FolhaPagamento() {
           </div>
         )}
 
-        {/* RESUMO TOTAL DO MÊS */}
-        {(vale || pagamento) && (() => {
+        {/* RESUMO GERAL DO MÊS - formato tabela profissional */}
+        {(vale || pagamento || decimoTerceiro1 || decimoTerceiro2) && (() => {
+          const valeProventos = vale ? parseBRLNum(vale.totalProventos) : 0;
+          const valeDescontos = vale ? parseBRLNum(vale.totalDescontos) : 0;
           const valeLiquido = vale ? parseBRLNum(vale.totalLiquido) : 0;
+          const valeQtd = vale?.totalFuncionarios || 0;
+
+          const pagProventos = pagamento ? parseBRLNum(pagamento.totalProventos) : 0;
+          const pagDescontos = pagamento ? parseBRLNum(pagamento.totalDescontos) : 0;
           const pagLiquido = pagamento ? parseBRLNum(pagamento.totalLiquido) : 0;
-          const totalMes = valeLiquido + pagLiquido;
+          const pagQtd = pagamento?.totalFuncionarios || 0;
+
+          const d13_1Proventos = decimoTerceiro1 ? parseBRLNum(decimoTerceiro1.totalProventos) : 0;
+          const d13_1Descontos = decimoTerceiro1 ? parseBRLNum(decimoTerceiro1.totalDescontos) : 0;
+          const d13_1Liquido = decimoTerceiro1 ? parseBRLNum(decimoTerceiro1.totalLiquido) : 0;
+          const d13_1Qtd = decimoTerceiro1?.totalFuncionarios || 0;
+
+          const d13_2Proventos = decimoTerceiro2 ? parseBRLNum(decimoTerceiro2.totalProventos) : 0;
+          const d13_2Descontos = decimoTerceiro2 ? parseBRLNum(decimoTerceiro2.totalDescontos) : 0;
+          const d13_2Liquido = decimoTerceiro2 ? parseBRLNum(decimoTerceiro2.totalLiquido) : 0;
+          const d13_2Qtd = decimoTerceiro2?.totalFuncionarios || 0;
+
+          const totalProventos = valeProventos + pagProventos + d13_1Proventos + d13_2Proventos;
+          const totalDescontos = valeDescontos + pagDescontos + d13_1Descontos + d13_2Descontos;
+          const totalLiquido = valeLiquido + pagLiquido + d13_1Liquido + d13_2Liquido;
+          const totalQtd = Math.max(valeQtd, pagQtd, d13_1Qtd, d13_2Qtd);
+
+          // Colunas dinâmicas baseadas no que existe
+          type Col = { label: string; qtd: number; proventos: number; descontos: number; liquido: number };
+          const cols: Col[] = [];
+          if (vale) cols.push({ label: "VALE / ADIANT.", qtd: valeQtd, proventos: valeProventos, descontos: valeDescontos, liquido: valeLiquido });
+          if (pagamento) cols.push({ label: "PAGAMENTO", qtd: pagQtd, proventos: pagProventos, descontos: pagDescontos, liquido: pagLiquido });
+          if (decimoTerceiro1) cols.push({ label: "13º - 1ª PARCELA", qtd: d13_1Qtd, proventos: d13_1Proventos, descontos: d13_1Descontos, liquido: d13_1Liquido });
+          if (decimoTerceiro2) cols.push({ label: "13º - 2ª PARCELA", qtd: d13_2Qtd, proventos: d13_2Proventos, descontos: d13_2Descontos, liquido: d13_2Liquido });
+
           return (
             <Card className="border-2 border-[#1B2A4A]/30 bg-gradient-to-r from-[#1B2A4A]/5 to-[#1B2A4A]/10">
               <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-[#1B2A4A] flex items-center justify-center">
-                      <BarChart3 className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-base text-[#1B2A4A]">Resumo Total do Mês</p>
-                      <p className="text-xs text-muted-foreground">{formatMesAno(mesAno)}</p>
-                    </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-10 w-10 rounded-lg bg-[#1B2A4A] flex items-center justify-center">
+                    <BarChart3 className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-base text-[#1B2A4A]">Resumo Geral</p>
+                    <p className="text-xs text-muted-foreground">{formatMesAno(mesAno)}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                  <div className="bg-orange-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Vale / Adiantamento</p>
-                    <p className="text-lg font-bold text-orange-700">{formatBRL(valeLiquido)}</p>
-                    {vale && <p className="text-[10px] text-muted-foreground">{vale.totalFuncionarios} funcionários</p>}
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Pagamento</p>
-                    <p className="text-lg font-bold text-green-700">{formatBRL(pagLiquido)}</p>
-                    {pagamento && <p className="text-[10px] text-muted-foreground">{pagamento.totalFuncionarios} funcionários</p>}
-                  </div>
-                  <div className="bg-amber-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Horas Extras</p>
-                    <p className="text-lg font-bold text-amber-700">—</p>
-                    <p className="text-[10px] text-muted-foreground">Ver detalhes</p>
-                  </div>
-                  <div className="bg-[#1B2A4A]/10 rounded-lg p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Total Geral</p>
-                    <p className="text-xl font-black text-[#1B2A4A]">{formatBRL(totalMes)}</p>
-                    <p className="text-[10px] text-muted-foreground">Vale + Pagamento</p>
-                  </div>
+
+                {/* Tabela Resumo Geral */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b-2 border-[#1B2A4A]/30">
+                        <th className="text-left py-2 pr-4 font-bold text-[#1B2A4A] min-w-[120px]">RESUMO GERAL</th>
+                        {cols.map((c, i) => (
+                          <th key={i} className="text-right py-2 px-3 font-bold text-[#1B2A4A] min-w-[130px]">{c.label}</th>
+                        ))}
+                        <th className="text-right py-2 pl-3 font-black text-[#1B2A4A] min-w-[140px] bg-[#1B2A4A]/10 rounded-tr-lg">TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-200">
+                        <td className="py-2 pr-4 text-muted-foreground">Quantidade</td>
+                        {cols.map((c, i) => (
+                          <td key={i} className="text-right py-2 px-3 font-medium">{c.qtd}</td>
+                        ))}
+                        <td className="text-right py-2 pl-3 font-bold bg-[#1B2A4A]/5">{totalQtd}</td>
+                      </tr>
+                      <tr className="border-b border-gray-200">
+                        <td className="py-2 pr-4 text-muted-foreground">Proventos</td>
+                        {cols.map((c, i) => (
+                          <td key={i} className="text-right py-2 px-3 font-medium text-green-700">{formatBRL(c.proventos)}</td>
+                        ))}
+                        <td className="text-right py-2 pl-3 font-bold text-green-700 bg-[#1B2A4A]/5">{formatBRL(totalProventos)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-200">
+                        <td className="py-2 pr-4 text-muted-foreground">Descontos</td>
+                        {cols.map((c, i) => (
+                          <td key={i} className="text-right py-2 px-3 font-medium text-red-600">{formatBRL(c.descontos)}</td>
+                        ))}
+                        <td className="text-right py-2 pl-3 font-bold text-red-600 bg-[#1B2A4A]/5">{formatBRL(totalDescontos)}</td>
+                      </tr>
+                      <tr className="border-b-2 border-[#1B2A4A]/30 bg-[#1B2A4A]/5">
+                        <td className="py-2.5 pr-4 font-black text-[#1B2A4A]">Líquido</td>
+                        {cols.map((c, i) => (
+                          <td key={i} className="text-right py-2.5 px-3 font-black text-[#1B2A4A]">{formatBRL(c.liquido)}</td>
+                        ))}
+                        <td className="text-right py-2.5 pl-3 font-black text-[#1B2A4A] text-lg">{formatBRL(totalLiquido)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </CardContent>
             </Card>
@@ -1727,6 +1800,171 @@ export default function FolhaPagamento() {
             </div>
           </div>
         )}
+
+        {/* ===== DIALOG DE INCONSISTÊNCIAS COM ANÁLISE IA ===== */}
+        <Dialog open={showInconsistDialog} onOpenChange={setShowInconsistDialog}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <AlertTriangle className="h-5 w-5" />
+                Consolidação Bloqueada
+              </DialogTitle>
+              <DialogDescription className="text-sm">
+                O sistema identificou inconsistências que precisam ser resolvidas antes da consolidação.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {inconsistDialogData && (() => {
+              const msg = inconsistDialogData.message;
+              const isInconsistencia = msg.includes('inconsistência');
+              const isObra = msg.includes('sem obra vinculada');
+              
+              return (
+                <div className="space-y-4">
+                  {/* ALERTA PRINCIPAL */}
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-semibold text-red-800 text-sm">O que aconteceu?</p>
+                        <p className="text-sm text-red-700 mt-1">
+                          {isInconsistencia 
+                            ? "Existem funcionários na folha de pagamento com dados que não conferem com o cadastro do sistema. Isso pode causar erros nos relatórios e cálculos."
+                            : isObra
+                            ? "Existem funcionários que não estão vinculados a nenhuma obra. Para gerar relatórios de custos por obra corretamente, todos precisam estar vinculados."
+                            : msg
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ANÁLISE IA AUTOMÁTICA */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Lightbulb className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                      <div className="w-full">
+                        <p className="font-semibold text-blue-800 text-sm">Análise Automática — Como Resolver</p>
+                        <div className="mt-3 space-y-3">
+                          {isInconsistencia && (
+                            <>
+                              {msg.includes('divergências de dados') && (
+                                <div className="bg-white rounded-md p-3 border border-blue-100">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <span className="font-semibold text-sm text-amber-800">Divergências de Dados</span>
+                                  </div>
+                                  <p className="text-xs text-gray-700 mb-2">
+                                    Dados como data de admissão, função, salário ou status do funcionário na folha estão diferentes do cadastro.
+                                  </p>
+                                  <div className="bg-amber-50 rounded p-2 space-y-1.5">
+                                    <p className="text-xs font-semibold text-amber-900">Passo a passo para resolver:</p>
+                                    <div className="flex items-start gap-2 text-xs text-amber-800">
+                                      <span className="bg-amber-200 text-amber-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">1</span>
+                                      <span>Clique em <strong>"Detalhes"</strong> no lançamento para ver a lista de divergências</span>
+                                    </div>
+                                    <div className="flex items-start gap-2 text-xs text-amber-800">
+                                      <span className="bg-amber-200 text-amber-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">2</span>
+                                      <span>Filtre por <strong>"Divergentes"</strong> para ver apenas os funcionários com problemas</span>
+                                    </div>
+                                    <div className="flex items-start gap-2 text-xs text-amber-800">
+                                      <span className="bg-amber-200 text-amber-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">3</span>
+                                      <span>Clique no nome do funcionário para expandir e ver qual dado está diferente</span>
+                                    </div>
+                                    <div className="flex items-start gap-2 text-xs text-amber-800">
+                                      <span className="bg-amber-200 text-amber-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">4</span>
+                                      <span>Vá em <strong>Colaboradores</strong> no menu lateral e edite o cadastro do funcionário para corrigir o dado</span>
+                                    </div>
+                                    <div className="flex items-start gap-2 text-xs text-amber-800">
+                                      <span className="bg-amber-200 text-amber-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">5</span>
+                                      <span>Após corrigir, clique em <strong>"Re-Match"</strong> para o sistema reanalisar automaticamente</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {msg.includes('não encontrados') && (
+                                <div className="bg-white rounded-md p-3 border border-blue-100">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <XCircle className="h-4 w-4 text-red-600" />
+                                    <span className="font-semibold text-sm text-red-800">Funcionários Não Encontrados</span>
+                                  </div>
+                                  <p className="text-xs text-gray-700 mb-2">
+                                    Esses funcionários aparecem na folha da contabilidade mas não existem no cadastro do sistema.
+                                  </p>
+                                  <div className="bg-red-50 rounded p-2 space-y-1.5">
+                                    <p className="text-xs font-semibold text-red-900">Passo a passo para resolver:</p>
+                                    <div className="flex items-start gap-2 text-xs text-red-800">
+                                      <span className="bg-red-200 text-red-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">1</span>
+                                      <span>Vá em <strong>Colaboradores</strong> no menu lateral</span>
+                                    </div>
+                                    <div className="flex items-start gap-2 text-xs text-red-800">
+                                      <span className="bg-red-200 text-red-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">2</span>
+                                      <span>Clique em <strong>"+Novo"</strong> e cadastre o funcionário com o mesmo CPF que aparece na folha</span>
+                                    </div>
+                                    <div className="flex items-start gap-2 text-xs text-red-800">
+                                      <span className="bg-red-200 text-red-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">3</span>
+                                      <span>Volte aqui e clique em <strong>"Re-Match"</strong> para vincular automaticamente</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {isObra && (
+                            <div className="bg-white rounded-md p-3 border border-blue-100">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MapPin className="h-4 w-4 text-purple-600" />
+                                <span className="font-semibold text-sm text-purple-800">Funcionários Sem Obra Vinculada</span>
+                              </div>
+                              <p className="text-xs text-gray-700 mb-2">
+                                Para consolidar, todos os funcionários precisam estar vinculados a uma obra (via ponto ou manualmente).
+                              </p>
+                              <div className="bg-purple-50 rounded p-2 space-y-1.5">
+                                <p className="text-xs font-semibold text-purple-900">Passo a passo para resolver:</p>
+                                <div className="flex items-start gap-2 text-xs text-purple-800">
+                                  <span className="bg-purple-200 text-purple-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">1</span>
+                                  <span>Clique em <strong>"Custos/Obra"</strong> no lançamento</span>
+                                </div>
+                                <div className="flex items-start gap-2 text-xs text-purple-800">
+                                  <span className="bg-purple-200 text-purple-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">2</span>
+                                  <span>Veja quais funcionários estão na aba <strong>"Sem Obra"</strong></span>
+                                </div>
+                                <div className="flex items-start gap-2 text-xs text-purple-800">
+                                  <span className="bg-purple-200 text-purple-900 rounded-full w-5 h-5 flex items-center justify-center shrink-0 text-[10px] font-bold">3</span>
+                                  <span>Selecione a obra e clique em <strong>"Vincular"</strong> para cada funcionário</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DICA EXTRA */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <Wrench className="h-4 w-4 text-gray-500 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700">Dica do Sistema</p>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          Você pode desativar esta verificação em <strong>Configurações &gt; Critérios do Sistema &gt; Folha de Pagamento</strong> alterando o critério "Bloquear consolidação com inconsistências" para Não. Porém, recomendamos manter ativo para garantir a integridade dos dados.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowInconsistDialog(false)}>Fechar</Button>
+              <Button onClick={() => { setShowInconsistDialog(false); setViewMode("detalhes"); }}>
+                <Eye className="h-4 w-4 mr-1" /> Ver Detalhes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

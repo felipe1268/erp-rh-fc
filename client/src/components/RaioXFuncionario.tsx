@@ -145,12 +145,164 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
-    printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Raio-X - ${emp?.nomeCompleto || ""}</title>
-    <style>@page{size:A4 portrait;margin:15mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a1a;line-height:1.4}.header{background:#1e40af;color:white;padding:20px 24px;border-radius:8px;margin-bottom:16px}.header h1{font-size:20px}.section{margin-bottom:14px;page-break-inside:avoid}.section-title{font-size:13px;font-weight:700;color:#1e40af;border-bottom:2px solid #3b82f6;padding-bottom:4px;margin-bottom:8px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#f0f4ff;color:#1e40af;font-weight:600;text-align:left;padding:6px 8px;border:1px solid #dbeafe}td{padding:5px 8px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.footer{position:fixed;bottom:0;left:0;right:0;padding:8px 15mm;border-top:2px solid #1e40af;font-size:9px;display:flex;justify-content:space-between;background:white}.lgpd{color:#dc2626;font-weight:600;font-size:8px}</style></head><body>`);
-    printWindow.document.write(`<div class="header"><h1>RAIO-X DO FUNCIONÁRIO</h1><p>${emp?.nomeCompleto} — CPF: ${formatCPF(emp?.cpf || "")}</p></div>`);
-    printWindow.document.write(`<div class="footer"><span>ERP RH & DP — FC Engenharia</span><span>Gerado por: ${userName} em ${dataEmissao}</span><span class="lgpd">Dados protegidos pela LGPD (Lei 13.709/2018)</span></div></body></html>`);
+
+    const css = `@page{size:A4 portrait;margin:12mm 15mm 20mm 15mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4;padding-bottom:40px}.header{background:#1e40af;color:white;padding:16px 20px;border-radius:6px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}.header h1{font-size:18px;margin-bottom:2px}.header-right{text-align:right;font-size:9px;opacity:0.9}.section{margin-bottom:10px;page-break-inside:avoid}.section-title{font-size:12px;font-weight:700;color:#1e40af;border-bottom:2px solid #3b82f6;padding-bottom:3px;margin-bottom:6px;display:flex;align-items:center;gap:6px}.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px;margin-bottom:8px}.info-item{font-size:10px}.info-item strong{color:#374151}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#eff6ff;color:#1e40af;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #dbeafe}td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:600}.badge-green{background:#dcfce7;color:#166534}.badge-red{background:#fef2f2;color:#991b1b}.badge-yellow{background:#fefce8;color:#854d0e}.badge-blue{background:#eff6ff;color:#1e40af}.badge-orange{background:#fff7ed;color:#9a3412}.alert-box{background:#fef2f2;border:1px solid #fecaca;border-radius:4px;padding:8px 10px;margin-bottom:8px;font-size:9px;color:#991b1b}.footer{position:fixed;bottom:0;left:0;right:0;padding:6px 15mm;border-top:2px solid #1e40af;font-size:8px;display:flex;justify-content:space-between;background:white}.lgpd{color:#dc2626;font-weight:600}`;
+
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Raio-X - ${emp?.nomeCompleto || ""}</title><style>${css}</style></head><body>`;
+
+    // HEADER
+    html += `<div class="header"><div><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p style="font-size:13px;margin-top:2px">${emp?.nomeCompleto || "-"}</p></div><div class="header-right"><p>CPF: ${formatCPF(emp?.cpf || "")}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ""}</div></div>`;
+
+    // DADOS PESSOAIS
+    html += `<div class="section"><div class="section-title">\u{1F464} Dados Pessoais</div><div class="info-grid">`;
+    const campos = [
+      ["Fun\u00E7\u00E3o", emp?.funcao || emp?.cargo || "-"],
+      ["Setor", emp?.setor || "-"],
+      ["Admiss\u00E3o", formatDate(emp?.dataAdmissao)],
+      ["Tempo de Empresa", calcTempoEmpresa(emp?.dataAdmissao)],
+      ["Sal\u00E1rio Base", formatSalario(emp?.salarioBase)],
+      ["Valor/Hora", formatSalario(emp?.valorHora)],
+      ["Nascimento", formatDate(emp?.dataNascimento)],
+      ["Sexo", emp?.sexo === "M" ? "Masculino" : emp?.sexo === "F" ? "Feminino" : emp?.sexo || "-"],
+      ["Estado Civil", emp?.estadoCivil?.replace(/_/g, " ") || "-"],
+      ["RG", emp?.rg || "-"],
+      ["CTPS", emp?.ctps || "-"],
+      ["PIS", emp?.pis || "-"],
+      ["Telefone", emp?.telefone || emp?.celular || "-"],
+      ["E-mail", emp?.email || "-"],
+      ["Contrato", emp?.tipoContrato || "-"],
+      ["Jornada", emp?.jornadaTrabalho || "-"],
+      ["Banco", emp?.bancoNome || emp?.banco || "-"],
+      ["Ag\u00EAncia/Conta", `${emp?.agencia || "-"} / ${emp?.conta || "-"}`],
+    ];
+    campos.forEach(([label, value]) => { html += `<div class="info-item"><strong>${label}:</strong> ${value}</div>`; });
+    html += `</div>`;
+    if (emp?.logradouro) html += `<div class="info-item" style="margin-top:2px"><strong>Endere\u00E7o:</strong> ${emp.logradouro}${emp.numero ? `, ${emp.numero}` : ""}${emp.complemento ? ` - ${emp.complemento}` : ""}${emp.bairro ? `, ${emp.bairro}` : ""}${emp.cidade ? ` - ${emp.cidade}` : ""}${emp.estado ? `/${emp.estado}` : ""}${emp.cep ? ` - CEP: ${emp.cep}` : ""}</div>`;
+    if (emp?.dataDemissao) html += `<div class="info-item" style="color:#dc2626;margin-top:4px"><strong>Desligado em:</strong> ${formatDate(emp.dataDemissao)}</div>`;
+    html += `</div>`;
+
+    // ALERTAS
+    if (advertencias.length >= 3) html += `<div class="alert-box"><strong>\u26A0 ALERTA CLT:</strong> ${advertencias.length} advert\u00EAncias registradas. ${advertencias.length >= 4 ? "Recomenda-se an\u00E1lise para poss\u00EDvel Justa Causa (Art. 482 CLT)." : "Pr\u00F3ximo passo: Suspens\u00E3o (Art. 474 CLT)."}</div>`;
+    if (acidentes.length > 0) html += `<div class="alert-box" style="background:#fffbeb;border-color:#fde68a;color:#92400e"><strong>\u26A0 Hist\u00F3rico de Acidentes:</strong> ${acidentes.length} acidente(s) de trabalho registrado(s).</div>`;
+
+    // ASOs
+    if (asos.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1FA7A} ASOs (${asos.length})</div><table><thead><tr><th>Tipo</th><th>Data Exame</th><th>Validade</th><th>Status</th><th>Vencimento</th><th>Resultado</th><th>M\u00E9dico</th><th>CRM</th></tr></thead><tbody>`;
+      asos.forEach((a: any) => {
+        const badgeCls = a.status === "VENCIDO" ? "badge-red" : a.status?.includes("DIAS") ? "badge-yellow" : "badge-green";
+        html += `<tr><td>${a.tipo}</td><td>${formatDate(a.dataExame)}</td><td>${a.validadeDias || 365} dias</td><td><span class="badge ${badgeCls}">${a.status || "V\u00C1LIDO"}</span></td><td>${formatDate(a.dataVencimento)}</td><td style="color:${a.resultado === "Apto" ? "#166534" : "#991b1b"};font-weight:600">${a.resultado}</td><td>${a.medico || "-"}</td><td>${a.crm || "-"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // TREINAMENTOS
+    if (treinamentos.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F393} Treinamentos (${treinamentos.length})</div><table><thead><tr><th>Treinamento</th><th>Norma</th><th>Carga H.</th><th>Realiza\u00E7\u00E3o</th><th>Validade</th><th>Status</th><th>Instrutor</th></tr></thead><tbody>`;
+      treinamentos.forEach((t: any) => {
+        const badgeCls = t.statusCalculado === "VENCIDO" ? "badge-red" : t.statusCalculado?.includes("DIAS") ? "badge-yellow" : "badge-green";
+        html += `<tr><td>${t.nome}</td><td>${t.norma || "-"}</td><td>${t.cargaHoraria || "-"}</td><td>${formatDate(t.dataRealizacao)}</td><td>${formatDate(t.dataValidade)}</td><td><span class="badge ${badgeCls}">${t.statusCalculado || "V\u00C1LIDO"}</span></td><td>${t.instrutor || "-"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // ATESTADOS
+    if (atestados.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F4CB} Atestados (${atestados.length})</div><table><thead><tr><th>Tipo</th><th>Data</th><th>Dias Afast.</th><th>Retorno</th><th>CID</th><th>M\u00E9dico</th><th>Observa\u00E7\u00F5es</th></tr></thead><tbody>`;
+      atestados.forEach((a: any) => {
+        html += `<tr><td>${a.tipo}</td><td>${formatDate(a.dataEmissao)}</td><td style="text-align:center;font-weight:600">${a.diasAfastamento || 0}</td><td>${formatDate(a.dataRetorno)}</td><td>${a.cid || "-"}</td><td>${a.medico || "-"}</td><td>${a.observacoes || a.descricao || "-"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // ADVERT\u00CANCIAS
+    if (advertencias.length > 0) {
+      html += `<div class="section"><div class="section-title">\u26A0\uFE0F Advert\u00EAncias (${advertencias.length})</div><table><thead><tr><th>Seq.</th><th>Tipo</th><th>Data</th><th>Motivo</th><th>Testemunhas</th><th>Aplicado por</th></tr></thead><tbody>`;
+      advertencias.forEach((a: any, idx: number) => {
+        const tipo = a.tipoAdvertencia === "Suspensao" ? "Suspens\u00E3o" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
+        html += `<tr><td style="text-align:center;font-weight:700">${a.sequencia || idx + 1}\u00AA</td><td><span class="badge ${a.tipoAdvertencia === "Suspensao" || a.tipoAdvertencia === "JustaCausa" ? "badge-red" : "badge-orange"}">${tipo}</span></td><td>${formatDate(a.dataOcorrencia)}</td><td>${a.motivo || "-"}</td><td>${a.testemunhas || "-"}</td><td>${a.aplicadoPor || "-"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // HORAS EXTRAS
+    if (horasExtras.length > 0) {
+      html += `<div class="section"><div class="section-title">\u26A1 Horas Extras (${horasExtras.length}) \u2014 Total: ${totalHEHoras.toFixed(1)}h | Custo: ${formatSalario(String(totalHEValor.toFixed(2)))}</div><table><thead><tr><th>Compet\u00EAncia</th><th>Horas</th><th>% Acr\u00E9scimo</th><th>Valor/Hora</th><th>Valor Total</th><th>Descri\u00E7\u00E3o</th></tr></thead><tbody>`;
+      horasExtras.forEach((h: any) => {
+        html += `<tr><td>${h.mesReferencia}</td><td style="text-align:right;font-weight:600">${h.quantidadeHoras}h</td><td style="text-align:right">${h.percentualAcrescimo || "50"}%</td><td style="text-align:right">${formatSalario(h.valorHoraBase)}</td><td style="text-align:right;font-weight:700;color:#dc2626">${formatSalario(h.valorTotal)}</td><td>${h.descricao || "-"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // EPIs
+    if (episEntregas.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F9E4} EPIs Entregues (${episEntregas.length})</div><table><thead><tr><th>EPI</th><th>CA</th><th>Qtd</th><th>Data Entrega</th><th>Data Devolu\u00E7\u00E3o</th><th>Motivo</th></tr></thead><tbody>`;
+      episEntregas.forEach((e: any) => {
+        html += `<tr><td>${e.nomeEpi || "-"}</td><td>${e.ca || "-"}</td><td style="text-align:center">${e.quantidade || 1}</td><td>${formatDate(e.dataEntrega)}</td><td>${formatDate(e.dataDevolucao)}</td><td>${e.motivo || "Entrega regular"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // ACIDENTES
+    if (acidentes.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F6A8} Acidentes de Trabalho (${acidentes.length})</div><table><thead><tr><th>Data</th><th>Hora</th><th>Tipo</th><th>Gravidade</th><th>Local</th><th>Parte Corpo</th><th>Dias Afast.</th><th>CAT</th></tr></thead><tbody>`;
+      acidentes.forEach((a: any) => {
+        html += `<tr><td>${formatDate(a.dataAcidente)}</td><td>${a.horaAcidente || "-"}</td><td>${a.tipoAcidente?.replace(/_/g, " ")}</td><td><span class="badge ${a.gravidade === "Grave" || a.gravidade === "Fatal" ? "badge-red" : "badge-yellow"}">${a.gravidade}</span></td><td>${a.localAcidente || "-"}</td><td>${a.parteCorpoAtingida || "-"}</td><td style="text-align:center;font-weight:600">${a.diasAfastamento || 0}</td><td>${a.catNumero || "-"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // PROCESSOS TRABALHISTAS
+    if (processos.length > 0) {
+      html += `<div class="section"><div class="section-title">\u2696\uFE0F Processos Trabalhistas (${processos.length})</div><table><thead><tr><th>N\u00FAmero</th><th>Vara</th><th>Comarca</th><th>Tipo A\u00E7\u00E3o</th><th>Risco</th><th>Valor Causa</th><th>Valor Acordo</th><th>Status</th></tr></thead><tbody>`;
+      processos.forEach((p: any) => {
+        html += `<tr><td>${p.numeroProcesso}</td><td>${p.vara || "-"}</td><td>${p.comarca || "-"}</td><td>${p.tipoAcao?.replace(/_/g, " ") || "-"}</td><td><span class="badge ${p.risco === "alto" || p.risco === "critico" ? "badge-red" : "badge-yellow"}">${p.risco}</span></td><td>${formatSalario(p.valorCausa)}</td><td>${formatSalario(p.valorAcordo)}</td><td>${p.status?.replace(/_/g, " ")}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // HIST\u00D3RICO FUNCIONAL
+    if (historicoFuncional.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F4C8} Hist\u00F3rico Funcional (${historicoFuncional.length})</div><table><thead><tr><th>Data</th><th>Tipo</th><th>Valor Anterior</th><th>Valor Novo</th><th>Descri\u00E7\u00E3o</th></tr></thead><tbody>`;
+      const tipoLabel: Record<string, string> = { Admissao: "Admiss\u00E3o", Promocao: "Promo\u00E7\u00E3o", Transferencia: "Transfer\u00EAncia", Mudanca_Funcao: "Mudan\u00E7a de Fun\u00E7\u00E3o", Mudanca_Setor: "Mudan\u00E7a de Setor", Mudanca_Salario: "Altera\u00E7\u00E3o Salarial", Afastamento: "Afastamento", Retorno: "Retorno", Ferias: "F\u00E9rias", Desligamento: "Desligamento", Outros: "Outros" };
+      historicoFuncional.forEach((h: any) => {
+        html += `<tr><td>${formatDate(h.dataEvento)}</td><td><span class="badge badge-blue">${tipoLabel[h.tipo] || h.tipo}</span></td><td>${h.valorAnterior || "-"}</td><td style="font-weight:600">${h.valorNovo || "-"}</td><td>${h.descricao || "-"}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // PONTO
+    if (pontoResumo.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F552} Resumo de Ponto (${pontoResumo.length} meses)</div><table><thead><tr><th>Compet\u00EAncia</th><th>Dias Trab.</th><th>Ajustes Manuais</th></tr></thead><tbody>`;
+      pontoResumo.forEach((p: any) => {
+        html += `<tr><td>${p.mesReferencia}</td><td style="text-align:center">${p.diasTrabalhados}</td><td style="text-align:center">${p.ajustesManuais || 0}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // FOLHA
+    if (folhaPagamento.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F4B0} Folha de Pagamento (${folhaPagamento.length})</div><table><thead><tr><th>Compet\u00EAncia</th><th>Sal\u00E1rio Base</th><th>H. Extras</th><th>Descontos</th><th>L\u00EDquido</th><th>Status</th></tr></thead><tbody>`;
+      folhaPagamento.forEach((f: any) => {
+        html += `<tr><td>${f.mesReferencia}</td><td style="text-align:right">${formatSalario(f.salarioBase)}</td><td style="text-align:right;color:#166534">${formatSalario(f.horasExtrasValor)}</td><td style="text-align:right;color:#dc2626">${formatSalario(f.totalDescontos)}</td><td style="text-align:right;font-weight:700;font-size:11px">${formatSalario(f.salarioLiquido)}</td><td>${f.status}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // TIMELINE
+    if (timeline.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F4C5} Timeline (${timeline.length} eventos)</div><table><thead><tr><th>Data</th><th>Tipo</th><th>Descri\u00E7\u00E3o</th></tr></thead><tbody>`;
+      timeline.forEach((ev: any) => {
+        html += `<tr><td>${formatDate(ev.data)}</td><td><span class="badge badge-blue">${ev.tipo}</span></td><td>${ev.descricao}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    // FOOTER
+    html += `<div class="footer"><span>ERP RH & DP \u2014 FC Engenharia</span><span>Gerado por: ${userName} em ${dataEmissao}</span><span class="lgpd">Dados protegidos pela LGPD (Lei 13.709/2018)</span></div></body></html>`;
+
+    printWindow.document.write(html);
     printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
+    setTimeout(() => printWindow.print(), 600);
   };
 
   // ===================== FULL SCREEN OVERLAY =====================
