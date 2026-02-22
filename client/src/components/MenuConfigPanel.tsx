@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   LayoutDashboard, Users, Building2, Landmark, Layers, Briefcase,
   Clock, Wallet, FolderOpen, UtensilsCrossed, Wifi, HardHat,
   Gavel, UserSearch, BarChart3, Lock, FileText, Settings, Star,
   ClipboardList, GripVertical, Eye, EyeOff,
-  RotateCcw, Save, Loader2, ChevronDown, ChevronRight,
+  RotateCcw, Save, Loader2, ChevronDown, ChevronRight, Pencil, Check, X,
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -70,9 +71,56 @@ type DragSection = { type: "section"; sectionIdx: number };
 type DragData = DragItem | DragSection;
 
 export default function MenuConfigPanel() {
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
   const [menuConfig, setMenuConfig] = useState<MenuSection[]>(DEFAULT_MENU);
   const [hasChanges, setHasChanges] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [editingItem, setEditingItem] = useState<{ sectionIdx: number; itemIdx: number } | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
+  const [editingSection, setEditingSection] = useState<number | null>(null);
+  const [editingSectionTitle, setEditingSectionTitle] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const startEditItem = (sectionIdx: number, itemIdx: number) => {
+    if (!isMaster) return;
+    setEditingItem({ sectionIdx, itemIdx });
+    setEditingLabel(menuConfig[sectionIdx].items[itemIdx].label);
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  };
+
+  const confirmEditItem = () => {
+    if (!editingItem || !editingLabel.trim()) { setEditingItem(null); return; }
+    setMenuConfig(prev => {
+      const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
+      arr[editingItem.sectionIdx].items[editingItem.itemIdx].label = editingLabel.trim();
+      return arr;
+    });
+    setHasChanges(true);
+    setEditingItem(null);
+  };
+
+  const cancelEditItem = () => setEditingItem(null);
+
+  const startEditSection = (sectionIdx: number) => {
+    if (!isMaster) return;
+    setEditingSection(sectionIdx);
+    setEditingSectionTitle(menuConfig[sectionIdx].title);
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  };
+
+  const confirmEditSection = () => {
+    if (editingSection === null || !editingSectionTitle.trim()) { setEditingSection(null); return; }
+    setMenuConfig(prev => {
+      const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
+      arr[editingSection].title = editingSectionTitle.trim();
+      return arr;
+    });
+    setHasChanges(true);
+    setEditingSection(null);
+  };
+
+  const cancelEditSection = () => setEditingSection(null);
 
   // Drag state
   const [dragData, setDragData] = useState<DragData | null>(null);
@@ -263,7 +311,7 @@ export default function MenuConfigPanel() {
         <div>
           <h2 className="text-lg font-semibold text-gray-800">Painel de Controle do Menu</h2>
           <p className="text-sm text-gray-500">
-            Arraste e solte para reorganizar. Mova itens entre categorias livremente.
+            Arraste e solte para reorganizar. Mova itens entre categorias livremente.{isMaster && " Duplo clique ou clique no lápis para renomear."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -336,9 +384,27 @@ export default function MenuConfigPanel() {
                       onClick={(e) => e.stopPropagation()}>
                       <GripVertical className="h-4 w-4 text-gray-400" />
                     </div>
-                    <span className="text-sm font-bold uppercase tracking-wider text-gray-600">
-                      {section.title}
-                    </span>
+                    {editingSection === sIdx ? (
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          ref={editInputRef}
+                          className="text-sm font-bold uppercase tracking-wider text-gray-800 bg-white border border-blue-300 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          value={editingSectionTitle}
+                          onChange={(e) => setEditingSectionTitle(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") confirmEditSection(); if (e.key === "Escape") cancelEditSection(); }}
+                        />
+                        <button onClick={confirmEditSection} className="p-0.5 rounded hover:bg-green-100 text-green-600"><Check className="h-3.5 w-3.5" /></button>
+                        <button onClick={cancelEditSection} className="p-0.5 rounded hover:bg-red-100 text-red-600"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ) : (
+                      <span
+                        className={`text-sm font-bold uppercase tracking-wider text-gray-600 ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
+                        onDoubleClick={(e) => { e.stopPropagation(); startEditSection(sIdx); }}
+                        title={isMaster ? "Duplo clique para renomear" : ""}
+                      >
+                        {section.title}
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400 font-normal">
                       {visibleCount}/{section.items.length} visíveis
                     </span>
@@ -346,6 +412,15 @@ export default function MenuConfigPanel() {
                   <div className="flex items-center gap-1">
                     {isSectionDropZone && isDraggingItem && (
                       <span className="text-xs text-blue-600 font-medium mr-2 animate-pulse">Solte aqui</span>
+                    )}
+                    {isMaster && editingSection !== sIdx && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); startEditSection(sIdx); }}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500"
+                        title="Renomear categoria"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
                     )}
                     {isExpanded ? (
                       <ChevronDown className="h-4 w-4 text-gray-400" />
@@ -398,23 +473,54 @@ export default function MenuConfigPanel() {
                                 <GripVertical className="h-3.5 w-3.5 text-gray-300" />
                               </div>
                               <IconComp className={`h-4 w-4 ${item.visible ? "text-gray-600" : "text-gray-400"}`} />
-                              <span className={`text-sm ${item.visible ? "text-gray-800 font-medium" : "text-gray-400 line-through"}`}>
-                                {item.label}
-                              </span>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 flex-shrink-0"
-                              onClick={(e) => { e.stopPropagation(); toggleItemVisibility(sIdx, iIdx); }}
-                              title={item.visible ? "Ocultar" : "Mostrar"}
-                            >
-                              {item.visible ? (
-                                <Eye className="h-3.5 w-3.5 text-green-600" />
+                              {editingItem?.sectionIdx === sIdx && editingItem?.itemIdx === iIdx ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    ref={editInputRef}
+                                    className="text-sm font-medium text-gray-800 bg-white border border-blue-300 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    value={editingLabel}
+                                    onChange={(e) => setEditingLabel(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") confirmEditItem(); if (e.key === "Escape") cancelEditItem(); }}
+                                  />
+                                  <button onClick={confirmEditItem} className="p-0.5 rounded hover:bg-green-100 text-green-600"><Check className="h-3.5 w-3.5" /></button>
+                                  <button onClick={cancelEditItem} className="p-0.5 rounded hover:bg-red-100 text-red-600"><X className="h-3.5 w-3.5" /></button>
+                                </div>
                               ) : (
-                                <EyeOff className="h-3.5 w-3.5 text-gray-400" />
+                                <span
+                                  className={`text-sm ${item.visible ? "text-gray-800 font-medium" : "text-gray-400 line-through"} ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
+                                  onDoubleClick={(e) => { e.stopPropagation(); startEditItem(sIdx, iIdx); }}
+                                  title={isMaster ? "Duplo clique para renomear" : ""}
+                                >
+                                  {item.label}
+                                </span>
                               )}
-                            </Button>
+                            </div>
+                            <div className="flex items-center gap-0.5">
+                              {isMaster && !(editingItem?.sectionIdx === sIdx && editingItem?.itemIdx === iIdx) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 flex-shrink-0"
+                                  onClick={(e) => { e.stopPropagation(); startEditItem(sIdx, iIdx); }}
+                                  title="Renomear"
+                                >
+                                  <Pencil className="h-3 w-3 text-gray-400 hover:text-blue-500" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 flex-shrink-0"
+                                onClick={(e) => { e.stopPropagation(); toggleItemVisibility(sIdx, iIdx); }}
+                                title={item.visible ? "Ocultar" : "Mostrar"}
+                              >
+                                {item.visible ? (
+                                  <Eye className="h-3.5 w-3.5 text-green-600" />
+                                ) : (
+                                  <EyeOff className="h-3.5 w-3.5 text-gray-400" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
 
                           {/* Drop indicator AFTER item */}

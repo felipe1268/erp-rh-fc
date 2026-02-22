@@ -1461,3 +1461,4 @@
 - [x] Criar tela de Lixeira com listagem, filtros, restauração e exclusão permanente
 - [x] Adicionar rota /lixeira no menu lateral (Administração)
 - [ ] Corrigir TS errors no goldenRules batch generation (fn.nome -> fn.name)
+- [x] Permitir renomear itens do menu na tela de Configurações > Menu (somente ADM Master)
