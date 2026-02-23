@@ -273,6 +273,7 @@ export default function FechamentoPonto() {
     return ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
   };
 
+  const openPontoDetalhe = (empId: number) => { setSelectedEmployeeId(empId); setViewMode("detalhe"); };
   const openRaioX = (empId: number) => setRaioXEmployeeId(empId);
 
   // ===== PRINT / PDF =====
@@ -377,7 +378,7 @@ export default function FechamentoPonto() {
         <div className="flex items-center justify-between">
           <div>
             {viewMode === "detalhe" && selectedEmployeeId ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Button variant="ghost" size="sm" onClick={() => { setViewMode("resumo"); setSelectedEmployeeId(null); }}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -389,6 +390,9 @@ export default function FechamentoPonto() {
                     {employeeDetail.data?.employee?.funcao} — {formatCPF(employeeDetail.data?.employee?.cpf || "")}
                   </p>
                 </div>
+                <Button variant="outline" size="sm" className="ml-2 gap-1.5 text-xs text-muted-foreground" onClick={() => openRaioX(selectedEmployeeId)}>
+                  <Users className="h-3.5 w-3.5" /> Raio-X Completo
+                </Button>
               </div>
             ) : (
               <div>
@@ -720,7 +724,7 @@ export default function FechamentoPonto() {
                             {conflitos.data.map((c: any, idx: number) => (
                               <tr key={idx} className={`border-b last:border-0 hover:bg-orange-50/30 ${c.hasOverlap ? "border-l-4 border-l-red-500 bg-red-50/20" : "border-l-4 border-l-green-500"}`}>
                                 <td className="p-2">
-                                  <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(c.employeeId)}>
+                                  <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(c.employeeId)}>
                                     {c.employeeName}
                                   </button>
                                 </td>
@@ -761,8 +765,8 @@ export default function FechamentoPonto() {
                                   })() : "-"}
                                 </td>
                                 <td className="p-2 text-center">
-                                  <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployeeId(c.employeeId); setViewMode("detalhe"); }}>
-                                    <Eye className="h-4 w-4" />
+                                  <Button variant="ghost" size="sm" title="Raio-X do Funcionário" onClick={() => openRaioX(c.employeeId)}>
+                                    <Users className="h-4 w-4" />
                                   </Button>
                                 </td>
                               </tr>
@@ -838,7 +842,7 @@ export default function FechamentoPonto() {
                               <th className="p-2 font-medium text-center">H. Extras</th>
                               <th className="p-2 font-medium text-center">Atrasos</th>
                               <th className="p-2 font-medium text-center">Status</th>
-                              <th className="p-2 font-medium text-center">Ações</th>
+                              <th className="p-2 font-medium text-center">Raio-X</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -847,7 +851,7 @@ export default function FechamentoPonto() {
                               return (
                                 <tr key={emp.employeeId} className={`border-b last:border-0 hover:bg-muted/30 ${emp.temAjusteManual ? "bg-purple-50" : ""} ${hasConflict ? "bg-orange-50" : emp.multiplasObras ? "bg-red-50" : ""}`}>
                                   <td className="p-2">
-                                    <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(emp.employeeId)}>
+                                    <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(emp.employeeId)}>
                                       {emp.employeeName}
                                     </button>
                                     {emp.temAjusteManual && (
@@ -889,8 +893,8 @@ export default function FechamentoPonto() {
                                     )}
                                   </td>
                                   <td className="p-2 text-center">
-                                    <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployeeId(emp.employeeId); setViewMode("detalhe"); }}>
-                                      <Eye className="h-4 w-4" />
+                                    <Button variant="ghost" size="sm" title="Raio-X do Funcionário" onClick={() => openRaioX(emp.employeeId)}>
+                                      <Users className="h-4 w-4" />
                                     </Button>
                                   </td>
                                 </tr>
@@ -1115,7 +1119,7 @@ export default function FechamentoPonto() {
                                       onClick={() => setExpandedInconsistency(isIncExpanded ? null : inc.id)}
                                     >
                                       <td className="p-2">
-                                        <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(inc.employeeId); }}>
+                                        <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openPontoDetalhe(inc.employeeId); }}>
                                           {item.employeeName}
                                         </button>
                                         {item.employeeFuncao && <span className="block text-xs text-muted-foreground">{item.employeeFuncao}</span>}
@@ -1355,7 +1359,7 @@ export default function FechamentoPonto() {
                                 <tr className={`border-b hover:bg-muted/30 cursor-pointer ${isExpanded ? (isOverlap ? "bg-red-50" : "bg-green-50") : ""} ${isOverlap ? "border-l-4 border-l-red-500" : "border-l-4 border-l-green-500"}`}
                                   onClick={() => setExpandedConflict(isExpanded ? null : key)}>
                                   <td className="p-2">
-                                    <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openRaioX(c.employeeId); }}>
+                                    <button className="font-medium text-blue-700 hover:underline text-left" onClick={(e) => { e.stopPropagation(); openPontoDetalhe(c.employeeId); }}>
                                       {c.employeeName}
                                     </button>
                                   </td>
@@ -1507,14 +1511,132 @@ export default function FechamentoPonto() {
               <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
             ) : (
               <>
-                {!isConsolidado && (
-                  <div className="flex justify-end">
-                    <Button variant="outline" size="sm" onClick={() => {
-                      setManualData({ employeeId: selectedEmployeeId, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "" });
-                      setShowManualDialog(true);
-                    }}><PenLine className="h-4 w-4 mr-1" /> Lançar Manual</Button>
-                  </div>
-                )}
+                {/* Resumo Totalizador do Colaborador */}
+                {(() => {
+                  const allRecs = employeeDetail.data?.records || [];
+                  const empIncons = employeeDetail.data?.inconsistencies || [];
+                  const empConflitos = (conflitos.data || []).filter((c: any) => c.employeeId === selectedEmployeeId);
+                  const totalDias = new Set(allRecs.map((r: any) => r.data)).size;
+                  const parseHM = (s: string) => { if (!s || s === "-") return 0; const [h, m] = s.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+                  const fmtHM = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, "0")}`;
+                  const totalHoras = allRecs.reduce((acc: number, r: any) => acc + parseHM(r.horasTrabalhadas), 0);
+                  const totalExtras = allRecs.reduce((acc: number, r: any) => acc + parseHM(r.horasExtras), 0);
+                  const totalAtrasos = allRecs.reduce((acc: number, r: any) => acc + parseHM(r.atrasos), 0);
+                  const totalObras = (employeeDetail.data?.recordsByObra || []).length;
+                  const inconsPendentes = empIncons.filter((i: any) => i.status === "pendente").length;
+                  const empSummary = (summary.data || []).find((e: any) => e.employeeId === selectedEmployeeId);
+
+                  return (
+                    <Card className="border-[#1B2A4A]/20">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div className="flex items-center gap-6 flex-wrap">
+                            <div className="text-center">
+                              <p className="text-2xl font-bold text-[#1B2A4A]">{totalDias}</p>
+                              <p className="text-xs text-muted-foreground">Dias Trab.</p>
+                            </div>
+                            <div className="h-8 w-px bg-border" />
+                            <div className="text-center">
+                              <p className="text-2xl font-bold text-[#1B2A4A]">{fmtHM(totalHoras)}</p>
+                              <p className="text-xs text-muted-foreground">Horas Totais</p>
+                            </div>
+                            <div className="h-8 w-px bg-border" />
+                            <div className="text-center">
+                              <p className={`text-2xl font-bold ${totalExtras > 0 ? "text-green-600" : "text-muted-foreground"}`}>{fmtHM(totalExtras)}</p>
+                              <p className="text-xs text-muted-foreground">Horas Extras</p>
+                            </div>
+                            <div className="h-8 w-px bg-border" />
+                            <div className="text-center">
+                              <p className={`text-2xl font-bold ${totalAtrasos > 0 ? "text-red-600" : "text-muted-foreground"}`}>{fmtHM(totalAtrasos)}</p>
+                              <p className="text-xs text-muted-foreground">Atrasos</p>
+                            </div>
+                            <div className="h-8 w-px bg-border" />
+                            <div className="text-center">
+                              <p className="text-2xl font-bold text-[#1B2A4A]">{totalObras}</p>
+                              <p className="text-xs text-muted-foreground">Obra{totalObras !== 1 ? "s" : ""}</p>
+                            </div>
+                            {inconsPendentes > 0 && (
+                              <>
+                                <div className="h-8 w-px bg-border" />
+                                <div className="text-center">
+                                  <p className="text-2xl font-bold text-amber-600">{inconsPendentes}</p>
+                                  <p className="text-xs text-muted-foreground">Inconsistências</p>
+                                </div>
+                              </>
+                            )}
+                            {empConflitos.length > 0 && (
+                              <>
+                                <div className="h-8 w-px bg-border" />
+                                <div className="text-center">
+                                  <p className="text-2xl font-bold text-orange-600">{empConflitos.length}</p>
+                                  <p className="text-xs text-muted-foreground">Conflitos</p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!isConsolidado && (
+                              <Button variant="outline" size="sm" onClick={() => {
+                                setManualData({ employeeId: selectedEmployeeId, obraId: 0, data: "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "" });
+                                setShowManualDialog(true);
+                              }}><PenLine className="h-4 w-4 mr-1" /> Lançar Manual</Button>
+                            )}
+                          </div>
+                        </div>
+                        {/* Jornada e competência */}
+                        <div className="flex items-center gap-4 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                          <span><strong>Competência:</strong> {formatMesAno(mesAno)}</span>
+                          {employeeDetail.data?.employee?.jornadaTrabalho && (
+                            <span><strong>Jornada:</strong> {employeeDetail.data.employee.jornadaTrabalho}</span>
+                          )}
+                          {empSummary?.multiplasObras && (
+                            <Badge variant="destructive" className="text-xs"><MapPin className="h-3 w-3 mr-1" /> Múltiplas Obras</Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
+                {/* Inconsistências pendentes deste funcionário */}
+                {(() => {
+                  const empIncons = (employeeDetail.data?.inconsistencies || []).filter((i: any) => i.status === "pendente");
+                  if (empIncons.length === 0) return null;
+                  return (
+                    <Card className="border-amber-300 bg-amber-50/50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2 text-amber-800">
+                          <AlertTriangle className="h-4 w-4" /> {empIncons.length} Inconsistência{empIncons.length > 1 ? "s" : ""} Pendente{empIncons.length > 1 ? "s" : ""}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="space-y-2">
+                          {empIncons.map((inc: any) => (
+                            <div key={inc.id} className="flex items-center justify-between bg-white rounded-lg border p-2">
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-mono">{inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</span>
+                                <Badge variant="outline" className="text-xs">{inc.tipoInconsistencia?.replace("_", " ")}</Badge>
+                                <span className="text-xs text-muted-foreground">{inc.descricao}</span>
+                              </div>
+                              {!isConsolidado && (
+                                <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => {
+                                  setSelectedInconsistency({
+                                    inconsistency: inc,
+                                    employeeName: employeeDetail.data?.employee?.nomeCompleto || "Colaborador",
+                                  });
+                                  setResolveData({ status: "justificado", justificativa: "" });
+                                  setShowResolveDialog(true);
+                                }}>
+                                  <CheckCircle className="h-3.5 w-3.5" /> Resolver
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
 
                 {/* Conflitos deste funcionário — expandível com ações inline */}
                 {(() => {
@@ -1809,7 +1931,7 @@ export default function FechamentoPonto() {
                           {obra.funcionarios.map((f: any) => (
                             <tr key={f.employeeId} className="border-b last:border-0 hover:bg-muted/20">
                               <td className="p-2">
-                                <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openRaioX(f.employeeId)}>
+                                <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(f.employeeId)}>
                                   {f.nomeCompleto}
                                 </button>
                               </td>

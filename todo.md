@@ -1783,3 +1783,15 @@
 ## Regra: Registrar TODA alteração como revisão
 - [x] Registrar Rev. 65 com todas as mudanças feitas (responsividade, correções, etc.)
 - [x] A partir de agora, SEMPRE registrar cada alteração no Controle de Revisões
+
+## Rev. 66 - Fechamento de Ponto - Detalhe do Colaborador (em vez de Raio-X)
+- [x] Remover redirecionamento para Raio-X ao clicar no nome do colaborador
+- [x] Clique no nome agora abre visão detalhada de ponto do mês (viewMode detalhe)
+- [x] Card totalizador no topo: Dias Trab., Horas Totais, Horas Extras, Atrasos, Obras, Inconsistências, Conflitos
+- [x] Exibir competência, jornada e badge de múltiplas obras no card
+- [x] Painel de inconsistências pendentes do funcionário na visão de detalhe com botão Resolver
+- [x] Botão "Raio-X Completo" no header como opção secundária
+- [x] Ícone Raio-X na coluna de ações das tabelas (substituindo ícone de olho)
+- [x] Comportamento consistente em todas as abas: Resumo, Inconsistências, Conflitos, Rateio
+- [x] Registrado Rev. 66 no banco + shared/version.ts
+- [x] 41 testes passando (12 novos + 29 existentes)
