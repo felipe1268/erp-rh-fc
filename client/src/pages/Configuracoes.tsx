@@ -44,7 +44,7 @@ const CATEGORIAS = [
   { key: "rescisao", label: "Rescisão", icon: UserX, color: "text-gray-600", bgColor: "bg-gray-50", borderColor: "border-gray-200" },
 ];
 
-type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes";
+type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -310,6 +310,7 @@ export default function Configuracoes() {
     { key: "usuarios" as TabKey, label: "Usuários", icon: Users },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell },
+    { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2 },
   ];
 
@@ -821,6 +822,11 @@ export default function Configuracoes() {
           <NotificacoesEmailTab companyId={companyId} />
         )}
 
+        {/* TAB: Contrato PJ */}
+        {activeTab === "contrato_pj" && (
+          <ContratoPJTab companyId={companyId} userName={user?.name || ''} />
+        )}
+
         {/* TAB: Limpeza */}
         {activeTab === "limpeza" && (
           <Card className="border-red-200">
@@ -1006,6 +1012,135 @@ export default function Configuracoes() {
         </FullScreenDialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// COMPONENTE: Contrato PJ (Template Editável)
+// ============================================================
+function ContratoPJTab({ companyId, userName }: { companyId: number; userName: string }) {
+  const [editing, setEditing] = useState(false);
+  const [conteudo, setConteudo] = useState('');
+  const [titulo, setTitulo] = useState('');
+
+  const templateQuery = (trpc as any).docs.templates.getByTipo.useQuery(
+    { companyId, tipo: 'contrato_pj' },
+    { enabled: companyId > 0 }
+  );
+  const upsertMutation = (trpc as any).docs.templates.upsert.useMutation({
+    onSuccess: () => {
+      toast.success('Modelo do contrato PJ salvo com sucesso!');
+      setEditing(false);
+      templateQuery.refetch();
+    },
+    onError: () => toast.error('Erro ao salvar modelo'),
+  });
+
+  useEffect(() => {
+    if (templateQuery.data) {
+      setConteudo(templateQuery.data.conteudo || '');
+      setTitulo(templateQuery.data.titulo || 'Contrato Particular de Prestação de Serviços');
+    }
+  }, [templateQuery.data]);
+
+  const placeholders = [
+    { tag: '[CONTRATANTE_NOME]', desc: 'Razão social da empresa contratante' },
+    { tag: '[CONTRATANTE_CNPJ]', desc: 'CNPJ da empresa contratante' },
+    { tag: '[CONTRATANTE_ENDERECO]', desc: 'Endereço da empresa contratante' },
+    { tag: '[CONTRATANTE_CIDADE]', desc: 'Cidade da empresa contratante' },
+    { tag: '[CONTRATANTE_ESTADO]', desc: 'Estado da empresa contratante' },
+    { tag: '[CONTRATANTE_REPRESENTANTE]', desc: 'Nome do representante legal' },
+    { tag: '[CONTRATADA_RAZAO_SOCIAL]', desc: 'Razão social do prestador PJ' },
+    { tag: '[CONTRATADA_CNPJ]', desc: 'CNPJ do prestador PJ' },
+    { tag: '[CONTRATADA_ENDERECO]', desc: 'Endereço do prestador PJ' },
+    { tag: '[CONTRATADA_CIDADE]', desc: 'Cidade do prestador PJ' },
+    { tag: '[CONTRATADA_ESTADO]', desc: 'Estado do prestador PJ' },
+    { tag: '[OBJETO_CONTRATO]', desc: 'Descrição do serviço contratado' },
+    { tag: '[VALOR_MENSAL]', desc: 'Valor mensal (R$)' },
+    { tag: '[VALOR_EXTENSO]', desc: 'Valor por extenso' },
+    { tag: '[DATA_INICIO]', desc: 'Data de início do contrato' },
+    { tag: '[FORO_COMARCA]', desc: 'Comarca do foro' },
+  ];
+
+  if (templateQuery.isLoading) {
+    return <div className="flex items-center justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" /></div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Modelo do Contrato PJ</h3>
+          <p className="text-sm text-muted-foreground">Defina o texto padrão do contrato de prestação de serviços PJ. Os placeholders serão substituídos automaticamente pelos dados do colaborador.</p>
+        </div>
+        {templateQuery.data?.isDefault && (
+          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">Modelo Padrão</span>
+        )}
+      </div>
+
+      {/* Placeholders disponíveis */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><Info className="h-4 w-4" /> Placeholders Disponíveis</CardTitle>
+          <CardDescription className="text-xs">Use estes códigos no texto do contrato. Eles serão substituídos automaticamente ao gerar o contrato.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+            {placeholders.map(p => (
+              <div key={p.tag} className="flex items-center gap-2 text-xs py-0.5">
+                <code className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-mono text-[11px] whitespace-nowrap">{p.tag}</code>
+                <span className="text-muted-foreground">{p.desc}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Editor do contrato */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">Título do Contrato</CardTitle>
+            {!editing && (
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Editar Modelo
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {editing ? (
+            <>
+              <Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título do contrato" />
+              <div>
+                <label className="text-sm font-medium mb-1 block">Texto do Contrato</label>
+                <textarea
+                  className="w-full border rounded-md p-3 text-sm font-mono min-h-[500px] resize-y bg-white"
+                  value={conteudo}
+                  onChange={e => setConteudo(e.target.value)}
+                  placeholder="Digite o texto do contrato..."
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setEditing(false); if (templateQuery.data) { setConteudo(templateQuery.data.conteudo); setTitulo(templateQuery.data.titulo); } }}>
+                  Cancelar
+                </Button>
+                <Button onClick={() => upsertMutation.mutate({ companyId, tipo: 'contrato_pj' as any, titulo, conteudo, userName })} disabled={upsertMutation.isPending}>
+                  <Save className="h-4 w-4 mr-1" /> {upsertMutation.isPending ? 'Salvando...' : 'Salvar Modelo'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <p className="font-medium">{titulo}</p>
+              <div className="bg-gray-50 rounded-md p-4 max-h-[400px] overflow-y-auto">
+                <pre className="text-xs whitespace-pre-wrap font-sans text-gray-700 leading-relaxed">{conteudo}</pre>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

@@ -158,9 +158,18 @@ export const pjContractsRouter = router({
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
           employeeEmail: employees.email,
+          // Dados da empresa contratante
+          companyRazaoSocial: companies.razaoSocial,
+          companyCnpj: companies.cnpj,
+          companyEndereco: companies.endereco,
+          companyCidade: companies.cidade,
+          companyEstado: companies.estado,
+          companyLogoUrl: companies.logoUrl,
+          companyNomeFantasia: companies.nomeFantasia,
         })
         .from(pjContracts)
         .innerJoin(employees, eq(pjContracts.employeeId, employees.id))
+        .innerJoin(companies, eq(pjContracts.companyId, companies.id))
         .where(eq(pjContracts.id, input.id));
         return row || null;
       }),

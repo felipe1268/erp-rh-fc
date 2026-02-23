@@ -255,16 +255,29 @@ export async function getEmployees(companyId: number, search?: string, status?: 
     conditions.push(eq(employees.status, status as any));
   }
   if (search) {
-    conditions.push(
-      or(
-        like(employees.nomeCompleto, `%${search}%`),
-        like(employees.cpf, `%${search}%`),
-        like(employees.rg, `%${search}%`),
-        like(employees.cargo, `%${search}%`),
-        like(employees.funcao, `%${search}%`),
-        like(employees.codigoInterno, `%${search}%`),
-      )!
-    );
+    const s = search.toLowerCase();
+    // Mapear termos amigáveis para valores do banco
+    let tipoContratoSearch: string | null = null;
+    if (['pj', 'pessoa juridica', 'pessoa jurídica'].some(t => s.includes(t))) tipoContratoSearch = 'PJ';
+    else if (['clt', 'carteira'].some(t => s.includes(t))) tipoContratoSearch = 'CLT';
+    else if (['temporario', 'temporário'].some(t => s.includes(t))) tipoContratoSearch = 'Temporário';
+    else if (['estagio', 'estágio', 'estagiario', 'estagiário'].some(t => s.includes(t))) tipoContratoSearch = 'Estágio';
+    else if (['aprendiz', 'jovem aprendiz'].some(t => s.includes(t))) tipoContratoSearch = 'Aprendiz';
+
+    const orConditions = [
+      like(employees.nomeCompleto, `%${search}%`),
+      like(employees.cpf, `%${search}%`),
+      like(employees.rg, `%${search}%`),
+      like(employees.cargo, `%${search}%`),
+      like(employees.funcao, `%${search}%`),
+      like(employees.codigoInterno, `%${search}%`),
+      like(employees.setor, `%${search}%`),
+      
+    ];
+    if (tipoContratoSearch) {
+      orConditions.push(eq(employees.tipoContrato, tipoContratoSearch as any));
+    }
+    conditions.push(or(...orConditions)!);
   }
   return db.select().from(employees).where(and(...conditions)).orderBy(employees.nomeCompleto);
 }

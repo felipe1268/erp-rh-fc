@@ -978,7 +978,7 @@ export type InsertUserProfile = typeof userProfiles.$inferInsert;
 export const documentTemplates = mysqlTable("document_templates", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
-	tipo: mysqlEnum(['advertencia_verbal','advertencia_escrita','suspensao','justa_causa','outros']).notNull(),
+	tipo: mysqlEnum(['advertencia_verbal','advertencia_escrita','suspensao','justa_causa','contrato_pj','outros']).notNull(),
 	titulo: varchar({ length: 255 }).notNull(),
 	conteudo: text().notNull(),
 	ativo: tinyint().default(1).notNull(),
