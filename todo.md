@@ -1735,3 +1735,18 @@
 - [x] Corrigir inicialização do editRole (era string vazia, agora "user")
 - [x] Simplificar condição de envio de role no updateUser
 - [x] Melhorar badges de role na tabela de usuários (cores e bordas distintas)
+
+## Unificação da Página de Usuários e Permissões
+- [x] Unificar aba "Usuários" das Configurações com a página "Usuários e Permissões"
+- [x] Página única com: criação de usuário, definição de role, perfil por empresa e permissões granulares
+- [x] Remover aba "Usuários" das Configurações
+- [x] Manter "Novo Usuário" (username/senha) e "Novo Perfil" na mesma página
+- [x] Exibir tabela de usuários com role do sistema + perfil por empresa + permissões
+
+## Bug: Desconsolidar Mês - Permissão Admin Master
+- [ ] BUG: Admin Master recebe erro "Apenas o Admin Master pode desconsolidar um mês" ao tentar desconsolidar
+- [ ] Investigar e corrigir verificação de role na rota de desconsolidação
+
+## Bug: Relógio de Ponto - Auto-liberação quando obra muda de status
+- [ ] Quando obra muda para "Concluída" ou "Paralisada", liberar relógio automaticamente para realocação
+- [ ] Relógio deve ficar com status "Disponível" e sem obra vinculada

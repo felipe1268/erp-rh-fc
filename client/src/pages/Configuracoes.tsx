@@ -62,7 +62,7 @@ const CATEGORIAS = [
   { key: "rescisao", label: "Rescisão", icon: UserX, color: "text-gray-600", bgColor: "bg-gray-50", borderColor: "border-gray-200" },
 ];
 
-type TabKey = "criterios" | "usuarios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj";
+type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -78,21 +78,7 @@ export default function Configuracoes() {
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
 
-  // Usuários
-  const [showCreateUser, setShowCreateUser] = useState(false);
-  const [newUsername, setNewUsername] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<"user" | "admin" | "admin_master">("user");
-  const [newPassword, setNewPassword] = useState("");
 
-  // Edição de usuário
-  const [editingUser, setEditingUser] = useState<any>(null);
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editUsername, setEditUsername] = useState("");
-  const [editPassword, setEditPassword] = useState("");
-  const [editRole, setEditRole] = useState("user");
 
   // Troca de senha
   const [showChangePwd, setShowChangePwd] = useState(false);
@@ -143,7 +129,7 @@ export default function Configuracoes() {
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [expandedCat, setExpandedCat] = useState<string | null>("horas_extras");
 
-  const usersQuery = trpc.userManagement.listUsers.useQuery();
+
   const criteriaQuery = trpc.criteria.getAll.useQuery(
     { companyId },
     { enabled: companyId > 0 }
@@ -201,51 +187,7 @@ export default function Configuracoes() {
     onError: (err) => toast.error(err.message),
   });
 
-  const createUserMutation = trpc.userManagement.createLocalUser.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Usuário ${data.username} criado! Senha padrão: ${data.defaultPassword}`);
-      setShowCreateUser(false);
-      setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword("");
-      usersQuery.refetch();
-    },
-    onError: (err) => toast.error(err.message),
-  });
 
-  const resetPwdMutation = trpc.userManagement.resetPassword.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Senha resetada! Nova senha padrão: ${data.defaultPassword}`);
-      usersQuery.refetch();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const utils = trpc.useUtils();
-  const updateRoleMutation = trpc.userManagement.updateRole.useMutation({
-    onSuccess: () => {
-      toast.success("Perfil do usuário atualizado com sucesso!");
-      usersQuery.refetch();
-      utils.auth.me.invalidate();
-    },
-    onError: (err) => toast.error("Erro ao alterar perfil: " + err.message),
-  });
-
-  const updateUserMutation = trpc.userManagement.updateUser.useMutation({
-    onSuccess: () => {
-      toast.success("Usuário atualizado com sucesso!");
-      setEditingUser(null);
-      usersQuery.refetch();
-      utils.auth.me.invalidate();
-    },
-    onError: (err) => toast.error("Erro ao atualizar usuário: " + err.message),
-  });
-
-  const deleteUserMutation = trpc.userManagement.deleteUser.useMutation({
-    onSuccess: () => {
-      toast.success("Usuário excluído!");
-      usersQuery.refetch();
-    },
-    onError: (err) => toast.error(err.message),
-  });
 
   const changePwdMutation = trpc.userManagement.changePassword.useMutation({
     onSuccess: () => {
@@ -277,14 +219,7 @@ export default function Configuracoes() {
     cleanMutation.mutate({ confirmPassword: cleanPassword, modules: selectedModules });
   };
 
-  const handleCreateUser = () => {
-    if (!newUsername || !newName) { toast.error("Preencha usuário e nome"); return; }
-    createUserMutation.mutate({
-      username: newUsername, name: newName,
-      email: newEmail || undefined, role: newRole,
-      password: newPassword || undefined,
-    });
-  };
+
 
   const handleChangePwd = () => {
     if (newPwd !== confirmPwd) { toast.error("As senhas não coincidem"); return; }
@@ -328,7 +263,6 @@ export default function Configuracoes() {
     { key: "painel" as TabKey, label: "Painel de Controle", icon: LayoutDashboard, minRole: "user" },
     { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin" },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin" },
-    { key: "usuarios" as TabKey, label: "Usuários", icon: Users, minRole: "admin" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin" },
     { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin" },
@@ -713,114 +647,6 @@ export default function Configuracoes() {
           </div>
         )}
 
-        {/* TAB: Usuários */}
-        {activeTab === "usuarios" && (
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Users className="w-5 h-5 text-green-600" />
-                      Usuários do Sistema
-                    </CardTitle>
-                    <CardDescription>Gerencie os usuários com acesso local (username/senha)</CardDescription>
-                  </div>
-                  <Button onClick={() => setShowCreateUser(true)} className="bg-green-600 hover:bg-green-700">
-                    + Novo Usuário
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-gray-500">
-                        <th className="pb-2 pr-4">Nome</th>
-                        <th className="pb-2 pr-4">Username</th>
-                        <th className="pb-2 pr-4">Email</th>
-                        <th className="pb-2 pr-4">Método</th>
-                        <th className="pb-2 pr-4">Perfil</th>
-                        <th className="pb-2 pr-4">Último Acesso</th>
-                        <th className="pb-2">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {usersQuery.data?.map((u: any) => (
-                        <tr key={u.id} className="border-b hover:bg-gray-50">
-                          <td className="py-2 pr-4 font-medium">{u.name || "-"}</td>
-                          <td className="py-2 pr-4">{u.username || "-"}</td>
-                          <td className="py-2 pr-4">{u.email || "-"}</td>
-                          <td className="py-2 pr-4">
-                            <span className={`px-2 py-0.5 rounded text-xs ${u.loginMethod === "local" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
-                              {u.loginMethod || "OAuth"}
-                            </span>
-                          </td>
-                          <td className="py-2 pr-4">
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${u.role === "admin_master" ? "bg-purple-100 text-purple-700 border border-purple-200" : u.role === "admin" ? "bg-blue-100 text-blue-700 border border-blue-200" : "bg-gray-100 text-gray-600 border border-gray-200"}`}>
-                              {u.role === "admin_master" ? "Admin Master" : u.role === "admin" ? "Admin" : "Usuário"}
-                            </span>
-                          </td>
-                          <td className="py-2 pr-4 text-gray-500">
-                            {u.lastSignedIn ? new Date(u.lastSignedIn).toLocaleDateString("pt-BR") : "-"}
-                          </td>
-                          <td className="py-2">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {/* Editar */}
-                              <Button size="sm" variant="outline" className="text-xs h-7 px-2" title="Editar"
-                                onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); setEditPassword(""); setEditRole(u.role || "user"); }}>
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              {/* Alterar Perfil */}
-                              {isMaster && u.id !== user?.id && (
-                                <Select
-                                  value={u.role || "user"}
-                                  onValueChange={(newRole) => {
-                                    if (newRole !== u.role) {
-                                      const label = newRole === 'admin_master' ? 'Admin Master' : newRole === 'admin' ? 'Admin' : 'Usuário';
-                                      if (confirm(`Alterar perfil de ${u.name} para ${label}?`)) {
-                                        updateRoleMutation.mutate({ userId: u.id, role: newRole as "user" | "admin" | "admin_master" });
-                                      }
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger className="text-xs h-7 w-[120px] bg-white">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="user">Usuário</SelectItem>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="admin_master">Admin Master</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )}
-                              {/* Resetar Senha */}
-                              {u.loginMethod === "local" && (
-                                <Button size="sm" variant="outline" className="text-xs h-7 px-2 text-amber-700 border-amber-300" title="Resetar Senha"
-                                  onClick={() => { if (confirm(`Resetar senha de ${u.name}? Nova senha padrão: asdf1020`)) resetPwdMutation.mutate({ userId: u.id }); }}>
-                                  <Key className="h-3 w-3" />
-                                </Button>
-                              )}
-                              {/* Excluir */}
-                              {isMaster && u.id !== user?.id && (
-                                <Button size="sm" variant="outline" className="text-xs h-7 px-2 text-red-600 border-red-300 hover:bg-red-50" title="Excluir"
-                                  onClick={() => { if (confirm(`Excluir usuário ${u.name}? Esta ação não pode ser desfeita.`)) deleteUserMutation.mutate({ userId: u.id }); }}>
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {usersQuery.isLoading ? <p className="text-center py-4 text-gray-400">Carregando...</p> : null}
-                  {usersQuery.data?.length === 0 ? <p className="text-center py-4 text-gray-400">Nenhum usuário cadastrado</p> : null}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         {/* TAB: Minha Senha */}
         {activeTab === "senha" && (
@@ -881,126 +707,9 @@ export default function Configuracoes() {
           </Card>
         )}
 
-        {/* Dialog: Criar Usuário */}
-        <FullScreenDialog open={showCreateUser} onClose={() => setShowCreateUser(false)} title="Novo Usuário Local" subtitle="Crie um usuário com acesso por username e senha">
-          <div className="w-full max-w-2xl">
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium">Nome Completo *</label>
-                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome do usuário" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Username *</label>
-                <Input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="Ex: joao.silva" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@empresa.com" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Senha (padrão: asdf1020)</label>
-                <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Deixe vazio para senha padrão" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Perfil</label>
-                <select className="w-full border rounded px-3 py-2 text-sm" value={newRole} onChange={e => setNewRole(e.target.value as "user" | "admin" | "admin_master")}>
-                  <option value="user">Usuário</option>
-                  <option value="admin">Administrador</option>
-                  <option value="admin_master">Admin Master</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => setShowCreateUser(false)}>Cancelar</Button>
-              <Button onClick={handleCreateUser} disabled={createUserMutation.isPending}>
-                {createUserMutation.isPending ? "Criando..." : "Criar Usuário"}
-              </Button>
-            </div>
-          </div>
-        </FullScreenDialog>
 
-        {/* Dialog: Editar Usuário */}
-        <FullScreenDialog open={!!editingUser} onClose={() => setEditingUser(null)} title="Editar Usuário" subtitle={`Editando: ${editingUser?.name || ''}`}>
-          <div className="w-full max-w-2xl">
-            <div className="space-y-4">
-              {/* Dados Básicos */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium">Nome Completo</label>
-                  <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nome do usuário" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Email</label>
-                  <Input value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@empresa.com" />
-                </div>
-              </div>
-              {editingUser?.loginMethod === "local" && (
-                <div>
-                  <label className="text-sm font-medium">Username</label>
-                  <Input value={editUsername} onChange={e => setEditUsername(e.target.value)} placeholder="Username" />
-                </div>
-              )}
 
-              {/* Perfil (Role) - Apenas Admin Master pode alterar */}
-              {isMaster && editingUser?.id !== user?.id && (
-                <div>
-                  <label className="text-sm font-medium flex items-center gap-1"><Shield className="h-3.5 w-3.5" /> Perfil de Acesso</label>
-                  <Select value={editRole} onValueChange={setEditRole}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Selecione o perfil" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">Usuário</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="admin_master">Admin Master</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
 
-              {/* Nova Senha - Admin pode definir nova senha para o usuário */}
-              {(isMaster || user?.role === "admin") && (
-                <div className="border-t pt-3">
-                  <label className="text-sm font-medium flex items-center gap-1"><Key className="h-3.5 w-3.5" /> Nova Senha (deixe em branco para manter a atual)</label>
-                  <Input
-                    type="password"
-                    value={editPassword}
-                    onChange={e => setEditPassword(e.target.value)}
-                    placeholder="Digite a nova senha (mín. 6 caracteres)"
-                    className="mt-1"
-                  />
-                  {editPassword && editPassword.length < 6 && (
-                    <p className="text-xs text-red-500 mt-1">A senha deve ter no mínimo 6 caracteres</p>
-                  )}
-                </div>
-              )}
-
-              {/* Info do Usuário */}
-              <div className="bg-gray-50 border rounded-lg p-3 text-sm">
-                <p className="text-gray-500"><strong>Método de Login:</strong> {editingUser?.loginMethod === "local" ? "Local (username/senha)" : editingUser?.loginMethod === "apple" ? "Apple ID" : "OAuth"}</p>
-                <p className="text-gray-500"><strong>Perfil Atual:</strong> {editingUser?.role === "admin_master" ? "Admin Master" : editingUser?.role === "admin" ? "Admin" : "Usuário"}</p>
-                <p className="text-gray-500"><strong>Último Acesso:</strong> {editingUser?.lastSignedIn ? new Date(editingUser.lastSignedIn).toLocaleDateString("pt-BR") : "Nunca"}</p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
-              <Button onClick={() => {
-                if (!editName.trim()) { toast.error("Nome é obrigatório"); return; }
-                if (editPassword && editPassword.length < 6) { toast.error("A senha deve ter no mínimo 6 caracteres"); return; }
-                updateUserMutation.mutate({
-                  userId: editingUser.id,
-                  name: editName.trim(),
-                  email: editEmail.trim() || undefined,
-                  username: editUsername.trim() || undefined,
-                  newPassword: editPassword.trim() || undefined,
-                  role: (isMaster && editingUser?.id !== user?.id) ? editRole as "user" | "admin" | "admin_master" : undefined,
-                });
-              }} disabled={updateUserMutation.isPending}>
-                {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}
-              </Button>
-            </div>
-          </div>
-        </FullScreenDialog>
 
         {/* Dialog: Limpeza do Banco */}
         <FullScreenDialog open={showCleanDialog} onClose={() => setShowCleanDialog(false)} title="Limpeza do Banco de Dados" subtitle="Selecione os módulos que deseja limpar. Todos os registros serão removidos permanentemente." headerColor="bg-gradient-to-r from-red-700 to-red-500">
