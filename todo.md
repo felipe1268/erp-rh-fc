@@ -1624,3 +1624,4 @@
 - [ ] Banner visual de LISTA NEGRA no Raio-X (colaboradores blacklist)
 - [ ] Corrigir filtro Blacklist (mostra 0 mas há colaborador no banco)
 - [x] Corrigir formato de valores monetários nos Processos Trabalhistas (45000.00 → R$ 45.000,00)
+- [x] Adicionar coluna Tipo de Contrato (CLT/PJ) na tabela de colaboradores ao lado do CPF

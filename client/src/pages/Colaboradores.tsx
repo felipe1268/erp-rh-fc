@@ -585,6 +585,7 @@ export default function Colaboradores() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Nº Interno</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground min-w-[180px] whitespace-nowrap">CPF</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground w-20">Tipo</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Função</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Setor</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -615,6 +616,11 @@ export default function Colaboradores() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground min-w-[180px] whitespace-nowrap font-mono text-sm">{formatCPF(emp.cpf)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${emp.tipoContrato === 'PJ' ? 'bg-purple-100 text-purple-700' : emp.tipoContrato === 'Temporario' ? 'bg-amber-100 text-amber-700' : emp.tipoContrato === 'Estagio' ? 'bg-cyan-100 text-cyan-700' : emp.tipoContrato === 'Aprendiz' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {emp.tipoContrato || 'CLT'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.funcao ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3">
