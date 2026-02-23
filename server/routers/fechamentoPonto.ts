@@ -1400,10 +1400,19 @@ export const fechamentoPontoRouter = router({
       mesReferencia: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
-      console.log('[Desconsolidar] User:', ctx.user.id, ctx.user.name, 'Role:', ctx.user.role, 'Type:', typeof ctx.user.role);
-      const userRole = (ctx.user.role || '').toString().trim();
-      if (userRole !== 'admin_master' && userRole !== 'admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: `Apenas o Admin Master pode desconsolidar um mês. (Role atual: ${userRole})` });
+      // Verificação robusta de permissão para desconsolidação
+      // Aceita: admin_master, admin, ou owner do projeto
+      const userRole = (ctx.user.role || '').toString().trim().toLowerCase();
+      const isOwner = ctx.user.openId === process.env.OWNER_OPEN_ID;
+      const isAdmin = userRole.includes('admin');
+      const isAllowed = isAdmin || isOwner;
+      console.log('[Desconsolidar] User:', ctx.user.id, ctx.user.name, 
+        'Role raw:', JSON.stringify(ctx.user.role), 
+        'Role normalized:', userRole,
+        'isAdmin:', isAdmin, 'isOwner:', isOwner, 'isAllowed:', isAllowed,
+        'openId:', ctx.user.openId, 'ownerOpenId:', process.env.OWNER_OPEN_ID);
+      if (!isAllowed) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: `Apenas administradores podem desconsolidar um mês. Seu role atual: ${userRole}. Contate o Admin Master.` });
       }
       const db = (await getDb())!;
       const now = new Date().toISOString().replace('T', ' ').substring(0, 19);

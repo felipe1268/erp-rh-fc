@@ -1774,3 +1774,12 @@
 
 ## Responsividade - Controle de Revisões
 - [x] Corrigir layout dos cards de estatísticas para ser responsivo (não quebrar em 2 linhas)
+
+## Bug CRÍTICO PERSISTENTE: Desconsolidar ainda bloqueado para Admin Master
+- [x] Deep debug: verificar qual role o ctx.user realmente tem quando a rota é chamada
+- [x] Verificar se há OUTRA verificação de permissão bloqueando (frontend ou middleware)
+- [x] Corrigir definitivamente - adicionado fallback de owner + logging detalhado + includes('admin')
+
+## Regra: Registrar TODA alteração como revisão
+- [x] Registrar Rev. 65 com todas as mudanças feitas (responsividade, correções, etc.)
+- [x] A partir de agora, SEMPRE registrar cada alteração no Controle de Revisões
