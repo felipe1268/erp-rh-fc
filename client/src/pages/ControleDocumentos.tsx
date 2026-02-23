@@ -15,7 +15,7 @@ import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
   Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X
 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -54,6 +54,7 @@ export default function ControleDocumentos() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("aso");
+  const [advPreFillApplied, setAdvPreFillApplied] = useState(false);
 
   // ============ QUERIES ============
   const { data: resumo } = trpc.docs.resumo.useQuery({ companyId }, { enabled: !!companyId });
@@ -117,6 +118,45 @@ export default function ControleDocumentos() {
   const [treinForm, setTreinForm] = useState<any>({});
   const [atestForm, setAtestForm] = useState<any>({});
   const [advForm, setAdvForm] = useState<any>({});
+
+  // ============ PRE-FILL FROM FECHAMENTO DE PONTO ============
+  useEffect(() => {
+    if (advPreFillApplied) return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const action = params.get("action");
+    if (tab === "advertencias") {
+      setActiveTab("advertencias");
+      if (action === "nova") {
+        // Read pre-fill data from sessionStorage
+        const raw = sessionStorage.getItem("advPreFill");
+        if (raw) {
+          try {
+            const preFill = JSON.parse(raw);
+            setEditingAdvId(null);
+            setAdvForm({
+              employeeId: preFill.employeeId,
+              dataOcorrencia: preFill.dataOcorrencia || "",
+              motivo: preFill.motivo || "",
+              descricao: preFill.descricao || "",
+              tipoAdvertencia: "", // User must choose
+            });
+            setShowAdvDialog(true);
+            sessionStorage.removeItem("advPreFill");
+            toast.info(`Advertência para ${preFill.employeeName || "colaborador"} — preencha o tipo e confirme.`, { duration: 6000 });
+          } catch { /* ignore parse errors */ }
+        } else {
+          // Just open new adv dialog without pre-fill
+          setEditingAdvId(null);
+          setAdvForm({});
+          setShowAdvDialog(true);
+        }
+      }
+      // Clean URL params without reload
+      window.history.replaceState({}, "", window.location.pathname);
+      setAdvPreFillApplied(true);
+    }
+  }, [advPreFillApplied]);
 
   // ============ FILTER ============
   const [statusFilter, setStatusFilter] = useState("todos");

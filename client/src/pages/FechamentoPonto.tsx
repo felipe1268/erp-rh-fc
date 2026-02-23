@@ -21,11 +21,25 @@ import {
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio";
+
+// Helper to navigate to Controle de Documentos > Advertências with pre-filled data
+function navigateToAdvertencia(setLocation: (path: string) => void, employeeId: number, employeeName: string, data: string, descricao: string) {
+  // Store pre-fill data in sessionStorage so ControleDocumentos can pick it up
+  sessionStorage.setItem("advPreFill", JSON.stringify({
+    employeeId,
+    employeeName,
+    dataOcorrencia: data,
+    motivo: `Inconsistência de ponto: ${descricao}`,
+    descricao: `Advertência originada de inconsistência de ponto do dia ${data ? new Date(data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}. ${descricao || ""}`,
+  }));
+  setLocation("/controle-documentos?tab=advertencias&action=nova");
+}
 type CardFilter = null | "colaboradores" | "registros" | "inconsistencias" | "ajustes" | "multiplasObras" | "conflitos";
 
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -39,6 +53,7 @@ function formatMesAno(mesAno: string): string {
 export default function FechamentoPonto() {
   const { selectedCompanyId } = useCompany();
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const isMaster = user?.role === "admin_master";
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
@@ -1151,8 +1166,8 @@ export default function FechamentoPonto() {
                                               onClick={(e) => { e.stopPropagation(); setManualData({ employeeId: inc.employeeId || 0, obraId: inc.obraId || 0, data: inc.data || "", entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: `Correção: ${inc.descricao}` }); setShowManualDialog(true); }}>
                                               <PenLine className="h-4 w-4" />
                                             </Button>
-                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 hover:bg-red-50" title="Advertência"
-                                              onClick={(e) => { e.stopPropagation(); setSelectedInconsistency(item); setResolveData({ status: "advertencia", justificativa: "" }); setShowResolveDialog(true); }}>
+                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 hover:bg-red-50" title="Gerar Advertência (abre Controle de Documentos)"
+                                              onClick={(e) => { e.stopPropagation(); navigateToAdvertencia(setLocation, inc.employeeId, item.employeeName, inc.data || "", inc.descricao || inc.tipoInconsistencia || ""); }}>
                                               <Shield className="h-4 w-4" />
                                             </Button>
                                             <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isIncExpanded ? "rotate-90" : ""}`} />
@@ -1282,16 +1297,14 @@ export default function FechamentoPonto() {
                                                     className="border-2 border-red-200 bg-red-50 rounded-lg p-3 text-left hover:border-red-400 hover:bg-red-100 transition-all"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      setSelectedInconsistency(item);
-                                                      setResolveData({ status: "advertencia", justificativa: "" });
-                                                      setShowResolveDialog(true);
+                                                      navigateToAdvertencia(setLocation, inc.employeeId, item.employeeName, inc.data || "", inc.descricao || inc.tipoInconsistencia || "");
                                                     }}
                                                   >
                                                     <div className="flex items-center gap-2">
                                                       <Shield className="h-4 w-4 text-red-600" />
                                                       <span className="text-sm font-semibold text-red-800">Advertência</span>
                                                     </div>
-                                                    <p className="text-xs text-red-600 mt-1">Gerar advertência formal</p>
+                                                    <p className="text-xs text-red-600 mt-1">Ir para Controle de Documentos</p>
                                                   </button>
                                                 </div>
                                               </div>
@@ -2105,7 +2118,7 @@ export default function FechamentoPonto() {
         </FullScreenDialog>
 
         {/* ===== RESOLVE INCONSISTENCY DIALOG (FULL SCREEN) ===== */}
-        <FullScreenDialog open={showResolveDialog} onClose={() => setShowResolveDialog(false)} title={resolveData.status === "advertencia" ? "Gerar Advertência" : "Resolver Inconsistência"} subtitle={selectedInconsistency ? selectedInconsistency.employeeName : ""} icon={resolveData.status === "advertencia" ? <Shield className="h-5 w-5 text-white" /> : <CheckCircle className="h-5 w-5 text-white" />} headerColor={resolveData.status === "advertencia" ? "bg-gradient-to-r from-red-800 to-red-600" : "bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a]"}>
+        <FullScreenDialog open={showResolveDialog} onClose={() => setShowResolveDialog(false)} title="Resolver Inconsistência" subtitle={selectedInconsistency ? selectedInconsistency.employeeName : ""} icon={<CheckCircle className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a]">
           <div className="w-full max-w-xl">
             {selectedInconsistency && (
               <div className="space-y-3">
@@ -2122,19 +2135,14 @@ export default function FechamentoPonto() {
                     <SelectContent>
                       <SelectItem value="justificado">Justificar (sem penalidade)</SelectItem>
                       <SelectItem value="ajustado">Marcar como Ajustado</SelectItem>
-                      <SelectItem value="advertencia">Gerar Advertência</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>{resolveData.status === "advertencia" ? "Motivo da Advertência" : "Justificativa"}</Label>
+                  <Label>Justificativa</Label>
                   <Textarea value={resolveData.justificativa} onChange={e => setResolveData(p => ({ ...p, justificativa: e.target.value }))} />
                 </div>
-                {resolveData.status === "advertencia" && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-800">
-                    <strong>Atenção:</strong> Um registro será criado no módulo de Advertências.
-                  </div>
-                )}
+
               </div>
             )}
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
@@ -2143,8 +2151,8 @@ export default function FechamentoPonto() {
                 if (!selectedInconsistency) return;
                 resolveMut.mutate({ id: selectedInconsistency.inconsistency.id, status: resolveData.status as any, justificativa: resolveData.justificativa || undefined });
               }} disabled={resolveMut.isPending}
-                className={resolveData.status === "advertencia" ? "bg-red-600 hover:bg-red-700" : "bg-[#1B2A4A] hover:bg-[#243660]"}>
-                {resolveMut.isPending ? "Processando..." : resolveData.status === "advertencia" ? "Gerar Advertência" : "Resolver"}
+                className="bg-[#1B2A4A] hover:bg-[#243660]">
+                {resolveMut.isPending ? "Processando..." : "Resolver"}
               </Button>
             </div>
           </div>

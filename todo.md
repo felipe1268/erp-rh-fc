@@ -1795,3 +1795,14 @@
 - [x] Comportamento consistente em todas as abas: Resumo, Inconsistências, Conflitos, Rateio
 - [x] Registrado Rev. 66 no banco + shared/version.ts
 - [x] 41 testes passando (12 novos + 29 existentes)
+
+## Rev. 67 - Corrigir Fluxo de Advertência nas Inconsistências
+- [x] BUG: Botão de advertência nas inconsistências auto-resolve/cancela a inconsistência — CORRIGIDO
+- [x] BUG: Botão de advertência não navega para o formulário correto — CORRIGIDO (navega para Controle de Documentos)
+- [x] Advertência NÃO resolve a inconsistência automaticamente — são ações independentes
+- [x] Botão abre formulário completo de advertência (tipo, motivo, testemunhas) pré-preenchido via sessionStorage
+- [x] Usuário escolhe tipo (Verbal/Escrita/Suspensão/Justa Causa/OSS) e preenche todos os campos
+- [x] Inconsistência permanece pendente até ser resolvida separadamente (Justificar ou Ajustar)
+- [x] Dialog de Resolver Inconsistência agora só oferece Justificar e Ajustar (advertência é ação separada)
+- [x] Registrada Rev. 67 no banco + shared/version.ts
+- [x] 36 testes passando (6 novos + 30 existentes)
