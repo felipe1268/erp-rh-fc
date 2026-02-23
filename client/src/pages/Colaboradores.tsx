@@ -393,6 +393,7 @@ export default function Colaboradores() {
         ["Nome do Pai", safeDisplay(viewingEmployee.nomePai)],
         ["Contato Emergência", safeDisplay(viewingEmployee.contatoEmergencia)],
         ["Tel. Emergência", formatTelefone(viewingEmployee.telefoneEmergencia)],
+        ["Parentesco", safeDisplay(viewingEmployee.parentescoEmergencia)],
       ]},
       { title: "Profissional", fields: [
         ["Cód. Interno (JFC)", viewingEmployee.codigoInterno ? `🔒 ${viewingEmployee.codigoInterno}` : "-"],
@@ -865,6 +866,10 @@ export default function Colaboradores() {
                       else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, "($1) $2");
                       set("telefoneEmergencia", v);
                     }} placeholder="(00) 00000-0000" maxLength={15} className="bg-input mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Parentesco</Label>
+                  <Input value={form.parentescoEmergencia ?? ""} onChange={e => set("parentescoEmergencia", e.target.value)} placeholder="Ex: Esposa, Mãe, Pai" className="bg-input mt-1" />
                 </div>
               </div>
             </TabsContent>
@@ -1659,6 +1664,7 @@ export default function Colaboradores() {
                   ["Nome do Pai", safeDisplay(viewingEmployee.nomePai)],
                   ["Contato Emergência", safeDisplay(viewingEmployee.contatoEmergencia)],
                   ["Tel. Emergência", formatTelefone(viewingEmployee.telefoneEmergencia)],
+                  ["Parentesco", safeDisplay(viewingEmployee.parentescoEmergencia)],
                 ]},
                 { title: "Profissional", fields: [
                   ["Cód. Interno (JFC)", viewingEmployee.codigoInterno ? `🔒 ${viewingEmployee.codigoInterno}` : "-"],

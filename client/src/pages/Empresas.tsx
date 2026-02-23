@@ -24,11 +24,14 @@ type CompanyForm = {
   cep: string;
   telefone: string;
   email: string;
+  inscricaoEstadual: string;
+  inscricaoMunicipal: string;
 };
 
 const emptyForm: CompanyForm = {
   cnpj: "", razaoSocial: "", nomeFantasia: "", endereco: "",
   cidade: "", estado: "", cep: "", telefone: "", email: "",
+  inscricaoEstadual: "", inscricaoMunicipal: "",
 };
 
 function formatCnpj(value: string): string {
@@ -151,6 +154,8 @@ export default function Empresas() {
       cep: company.cep ?? "",
       telefone: company.telefone ?? "",
       email: company.email ?? "",
+      inscricaoEstadual: company.inscricaoEstadual ?? "",
+      inscricaoMunicipal: company.inscricaoMunicipal ?? "",
     });
     setDialogOpen(true);
   };
@@ -338,6 +343,14 @@ export default function Empresas() {
             <div>
               <Label>E-mail</Label>
               <Input value={form.email} onChange={e => set("email", e.target.value)} placeholder="email@empresa.com" className="bg-input" />
+            </div>
+            <div>
+              <Label>Inscrição Estadual</Label>
+              <Input value={form.inscricaoEstadual} onChange={e => set("inscricaoEstadual", e.target.value)} placeholder="Inscrição Estadual" className="bg-input" />
+            </div>
+            <div>
+              <Label>Inscrição Municipal</Label>
+              <Input value={form.inscricaoMunicipal} onChange={e => set("inscricaoMunicipal", e.target.value)} placeholder="Inscrição Municipal" className="bg-input" />
             </div>
           </div>
           {/* Upload de Logo */}

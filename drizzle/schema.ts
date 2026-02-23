@@ -202,6 +202,8 @@ export const companies = mysqlTable("companies", {
 	cep: varchar({ length: 10 }),
 	telefone: varchar({ length: 20 }),
 	email: varchar({ length: 320 }),
+	inscricaoEstadual: varchar({ length: 30 }),
+	inscricaoMunicipal: varchar({ length: 30 }),
 	logoUrl: text(),
 	prefixoCodigo: varchar({ length: 10 }).default('EMP'),
 	nextCodigoInterno: int().default(1).notNull(),
@@ -225,6 +227,7 @@ export const dds = mysqlTable("dds", {
 	participantes: text(),
 	descricao: text(),
 	documentoUrl: text(),
+	fotosUrls: json(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
 
@@ -312,6 +315,7 @@ export const employees = mysqlTable("employees", {
 	email: varchar({ length: 320 }),
 	contatoEmergencia: varchar({ length: 255 }),
 	telefoneEmergencia: varchar({ length: 20 }),
+	parentescoEmergencia: varchar({ length: 100 }),
 	cargo: varchar({ length: 100 }),
 	funcao: varchar({ length: 100 }),
 	setor: varchar({ length: 100 }),
@@ -397,6 +401,7 @@ export const epis = mysqlTable("epis", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	validadeCa: date({ mode: 'string' }),
 	fabricante: varchar({ length: 255 }),
+	fornecedor: varchar({ length: 255 }),
 	quantidadeEstoque: int().default(0),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),

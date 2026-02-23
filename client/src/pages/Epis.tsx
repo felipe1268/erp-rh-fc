@@ -42,7 +42,7 @@ export default function Epis() {
 
   // Form state - EPI
   const [epiForm, setEpiForm] = useState({
-    nome: "", ca: "", validadeCa: "", fabricante: "", quantidadeEstoque: 0,
+    nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", quantidadeEstoque: 0,
   });
 
   // Form state - Entrega
@@ -93,7 +93,7 @@ export default function Epis() {
   };
 
   function resetEpiForm() {
-    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", quantidadeEstoque: 0 });
+    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", quantidadeEstoque: 0 });
   }
   function resetEntregaForm() {
     setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "" });
@@ -161,6 +161,13 @@ export default function Epis() {
                     placeholder="Nome do fabricante" />
                 </div>
                 <div>
+                  <Label>Fornecedor</Label>
+                  <Input value={epiForm.fornecedor} onChange={e => setEpiForm(f => ({ ...f, fornecedor: e.target.value }))}
+                    placeholder="Nome do fornecedor" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <Label>Quantidade em Estoque</Label>
                   <Input type="number" min={0} value={epiForm.quantidadeEstoque}
                     onChange={e => setEpiForm(f => ({ ...f, quantidadeEstoque: parseInt(e.target.value) || 0 }))} />
@@ -170,7 +177,7 @@ export default function Epis() {
                 <Button variant="outline" onClick={() => { setViewMode("catalogo"); resetEpiForm(); }}>Cancelar</Button>
                 <Button onClick={() => {
                   if (!epiForm.nome.trim()) return toast.error("Nome do EPI é obrigatório");
-                  createEpiMut.mutate({ companyId, ...epiForm, validadeCa: epiForm.validadeCa || undefined, ca: epiForm.ca || undefined, fabricante: epiForm.fabricante || undefined });
+                  createEpiMut.mutate({ companyId, ...epiForm, validadeCa: epiForm.validadeCa || undefined, ca: epiForm.ca || undefined, fabricante: epiForm.fabricante || undefined, fornecedor: epiForm.fornecedor || undefined });
                 }} disabled={createEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {createEpiMut.isPending ? "Salvando..." : "Cadastrar EPI"}
                 </Button>
@@ -616,6 +623,7 @@ function EditEpiInline({ epi, onSave, onCancel, isPending }: { epi: any; onSave:
     ca: epi.ca || "",
     validadeCa: epi.validadeCa || "",
     fabricante: epi.fabricante || "",
+    fornecedor: epi.fornecedor || "",
     quantidadeEstoque: epi.quantidadeEstoque ?? 0,
   });
 

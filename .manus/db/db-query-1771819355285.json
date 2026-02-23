@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, nomeFantasia, razaoSocial, prefixoCodigo, nextCodigoInterno FROM companies;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeFantasia, razaoSocial, prefixoCodigo, nextCodigoInterno FROM companies;",
+  "rows": [
+    {
+      "id": "60002",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "prefixoCodigo": "JFC",
+      "nextCodigoInterno": "1"
+    },
+    {
+      "id": "60004",
+      "nomeFantasia": "HOTEL CONSAGRADO",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "prefixoCodigo": "HC",
+      "nextCodigoInterno": "15"
+    },
+    {
+      "id": "60005",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "prefixoCodigo": "JFP",
+      "nextCodigoInterno": "15"
+    },
+    {
+      "id": "90001",
+      "nomeFantasia": "",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "prefixoCodigo": "LN",
+      "nextCodigoInterno": "4"
+    },
+    {
+      "id": "390001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "razaoSocial": "Empresa Teste CRUD",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeFantasia\trazaoSocial\tprefixoCodigo\tnextCodigoInterno\n60002\tFC ENGENHARIA PROJETOS E OBRAS\tFC ENGENHARIA E CONSTRUCAO LTDA\tJFC\t1\n60004\tHOTEL CONSAGRADO\tCF HOTELARIA LTDA\tHC\t15\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\tJULIO FERRAZ PROJETOS E OBRAS LTDA\tJFP\t15\n90001\t\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\tLN\t4\n390001\tTeste CRUD Atualizado\tEmpresa Teste CRUD\tEMP\t3\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

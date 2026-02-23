@@ -1638,3 +1638,87 @@
 - [x] EPIs: seleção múltipla com checkbox + exclusão em lote na tabela de Catálogo de EPIs
 - [x] Funções/Cargos: corrigir filtros dos cards de estatísticas (Com CBO, Com Descrição, etc.) - não filtram ao clicar
 - [x] Fluxo de Caixa Prévio: adicionar gráfico de barras abaixo do Total Estimado Anual
+
+## ALINHAMENTO APRESENTAÇÃO vs SISTEMA — Gaps Identificados
+
+### SLIDE 4 — Painel Principal (Widgets faltantes)
+- [x] Widget "Afastados" no painel principal (JÁ EXISTE no homeData backend + Home.tsx)
+- [x] Widget "Licença" no painel principal (JÁ EXISTE no homeData backend + Home.tsx)
+- [x] Widget "Próximas Audiências" no painel principal (JÁ EXISTE no homeData backend + Home.tsx)
+- [x] Widget "Movimentações 30 dias" com atividade recente (JÁ EXISTE no homeData backend + Home.tsx)
+
+### SLIDE 6 — Cadastro de Empresas
+- [x] Validação automática de CNPJ (JÁ IMPLEMENTADO - Fase 10)
+- [x] Campos Inscrição Estadual e Inscrição Municipal no cadastro de empresas (ADICIONADO AGORA)
+
+### SLIDE 7 — Perfis e Permissões (4 níveis)
+- [ ] Implementar perfil "Operacional" (lançamentos diários, upload, sem configurações)
+- [ ] Implementar perfil "Consulta" (somente leitura, ideal para auditores)
+- [ ] Permissões granulares por módulo para cada perfil
+
+### SLIDE 8 — Critérios do Sistema (Categorias faltantes)
+- [ ] Critérios de Folha: regras de desconto, cálculo INSS/IRRF/FGTS
+- [ ] Critérios de Benefícios: VT, VA/VR, Plano de Saúde (valores padrão)
+- [ ] Referência CLT visível ao lado de cada valor configurado
+
+### SLIDE 12 — Templates de Documentos
+- [ ] Geração automática de PDF com variáveis preenchidas ({nome}, {cpf}, {função}, {data}, {empresa})
+- [ ] Assinatura digital integrada nos documentos
+
+### SLIDE 15 — Cadastro de Colaboradores (Campos faltantes)
+- [x] Campo "Cargo" separado de "Função" no cadastro (JÁ EXISTE no schema - campo cargo)
+- [x] Campo "Contato de Emergência" (nome, telefone) (JÁ EXISTE no schema) + parentesco ADICIONADO AGORA
+- [x] Campo "CTPS" (número e série) (JÁ EXISTE no schema - ctps + serieCTPS)
+- [x] Campo "Título de Eleitor" (JÁ EXISTE no schema - tituloEleitor)
+- [x] Campo "CNH" (número, categoria, validade) (JÁ EXISTE no schema)
+- [x] Campo "Chave PIX" na aba Bancário (JÁ EXISTE no schema - chavePix + tipoChavePix)
+
+### SLIDE 16 — Raio-X do Colaborador (Informações faltantes)
+- [ ] Histórico de salário/reajustes no Raio-X (timeline de aumentos)
+- [ ] Ranking de faltas/atrasos individual no Raio-X
+
+### SLIDE 17 — Lista Negra (Melhorias)
+- [x] Consulta automática de CPF/RG ao cadastrar novo funcionário (JÁ IMPLEMENTADO - checkBlacklist no routers.ts)
+- [x] Bloqueio automático de cadastro quando CPF está na lista negra (JÁ IMPLEMENTADO)
+
+### SLIDE 26 — Férias (Melhorias)
+- [ ] Controle de 1/3 constitucional no cálculo de férias
+- [ ] Opção de abono pecuniário (venda de 10 dias)
+- [ ] Status automático "Férias" ao iniciar período e retorno automático "Ativo"
+
+### SLIDE 30 — Advertências
+- [x] Sequência automática de advertências (JÁ IMPLEMENTADO - REVISÃO_01 advertencias progressivas CLT)
+
+### SLIDE 32 — Controle de Entregas de EPI
+- [x] Campo "Fornecedor" no cadastro de EPI (ADICIONADO AGORA)
+- [ ] Assinatura digital na entrega de EPI
+- [ ] Exportar Ficha de EPI completa em PDF (por funcionário)
+
+### SLIDE 33 — Acidentes, DDS e CIPA
+- [x] Registro fotográfico no DDS (campo fotosUrls ADICIONADO no schema)
+- [ ] Calendário visual de reuniões CIPA
+
+### SLIDE 34 — Segurança do Trabalho (FISPQ e Riscos)
+- [ ] FISPQ: classificação de risco 1-5, EPI necessário, primeiros socorros, armazenamento
+- [ ] Mapeamento de Riscos: 5 tipos (Físico, Químico, Biológico, Ergonômico, Acidente)
+- [ ] Auditorias internas/externas com plano de ação (responsável + prazo)
+
+### SLIDE 35 — Controle de PJ (Melhorias)
+- [ ] Validação automática de CNPJ do PJ
+- [ ] Renovação automática de contrato PJ (alerta + opção de renovar)
+- [ ] Relatórios separados CLT vs PJ
+- [ ] Dashboard de custos PJ
+
+### SLIDE 36 — Processos Trabalhistas (Melhorias)
+- [ ] Dashboard Jurídico completo (valor em risco, processos por status, por advogado)
+- [ ] Alertas automáticos de audiências e prazos
+
+### SLIDE 39 — IA Integrada (Funcionalidades avançadas)
+- [ ] Análise Preditiva (padrões de vencimento, tendências de HE)
+- [ ] Classificação Inteligente de documentos (upload → IA sugere tipo e preenche campos)
+- [ ] Sugestões automáticas de resolução de inconsistências
+
+### SLIDE 40 — Auditoria e Segurança
+- [ ] Log de downloads/exportações na auditoria
+- [ ] Log de tentativas de acesso negadas
+- [ ] Log de alterações de permissão

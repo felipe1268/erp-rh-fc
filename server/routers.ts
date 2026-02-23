@@ -47,6 +47,7 @@ import { notificationsRouter } from "./routers/notifications";
 import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
 import { cipaRouter } from "./routers/cipa";
 import { pjContractsRouter } from "./routers/pjContracts";
+import { insuranceRouter } from "./routers/insurance";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -71,6 +72,7 @@ export const appRouter = router({
   docs: controleDocumentosRouter,
   home: homeDataRouter,
   epis: episRouter,
+  insurance: insuranceRouter,
   menuConfig: menuConfigRouter,
   goldenRules: goldenRulesRouter,
   notifications: notificationsRouter,
@@ -94,6 +96,7 @@ export const appRouter = router({
       nomeFantasia: z.string().optional(), endereco: z.string().optional(),
       cidade: z.string().optional(), estado: z.string().optional(),
       cep: z.string().optional(), telefone: z.string().optional(), email: z.string().optional(),
+      inscricaoEstadual: z.string().optional(), inscricaoMunicipal: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
       if (!validateCNPJ(input.cnpj)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ inválido. Verifique os dígitos e tente novamente." });
@@ -106,7 +109,9 @@ export const appRouter = router({
       id: z.number(), cnpj: z.string().optional(), razaoSocial: z.string().optional(),
       nomeFantasia: z.string().optional(), endereco: z.string().optional(),
       cidade: z.string().optional(), estado: z.string().optional(),
-      cep: z.string().optional(), telefone: z.string().optional(), email: z.string().optional(), isActive: z.boolean().optional(),
+      cep: z.string().optional(), telefone: z.string().optional(), email: z.string().optional(),
+      inscricaoEstadual: z.string().optional(), inscricaoMunicipal: z.string().optional(),
+      isActive: z.boolean().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
       await updateCompany(id, { ...data, isActive: data.isActive !== undefined ? (data.isActive ? 1 : 0) : undefined } as any);

@@ -20,6 +20,7 @@ export const episRouter = router({
       ca: z.string().optional(),
       validadeCa: z.string().optional(),
       fabricante: z.string().optional(),
+      fornecedor: z.string().optional(),
       quantidadeEstoque: z.number().default(0),
     }))
     .mutation(({ input }) => createEpi(input)),
@@ -31,6 +32,7 @@ export const episRouter = router({
       ca: z.string().optional(),
       validadeCa: z.string().optional(),
       fabricante: z.string().optional(),
+      fornecedor: z.string().optional(),
       quantidadeEstoque: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
