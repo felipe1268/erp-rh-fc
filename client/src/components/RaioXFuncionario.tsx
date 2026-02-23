@@ -543,7 +543,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                       { value: "ponto", label: "Ponto", icon: Clock, count: pontoResumo.length },
                       { value: "folha", label: "Folha", icon: DollarSign, count: folhaPagamento.length },
                       { value: "he", label: "Horas Extras", icon: Zap, count: horasExtras.length },
-                      { value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length },
+                      ...(emp?.tipoContrato === 'PJ' ? [{ value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length }] : []),
                     ],
                   },
                   {

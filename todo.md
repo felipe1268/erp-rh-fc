@@ -1590,3 +1590,7 @@
 - [x] Labels coloridos por categoria com bordas temáticas
 - [x] Todas as 17 abas acessíveis e funcionais
 - [x] Atualizar Rev. 60 → Rev. 61
+
+## Rev. 62 - Correção Aba PJ no Raio-X
+- [x] Ocultar aba PJ no Raio-X para colaboradores CLT (só mostrar para tipo_contrato = PJ)
+- [x] Testado: CLT (Ademir) sem aba PJ / PJ (Ricardo) com aba PJ
