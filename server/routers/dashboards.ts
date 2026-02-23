@@ -786,12 +786,18 @@ async function getDashJuridico(companyId: number) {
     .sort((a, b) => (a.data || "").localeCompare(b.data || "")).slice(0, 10);
 
   // Valores
+  const parseBRLVal = (val: string | null) => {
+    if (!val) return 0;
+    const clean = val.replace(/R\$\s*/g, "").trim();
+    if (clean.includes(",")) return parseFloat(clean.replace(/\./g, "").replace(",", ".")) || 0;
+    return parseFloat(clean) || 0;
+  };
   let totalValorCausa = 0, totalValorCondenacao = 0, totalValorAcordo = 0, totalValorPago = 0;
   for (const p of allProcessos) {
-    totalValorCausa += parseFloat(p.valorCausa || "0");
-    totalValorCondenacao += parseFloat(p.valorCondenacao || "0");
-    totalValorAcordo += parseFloat(p.valorAcordo || "0");
-    totalValorPago += parseFloat(p.valorPago || "0");
+    totalValorCausa += parseBRLVal(p.valorCausa);
+    totalValorCondenacao += parseBRLVal(p.valorCondenacao);
+    totalValorAcordo += parseBRLVal(p.valorAcordo);
+    totalValorPago += parseBRLVal(p.valorPago);
   }
 
   // Por status
@@ -824,7 +830,7 @@ async function getDashJuridico(companyId: number) {
   for (const p of allProcessos) {
     if (p.status !== "encerrado" && p.status !== "arquivado") {
       const risco = p.risco || "medio";
-      valorPorRisco[risco] = (valorPorRisco[risco] || 0) + parseFloat(p.valorCausa || "0");
+      valorPorRisco[risco] = (valorPorRisco[risco] || 0) + parseBRLVal(p.valorCausa);
     }
   }
 

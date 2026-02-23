@@ -1,0 +1,26 @@
+{
+  "query": "SELECT id, numeroProcesso, valorCausa, valorPago, valorCondenacao, valorAcordo FROM processos_trabalhistas LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, numeroProcesso, valorCausa, valorPago, valorCondenacao, valorAcordo FROM processos_trabalhistas LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "numeroProcesso": "0001234-56.2026.5.15.0042",
+      "valorCausa": "85000.00",
+      "valorPago": "NULL",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL"
+    },
+    {
+      "id": "2",
+      "numeroProcesso": "0005678-90.2025.5.15.0042",
+      "valorCausa": "45000.00",
+      "valorPago": "NULL",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnumeroProcesso\tvalorCausa\tvalorPago\tvalorCondenacao\tvalorAcordo\n1\t0001234-56.2026.5.15.0042\t85000.00\tNULL\tNULL\tNULL\n2\t0005678-90.2025.5.15.0042\t45000.00\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 192
+}

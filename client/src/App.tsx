@@ -38,6 +38,7 @@ import AvisoPrevio from "./pages/AvisoPrevio";
 import Ferias from "./pages/Ferias";
 import CipaCompleta from "./pages/CipaCompleta";
 import ModuloPJ from "./pages/ModuloPJ";
+import ContratoPJView from "./pages/ContratoPJView";
 
 function Router() {
   return (
@@ -65,6 +66,7 @@ function Router() {
       <Route path={"/ferias"} component={Ferias} />
       <Route path={"/cipa"} component={CipaCompleta} />
       <Route path={"/modulo-pj"} component={ModuloPJ} />
+      <Route path={"/contrato-pj/:id"} component={ContratoPJView} />
       {/* Relatórios */}
       <Route path={"/relatorios/raio-x"} component={RaioXPage} />
       {/* Dashboards */}

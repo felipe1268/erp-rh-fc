@@ -88,21 +88,46 @@ export function formatCNH(val: unknown): string {
 }
 
 /**
+ * Converte string monetária para número, detectando automaticamente
+ * formato brasileiro (1.234,56) vs americano/banco (1234.56 ou 4000.00)
+ * 
+ * Regras de detecção:
+ * - Se termina com vírgula + 1-2 dígitos → formato BR (ex: "4.000,00" → 4000)
+ * - Se termina com ponto + 1-2 dígitos e NÃO tem vírgula → formato US/banco (ex: "4000.00" → 4000)
+ * - Caso contrário → tenta parseFloat direto
+ */
+function parseMoneyString(s: string): number {
+  const str = s.trim().replace(/^R\$\s*/, "");
+  // Se tem vírgula seguida de 1-2 dígitos no final → formato BR (1.234,56)
+  if (/,\d{1,2}$/.test(str)) {
+    return parseFloat(str.replace(/\./g, "").replace(",", "."));
+  }
+  // Se tem ponto seguido de 1-2 dígitos no final e NÃO tem vírgula → formato US/banco (4000.00)
+  if (/\.\d{1,2}$/.test(str) && !str.includes(",")) {
+    return parseFloat(str);
+  }
+  // Número inteiro sem separadores
+  return parseFloat(str.replace(/[^\d.-]/g, ""));
+}
+
+/**
  * Formata qualquer valor monetário como R$ 0.000,00
+ * Detecta automaticamente formato BR (1.234,56) e US/banco (1234.56)
  */
 export function formatMoeda(val: unknown): string {
-  if (!val) return "-";
-  const num = typeof val === "number" ? val : parseFloat(String(val).replace(/\./g, "").replace(",", "."));
+  if (!val && val !== 0) return "-";
+  const num = typeof val === "number" ? val : parseMoneyString(String(val));
   if (isNaN(num)) return String(val);
   return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /**
  * Formata valor monetário para exibição sem prefixo R$ (ex: 2.500,00)
+ * Detecta automaticamente formato BR (1.234,56) e US/banco (1234.56)
  */
 export function formatMoedaSemPrefixo(val: unknown): string {
   if (!val && val !== 0) return "";
-  const num = typeof val === "number" ? val : parseFloat(String(val).replace(/\./g, "").replace(",", "."));
+  const num = typeof val === "number" ? val : parseMoneyString(String(val));
   if (isNaN(num)) return String(val);
   return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

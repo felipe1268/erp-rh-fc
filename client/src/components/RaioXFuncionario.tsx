@@ -11,7 +11,7 @@ import {
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
-  Palmtree, Shield, FileSignature
+  Palmtree, Shield, FileSignature, Ban
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -185,12 +185,31 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
       ["Telefone", emp?.telefone || emp?.celular || "-"],
       ["E-mail", emp?.email || "-"],
       ["Contrato", emp?.tipoContrato || "-"],
-      ["Jornada", emp?.jornadaTrabalho || "-"],
       ["Banco", emp?.bancoNome || emp?.banco || "-"],
       ["Ag\u00EAncia/Conta", `${emp?.agencia || "-"} / ${emp?.conta || "-"}`],
     ];
     campos.forEach(([label, value]) => { html += `<div class="info-item"><strong>${label}:</strong> ${value}</div>`; });
     html += `</div>`;
+    // JORNADA DE TRABALHO - tabela visual ou texto
+    if (emp?.jornadaTrabalho && emp.jornadaTrabalho !== '-') {
+      const jt = emp.jornadaTrabalho;
+      const isJson = typeof jt === 'string' && jt.trim().startsWith('{');
+      if (isJson) {
+        try {
+          const jornada = JSON.parse(jt);
+const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta', sab: 'Sábado', dom: 'Domingo' };
+           const diasOrdem = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'];
+           html += `<div style="margin-top:8px"><strong>Jornada de Trabalho:</strong></div>`;
+           html += `<table style="width:100%;margin-top:4px;font-size:11px;border-collapse:collapse"><thead><tr style="background:#e0e7ff">`;
+           diasOrdem.forEach(d => { if (jornada[d]) html += `<th style="padding:3px 6px;border:1px solid #c7d2fe;text-align:center">${diasMap[d]}</th>`; });
+          html += `</tr></thead><tbody><tr>`;
+          diasOrdem.forEach(d => { if (jornada[d]) { const j = jornada[d]; html += `<td style="padding:3px 6px;border:1px solid #c7d2fe;text-align:center">${j.entrada || '-'} - ${j.saida || '-'}</td>`; } });
+          html += `</tr></tbody></table>`;
+        } catch { html += `<div class="info-item"><strong>Jornada:</strong> ${jt}</div>`; }
+      } else {
+        html += `<div class="info-item" style="margin-top:4px"><strong>Jornada:</strong> ${jt}</div>`;
+      }
+    }
     if (emp?.logradouro) html += `<div class="info-item" style="margin-top:2px"><strong>Endere\u00E7o:</strong> ${emp.logradouro}${emp.numero ? `, ${emp.numero}` : ""}${emp.complemento ? ` - ${emp.complemento}` : ""}${emp.bairro ? `, ${emp.bairro}` : ""}${emp.cidade ? ` - ${emp.cidade}` : ""}${emp.estado ? `/${emp.estado}` : ""}${emp.cep ? ` - CEP: ${emp.cep}` : ""}</div>`;
     if (emp?.dataDemissao) html += `<div class="info-item" style="color:#dc2626;margin-top:4px"><strong>Desligado em:</strong> ${formatDate(emp.dataDemissao)}</div>`;
     html += `</div>`;
@@ -452,6 +471,59 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                     </div>
                   )}
                   {emp.dataDemissao && <p className="text-sm text-red-600 mt-2 font-medium">Desligado em: {formatDate(emp.dataDemissao)}</p>}
+                  {/* JORNADA DE TRABALHO - tabela visual ou texto */}
+                  {emp.jornadaTrabalho && emp.jornadaTrabalho !== '-' && (() => {
+                    const jt = emp.jornadaTrabalho;
+                    const isJson = typeof jt === 'string' && jt.trim().startsWith('{');
+                    if (isJson) {
+                      try {
+                        const jornada = JSON.parse(jt);
+                        const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta', sab: 'Sábado', dom: 'Domingo' };
+                        const diasOrdem = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'];
+                        const diasAtivos = diasOrdem.filter(d => jornada[d]);
+                        if (diasAtivos.length === 0) return null;
+                        return (
+                          <div className="mt-3 bg-white/60 rounded-lg border border-blue-100 p-3">
+                            <p className="text-xs font-bold text-blue-800 uppercase mb-2">Jornada de Trabalho</p>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-blue-100/80">
+                                    {diasAtivos.map(d => (
+                                      <th key={d} className="px-3 py-1.5 text-center font-bold text-blue-800 border border-blue-200">{diasMap[d]}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr>
+                                    {diasAtivos.map(d => {
+                                      const j = jornada[d];
+                                      return (
+                                        <td key={d} className="px-2 py-1.5 text-center border border-blue-200 text-gray-700">
+                                          <span className="font-semibold">{j.entrada || '-'}</span>
+                                          <span className="text-gray-400 mx-0.5">–</span>
+                                          <span className="font-semibold">{j.saida || '-'}</span>
+                                          {j.intervalo && <div className="text-[10px] text-gray-400">Int: {j.intervalo}</div>}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      } catch { return null; }
+                    } else {
+                      // Texto simples: "07:00 às 17:00"
+                      return (
+                        <div className="mt-3 flex items-center gap-2 text-sm text-blue-700">
+                          <Clock className="h-4 w-4 shrink-0 text-blue-500" />
+                          <span><strong>Jornada:</strong> {jt}</span>
+                        </div>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
 
@@ -474,7 +546,9 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                   { label: "Advertências", value: advertencias.length, tab: "adv", bg: advertencias.length >= 3 ? "bg-red-50 border-red-300" : "bg-orange-50 border-orange-200", textColor: advertencias.length >= 3 ? "text-red-700" : "text-orange-700", iconColor: advertencias.length >= 3 ? "text-red-400" : "text-orange-400", icon: ShieldAlert },
                   { label: "Ponto", value: pontoResumo.length, tab: "ponto", bg: "bg-sky-50 border-sky-200", textColor: "text-sky-700", iconColor: "text-sky-400", icon: Clock },
                   { label: "EPIs", value: episEntregas.length, tab: "epis", bg: "bg-teal-50 border-teal-200", textColor: "text-teal-700", iconColor: "text-teal-400", icon: HardHat },
-                  { label: "Horas Extras", value: horasExtras.length, tab: "he", bg: "bg-amber-50 border-amber-200", textColor: "text-amber-700", iconColor: "text-amber-400", icon: Zap },
+                  ...(emp?.tipoContrato === 'PJ'
+                    ? [{ label: "Adicionais", value: horasExtras.length, tab: "he", bg: "bg-purple-50 border-purple-200", textColor: "text-purple-700", iconColor: "text-purple-400", icon: Zap }]
+                    : [{ label: "Horas Extras", value: horasExtras.length, tab: "he", bg: "bg-amber-50 border-amber-200", textColor: "text-amber-700", iconColor: "text-amber-400", icon: Zap }]),
                   { label: "Histórico", value: timeline.length, tab: "timeline", bg: "bg-indigo-50 border-indigo-200", textColor: "text-indigo-700", iconColor: "text-indigo-400", icon: History },
                 ].map(c => {
                   const Icon = c.icon;
@@ -488,6 +562,27 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                 })}
               </div>
             </div>
+
+            {/* BANNER LISTA NEGRA */}
+            {(emp.listaNegra === 1 || emp.status === 'Lista_Negra') && (
+              <div className="bg-red-900 border-2 border-red-600 rounded-xl p-5 flex items-start gap-4 shadow-lg">
+                <div className="h-12 w-12 rounded-full bg-red-700 flex items-center justify-center shrink-0">
+                  <Ban className="h-7 w-7 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-white text-lg tracking-wide">LISTA NEGRA — RECONTRATAÇÃO PROIBIDA</p>
+                  <p className="text-sm text-red-200 mt-1">
+                    Este colaborador está na <strong className="text-white">Lista Negra</strong> da empresa e <strong className="text-white">NÃO pode ser recontratado</strong>.
+                  </p>
+                  {(emp as any).motivoListaNegra && (
+                    <p className="text-sm text-red-300 mt-2"><strong className="text-red-100">Motivo:</strong> {(emp as any).motivoListaNegra}</p>
+                  )}
+                  {(emp as any).dataListaNegra && (
+                    <p className="text-xs text-red-400 mt-1">Incluído em: {formatDate((emp as any).dataListaNegra)} {(emp as any).listaNegraPor ? `por ${(emp as any).listaNegraPor}` : ''}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ALERTAS */}
             {advertencias.length >= 3 && (
@@ -542,7 +637,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                     tabs: [
                       { value: "ponto", label: "Ponto", icon: Clock, count: pontoResumo.length },
                       { value: "folha", label: "Folha", icon: DollarSign, count: folhaPagamento.length },
-                      { value: "he", label: "Horas Extras", icon: Zap, count: horasExtras.length },
+                      { value: "he", label: emp?.tipoContrato === 'PJ' ? "Adicionais" : "Horas Extras", icon: Zap, count: horasExtras.length },
                       ...(emp?.tipoContrato === 'PJ' ? [{ value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length }] : []),
                     ],
                   },
@@ -903,51 +998,98 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                 )}
               </TabsContent>
 
-              {/* ============ HORAS EXTRAS ============ */}
+              {/* ============ HORAS EXTRAS / ADICIONAIS PJ ============ */}
               <TabsContent value="he" className="mt-4">
-                {horasExtras.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">Nenhuma hora extra registrada</div>
+                {emp?.tipoContrato === 'PJ' ? (
+                  /* ---- ADICIONAIS PJ ---- */
+                  horasExtras.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">Nenhum adicional registrado</div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <Card className="border-l-4 border-l-purple-500"><CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground">Total Adicionais</p>
+                          <p className="text-2xl font-bold text-purple-600">{horasExtras.length}</p>
+                        </CardContent></Card>
+                        <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground">Horas Adicionais</p>
+                          <p className="text-2xl font-bold text-blue-600">{totalHEHoras.toFixed(1)}h</p>
+                        </CardContent></Card>
+                        <Card className="border-l-4 border-l-green-500"><CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground">Valor Total Adicionais</p>
+                          <p className="text-2xl font-bold text-green-600">{formatSalario(String(totalHEValor.toFixed(2)))}</p>
+                        </CardContent></Card>
+                      </div>
+                      <div className="overflow-x-auto rounded-lg border bg-white">
+                        <table className="w-full text-sm">
+                          <thead><tr className="bg-purple-50 border-b">
+                            <th className="p-3 text-left font-semibold text-purple-900">Competência</th>
+                            <th className="p-3 text-left font-semibold text-purple-900">Tipo</th>
+                            <th className="p-3 text-right font-semibold text-purple-900">Horas</th>
+                            <th className="p-3 text-right font-semibold text-purple-900">Valor Total</th>
+                            <th className="p-3 text-left font-semibold text-purple-900">Descrição</th>
+                          </tr></thead>
+                          <tbody>
+                            {horasExtras.map((h: any) => (
+                              <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="p-3 font-medium">{h.mesReferencia}</td>
+                                <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">{h.descricao?.includes('Comissão') ? 'Comissão' : h.descricao?.includes('Bônus') ? 'Bônus' : 'Adicional'}</span></td>
+                                <td className="p-3 text-right font-mono font-semibold text-purple-600">{h.quantidadeHoras}h</td>
+                                <td className="p-3 text-right font-mono font-bold text-green-600">{formatSalario(h.valorTotal)}</td>
+                                <td className="p-3 max-w-[200px] truncate">{h.descricao || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
                 ) : (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4">
-                      <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
-                        <p className="text-xs text-muted-foreground">Total Registros</p>
-                        <p className="text-2xl font-bold text-orange-600">{horasExtras.length}</p>
-                      </CardContent></Card>
-                      <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
-                        <p className="text-xs text-muted-foreground">Total Horas</p>
-                        <p className="text-2xl font-bold text-blue-600">{totalHEHoras.toFixed(1)}h</p>
-                      </CardContent></Card>
-                      <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
-                        <p className="text-xs text-muted-foreground">Custo Total</p>
-                        <p className="text-2xl font-bold text-red-600">{formatSalario(String(totalHEValor.toFixed(2)))}</p>
-                      </CardContent></Card>
+                  /* ---- HORAS EXTRAS CLT ---- */
+                  horasExtras.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">Nenhuma hora extra registrada</div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground">Total Registros</p>
+                          <p className="text-2xl font-bold text-orange-600">{horasExtras.length}</p>
+                        </CardContent></Card>
+                        <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground">Total Horas</p>
+                          <p className="text-2xl font-bold text-blue-600">{totalHEHoras.toFixed(1)}h</p>
+                        </CardContent></Card>
+                        <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground">Custo Total</p>
+                          <p className="text-2xl font-bold text-red-600">{formatSalario(String(totalHEValor.toFixed(2)))}</p>
+                        </CardContent></Card>
+                      </div>
+                      <div className="overflow-x-auto rounded-lg border bg-white">
+                        <table className="w-full text-sm">
+                          <thead><tr className="bg-orange-50 border-b">
+                            <th className="p-3 text-left font-semibold text-orange-900">Competência</th>
+                            <th className="p-3 text-right font-semibold text-orange-900">Horas</th>
+                            <th className="p-3 text-right font-semibold text-orange-900">% Acréscimo</th>
+                            <th className="p-3 text-right font-semibold text-orange-900">Valor/Hora</th>
+                            <th className="p-3 text-right font-semibold text-orange-900">Valor Total</th>
+                            <th className="p-3 text-left font-semibold text-orange-900">Descrição</th>
+                          </tr></thead>
+                          <tbody>
+                            {horasExtras.map((h: any) => (
+                              <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="p-3 font-medium">{h.mesReferencia}</td>
+                                <td className="p-3 text-right font-mono font-semibold text-orange-600">{h.quantidadeHoras}h</td>
+                                <td className="p-3 text-right font-mono">{h.percentualAcrescimo || "50"}%</td>
+                                <td className="p-3 text-right font-mono">{formatSalario(h.valorHoraBase)}</td>
+                                <td className="p-3 text-right font-mono font-bold text-red-600">{formatSalario(h.valorTotal)}</td>
+                                <td className="p-3 max-w-[200px] truncate">{h.descricao || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                    <div className="overflow-x-auto rounded-lg border bg-white">
-                      <table className="w-full text-sm">
-                        <thead><tr className="bg-orange-50 border-b">
-                          <th className="p-3 text-left font-semibold text-orange-900">Competência</th>
-                          <th className="p-3 text-right font-semibold text-orange-900">Horas</th>
-                          <th className="p-3 text-right font-semibold text-orange-900">% Acréscimo</th>
-                          <th className="p-3 text-right font-semibold text-orange-900">Valor/Hora</th>
-                          <th className="p-3 text-right font-semibold text-orange-900">Valor Total</th>
-                          <th className="p-3 text-left font-semibold text-orange-900">Descrição</th>
-                        </tr></thead>
-                        <tbody>
-                          {horasExtras.map((h: any) => (
-                            <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="p-3 font-medium">{h.mesReferencia}</td>
-                              <td className="p-3 text-right font-mono font-semibold text-orange-600">{h.quantidadeHoras}h</td>
-                              <td className="p-3 text-right font-mono">{h.percentualAcrescimo || "50"}%</td>
-                              <td className="p-3 text-right font-mono">{formatSalario(h.valorHoraBase)}</td>
-                              <td className="p-3 text-right font-mono font-bold text-red-600">{formatSalario(h.valorTotal)}</td>
-                              <td className="p-3 max-w-[200px] truncate">{h.descricao || "-"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  )
                 )}
               </TabsContent>
 
@@ -1286,7 +1428,17 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
                 ) : (
                   <div className="space-y-4">
                     <div className="bg-white rounded-xl border p-6">
-                      <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-500" /> Contratos PJ — {pjContratos.length}</h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-500" /> Contratos PJ — {pjContratos.length}</h3>
+                        <Button size="sm" variant="outline" className="gap-1.5 text-purple-700 border-purple-300 hover:bg-purple-50" onClick={() => {
+                          const contrato = pjContratos[0];
+                          if (!contrato) return;
+                          window.location.href = `/contrato-pj/${contrato.id}`;
+                        }}>
+
+                          <Printer className="h-4 w-4" /> Gerar Contrato
+                        </Button>
+                      </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead><tr className="border-b bg-muted/30"><th className="p-2 text-left">Nº Contrato</th><th className="p-2 text-left">Vigência</th><th className="p-2 text-right">Valor Mensal</th><th className="p-2 text-center">Adiant./Fech.</th><th className="p-2 text-center">Status</th></tr></thead>

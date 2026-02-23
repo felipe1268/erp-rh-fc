@@ -227,7 +227,11 @@ export const processosTrabRouter = router({
 
       const parseBRL = (val: string | null) => {
         if (!val) return 0;
-        return parseFloat(val.replace(/R\$\s*/g, "").replace(/\./g, "").replace(",", ".").trim()) || 0;
+        const clean = val.replace(/R\$\s*/g, "").trim();
+        if (clean.includes(",")) {
+          return parseFloat(clean.replace(/\./g, "").replace(",", ".")) || 0;
+        }
+        return parseFloat(clean) || 0;
       };
 
       const totalValorCausa = processos.reduce((s, p) => s + parseBRL(p.valorCausa), 0);

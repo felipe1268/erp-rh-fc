@@ -75,7 +75,17 @@ function formatDate(d: string | null | undefined): string {
 
 function formatBRL(val: string | null | undefined): string {
   if (!val) return "—";
-  const num = parseFloat(val.replace(/R\$\s*/g, "").replace(/\./g, "").replace(",", ".").trim());
+  const clean = val.replace(/R\$\s*/g, "").trim();
+  // Check if it's already in numeric format (e.g., "85000.00" from DB)
+  // vs BRL format (e.g., "85.000,00" with dots as thousands separator)
+  let num: number;
+  if (clean.includes(",")) {
+    // BRL format: dots are thousands, comma is decimal
+    num = parseFloat(clean.replace(/\./g, "").replace(",", "."));
+  } else {
+    // Numeric format: dot is decimal separator
+    num = parseFloat(clean);
+  }
   if (isNaN(num)) return val;
   return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -1007,7 +1017,7 @@ function EditableField({ label, value, field, processoId, onSave }: {
   return (
     <div className="flex justify-between items-center group cursor-pointer" onClick={() => { setVal(value || ""); setEditing(true); }}>
       <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="font-medium text-xs group-hover:text-blue-600">{value || "—"}</span>
+      <span className="font-medium text-xs group-hover:text-blue-600">{field.startsWith("valor") ? formatBRL(value) : (value || "—")}</span>
     </div>
   );
 }

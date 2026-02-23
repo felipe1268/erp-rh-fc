@@ -1594,3 +1594,33 @@
 ## Rev. 62 - Correção Aba PJ no Raio-X
 - [x] Ocultar aba PJ no Raio-X para colaboradores CLT (só mostrar para tipo_contrato = PJ)
 - [x] Testado: CLT (Ademir) sem aba PJ / PJ (Ricardo) com aba PJ
+
+## Rev. 63 - Contrato Formal PJ + Adicionais PJ
+- [ ] Criar modelo de contrato formal PJ para impressão/PDF com dados dinâmicos do colaborador
+- [ ] Renomear "Horas Extras" para "Adicionais" no Raio-X para colaboradores PJ
+- [ ] Ocultar aba "Horas Extras" para PJ (PJ não tem HE por lei)
+- [ ] Criar tabela/schema de adicionais PJ (comissões, pagamentos extras, horas adicionais)
+- [ ] Criar CRUD de adicionais PJ no backend e frontend
+- [ ] Integrar botão de gerar contrato PJ na aba PJ do Raio-X
+
+## Rev. 63 - BUG CRÍTICO: Cálculo de Férias Errado
+- [ ] Investigar e corrigir cálculo de férias (valores absurdos: R$ 400.000 para Técnico de Segurança)
+- [ ] Provável erro de parsing do salário (formato BR com ponto/vírgula)
+- [ ] Revisar TODOS os cálculos de férias no sistema
+- [ ] Identificar automaticamente funcionários de férias na importação da folha de pagamento
+- [ ] Separar valores de férias (salário + 1/3) da folha normal ao importar
+- [ ] Sinalizar na folha que funcionário está de férias naquele mês
+- [ ] Formatar jornada de trabalho no Raio-X (JSON bruto → tabela visual simples)
+- [ ] Alterar labels da jornada de "Seg/Ter/Qua..." para "Segunda/Terça/Quarta..." por extenso
+
+## Rev. 63 - Nova Abordagem: Contrato PJ como Página Dedicada
+- [ ] Criar página /contrato-pj/:id como rota do sistema (sem popup/blob/window.open)
+- [ ] Backend tRPC: rota para buscar dados completos do contrato PJ por ID
+- [ ] Página renderiza contrato formal diretamente no app com CSS de impressão
+- [ ] Botão "Imprimir" usa window.print() nativo (funciona em qualquer ambiente)
+- [ ] Botão no Raio-X navega para a rota (useLocation do wouter)
+- [ ] Remover código antigo de Blob URL do RaioXFuncionario.tsx
+- [ ] Atualizar versão sidebar Rev. 60 → Rev. 63
+- [ ] Banner visual de LISTA NEGRA no Raio-X (colaboradores blacklist)
+- [ ] Corrigir filtro Blacklist (mostra 0 mas há colaborador no banco)
+- [x] Corrigir formato de valores monetários nos Processos Trabalhistas (45000.00 → R$ 45.000,00)
