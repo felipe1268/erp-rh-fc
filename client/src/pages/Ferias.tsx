@@ -427,12 +427,55 @@ export default function Ferias() {
                   ))}
                 </div>
                 {(fluxoCaixa as any[]).length > 0 && (
+                  <>
                   <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 flex justify-between items-center">
                     <span className="font-semibold text-blue-800">Total Estimado Anual:</span>
                     <span className="text-xl font-bold text-blue-800">
                       {formatMoeda((fluxoCaixa as any[]).reduce((sum: number, m: any) => sum + parseFloat(m.valorTotal || "0"), 0))}
                     </span>
                   </div>
+
+                  {/* Gráfico de barras mensal */}
+                  {(() => {
+                    const dados = fluxoCaixa as any[];
+                    const maxVal = Math.max(...dados.map((m: any) => parseFloat(m.valorTotal || "0")), 1);
+                    return (
+                      <div className="mt-6">
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4" /> Visualização Mensal
+                        </h4>
+                        <div className="flex items-end gap-2 h-48 border-b border-gray-200 pb-1">
+                          {dados.map((m: any) => {
+                            const val = parseFloat(m.valorTotal || "0");
+                            const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+                            const hasValue = val > 0;
+                            return (
+                              <div key={m.mes} className="flex-1 flex flex-col items-center gap-1 group relative">
+                                {hasValue && (
+                                  <span className="text-[9px] font-semibold text-green-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                    {formatMoeda(val)}
+                                  </span>
+                                )}
+                                <div
+                                  className={`w-full rounded-t-md transition-all ${
+                                    hasValue
+                                      ? "bg-gradient-to-t from-green-500 to-green-400 group-hover:from-green-600 group-hover:to-green-500"
+                                      : "bg-gray-200"
+                                  }`}
+                                  style={{ height: `${Math.max(pct, 3)}%`, minHeight: "4px" }}
+                                  title={`${m.nomeMes}: ${formatMoeda(val)} - ${m.totalFuncionarios} func.`}
+                                />
+                                <span className="text-[9px] text-muted-foreground font-medium">
+                                  {(m.nomeMes || "").substring(0, 3)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  </>
                 )}
               </CardContent>
             </Card>

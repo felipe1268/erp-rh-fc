@@ -46,6 +46,18 @@ export const episRouter = router({
       return { success: true };
     }),
 
+  deleteBatch: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const { inArray } = await import("drizzle-orm");
+      // Primeiro excluir entregas vinculadas
+      await db.delete(epiDeliveries).where(inArray(epiDeliveries.epiId, input.ids));
+      // Depois excluir os EPIs
+      await db.delete(epis).where(inArray(epis.id, input.ids));
+      return { success: true, deleted: input.ids.length };
+    }),
+
   // ============================================================
   // ENTREGAS DE EPIs
   // ============================================================

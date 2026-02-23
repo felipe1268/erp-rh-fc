@@ -1635,3 +1635,6 @@
 - [x] Processos Trabalhistas: seleção múltipla com checkbox para excluir em lote
 - [x] Processos Trabalhistas: criar rota backend de exclusão (delete e deleteBatch)
 - [x] CIPA: alerta só aparecer quando NÃO tem mandato ativo com membros suficientes (sumir quando CIPA já constituída)
+- [x] EPIs: seleção múltipla com checkbox + exclusão em lote na tabela de Catálogo de EPIs
+- [x] Funções/Cargos: corrigir filtros dos cards de estatísticas (Com CBO, Com Descrição, etc.) - não filtram ao clicar
+- [x] Fluxo de Caixa Prévio: adicionar gráfico de barras abaixo do Total Estimado Anual

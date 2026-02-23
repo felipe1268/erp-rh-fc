@@ -26,6 +26,8 @@ export default function Epis() {
   const [viewMode, setViewMode] = useState<ViewMode>("catalogo");
   const [search, setSearch] = useState("");
   const [editingEpi, setEditingEpi] = useState<any>(null);
+  const [selectedEpis, setSelectedEpis] = useState<Set<number>>(new Set());
+  const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
 
   // Queries
   const episQ = trpc.epis.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -70,6 +72,25 @@ export default function Epis() {
     onSuccess: () => { deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch(); toast.success("Entrega removida!"); },
     onError: (err) => toast.error(err.message),
   });
+  const deleteBatchMut = trpc.epis.deleteBatch.useMutation({
+    onSuccess: (data: any) => { episQ.refetch(); statsQ.refetch(); setSelectedEpis(new Set()); setShowBatchDeleteDialog(false); toast.success(`${data.deleted} EPI(s) removido(s)!`); },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const toggleSelectEpi = (id: number) => {
+    setSelectedEpis(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllEpis = () => {
+    if (selectedEpis.size === filteredEpis.length) {
+      setSelectedEpis(new Set());
+    } else {
+      setSelectedEpis(new Set(filteredEpis.map((e: any) => e.id)));
+    }
+  };
 
   function resetEpiForm() {
     setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", quantidadeEstoque: 0 });
@@ -391,9 +412,23 @@ export default function Epis() {
             <Card>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
+                  {selectedEpis.size > 0 && (
+                    <div className="flex items-center gap-3 px-4 py-2 bg-red-50 border-b border-red-200">
+                      <span className="text-sm font-medium text-red-800">{selectedEpis.size} selecionado(s)</span>
+                      <Button size="sm" variant="destructive" onClick={() => setShowBatchDeleteDialog(true)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir Selecionados
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setSelectedEpis(new Set())} className="text-xs">
+                        Limpar seleção
+                      </Button>
+                    </div>
+                  )}
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/50">
+                        <th className="p-3 text-center w-10">
+                          <input type="checkbox" checked={filteredEpis.length > 0 && selectedEpis.size === filteredEpis.length} onChange={toggleSelectAllEpis} className="rounded" />
+                        </th>
                         <th className="p-3 text-left font-medium">Nome do EPI</th>
                         <th className="p-3 text-left font-medium">CA</th>
                         <th className="p-3 text-left font-medium">Validade CA</th>
@@ -407,7 +442,10 @@ export default function Epis() {
                         const caVencido = epi.validadeCa && epi.validadeCa < hoje;
                         const estoqueBaixo = (epi.quantidadeEstoque ?? 0) <= 5;
                         return (
-                          <tr key={epi.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <tr key={epi.id} className={`border-b last:border-0 hover:bg-muted/30 ${selectedEpis.has(epi.id) ? "bg-red-50" : ""}`}>
+                            <td className="p-3 text-center">
+                              <input type="checkbox" checked={selectedEpis.has(epi.id)} onChange={() => toggleSelectEpi(epi.id)} className="rounded" />
+                            </td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
                                 <HardHat className="h-4 w-4 text-amber-600" />
@@ -464,6 +502,24 @@ export default function Epis() {
                 <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground">
                   {filteredEpis.length} EPI{filteredEpis.length !== 1 ? "s" : ""} encontrado{filteredEpis.length !== 1 ? "s" : ""}
                 </div>
+
+                {/* Batch Delete Dialog */}
+                {showBatchDeleteDialog && (
+                  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowBatchDeleteDialog(false)}>
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+                      <h3 className="text-lg font-bold text-red-700 mb-2">Confirmar Exclusão em Lote</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Tem certeza que deseja excluir <strong>{selectedEpis.size}</strong> EPI(s)? Esta ação não pode ser desfeita.
+                      </p>
+                      <div className="flex justify-end gap-3">
+                        <Button variant="outline" onClick={() => setShowBatchDeleteDialog(false)}>Cancelar</Button>
+                        <Button variant="destructive" onClick={() => deleteBatchMut.mutate({ ids: Array.from(selectedEpis) })} disabled={deleteBatchMut.isPending}>
+                          {deleteBatchMut.isPending ? "Excluindo..." : `Excluir ${selectedEpis.size} EPI(s)`}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )

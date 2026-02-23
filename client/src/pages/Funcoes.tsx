@@ -83,7 +83,7 @@ function CboAutocomplete({ value, onChange, onSelect }: { value: string; onChang
   );
 }
 
-type FilterType = "todas" | "incompletas" | "sem_cbo" | "sem_descricao" | "sem_os";
+type FilterType = "todas" | "incompletas" | "sem_cbo" | "sem_descricao" | "sem_os" | "com_cbo" | "com_descricao" | "com_os";
 
 export default function Funcoes() {
   const { selectedCompanyId, selectedCompany } = useCompany();
@@ -150,10 +150,16 @@ export default function Funcoes() {
       list = list.filter((f: any) => !isComplete(f));
     } else if (activeFilter === "sem_cbo") {
       list = list.filter((f: any) => !f.cbo || !f.cbo.trim());
+    } else if (activeFilter === "com_cbo") {
+      list = list.filter((f: any) => f.cbo && f.cbo.trim());
     } else if (activeFilter === "sem_descricao") {
       list = list.filter((f: any) => !f.descricao || f.descricao.trim().length <= 20);
+    } else if (activeFilter === "com_descricao") {
+      list = list.filter((f: any) => f.descricao && f.descricao.trim().length > 20);
     } else if (activeFilter === "sem_os") {
       list = list.filter((f: any) => !f.ordemServico || f.ordemServico.trim().length <= 20);
+    } else if (activeFilter === "com_os") {
+      list = list.filter((f: any) => f.ordemServico && f.ordemServico.trim().length > 20);
     }
     
     // Filtro por busca
@@ -274,8 +280,11 @@ export default function Funcoes() {
   const filterButtons: { key: FilterType; label: string; count: number; color: string }[] = [
     { key: "todas", label: "Todas", count: totalFuncoes, color: "bg-[#1B2A4A] text-white" },
     { key: "incompletas", label: "Incompletas", count: incompletas, color: "bg-red-600 text-white" },
+    { key: "com_cbo", label: "Com CBO", count: comCBO, color: "bg-green-600 text-white" },
     { key: "sem_cbo", label: "Sem CBO", count: totalFuncoes - comCBO, color: "bg-orange-500 text-white" },
+    { key: "com_descricao", label: "Com Descrição", count: comDescricao, color: "bg-blue-600 text-white" },
     { key: "sem_descricao", label: "Sem Descrição", count: totalFuncoes - comDescricao, color: "bg-amber-500 text-white" },
+    { key: "com_os", label: "Com Ordem de Serviço", count: comOS, color: "bg-amber-600 text-white" },
     { key: "sem_os", label: "Sem OS NR-1", count: totalFuncoes - comOS, color: "bg-gray-500 text-white" },
   ];
 
@@ -321,22 +330,22 @@ export default function Funcoes() {
             <div className="text-[10px] sm:text-xs text-gray-500">Total de Funções</div>
           </button>
           <button
-            onClick={() => setActiveFilter("sem_cbo")}
-            className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "sem_cbo" ? "ring-2 ring-green-600 bg-green-50" : "bg-white hover:bg-gray-50"}`}
+            onClick={() => setActiveFilter(activeFilter === "com_cbo" ? "todas" : "com_cbo")}
+            className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "com_cbo" ? "ring-2 ring-green-600 bg-green-50" : "bg-white hover:bg-gray-50"}`}
           >
             <div className="text-xl sm:text-2xl font-bold text-green-600">{comCBO}</div>
             <div className="text-[10px] sm:text-xs text-gray-500">Com CBO</div>
           </button>
           <button
-            onClick={() => setActiveFilter("sem_descricao")}
-            className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "sem_descricao" ? "ring-2 ring-blue-600 bg-blue-50" : "bg-white hover:bg-gray-50"}`}
+            onClick={() => setActiveFilter(activeFilter === "com_descricao" ? "todas" : "com_descricao")}
+            className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "com_descricao" ? "ring-2 ring-blue-600 bg-blue-50" : "bg-white hover:bg-gray-50"}`}
           >
             <div className="text-xl sm:text-2xl font-bold text-blue-600">{comDescricao}</div>
             <div className="text-[10px] sm:text-xs text-gray-500">Com Descrição</div>
           </button>
           <button
-            onClick={() => setActiveFilter("sem_os")}
-            className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "sem_os" ? "ring-2 ring-amber-600 bg-amber-50" : "bg-white hover:bg-gray-50"}`}
+            onClick={() => setActiveFilter(activeFilter === "com_os" ? "todas" : "com_os")}
+            className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "com_os" ? "ring-2 ring-amber-600 bg-amber-50" : "bg-white hover:bg-gray-50"}`}
           >
             <div className="text-xl sm:text-2xl font-bold text-amber-600">{comOS}</div>
             <div className="text-[10px] sm:text-xs text-gray-500">Com Ordem de Serviço</div>
