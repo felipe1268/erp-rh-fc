@@ -29,7 +29,7 @@ import {
   BarChart3, Settings,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
   ClipboardList, UserSearch, Gavel, Wifi, HardHat, Trash2,
-  AlertTriangle, Palmtree, Shield, FileSignature,
+  AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -113,6 +113,7 @@ const menuSections = [
       { icon: Lock, label: "Usuários e Permissões", path: "/usuarios" },
       { icon: FileText, label: "Auditoria do Sistema", path: "/auditoria" },
       { icon: Settings, label: "Configurações", path: "/configuracoes" },
+      { icon: GitBranch, label: "Revisões do Sistema", path: "/revisoes", adminMasterOnly: true },
       { icon: Trash2, label: "Lixeira", path: "/lixeira" },
     ],
   },
@@ -294,8 +295,15 @@ function DashboardLayoutContent({
         items: s.items.filter((item: any) => !adminOnlyPaths.includes(item.path)),
       }));
     }
+    // Filtrar itens exclusivos do Admin Master
+    if (!isMasterUser) {
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.filter((item: any) => !item.adminMasterOnly),
+      }));
+    }
     return sections.filter((s: any) => s.items.length > 0);
-  }, [menuConfigQuery.data, isAdminUser]);
+  }, [menuConfigQuery.data, isAdminUser, isMasterUser]);
 
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const activeMenuItem = allEffectiveItems.find(item => item.path === location) || allMenuItems.find(item => item.path === location);

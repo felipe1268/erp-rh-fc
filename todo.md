@@ -1759,3 +1759,15 @@
 ## Bug: Painel de Controle - Texto cinza e Drag and Drop
 - [x] BUG: Itens "Funções" e "Relógios de Ponto" aparecem com texto cinza sem motivo (verificado - não reproduzível, itens aparecem normais)
 - [ ] Implementar drag and drop para reorganizar itens do menu no Painel de Controle (já implementado no MenuConfigPanel)
+
+## Bug PERSISTENTE: Desconsolidar - Admin Master bloqueado
+- [x] BUG: Admin Master continua recebendo erro "Apenas o Admin Master pode desconsolidar" em produção
+- [x] Investigar TODAS as camadas: frontend, backend, e como o role é verificado
+- [x] Corrigir definitivamente (permitir admin + admin_master desconsolidar)
+
+## Módulo: Controle de Revisões do Sistema
+- [x] Criar tabela system_revisions no schema (id, version, titulo, descricao, data, tipo)
+- [x] Criar backend CRUD para revisões (apenas Admin Master)
+- [x] Criar página de Controle de Revisões no frontend (visível apenas Admin Master)
+- [x] Popular histórico de revisões existentes (12 revisões seed)
+- [x] Exibir número da revisão atual no rodapé do sidebar

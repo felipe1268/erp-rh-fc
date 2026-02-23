@@ -11,6 +11,7 @@ import {
   trainingDocuments, payrollUploads, dixiDevices,
   obras, InsertObra, obraFuncionarios, obraHorasRateio, obraSns,
   sectors, InsertSector, jobFunctions, InsertJobFunction,
+  systemRevisions,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1381,4 +1382,42 @@ export async function findObraBySn(companyId: number, sn: string) {
     ))
     .limit(1);
   return results[0] || null;
+}
+
+
+// ============================================================
+// CONTROLE DE REVISÕES DO SISTEMA
+// ============================================================
+
+export async function getRevisions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(systemRevisions).orderBy(desc(systemRevisions.version));
+}
+
+export async function getLatestRevision() {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(systemRevisions).orderBy(desc(systemRevisions.version)).limit(1);
+  return rows[0] || null;
+}
+
+export async function createRevision(data: {
+  version: number;
+  titulo: string;
+  descricao: string;
+  tipo: 'feature' | 'bugfix' | 'melhoria' | 'seguranca' | 'performance';
+  modulos?: string;
+  criadoPor: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(systemRevisions).values(data);
+  return { id: Number(result[0].insertId) };
+}
+
+export async function deleteRevision(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(systemRevisions).where(eq(systemRevisions.id, id));
 }

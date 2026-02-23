@@ -25,6 +25,8 @@ import {
   // Setores e Funções
   listSectors, createSector, updateSector, deleteSector, restoreSector,
   listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction, restoreJobFunction,
+  // Revisões
+  getRevisions, getLatestRevision, createRevision, deleteRevision,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
@@ -1274,6 +1276,32 @@ export const appRouter = router({
 
       await db.execute(sqlFn.raw(`DELETE FROM \`${tableName}\` WHERE id = ${input.id}`));
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "PERMANENT_DELETE", module: "lixeira", entityType: input.entity, entityId: input.id, details: `Item excluído permanentemente: ${input.entity} #${input.id}` });
+      return { success: true };
+    }),
+  }),
+
+  // ===================== CONTROLE DE REVISÕES =====================
+  revisions: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso restrito ao Admin Master' });
+      return getRevisions();
+    }),
+    latest: publicProcedure.query(async () => {
+      return getLatestRevision();
+    }),
+    create: protectedProcedure.input(z.object({
+      version: z.number(),
+      titulo: z.string().min(1),
+      descricao: z.string().min(1),
+      tipo: z.enum(['feature', 'bugfix', 'melhoria', 'seguranca', 'performance']),
+      modulos: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso restrito ao Admin Master' });
+      return createRevision({ ...input, criadoPor: ctx.user.name || 'Sistema' });
+    }),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso restrito ao Admin Master' });
+      await deleteRevision(input.id);
       return { success: true };
     }),
   }),

@@ -1595,3 +1595,21 @@ export const pjPayments = mysqlTable("pj_payments", {
 	index("pjp_company_mes").on(table.companyId, table.mesReferencia),
 	index("pjp_employee").on(table.employeeId),
 ]);
+
+
+// ============================================================
+// CONTROLE DE REVISÕES DO SISTEMA
+// ============================================================
+export const systemRevisions = mysqlTable("system_revisions", {
+	id: int().autoincrement().notNull(),
+	version: int().notNull(), // Número da revisão (ex: 64, 65, 66)
+	titulo: varchar({ length: 255 }).notNull(),
+	descricao: text().notNull(), // Descrição detalhada das mudanças
+	tipo: mysqlEnum(['feature','bugfix','melhoria','seguranca','performance']).notNull(),
+	modulos: text(), // Módulos afetados (JSON array)
+	criadoPor: varchar({ length: 255 }).notNull(),
+	dataPublicacao: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+	index("sr_version").on(table.version),
+]);
