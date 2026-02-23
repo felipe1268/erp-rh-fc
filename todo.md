@@ -1630,3 +1630,8 @@
 - [x] Criar aba "Contrato PJ" nas Configurações/Critérios do Sistema para editar texto padrão
 - [x] Criar tabela no banco para armazenar template editável do contrato PJ
 - [x] Busca de colaboradores filtrar por qualquer campo (tipo contrato, setor, função, status, etc)
+- [x] Varredura completa: adicionar todos os módulos faltantes na tela de Limpeza de Dados
+- [x] Processos Trabalhistas: adicionar botões editar/excluir na tabela
+- [x] Processos Trabalhistas: seleção múltipla com checkbox para excluir em lote
+- [x] Processos Trabalhistas: criar rota backend de exclusão (delete e deleteBatch)
+- [x] CIPA: alerta só aparecer quando NÃO tem mandato ativo com membros suficientes (sumir quando CIPA já constituída)

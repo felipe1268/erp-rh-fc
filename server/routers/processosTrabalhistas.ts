@@ -175,6 +175,21 @@ export const processosTrabRouter = router({
     }),
 
   // ============================================================
+  // EXCLUIR EM LOTE
+  // ============================================================
+  excluirLote: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.update(processosTrabalhistas).set({
+        deletedAt: sql`NOW()`,
+        deletedBy: ctx.user.name ?? 'Sistema',
+        deletedByUserId: ctx.user.id,
+      } as any).where(inArray(processosTrabalhistas.id, input.ids));
+      return { success: true, count: input.ids.length };
+    }),
+
+  // ============================================================
   // ANDAMENTOS
   // ============================================================
   listarAndamentos: protectedProcedure

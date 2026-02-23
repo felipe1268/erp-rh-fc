@@ -110,6 +110,8 @@ export default function ProcessosTrabalhistas() {
   const [showAndamentoDialog, setShowAndamentoDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "processo" | "andamento"; id: number } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -217,6 +219,25 @@ export default function ProcessosTrabalhistas() {
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
   });
+
+  const excluirLoteMut = trpc.processos.excluirLote.useMutation({
+    onSuccess: (res) => {
+      toast.success(`${res.count} processo(s) excluído(s)!`);
+      processos.refetch();
+      stats.refetch();
+      setSelectedIds([]);
+      setShowBatchDeleteDialog(false);
+    },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filtered.length) setSelectedIds([]);
+    else setSelectedIds(filtered.map((p: any) => p.id));
+  };
 
   function resetForm() {
     setForm({
@@ -929,12 +950,25 @@ export default function ProcessosTrabalhistas() {
             </CardContent>
           </Card>
         ) : (
+          <>
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <span className="text-sm font-medium text-blue-700">{selectedIds.length} processo(s) selecionado(s)</span>
+              <Button variant="destructive" size="sm" onClick={() => setShowBatchDeleteDialog(true)}>
+                <Trash2 className="h-4 w-4 mr-1" /> Excluir Selecionados
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setSelectedIds([])}>
+                <X className="h-4 w-4 mr-1" /> Limpar Seleção
+              </Button>
+            </div>
+          )}
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left bg-muted/50">
+                      <th className="p-2.5 w-10"><input type="checkbox" checked={selectedIds.length === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded" /></th>
                       <th className="p-2.5 font-medium">Nº Processo</th>
                       <th className="p-2.5 font-medium">Reclamante</th>
                       <th className="p-2.5 font-medium">Tipo</th>
@@ -943,7 +977,7 @@ export default function ProcessosTrabalhistas() {
                       <th className="p-2.5 font-medium text-center">Fase</th>
                       <th className="p-2.5 font-medium">Valor Causa</th>
                       <th className="p-2.5 font-medium">Próx. Audiência</th>
-                      <th className="p-2.5 font-medium w-10"></th>
+                      <th className="p-2.5 font-medium text-center w-24">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -952,8 +986,9 @@ export default function ProcessosTrabalhistas() {
                       const riscoInfo = RISCO_LABELS[p.risco] || RISCO_LABELS.medio;
                       const dias = diasAte(p.dataAudiencia);
                       return (
-                        <tr key={p.id} className="border-b hover:bg-muted/30 cursor-pointer" onClick={() => { setSelectedProcessoId(p.id); setViewMode("detalhe"); }}>
-                          <td className="p-2.5 font-mono text-xs">{p.numeroProcesso}</td>
+                        <tr key={p.id} className={`border-b hover:bg-muted/30 ${selectedIds.includes(p.id) ? "bg-blue-50" : ""}`}>
+                          <td className="p-2.5" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelect(p.id)} className="w-4 h-4 rounded" /></td>
+                          <td className="p-2.5 font-mono text-xs cursor-pointer" onClick={() => { setSelectedProcessoId(p.id); setViewMode("detalhe"); }}>{p.numeroProcesso}</td>
                           <td className="p-2.5">
                             <p className="font-medium text-sm">{p.reclamante}</p>
                             {p.employee && <p className="text-xs text-muted-foreground">{p.employee.funcao || ""}</p>}
@@ -976,7 +1011,11 @@ export default function ProcessosTrabalhistas() {
                             ) : "—"}
                           </td>
                           <td className="p-2.5">
-                            <Eye className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex items-center gap-1">
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedProcessoId(p.id); setViewMode("detalhe"); }} className="p-1 hover:bg-blue-100 rounded" title="Ver"><Eye className="h-4 w-4 text-muted-foreground" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedProcessoId(p.id); setViewMode("detalhe"); }} className="p-1 hover:bg-amber-100 rounded" title="Editar"><Pencil className="h-4 w-4 text-amber-600" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "processo", id: p.id }); setShowDeleteDialog(true); }} className="p-1 hover:bg-red-100 rounded" title="Excluir"><Trash2 className="h-4 w-4 text-red-500" /></button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -986,6 +1025,48 @@ export default function ProcessosTrabalhistas() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Dialog de exclusão em lote */}
+          <Dialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" /> Excluir {selectedIds.length} processo(s)?
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita. Os processos selecionados serão removidos permanentemente.</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBatchDeleteDialog(false)}>Cancelar</Button>
+                <Button variant="destructive" onClick={() => excluirLoteMut.mutate({ ids: selectedIds })} disabled={excluirLoteMut.isPending}>
+                  {excluirLoteMut.isPending ? "Excluindo..." : `Excluir ${selectedIds.length} processo(s)`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog de exclusão individual (tabela) */}
+          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" /> Confirmar Exclusão
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm">Tem certeza que deseja excluir este processo e todos os seus andamentos? Esta ação não pode ser desfeita.</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setShowDeleteDialog(false); setDeleteTarget(null); }}>Cancelar</Button>
+                <Button variant="destructive" onClick={() => {
+                  if (deleteTarget) {
+                    if (deleteTarget.type === "processo") excluirMut.mutate({ id: deleteTarget.id });
+                    else excluirAndamentoMut.mutate({ id: deleteTarget.id });
+                  }
+                  setShowDeleteDialog(false);
+                  setDeleteTarget(null);
+                }}>Excluir</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          </>
         )}
       </div>
     </DashboardLayout>

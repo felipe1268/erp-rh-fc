@@ -887,6 +887,23 @@ export const appRouter = router({
         adiantamentos: ["advances"],
         vr_beneficios: ["vr_benefits"],
         processos: ["processos_andamentos", "processos_trabalhistas"],
+        contratos_pj: ["pj_payments", "pj_contracts"],
+        cipa: ["cipa_members", "cipa_meetings", "cipa_elections"],
+        epis: ["epi_deliveries", "epis"],
+        equipamentos: ["equipment"],
+        veiculos: ["vehicles"],
+        extintores: ["extinguishers"],
+        hidrantes: ["hydrants"],
+        riscos: ["chemicals", "risks"],
+        dds: ["dds"],
+        desvios: ["deviations"],
+        planos_acao: ["action_plans"],
+        ferias: ["vacation_periods"],
+        seguros: ["insurance_alerts_log", "insurance_alert_recipients", "insurance_alert_config"],
+        auditoria: ["audit_logs", "audits"],
+        templates: ["document_templates", "email_templates", "termination_notices"],
+        criterios: ["system_criteria"],
+        notificacoes: ["notification_logs", "notification_recipients"],
       };
       // Desabilitar FK checks para evitar erros de ordem de exclusão
       await db.execute(sql.raw(`SET FOREIGN_KEY_CHECKS = 0`));

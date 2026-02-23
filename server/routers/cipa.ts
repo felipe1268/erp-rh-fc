@@ -62,11 +62,26 @@ export const cipaRouter = router({
         .orderBy(desc(cipaElections.mandatoFim))
         .limit(1);
       
+      // Verificar se o mandato ativo tem membros suficientes
+      let membrosAtivos = 0;
+      if (mandatoAtivo) {
+        const [membrosResult] = await db.select({ total: count() })
+          .from(cipaMembers)
+          .where(eq(cipaMembers.electionId, mandatoAtivo.id));
+        membrosAtivos = membrosResult?.total || 0;
+      }
+      
+      // Alerta só aparece se: precisa de CIPA E (não tem mandato ativo OU mandato sem membros suficientes)
+      const minMembros = dimensionamento.efetivos + dimensionamento.suplentes;
+      const cipaConstituida = !!mandatoAtivo && membrosAtivos >= Math.max(minMembros, 1);
+      
       return {
         numFuncionarios,
         ...dimensionamento,
         mandatoAtivo: mandatoAtivo || null,
-        alertaCipa: dimensionamento.necessaria && !mandatoAtivo,
+        membrosAtivos,
+        cipaConstituida,
+        alertaCipa: dimensionamento.necessaria && !cipaConstituida,
       };
     }),
 
