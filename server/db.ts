@@ -1357,6 +1357,14 @@ export async function releaseObraSns(obraId: number) {
   }).where(and(eq(obraSns.obraId, obraId), eq(obraSns.status, "ativo")));
 }
 
+// Listar SNs inativos (disponíveis para realocação)
+export async function getAvailableSns(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(obraSns)
+    .where(and(eq(obraSns.companyId, companyId), eq(obraSns.status, "inativo")));
+}
+
 // Buscar obra pelo SN ativo (para integração DIXI)
 export async function findObraBySn(companyId: number, sn: string) {
   const db = await getDb();

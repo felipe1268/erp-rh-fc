@@ -1400,7 +1400,7 @@ export const fechamentoPontoRouter = router({
       mesReferencia: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== 'admin') {
+      if (ctx.user.role !== 'admin_master') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o Admin Master pode desconsolidar um mês.' });
       }
       const db = (await getDb())!;

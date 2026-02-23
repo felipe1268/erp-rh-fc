@@ -44,8 +44,11 @@ export default function Obras() {
   const allSnsQ = trpc.obras.listSnsByCompany.useQuery({ companyId }, { enabled: !!companyId });
   const allSns = allSnsQ.data ?? [];
 
-  const createMut = trpc.obras.create.useMutation({ onSuccess: () => { obrasQ.refetch(); setDialogOpen(false); toast.success("Obra criada com sucesso!"); } });
-  const updateMut = trpc.obras.update.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); setDialogOpen(false); toast.success("Obra atualizada!"); } });
+  const availableSnsQ = trpc.obras.listAvailableSns.useQuery({ companyId }, { enabled: !!companyId });
+  const availableSns = availableSnsQ.data ?? [];
+
+  const createMut = trpc.obras.create.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setDialogOpen(false); toast.success("Obra criada com sucesso!"); } });
+  const updateMut = trpc.obras.update.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setDialogOpen(false); toast.success("Obra atualizada!"); } });
   const deleteMut = trpc.obras.delete.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); toast.success("Obra excluída!"); } });
   const addSnMut = trpc.obras.addSn.useMutation({
     onSuccess: () => { allSnsQ.refetch(); obraSnQ.refetch(); toast.success("SN vinculado com sucesso!"); setNewSn(""); setNewSnApelido(""); },
@@ -64,6 +67,8 @@ export default function Obras() {
   const [newSn, setNewSn] = useState("");
   const [newSnApelido, setNewSnApelido] = useState("");
   const [snValidation, setSnValidation] = useState<{ checking: boolean; available?: boolean; usedByObra?: string }>({ checking: false });
+  // SNs pendentes para vincular na criação (antes de salvar)
+  const [pendingSns, setPendingSns] = useState<{ sn: string; apelido?: string }[]>([]);
 
   // Query SNs da obra sendo editada
   const obraSnQ = trpc.obras.listSns.useQuery({ obraId: editingId || 0 }, { enabled: !!editingId });
@@ -98,7 +103,7 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
@@ -151,7 +156,7 @@ export default function Obras() {
     if (editingId) {
       updateMut.mutate({ id: editingId, ...cleanForm } as any);
     } else {
-      createMut.mutate({ companyId, ...cleanForm } as any);
+      createMut.mutate({ companyId, ...cleanForm, sns: pendingSns.length > 0 ? pendingSns : undefined } as any);
     }
   };
 
@@ -324,7 +329,113 @@ export default function Obras() {
               <Textarea value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={3} />
             </div>
 
-            {/* Seção de SNs (Relógios de Ponto) */}
+            {/* Seção de SNs (Relógios de Ponto) - NOVA OBRA */}
+            {!editingId && (
+              <div className="sm:col-span-2 border-t pt-4 mt-2">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <Label className="text-base font-semibold">Relógios de Ponto (SNs)</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Vincule relógios de ponto a esta obra</p>
+                  </div>
+                </div>
+
+                {/* SNs já adicionados (pendentes) */}
+                {pendingSns.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {pendingSns.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg border bg-emerald-50/50 border-emerald-200">
+                        <div className="flex items-center gap-3">
+                          <Wifi className="h-4 w-4 text-emerald-600" />
+                          <div>
+                            <span className="font-mono font-semibold text-sm">{item.sn}</span>
+                            {item.apelido && <span className="text-xs text-muted-foreground ml-2">({item.apelido})</span>}
+                          </div>
+                          <Badge className="text-[10px] bg-blue-100 text-blue-700">Será vinculado ao salvar</Badge>
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setPendingSns(prev => prev.filter((_, i) => i !== idx))}>
+                          <X className="h-3.5 w-3.5 mr-1" /> Remover
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Relógios disponíveis para realocação */}
+                {availableSns.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs font-medium text-slate-600 mb-2">Relógios disponíveis para realocação:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {availableSns.filter(s => !pendingSns.some(p => p.sn === s.sn)).map((s: any) => (
+                        <Button key={s.id} variant="outline" size="sm" className="text-xs gap-1.5 border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                          onClick={() => setPendingSns(prev => [...prev, { sn: s.sn, apelido: s.apelido || undefined }])}>
+                          <Wifi className="h-3 w-3" />
+                          {s.sn}{s.apelido ? ` (${s.apelido})` : ""}
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Adicionar novo SN manualmente */}
+                <div className="bg-slate-50 rounded-lg border p-3 space-y-2">
+                  <p className="text-xs font-medium text-slate-600">Adicionar novo SN</p>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Label className="text-xs">Número de Série *</Label>
+                      <div className="relative">
+                        <Input
+                          value={newSn}
+                          onChange={e => setNewSn(e.target.value.toUpperCase())}
+                          placeholder="Ex: 0001234567"
+                          className="font-mono pr-8"
+                        />
+                        {newSn.trim().length >= 2 && checkSnQ.data && (
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                            {checkSnQ.data.available ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-red-500" />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {newSn.trim().length >= 2 && checkSnQ.data && !checkSnQ.data.available && (
+                        <p className="text-xs text-red-600 mt-1">
+                          SN já em uso na obra "{checkSnQ.data.usedByObra}"
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-xs">Apelido (opcional)</Label>
+                      <Input
+                        value={newSnApelido}
+                        onChange={e => setNewSnApelido(e.target.value)}
+                        placeholder="Ex: Relógio Portaria"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!newSn.trim()) { toast.error("Informe o número do SN"); return; }
+                        if (pendingSns.some(p => p.sn === newSn.trim())) { toast.error("SN já adicionado"); return; }
+                        setPendingSns(prev => [...prev, { sn: newSn.trim(), apelido: newSnApelido.trim() || undefined }]);
+                        setNewSn(""); setNewSnApelido("");
+                        toast.success("SN adicionado à lista");
+                      }}
+                      disabled={!newSn.trim() || (checkSnQ.data && !checkSnQ.data.available) || pendingSns.some(p => p.sn === newSn.trim())}
+                      className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Adicionar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Seção de SNs (Relógios de Ponto) - EDIÇÃO */}
             {editingId && (
               <div className="sm:col-span-2 border-t pt-4 mt-2">
                 <div className="flex items-center justify-between mb-3">
@@ -431,15 +542,7 @@ export default function Obras() {
               </div>
             )}
 
-            {/* Aviso para obras novas */}
-            {!editingId && (
-              <div className="sm:col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-xs text-blue-800">
-                  <Wifi className="h-3.5 w-3.5 inline mr-1" />
-                  Após criar a obra, edite-a para vincular os relógios de ponto (SNs).
-                </p>
-              </div>
-            )}
+
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>

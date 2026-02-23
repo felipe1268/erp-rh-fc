@@ -1744,9 +1744,18 @@
 - [x] Exibir tabela de usuários com role do sistema + perfil por empresa + permissões
 
 ## Bug: Desconsolidar Mês - Permissão Admin Master
-- [ ] BUG: Admin Master recebe erro "Apenas o Admin Master pode desconsolidar um mês" ao tentar desconsolidar
-- [ ] Investigar e corrigir verificação de role na rota de desconsolidação
+- [x] BUG: Admin Master recebe erro "Apenas o Admin Master pode desconsolidar um mês" ao tentar desconsolidar
+- [x] Investigar e corrigir verificação de role na rota de desconsolidação
 
 ## Bug: Relógio de Ponto - Auto-liberação quando obra muda de status
 - [ ] Quando obra muda para "Concluída" ou "Paralisada", liberar relógio automaticamente para realocação
 - [ ] Relógio deve ficar com status "Disponível" e sem obra vinculada
+
+## Melhoria: Vincular Relógios na Tela de Nova Obra
+- [x] Mostrar relógios disponíveis para alocação na tela de Nova Obra
+- [x] Permitir adicionar múltiplos relógios diretamente no cadastro da obra
+- [x] Relógios vinculados devem ser salvos automaticamente ao salvar a obra
+
+## Bug: Painel de Controle - Texto cinza e Drag and Drop
+- [x] BUG: Itens "Funções" e "Relógios de Ponto" aparecem com texto cinza sem motivo (verificado - não reproduzível, itens aparecem normais)
+- [ ] Implementar drag and drop para reorganizar itens do menu no Painel de Controle (já implementado no MenuConfigPanel)

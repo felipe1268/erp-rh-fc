@@ -21,7 +21,7 @@ import {
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, restoreObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
-  getObraSns, getObraSnsByCompany, getActiveSnsByCompany, checkSnAvailability, addSnToObra, updateSnObra, removeSnFromObra, releaseObraSns, findObraBySn,
+  getObraSns, getObraSnsByCompany, getActiveSnsByCompany, getAvailableSns, checkSnAvailability, addSnToObra, updateSnObra, removeSnFromObra, releaseObraSns, findObraBySn,
   // Setores e Funções
   listSectors, createSector, updateSector, deleteSector, restoreSector,
   listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction, restoreJobFunction,
@@ -286,7 +286,7 @@ export const appRouter = router({
       // Frontend envia { id, companyId, data } - extrair dados corretamente
       const employeeData = input.data || input;
       // Proteger código interno JFC: somente ADM Master pode alterar
-      if (employeeData.codigoInterno !== undefined && ctx.user.role !== 'admin') {
+      if (employeeData.codigoInterno !== undefined && ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
         delete employeeData.codigoInterno;
       }
       // Buscar dados ANTES da atualização para detectar mudança de status
@@ -599,7 +599,22 @@ export const appRouter = router({
       status: z.enum(["Planejamento", "Em_Andamento", "Paralisada", "Concluida", "Cancelada"]).optional(),
       valorContrato: z.string().optional(),
       observacoes: z.string().optional(),
-    })).mutation(({ input }) => createObra(input as any)),
+      sns: z.array(z.object({ sn: z.string(), apelido: z.string().optional() })).optional(),
+    })).mutation(async ({ input }) => {
+      const { sns, ...obraData } = input;
+      const result = await createObra(obraData as any);
+      // Auto-link SNs if provided
+      if (sns && sns.length > 0 && result?.id) {
+        for (const snItem of sns) {
+          try {
+            await addSnToObra({ companyId: input.companyId, obraId: result.id, sn: snItem.sn, apelido: snItem.apelido });
+          } catch (e) {
+            // Skip SNs that fail (e.g. already in use)
+          }
+        }
+      }
+      return result;
+    }),
     update: protectedProcedure.input(z.object({
       id: z.number(),
       nome: z.string().optional(),
@@ -654,6 +669,7 @@ export const appRouter = router({
     listSns: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraSns(input.obraId)),
     listSnsByCompany: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObraSnsByCompany(input.companyId)),
     listActiveSns: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getActiveSnsByCompany(input.companyId)),
+    listAvailableSns: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getAvailableSns(input.companyId)),
     checkSnAvailability: protectedProcedure.input(z.object({
       companyId: z.number(),
       sn: z.string().min(1),
