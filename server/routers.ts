@@ -77,7 +77,11 @@ export const appRouter = router({
   goldenRules: goldenRulesRouter,
   notifications: notificationsRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => {
+      if (!opts.ctx.user) return null;
+      const { password, ...safeUser } = opts.ctx.user as any;
+      return safeUser;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -431,6 +435,7 @@ export const appRouter = router({
     create: protectedProcedure.input(z.object({
       userId: z.number(), companyId: z.number(), profileType: z.string(),
     })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin pode gerenciar perfis" });
       const result = await createUserProfile({ ...input, profileType: input.profileType as ProfileType });
       const defaultPerms = DEFAULT_PERMISSIONS[input.profileType as ProfileType] || {};
       const permEntries = Object.entries(defaultPerms).map(([module, p]: [string, any]) => ({
@@ -443,11 +448,13 @@ export const appRouter = router({
     update: protectedProcedure.input(z.object({
       id: z.number(), profileType: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin pode gerenciar perfis" });
       await updateUserProfile(input.id, { profileType: input.profileType as ProfileType });
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "profile", entityId: input.id, details: `Perfil atualizado` });
       return { success: true };
     }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin pode gerenciar perfis" });
       await deleteUserProfile(input.id);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "usuarios", entityType: "profile", entityId: input.id, details: `Perfil excluído` });
       return { success: true };

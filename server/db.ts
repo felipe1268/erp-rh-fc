@@ -68,7 +68,7 @@ export async function getUserByOpenId(openId: string) {
 export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(users).orderBy(desc(users.createdAt));
+  return db.select().from(users).where(isNull(users.deletedAt)).orderBy(desc(users.createdAt));
 }
 
 // ============================================================

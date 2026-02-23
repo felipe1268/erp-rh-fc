@@ -259,26 +259,43 @@ function DashboardLayoutContent({
 
   // Carregar configuração personalizada do menu
   const menuConfigQuery = trpc.menuConfig.get.useQuery(undefined, { staleTime: 60000 });
+  const isAdminUser = user?.role === 'admin' || user?.role === 'admin_master';
+  const isMasterUser = user?.role === 'admin_master';
+  
+  // Paths restritos por nível de acesso
+  const adminOnlyPaths = ['/usuarios', '/auditoria', '/configuracoes', '/lixeira'];
+  const masterOnlyPaths = ['/usuarios'];
+  
   const effectiveSections = useMemo(() => {
-    if (!menuConfigQuery.data) return menuSections;
-    // Mapear configuração salva de volta para o formato com ícones
-    return (menuConfigQuery.data as any[]).map((section: any) => ({
-      title: section.title,
-      items: section.items
-        .filter((item: any) => item.visible !== false)
-        .map((item: any) => {
-          // Encontrar o item original para pegar o ícone e propriedade "soon"
-          const original = allMenuItems.find(m => m.path === item.path);
-          return {
-            icon: ICON_MAP[item.label] || original?.icon || LayoutDashboard,
-            // Path is stable even when label is renamed
-            label: item.label,
-            path: item.path,
-            soon: (original as any)?.soon || false,
-          };
-        }),
-    })).filter((s: any) => s.items.length > 0);
-  }, [menuConfigQuery.data]);
+    let sections = menuSections;
+    if (menuConfigQuery.data) {
+      // Mapear configuração salva de volta para o formato com ícones
+      sections = (menuConfigQuery.data as any[]).map((section: any) => ({
+        title: section.title,
+        items: section.items
+          .filter((item: any) => item.visible !== false)
+          .map((item: any) => {
+            // Encontrar o item original para pegar o ícone e propriedade "soon"
+            const original = allMenuItems.find(m => m.path === item.path);
+            return {
+              icon: ICON_MAP[item.label] || original?.icon || LayoutDashboard,
+              // Path is stable even when label is renamed
+              label: item.label,
+              path: item.path,
+              soon: (original as any)?.soon || false,
+            };
+          }),
+      }));
+    }
+    // Filtrar itens baseado no role do usuário
+    if (!isAdminUser) {
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.filter((item: any) => !adminOnlyPaths.includes(item.path)),
+      }));
+    }
+    return sections.filter((s: any) => s.items.length > 0);
+  }, [menuConfigQuery.data, isAdminUser]);
 
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const activeMenuItem = allEffectiveItems.find(item => item.path === location) || allMenuItems.find(item => item.path === location);
@@ -425,7 +442,7 @@ function DashboardLayoutContent({
                       {user?.name || "-"}
                     </p>
                     <p className="text-xs text-sidebar-foreground/50 truncate mt-1.5">
-                      Admin Master
+                      {user?.role === 'admin_master' ? 'Admin Master' : user?.role === 'admin' ? 'Admin' : 'Usuário'}
                     </p>
                   </div>
                 </button>

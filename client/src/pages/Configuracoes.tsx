@@ -70,7 +70,7 @@ export default function Configuracoes() {
   const isAdmin = user?.role === "admin" || isMaster;
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
-  const [activeTab, setActiveTab] = useState<TabKey>("criterios");
+  const [activeTab, setActiveTab] = useState<TabKey>(isAdmin ? "criterios" : "senha");
 
   // Limpeza
   const [showCleanDialog, setShowCleanDialog] = useState(false);
@@ -92,7 +92,7 @@ export default function Configuracoes() {
   const [editEmail, setEditEmail] = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
-  const [editRole, setEditRole] = useState("");
+  const [editRole, setEditRole] = useState("user");
 
   // Troca de senha
   const [showChangePwd, setShowChangePwd] = useState(false);
@@ -219,21 +219,24 @@ export default function Configuracoes() {
     onError: (err) => toast.error(err.message),
   });
 
+  const utils = trpc.useUtils();
   const updateRoleMutation = trpc.userManagement.updateRole.useMutation({
     onSuccess: () => {
-      toast.success("Perfil do usuário atualizado!");
+      toast.success("Perfil do usuário atualizado com sucesso!");
       usersQuery.refetch();
+      utils.auth.me.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error("Erro ao alterar perfil: " + err.message),
   });
 
   const updateUserMutation = trpc.userManagement.updateUser.useMutation({
     onSuccess: () => {
-      toast.success("Usuário atualizado!");
+      toast.success("Usuário atualizado com sucesso!");
       setEditingUser(null);
       usersQuery.refetch();
+      utils.auth.me.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error("Erro ao atualizar usuário: " + err.message),
   });
 
   const deleteUserMutation = trpc.userManagement.deleteUser.useMutation({
@@ -321,16 +324,22 @@ export default function Configuracoes() {
     return currentVal !== criterio.valorPadraoClt;
   };
 
-  const tabs = [
-    { key: "painel" as TabKey, label: "Painel de Controle", icon: LayoutDashboard },
-    { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield },
-    { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale },
-    { key: "usuarios" as TabKey, label: "Usuários", icon: Users },
-    { key: "senha" as TabKey, label: "Minha Senha", icon: Key },
-    { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell },
-    { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText },
-    { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2 },
+  const allTabs = [
+    { key: "painel" as TabKey, label: "Painel de Controle", icon: LayoutDashboard, minRole: "user" },
+    { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin" },
+    { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin" },
+    { key: "usuarios" as TabKey, label: "Usuários", icon: Users, minRole: "admin" },
+    { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user" },
+    { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin" },
+    { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin" },
+    { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master" },
   ];
+  const tabs = allTabs.filter(tab => {
+    if (tab.minRole === "user") return true;
+    if (tab.minRole === "admin") return isAdmin;
+    if (tab.minRole === "admin_master") return isMaster;
+    return true;
+  });
 
   const renderUnitLabel = (unidade: string) => {
     switch (unidade) {
@@ -748,7 +757,7 @@ export default function Configuracoes() {
                             </span>
                           </td>
                           <td className="py-2 pr-4">
-                            <span className={`px-2 py-0.5 rounded text-xs ${u.role === "admin_master" ? "bg-purple-100 text-purple-700" : u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${u.role === "admin_master" ? "bg-purple-100 text-purple-700 border border-purple-200" : u.role === "admin" ? "bg-blue-100 text-blue-700 border border-blue-200" : "bg-gray-100 text-gray-600 border border-gray-200"}`}>
                               {u.role === "admin_master" ? "Admin Master" : u.role === "admin" ? "Admin" : "Usuário"}
                             </span>
                           </td>
@@ -764,19 +773,26 @@ export default function Configuracoes() {
                               </Button>
                               {/* Alterar Perfil */}
                               {isMaster && u.id !== user?.id && (
-                                <select
-                                  className="text-xs border rounded px-1 py-1 h-7 bg-white"
+                                <Select
                                   value={u.role || "user"}
-                                  onChange={(e) => {
-                                    if (confirm(`Alterar perfil de ${u.name} para ${e.target.value === 'admin_master' ? 'Admin Master' : e.target.value === 'admin' ? 'Admin' : 'Usuário'}?`)) {
-                                      updateRoleMutation.mutate({ userId: u.id, role: e.target.value as "user" | "admin" | "admin_master" });
+                                  onValueChange={(newRole) => {
+                                    if (newRole !== u.role) {
+                                      const label = newRole === 'admin_master' ? 'Admin Master' : newRole === 'admin' ? 'Admin' : 'Usuário';
+                                      if (confirm(`Alterar perfil de ${u.name} para ${label}?`)) {
+                                        updateRoleMutation.mutate({ userId: u.id, role: newRole as "user" | "admin" | "admin_master" });
+                                      }
                                     }
                                   }}
                                 >
-                                  <option value="user">Usuário</option>
-                                  <option value="admin">Admin</option>
-                                  <option value="admin_master">Admin Master</option>
-                                </select>
+                                  <SelectTrigger className="text-xs h-7 w-[120px] bg-white">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="user">Usuário</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                    <SelectItem value="admin_master">Admin Master</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               )}
                               {/* Resetar Senha */}
                               {u.loginMethod === "local" && (
@@ -977,7 +993,7 @@ export default function Configuracoes() {
                   email: editEmail.trim() || undefined,
                   username: editUsername.trim() || undefined,
                   newPassword: editPassword.trim() || undefined,
-                  role: (isMaster && editingUser?.id !== user?.id && editRole !== editingUser?.role) ? editRole as any : undefined,
+                  role: (isMaster && editingUser?.id !== user?.id) ? editRole as "user" | "admin" | "admin_master" : undefined,
                 });
               }} disabled={updateUserMutation.isPending}>
                 {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}

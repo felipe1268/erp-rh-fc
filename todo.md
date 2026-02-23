@@ -1722,3 +1722,16 @@
 - [ ] Log de downloads/exportações na auditoria
 - [ ] Log de tentativas de acesso negadas
 - [ ] Log de alterações de permissão
+
+## Correção do Sistema de Permissões e Roles
+- [x] Corrigir getAllUsers para filtrar usuários excluídos (soft delete)
+- [x] Corrigir auth.me para não retornar campo password
+- [x] Corrigir Select nativo de role na tabela de usuários (substituir por shadcn Select)
+- [x] Adicionar invalidação de cache auth.me após mudança de role
+- [x] Corrigir label de role no sidebar footer (estava hardcoded "Admin Master")
+- [x] Adicionar filtragem de menu baseada em role (admin-only paths)
+- [x] Adicionar restrição admin-only nas mutations de profiles (create, update, delete)
+- [x] Filtrar tabs de Configurações baseado no role do usuário
+- [x] Corrigir inicialização do editRole (era string vazia, agora "user")
+- [x] Simplificar condição de envio de role no updateUser
+- [x] Melhorar badges de role na tabela de usuários (cores e bordas distintas)
