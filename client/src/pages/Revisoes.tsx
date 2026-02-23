@@ -74,7 +74,7 @@ export default function Revisoes() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
             <GitBranch className="h-7 w-7 text-primary" />
@@ -82,26 +82,26 @@ export default function Revisoes() {
           </div>
           <p className="text-muted-foreground mt-1">Histórico detalhado de todas as atualizações do sistema</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handlePrint}>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={handlePrint}>
             <Printer className="h-4 w-4 mr-2" /> Imprimir
           </Button>
-          <Button onClick={() => { resetForm(); setVersion(String(nextVersion)); setShowDialog(true); }}>
+          <Button size="sm" onClick={() => { resetForm(); setVersion(String(nextVersion)); setShowDialog(true); }}>
             <Plus className="h-4 w-4 mr-2" /> Nova Revisão
           </Button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-background border rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-primary">{revisions.length}</p>
-          <p className="text-xs text-muted-foreground">Total Revisões</p>
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        <div className="bg-background border rounded-lg p-2.5 text-center">
+          <p className="text-xl font-bold text-primary">{revisions.length}</p>
+          <p className="text-[10px] leading-tight text-muted-foreground">Total</p>
         </div>
         {Object.entries(TIPO_CONFIG).map(([key, cfg]) => (
-          <div key={key} className="bg-background border rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold">{revisions.filter(r => r.tipo === key).length}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">{cfg.icon} {cfg.label}</p>
+          <div key={key} className="bg-background border rounded-lg p-2.5 text-center">
+            <p className="text-xl font-bold">{revisions.filter(r => r.tipo === key).length}</p>
+            <p className="text-[10px] leading-tight text-muted-foreground flex items-center justify-center gap-0.5">{cfg.icon} <span className="truncate">{cfg.label}</span></p>
           </div>
         ))}
       </div>

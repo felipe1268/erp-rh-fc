@@ -1771,3 +1771,6 @@
 - [x] Criar página de Controle de Revisões no frontend (visível apenas Admin Master)
 - [x] Popular histórico de revisões existentes (12 revisões seed)
 - [x] Exibir número da revisão atual no rodapé do sidebar
+
+## Responsividade - Controle de Revisões
+- [x] Corrigir layout dos cards de estatísticas para ser responsivo (não quebrar em 2 linhas)
