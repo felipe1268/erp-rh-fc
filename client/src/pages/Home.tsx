@@ -819,7 +819,7 @@ function AlertasDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className="!max-w-[100vw] !w-[100vw] !h-[100vh] !max-h-[100vh] !rounded-none overflow-hidden flex flex-col p-0 !top-0 !left-0 !translate-x-0 !translate-y-0">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b">
           <div className="flex items-center gap-3">

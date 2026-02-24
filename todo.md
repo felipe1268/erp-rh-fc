@@ -2096,3 +2096,5 @@
 - [x] Frontend busca critérios globais via trpc.criteria.getByCategory e exibe "Empresa: 60% (CLT: 50%)" nos campos
 - [x] Ao desmarcar acordo individual, valores resetam para os critérios da empresa (não mais para CLT)
 - [x] Visualização do funcionário mostra "Padrão Empresa (60/100/20%)" em vez de "Padrão CLT (50/100/20%)"
+## Central de Alertas: Fullscreen
+- [x] Fazer a Central de Alertas abrir em tela cheia (fullscreen) em vez de popup pequeno — DialogContent com 100vw/100vh
