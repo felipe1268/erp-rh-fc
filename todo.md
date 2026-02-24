@@ -1996,3 +1996,4 @@
 - [x] Ficha EPI: desconto claro dentro do mesmo mês
 - [x] Ficha EPI: foto obrigatória destacada na ficha
 - [x] Ficha EPI: layout padronizado com logo da empresa
+- [x] Bug: site não responsivo ao virar celular (viewport meta + CSS landscape + padding responsivo)

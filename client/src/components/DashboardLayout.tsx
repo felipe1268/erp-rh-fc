@@ -482,7 +482,7 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         <CompanyHeader isMobile={isMobile} activeLabel={activeMenuItem?.label ?? "Menu"} />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>
   );
@@ -507,7 +507,7 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
           <Building2 className="h-4 w-4 text-muted-foreground" />
         )}
         <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-          <SelectTrigger className="w-64 bg-card border-border h-9 text-sm">
+          <SelectTrigger className="w-40 sm:w-52 md:w-64 bg-card border-border h-9 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
