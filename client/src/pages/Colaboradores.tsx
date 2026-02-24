@@ -138,6 +138,20 @@ export default function Colaboradores() {
   const { data: contasBancariasEmpresa } = trpc.folha.listarContasBancarias.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
   const contasAtivas = (contasBancariasEmpresa || []).filter((c: any) => c.ativo !== 0);
 
+  // Buscar critérios globais de HE da empresa
+  const { data: criteriosHE } = trpc.criteria.getByCategory.useQuery(
+    { companyId: companyId ?? 0, categoria: 'horas_extras' },
+    { enabled: !!companyId }
+  );
+  const globalHE = useMemo(() => {
+    const map = new Map<string, string>((criteriosHE || []).map((c: any) => [c.chave, c.valor]));
+    return {
+      heDiasUteis: map.get('he_dias_uteis') || '50',
+      heDomingosFeriados: map.get('he_domingos_feriados') || '100',
+      heAdicionalNoturno: map.get('he_adicional_noturno') || '20',
+    };
+  }, [criteriosHE]);
+
   // Import Excel
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -425,7 +439,7 @@ export default function Colaboradores() {
         ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
         ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
         ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
-        ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? 50}% / ${viewingEmployee.he100 ?? 100}% / ${viewingEmployee.heNoturna ?? 20}%` : "Padrão CLT (50/100/20%)"],
+        ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? globalHE.heDiasUteis}% / ${viewingEmployee.he100 ?? globalHE.heDomingosFeriados}% / ${viewingEmployee.heNoturna ?? globalHE.heAdicionalNoturno}%` : `Padrão Empresa (${globalHE.heDiasUteis}/${globalHE.heDomingosFeriados}/${globalHE.heAdicionalNoturno}%)`],
       ]},
       { title: "Documentos", fields: [
         ["CTPS", safeDisplay(viewingEmployee.ctps)],
@@ -1682,13 +1696,13 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   <div className="flex items-center gap-2">
                     <Checkbox
                       checked={String(form.acordoHoraExtra) === "1"}
-                      onCheckedChange={(checked) => {
-                        set("acordoHoraExtra", checked ? "1" : "0");
-                        if (!checked) {
-                          set("heNormal50", "50");
-                          set("he100", "100");
-                          set("heNoturna", "20");
-                        }
+                       onCheckedChange={(checked) => {
+                         set("acordoHoraExtra", checked ? "1" : "0");
+                         if (!checked) {
+                           set("heNormal50", globalHE.heDiasUteis);
+                           set("he100", globalHE.heDomingosFeriados);
+                           set("heNoturna", globalHE.heAdicionalNoturno);
+                         }
                       }}
                     />
                     <Label className="text-xs text-muted-foreground cursor-pointer">Acordo individual de hora extra (valores diferenciados)</Label>
@@ -1703,14 +1717,14 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           type="text"
                           inputMode="numeric"
                           placeholder="Ex: 60"
-                          value={form.heNormal50 ?? "50"}
+                          value={form.heNormal50 ?? globalHE.heDiasUteis}
                           onChange={e => set("heNormal50", e.target.value.replace(/[^0-9.,]/g, ''))}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
                         <span className="text-sm font-medium text-muted-foreground">%</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT padrão: 50%</span>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Empresa: {globalHE.heDiasUteis}% (CLT: 50%)</span>
                     </div>
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">HE Domingos/Feriados (%)</Label>
@@ -1719,14 +1733,14 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           type="text"
                           inputMode="numeric"
                           placeholder="Ex: 100"
-                          value={form.he100 ?? "100"}
+                          value={form.he100 ?? globalHE.heDomingosFeriados}
                           onChange={e => set("he100", e.target.value.replace(/[^0-9.,]/g, ''))}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
                         <span className="text-sm font-medium text-muted-foreground">%</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT padrão: 100%</span>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Empresa: {globalHE.heDomingosFeriados}% (CLT: 100%)</span>
                     </div>
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Adicional Noturno (%)</Label>
@@ -1735,19 +1749,19 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           type="text"
                           inputMode="numeric"
                           placeholder="Ex: 20"
-                          value={form.heNoturna ?? "20"}
+                          value={form.heNoturna ?? globalHE.heAdicionalNoturno}
                           onChange={e => set("heNoturna", e.target.value.replace(/[^0-9.,]/g, ''))}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
                         <span className="text-sm font-medium text-muted-foreground">%</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT padrão: 20%</span>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Empresa: {globalHE.heAdicionalNoturno}% (CLT: 20%)</span>
                     </div>
                   </div>
                   {String(form.acordoHoraExtra) === "1" && (
                     <div className="mt-3 p-2 bg-blue-100/50 rounded text-xs text-blue-800">
-                      <strong>Acordo ativo:</strong> Os percentuais acima serão usados no cálculo de horas extras deste funcionário ao invés dos valores padrão da CLT.
+                      <strong>Acordo ativo:</strong> Os percentuais acima serão usados no cálculo de horas extras deste funcionário ao invés dos valores padrão da empresa.
                     </div>
                   )}
                 </div>
@@ -2104,7 +2118,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   [viewingEmployee.tipoContrato === 'Horista' ? '⚡ Valor da Hora' : "Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
                   ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
                   ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
-                  ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? 50}% / ${viewingEmployee.he100 ?? 100}% / ${viewingEmployee.heNoturna ?? 20}%` : "Padrão CLT (50/100/20%)"],
+                  ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? globalHE.heDiasUteis}% / ${viewingEmployee.he100 ?? globalHE.heDomingosFeriados}% / ${viewingEmployee.heNoturna ?? globalHE.heAdicionalNoturno}%` : `Padrão Empresa (${globalHE.heDiasUteis}/${globalHE.heDomingosFeriados}/${globalHE.heAdicionalNoturno}%)`],
                 ]},
                 { title: "Documentos", fields: [
                   ["CTPS", safeDisplay(viewingEmployee.ctps)],

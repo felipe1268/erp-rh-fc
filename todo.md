@@ -2091,3 +2091,8 @@
 - [x] Trocar campos HE Dias Úteis, HE Domingos/Feriados e Adicional Noturno de spinner numérico para input texto livre (aceitar 60, 70, 80% etc.) — type=text com inputMode=numeric, sem limite max=100
 ## Jornada de Trabalho: Campos de horário com digitação livre
 - [x] Converter selects de Entrada, Intervalo e Saída para combobox (opções pré-definidas + digitação manual livre, ex: 1h15 de intervalo) — componente TimeCombobox criado com dropdown + input texto, parse inteligente (1h15, 0730, 30min)
+## Bug: Critérios globais de HE não refletem nos funcionários sem acordo individual
+- [x] Quando altera HE nas Configurações (ex: 60%), funcionários sem acordo individual agora refletem o valor global da empresa em vez de CLT hardcoded (50%)
+- [x] Frontend busca critérios globais via trpc.criteria.getByCategory e exibe "Empresa: 60% (CLT: 50%)" nos campos
+- [x] Ao desmarcar acordo individual, valores resetam para os critérios da empresa (não mais para CLT)
+- [x] Visualização do funcionário mostra "Padrão Empresa (60/100/20%)" em vez de "Padrão CLT (50/100/20%)"
