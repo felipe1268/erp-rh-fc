@@ -2067,3 +2067,5 @@
 - [x] Fix: teste newModules.test.ts timeout aumentado para 15s (AppRouter integration)
 - [x] 247 testes passando (21 arquivos de teste)
 - [x] Registrar Rev. 78
+## Bug: Erro ao cadastrar EPI com nome muito longo (CA query)
+- [x] Nome do EPI vindo da consulta CAEPI excede limite da coluna varchar — coluna `nome` em epis e `epi_nome` em epi_discount_alerts aumentadas de 255/500 para 1000 caracteres

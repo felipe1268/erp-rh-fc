@@ -1,0 +1,1 @@
+ALTER TABLE `epi_discount_alerts` MODIFY COLUMN `epi_nome` varchar(1000) NOT NULL;

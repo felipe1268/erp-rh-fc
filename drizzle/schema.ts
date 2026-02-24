@@ -411,7 +411,7 @@ export const epiDeliveries = mysqlTable("epi_deliveries", {
 export const epis = mysqlTable("epis", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
-	nome: varchar({ length: 255 }).notNull(),
+	nome: varchar({ length: 1000 }).notNull(),
 	ca: varchar({ length: 20 }),
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	validadeCa: date({ mode: 'string' }),
@@ -1714,7 +1714,7 @@ export const epiDiscountAlerts = mysqlTable("epi_discount_alerts", {
 	companyId: int().notNull(),
 	employeeId: int().notNull(),
 	epiDeliveryId: int().notNull(),
-	epiNome: varchar("epi_nome", { length: 500 }).notNull(),
+	epiNome: varchar("epi_nome", { length: 1000 }).notNull(),
 	ca: varchar({ length: 20 }),
 	quantidade: int().default(1).notNull(),
 	valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }).notNull(),
