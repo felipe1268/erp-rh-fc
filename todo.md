@@ -1284,11 +1284,11 @@
 - [ ] Remover botões "Mover para..." e setas, substituir por drag & drop intuitivo
 
 ## Rev. 60: Consulta Automática de CA (Certificado de Aprovação) do MTE
-- [ ] Pesquisar e integrar API/base do MTE para consulta de CA
-- [ ] Criar rota tRPC para consultar CA no backend
-- [ ] Autopreenchimento no cadastro de EPI ao digitar número do CA (nome, fabricante, validade, natureza)
-- [ ] Feedback visual durante a consulta (loading, sucesso, erro)
-- [ ] Cache de consultas CA para evitar requisições repetidas
+- [x] Pesquisar e integrar API/base do MTE para consulta de CA (site oficial caepi.mte.gov.br)
+- [x] Criar rota tRPC para consultar CA no backend
+- [x] Autopreenchimento no cadastro de EPI ao digitar número do CA (nome, fabricante, validade, natureza)
+- [x] Feedback visual durante a consulta (loading, sucesso, erro)
+- [ ] Cache de consultas CA para evitar requisições repetidas (futuro)
 
 ## Rev. 61: Tela de Login/Apresentação Profissional
 - [ ] Redesenhar Home.tsx com layout split-screen profissional
@@ -1997,3 +1997,7 @@
 - [x] Ficha EPI: foto obrigatória destacada na ficha
 - [x] Ficha EPI: layout padronizado com logo da empresa
 - [x] Bug: site não responsivo ao virar celular (viewport meta + CSS landscape + padding responsivo)
+- [x] Bug: consulta CA retorna erro "a[d] is not a function" - CORRIGIDO (migrado para site oficial CAEPI/MTE)
+- [x] Busca automática do CA ao digitar (debounce 800ms), sem precisar clicar no botão
+
+- [x] Simplificar exibição cobrança automática EPI: mostrar apenas valor final com BDI (sem detalhar cálculo)

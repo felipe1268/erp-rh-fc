@@ -15,7 +15,7 @@ import {
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -176,12 +176,15 @@ export default function Epis() {
   }
 
   // CA lookup function
-  async function handleCaLookup() {
-    if (!epiForm.ca.trim()) return toast.error("Digite o número do CA");
+  const caLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const executeCaLookup = useCallback(async (caValue: string) => {
+    const caClean = caValue.replace(/\D/g, "");
+    if (!caClean || caClean.length < 3) return;
     setCaLookupLoading(true);
     setCaLookupResult(null);
     try {
-      const res = await (trpc as any).epis.consultaCa.query({ ca: epiForm.ca.trim() });
+      const res = await (trpc as any).epis.consultaCa.query({ ca: caClean });
       if (res.found) {
         setCaLookupResult(res);
         setEpiForm(f => ({
@@ -190,15 +193,36 @@ export default function Epis() {
           fabricante: res.fabricante || f.fabricante,
           validadeCa: res.validade || f.validadeCa,
         }));
-        toast.success(`CA ${res.ca} encontrado: ${res.descricao?.substring(0, 60)}...`);
+        toast.success(`CA ${res.ca} encontrado!`);
       } else {
-        toast.error(res.error || "CA não encontrado");
+        setCaLookupResult({ found: false, error: res.error });
       }
     } catch (err: any) {
-      toast.error("Erro ao consultar CA: " + (err.message || "Tente novamente"));
+      setCaLookupResult({ found: false, error: "Erro na consulta" });
     } finally {
       setCaLookupLoading(false);
     }
+  }, []);
+
+  // Auto-search: debounce 800ms after typing
+  useEffect(() => {
+    const caClean = epiForm.ca.replace(/\D/g, "");
+    if (caClean.length < 3) {
+      setCaLookupResult(null);
+      return;
+    }
+    if (caLookupTimerRef.current) clearTimeout(caLookupTimerRef.current);
+    caLookupTimerRef.current = setTimeout(() => {
+      executeCaLookup(epiForm.ca);
+    }, 800);
+    return () => {
+      if (caLookupTimerRef.current) clearTimeout(caLookupTimerRef.current);
+    };
+  }, [epiForm.ca, executeCaLookup]);
+
+  async function handleCaLookup() {
+    if (!epiForm.ca.trim()) return toast.error("Digite o número do CA");
+    executeCaLookup(epiForm.ca);
   }
 
   const hoje = new Date().toISOString().split("T")[0];
@@ -318,20 +342,33 @@ export default function Epis() {
                 <div>
                   <Label>Número do CA</Label>
                   <div className="flex gap-2">
-                    <Input value={epiForm.ca} onChange={e => setEpiForm(f => ({ ...f, ca: e.target.value }))}
-                      placeholder="Ex: 12345" onKeyDown={e => { if (e.key === 'Enter') handleCaLookup(); }} />
-                    <Button type="button" variant="outline" size="sm" onClick={handleCaLookup} disabled={caLookupLoading} className="shrink-0">
-                      {caLookupLoading ? <span className="animate-spin">⏳</span> : <Search className="h-4 w-4" />}
-                      <span className="ml-1 text-xs">{caLookupLoading ? 'Buscando...' : 'Buscar CA'}</span>
-                    </Button>
+                    <div className="relative flex-1">
+                      <Input value={epiForm.ca} onChange={e => setEpiForm(f => ({ ...f, ca: e.target.value }))}
+                        placeholder="Digite o CA (ex: 15532)" onKeyDown={e => { if (e.key === 'Enter') handleCaLookup(); }} />
+                      {caLookupLoading && (
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <span className="animate-spin text-sm">⏳</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {caLookupResult?.found && (
                     <div className="mt-2 bg-green-50 border border-green-200 rounded p-2 text-xs text-green-700">
-                      <p className="font-semibold">✓ CA encontrado: {caLookupResult.descricao?.substring(0, 80)}</p>
-                      {caLookupResult.situacao && <p>Situação: {caLookupResult.situacao}</p>}
+                      <p className="font-semibold">✓ CA {caLookupResult.ca} encontrado</p>
+                      {caLookupResult.descricao && <p>{caLookupResult.descricao.substring(0, 100)}</p>}
+                      {caLookupResult.situacao && <p>Situação: <strong className={caLookupResult.situacao === 'VÁLIDO' ? 'text-green-700' : 'text-red-600'}>{caLookupResult.situacao}</strong></p>}
                       {caLookupResult.fabricante && <p>Fabricante: {caLookupResult.fabricante}</p>}
                       {caLookupResult.validade && <p>Validade: {caLookupResult.validade}</p>}
+                      {caLookupResult.referencia && <p>Referência: {caLookupResult.referencia}</p>}
                     </div>
+                  )}
+                  {caLookupResult && !caLookupResult.found && (
+                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-700">
+                      <p>⚠ {caLookupResult.error || 'CA não encontrado'}</p>
+                    </div>
+                  )}
+                  {epiForm.ca && epiForm.ca.replace(/\D/g, '').length >= 3 && !caLookupResult && !caLookupLoading && (
+                    <p className="mt-1 text-xs text-muted-foreground">Buscando automaticamente...</p>
                   )}
                 </div>
                 <div>
@@ -481,7 +518,7 @@ export default function Epis() {
                     Cobrança Automática
                   </div>
                   <p className="text-sm text-red-600">
-                    Custo do EPI: R$ {parseFloat(String(selectedEpi.valorProduto)).toFixed(2)} + BDI {bdiPct}% = <strong>R$ {chargeValue}</strong>
+                    Valor de cobrança: <strong>R$ {chargeValue}</strong>
                   </p>
                   <p className="text-xs text-red-500 mt-1">
                     Base legal: Art. 462, §1º da CLT — desconto por dano causado pelo empregado

@@ -362,7 +362,7 @@ export const episRouter = router({
     }),
 
   // ============================================================
-  // CONSULTA CA - Busca dados do EPI pelo número do CA
+  // CONSULTA CA - Busca dados do EPI pelo número do CA (site oficial CAEPI/MTE)
   // ============================================================
   consultaCa: protectedProcedure
     .input(z.object({ ca: z.string().min(1) }))
@@ -371,90 +371,161 @@ export const episRouter = router({
         const caNum = input.ca.replace(/\D/g, "");
         if (!caNum) return { found: false as const, error: "Número do CA inválido" };
 
-        const response = await fetch(`https://consultaca.com/${caNum}`, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml",
-            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-          },
-        });
-
-        if (!response.ok) return { found: false as const, error: "Erro ao consultar CA" };
-
-        const html = await response.text();
-
-        // Extrair dados do HTML
-        const extract = (regex: RegExp): string => {
-          const match = html.match(regex);
-          return match ? match[1].replace(/<[^>]*>/g, "").trim() : "";
+        const baseUrl = "https://caepi.mte.gov.br/internet/consultacainternet.aspx";
+        const defaultHeaders = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        };
+        const ajaxHeaders = {
+          ...defaultHeaders,
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-MicrosoftAjax": "Delta=true",
+          "X-Requested-With": "XMLHttpRequest",
         };
 
-        // Título principal (descrição do EPI)
-        const titleMatch = html.match(/<h1[^>]*class="[^"]*text-uppercase[^"]*"[^>]*>([^<]+)<\/h1>/i)
-          || html.match(/<title>CA \d+ - ([^<]+)<\/title>/i);
-        const descricao = titleMatch ? titleMatch[1].trim() : "";
+        // Step 1: Get initial page to obtain ViewState tokens
+        const initRes = await fetch(baseUrl, { headers: defaultHeaders });
+        if (!initRes.ok) return { found: false as const, error: "Erro ao acessar site do CAEPI" };
+        const initHtml = await initRes.text();
 
-        // Situação
-        const situacaoMatch = html.match(/Situa[\u00e7c][\u00e3a]o[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([A-ZÁ-Ú]+)/i);
-        const situacao = situacaoMatch ? situacaoMatch[1].trim() : "";
+        const extractToken = (html: string, id: string) => {
+          const m = html.match(new RegExp(`id="${id}"\\s+value="([^"]*)"`));
+          return m ? m[1] : "";
+        };
+        const extractAjaxToken = (text: string, id: string) => {
+          const m = text.match(new RegExp(`\\|${id}\\|([^|]+)\\|`));
+          return m ? m[1] : "";
+        };
 
-        // Validade
-        const validadeMatch = html.match(/Validade[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*(\d{2}\/\d{2}\/\d{4})/i);
-        const validade = validadeMatch ? validadeMatch[1] : "";
+        const vs1 = extractToken(initHtml, "__VIEWSTATE");
+        const vsg1 = extractToken(initHtml, "__VIEWSTATEGENERATOR");
+        const ev1 = extractToken(initHtml, "__EVENTVALIDATION");
 
-        // Natureza
-        const naturezaMatch = html.match(/Natureza[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([A-Za-zà-ú]+)/i);
-        const natureza = naturezaMatch ? naturezaMatch[1].trim() : "";
+        // Get cookies from initial request
+        const setCookieHeaders = initRes.headers.getSetCookie?.() || [];
+        const cookieStr = setCookieHeaders.map((c: string) => c.split(";")[0]).join("; ");
 
-        // Nome Comercial (Modelo)
-        const modeloMatch = html.match(/Nome Comercial[^<]*(?:\(Modelo\))?[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([^<]+)/i);
-        const modelo = modeloMatch ? modeloMatch[1].trim() : "";
+        // Step 2: AJAX search request
+        const searchData = new URLSearchParams({
+          "ctl00$ScriptManager1": "ctl00$PlaceHolderConteudo$UpdatePanel1|ctl00$PlaceHolderConteudo$btnConsultar",
+          "__EVENTTARGET": "",
+          "__EVENTARGUMENT": "",
+          "__VIEWSTATE": vs1,
+          "__VIEWSTATEGENERATOR": vsg1,
+          "__EVENTVALIDATION": ev1,
+          "ctl00$PlaceHolderConteudo$txtNumeroCA": caNum,
+          "ctl00$PlaceHolderConteudo$cboEquipamento": "*******Selecione*******",
+          "ctl00$PlaceHolderConteudo$cboFabricante": "*******Selecione*******",
+          "ctl00$PlaceHolderConteudo$cboTipoProtecao": "*******Selecione*******",
+          "__ASYNCPOST": "true",
+          "ctl00$PlaceHolderConteudo$btnConsultar": "Consultar",
+        });
 
-        // Fabricante - Razão Social
-        const fabMatch = html.match(/Raz[\u00e3a]o Social[^:]*(?:Importador|Fabricante)?[^:]*:[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([^<]+)/i);
-        const fabricanteRazao = fabMatch ? fabMatch[1].trim() : "";
+        const searchRes = await fetch(baseUrl, {
+          method: "POST",
+          headers: { ...ajaxHeaders, "Cookie": cookieStr },
+          body: searchData.toString(),
+        });
 
-        // Nome Fantasia
-        const fantasiaMatch = html.match(/Nome Fantasia[^:]*:[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([^<]+)/i);
-        const nomeFantasia = fantasiaMatch ? fantasiaMatch[1].trim() : "";
+        if (!searchRes.ok) return { found: false as const, error: "Erro na consulta ao CAEPI" };
+        const searchHtml = await searchRes.text();
 
-        // Usar nome fantasia se disponível, senão razão social
-        const fabricante = nomeFantasia || fabricanteRazao;
+        if (!searchHtml.includes("grdListaResultado")) {
+          return { found: false as const, error: "CA não encontrado no sistema CAEPI" };
+        }
 
-        // Converter validade DD/MM/YYYY para YYYY-MM-DD
+        // Step 3: Extract new tokens and click detail button
+        const vs2 = extractAjaxToken(searchHtml, "__VIEWSTATE");
+        const vsg2 = extractAjaxToken(searchHtml, "__VIEWSTATEGENERATOR") || vsg1;
+        const ev2 = extractAjaxToken(searchHtml, "__EVENTVALIDATION");
+
+        const cookies2 = searchRes.headers.getSetCookie?.()?.map((c: string) => c.split(";")[0]).join("; ") || cookieStr;
+
+        const detailData = new URLSearchParams({
+          "ctl00$ScriptManager1": "ctl00$PlaceHolderConteudo$UpdatePanel1|ctl00$PlaceHolderConteudo$grdListaResultado$ctl02$btnDetalhar",
+          "__EVENTTARGET": "",
+          "__EVENTARGUMENT": "",
+          "__VIEWSTATE": vs2,
+          "__VIEWSTATEGENERATOR": vsg2,
+          "__EVENTVALIDATION": ev2,
+          "ctl00$PlaceHolderConteudo$txtNumeroCA": caNum,
+          "ctl00$PlaceHolderConteudo$cboEquipamento": "*******Selecione*******",
+          "ctl00$PlaceHolderConteudo$cboFabricante": "*******Selecione*******",
+          "ctl00$PlaceHolderConteudo$cboTipoProtecao": "*******Selecione*******",
+          "ctl00$PlaceHolderConteudo$txtNumeroCAFiltro": "",
+          "__ASYNCPOST": "true",
+          "ctl00$PlaceHolderConteudo$grdListaResultado$ctl02$btnDetalhar.x": "10",
+          "ctl00$PlaceHolderConteudo$grdListaResultado$ctl02$btnDetalhar.y": "10",
+        });
+
+        const detailRes = await fetch(baseUrl, {
+          method: "POST",
+          headers: { ...ajaxHeaders, "Cookie": cookies2 },
+          body: detailData.toString(),
+        });
+
+        if (!detailRes.ok) return { found: false as const, error: "Erro ao obter detalhes do CA" };
+        const detailHtml = await detailRes.text();
+
+        // Extract data using span IDs from the CAEPI detail page
+        const extractSpan = (spanId: string): string => {
+          const m = detailHtml.match(new RegExp(`id="PlaceHolderConteudo_${spanId}"[^>]*>([^<]*)</span>`));
+          return m ? m[1].trim() : "";
+        };
+
+        const ca = extractSpan("lblNRRegistroCA");
+        const situacao = extractSpan("lblSituacao");
+        const validadeRaw = extractSpan("lblDTValidade"); // "23/09/2030 00:00:00"
+        const processo = extractSpan("lblNRProcesso");
+        const cnpj = extractSpan("lblNRCNPJ");
+        const razaoSocial = extractSpan("lblNORazaoSocial");
+        const natureza = extractSpan("lblNatureza");
+        const nomeEquipamento = extractSpan("lblNOEquipamento");
+        const descricao = extractSpan("lblEquipamentoDSEquipamentoTexto");
+        const marcacao = extractSpan("lblDSLocalMarcacaoCA");
+        const referencia = extractSpan("lblDSReferencia");
+        const tamanho = extractSpan("lblDSTamanho");
+        const cor = extractSpan("lblDSCor");
+        const aprovadoPara = extractSpan("lblDSAprovadoParaLaudo");
+
+        if (!ca && !nomeEquipamento && !descricao) {
+          return { found: false as const, error: "CA não encontrado" };
+        }
+
+        // Convert validade "DD/MM/YYYY HH:MM:SS" to "YYYY-MM-DD"
         let validadeISO = "";
-        if (validade) {
-          const parts = validade.split("/");
+        if (validadeRaw) {
+          const datePart = validadeRaw.split(" ")[0]; // "23/09/2030"
+          const parts = datePart.split("/");
           if (parts.length === 3) {
             validadeISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
           }
         }
 
-        // Montar nome do EPI: modelo + descrição resumida
-        let nomeEpi = "";
-        if (modelo) {
-          nomeEpi = modelo;
-        } else if (descricao) {
-          // Pegar as primeiras palavras relevantes da descrição
-          const palavras = descricao.split(" ").slice(0, 6).join(" ");
-          nomeEpi = palavras;
-        }
-
-        if (!descricao && !modelo) {
-          return { found: false as const, error: "CA não encontrado" };
+        // Build EPI name from reference + equipment name
+        let nomeEpi = referencia || "";
+        if (!nomeEpi && nomeEquipamento) {
+          nomeEpi = nomeEquipamento.split(" ").slice(0, 8).join(" ");
         }
 
         return {
           found: true as const,
-          ca: caNum,
+          ca: ca || caNum,
           nome: nomeEpi,
-          descricao,
-          fabricante,
-          fabricanteRazao,
-          nomeFantasia,
+          descricao: descricao || nomeEquipamento,
+          fabricante: razaoSocial,
+          fabricanteRazao: razaoSocial,
+          nomeFantasia: "",
           situacao,
           validade: validadeISO,
           natureza,
+          referencia,
+          marcacao,
+          tamanho,
+          cor,
+          cnpj,
+          aprovadoPara,
         };
       } catch (err: any) {
         return { found: false as const, error: err.message || "Erro ao consultar CA" };
