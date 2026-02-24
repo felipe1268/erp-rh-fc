@@ -2087,3 +2087,5 @@
 ## Fix: Ordenação alfabética confirmada
 - [x] Backend já tinha orderBy(asc(nomeCompleto)) — problema era dado sujo (TAB no nome)
 - [x] Frontend mantém .sort(localeCompare) como fallback
+## HE Percentuais: Input manual livre
+- [x] Trocar campos HE Dias Úteis, HE Domingos/Feriados e Adicional Noturno de spinner numérico para input texto livre (aceitar 60, 70, 80% etc.) — type=text com inputMode=numeric, sem limite max=100

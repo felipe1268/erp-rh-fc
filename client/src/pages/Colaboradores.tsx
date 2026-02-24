@@ -1714,11 +1714,11 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       <Label className="text-xs font-medium text-muted-foreground">HE Dias Úteis (%)</Label>
                       <div className="flex items-center gap-2 mt-1">
                         <Input
-                          type="number"
-                          min="0"
-                          max="100"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="Ex: 60"
                           value={form.heNormal50 ?? "50"}
-                          onChange={e => set("heNormal50", e.target.value)}
+                          onChange={e => set("heNormal50", e.target.value.replace(/[^0-9.,]/g, ''))}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
@@ -1730,11 +1730,11 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       <Label className="text-xs font-medium text-muted-foreground">HE Domingos/Feriados (%)</Label>
                       <div className="flex items-center gap-2 mt-1">
                         <Input
-                          type="number"
-                          min="0"
-                          max="100"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="Ex: 100"
                           value={form.he100 ?? "100"}
-                          onChange={e => set("he100", e.target.value)}
+                          onChange={e => set("he100", e.target.value.replace(/[^0-9.,]/g, ''))}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
@@ -1746,11 +1746,11 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       <Label className="text-xs font-medium text-muted-foreground">Adicional Noturno (%)</Label>
                       <div className="flex items-center gap-2 mt-1">
                         <Input
-                          type="number"
-                          min="0"
-                          max="100"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="Ex: 20"
                           value={form.heNoturna ?? "20"}
-                          onChange={e => set("heNoturna", e.target.value)}
+                          onChange={e => set("heNoturna", e.target.value.replace(/[^0-9.,]/g, ''))}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
