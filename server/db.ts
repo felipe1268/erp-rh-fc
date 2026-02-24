@@ -195,8 +195,30 @@ export async function createEmployee(data: InsertEmployee) {
   
   const prefixo = companyRows?.[0]?.prefixoCodigo || 'EMP';
   const num = companyRows?.[0]?.usedNum || 1;
-  const codigoInterno = prefixo + String(num).padStart(3, '0');
+  let codigoInterno = prefixo + String(num).padStart(3, '0');
   
+  // Retry with incremented number if duplicate (handles stale nextCodigoInterno)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const result = await db.insert(employees).values({ ...data, codigoInterno });
+      return { id: result[0].insertId, codigoInterno };
+    } catch (err: any) {
+      if (err?.errno === 1062 && err?.sqlMessage?.includes('idx_codigo_interno')) {
+        // Increment and retry
+        await db.execute(
+          sql`UPDATE companies SET nextCodigoInterno = nextCodigoInterno + 1 WHERE id = ${companyId}`
+        );
+        const [retry] = await db.execute(
+          sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum FROM companies WHERE id = ${companyId}`
+        ) as any;
+        const retryNum = retry?.[0]?.usedNum || (num + attempt + 1);
+        codigoInterno = prefixo + String(retryNum).padStart(3, '0');
+        continue;
+      }
+      throw err;
+    }
+  }
+  // Final attempt without retry
   const result = await db.insert(employees).values({ ...data, codigoInterno });
   return { id: result[0].insertId, codigoInterno };
 }
@@ -286,7 +308,7 @@ export async function getEmployees(companyId: number, search?: string, status?: 
 export async function getEmployeeById(id: number, companyId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId))).limit(1);
+  const result = await db.select().from(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId), isNull(employees.deletedAt))).limit(1);
   return result[0];
 }
 

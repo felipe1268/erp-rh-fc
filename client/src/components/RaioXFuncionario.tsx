@@ -640,6 +640,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "folha", label: "Folha", icon: DollarSign, count: folhaPagamento.length },
                       { value: "he", label: emp?.tipoContrato === 'PJ' ? "Adicionais" : "Horas Extras", icon: Zap, count: horasExtras.length },
                       ...(emp?.tipoContrato === 'PJ' ? [{ value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length }] : []),
+                      { value: "descontos_epi", label: "Descontos EPI", icon: Ban, count: (raioX as any)?.epiDiscountAlerts?.filter((a: any) => a.status === 'pendente').length || 0 },
                     ],
                   },
                   {
@@ -1099,31 +1100,137 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                 {episEntregas.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhuma entrega de EPI registrada</div>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border bg-white">
-                    <table className="w-full text-sm">
-                      <thead><tr className="bg-teal-50 border-b">
-                        <th className="p-3 text-left font-semibold text-teal-900">EPI</th>
-                        <th className="p-3 text-left font-semibold text-teal-900">CA</th>
-                        <th className="p-3 text-center font-semibold text-teal-900">Qtd</th>
-                        <th className="p-3 text-left font-semibold text-teal-900">Data Entrega</th>
-                        <th className="p-3 text-left font-semibold text-teal-900">Data Devolução</th>
-                        <th className="p-3 text-left font-semibold text-teal-900">Motivo</th>
-                      </tr></thead>
-                      <tbody>
-                        {episEntregas.map((e: any) => (
-                          <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30">
-                            <td className="p-3 font-medium">{e.nomeEpi || "-"}</td>
-                            <td className="p-3 font-mono">{e.ca || "-"}</td>
-                            <td className="p-3 text-center">{e.quantidade || 1}</td>
-                            <td className="p-3">{formatDate(e.dataEntrega)}</td>
-                            <td className="p-3">{formatDate(e.dataDevolucao)}</td>
-                            <td className="p-3">{e.motivo || "Entrega regular"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-3">
+                    {/* Alerta de descontos pendentes */}
+                    {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-red-700 font-semibold text-sm mb-1">
+                          <AlertTriangle className="h-4 w-4" />
+                          Descontos Pendentes de EPI
+                        </div>
+                        <p className="text-xs text-red-600">
+                          Este colaborador possui {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').length} desconto(s) de EPI pendente(s) de validação pelo DP.
+                          Valor total: R$ {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                    <div className="overflow-x-auto rounded-lg border bg-white">
+                      <table className="w-full text-sm">
+                        <thead><tr className="bg-teal-50 border-b">
+                          <th className="p-3 text-left font-semibold text-teal-900">EPI</th>
+                          <th className="p-3 text-left font-semibold text-teal-900">CA</th>
+                          <th className="p-3 text-center font-semibold text-teal-900">Tam.</th>
+                          <th className="p-3 text-center font-semibold text-teal-900">Qtd</th>
+                          <th className="p-3 text-left font-semibold text-teal-900">Data Entrega</th>
+                          <th className="p-3 text-left font-semibold text-teal-900">Data Devolução</th>
+                          <th className="p-3 text-left font-semibold text-teal-900">Motivo</th>
+                          <th className="p-3 text-center font-semibold text-teal-900">Ficha</th>
+                        </tr></thead>
+                        <tbody>
+                          {episEntregas.map((e: any) => {
+                            const isMauUso = e.motivo && (e.motivo.includes('Mau Uso') || e.motivo.includes('Perda') || e.motivo.includes('Furto') || e.motivo.includes('Extravio'));
+                            const hasLink = !!e.fichaUrl;
+                            return (
+                              <tr
+                                key={e.id}
+                                className={`border-b last:border-0 hover:bg-muted/30 ${isMauUso ? 'bg-red-50/50' : ''} ${hasLink ? 'cursor-pointer hover:bg-teal-50/60' : ''}`}
+                                onClick={() => { if (hasLink) window.open(e.fichaUrl, '_blank'); }}
+                                title={hasLink ? 'Clique para ver a ficha de entrega assinada' : ''}
+                              >
+                                <td className="p-3 font-medium">
+                                  <span className={hasLink ? 'text-teal-700' : ''}>{e.nomeEpi || "-"}</span>
+                                </td>
+                                <td className="p-3 font-mono">{e.ca || "-"}</td>
+                                <td className="p-3 text-center text-xs">{e.tamanho || "-"}</td>
+                                <td className="p-3 text-center">{e.quantidade || 1}</td>
+                                <td className="p-3">{formatDate(e.dataEntrega)}</td>
+                                <td className="p-3">{formatDate(e.dataDevolucao)}</td>
+                                <td className="p-3">
+                                  <span className={isMauUso ? 'text-red-600 font-semibold' : ''}>{e.motivo || "Entrega regular"}</span>
+                                  {isMauUso && e.valorCobranca && <span className="ml-1 text-xs text-red-500">(R$ {parseFloat(e.valorCobranca).toFixed(2)})</span>}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {hasLink ? (
+                                    <a href={e.fichaUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center justify-center gap-1" title="Ver ficha assinada" onClick={(ev) => ev.stopPropagation()}>
+                                      <FileText className="h-4 w-4" /> Ver
+                                    </a>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
+              </TabsContent>
+
+              {/* ============ DESCONTOS EPI ============ */}
+              <TabsContent value="descontos_epi" className="mt-4">
+                {(() => {
+                  const alerts = (raioX as any)?.epiDiscountAlerts || [];
+                  if (alerts.length === 0) return <div className="text-center py-12 text-muted-foreground">Nenhum desconto de EPI registrado</div>;
+                  const pendentes = alerts.filter((a: any) => a.status === 'pendente');
+                  const confirmados = alerts.filter((a: any) => a.status === 'confirmado');
+                  const cancelados = alerts.filter((a: any) => a.status === 'cancelado');
+                  return (
+                    <div className="space-y-4">
+                      {/* Resumo */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                          <p className="text-2xl font-bold text-amber-700">{pendentes.length}</p>
+                          <p className="text-xs text-amber-600 font-medium">Pendentes</p>
+                          <p className="text-xs text-amber-500 mt-1">R$ {pendentes.reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}</p>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                          <p className="text-2xl font-bold text-green-700">{confirmados.length}</p>
+                          <p className="text-xs text-green-600 font-medium">Confirmados</p>
+                          <p className="text-xs text-green-500 mt-1">R$ {confirmados.reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}</p>
+                        </div>
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                          <p className="text-2xl font-bold text-gray-500">{cancelados.length}</p>
+                          <p className="text-xs text-gray-500 font-medium">Cancelados</p>
+                          <p className="text-xs text-gray-400 mt-1">R$ {cancelados.reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}</p>
+                        </div>
+                      </div>
+                      {/* Tabela */}
+                      <div className="overflow-x-auto rounded-lg border bg-white">
+                        <table className="w-full text-sm">
+                          <thead><tr className="bg-red-50 border-b">
+                            <th className="p-3 text-left font-semibold text-red-900">EPI</th>
+                            <th className="p-3 text-left font-semibold text-red-900">Motivo</th>
+                            <th className="p-3 text-right font-semibold text-red-900">Valor</th>
+                            <th className="p-3 text-left font-semibold text-red-900">Data</th>
+                            <th className="p-3 text-center font-semibold text-red-900">Status</th>
+                            <th className="p-3 text-left font-semibold text-red-900">Validado por</th>
+                            <th className="p-3 text-left font-semibold text-red-900">Justificativa</th>
+                          </tr></thead>
+                          <tbody>
+                            {alerts.map((a: any) => (
+                              <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.status === 'pendente' ? 'bg-amber-50/50' : ''}`}>
+                                <td className="p-3 font-medium">{a.nomeEpi || "-"}</td>
+                                <td className="p-3">{a.motivo || "-"}</td>
+                                <td className="p-3 text-right font-mono font-semibold text-red-600">R$ {parseFloat(a.valor || '0').toFixed(2)}</td>
+                                <td className="p-3">{formatDate(a.dataEntrega)}</td>
+                                <td className="p-3 text-center">
+                                  <Badge variant={a.status === 'pendente' ? 'secondary' : a.status === 'confirmado' ? 'destructive' : 'outline'}
+                                    className={`text-xs ${a.status === 'pendente' ? 'bg-amber-100 text-amber-800' : a.status === 'confirmado' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
+                                    {a.status === 'pendente' ? 'Pendente' : a.status === 'confirmado' ? 'Descontado' : 'Cancelado'}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-xs">{a.validadoPor || "-"}</td>
+                                <td className="p-3 text-xs max-w-[200px] truncate">{a.justificativa || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </TabsContent>
 
               {/* ============ ACIDENTES ============ */}

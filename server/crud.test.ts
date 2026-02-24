@@ -28,8 +28,9 @@ describe("CRUD Completo - Todos os Módulos", () => {
   // ============================================================
   describe("Empresas", () => {
     it("deve criar uma empresa com todos os campos", async () => {
+      const uniqueCnpj = `99.${String(Date.now()).slice(-3)}.${String(Math.floor(Math.random()*999)).padStart(3,'0')}/0001-99`;
       const result = await createCompany({
-        cnpj: "99.999.999/0001-99",
+        cnpj: uniqueCnpj,
         razaoSocial: "Empresa Teste CRUD",
         nomeFantasia: "Teste CRUD",
         endereco: "Rua Teste, 123",

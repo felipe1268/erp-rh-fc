@@ -71,6 +71,8 @@ export default function Epis() {
   // Form state - EPI
   const [epiForm, setEpiForm] = useState({
     nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "",
+    categoria: "EPI" as "EPI" | "Uniforme" | "Calcado",
+    tamanho: "",
     quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "",
   });
 
@@ -168,8 +170,11 @@ export default function Epis() {
   };
 
   function resetEpiForm() {
-    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "" });
+    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "" });
   }
+
+  const TAMANHOS_ROUPA = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
+  const TAMANHOS_CALCADO = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
   function resetEntregaForm() {
     setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "" });
     setFotoEstado({ file: null, preview: "" });
@@ -326,6 +331,41 @@ export default function Epis() {
                     placeholder="Nome do fornecedor" />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="flex items-center gap-1">
+                    <Package className="h-3 w-3 text-indigo-600" />
+                    Categoria
+                  </Label>
+                  <Select value={epiForm.categoria} onValueChange={(v: any) => setEpiForm(f => ({ ...f, categoria: v, tamanho: '' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EPI">EPI (Equipamento de Proteção)</SelectItem>
+                      <SelectItem value="Uniforme">Uniforme (Roupa)</SelectItem>
+                      <SelectItem value="Calcado">Calçado (Bota/Sapato)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {epiForm.categoria !== 'EPI' && (
+                  <div>
+                    <Label className="flex items-center gap-1">
+                      {epiForm.categoria === 'Uniforme' ? (
+                        <><Shirt className="h-3 w-3 text-indigo-600" /> Tamanho</>
+                      ) : (
+                        <><Footprints className="h-3 w-3 text-amber-800" /> Número do Calçado</>
+                      )}
+                    </Label>
+                    <Select value={epiForm.tamanho || undefined} onValueChange={v => setEpiForm(f => ({ ...f, tamanho: v }))}>
+                      <SelectTrigger><SelectValue placeholder={epiForm.categoria === 'Uniforme' ? 'Selecione o tamanho...' : 'Selecione o número...'} /></SelectTrigger>
+                      <SelectContent>
+                        {(epiForm.categoria === 'Uniforme' ? TAMANHOS_ROUPA : TAMANHOS_CALCADO).map(t => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label>Quantidade em Estoque</Label>
@@ -359,6 +399,8 @@ export default function Epis() {
                     companyId, nome: epiForm.nome,
                     ca: epiForm.ca || undefined, validadeCa: epiForm.validadeCa || undefined,
                     fabricante: epiForm.fabricante || undefined, fornecedor: epiForm.fornecedor || undefined,
+                    categoria: epiForm.categoria,
+                    tamanho: epiForm.tamanho || undefined,
                     quantidadeEstoque: epiForm.quantidadeEstoque,
                     valorProduto: epiForm.valorProduto ? parseFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
@@ -862,6 +904,8 @@ export default function Epis() {
                             onChange={toggleSelectAllEpis} className="rounded" />
                         </th>
                         <th className="p-3 text-left font-medium">EPI</th>
+                        <th className="p-3 text-center font-medium">Categoria</th>
+                        <th className="p-3 text-center font-medium">Tam.</th>
                         <th className="p-3 text-center font-medium">CA</th>
                         <th className="p-3 text-center font-medium">Validade CA</th>
                         <th className="p-3 text-center font-medium">Estoque</th>
@@ -877,7 +921,7 @@ export default function Epis() {
                         if (editingEpi?.id === epi.id) {
                           return (
                             <tr key={epi.id} className="border-b bg-blue-50">
-                              <td colSpan={8} className="p-3">
+                              <td colSpan={10} className="p-3">
                                 <EditEpiInline epi={epi} onSave={(data: any) => updateEpiMut.mutate({ id: epi.id, ...data })} onCancel={() => setEditingEpi(null)} isPending={updateEpiMut.isPending} />
                               </td>
                             </tr>
@@ -897,6 +941,14 @@ export default function Epis() {
                                   {epi.fabricante && <span className="text-xs text-muted-foreground ml-1">({epi.fabricante})</span>}
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-3 text-center">
+                              <Badge variant="outline" className={`text-xs ${epi.categoria === 'Uniforme' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : epi.categoria === 'Calcado' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                {epi.categoria === 'Calcado' ? 'Calçado' : epi.categoria || 'EPI'}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-center text-xs font-medium">
+                              {epi.tamanho || '—'}
                             </td>
                             <td className="p-3 text-center">
                               {epi.ca ? <Badge variant="outline">{epi.ca}</Badge> : "—"}

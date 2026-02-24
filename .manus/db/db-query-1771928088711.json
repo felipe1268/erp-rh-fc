@@ -1,0 +1,70 @@
+{
+  "query": "SELECT id, prefixoCodigo, nextCodigoInterno, razaoSocial FROM companies WHERE id >= 450000 ORDER BY id DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, prefixoCodigo, nextCodigoInterno, razaoSocial FROM companies WHERE id >= 450000 ORDER BY id DESC LIMIT 10",
+  "rows": [
+    {
+      "id": "450030",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450029",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450028",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450027",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450026",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450025",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450024",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450023",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450022",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450021",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tprefixoCodigo\tnextCodigoInterno\trazaoSocial\n450030\tEMP\t3\tEmpresa Teste CRUD\n450029\tEMP\t3\tEmpresa Teste CRUD\n450028\tEMP\t3\tEmpresa Teste CRUD\n450027\tEMP\t3\tEmpresa Teste CRUD\n450026\tEMP\t3\tEmpresa Teste CRUD\n450025\tEMP\t3\tEmpresa Teste CRUD\n450024\tEMP\t3\tEmpresa Teste CRUD\n450023\tEMP\t3\tEmpresa Teste CRUD\n450022\tEMP\t3\tEmpresa Teste CRUD\n450021\tEMP\t3\tEmpresa Teste CRUD\n",
+  "stderr": "",
+  "execution_time_ms": 77
+}

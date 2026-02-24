@@ -1,0 +1,24 @@
+{
+  "query": "SELECT e.id, e.codigoInterno, e.nomeCompleto, e.companyId, c.razaoSocial FROM employees e LEFT JOIN companies c ON e.companyId = c.id WHERE e.codigoInterno LIKE 'EMP%' ORDER BY e.codigoInterno",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT e.id, e.codigoInterno, e.nomeCompleto, e.companyId, c.razaoSocial FROM employees e LEFT JOIN companies c ON e.companyId = c.id WHERE e.codigoInterno LIKE 'EMP%' ORDER BY e.codigoInterno",
+  "rows": [
+    {
+      "id": "510041",
+      "codigoInterno": "EMP001",
+      "nomeCompleto": "João Carlos da Silva Teste",
+      "companyId": "450031",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "510042",
+      "codigoInterno": "EMP002",
+      "nomeCompleto": "Colaborador Mínimo",
+      "companyId": "450031",
+      "razaoSocial": "Empresa Teste CRUD"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcodigoInterno\tnomeCompleto\tcompanyId\trazaoSocial\n510041\tEMP001\tJoão Carlos da Silva Teste\t450031\tEmpresa Teste CRUD\n510042\tEMP002\tColaborador Mínimo\t450031\tEmpresa Teste CRUD\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

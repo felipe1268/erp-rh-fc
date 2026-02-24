@@ -1,0 +1,38 @@
+{
+  "query": "SELECT id, cnpj, razaoSocial, prefixoCodigo, nextCodigoInterno FROM companies WHERE cnpj LIKE '99.%' OR razaoSocial LIKE '%Teste CRUD%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, cnpj, razaoSocial, prefixoCodigo, nextCodigoInterno FROM companies WHERE cnpj LIKE '99.%' OR razaoSocial LIKE '%Teste CRUD%'",
+  "rows": [
+    {
+      "id": "390001",
+      "cnpj": "99.999.999/0001-99",
+      "razaoSocial": "Empresa Teste CRUD",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3"
+    },
+    {
+      "id": "450011",
+      "cnpj": "99.752.772/0001-99",
+      "razaoSocial": "Empresa Teste CRUD",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3"
+    },
+    {
+      "id": "450012",
+      "cnpj": "99.081.856/0001-99",
+      "razaoSocial": "Empresa Teste CRUD",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3"
+    },
+    {
+      "id": "450013",
+      "cnpj": "99.995.573/0001-99",
+      "razaoSocial": "Empresa Teste CRUD",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcnpj\trazaoSocial\tprefixoCodigo\tnextCodigoInterno\n390001\t99.999.999/0001-99\tEmpresa Teste CRUD\tEMP\t3\n450011\t99.752.772/0001-99\tEmpresa Teste CRUD\tEMP\t3\n450012\t99.081.856/0001-99\tEmpresa Teste CRUD\tEMP\t3\n450013\t99.995.573/0001-99\tEmpresa Teste CRUD\tEMP\t3\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

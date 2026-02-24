@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -895,6 +895,8 @@ export const controleDocumentosRouter = router({
         id: epiDeliveries.id, epiId: epiDeliveries.epiId, quantidade: epiDeliveries.quantidade,
         dataEntrega: epiDeliveries.dataEntrega, dataDevolucao: epiDeliveries.dataDevolucao,
         motivo: epiDeliveries.motivo, nomeEpi: epis.nome, ca: epis.ca,
+        fichaUrl: epiDeliveries.fichaUrl, tamanho: epis.tamanho,
+        valorCobranca: epiDeliveries.valorCobrado,
       }).from(epiDeliveries)
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
         .where(eq(epiDeliveries.employeeId, input.employeeId))
@@ -1048,6 +1050,25 @@ export const controleDocumentosRouter = router({
         .where(eq(pjPayments.employeeId, input.employeeId))
         .orderBy(desc(pjPayments.mesReferencia));
 
+      // ALERTAS DE DESCONTO EPI
+      const empEpiDiscountAlerts = await db.select({
+        id: epiDiscountAlerts.id,
+        epiNome: epiDiscountAlerts.epiNome,
+        ca: epiDiscountAlerts.ca,
+        quantidade: epiDiscountAlerts.quantidade,
+        valorUnitario: epiDiscountAlerts.valorUnitario,
+        valorTotal: epiDiscountAlerts.valorTotal,
+        motivoCobranca: epiDiscountAlerts.motivoCobranca,
+        mesReferencia: epiDiscountAlerts.mesReferencia,
+        status: epiDiscountAlerts.status,
+        validadoPor: epiDiscountAlerts.validadoPor,
+        dataValidacao: epiDiscountAlerts.dataValidacao,
+        justificativa: epiDiscountAlerts.justificativa,
+        createdAt: epiDiscountAlerts.createdAt,
+      }).from(epiDiscountAlerts)
+        .where(eq(epiDiscountAlerts.employeeId, input.employeeId))
+        .orderBy(desc(epiDiscountAlerts.createdAt));
+
       // Add new events to timeline
       empAvisosPrevios.forEach(a => timeline.push({ data: a.dataInicio, tipo: "Aviso Prévio", descricao: `${a.tipo.startsWith('empregador') ? 'Pelo Empregador' : 'Pelo Empregado'} — ${a.diasAviso || 30} dias`, cor: "orange", icone: "alert-triangle" }));
       empFerias.forEach(f => { if (f.dataInicio) timeline.push({ data: f.dataInicio, tipo: "Férias", descricao: `${f.diasGozo || 30} dias${f.abonoPecuniario ? ' + abono pecuniário' : ''}`, cor: "cyan", icone: "palmtree" }); });
@@ -1082,6 +1103,7 @@ export const controleDocumentosRouter = router({
         cipa: empCipa,
         pjContratos: empPjContratos,
         pjPagamentos: empPjPagamentos,
+        epiDiscountAlerts: empEpiDiscountAlerts,
       };
     }),
 

@@ -2005,6 +2005,37 @@
 - [x] Melhorar formatação da ficha de entrega de EPI: logo no topo centralizado, cores padrão FC Engenharia
 - [x] Nome do arquivo PDF da ficha EPI: "EPI - Nome do Colaborador" ao salvar/imprimir
 - [x] Remover texto "(custo + encargos administrativos)" da seção de cobrança na ficha EPI
-- [ ] Tornar linhas de EPI clicáveis no Raio-X do funcionário para abrir ficha de entrega e visualizar arquivo assinado
+- [x] Tornar linhas de EPI clicáveis no Raio-X do funcionário para abrir ficha de entrega e visualizar arquivo assinado
 - [x] Exibir nome do usuário que emitiu a ficha de EPI abaixo da data/hora de emissão
 - [x] Mover configurações de EPI (BDI, texto ficha) da página de EPIs para a tela de Configurações geral
+
+## Rev. 75 — Base CAEPI Local + Sistema de Descontos de EPI + Botão Atualizar Base CA
+
+### Base CAEPI Local (eliminar scraping)
+- [ ] Importar base CAEPI oficial do XLSX para tabela no banco de dados
+- [ ] Reescrever consulta CA para usar banco local (instantânea)
+- [x] Botão "Atualizar Base de CAs" nas Configurações para o usuário atualizar quando quiser (seção CAEPI com stats e botão refresh)
+
+### Sistema de Descontos de EPI
+- [x] Criar tabela epi_discount_alerts no schema (funcionarioId, epiDeliveryId, valor, status, validadoPor, dataValidacao, justificativa)
+- [x] Backend: criar alerta de desconto automaticamente ao registrar entrega por mau uso/perda/furto
+- [x] Backend: rotas CRUD para alertas de desconto (listar, validar, cancelar)
+- [x] Backend: bloquear fechamento da folha se houver descontos pendentes de validação
+- [x] Frontend: aba "Descontos" no Raio-X do funcionário com histórico completo
+- [x] Frontend: alerta obrigatório na folha de pagamento para DP validar desconto
+- [x] Frontend: botões "Confirmar Desconto" e "Cancelar Desconto" com justificativa
+- [x] Registrar Rev. 75
+
+### Uniformes e Controle de Tamanhos
+- [ ] Adicionar campo "Categoria" no cadastro EPI (EPI, Uniforme, Calçado)
+- [ ] Adicionar campo "Tamanho" para uniformes (PP, P, M, G, GG, XGG, XXGG) e calçados (34-48)
+- [ ] Controle de estoque por tamanho (ex: P:10, M:25, G:30)
+- [ ] Filtro por categoria e tamanho na listagem de EPIs/Uniformes
+- [ ] Exibir tamanho na entrega e na ficha de EPI
+
+## Correções Rev. 75
+- [x] Fix: índice codigoInterno alterado de global para composto (companyId + codigoInterno) para evitar conflito entre empresas
+- [x] Fix: createEmployee com retry automático em caso de duplicata de codigoInterno (até 5 tentativas)
+- [x] Fix: getEmployeeById agora filtra soft-deleted (isNull deletedAt)
+- [x] Fix: limpeza de dados de teste órfãos no banco de dados
+- [x] Todos os 247 testes passando (21 arquivos de teste)

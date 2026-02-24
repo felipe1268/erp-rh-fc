@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria } from "../../drizzle/schema";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -24,6 +24,8 @@ export const episRouter = router({
       validadeCa: z.string().optional(),
       fabricante: z.string().optional(),
       fornecedor: z.string().optional(),
+      categoria: z.enum(['EPI','Uniforme','Calcado']).default('EPI'),
+      tamanho: z.string().optional(),
       quantidadeEstoque: z.number().default(0),
       valorProduto: z.number().optional(),
       tempoMinimoTroca: z.number().optional(),
@@ -37,6 +39,8 @@ export const episRouter = router({
         validadeCa: input.validadeCa || null,
         fabricante: input.fabricante || null,
         fornecedor: input.fornecedor || null,
+        categoria: input.categoria,
+        tamanho: input.tamanho || null,
         quantidadeEstoque: input.quantidadeEstoque,
         valorProduto: input.valorProduto != null ? String(input.valorProduto) : null,
         tempoMinimoTroca: input.tempoMinimoTroca || null,
@@ -52,6 +56,8 @@ export const episRouter = router({
       validadeCa: z.string().optional(),
       fabricante: z.string().optional(),
       fornecedor: z.string().optional(),
+      categoria: z.enum(['EPI','Uniforme','Calcado']).optional(),
+      tamanho: z.string().nullable().optional(),
       quantidadeEstoque: z.number().optional(),
       valorProduto: z.number().nullable().optional(),
       tempoMinimoTroca: z.number().nullable().optional(),
@@ -65,6 +71,8 @@ export const episRouter = router({
       if (data.validadeCa !== undefined) updateData.validadeCa = data.validadeCa;
       if (data.fabricante !== undefined) updateData.fabricante = data.fabricante;
       if (data.fornecedor !== undefined) updateData.fornecedor = data.fornecedor;
+      if (data.categoria !== undefined) updateData.categoria = data.categoria;
+      if (data.tamanho !== undefined) updateData.tamanho = data.tamanho;
       if (data.quantidadeEstoque !== undefined) updateData.quantidadeEstoque = data.quantidadeEstoque;
       if (data.valorProduto !== undefined) updateData.valorProduto = data.valorProduto != null ? String(data.valorProduto) : null;
       if (data.tempoMinimoTroca !== undefined) updateData.tempoMinimoTroca = data.tempoMinimoTroca;
@@ -197,6 +205,25 @@ export const episRouter = router({
       await db.update(epis)
         .set({ quantidadeEstoque: sql`GREATEST(${epis.quantidadeEstoque} - ${input.quantidade}, 0)` })
         .where(eq(epis.id, input.epiId));
+
+      // Se motivo é cobrável, criar alerta de desconto automaticamente
+      if (valorCobrado && parseFloat(valorCobrado) > 0) {
+        const now = new Date();
+        const mesRef = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        await db.insert(epiDiscountAlerts).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          epiDeliveryId: result[0].insertId,
+          epiNome: epi?.nome || 'EPI',
+          ca: epi?.ca || null,
+          quantidade: input.quantidade,
+          valorUnitario: valorCobrado,
+          valorTotal: String(parseFloat(valorCobrado) * input.quantidade),
+          motivoCobranca: input.motivoTroca || 'mau_uso',
+          mesReferencia: mesRef,
+          status: 'pendente',
+        } as any);
+      }
 
       return { id: result[0].insertId, valorCobrado };
     }),
@@ -362,7 +389,7 @@ export const episRouter = router({
     }),
 
   // ============================================================
-  // CONSULTA CA - Busca dados do EPI pelo número do CA (site oficial CAEPI/MTE)
+  // CONSULTA CA - Busca dados do EPI pelo número do CA (base local CAEPI/MTE)
   // ============================================================
   consultaCa: protectedProcedure
     .input(z.object({ ca: z.string().min(1) }))
@@ -371,182 +398,252 @@ export const episRouter = router({
         const caNum = input.ca.replace(/\D/g, "");
         if (!caNum) return { found: false as const, error: "Número do CA inválido" };
 
-        const baseUrl = "https://caepi.mte.gov.br/internet/consultacainternet.aspx";
-        const defaultHeaders: Record<string, string> = {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-        };
-        const ajaxHeaders: Record<string, string> = {
-          ...defaultHeaders,
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-MicrosoftAjax": "Delta=true",
-          "X-Requested-With": "XMLHttpRequest",
-        };
+        const db = (await getDb())!;
+        const results = await db.select().from(caepiDatabase).where(eq(caepiDatabase.ca, caNum)).limit(1);
 
-        const controller1 = new AbortController();
-        const timeout1 = setTimeout(() => controller1.abort(), 15000);
-
-        // Step 1: Get initial page to obtain ViewState tokens
-        const initRes = await fetch(baseUrl, { headers: defaultHeaders, signal: controller1.signal });
-        clearTimeout(timeout1);
-        if (!initRes.ok) return { found: false as const, error: `Erro ao acessar site do CAEPI (status ${initRes.status})` };
-        const initHtml = await initRes.text();
-
-        const extractToken = (html: string, id: string) => {
-          const m = html.match(new RegExp(`id="${id}"\\s+value="([^"]*)"`));
-          return m ? m[1] : "";
-        };
-        const extractAjaxToken = (text: string, id: string) => {
-          const m = text.match(new RegExp(`\\|${id}\\|([^|]+)\\|`));
-          return m ? m[1] : "";
-        };
-
-        const vs1 = extractToken(initHtml, "__VIEWSTATE");
-        const vsg1 = extractToken(initHtml, "__VIEWSTATEGENERATOR");
-        const ev1 = extractToken(initHtml, "__EVENTVALIDATION");
-
-        // Get cookies from initial request
-        const setCookieHeaders = initRes.headers.getSetCookie?.() || [];
-        const cookieStr = setCookieHeaders.map((c: string) => c.split(";")[0]).join("; ");
-
-        // Step 2: AJAX search request
-        const searchData = new URLSearchParams({
-          "ctl00$ScriptManager1": "ctl00$PlaceHolderConteudo$UpdatePanel1|ctl00$PlaceHolderConteudo$btnConsultar",
-          "__EVENTTARGET": "",
-          "__EVENTARGUMENT": "",
-          "__VIEWSTATE": vs1,
-          "__VIEWSTATEGENERATOR": vsg1,
-          "__EVENTVALIDATION": ev1,
-          "ctl00$PlaceHolderConteudo$txtNumeroCA": caNum,
-          "ctl00$PlaceHolderConteudo$cboEquipamento": "*******Selecione*******",
-          "ctl00$PlaceHolderConteudo$cboFabricante": "*******Selecione*******",
-          "ctl00$PlaceHolderConteudo$cboTipoProtecao": "*******Selecione*******",
-          "__ASYNCPOST": "true",
-          "ctl00$PlaceHolderConteudo$btnConsultar": "Consultar",
-        });
-
-        const controller2 = new AbortController();
-        const timeout2 = setTimeout(() => controller2.abort(), 15000);
-
-        const searchRes = await fetch(baseUrl, {
-          method: "POST",
-          headers: { ...ajaxHeaders, "Cookie": cookieStr },
-          body: searchData.toString(),
-          signal: controller2.signal,
-        });
-        clearTimeout(timeout2);
-
-        if (!searchRes.ok) return { found: false as const, error: `Erro na consulta ao CAEPI (status ${searchRes.status})` };
-        const searchHtml = await searchRes.text();
-
-        if (!searchHtml.includes("grdListaResultado")) {
-          return { found: false as const, error: "CA não encontrado no sistema CAEPI" };
+        if (results.length === 0) {
+          return { found: false as const, error: "CA não encontrado na base de dados. Tente atualizar a base de CAs nas Configurações." };
         }
 
-        // Step 3: Extract new tokens and click detail button
-        const vs2 = extractAjaxToken(searchHtml, "__VIEWSTATE");
-        const vsg2 = extractAjaxToken(searchHtml, "__VIEWSTATEGENERATOR") || vsg1;
-        const ev2 = extractAjaxToken(searchHtml, "__EVENTVALIDATION");
+        const r = results[0];
 
-        const cookies2 = searchRes.headers.getSetCookie?.()?.map((c: string) => c.split(";")[0]).join("; ") || cookieStr;
-
-        const detailData = new URLSearchParams({
-          "ctl00$ScriptManager1": "ctl00$PlaceHolderConteudo$UpdatePanel1|ctl00$PlaceHolderConteudo$grdListaResultado$ctl02$btnDetalhar",
-          "__EVENTTARGET": "",
-          "__EVENTARGUMENT": "",
-          "__VIEWSTATE": vs2,
-          "__VIEWSTATEGENERATOR": vsg2,
-          "__EVENTVALIDATION": ev2,
-          "ctl00$PlaceHolderConteudo$txtNumeroCA": caNum,
-          "ctl00$PlaceHolderConteudo$cboEquipamento": "*******Selecione*******",
-          "ctl00$PlaceHolderConteudo$cboFabricante": "*******Selecione*******",
-          "ctl00$PlaceHolderConteudo$cboTipoProtecao": "*******Selecione*******",
-          "ctl00$PlaceHolderConteudo$txtNumeroCAFiltro": "",
-          "__ASYNCPOST": "true",
-          "ctl00$PlaceHolderConteudo$grdListaResultado$ctl02$btnDetalhar.x": "10",
-          "ctl00$PlaceHolderConteudo$grdListaResultado$ctl02$btnDetalhar.y": "10",
-        });
-
-        const controller3 = new AbortController();
-        const timeout3 = setTimeout(() => controller3.abort(), 15000);
-
-        const detailRes = await fetch(baseUrl, {
-          method: "POST",
-          headers: { ...ajaxHeaders, "Cookie": cookies2 },
-          body: detailData.toString(),
-          signal: controller3.signal,
-        });
-        clearTimeout(timeout3);
-
-        if (!detailRes.ok) return { found: false as const, error: `Erro ao obter detalhes do CA (status ${detailRes.status})` };
-        const detailHtml = await detailRes.text();
-
-        // Extract data using span IDs from the CAEPI detail page
-        const extractSpan = (spanId: string): string => {
-          const m = detailHtml.match(new RegExp(`id="PlaceHolderConteudo_${spanId}"[^>]*>([^<]*)</span>`));
-          return m ? m[1].trim() : "";
-        };
-
-        const ca = extractSpan("lblNRRegistroCA");
-        const situacao = extractSpan("lblSituacao");
-        const validadeRaw = extractSpan("lblDTValidade"); // "23/09/2030 00:00:00"
-        const processo = extractSpan("lblNRProcesso");
-        const cnpj = extractSpan("lblNRCNPJ");
-        const razaoSocial = extractSpan("lblNORazaoSocial");
-        const natureza = extractSpan("lblNatureza");
-        const nomeEquipamento = extractSpan("lblNOEquipamento");
-        const descricao = extractSpan("lblEquipamentoDSEquipamentoTexto");
-        const marcacao = extractSpan("lblDSLocalMarcacaoCA");
-        const referencia = extractSpan("lblDSReferencia");
-        const tamanho = extractSpan("lblDSTamanho");
-        const cor = extractSpan("lblDSCor");
-        const aprovadoPara = extractSpan("lblDSAprovadoParaLaudo");
-
-        if (!ca && !nomeEquipamento && !descricao) {
-          return { found: false as const, error: "CA não encontrado" };
-        }
-
-        // Convert validade "DD/MM/YYYY HH:MM:SS" to "YYYY-MM-DD"
+        // Convert validade "DD/MM/YYYY" to "YYYY-MM-DD"
         let validadeISO = "";
-        if (validadeRaw) {
-          const datePart = validadeRaw.split(" ")[0]; // "23/09/2030"
-          const parts = datePart.split("/");
+        if (r.validade) {
+          const parts = r.validade.split("/");
           if (parts.length === 3) {
             validadeISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
           }
         }
 
         // Build EPI name from reference + equipment name
-        let nomeEpi = referencia || "";
-        if (!nomeEpi && nomeEquipamento) {
-          nomeEpi = nomeEquipamento.split(" ").slice(0, 8).join(" ");
+        let nomeEpi = r.referencia || "";
+        if (!nomeEpi && r.equipamento) {
+          nomeEpi = r.equipamento.split(" ").slice(0, 8).join(" ");
         }
 
         return {
           found: true as const,
-          ca: ca || caNum,
+          ca: caNum,
           nome: nomeEpi,
-          descricao: descricao || nomeEquipamento,
-          fabricante: razaoSocial,
-          fabricanteRazao: razaoSocial,
+          descricao: r.descricao || r.equipamento || "",
+          fabricante: r.fabricante || "",
+          fabricanteRazao: r.fabricante || "",
           nomeFantasia: "",
-          situacao,
+          situacao: r.situacao || "",
           validade: validadeISO,
-          natureza,
-          referencia,
-          marcacao,
-          tamanho,
-          cor,
-          cnpj,
-          aprovadoPara,
+          natureza: r.natureza || "",
+          referencia: r.referencia || "",
+          marcacao: "",
+          tamanho: "",
+          cor: r.cor || "",
+          cnpj: r.cnpj || "",
+          aprovadoPara: r.aprovadoPara || "",
         };
       } catch (err: any) {
-        console.error("[ConsultaCA] Erro:", err.name, err.message);
-        if (err.name === "AbortError") {
-          return { found: false as const, error: "Tempo limite excedido. O site do CAEPI pode estar lento. Tente novamente." };
-        }
+        console.error("[ConsultaCA] Erro:", err.message);
         return { found: false as const, error: `Erro ao consultar CA: ${err.message || "Tente novamente"}` };
+      }
+    }),
+
+  // ============================================================
+  // ALERTAS DE DESCONTO DE EPI
+  // ============================================================
+  listDiscountAlerts: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      employeeId: z.number().optional(),
+      status: z.enum(['pendente','confirmado','cancelado']).optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const conds: any[] = [eq(epiDiscountAlerts.companyId, input.companyId)];
+      if (input.employeeId) conds.push(eq(epiDiscountAlerts.employeeId, input.employeeId));
+      if (input.status) conds.push(eq(epiDiscountAlerts.status, input.status));
+
+      return db.select({
+        id: epiDiscountAlerts.id,
+        companyId: epiDiscountAlerts.companyId,
+        employeeId: epiDiscountAlerts.employeeId,
+        epiDeliveryId: epiDiscountAlerts.epiDeliveryId,
+        epiNome: epiDiscountAlerts.epiNome,
+        ca: epiDiscountAlerts.ca,
+        quantidade: epiDiscountAlerts.quantidade,
+        valorUnitario: epiDiscountAlerts.valorUnitario,
+        valorTotal: epiDiscountAlerts.valorTotal,
+        motivoCobranca: epiDiscountAlerts.motivoCobranca,
+        mesReferencia: epiDiscountAlerts.mesReferencia,
+        status: epiDiscountAlerts.status,
+        validadoPor: epiDiscountAlerts.validadoPor,
+        dataValidacao: epiDiscountAlerts.dataValidacao,
+        justificativa: epiDiscountAlerts.justificativa,
+        createdAt: epiDiscountAlerts.createdAt,
+        nomeFunc: employees.nomeCompleto,
+        funcaoFunc: employees.funcao,
+      })
+        .from(epiDiscountAlerts)
+        .leftJoin(employees, eq(epiDiscountAlerts.employeeId, employees.id))
+        .where(and(...conds))
+        .orderBy(desc(epiDiscountAlerts.createdAt));
+    }),
+
+  validateDiscount: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      acao: z.enum(['confirmado','cancelado']),
+      justificativa: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.update(epiDiscountAlerts).set({
+        status: input.acao,
+        validadoPor: ctx.user.name ?? 'Sistema',
+        validadoPorUserId: ctx.user.id,
+        dataValidacao: sql`NOW()`,
+        justificativa: input.justificativa || null,
+      } as any).where(eq(epiDiscountAlerts.id, input.id));
+      return { success: true };
+    }),
+
+  pendingDiscountsCount: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [result] = await db.select({ count: sql<number>`COUNT(*)` })
+        .from(epiDiscountAlerts)
+        .where(and(
+          eq(epiDiscountAlerts.companyId, input.companyId),
+          eq(epiDiscountAlerts.status, 'pendente')
+        ));
+      return { count: result?.count || 0 };
+    }),
+
+  // ============================================================
+  // ESTATÍSTICAS DA BASE CAEPI
+  // ============================================================
+  caepiStats: protectedProcedure
+    .query(async () => {
+      try {
+        const db = (await getDb())!;
+        const [countResult] = await db.select({ count: sql<number>`COUNT(*)` }).from(caepiDatabase);
+        const [lastUpdate] = await db.select({ updatedAt: caepiDatabase.updatedAt }).from(caepiDatabase).orderBy(desc(caepiDatabase.updatedAt)).limit(1);
+        return {
+          totalCas: countResult?.count || 0,
+          lastUpdate: lastUpdate?.updatedAt || null,
+        };
+      } catch {
+        return { totalCas: 0, lastUpdate: null };
+      }
+    }),
+
+  // ============================================================
+  // ATUALIZAR BASE CAEPI (download do Portal de Dados Abertos)
+  // ============================================================
+  refreshCaepiDatabase: protectedProcedure
+    .mutation(async () => {
+      try {
+        const db = (await getDb())!;
+        
+        // URL do Portal de Dados Abertos do Governo Federal
+        const dataUrl = "https://dados.gov.br/dados/conjuntos-dados/cadastro-de-certificado-de-aprovacao-de-equipamento-de-protecao-individual1";
+        
+        // Try to fetch from the API endpoint
+        const apiUrl = "https://dados.gov.br/api/publico/conjuntos-dados/cadastro-de-certificado-de-aprovacao-de-equipamento-de-protecao-individual1";
+        
+        let jsonData: any[] = [];
+        let fetched = false;
+        
+        // Attempt 1: Try the direct CSV/JSON resource URLs from dados.gov.br
+        const resourceUrls = [
+          "https://www.gov.br/trabalho-e-emprego/pt-br/servicos/seguranca-e-saude-no-trabalho/certificado-de-aprovacao-de-equipamento-de-protecao-individual/dados-abertos/caepi.json",
+          "https://www.gov.br/trabalho-e-emprego/pt-br/servicos/seguranca-e-saude-no-trabalho/certificado-de-aprovacao-de-equipamento-de-protecao-individual/dados-abertos/caepi.csv",
+        ];
+        
+        for (const url of resourceUrls) {
+          try {
+            const resp = await fetch(url, { 
+              headers: { 'User-Agent': 'Mozilla/5.0 ERP-RH-FC/1.0' },
+              signal: AbortSignal.timeout(30000)
+            });
+            if (resp.ok) {
+              const contentType = resp.headers.get('content-type') || '';
+              if (contentType.includes('json') || url.endsWith('.json')) {
+                jsonData = await resp.json();
+                fetched = true;
+                break;
+              } else if (contentType.includes('csv') || url.endsWith('.csv')) {
+                const csvText = await resp.text();
+                // Parse CSV
+                const lines = csvText.split('\n').filter(l => l.trim());
+                if (lines.length > 1) {
+                  const headers = lines[0].split(';').map(h => h.trim().replace(/"/g, ''));
+                  jsonData = lines.slice(1).map(line => {
+                    const values = line.split(';').map(v => v.trim().replace(/"/g, ''));
+                    const obj: any = {};
+                    headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+                    return obj;
+                  });
+                  fetched = true;
+                  break;
+                }
+              }
+            }
+          } catch { /* try next URL */ }
+        }
+        
+        if (!fetched || jsonData.length === 0) {
+          // Return current stats if we can't fetch new data
+          const [countResult] = await db.select({ count: sql<number>`COUNT(*)` }).from(caepiDatabase);
+          return {
+            success: false,
+            error: "Não foi possível baixar dados atualizados do Portal de Dados Abertos. A base local permanece inalterada.",
+            totalImported: countResult?.count || 0,
+          };
+        }
+        
+        // Map fields from government data format
+        const records = jsonData.map((item: any) => {
+          const ca = String(item.NrCA || item.CA || item.ca || item.NumeroCA || '').replace(/\D/g, '');
+          return {
+            ca,
+            validade: item.DataValidade || item.Validade || item.validade || null,
+            situacao: item.Situacao || item.situacao || item.Status || null,
+            cnpj: item.CNPJ || item.cnpj || null,
+            fabricante: item.RazaoSocial || item.Fabricante || item.fabricante || null,
+            natureza: item.Natureza || item.natureza || null,
+            equipamento: item.Equipamento || item.equipamento || item.Descricao || null,
+            descricao: item.DescricaoEquipamento || item.descricao || item.Descricao || null,
+            referencia: item.Referencia || item.referencia || null,
+            cor: item.Cor || item.cor || null,
+            aprovadoPara: item.AprovadoPara || item.aprovadoPara || null,
+          };
+        }).filter((r: any) => r.ca && r.ca.length > 0);
+        
+        if (records.length === 0) {
+          return { success: false, error: "Dados baixados mas nenhum CA válido encontrado.", totalImported: 0 };
+        }
+        
+        // Clear existing data and insert new
+        await db.delete(caepiDatabase).where(sql`1=1`);
+        
+        // Insert in batches of 500
+        const batchSize = 500;
+        for (let i = 0; i < records.length; i += batchSize) {
+          const batch = records.slice(i, i + batchSize);
+          await db.insert(caepiDatabase).values(batch as any);
+        }
+        
+        return {
+          success: true,
+          totalImported: records.length,
+          message: `Base CAEPI atualizada com ${records.length.toLocaleString()} CAs.`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: `Erro ao atualizar: ${err.message || 'Erro desconhecido'}`,
+          totalImported: 0,
+        };
       }
     }),
 });

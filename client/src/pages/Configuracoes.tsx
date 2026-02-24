@@ -13,7 +13,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -646,6 +646,9 @@ export default function Configuracoes() {
                 })}
               </div>
             )}
+
+            {/* ============ BASE CAEPI (Certificados de Aprovação) ============ */}
+            <CaepiStatsSection />
           </div>
         )}
 
@@ -1341,5 +1344,92 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ============================================================
+// SEÇÃO: Base de Dados CAEPI (Certificados de Aprovação)
+// ============================================================
+function CaepiStatsSection() {
+  const caepiStats = trpc.epis.caepiStats.useQuery();
+  const [updating, setUpdating] = useState(false);
+
+  const formatDate = (d: string | null) => {
+    if (!d) return "-";
+    try {
+      const date = new Date(d);
+      return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return d; }
+  };
+
+  return (
+    <div className="mt-6 border rounded-lg overflow-hidden border-blue-200">
+      <div className="flex items-center justify-between px-4 py-3 bg-blue-50">
+        <div className="flex items-center gap-3">
+          <Database className="w-5 h-5 text-blue-600" />
+          <span className="font-semibold text-gray-800">Base de Dados CAEPI (Certificados de Aprovação)</span>
+          {caepiStats.data && (
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+              {Number(caepiStats.data.totalCas).toLocaleString("pt-BR")} CAs cadastrados
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="bg-white p-4">
+        <p className="text-sm text-gray-500 mb-4">
+          Base de dados local com os Certificados de Aprovação (CA) do Ministério do Trabalho e Emprego (MTE).
+          Utilizada para preenchimento automático dos dados do EPI ao digitar o número do CA.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
+            <p className="text-3xl font-bold text-blue-700">
+              {caepiStats.isLoading ? "..." : Number(caepiStats.data?.totalCas || 0).toLocaleString("pt-BR")}
+            </p>
+            <p className="text-xs text-blue-600 font-medium mt-1">CAs na Base Local</p>
+          </div>
+          <div className="bg-green-50 rounded-lg p-4 text-center border border-green-100">
+            <p className="text-sm font-semibold text-green-700">
+              {caepiStats.isLoading ? "..." : formatDate(caepiStats.data?.lastUpdate || null)}
+            </p>
+            <p className="text-xs text-green-600 font-medium mt-1">Última Atualização</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-100">
+            <p className="text-sm font-semibold text-gray-700">Portal de Dados Abertos</p>
+            <p className="text-xs text-gray-500 font-medium mt-1">Fonte: Governo Federal (MTE)</p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <RefreshCaepiButton onSuccess={() => caepiStats.refetch()} />
+          <span className="text-xs text-gray-400">Baixa os dados mais recentes do Portal de Dados Abertos do Governo Federal</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RefreshCaepiButton({ onSuccess }: { onSuccess: () => void }) {
+  const refreshMutation = trpc.epis.refreshCaepiDatabase.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(`Base CAEPI atualizada! ${data.totalImported?.toLocaleString("pt-BR") || ""} CAs importados.`);
+        onSuccess();
+      } else {
+        toast.error(data.error || "Erro ao atualizar base CAEPI");
+      }
+    },
+    onError: (err) => toast.error("Erro ao atualizar: " + (err.message || "Tente novamente")),
+  });
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50"
+      onClick={() => refreshMutation.mutate()}
+      disabled={refreshMutation.isPending}
+    >
+      {refreshMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+      {refreshMutation.isPending ? "Atualizando..." : "Atualizar Base CAEPI"}
+    </Button>
   );
 }

@@ -417,6 +417,8 @@ export const epis = mysqlTable("epis", {
 	validadeCa: date({ mode: 'string' }),
 	fabricante: varchar({ length: 255 }),
 	fornecedor: varchar({ length: 255 }),
+	categoria: mysqlEnum('categoria', ['EPI','Uniforme','Calcado']).default('EPI').notNull(),
+	tamanho: varchar({ length: 20 }), // P, M, G, GG, XGG, XXGG ou 34-48 para calçados
 	quantidadeEstoque: int().default(0),
 	valorProduto: decimal("valor_produto", { precision: 10, scale: 2 }),
 	tempoMinimoTroca: int("tempo_minimo_troca"),
@@ -1680,4 +1682,56 @@ export const dixiNameMappings = mysqlTable("dixi_name_mappings", {
 	index("dnm_company").on(table.companyId),
 	index("dnm_dixi_name").on(table.companyId, table.dixiName),
 	index("dnm_employee").on(table.employeeId),
+]);
+
+
+// ============================================================
+// BASE DE DADOS CAEPI (Certificados de Aprovação do MTE)
+// ============================================================
+export const caepiDatabase = mysqlTable("caepi_database", {
+	id: int().autoincrement().notNull(),
+	ca: varchar({ length: 20 }).notNull(),
+	validade: varchar({ length: 20 }),
+	situacao: varchar({ length: 30 }),
+	cnpj: varchar({ length: 20 }),
+	fabricante: varchar({ length: 500 }),
+	natureza: varchar({ length: 50 }),
+	equipamento: varchar({ length: 500 }),
+	descricao: text(),
+	referencia: varchar({ length: 500 }),
+	cor: varchar({ length: 100 }),
+	aprovadoPara: text("aprovado_para"),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("caepi_ca_idx").on(table.ca),
+]);
+
+// ============================================================
+// ALERTAS DE DESCONTO DE EPI
+// ============================================================
+export const epiDiscountAlerts = mysqlTable("epi_discount_alerts", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	epiDeliveryId: int().notNull(),
+	epiNome: varchar("epi_nome", { length: 500 }).notNull(),
+	ca: varchar({ length: 20 }),
+	quantidade: int().default(1).notNull(),
+	valorUnitario: decimal("valor_unitario", { precision: 10, scale: 2 }).notNull(),
+	valorTotal: decimal("valor_total", { precision: 10, scale: 2 }).notNull(),
+	motivoCobranca: varchar("motivo_cobranca", { length: 100 }).notNull(), // mau_uso, perda, furto, extravio
+	mesReferencia: varchar("mes_referencia", { length: 7 }).notNull(), // YYYY-MM
+	status: mysqlEnum(['pendente','confirmado','cancelado']).default('pendente').notNull(),
+	validadoPor: varchar("validado_por", { length: 255 }),
+	validadoPorUserId: int("validado_por_user_id"),
+	dataValidacao: timestamp("data_validacao", { mode: 'string' }),
+	justificativa: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("eda_company").on(table.companyId),
+	index("eda_employee").on(table.employeeId),
+	index("eda_delivery").on(table.epiDeliveryId),
+	index("eda_status").on(table.status),
+	index("eda_mes").on(table.companyId, table.mesReferencia),
 ]);
