@@ -11,7 +11,8 @@ import { trpc } from "@/lib/trpc";
 import {
   Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
-  DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText
+  DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
+  Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useRef } from "react";
@@ -20,6 +21,26 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 type ViewMode = "catalogo" | "entregas" | "novo_epi" | "nova_entrega" | "config_bdi" | "ficha_epi";
+
+// Mapeamento de ícones dinâmicos por tipo de EPI
+function getEpiIcon(nome: string, className: string = "h-4 w-4") {
+  const n = (nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (n.includes("capacete") || n.includes("helmet")) return <HardHat className={`${className} text-amber-600`} />;
+  if (n.includes("luva")) return <Hand className={`${className} text-blue-600`} />;
+  if (n.includes("oculos") || n.includes("viseira") || n.includes("protetor facial") || n.includes("face")) return <Glasses className={`${className} text-sky-600`} />;
+  if (n.includes("bota") || n.includes("botina") || n.includes("calcado") || n.includes("sapato")) return <Footprints className={`${className} text-amber-800`} />;
+  if (n.includes("auricular") || n.includes("abafador") || n.includes("ouvido") || n.includes("plug")) return <Ear className={`${className} text-purple-600`} />;
+  if (n.includes("uniforme") || n.includes("camisa") || n.includes("calca") || n.includes("jaleco") || n.includes("avental") || n.includes("vestimenta") || n.includes("manga")) return <Shirt className={`${className} text-indigo-600`} />;
+  if (n.includes("respirador") || n.includes("mascara") || n.includes("respiratoria") || n.includes("pff")) return <Wind className={`${className} text-teal-600`} />;
+  if (n.includes("cinto") || n.includes("arnês") || n.includes("arnes") || n.includes("trava-queda") || n.includes("talabarte")) return <Shield className={`${className} text-red-600`} />;
+  if (n.includes("soldador") || n.includes("solda") || n.includes("touca")) return <Flame className={`${className} text-orange-600`} />;
+  if (n.includes("creme") || n.includes("protetor solar") || n.includes("filtro")) return <Droplets className={`${className} text-cyan-600`} />;
+  if (n.includes("ferramenta") || n.includes("chave")) return <Wrench className={`${className} text-gray-600`} />;
+  if (n.includes("eletric") || n.includes("isolante")) return <Zap className={`${className} text-yellow-600`} />;
+  if (n.includes("primeiros") || n.includes("socorro") || n.includes("kit")) return <HeartPulse className={`${className} text-red-500`} />;
+  if (n.includes("chuva") || n.includes("impermeavel")) return <Umbrella className={`${className} text-blue-500`} />;
+  return <ShieldCheck className={`${className} text-emerald-600`} />;
+}
 
 export default function Epis() {
   const { selectedCompanyId } = useCompany();
@@ -712,7 +733,7 @@ export default function Epis() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
-                                <HardHat className="h-4 w-4 text-amber-600 shrink-0" />
+                                {getEpiIcon(epi.nome, "h-4 w-4 shrink-0")}
                                 <div>
                                   <span className="font-medium">{epi.nome}</span>
                                   {epi.fabricante && <span className="text-xs text-muted-foreground ml-1">({epi.fabricante})</span>}
@@ -841,7 +862,7 @@ export default function Epis() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
-                                <HardHat className="h-3.5 w-3.5 text-amber-600" />
+                                {getEpiIcon(d.nomeEpi || "", "h-3.5 w-3.5")}
                                 <span className="text-xs">{d.nomeEpi || "—"}</span>
                                 {d.caEpi && <Badge variant="outline" className="text-[10px]">CA: {d.caEpi}</Badge>}
                               </div>

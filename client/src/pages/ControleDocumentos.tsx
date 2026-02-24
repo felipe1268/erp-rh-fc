@@ -854,7 +854,7 @@ export default function ControleDocumentos() {
                           <td className="py-2">{formatDate(a.dataOcorrencia)}</td>
                           <td className="py-2 max-w-[180px] truncate" title={a.motivo}>{a.motivo}</td>
                           <td className="py-2 max-w-[180px] truncate" title={a.descricao}>{a.descricao || "-"}</td>
-                          <td className="py-2">{a.testemunhas || "-"}</td>
+                          <td className="py-2 max-w-[200px] truncate">{(() => { try { const arr = JSON.parse(a.testemunhas || "[]"); if (Array.isArray(arr) && arr.length > 0) { return arr.filter((t: any) => t.nome?.trim()).map((t: any) => t.nome).join(", ") || "-"; } return a.testemunhas || "-"; } catch { return a.testemunhas || "-"; } })()}</td>
                           <td className="py-2">
                             <div className="flex gap-1">
                               {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Visualizar Documento CLT" onClick={() => {

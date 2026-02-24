@@ -1974,3 +1974,12 @@
 - [x] Tela "Tipos de Perfil": aba separada com cards visuais e checkboxes V/C/E/D por módulo
 - [x] Tela "Usuários": aba com cadastro de usuário, dados e perfil global
 - [x] Tela "Perfis por Empresa": aba com atribuição de tipo de perfil e personalização individual
+
+## Rev. 74 — Ajustes
+- [x] Adicionar botão de voltar na tela de Controle de Revisões
+
+## Rev. 74 — Ajustes
+- [x] Adicionar botão de voltar na tela de Controle de Revisões
+- [ ] Adicionar Domingo na grade de jornada de trabalho (com badge HE, igual ao Sábado)
+- [x] Bug: testemunhas na lista de advertências mostrando JSON bruto em vez de nomes formatados
+- [x] Ícones dinâmicos por tipo de EPI (capacete, luva, óculos, bota, protetor auricular, etc.)

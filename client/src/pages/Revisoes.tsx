@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { GitBranch, Plus, Trash2, Bug, Sparkles, Shield, Zap, Wrench, Calendar, User, Tag, FileText, Printer } from "lucide-react";
+import { GitBranch, Plus, Trash2, Bug, Sparkles, Shield, Zap, Wrench, Calendar, User, Tag, FileText, Printer, ArrowLeft } from "lucide-react";
+import { useLocation } from "wouter";
 
 const TIPO_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   feature: { label: "Nova Funcionalidade", color: "bg-blue-100 text-blue-800 border-blue-200", icon: <Sparkles className="h-3.5 w-3.5" /> },
@@ -21,6 +22,7 @@ const TIPO_CONFIG: Record<string, { label: string; color: string; icon: React.Re
 };
 
 export default function Revisoes() {
+  const [, navigate] = useLocation();
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
   const revisionsQuery = trpc.revisions.list.useQuery(undefined, { enabled: isMaster });
@@ -78,6 +80,9 @@ export default function Revisoes() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
             <GitBranch className="h-7 w-7 text-primary" />
             <h1 className="text-2xl font-bold">Controle de Revisões</h1>
           </div>
