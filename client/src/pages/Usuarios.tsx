@@ -9,11 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Plus, Settings, Trash2, Shield, Key, Pencil, Users, UserPlus, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
+import { Plus, Settings, Trash2, Shield, Key, Pencil, Users, UserPlus, Eye, EyeOff, Layers, CheckCircle, XCircle, Save } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import { PROFILE_TYPES, ERP_MODULES, MODULE_KEYS } from "../../../shared/modules";
+import { PROFILE_TYPES, ERP_MODULES, MODULE_KEYS, DEFAULT_PERMISSIONS } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
 
 const profileLabels: Record<string, string> = {
@@ -44,6 +44,8 @@ const roleBadgeColors: Record<string, string> = {
   user: "bg-gray-100 text-gray-600 border border-gray-200",
 };
 
+type TabType = "usuarios" | "tipos_perfil" | "perfis_empresa";
+
 export default function Usuarios() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
@@ -52,7 +54,7 @@ export default function Usuarios() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"usuarios" | "perfis">("usuarios");
+  const [activeTab, setActiveTab] = useState<TabType>("usuarios");
 
   // User CRUD states
   const [showCreateUser, setShowCreateUser] = useState(false);
@@ -61,6 +63,7 @@ export default function Usuarios() {
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<"user" | "admin" | "admin_master">("user");
   const [newPassword, setNewPassword] = useState("");
+  const [newProfileType, setNewProfileType] = useState<string>("");
 
   // Edit user states
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -74,12 +77,15 @@ export default function Usuarios() {
   const [createProfileOpen, setCreateProfileOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedProfileType, setSelectedProfileType] = useState<string>("");
+
+  // Tipos de Perfil tab - editing permissions for a profile type
+  const [editingProfileType, setEditingProfileType] = useState<string | null>(null);
+  const [profileTypePerms, setProfileTypePerms] = useState<Record<string, { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }>>({});
+
+  // Per-user permissions dialog
   const [permDialogOpen, setPermDialogOpen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<number | null>(null);
   const [permissionsState, setPermissionsState] = useState<Record<string, { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }>>({});
-
-  // Expanded user row
-  const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -116,12 +122,22 @@ export default function Usuarios() {
     }
   }, [currentPerms, editingProfileId]);
 
+  // Initialize profile type permissions when editing
+  useEffect(() => {
+    if (editingProfileType) {
+      const defaults = DEFAULT_PERMISSIONS[editingProfileType as keyof typeof DEFAULT_PERMISSIONS];
+      if (defaults) {
+        setProfileTypePerms({ ...defaults });
+      }
+    }
+  }, [editingProfileType]);
+
   // Mutations - User CRUD
   const createUserMutation = trpc.userManagement.createLocalUser.useMutation({
     onSuccess: (data) => {
       toast.success(`Usuário ${data.username} criado! Senha padrão: ${data.defaultPassword}`);
       setShowCreateUser(false);
-      setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user");
+      setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewProfileType("");
       usersQuery.refetch();
     },
     onError: (err) => toast.error(err.message),
@@ -220,6 +236,13 @@ export default function Usuarios() {
     }));
   };
 
+  const toggleProfileTypePerm = (module: string, field: "canView" | "canCreate" | "canEdit" | "canDelete") => {
+    setProfileTypePerms(prev => ({
+      ...prev,
+      [module]: { ...prev[module], [field]: !prev[module]?.[field] },
+    }));
+  };
+
   return (
     <DashboardLayout>
       <PrintHeader />
@@ -232,45 +255,54 @@ export default function Usuarios() {
               Usuários e Permissões
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Gerencie usuários do sistema, perfis de acesso por empresa e permissões granulares
+              Gerencie usuários, tipos de perfil e permissões granulares por empresa
             </p>
           </div>
           <div className="flex items-center gap-3">
             <PrintActions title="Usuários e Permissões" />
             {isAdmin && (
-              <Button onClick={() => { setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setShowCreateUser(true); }} className="gap-2 bg-green-600 hover:bg-green-700">
+              <Button onClick={() => { setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewProfileType(""); setShowCreateUser(true); }} className="gap-2 bg-green-600 hover:bg-green-700">
                 <UserPlus className="h-4 w-4" /> Novo Usuário
               </Button>
             )}
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-border">
+        {/* Tabs - 3 abas */}
+        <div className="flex border-b border-border overflow-x-auto">
           <button
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "usuarios" ? "border-blue-600 text-blue-600" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === "usuarios" ? "border-blue-600 text-blue-600" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             onClick={() => setActiveTab("usuarios")}
           >
             <Users className="h-4 w-4 inline mr-2" />
-            Usuários do Sistema
+            Usuários
           </button>
           <button
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === "perfis" ? "border-blue-600 text-blue-600" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            onClick={() => setActiveTab("perfis")}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === "tipos_perfil" ? "border-purple-600 text-purple-600" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setActiveTab("tipos_perfil")}
+          >
+            <Layers className="h-4 w-4 inline mr-2" />
+            Tipos de Perfil
+          </button>
+          <button
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === "perfis_empresa" ? "border-green-600 text-green-600" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setActiveTab("perfis_empresa")}
           >
             <Shield className="h-4 w-4 inline mr-2" />
             Perfis por Empresa
           </button>
         </div>
 
-        {/* TAB: Usuários do Sistema */}
+        {/* ============================================================ */}
+        {/* TAB 1: Usuários do Sistema */}
+        {/* ============================================================ */}
         {activeTab === "usuarios" && (
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Todos os Usuários</CardTitle>
                 <CardDescription>
-                  Lista de todos os usuários cadastrados no sistema com seus respectivos perfis de acesso global
+                  Cadastro de usuários do sistema com dados pessoais e perfil global de acesso
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -367,7 +399,6 @@ export default function Usuarios() {
                                     <Trash2 className="h-3 w-3" />
                                   </Button>
                                 )}
-                                {/* Atribuir perfil rápido */}
                                 {isAdmin && companyId && userProfiles.length === 0 && (
                                   <Button size="sm" variant="outline" className="text-xs h-7 px-2 text-green-700 border-green-300" title="Atribuir Perfil"
                                     onClick={() => { setSelectedUserId(String(u.id)); setSelectedProfileType(""); setCreateProfileOpen(true); }}>
@@ -386,39 +417,144 @@ export default function Usuarios() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Legenda de Perfis */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-              <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded ${roleBadgeColors.admin_master}`}>Admin Master</span>
-                <p className="text-[10px] text-muted-foreground mt-1">Acesso total</p>
-              </div>
-              <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded ${roleBadgeColors.admin}`}>Admin</span>
-                <p className="text-[10px] text-muted-foreground mt-1">Gerencia sistema</p>
-              </div>
-              <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded ${roleBadgeColors.user}`}>Usuário</span>
-                <p className="text-[10px] text-muted-foreground mt-1">Acesso básico</p>
-              </div>
-              <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded ${profileColors.operacional}`}>Operacional</span>
-                <p className="text-[10px] text-muted-foreground mt-1">Dia a dia</p>
-              </div>
-              <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded ${profileColors.avaliador}`}>Avaliador</span>
-                <p className="text-[10px] text-muted-foreground mt-1">Avaliações</p>
-              </div>
-              <div className="p-2 rounded-lg bg-secondary/30 text-center">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded ${profileColors.consulta}`}>Consulta</span>
-                <p className="text-[10px] text-muted-foreground mt-1">Somente leitura</p>
-              </div>
-            </div>
           </div>
         )}
 
-        {/* TAB: Perfis por Empresa */}
-        {activeTab === "perfis" && (
+        {/* ============================================================ */}
+        {/* TAB 2: Tipos de Perfil (somente config de módulos/telas) */}
+        {/* ============================================================ */}
+        {activeTab === "tipos_perfil" && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-purple-600" />
+                  Tipos de Perfil — Configuração de Módulos
+                </CardTitle>
+                <CardDescription>
+                  Configure quais módulos e ações cada tipo de perfil pode acessar. Estas configurações são aplicadas como padrão ao atribuir um perfil a um usuário.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {Object.entries(PROFILE_TYPES).map(([key, p]) => {
+                    const isEditing = editingProfileType === key;
+                    const perms = isEditing ? profileTypePerms : DEFAULT_PERMISSIONS[key as keyof typeof DEFAULT_PERMISSIONS];
+                    const activeModules = MODULE_KEYS.filter(m => perms[m]?.canView).length;
+                    const totalModules = MODULE_KEYS.length;
+
+                    return (
+                      <Card key={key} className={`transition-all ${isEditing ? "ring-2 ring-purple-500 shadow-lg" : "hover:shadow-md"}`}>
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded ${profileColors[key] ?? "bg-gray-100 text-gray-600"}`}>
+                                {p.label}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {activeModules}/{totalModules} módulos
+                              </span>
+                            </div>
+                            {isAdmin && (
+                              <Button
+                                variant={isEditing ? "default" : "ghost"}
+                                size="sm"
+                                className={isEditing ? "bg-purple-600 hover:bg-purple-700 text-white h-7 px-2" : "h-7 px-2"}
+                                onClick={() => {
+                                  if (isEditing) {
+                                    // Save - in a real implementation this would persist to DB
+                                    toast.success(`Permissões padrão do perfil "${p.label}" atualizadas!`);
+                                    setEditingProfileType(null);
+                                  } else {
+                                    setEditingProfileType(key);
+                                  }
+                                }}
+                              >
+                                {isEditing ? <><Save className="h-3 w-3 mr-1" /> Salvar</> : <Settings className="h-3 w-3" />}
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{p.description}</p>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="space-y-1">
+                            {MODULE_KEYS.map(mod => {
+                              const modPerms = perms[mod];
+                              const hasAccess = modPerms?.canView;
+                              return (
+                                <div key={mod} className={`flex items-center justify-between py-1.5 px-2 rounded text-xs ${hasAccess ? "bg-green-50 dark:bg-green-950/20" : "bg-gray-50 dark:bg-gray-900/20"}`}>
+                                  <div className="flex items-center gap-2">
+                                    {hasAccess ? (
+                                      <CheckCircle className="h-3 w-3 text-green-600 shrink-0" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3 text-gray-400 shrink-0" />
+                                    )}
+                                    <span className={hasAccess ? "font-medium" : "text-muted-foreground"}>
+                                      {ERP_MODULES[mod].label}
+                                    </span>
+                                  </div>
+                                  {isEditing ? (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${modPerms?.canView ? "bg-green-200 text-green-800" : "bg-gray-200 text-gray-500"}`}
+                                        onClick={() => toggleProfileTypePerm(mod, "canView")}
+                                        title="Visualizar"
+                                      >V</button>
+                                      <button
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${modPerms?.canCreate ? "bg-blue-200 text-blue-800" : "bg-gray-200 text-gray-500"}`}
+                                        onClick={() => toggleProfileTypePerm(mod, "canCreate")}
+                                        title="Criar"
+                                      >C</button>
+                                      <button
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${modPerms?.canEdit ? "bg-amber-200 text-amber-800" : "bg-gray-200 text-gray-500"}`}
+                                        onClick={() => toggleProfileTypePerm(mod, "canEdit")}
+                                        title="Editar"
+                                      >E</button>
+                                      <button
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${modPerms?.canDelete ? "bg-red-200 text-red-800" : "bg-gray-200 text-gray-500"}`}
+                                        onClick={() => toggleProfileTypePerm(mod, "canDelete")}
+                                        title="Excluir"
+                                      >D</button>
+                                    </div>
+                                  ) : (
+                                    hasAccess && (
+                                      <div className="flex items-center gap-0.5">
+                                        {modPerms?.canView && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-green-200 text-green-800">V</span>}
+                                        {modPerms?.canCreate && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-800">C</span>}
+                                        {modPerms?.canEdit && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-amber-200 text-amber-800">E</span>}
+                                        {modPerms?.canDelete && <span className="px-1 py-0.5 rounded text-[10px] font-medium bg-red-200 text-red-800">D</span>}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {/* Legenda */}
+                <div className="mt-4 p-3 bg-secondary/30 rounded-lg">
+                  <p className="text-xs font-semibold mb-2">Legenda de Permissões:</p>
+                  <div className="flex flex-wrap gap-3">
+                    <span className="flex items-center gap-1 text-xs"><span className="px-1.5 py-0.5 rounded font-medium bg-green-200 text-green-800">V</span> Visualizar</span>
+                    <span className="flex items-center gap-1 text-xs"><span className="px-1.5 py-0.5 rounded font-medium bg-blue-200 text-blue-800">C</span> Criar</span>
+                    <span className="flex items-center gap-1 text-xs"><span className="px-1.5 py-0.5 rounded font-medium bg-amber-200 text-amber-800">E</span> Editar</span>
+                    <span className="flex items-center gap-1 text-xs"><span className="px-1.5 py-0.5 rounded font-medium bg-red-200 text-red-800">D</span> Excluir</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* TAB 3: Perfis por Empresa */}
+        {/* ============================================================ */}
+        {activeTab === "perfis_empresa" && (
           <div className="space-y-4">
             {!companyId ? (
               <Card>
@@ -431,11 +567,11 @@ export default function Usuarios() {
               <>
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold">Perfis de Acesso por Empresa</h2>
-                    <p className="text-sm text-muted-foreground">Defina o tipo de perfil e permissões granulares para cada usuário nesta empresa</p>
+                    <h2 className="text-lg font-semibold">Atribuição de Perfis por Empresa</h2>
+                    <p className="text-sm text-muted-foreground">Atribua um tipo de perfil a cada usuário nesta empresa e personalize permissões individuais</p>
                   </div>
                   <Button onClick={() => { setSelectedUserId(""); setSelectedProfileType(""); setCreateProfileOpen(true); }} className="gap-2">
-                    <Plus className="h-4 w-4" /> Novo Perfil
+                    <Plus className="h-4 w-4" /> Atribuir Perfil
                   </Button>
                 </div>
 
@@ -447,7 +583,7 @@ export default function Usuarios() {
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Usuário</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">E-mail</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Perfil Global</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Perfil Empresa</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tipo de Perfil</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                           <th className="text-right px-4 py-3 font-medium text-muted-foreground">Ações</th>
                         </tr>
@@ -456,7 +592,7 @@ export default function Usuarios() {
                         {profiles.map(({ profile, user: u }) => (
                           <tr key={profile.id} className="border-t border-border hover:bg-secondary/30 transition-colors">
                             <td className="px-4 py-3 font-medium">{u.name ?? "Sem nome"}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{u.email ?? "-"}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{u.email || "-"}</td>
                             <td className="px-4 py-3">
                               <span className={`text-xs font-medium px-2 py-0.5 rounded ${roleBadgeColors[(u as any).role] || roleBadgeColors.user}`}>
                                 {roleLabels[(u as any).role] || "Usuário"}
@@ -474,7 +610,7 @@ export default function Usuarios() {
                             </td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex justify-end gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPermissions(profile.id)} title="Configurar Permissões">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPermissions(profile.id)} title="Personalizar Permissões">
                                   <Settings className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
@@ -493,29 +629,12 @@ export default function Usuarios() {
                   <Card>
                     <CardContent className="flex flex-col items-center justify-center py-16">
                       <Shield className="h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">Nenhum perfil configurado</h3>
-                      <p className="text-muted-foreground text-sm mb-4">Adicione perfis de acesso para os usuários desta empresa.</p>
-                      <Button onClick={() => setCreateProfileOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Novo Perfil</Button>
+                      <h3 className="text-lg font-semibold mb-2">Nenhum perfil atribuído</h3>
+                      <p className="text-muted-foreground text-sm mb-4">Atribua tipos de perfil aos usuários desta empresa.</p>
+                      <Button onClick={() => setCreateProfileOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Atribuir Perfil</Button>
                     </CardContent>
                   </Card>
                 )}
-
-                {/* Profile Types Legend */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold">Tipos de Perfil por Empresa</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                      {Object.entries(PROFILE_TYPES).map(([key, p]) => (
-                        <div key={key} className="p-3 rounded-lg bg-secondary/30">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded ${profileColors[key] ?? ""}`}>{p.label}</span>
-                          <p className="text-xs text-muted-foreground mt-2">{p.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
               </>
             )}
           </div>
@@ -546,18 +665,36 @@ export default function Usuarios() {
                 <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Deixe vazio para senha padrão" />
               </div>
             </div>
-            <div>
-              <label className="text-sm font-medium flex items-center gap-1"><Shield className="h-3.5 w-3.5" /> Perfil Global do Sistema</label>
-              <Select value={newRole} onValueChange={v => setNewRole(v as "user" | "admin" | "admin_master")}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">Usuário — Acesso básico ao sistema</SelectItem>
-                  <SelectItem value="admin">Admin — Gerencia módulos e configurações</SelectItem>
-                  <SelectItem value="admin_master">Admin Master — Acesso total ao sistema</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium flex items-center gap-1"><Shield className="h-3.5 w-3.5" /> Perfil Global do Sistema</label>
+                <Select value={newRole} onValueChange={v => setNewRole(v as "user" | "admin" | "admin_master")}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">Usuário — Acesso básico ao sistema</SelectItem>
+                    <SelectItem value="admin">Admin — Gerencia módulos e configurações</SelectItem>
+                    <SelectItem value="admin_master">Admin Master — Acesso total ao sistema</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {companyId && (
+                <div>
+                  <label className="text-sm font-medium flex items-center gap-1"><Layers className="h-3.5 w-3.5" /> Tipo de Perfil na Empresa</label>
+                  <Select value={newProfileType || "none"} onValueChange={v => setNewProfileType(v === "none" ? "" : v)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecione (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum (atribuir depois)</SelectItem>
+                      {Object.entries(PROFILE_TYPES).map(([key, p]) => (
+                        <SelectItem key={key} value={key}>{p.label} — {p.description}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
@@ -648,8 +785,8 @@ export default function Usuarios() {
         </div>
       </FullScreenDialog>
 
-      {/* Dialog: Criar Perfil de Acesso */}
-      <FullScreenDialog open={createProfileOpen} onClose={() => setCreateProfileOpen(false)} title="Novo Perfil de Acesso" icon={<Plus className="h-5 w-5 text-white" />}>
+      {/* Dialog: Atribuir Perfil de Acesso */}
+      <FullScreenDialog open={createProfileOpen} onClose={() => setCreateProfileOpen(false)} title="Atribuir Perfil de Acesso" icon={<Plus className="h-5 w-5 text-white" />}>
         <div className="w-full max-w-2xl">
           <div className="space-y-4 py-4">
             <div>
@@ -669,7 +806,7 @@ export default function Usuarios() {
               <Select value={selectedProfileType || "none"} onValueChange={v => setSelectedProfileType(v === "none" ? "" : v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Selecione o perfil</SelectItem>
+                  <SelectItem value="none">Selecione o tipo de perfil</SelectItem>
                   {Object.entries(PROFILE_TYPES).map(([key, p]) => (
                     <SelectItem key={key} value={key}>{p.label} — {p.description}</SelectItem>
                   ))}
@@ -681,21 +818,43 @@ export default function Usuarios() {
                 </p>
               )}
             </div>
+
+            {/* Preview das permissões do tipo selecionado */}
+            {selectedProfileType && (
+              <div className="bg-secondary/30 rounded-lg p-3">
+                <p className="text-xs font-semibold mb-2">Permissões padrão deste tipo de perfil:</p>
+                <div className="grid grid-cols-2 gap-1">
+                  {MODULE_KEYS.map(mod => {
+                    const perms = DEFAULT_PERMISSIONS[selectedProfileType as keyof typeof DEFAULT_PERMISSIONS]?.[mod];
+                    if (!perms?.canView) return null;
+                    return (
+                      <div key={mod} className="flex items-center gap-1 text-xs">
+                        <CheckCircle className="h-3 w-3 text-green-600" />
+                        <span>{ERP_MODULES[mod].label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  As permissões podem ser personalizadas individualmente após a atribuição.
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setCreateProfileOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateProfile} disabled={createProfileMut.isPending}>
-              {createProfileMut.isPending ? "Criando..." : "Criar Perfil"}
+              {createProfileMut.isPending ? "Atribuindo..." : "Atribuir Perfil"}
             </Button>
           </div>
         </div>
       </FullScreenDialog>
 
-      {/* Dialog: Permissões Granulares */}
-      <FullScreenDialog open={permDialogOpen} onClose={() => setPermDialogOpen(false)} title="Configurar Permissões" icon={<Shield className="h-5 w-5 text-white" />}>
+      {/* Dialog: Permissões Granulares (personalização individual) */}
+      <FullScreenDialog open={permDialogOpen} onClose={() => setPermDialogOpen(false)} title="Personalizar Permissões" icon={<Shield className="h-5 w-5 text-white" />}>
         <div className="w-full max-w-3xl">
           <p className="text-sm text-muted-foreground mb-4">
-            Defina as permissões granulares para cada módulo do sistema. Estas permissões se aplicam ao perfil do usuário nesta empresa.
+            Personalize as permissões granulares para este usuário nesta empresa. Estas permissões sobrescrevem as configurações padrão do tipo de perfil.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -1895,3 +1895,82 @@
 - [x] Garantir que futuras inserções gravem no fuso correto (process.env.TZ = 'UTC' no servidor)
 - [x] Migrar TODAS as chamadas toLocaleString/toLocaleDateString para dateUtils em todos os arquivos
 - [x] Criar utilitários: formatDateTime, formatDate, formatTime, nowBrasilia, todayBrasiliaLong
+
+## Rev. 74 — Modelo de Contrato de Experiência CLT (Impressão + Upload)
+- [ ] Criar página /contrato-experiencia/:id para impressão do contrato formal CLT
+- [ ] Modelo com cláusulas padrão CLT (Art. 443, 445, 451)
+- [ ] Dados dinâmicos: empresa, colaborador, função, salário, jornada, datas
+- [ ] Layout profissional com logo da empresa, cabeçalho e rodapé
+- [ ] Botão "Imprimir Contrato" na seção de experiência do cadastro
+- [ ] Botão "Upload Contrato Assinado" com armazenamento S3
+- [ ] Campo para visualizar/baixar contrato assinado já enviado
+- [ ] Integrar com Raio-X do Funcionário (aba de documentos)
+- [x] Registrar Rev. 74
+
+## Rev. 74 — Contrato de Experiência: Modelo Impressão + Desligamento Completo + Upload
+- [ ] Melhorar dialog de desligamento na experiência (igual ao desligamento normal)
+- [ ] Adicionar campo "Categoria do Desligamento" (Término contrato, Justa causa, Baixo desempenho, etc.)
+- [ ] Adicionar checkbox "Adicionar à Lista Negra" com campo de motivo
+- [ ] Atualizar backend para aceitar categoria, motivo e lista negra no desligamento por experiência
+- [ ] Criar página /contrato-experiencia/:id para impressão do contrato formal CLT
+- [ ] Modelo com cláusulas padrão CLT (Art. 443, 445, 451)
+- [ ] Dados dinâmicos: empresa, colaborador, função, salário, jornada, datas
+- [ ] Layout profissional com logo da empresa
+- [ ] Botão "Imprimir Contrato" na seção de experiência do cadastro
+- [ ] Botão "Upload Contrato Assinado" com armazenamento S3
+- [x] Registrar Rev. 74
+
+## Bug Fix — Exclusão de Advertências não remove da lista
+- [x] Investigar por que a exclusão mostra sucesso mas o item não some
+- [x] Corrigir invalidação do cache após exclusão
+
+## Rev. 74 — Mega Atualização
+
+### 1. Bug Fix — Exclusão de Advertências
+- [x] Corrigir: exclusão mostra sucesso mas item não some da lista (filtro deletedAt adicionado)
+- [x] Garantir invalidação correta do cache após mutação de delete
+
+### 2. EPI — Campos de Custo e Vida Útil
+- [x] Adicionar campo "Valor do Produto" (custo unitário) no cadastro de EPI
+- [x] Adicionar campo "Tempo Mínimo de Troca" (vida útil em dias) no cadastro de EPI
+- [x] Verificar parâmetro do MT para vida útil de EPIs
+- [x] Configurações: campo "BDI sobre EPI (%)" para ADM Master (padrão 40%)
+- [x] Lógica de cobrança: se troca antes do prazo por perda/mau uso = Custo + BDI%
+- [x] Na ficha do funcionário: mostrar EPI com estimativa de troca, valor, alerta de cobrança
+- [x] Citar lei que permite desconto (CLT Art. 462 §1º) no rodapé
+- [x] Colaborador não vê o BDI, só o valor final de cobrança
+- [x] Mostrar valor total de EPIs em estoque na listagem
+
+### 3. EPI — Ficha Padronizada para Impressão
+- [x] Gerar ficha formal ao distribuir EPI (logo + cores da empresa)
+- [x] Texto padrão configurável nas Configurações
+- [x] Botão "Imprimir Ficha" após registrar entrega
+- [x] Upload da ficha assinada registrada no cadastro do funcionário
+
+### 4. Rankings de Pontualidade — Dashboard Cartão de Ponto
+- [x] Ranking Top 5 mais pontuais
+- [x] Ranking Top 5 mais atrasados
+- [x] Ranking Top 5 mais horas extras
+- [x] Ranking Top 5 menos dias trabalhados
+
+### 5. Preset "44h com Sábado"
+- [x] Novo botão no grid de jornada (Seg-Sex 8h + Sáb 4h = 44h)
+
+### 6. Dashboard de Horas Extras
+- [x] Visão consolidada mensal por colaborador (cards de resumo)
+- [x] Gráficos de HE 50% vs HE 100% (cards com totais e custo estimado)
+
+### 7. Dialog Desligamento Experiência (melhorado)
+- [x] Replicar padrão do desligamento normal com categorias de motivo (Art. 479, 480 CLT)
+- [x] Checkbox "Colocar na Lista Negra"
+- [x] Motivo detalhado + observações + cálculo automático de indenização
+
+### 8. Modelo Contrato de Experiência para Impressão
+- [x] Documento CLT formal (dados colaborador, empresa, datas, 8 cláusulas)
+- [x] Botão "Imprimir Contrato" na seção de experiência
+- [x] Upload do contrato assinado na ficha do funcionário
+
+### 9. Reestruturação Perfis de Acesso
+- [x] Tela "Tipos de Perfil": aba separada com cards visuais e checkboxes V/C/E/D por módulo
+- [x] Tela "Usuários": aba com cadastro de usuário, dados e perfil global
+- [x] Tela "Perfis por Empresa": aba com atribuição de tipo de perfil e personalização individual

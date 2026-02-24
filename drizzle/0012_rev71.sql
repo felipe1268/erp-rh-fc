@@ -1,0 +1,1 @@
+-- Rev 71 migration (already applied)

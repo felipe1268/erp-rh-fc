@@ -216,7 +216,7 @@ export const controleDocumentosRouter = router({
           })
           .from(asos)
           .innerJoin(employees, eq(asos.employeeId, employees.id))
-          .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt)))
+          .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt)))
           .orderBy(employees.nomeCompleto);
 
         return rows.map((r: any) => ({
@@ -456,7 +456,7 @@ export const controleDocumentosRouter = router({
           })
           .from(atestados)
           .innerJoin(employees, eq(atestados.employeeId, employees.id))
-          .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt)))
+          .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt), isNull(atestados.deletedAt)))
           .orderBy(desc(atestados.dataEmissao));
       }),
 
@@ -569,7 +569,7 @@ export const controleDocumentosRouter = router({
           })
           .from(trainings)
           .innerJoin(employees, eq(trainings.employeeId, employees.id))
-          .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt)))
+          .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt), isNull(trainings.deletedAt)))
           .orderBy(desc(trainings.dataRealizacao));
 
         return rows.map((r: any) => {
@@ -698,7 +698,7 @@ export const controleDocumentosRouter = router({
           })
           .from(warnings)
           .innerJoin(employees, eq(warnings.employeeId, employees.id))
-          .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt)))
+          .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt), isNull(warnings.deletedAt)))
           .orderBy(desc(warnings.dataOcorrencia));
       }),
 
@@ -803,25 +803,25 @@ export const controleDocumentosRouter = router({
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt)));
+        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt)));
 
       const [treinamentoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))
-        .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt)));
+        .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt), isNull(trainings.deletedAt)));
 
       const [atestadoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(atestados)
         .innerJoin(employees, eq(atestados.employeeId, employees.id))
-        .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt)));
+        .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt), isNull(atestados.deletedAt)));
 
       const [advertenciaCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(warnings)
         .innerJoin(employees, eq(warnings.employeeId, employees.id))
-        .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt)));
+        .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt), isNull(warnings.deletedAt)));
 
       // ASOs vencidos
       const hoje = new Date().toISOString().split("T")[0];
@@ -829,7 +829,7 @@ export const controleDocumentosRouter = router({
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), sql`${asos.dataValidade} < ${hoje}`));
+        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${hoje}`));
 
       // ASOs a vencer em 30 dias
       const em30dias = new Date();
@@ -843,6 +843,7 @@ export const controleDocumentosRouter = router({
           and(
             eq(asos.companyId, input.companyId),
             isNull(employees.deletedAt),
+            isNull(asos.deletedAt),
             sql`${asos.dataValidade} >= ${hoje}`,
             sql`${asos.dataValidade} <= ${em30diasStr}`
           )
@@ -877,14 +878,14 @@ export const controleDocumentosRouter = router({
       }
 
       // ASOs
-      const empAsos = await db.select().from(asos).where(eq(asos.employeeId, input.employeeId)).orderBy(desc(asos.dataExame));
+      const empAsos = await db.select().from(asos).where(and(eq(asos.employeeId, input.employeeId), isNull(asos.deletedAt))).orderBy(desc(asos.dataExame));
       const asosComStatus = empAsos.map(a => ({ ...a, ...calcularStatusASO(a.dataValidade || "") }));
       // Treinamentos
-      const empTreinamentos = await db.select().from(trainings).where(eq(trainings.employeeId, input.employeeId)).orderBy(desc(trainings.dataRealizacao));
+      const empTreinamentos = await db.select().from(trainings).where(and(eq(trainings.employeeId, input.employeeId), isNull(trainings.deletedAt))).orderBy(desc(trainings.dataRealizacao));
       // Atestados
-      const empAtestados = await db.select().from(atestados).where(eq(atestados.employeeId, input.employeeId)).orderBy(desc(atestados.dataEmissao));
+      const empAtestados = await db.select().from(atestados).where(and(eq(atestados.employeeId, input.employeeId), isNull(atestados.deletedAt))).orderBy(desc(atestados.dataEmissao));
       // Advertências
-      const empAdvertencias = await db.select().from(warnings).where(eq(warnings.employeeId, input.employeeId)).orderBy(desc(warnings.dataOcorrencia));
+      const empAdvertencias = await db.select().from(warnings).where(and(eq(warnings.employeeId, input.employeeId), isNull(warnings.deletedAt))).orderBy(desc(warnings.dataOcorrencia));
       // Ponto - TODOS os registros (sem limite)
       const empPonto = await db.select().from(timeRecords).where(eq(timeRecords.employeeId, input.employeeId)).orderBy(desc(timeRecords.data));
       // Folha de pagamento - TODOS os registros

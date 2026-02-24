@@ -1257,6 +1257,135 @@ export default function Colaboradores() {
                     <Label className="text-xs font-medium text-muted-foreground">Observações da Experiência</Label>
                     <Input value={(form as any).experienciaObs ?? ''} onChange={e => set('experienciaObs' as any, e.target.value)} placeholder="Observações sobre o período de experiência..." className="bg-input mt-1" />
                   </div>
+                  {(form as any).experienciaTipo && (form as any).experienciaTipo !== 'none' && (
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                        onClick={() => {
+                          const comp = companies?.find(c => String(c.id) === selectedCompanyId);
+                          const empNome = form.nomeCompleto || 'Funcionário';
+                          const empCpf = form.cpf || '';
+                          const empRg = form.rg || '';
+                          const empCtps = form.ctps || '';
+                          const empFuncao = form.funcao || '';
+                          const empSalario = form.salarioBase || '0,00';
+                          const empEndereco = form.endereco || '';
+                          const empCidade = form.cidade || '';
+                          const empEstado = form.estado || '';
+                          const inicio = (form as any).experienciaInicio || form.dataAdmissao || '';
+                          const fim1 = (form as any).experienciaFim1 || '';
+                          const fim2 = (form as any).experienciaFim2 || '';
+                          const tipo = (form as any).experienciaTipo;
+                          const dias1 = tipo === '30_30' ? 30 : 45;
+                          const dias2 = tipo === '30_30' ? 60 : 90;
+                          const fmtDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '___/___/______';
+                          const jornadaDesc = (() => {
+                            const j = form as any;
+                            if (j.jornada_seg_entrada && j.jornada_seg_saida) {
+                              return `Segunda a Sexta: ${j.jornada_seg_entrada} às ${j.jornada_seg_saida} (intervalo ${j.jornada_seg_intervalo || '1h'})${j.jornada_sab_entrada ? `, Sábado: ${j.jornada_sab_entrada} às ${j.jornada_sab_saida}` : ''}`;
+                            }
+                            return '44 horas semanais, conforme escala definida pelo empregador';
+                          })();
+                          const w = window.open('', '_blank');
+                          if (!w) return toast.error('Popup bloqueado');
+                          w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title>
+<style>
+@page{size:A4;margin:2cm}
+body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#000;max-width:21cm;margin:0 auto;padding:2cm}
+h1{text-align:center;font-size:16pt;margin-bottom:8px;text-transform:uppercase}
+h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:normal}
+.clausula{margin-top:16px}
+.clausula-title{font-weight:bold;text-transform:uppercase;margin-bottom:4px}
+.assinaturas{margin-top:60px;display:flex;justify-content:space-between;gap:40px}
+.assinatura{text-align:center;flex:1}
+.assinatura .linha{border-top:1px solid #000;padding-top:4px;margin-top:60px}
+.header-info{text-align:center;margin-bottom:20px;font-size:10pt;color:#333}
+.destaque{font-weight:bold}
+@media print{body{padding:0}}
+</style></head><body>
+<h1>Contrato de Trabalho por Prazo Determinado</h1>
+<h2>Contrato de Experiência — Art. 443, §2º, alínea “c” da CLT</h2>
+<div class="header-info">${comp?.razaoSocial || 'Empresa'} — CNPJ: ${comp?.cnpj || '___'}</div>
+
+<p>Pelo presente instrumento particular de <strong>CONTRATO DE TRABALHO POR PRAZO DETERMINADO (EXPERIÊNCIA)</strong>, que entre si fazem:</p>
+
+<div class="clausula">
+<p><span class="destaque">EMPREGADOR:</span> ${comp?.razaoSocial || '________________________________'}, inscrita no CNPJ sob nº ${comp?.cnpj || '___.___.___/____-__'}, com sede em ${comp?.endereco || '________________'}, ${comp?.cidade || '________'}/${comp?.estado || '__'}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
+</div>
+
+<div class="clausula">
+<p><span class="destaque">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${formatCPF(empCpf) || '___.___.___-__'}, RG nº ${empRg || '____________'}, CTPS nº ${empCtps || '____________'}, residente em ${empEndereco ? empEndereco + ', ' + empCidade + '/' + empEstado : '________________________________'}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
+</div>
+
+<p>Têm entre si justo e contratado o seguinte:</p>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 1ª — Da Função</p>
+<p>O(A) EMPREGADO(A) é admitido(a) para exercer a função de <strong>${empFuncao || '________________'}</strong>, obrigando-se a executar as tarefas inerentes à função para a qual foi contratado(a), bem como as que forem compatíveis com a sua condição pessoal.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 2ª — Da Remuneração</p>
+<p>O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${empSalario}</strong> (${empSalario} reais), pagos até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 3ª — Da Jornada de Trabalho</p>
+<p>A jornada de trabalho do(a) EMPREGADO(A) será de <strong>${jornadaDesc}</strong>, respeitados os intervalos legais para repouso e alimentação, nos termos do Art. 71 da CLT.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 4ª — Do Prazo</p>
+<p>O presente contrato é firmado por prazo determinado de <strong>${dias1} (${dias1 === 30 ? 'trinta' : 'quarenta e cinco'}) dias</strong>, com início em <strong>${fmtDate(inicio)}</strong> e término previsto em <strong>${fmtDate(fim1)}</strong>, podendo ser prorrogado por mais <strong>${dias1} dias</strong>, totalizando <strong>${dias2} dias</strong>, com término final em <strong>${fmtDate(fim2)}</strong>, conforme Art. 445 da CLT.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 5ª — Da Rescisão Antecipada</p>
+<p>Caso o EMPREGADOR rescinda o contrato antes do prazo estipulado, sem justa causa, ficará obrigado a pagar ao EMPREGADO(A), a título de indenização, metade da remuneração a que teria direito até o término do contrato, conforme <strong>Art. 479 da CLT</strong>.</p>
+<p>Caso o(a) EMPREGADO(A) se desligue antes do prazo, poderá ser obrigado(a) a indenizar o EMPREGADOR nos termos do <strong>Art. 480 da CLT</strong>, limitada a indenização àquela a que teria direito o empregado em idênticas condições (§1º).</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 6ª — Das Obrigações</p>
+<p>O(A) EMPREGADO(A) se obriga a cumprir o regulamento interno da empresa, manter sigilo sobre informações confidenciais e zelar pelos equipamentos e materiais que lhe forem confiados.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 7ª — Do Local de Trabalho</p>
+<p>O(A) EMPREGADO(A) prestará serviços nas dependências do EMPREGADOR ou em obras/projetos por ele designados, podendo ser transferido(a) conforme necessidade do serviço.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 8ª — Das Disposições Gerais</p>
+<p>As partes elegem o foro da Comarca de ${comp?.cidade || '________'}/${comp?.estado || '__'} para dirimir quaisquer dúvidas oriundas do presente contrato. Fica assegurado ao(a) EMPREGADO(A) todos os direitos previstos na CLT e legislação trabalhista vigente.</p>
+</div>
+
+<p style="margin-top:24px">E por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.</p>
+
+<p style="text-align:center;margin-top:24px">${comp?.cidade || '________'}/${comp?.estado || '__'}, ${fmtDate(inicio)}</p>
+
+<div class="assinaturas">
+<div class="assinatura"><div class="linha">${comp?.razaoSocial || 'EMPREGADOR'}<br><small>CNPJ: ${comp?.cnpj || ''}</small></div></div>
+<div class="assinatura"><div class="linha">${empNome}<br><small>CPF: ${formatCPF(empCpf)}</small></div></div>
+</div>
+
+<div class="assinaturas" style="margin-top:40px">
+<div class="assinatura"><div class="linha">Testemunha 1<br><small>Nome: _________________ CPF: _______________</small></div></div>
+<div class="assinatura"><div class="linha">Testemunha 2<br><small>Nome: _________________ CPF: _______________</small></div></div>
+</div>
+
+</body></html>`);
+                          w.document.close();
+                          setTimeout(() => w.print(), 500);
+                        }}
+                      >
+                        <FileText className="h-4 w-4 mr-1" /> Imprimir Contrato de Experiência
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1321,7 +1450,34 @@ export default function Colaboradores() {
                         toast.success("Jornada 44h semanais aplicada! Seg-Qui 07-17h (9h), Sex 07-16h (8h), Sáb/Dom = Folga (HE)");
                       }}
                     >
-                      ⏰ Aplicar 44h/semana
+                      ⏰ 44h (Seg-Sex)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                      onClick={() => {
+                        // Jornada 44h com Sábado:
+                        // Seg-Sex: 07:00 - 16:00 (1h intervalo) = 8h/dia × 5 = 40h
+                        // Sáb: 07:00 - 11:00 (sem intervalo) = 4h
+                        // Dom: Folga (qualquer hora = HE 100%)
+                        // Total: 40 + 4 = 44h semanais
+                        setForm(prev => ({
+                          ...prev,
+                          jornada_seg_entrada: "07:00", jornada_seg_intervalo: "01:00", jornada_seg_saida: "16:00",
+                          jornada_ter_entrada: "07:00", jornada_ter_intervalo: "01:00", jornada_ter_saida: "16:00",
+                          jornada_qua_entrada: "07:00", jornada_qua_intervalo: "01:00", jornada_qua_saida: "16:00",
+                          jornada_qui_entrada: "07:00", jornada_qui_intervalo: "01:00", jornada_qui_saida: "16:00",
+                          jornada_sex_entrada: "07:00", jornada_sex_intervalo: "01:00", jornada_sex_saida: "16:00",
+                          jornada_sab_entrada: "07:00", jornada_sab_intervalo: "", jornada_sab_saida: "11:00",
+                          jornada_dom_entrada: "", jornada_dom_intervalo: "", jornada_dom_saida: "",
+                          jornada_padrao_entrada: "", jornada_padrao_intervalo: "", jornada_padrao_saida: "",
+                        }));
+                        toast.success("Jornada 44h com Sábado aplicada! Seg-Sex 07-16h (8h), Sáb 07-11h (4h), Dom = Folga");
+                      }}
+                    >
+                      ⏰ 44h (c/ Sábado)
                     </Button>
                     <Button
                       type="button"
@@ -1741,9 +1897,12 @@ export default function Colaboradores() {
                     <SelectContent>
                       <SelectItem value="none">Selecione...</SelectItem>
                       <SelectItem value="Término de contrato">Término de contrato</SelectItem>
+                      <SelectItem value="Fim do período de experiência">Fim do período de experiência (Art. 479/480 CLT)</SelectItem>
+                      <SelectItem value="Rescisão antecipada - empregador">Rescisão antecipada pelo empregador (Art. 479 CLT)</SelectItem>
+                      <SelectItem value="Rescisão antecipada - empregado">Rescisão antecipada pelo empregado (Art. 480 CLT)</SelectItem>
                       <SelectItem value="Justa causa">Justa causa</SelectItem>
                       <SelectItem value="Pedido de demissão">Pedido de demissão</SelectItem>
-                      <SelectItem value="Acordo mútuo">Acordo mútuo</SelectItem>
+                      <SelectItem value="Acordo mútuo">Acordo mútuo (Art. 484-A CLT)</SelectItem>
                       <SelectItem value="Fim de obra">Fim de obra</SelectItem>
                       <SelectItem value="Baixo desempenho">Baixo desempenho</SelectItem>
                       <SelectItem value="Indisciplina">Indisciplina</SelectItem>
@@ -1760,6 +1919,49 @@ export default function Colaboradores() {
                   <Input type="date" value={form.dataDemissao ?? new Date().toISOString().split("T")[0]} onChange={e => set("dataDemissao", e.target.value)} className="bg-white mt-1 border-red-300" />
                 </div>
               </div>
+              {/* Alerta CLT para rescisão em período de experiência */}
+              {(form.categoriaDesligamento?.includes("Rescisão antecipada") || form.categoriaDesligamento?.includes("Fim do período de experiência")) && (
+                <div className="mt-3 bg-amber-50 border border-amber-300 rounded-lg p-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-amber-800 mb-1">Atenção — Direitos na Rescisão em Período de Experiência</p>
+                      {form.categoriaDesligamento === "Fim do período de experiência" && (
+                        <div className="text-amber-700 space-y-1">
+                          <p><strong>Art. 479/480 CLT</strong> — Término normal do contrato de experiência.</p>
+                          <p>Direitos: Saldo de salário + 13º proporcional + Férias proporcionais + 1/3 + Saque FGTS (sem multa 40%).</p>
+                          <p className="text-xs">Não há aviso prévio nem multa do Art. 479.</p>
+                        </div>
+                      )}
+                      {form.categoriaDesligamento === "Rescisão antecipada - empregador" && (
+                        <div className="text-amber-700 space-y-1">
+                          <p><strong>Art. 479 CLT</strong> — Rescisão antecipada pelo empregador.</p>
+                          <p>Direitos: Saldo de salário + 13º proporcional + Férias proporcionais + 1/3 + FGTS + Multa 40% FGTS + <strong>Indenização Art. 479</strong> (metade dos dias restantes).</p>
+                          {(() => {
+                            const fim2 = (form as any).experienciaFim2;
+                            const dataDesl = form.dataDesligamentoEfetiva;
+                            if (fim2 && dataDesl) {
+                              const diasRestantes = Math.max(0, Math.ceil((new Date(fim2 + 'T12:00:00').getTime() - new Date(dataDesl + 'T12:00:00').getTime()) / 86400000));
+                              return diasRestantes > 0 ? (
+                                <p className="font-bold text-red-700">Dias restantes do contrato: {diasRestantes} → Indenização = {Math.ceil(diasRestantes / 2)} dia(s) de salário</p>
+                              ) : null;
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
+                      {form.categoriaDesligamento === "Rescisão antecipada - empregado" && (
+                        <div className="text-amber-700 space-y-1">
+                          <p><strong>Art. 480 CLT</strong> — Rescisão antecipada pelo empregado.</p>
+                          <p>Direitos: Saldo de salário + 13º proporcional + Férias proporcionais + 1/3.</p>
+                          <p>O empregado <strong>pode ser obrigado a indenizar</strong> o empregador (Art. 480, §1º), limitado ao que o empregador teria direito (Art. 479).</p>
+                          <p className="text-xs">Sem saque FGTS, sem multa 40%.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="mt-3">
                 <Label className="text-xs font-medium text-red-700">Motivo Detalhado do Desligamento {form.listaNegra === "1" && <span className="text-red-500">*</span>}</Label>
                 <textarea

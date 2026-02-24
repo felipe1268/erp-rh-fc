@@ -950,6 +950,51 @@ export default function FolhaPagamento() {
             <div className="text-center py-12 text-muted-foreground">Calculando horas extras...</div>
           ) : horasExtras.data ? (
             <>
+              {/* Resumo Consolidado */}
+              {(() => {
+                const funcs = horasExtras.data.funcionarios || [];
+                const totalHE = funcs.reduce((s: number, f: any) => s + f.totalHE, 0);
+                const totalHE50 = funcs.reduce((s: number, f: any) => s + f.he50, 0);
+                const totalHE100 = funcs.reduce((s: number, f: any) => s + f.he100, 0);
+                const totalValor = funcs.reduce((s: number, f: any) => s + (f.valorEstimado || 0), 0);
+                const totalFuncs = funcs.length;
+                const totalObras = horasExtras.data.rankingObras?.length || 0;
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <Card className="border-l-4 border-l-amber-500">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Total HE</p>
+                        <p className="text-xl font-black text-amber-700">{totalHE.toFixed(1)}h</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-blue-500">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">HE 50%</p>
+                        <p className="text-xl font-black text-blue-700">{totalHE50.toFixed(1)}h</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-red-500">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">HE 100%</p>
+                        <p className="text-xl font-black text-red-700">{totalHE100.toFixed(1)}h</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-green-500">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Custo Estimado</p>
+                        <p className="text-xl font-black text-green-700">{formatBRL(totalValor)}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-slate-500">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Funcionários / Obras</p>
+                        <p className="text-xl font-black">{totalFuncs} <span className="text-sm font-normal text-muted-foreground">/ {totalObras} obras</span></p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })()}
+
               {/* Ranking de Obras */}
               {horasExtras.data.rankingObras && horasExtras.data.rankingObras.length > 0 && (
                 <Card>

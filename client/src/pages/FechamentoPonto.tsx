@@ -292,6 +292,38 @@ export default function FechamentoPonto() {
     return data;
   }, [summary.data, searchTerm, filterObra, cardFilter, conflitos.data, statusFilter]);
 
+  // ===== RANKINGS =====
+  const rankings = useMemo(() => {
+    if (!summary.data || summary.data.length === 0) return null;
+    const parseHM = (hm: string) => {
+      if (!hm || hm === "0:00") return 0;
+      const [h, m] = hm.split(":").map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    const fmtHM = (mins: number) => `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, "0")}`;
+    const data = summary.data.map((e: any) => ({
+      id: e.employeeId,
+      nome: e.employeeName,
+      funcao: e.employeeFuncao || "-",
+      dias: e.diasTrabalhados || 0,
+      horasTrab: parseHM(e.horasTrabalhadas),
+      horasExtras: parseHM(e.horasExtras),
+      atrasos: parseHM(e.atrasos),
+      horasTrabahadasStr: e.horasTrabalhadas || "0:00",
+      horasExtrasStr: e.horasExtras || "0:00",
+      atrasosStr: e.atrasos || "0:00",
+    }));
+    // Top 5 mais pontuais (menos atrasos, mais dias)
+    const pontuais = [...data].filter(e => e.dias > 0).sort((a, b) => a.atrasos - b.atrasos || b.dias - a.dias).slice(0, 5);
+    // Top 5 mais atrasados
+    const atrasados = [...data].filter(e => e.atrasos > 0).sort((a, b) => b.atrasos - a.atrasos).slice(0, 5);
+    // Top 5 mais horas extras
+    const extras = [...data].filter(e => e.horasExtras > 0).sort((a, b) => b.horasExtras - a.horasExtras).slice(0, 5);
+    // Top 5 menos dias (possíveis faltas)
+    const faltosos = [...data].filter(e => e.dias >= 0).sort((a, b) => a.dias - b.dias).slice(0, 5);
+    return { pontuais, atrasados, extras, faltosos, fmtHM };
+  }, [summary.data]);
+
   // ===== HANDLERS =====
   const handleFilesSelected = async (files: File[]) => {
     setUploadFiles(files);
@@ -869,6 +901,103 @@ export default function FechamentoPonto() {
                       </div>
                     </CardContent>
                   </Card>
+                )}
+
+                {/* ===== RANKINGS DE PONTUALIDADE ===== */}
+                {!cardFilter && rankings && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Mais Pontuais */}
+                    <Card className="border-t-4 border-t-green-500">
+                      <CardHeader className="pb-2 pt-3 px-4">
+                        <CardTitle className="text-xs font-semibold flex items-center gap-1.5 text-green-700">
+                          <CheckCircle className="h-3.5 w-3.5" /> Mais Pontuais
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-3">
+                        <div className="space-y-1">
+                          {rankings.pontuais.map((e: any, i: number) => (
+                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-green-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                              </div>
+                              <span className="text-green-600 font-mono">{e.atrasosStr === "0:00" ? "Sem atraso" : e.atrasosStr}</span>
+                            </div>
+                          ))}
+                          {rankings.pontuais.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Sem dados</p>}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Mais Atrasados */}
+                    <Card className="border-t-4 border-t-red-500">
+                      <CardHeader className="pb-2 pt-3 px-4">
+                        <CardTitle className="text-xs font-semibold flex items-center gap-1.5 text-red-700">
+                          <XCircle className="h-3.5 w-3.5" /> Mais Atrasados
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-3">
+                        <div className="space-y-1">
+                          {rankings.atrasados.map((e: any, i: number) => (
+                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-red-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                              </div>
+                              <span className="text-red-600 font-mono">{e.atrasosStr}</span>
+                            </div>
+                          ))}
+                          {rankings.atrasados.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Nenhum atraso</p>}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Mais Horas Extras */}
+                    <Card className="border-t-4 border-t-amber-500">
+                      <CardHeader className="pb-2 pt-3 px-4">
+                        <CardTitle className="text-xs font-semibold flex items-center gap-1.5 text-amber-700">
+                          <Zap className="h-3.5 w-3.5" /> Mais Horas Extras
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-3">
+                        <div className="space-y-1">
+                          {rankings.extras.map((e: any, i: number) => (
+                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                              </div>
+                              <span className="text-amber-600 font-mono">{e.horasExtrasStr}</span>
+                            </div>
+                          ))}
+                          {rankings.extras.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Sem extras</p>}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Menos Dias (Faltas) */}
+                    <Card className="border-t-4 border-t-slate-500">
+                      <CardHeader className="pb-2 pt-3 px-4">
+                        <CardTitle className="text-xs font-semibold flex items-center gap-1.5 text-slate-700">
+                          <CalendarDays className="h-3.5 w-3.5" /> Menos Dias Trabalhados
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-3">
+                        <div className="space-y-1">
+                          {rankings.faltosos.map((e: any, i: number) => (
+                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-slate-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                              </div>
+                              <span className="text-slate-600 font-mono">{e.dias} dia{e.dias !== 1 ? "s" : ""}</span>
+                            </div>
+                          ))}
+                          {rankings.faltosos.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Sem dados</p>}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 )}
 
                 {/* Resumo por Colaborador */}

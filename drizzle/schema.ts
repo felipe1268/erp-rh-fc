@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, date, varchar, mysqlEnum, text, timestamp, index, tinyint, boolean, json } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, date, varchar, mysqlEnum, text, timestamp, index, tinyint, boolean, json, decimal } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const accidents = mysqlTable("accidents", {
@@ -399,6 +399,9 @@ export const epiDeliveries = mysqlTable("epi_deliveries", {
 	dataDevolucao: date({ mode: 'string' }),
 	motivo: varchar({ length: 255 }),
 	observacoes: text(),
+	motivoTroca: varchar("motivo_troca", { length: 50 }),
+	valorCobrado: decimal("valor_cobrado", { precision: 10, scale: 2 }),
+	fichaUrl: text("ficha_url"),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -414,6 +417,8 @@ export const epis = mysqlTable("epis", {
 	fabricante: varchar({ length: 255 }),
 	fornecedor: varchar({ length: 255 }),
 	quantidadeEstoque: int().default(0),
+	valorProduto: decimal("valor_produto", { precision: 10, scale: 2 }),
+	tempoMinimoTroca: int("tempo_minimo_troca"),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
