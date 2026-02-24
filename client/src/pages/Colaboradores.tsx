@@ -749,6 +749,15 @@ export default function Colaboradores() {
               {form.funcao && <span className="text-xs text-muted-foreground block mt-0.5">{form.funcao}</span>}
               {(uploadFotoMut.isPending || removeFotoMut.isPending) && <span className="text-xs text-blue-500 animate-pulse mt-1 block">Processando foto...</span>}
             </div>
+            {/* Código Interno em destaque */}
+            {form.codigoInterno && (
+              <div className="flex items-center gap-2 ml-auto pl-4">
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg px-4 py-2 text-center">
+                  <span className="text-[10px] text-blue-500 font-medium block leading-none mb-0.5">CÓD. INTERNO</span>
+                  <span className="text-2xl font-black text-blue-800 tracking-wider leading-none">{form.codigoInterno}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <Tabs defaultValue="pessoal" className="w-full">
@@ -1102,21 +1111,30 @@ export default function Colaboradores() {
                       set("valorHora", formatMoedaSemPrefixo(salarioNum / horasNum));
                     }
                   }} placeholder="2.500,00" className="bg-input mt-1" />
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">Referência mensal (varia conforme dias úteis)</span>
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Valor da Hora (R$)</Label>
-                  <Input value={form.valorHora ?? ""} readOnly className="bg-input mt-1 opacity-70 cursor-not-allowed" title="Calculado automaticamente: Salário Base ÷ Horas Mensais" />
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">Calculado: Salário ÷ Horas</span>
+                  <Label className="text-xs font-medium text-blue-700 font-semibold">Valor da Hora (R$) ⭐</Label>
+                  <Input value={form.valorHora ?? ""} onChange={e => {
+                    const formatted = formatMoedaInput(e.target.value);
+                    set("valorHora", formatted);
+                    const horaNum = parseMoedaBR(formatted);
+                    const horasNum = parseFloat(String(form.horasMensais || "220").replace(",", "."));
+                    if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                      set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
+                    }
+                  }} placeholder="11,36" className="bg-input mt-1 border-blue-300 ring-1 ring-blue-100" />
+                  <span className="text-[10px] text-blue-600 mt-0.5 block font-medium">Dado mestre — base para cálculo da folha</span>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Horas Mensais</Label>
                   <Input value={form.horasMensais ?? ""} onChange={e => {
                     const horas = e.target.value;
                     set("horasMensais", horas);
-                    const salarioNum = parseMoedaBR(String(form.salarioBase || "0"));
+                    const horaNum = parseMoedaBR(String(form.valorHora || "0"));
                     const horasNum = parseFloat(horas.replace(",", "."));
-                    if (salarioNum > 0 && !isNaN(horasNum) && horasNum > 0) {
-                      set("valorHora", formatMoedaSemPrefixo(salarioNum / horasNum));
+                    if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
+                      set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
                     }
                   }} placeholder="220" className="bg-input mt-1" />
                 </div>

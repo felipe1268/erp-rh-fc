@@ -1830,3 +1830,12 @@
 - [x] Toast de importação reposicionado para canto inferior esquerdo
 - [x] 3 endpoints backend: listUnmatched, linkUnmatched, discardUnmatched
 - [x] Registrada Rev. 69 no banco + shared/version.ts + 13 testes passando
+
+## Rev. 70 - Salário/Hora Bidirecional + Código Interno Visível
+- [x] Campos Salário Base e Valor da Hora ambos editáveis
+- [x] Digitar Valor da Hora → calcula Salário Base automaticamente (hora × horas mensais)
+- [x] Digitar Salário Base → calcula Valor da Hora automaticamente (salário ÷ horas mensais)
+- [x] Código interno exibido em destaque grande ao lado direito do nome no header
+- [x] Estruturar para horista: valor da hora como dado mestre (destaque azul + estrela), salário como referência
+- [x] Formatação monetária correta (R$ com separadores de ponto e vírgula)
+- [x] Registrada Rev. 70 no banco + shared/version.ts + 9 testes passando
