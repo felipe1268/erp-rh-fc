@@ -2106,3 +2106,8 @@
 - [x] Cards de resumo (Total, Nova Funcionalidade, Correção de Bug, Melhoria, Segurança, Performance) devem funcionar como filtros clicáveis
 - [x] Ao clicar em um card, filtrar a lista de revisões mostrando apenas as do tipo selecionado
 - [x] Clicar novamente ou clicar em "Total" deve remover o filtro
+
+## Fase 30: Correção de Dados Desatualizados nos Dashboards
+- [x] Rankings e gráficos do Dashboard mostrando dados antigos (seed de teste) — corrigido: faltava filtro deletedAt
+- [x] Verificar se dados de seed ainda existem no banco e limpar se necessário — causa: advertências soft-deleted não eram filtradas
+- [x] Garantir que dashboards refletem apenas dados reais atuais — isNull(warnings.deletedAt) adicionado em 7 queries

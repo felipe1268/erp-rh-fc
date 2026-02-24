@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, desc, inArray } from "drizzle-orm";
+import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 
 export const homeDataRouter = router({
   /**
@@ -271,7 +271,7 @@ export const homeDataRouter = router({
       // 7. ADVERTÊNCIAS RECENTES (últimos 30 dias)
       // ============================================================
       const allWarnings = await db.select().from(warnings)
-        .where(eq(warnings.companyId, input.companyId));
+        .where(and(eq(warnings.companyId, input.companyId), isNull(warnings.deletedAt)));
 
       const advertenciasRecentes = allWarnings
         .filter(w => w.dataOcorrencia && w.dataOcorrencia >= ha30diasStr)

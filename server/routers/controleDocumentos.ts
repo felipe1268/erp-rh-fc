@@ -722,7 +722,7 @@ export const controleDocumentosRouter = router({
         const db = (await getDb())!;
         // Calcular sequência automática
         const existentes = await db.select({ id: warnings.id }).from(warnings)
-          .where(and(eq(warnings.employeeId, input.employeeId), eq(warnings.companyId, input.companyId)));
+          .where(and(eq(warnings.employeeId, input.employeeId), eq(warnings.companyId, input.companyId), isNull(warnings.deletedAt)));
         const sequencia = existentes.length + 1;
         
         await db.insert(warnings).values({
@@ -1118,7 +1118,7 @@ export const controleDocumentosRouter = router({
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const advs = await db.select().from(warnings).where(eq(warnings.employeeId, input.employeeId)).orderBy(desc(warnings.dataOcorrencia));
+      const advs = await db.select().from(warnings).where(and(eq(warnings.employeeId, input.employeeId), isNull(warnings.deletedAt))).orderBy(desc(warnings.dataOcorrencia));
       const verbais = advs.filter(a => a.tipoAdvertencia === "Verbal").length;
       const escritas = advs.filter(a => a.tipoAdvertencia === "Escrita").length;
       const suspensoes = advs.filter(a => a.tipoAdvertencia === "Suspensao").length;

@@ -612,7 +612,7 @@ export async function createWarning(data: any) {
 }
 export async function getWarnings(companyId: number, employeeId?: number) {
   const db = await getDb(); if (!db) return [];
-  const conds = [eq(warnings.companyId, companyId)];
+  const conds: any[] = [eq(warnings.companyId, companyId), isNull(warnings.deletedAt)];
   if (employeeId) conds.push(eq(warnings.employeeId, employeeId));
   return db.select().from(warnings).where(and(...conds)).orderBy(desc(warnings.dataOcorrencia));
 }
@@ -928,7 +928,7 @@ export async function getSSTStats(companyId: number) {
     .where(and(eq(accidents.companyId, companyId), isNull(employees.deletedAt), sql`${accidents.dataAcidente} >= ${firstDayMonth}`));
   const [advertenciasMes] = await db.select({ count: sql<number>`count(*)` }).from(warnings)
     .innerJoin(employees, eq(warnings.employeeId, employees.id))
-    .where(and(eq(warnings.companyId, companyId), isNull(employees.deletedAt), sql`${warnings.dataOcorrencia} >= ${firstDayMonth}`));
+    .where(and(eq(warnings.companyId, companyId), isNull(employees.deletedAt), isNull(warnings.deletedAt), sql`${warnings.dataOcorrencia} >= ${firstDayMonth}`));
 
   return {
     asosVencidos: Number(asosVencidos?.count ?? 0),

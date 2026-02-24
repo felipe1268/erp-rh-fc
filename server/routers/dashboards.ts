@@ -6,7 +6,7 @@ import {
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, desc, count, asc } from "drizzle-orm";
+import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
 
 // ============================================================
 // 1. DASHBOARD FUNCIONÁRIOS (análise completa)
@@ -149,7 +149,7 @@ async function getDashFuncionarios(companyId: number) {
     .where(and(eq(employees.companyId, companyId), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql`${employees.deletedAt} IS NULL`))
     .orderBy(desc(employees.dataAdmissao)).limit(1);
 
-  // Ranking de advertências (top 10)
+  // Ranking de advertências (top 10) — filtrar soft-deleted
   const rankingAdvertencias = await db.select({
     employeeId: warnings.employeeId,
     nome: employees.nomeCompleto,
@@ -157,11 +157,11 @@ async function getDashFuncionarios(companyId: number) {
     total: sql<number>`count(*)`,
   }).from(warnings)
     .innerJoin(employees, eq(warnings.employeeId, employees.id))
-    .where(eq(warnings.companyId, companyId))
+    .where(and(eq(warnings.companyId, companyId), isNull(warnings.deletedAt), isNull(employees.deletedAt)))
     .groupBy(warnings.employeeId, employees.nomeCompleto, employees.funcao)
     .orderBy(sql`count(*) desc`).limit(10);
 
-  // Ranking de atestados/faltas (top 10)
+  // Ranking de atestados/faltas (top 10) — filtrar soft-deleted
   const rankingAtestados = await db.select({
     employeeId: atestados.employeeId,
     nome: employees.nomeCompleto,
@@ -170,15 +170,15 @@ async function getDashFuncionarios(companyId: number) {
     totalDias: sql<number>`COALESCE(SUM(diasAfastamento), 0)`,
   }).from(atestados)
     .innerJoin(employees, eq(atestados.employeeId, employees.id))
-    .where(eq(atestados.companyId, companyId))
+    .where(and(eq(atestados.companyId, companyId), isNull(atestados.deletedAt), isNull(employees.deletedAt)))
     .groupBy(atestados.employeeId, employees.nomeCompleto, employees.funcao)
     .orderBy(sql`count(*) desc`).limit(10);
 
-  // Advertências por tipo
+  // Advertências por tipo — filtrar soft-deleted
   const advertenciasTipo = await db.select({
     tipo: warnings.tipoAdvertencia,
     count: sql<number>`count(*)`,
-  }).from(warnings).where(eq(warnings.companyId, companyId)).groupBy(warnings.tipoAdvertencia);
+  }).from(warnings).where(and(eq(warnings.companyId, companyId), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia);
 
   // Total geral
   const totalAtivos = statusDist.find(s => s.status === "Ativo")?.count || 0;

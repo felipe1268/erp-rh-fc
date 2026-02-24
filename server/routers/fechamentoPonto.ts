@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import {
   timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings
 } from "../../drizzle/schema";
-import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
+import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================
@@ -1067,7 +1067,7 @@ export const fechamentoPontoRouter = router({
         if (inc) {
           // Contar advertências existentes do funcionário para definir sequência
           const existingWarnings = await db.select().from(warnings)
-            .where(eq(warnings.employeeId, inc.employeeId));
+            .where(and(eq(warnings.employeeId, inc.employeeId), isNull(warnings.deletedAt)));
           const totalAdv = existingWarnings.filter(w => w.tipoAdvertencia === "Verbal" || w.tipoAdvertencia === "Escrita").length;
           const sequencia = totalAdv + 1;
           // Definir tipo: 1ª e 2ª são Verbal, 3ª em diante Escrita
