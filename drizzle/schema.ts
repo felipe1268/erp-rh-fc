@@ -1701,7 +1701,7 @@ export const caepiDatabase = mysqlTable("caepi_database", {
 	referencia: varchar({ length: 500 }),
 	cor: varchar({ length: 100 }),
 	aprovadoPara: text("aprovado_para"),
-	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
 	index("caepi_ca_idx").on(table.ca),
 ]);
@@ -1726,7 +1726,7 @@ export const epiDiscountAlerts = mysqlTable("epi_discount_alerts", {
 	validadoPorUserId: int("validado_por_user_id"),
 	dataValidacao: timestamp("data_validacao", { mode: 'string' }),
 	justificativa: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
 	index("eda_company").on(table.companyId),

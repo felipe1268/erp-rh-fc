@@ -1,0 +1,1 @@
+ALTER TABLE `caepi_database` RENAME COLUMN `updatedAt` TO `updated_at`;

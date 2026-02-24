@@ -164,8 +164,12 @@ export default function Configuracoes() {
 
   // Auto-inicializar critérios quando empresa selecionada
   useEffect(() => {
-    if (companyId > 0 && criteriaQuery.data && criteriaQuery.data.length === 0) {
-      initDefaultsMutation.mutate({ companyId });
+    if (companyId > 0 && criteriaQuery.data) {
+      // Auto-initialize if no criteria or if EPI category is missing
+      const hasEpi = criteriaQuery.data.some((c: any) => c.categoria === 'epi');
+      if (criteriaQuery.data.length === 0 || !hasEpi) {
+        initDefaultsMutation.mutate({ companyId });
+      }
     }
   }, [companyId, criteriaQuery.data]);
 

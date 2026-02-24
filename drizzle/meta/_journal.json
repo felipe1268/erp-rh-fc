@@ -120,6 +120,20 @@
       "when": 1771926393902,
       "tag": "0016_known_bastion",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1771930573058,
+      "tag": "0017_green_white_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1771930938543,
+      "tag": "0018_foamy_ezekiel_stane",
+      "breakpoints": true
     }
   ]
 }

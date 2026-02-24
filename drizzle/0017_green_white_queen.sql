@@ -1,0 +1,1 @@
+ALTER TABLE `epi_discount_alerts` MODIFY COLUMN `createdAt` timestamp NOT NULL DEFAULT (now());

@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { storagePut } from "../storage";
+import { invokeLLM } from "../_core/llm";
 
 export const episRouter = router({
   // ============================================================
@@ -539,6 +540,88 @@ export const episRouter = router({
   // ============================================================
   // ATUALIZAR BASE CAEPI (download do Portal de Dados Abertos)
   // ============================================================
+  // ============================================================
+  // SUGESTÃO DE VIDA ÚTIL POR IA
+  // ============================================================
+  suggestLifespan: protectedProcedure
+    .input(z.object({
+      nomeEpi: z.string().min(1),
+      aprovadoPara: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `Você é um especialista em Segurança do Trabalho no Brasil com amplo conhecimento sobre EPIs (Equipamentos de Proteção Individual). Sua tarefa é estimar a vida útil média em dias de um EPI com base no seu nome e descrição de uso.
+
+Regras:
+- Considere o desgaste normal em obra de construção civil
+- Considere as normas NR-6 e práticas comuns do mercado brasileiro
+- Retorne APENAS o JSON solicitado, sem texto adicional
+- Se não conseguir determinar, use 180 dias como padrão
+- A vida útil deve ser em DIAS
+
+Exemplos de referência:
+- Luva de proteção mecânica: 30-60 dias
+- Capacete de segurança classe A/B: 365 dias
+- Botina/Sapato de segurança: 180-365 dias
+- Protetor auricular tipo plug: 30-90 dias
+- Protetor auricular tipo concha: 365 dias
+- Óculos de proteção: 180 dias
+- Respirador PFF2 descartável: 15-30 dias
+- Respirador com filtro: 90-180 dias
+- Cinto de segurança tipo paraquedista: 365 dias
+- Máscara de solda: 365 dias
+- Avental de raspa: 180-365 dias
+- Uniforme/Calça: 180 dias
+- Camiseta: 90-120 dias
+- Colete refletivo: 180 dias
+- Creme protetor solar: 30 dias`,
+            },
+            {
+              role: "user",
+              content: `EPI: ${input.nomeEpi}${input.aprovadoPara ? `\nAprovado para: ${input.aprovadoPara}` : ''}\n\nQual a vida útil estimada em dias deste EPI?`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "epi_lifespan",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  vidaUtilDias: { type: "integer", description: "Vida útil estimada em dias" },
+                  justificativa: { type: "string", description: "Breve justificativa da estimativa" },
+                  confianca: { type: "string", enum: ["alta", "media", "baixa"], description: "Nível de confiança da estimativa" },
+                },
+                required: ["vidaUtilDias", "justificativa", "confianca"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices?.[0]?.message?.content;
+        const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((c: any) => c.text || '').join('') : '';
+        const parsed = JSON.parse(text);
+        return {
+          vidaUtilDias: parsed.vidaUtilDias || 180,
+          justificativa: parsed.justificativa || 'Estimativa padrão',
+          confianca: parsed.confianca || 'media',
+        };
+      } catch (err: any) {
+        console.error('Erro ao sugerir vida útil:', err.message);
+        return {
+          vidaUtilDias: 180,
+          justificativa: 'Não foi possível estimar — usando valor padrão de 180 dias',
+          confianca: 'baixa' as const,
+        };
+      }
+    }),
+
   refreshCaepiDatabase: protectedProcedure
     .mutation(async () => {
       try {

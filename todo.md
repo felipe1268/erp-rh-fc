@@ -2039,3 +2039,13 @@
 - [x] Fix: getEmployeeById agora filtra soft-deleted (isNull deletedAt)
 - [x] Fix: limpeza de dados de teste órfãos no banco de dados
 - [x] Todos os 247 testes passando (21 arquivos de teste)
+
+## Bug: Consulta CA + Erro insert epi_discount_alerts
+- [x] Corrigir erro insert epi_discount_alerts ao registrar entrega EPI com mau uso/dano (colunas snake_case vs camelCase corrigidas)
+- [x] Investigar e corrigir consulta CA no cadastro de EPI (CA 13211 e outros retornam erro) — corrigido fetch tRPC + schema caepiDatabase
+- [x] Registrar Rev. 76
+- [x] Adicionar categoria "EPI / Segurança" nos Critérios do Sistema com parâmetro BDI (%)
+- [x] Base CAEPI mostrando 0 CAs na produção - corrigido (40.467 CAs carregados)
+- [x] Bug: Raio-X do Funcionário travado em "Carregando dados do funcionário..." - corrigido (colunas epi_discount_alerts)
+- [x] Remover "Tempo mín. troca padrão do EPI" dos Critérios globais (é por EPI individual, não regra global)
+- [x] IA sugere vida útil (dias) automaticamente ao cadastrar EPI baseado no tipo de equipamento (com justificativa e nível de confiança)

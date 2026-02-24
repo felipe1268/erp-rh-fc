@@ -89,6 +89,11 @@ export default function Epis() {
   const [caLookupLoading, setCaLookupLoading] = useState(false);
   const [caLookupResult, setCaLookupResult] = useState<any>(null);
 
+  // AI lifespan suggestion state
+  const [aiSuggestion, setAiSuggestion] = useState<{ vidaUtilDias: number; justificativa: string; confianca: string } | null>(null);
+  const [aiSuggestionLoading, setAiSuggestionLoading] = useState(false);
+  const suggestLifespanMut = trpc.epis.suggestLifespan.useMutation();
+
   // Foto do estado do EPI (para troca)
   const [fotoEstado, setFotoEstado] = useState<{ file: File | null; preview: string }>({ file: null, preview: "" });
   const fotoInputRef = useRef<HTMLInputElement>(null);
@@ -171,6 +176,9 @@ export default function Epis() {
 
   function resetEpiForm() {
     setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "" });
+    setAiSuggestion(null);
+    setAiSuggestionLoading(false);
+    setCaLookupResult(null);
   }
 
   const TAMANHOS_ROUPA = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
@@ -189,8 +197,12 @@ export default function Epis() {
     setCaLookupLoading(true);
     setCaLookupResult(null);
     try {
-      const res = await (trpc as any).epis.consultaCa.query({ ca: caClean });
-      if (res.found) {
+      const resp = await fetch(`/api/trpc/epis.consultaCa?input=${encodeURIComponent(JSON.stringify({ json: { ca: caClean } }))}`, {
+        credentials: 'include',
+      });
+      const json = await resp.json();
+      const res = json?.result?.data?.json || json?.result?.data;
+      if (res?.found) {
         setCaLookupResult(res);
         setEpiForm(f => ({
           ...f,
@@ -199,11 +211,37 @@ export default function Epis() {
           validadeCa: res.validade || f.validadeCa,
         }));
         toast.success(`CA ${res.ca} encontrado!`);
+        // Trigger AI lifespan suggestion
+        const epiName = res.descricao || res.nome || '';
+        if (epiName) {
+          setAiSuggestionLoading(true);
+          setAiSuggestion(null);
+          try {
+            const aiResp = await fetch(`/api/trpc/epis.suggestLifespan`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ json: { nomeEpi: epiName, aprovadoPara: res.aprovadoPara || '' } }),
+            });
+            const aiJson = await aiResp.json();
+            const aiData = aiJson?.result?.data?.json || aiJson?.result?.data;
+            if (aiData?.vidaUtilDias) {
+              setAiSuggestion(aiData);
+              setEpiForm(f => ({ ...f, tempoMinimoTroca: String(aiData.vidaUtilDias) }));
+              toast.info(`🧠 IA sugeriu vida útil: ${aiData.vidaUtilDias} dias`);
+            }
+          } catch (e) {
+            console.error('[AI Suggestion] Error:', e);
+          } finally {
+            setAiSuggestionLoading(false);
+          }
+        }
       } else {
-        setCaLookupResult({ found: false, error: res.error });
+        setCaLookupResult({ found: false, error: res?.error || 'CA não encontrado na base' });
       }
     } catch (err: any) {
-      setCaLookupResult({ found: false, error: "Erro na consulta" });
+      console.error('[CA Lookup] Error:', err);
+      setCaLookupResult({ found: false, error: "Erro na consulta. Verifique sua conexão." });
     } finally {
       setCaLookupLoading(false);
     }
@@ -384,11 +422,19 @@ export default function Epis() {
                 <div>
                   <Label className="flex items-center gap-1">
                     <Clock className="h-3 w-3 text-blue-600" />
-                    Tempo Mín. Troca (dias)
+                    Vida Útil (dias)
+                    {aiSuggestionLoading && <span className="text-xs text-blue-500 animate-pulse ml-1">🧠 IA analisando...</span>}
                   </Label>
                   <Input type="number" min={0} value={epiForm.tempoMinimoTroca}
-                    onChange={e => setEpiForm(f => ({ ...f, tempoMinimoTroca: e.target.value }))}
+                    onChange={e => { setEpiForm(f => ({ ...f, tempoMinimoTroca: e.target.value })); if (aiSuggestion) setAiSuggestion(null); }}
                     placeholder="Ex: 180" />
+                  {aiSuggestion && (
+                    <div className="mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                      <span className="font-semibold">🧠 Sugestão IA:</span> {aiSuggestion.vidaUtilDias} dias
+                      <span className="text-blue-500 ml-1">({aiSuggestion.confianca === 'alta' ? 'Alta confiança' : aiSuggestion.confianca === 'media' ? 'Média confiança' : 'Baixa confiança'})</span>
+                      <p className="text-[10px] text-blue-500 mt-0.5">{aiSuggestion.justificativa}</p>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-4">

@@ -1129,8 +1129,9 @@ export const appRouter = router({
       const { systemCriteria } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
       const existing = await db.select().from(systemCriteria)
-        .where(eq(systemCriteria.companyId, input.companyId)).limit(1);
-      if (existing.length > 0) return { success: true, message: "Critérios já inicializados", created: 0 };
+        .where(eq(systemCriteria.companyId, input.companyId));
+      // Get existing chaves to avoid duplicates
+      const existingChaves = new Set(existing.map((e: any) => e.chave));
 
       const defaults = [
         // HORAS EXTRAS
@@ -1184,14 +1185,14 @@ export const appRouter = router({
         { categoria: "atestados", chave: "atestado_motivo_obrigatorio", valor: "1", descricao: "Motivo do atestado obrigatório (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         // EPIs / SEGURANÇA
         { categoria: "epi", chave: "epi_bdi_percentual", valor: "40", descricao: "Percentual de BDI sobre custo do EPI para cobrança por perda/mau uso", valorPadraoClt: "40", unidade: "%" },
-        { categoria: "epi", chave: "epi_tempo_minimo_troca", valor: "180", descricao: "Tempo mínimo de troca padrão do EPI (dias)", valorPadraoClt: "180", unidade: "dias" },
         { categoria: "epi", chave: "epi_cobranca_perda", valor: "1", descricao: "Cobrar EPI em caso de perda (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "epi", chave: "epi_cobranca_mau_uso", valor: "1", descricao: "Cobrar EPI em caso de mau uso/dano (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "epi", chave: "epi_cobranca_furto", valor: "1", descricao: "Cobrar EPI em caso de furto/extravio (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "epi", chave: "epi_foto_obrigatoria_troca", valor: "1", descricao: "Foto obrigatória para troca por mau uso/dano (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
       ];
 
-      for (const d of defaults) {
+      const toInsert = defaults.filter(d => !existingChaves.has(d.chave));
+      for (const d of toInsert) {
         await db.insert(systemCriteria).values({
           companyId: input.companyId,
           ...d,
@@ -1199,8 +1200,10 @@ export const appRouter = router({
         });
       }
 
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "configuracoes", entityType: "criterios", entityId: input.companyId, details: `Critérios padrão CLT inicializados (${defaults.length} itens)` });
-      return { success: true, message: "Critérios padrão inicializados", created: defaults.length };
+      if (toInsert.length > 0) {
+        await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "configuracoes", entityType: "criterios", entityId: input.companyId, details: `Critérios padrão CLT inicializados (${toInsert.length} novos itens)` });
+      }
+      return { success: true, message: toInsert.length > 0 ? "Critérios padrão inicializados" : "Critérios já atualizados", created: toInsert.length };
     }),
   }),
 
