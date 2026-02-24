@@ -1980,6 +1980,19 @@
 
 ## Rev. 74 — Ajustes
 - [x] Adicionar botão de voltar na tela de Controle de Revisões
-- [ ] Adicionar Domingo na grade de jornada de trabalho (com badge HE, igual ao Sábado)
+- [x] Adicionar Domingo na grade de jornada de trabalho (com badge HE, já existia)
 - [x] Bug: testemunhas na lista de advertências mostrando JSON bruto em vez de nomes formatados
 - [x] Ícones dinâmicos por tipo de EPI (capacete, luva, óculos, bota, protetor auricular, etc.)
+- [x] Busca automática de dados do EPI pelo número do CA (Ministério do Trabalho)
+- [x] Foto obrigatória do EPI ao trocar por desgaste normal, mau uso/dano ou perda
+- [x] Após registrar entrega, abrir ficha de entrega automaticamente para impressão
+- [x] Upload da ficha assinada obrigatório para dar baixa no EPI
+- [x] Critério nas Configurações para ativar/desativar obrigatoriedade do upload da ficha
+- [x] Ficha EPI: adicionar coluna Valor (custo + BDI) na tabela da ficha
+- [x] Ficha EPI: adicionar coluna Vida Útil (dias) na tabela da ficha
+- [x] Ficha EPI: texto legal atualizado com política de troca sem custo dentro do prazo
+- [x] Ficha EPI: base legal NR-6 item 6.7.1 sobre responsabilidade do empregado
+- [x] Ficha EPI: data e hora de emissão da ficha
+- [x] Ficha EPI: desconto claro dentro do mesmo mês
+- [x] Ficha EPI: foto obrigatória destacada na ficha
+- [x] Ficha EPI: layout padronizado com logo da empresa

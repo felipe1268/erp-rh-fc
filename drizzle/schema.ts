@@ -402,6 +402,7 @@ export const epiDeliveries = mysqlTable("epi_deliveries", {
 	motivoTroca: varchar("motivo_troca", { length: 50 }),
 	valorCobrado: decimal("valor_cobrado", { precision: 10, scale: 2 }),
 	fichaUrl: text("ficha_url"),
+	fotoEstadoUrl: text("foto_estado_url"),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),

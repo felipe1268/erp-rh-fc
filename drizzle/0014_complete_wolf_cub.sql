@@ -1,0 +1,1 @@
+ALTER TABLE `epi_deliveries` ADD `foto_estado_url` text;

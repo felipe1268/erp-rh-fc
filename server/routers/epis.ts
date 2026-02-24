@@ -119,6 +119,7 @@ export const episRouter = router({
         motivoTroca: epiDeliveries.motivoTroca,
         valorCobrado: epiDeliveries.valorCobrado,
         fichaUrl: epiDeliveries.fichaUrl,
+        fotoEstadoUrl: epiDeliveries.fotoEstadoUrl,
         createdAt: epiDeliveries.createdAt,
         nomeEpi: epis.nome,
         caEpi: epis.ca,
@@ -145,9 +146,21 @@ export const episRouter = router({
       motivo: z.string().optional(),
       observacoes: z.string().optional(),
       motivoTroca: z.string().optional(),
+      fotoEstadoBase64: z.string().optional(),
+      fotoEstadoFileName: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+
+      // Upload foto do estado do EPI se fornecida
+      let fotoEstadoUrl: string | null = null;
+      if (input.fotoEstadoBase64 && input.fotoEstadoFileName) {
+        const buffer = Buffer.from(input.fotoEstadoBase64, 'base64');
+        const ext = input.fotoEstadoFileName.split('.').pop() || 'jpg';
+        const key = `epi-fotos/${input.companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { url } = await storagePut(key, buffer, `image/${ext}`);
+        fotoEstadoUrl = url;
+      }
 
       // Get EPI info for charge calculation
       const [epi] = await db.select().from(epis).where(eq(epis.id, input.epiId));
@@ -177,6 +190,7 @@ export const episRouter = router({
         observacoes: input.observacoes || null,
         motivoTroca: input.motivoTroca || null,
         valorCobrado,
+        fotoEstadoUrl,
       } as any);
 
       // Update stock (decrement)
@@ -345,5 +359,105 @@ export const episRouter = router({
         entregasMes,
         valorTotalInventario,
       };
+    }),
+
+  // ============================================================
+  // CONSULTA CA - Busca dados do EPI pelo número do CA
+  // ============================================================
+  consultaCa: protectedProcedure
+    .input(z.object({ ca: z.string().min(1) }))
+    .query(async ({ input }) => {
+      try {
+        const caNum = input.ca.replace(/\D/g, "");
+        if (!caNum) return { found: false as const, error: "Número do CA inválido" };
+
+        const response = await fetch(`https://consultaca.com/${caNum}`, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+          },
+        });
+
+        if (!response.ok) return { found: false as const, error: "Erro ao consultar CA" };
+
+        const html = await response.text();
+
+        // Extrair dados do HTML
+        const extract = (regex: RegExp): string => {
+          const match = html.match(regex);
+          return match ? match[1].replace(/<[^>]*>/g, "").trim() : "";
+        };
+
+        // Título principal (descrição do EPI)
+        const titleMatch = html.match(/<h1[^>]*class="[^"]*text-uppercase[^"]*"[^>]*>([^<]+)<\/h1>/i)
+          || html.match(/<title>CA \d+ - ([^<]+)<\/title>/i);
+        const descricao = titleMatch ? titleMatch[1].trim() : "";
+
+        // Situação
+        const situacaoMatch = html.match(/Situa[\u00e7c][\u00e3a]o[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([A-ZÁ-Ú]+)/i);
+        const situacao = situacaoMatch ? situacaoMatch[1].trim() : "";
+
+        // Validade
+        const validadeMatch = html.match(/Validade[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*(\d{2}\/\d{2}\/\d{4})/i);
+        const validade = validadeMatch ? validadeMatch[1] : "";
+
+        // Natureza
+        const naturezaMatch = html.match(/Natureza[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([A-Za-zà-ú]+)/i);
+        const natureza = naturezaMatch ? naturezaMatch[1].trim() : "";
+
+        // Nome Comercial (Modelo)
+        const modeloMatch = html.match(/Nome Comercial[^<]*(?:\(Modelo\))?[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([^<]+)/i);
+        const modelo = modeloMatch ? modeloMatch[1].trim() : "";
+
+        // Fabricante - Razão Social
+        const fabMatch = html.match(/Raz[\u00e3a]o Social[^:]*(?:Importador|Fabricante)?[^:]*:[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([^<]+)/i);
+        const fabricanteRazao = fabMatch ? fabMatch[1].trim() : "";
+
+        // Nome Fantasia
+        const fantasiaMatch = html.match(/Nome Fantasia[^:]*:[^<]*<[^>]*>\s*(?:<[^>]*>)*\s*([^<]+)/i);
+        const nomeFantasia = fantasiaMatch ? fantasiaMatch[1].trim() : "";
+
+        // Usar nome fantasia se disponível, senão razão social
+        const fabricante = nomeFantasia || fabricanteRazao;
+
+        // Converter validade DD/MM/YYYY para YYYY-MM-DD
+        let validadeISO = "";
+        if (validade) {
+          const parts = validade.split("/");
+          if (parts.length === 3) {
+            validadeISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          }
+        }
+
+        // Montar nome do EPI: modelo + descrição resumida
+        let nomeEpi = "";
+        if (modelo) {
+          nomeEpi = modelo;
+        } else if (descricao) {
+          // Pegar as primeiras palavras relevantes da descrição
+          const palavras = descricao.split(" ").slice(0, 6).join(" ");
+          nomeEpi = palavras;
+        }
+
+        if (!descricao && !modelo) {
+          return { found: false as const, error: "CA não encontrado" };
+        }
+
+        return {
+          found: true as const,
+          ca: caNum,
+          nome: nomeEpi,
+          descricao,
+          fabricante,
+          fabricanteRazao,
+          nomeFantasia,
+          situacao,
+          validade: validadeISO,
+          natureza,
+        };
+      } catch (err: any) {
+        return { found: false as const, error: err.message || "Erro ao consultar CA" };
+      }
     }),
 });

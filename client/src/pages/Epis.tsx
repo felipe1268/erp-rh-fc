@@ -83,6 +83,14 @@ export default function Epis() {
   // BDI config
   const [bdiValue, setBdiValue] = useState("");
 
+  // CA lookup state
+  const [caLookupLoading, setCaLookupLoading] = useState(false);
+  const [caLookupResult, setCaLookupResult] = useState<any>(null);
+
+  // Foto do estado do EPI (para troca)
+  const [fotoEstado, setFotoEstado] = useState<{ file: File | null; preview: string }>({ file: null, preview: "" });
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+
   // Mutations
   const createEpiMut = trpc.epis.create.useMutation({
     onSuccess: () => { episQ.refetch(); statsQ.refetch(); setViewMode("catalogo"); toast.success("EPI cadastrado!"); resetEpiForm(); },
@@ -104,7 +112,26 @@ export default function Epis() {
       } else {
         toast.success("Entrega registrada!");
       }
-      setViewMode("entregas"); resetEntregaForm();
+      // Abrir ficha de entrega automaticamente após registro
+      const epi = episList.find((e: any) => String(e.id) === entregaForm.epiId);
+      const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
+      setFichaDelivery({
+        id: result.id,
+        epiId: parseInt(entregaForm.epiId),
+        employeeId: parseInt(entregaForm.employeeId),
+        quantidade: entregaForm.quantidade,
+        dataEntrega: entregaForm.dataEntrega,
+        motivo: entregaForm.motivo,
+        motivoTroca: entregaForm.motivoTroca,
+        valorCobrado: result.valorCobrado,
+        nomeEpi: epi?.nome || "",
+        caEpi: epi?.ca || "",
+        nomeFunc: emp?.nomeCompleto || "",
+        funcaoFunc: emp?.funcao || "",
+      });
+      setViewMode("ficha_epi");
+      resetEntregaForm();
+      setFotoEstado({ file: null, preview: "" });
     },
     onError: (err) => toast.error(err.message),
   });
@@ -145,6 +172,33 @@ export default function Epis() {
   }
   function resetEntregaForm() {
     setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "" });
+    setFotoEstado({ file: null, preview: "" });
+  }
+
+  // CA lookup function
+  async function handleCaLookup() {
+    if (!epiForm.ca.trim()) return toast.error("Digite o número do CA");
+    setCaLookupLoading(true);
+    setCaLookupResult(null);
+    try {
+      const res = await (trpc as any).epis.consultaCa.query({ ca: epiForm.ca.trim() });
+      if (res.found) {
+        setCaLookupResult(res);
+        setEpiForm(f => ({
+          ...f,
+          nome: res.descricao || res.nome || f.nome,
+          fabricante: res.fabricante || f.fabricante,
+          validadeCa: res.validade || f.validadeCa,
+        }));
+        toast.success(`CA ${res.ca} encontrado: ${res.descricao?.substring(0, 60)}...`);
+      } else {
+        toast.error(res.error || "CA não encontrado");
+      }
+    } catch (err: any) {
+      toast.error("Erro ao consultar CA: " + (err.message || "Tente novamente"));
+    } finally {
+      setCaLookupLoading(false);
+    }
   }
 
   const hoje = new Date().toISOString().split("T")[0];
@@ -263,8 +317,22 @@ export default function Epis() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Número do CA</Label>
-                  <Input value={epiForm.ca} onChange={e => setEpiForm(f => ({ ...f, ca: e.target.value }))}
-                    placeholder="Ex: 12345" />
+                  <div className="flex gap-2">
+                    <Input value={epiForm.ca} onChange={e => setEpiForm(f => ({ ...f, ca: e.target.value }))}
+                      placeholder="Ex: 12345" onKeyDown={e => { if (e.key === 'Enter') handleCaLookup(); }} />
+                    <Button type="button" variant="outline" size="sm" onClick={handleCaLookup} disabled={caLookupLoading} className="shrink-0">
+                      {caLookupLoading ? <span className="animate-spin">⏳</span> : <Search className="h-4 w-4" />}
+                      <span className="ml-1 text-xs">{caLookupLoading ? 'Buscando...' : 'Buscar CA'}</span>
+                    </Button>
+                  </div>
+                  {caLookupResult?.found && (
+                    <div className="mt-2 bg-green-50 border border-green-200 rounded p-2 text-xs text-green-700">
+                      <p className="font-semibold">✓ CA encontrado: {caLookupResult.descricao?.substring(0, 80)}</p>
+                      {caLookupResult.situacao && <p>Situação: {caLookupResult.situacao}</p>}
+                      {caLookupResult.fabricante && <p>Fabricante: {caLookupResult.fabricante}</p>}
+                      {caLookupResult.validade && <p>Validade: {caLookupResult.validade}</p>}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label>Validade do CA</Label>
@@ -421,6 +489,35 @@ export default function Epis() {
                 </div>
               )}
 
+              {/* Foto obrigatória para troca por desgaste/perda/mau uso */}
+              {entregaForm.motivoTroca && ['desgaste_normal', 'perda', 'mau_uso', 'furto'].includes(entregaForm.motivoTroca) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <Label className="flex items-center gap-2 text-amber-800 font-semibold mb-2">
+                    📷 Foto do Estado do EPI (Obrigatória)
+                  </Label>
+                  <p className="text-xs text-amber-600 mb-3">Para registrar troca por {entregaForm.motivoTroca === 'desgaste_normal' ? 'desgaste' : entregaForm.motivoTroca === 'mau_uso' ? 'mau uso/dano' : entregaForm.motivoTroca === 'perda' ? 'perda' : 'furto'}, é obrigatório anexar uma foto do estado atual do EPI.</p>
+                  <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const preview = URL.createObjectURL(file);
+                      setFotoEstado({ file, preview });
+                    }
+                  }} />
+                  <div className="flex items-center gap-3">
+                    <Button type="button" variant="outline" size="sm" onClick={() => fotoInputRef.current?.click()}>
+                      <Upload className="h-4 w-4 mr-1" /> {fotoEstado.file ? 'Trocar Foto' : 'Anexar Foto'}
+                    </Button>
+                    {fotoEstado.preview && (
+                      <div className="relative">
+                        <img src={fotoEstado.preview} alt="Foto EPI" className="h-20 w-20 object-cover rounded border" />
+                        <button onClick={() => setFotoEstado({ file: null, preview: '' })} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
+                      </div>
+                    )}
+                    {!fotoEstado.file && <span className="text-xs text-red-500">* Foto obrigatória</span>}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label>Motivo / Observações</Label>
                 <Input value={entregaForm.motivo} onChange={e => setEntregaForm(f => ({ ...f, motivo: e.target.value }))}
@@ -428,8 +525,22 @@ export default function Epis() {
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button variant="outline" onClick={() => { setViewMode("entregas"); resetEntregaForm(); }}>Cancelar</Button>
-                <Button onClick={() => {
+                <Button onClick={async () => {
                   if (!entregaForm.epiId || !entregaForm.employeeId) return toast.error("Selecione EPI e funcionário");
+                  // Validar foto obrigatória para troca
+                  const requiresFoto = entregaForm.motivoTroca && ['desgaste_normal', 'perda', 'mau_uso', 'furto'].includes(entregaForm.motivoTroca);
+                  if (requiresFoto && !fotoEstado.file) return toast.error("Foto do estado do EPI é obrigatória para este tipo de troca");
+                  
+                  let fotoBase64: string | undefined;
+                  let fotoFileName: string | undefined;
+                  if (fotoEstado.file) {
+                    const buffer = await fotoEstado.file.arrayBuffer();
+                    const bytes = new Uint8Array(buffer);
+                    let binary = '';
+                    for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
+                    fotoBase64 = btoa(binary);
+                    fotoFileName = fotoEstado.file.name;
+                  }
                   createDeliveryMut.mutate({
                     companyId,
                     epiId: parseInt(entregaForm.epiId),
@@ -439,6 +550,8 @@ export default function Epis() {
                     motivo: entregaForm.motivo || undefined,
                     observacoes: entregaForm.observacoes || undefined,
                     motivoTroca: entregaForm.motivoTroca || undefined,
+                    fotoEstadoBase64: fotoBase64,
+                    fotoEstadoFileName: fotoFileName,
                   });
                 }} disabled={createDeliveryMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {createDeliveryMut.isPending ? "Salvando..." : "Registrar Entrega"}
@@ -499,17 +612,23 @@ export default function Epis() {
 
           {/* Printable Form */}
           <div className="bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b-2 border-[#1B2A4A] pb-4 mb-6">
-              <div className="flex items-center gap-3">
-                <img src="/fc-logo.png" alt="FC Engenharia" className="h-12" onError={(e: any) => e.target.style.display = 'none'} />
-                <div>
-                  <h2 className="text-lg font-bold text-[#1B2A4A]">FC ENGENHARIA</h2>
-                  <p className="text-xs text-gray-500">Ficha de Entrega de EPI</p>
+            {/* Header with Logo */}
+            <div className="border-b-2 border-[#1B2A4A] pb-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img src="/fc-logo.png" alt="FC Engenharia" className="h-14" onError={(e: any) => e.target.style.display = 'none'} />
+                  <div>
+                    <h2 className="text-xl font-bold text-[#1B2A4A] tracking-wide">FC ENGENHARIA</h2>
+                    <p className="text-xs text-gray-500 font-medium">PROJETOS E CONSULTORIA LTDA</p>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right text-xs text-gray-500">
-                <p>Data: {fichaDelivery.dataEntrega ? new Date(fichaDelivery.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p>
+                <div className="text-right">
+                  <div className="bg-[#1B2A4A] text-white px-3 py-1 rounded text-xs font-bold mb-1">
+                    FICHA DE ENTREGA DE EPI
+                  </div>
+                  <p className="text-[10px] text-gray-500">Data da Entrega: {fichaDelivery.dataEntrega ? new Date(fichaDelivery.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p>
+                  <p className="text-[10px] text-gray-400">Emitido em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
               </div>
             </div>
 
@@ -528,6 +647,8 @@ export default function Epis() {
                   <th className="p-2 text-left">EPI</th>
                   <th className="p-2 text-center">CA</th>
                   <th className="p-2 text-center">Qtd</th>
+                  <th className="p-2 text-center">Vida Útil</th>
+                  <th className="p-2 text-center">Valor Unit.</th>
                   <th className="p-2 text-center">Motivo</th>
                 </tr>
               </thead>
@@ -536,14 +657,61 @@ export default function Epis() {
                   <td className="p-2">{fichaDelivery.nomeEpi || epi?.nome || "—"}</td>
                   <td className="p-2 text-center">{fichaDelivery.caEpi || epi?.ca || "—"}</td>
                   <td className="p-2 text-center">{fichaDelivery.quantidade}</td>
+                  <td className="p-2 text-center">
+                    {epi?.tempoMinimoTroca ? `${epi.tempoMinimoTroca} dias` : "—"}
+                  </td>
+                  <td className="p-2 text-center">
+                    {epi?.valorProduto ? (() => {
+                      const bdiPct = bdiQ.data?.bdiPercentual ?? 40;
+                      const valorComBdi = parseFloat(String(epi.valorProduto)) * (1 + bdiPct / 100);
+                      return `R$ ${valorComBdi.toFixed(2)}`;
+                    })() : "—"}
+                  </td>
                   <td className="p-2 text-center">{fichaDelivery.motivo || "Entrega regular"}</td>
                 </tr>
               </tbody>
             </table>
 
+            {/* Policy Box - Vida Útil e Desconto */}
+            <div className="border-2 border-[#1B2A4A] rounded p-4 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="bg-[#1B2A4A] text-white px-2 py-0.5 rounded text-[10px] font-bold">⚠️ IMPORTANTE</div>
+                <p className="font-bold text-[#1B2A4A] text-xs">POLÍTICA DE CONSERVAÇÃO, TROCA E COBRANÇA DE EPI</p>
+              </div>
+              <div className="text-xs text-gray-700 leading-relaxed space-y-2">
+                <p>
+                  {epi?.tempoMinimoTroca ? (
+                    <>O EPI acima possui <strong>vida útil mínima de {epi.tempoMinimoTroca} dias</strong> a partir da data de entrega. </>
+                  ) : null}
+                  A troca dentro do prazo de vida útil por <strong>desgaste natural de uso</strong> será realizada <strong>sem custo</strong> ao colaborador,
+                  mediante apresentação do EPI danificado e registro fotográfico obrigatório.
+                </p>
+                <p className="bg-red-50 border border-red-200 rounded p-2 text-red-800">
+                  <strong>💰 COBRANÇA:</strong> Em caso de <strong>perda, extravio, furto, dano por mau uso ou negligência</strong>,
+                  o valor indicado na coluna "Valor Unit." (custo + encargos administrativos) será <strong>descontado
+                  integralmente na folha de pagamento do mesmo mês</strong> em que ocorrer a solicitação de troca,
+                  conforme Art. 462, §1º da CLT e acordo firmado neste documento.
+                </p>
+                <p className="bg-amber-50 border border-amber-200 rounded p-2 text-amber-800">
+                  <strong>📷 FOTO OBRIGATÓRIA:</strong> Para qualquer solicitação de troca (desgaste, perda, mau uso ou furto),
+                  é <strong>obrigatório</strong> o registro fotográfico do estado atual do EPI antigo como comprovação.
+                  Sem a foto, a troca não será autorizada.
+                </p>
+              </div>
+            </div>
+
             {/* Declaration Text */}
-            <div className="text-sm text-justify mb-8 leading-relaxed">
-              <p>{textoFicha}</p>
+            <div className="text-sm text-justify mb-4 leading-relaxed">
+              <p>{textoFicha || `Declaro ter recebido os Equipamentos de Proteção Individual (EPIs) acima descritos, comprometendo-me a utilizá-los corretamente durante a jornada de trabalho, conforme orientações recebidas. Estou ciente de que a não utilização, o uso inadequado ou a perda/dano por negligência poderá acarretar desconto em meu salário dentro do mesmo mês da ocorrência, conforme Art. 462, §1º da CLT e NR-6 do MTE. Declaro também estar ciente da obrigatoriedade de apresentação de registro fotográfico do EPI antigo para qualquer solicitação de troca.`}</p>
+            </div>
+
+            {/* Employee Obligations */}
+            <div className="text-[10px] text-gray-600 mb-6 leading-relaxed border rounded p-2 bg-gray-50">
+              <p className="font-semibold mb-1">Obrigações do Empregado (NR-6, item 6.7.1 do MTE):</p>
+              <p>a) Usar o EPI apenas para a finalidade a que se destina;</p>
+              <p>b) Responsabilizar-se pela guarda e conservação;</p>
+              <p>c) Comunicar ao empregador qualquer alteração que o torne impróprio para uso;</p>
+              <p>d) Cumprir as determinações do empregador sobre o uso adequado.</p>
             </div>
 
             {/* Signature Lines */}
@@ -561,8 +729,8 @@ export default function Epis() {
             </div>
 
             {/* Legal Footer */}
-            <div className="mt-8 pt-4 border-t text-[10px] text-gray-400 text-center">
-              Conforme Art. 462, §1º da CLT e NR-6 do MTE — Equipamentos de Proteção Individual
+            <div className="mt-6 pt-4 border-t text-[10px] text-gray-400 text-center">
+              Conforme Art. 462, §1º da CLT e NR-6 (item 6.7.1) do MTE — Equipamentos de Proteção Individual
             </div>
           </div>
         </div>
