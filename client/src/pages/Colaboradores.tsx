@@ -610,7 +610,7 @@ export default function Colaboradores() {
                 </tr>
               </thead>
               <tbody>
-                {employees.map(emp => (
+                {[...employees].sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR')).map(emp => (
                   <tr key={emp.id} className={`border-t border-border hover:bg-secondary/30 transition-colors ${selectedIds.has(emp.id) ? "bg-primary/5" : ""}`}>
                     <td className="px-3 py-3">
                       <Checkbox
