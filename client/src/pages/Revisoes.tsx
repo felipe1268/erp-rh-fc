@@ -1,16 +1,9 @@
-import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { formatDateTime } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { GitBranch, Plus, Trash2, Bug, Sparkles, Shield, Zap, Wrench, Calendar, User, Tag, FileText, Printer, ArrowLeft } from "lucide-react";
+import { GitBranch, Bug, Sparkles, Shield, Zap, Wrench, Calendar, User, Tag, Printer, ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
 
 const TIPO_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
@@ -26,34 +19,6 @@ export default function Revisoes() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
   const revisionsQuery = trpc.revisions.list.useQuery(undefined, { enabled: isMaster });
-  const createMut = trpc.revisions.create.useMutation({
-    onSuccess: () => { revisionsQuery.refetch(); setShowDialog(false); resetForm(); toast.success("Revisão registrada!"); },
-    onError: (err) => toast.error(err.message),
-  });
-  const deleteMut = trpc.revisions.delete.useMutation({
-    onSuccess: () => { revisionsQuery.refetch(); toast.success("Revisão excluída"); },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const [showDialog, setShowDialog] = useState(false);
-  const [version, setVersion] = useState("");
-  const [titulo, setTitulo] = useState("");
-  const [descricao, setDescricao] = useState("");
-  const [tipo, setTipo] = useState<string>("feature");
-  const [modulos, setModulos] = useState("");
-
-  const resetForm = () => { setVersion(""); setTitulo(""); setDescricao(""); setTipo("feature"); setModulos(""); };
-
-  const handleCreate = () => {
-    if (!version || !titulo || !descricao) { toast.error("Preencha todos os campos obrigatórios"); return; }
-    createMut.mutate({
-      version: parseInt(version),
-      titulo,
-      descricao,
-      tipo: tipo as any,
-      modulos: modulos || undefined,
-    });
-  };
 
   const handlePrint = () => {
     window.print();
@@ -72,7 +37,6 @@ export default function Revisoes() {
   }
 
   const revisions = revisionsQuery.data || [];
-  const nextVersion = revisions.length > 0 ? (revisions[0]?.version || 0) + 1 : 1;
 
   return (
     <div className="space-y-6">
@@ -91,9 +55,6 @@ export default function Revisoes() {
         <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" onClick={handlePrint}>
             <Printer className="h-4 w-4 mr-2" /> Imprimir
-          </Button>
-          <Button size="sm" onClick={() => { resetForm(); setVersion(String(nextVersion)); setShowDialog(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Nova Revisão
           </Button>
         </div>
       </div>
@@ -118,7 +79,6 @@ export default function Revisoes() {
           <div className="text-center py-16 text-muted-foreground">
             <GitBranch className="h-12 w-12 mx-auto mb-3 opacity-30" />
             <p>Nenhuma revisão registrada ainda.</p>
-            <p className="text-sm">Clique em "Nova Revisão" para registrar a primeira atualização.</p>
           </div>
         )}
         {revisions.map((rev, idx) => {
@@ -165,67 +125,12 @@ export default function Revisoes() {
                       </span>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0" onClick={() => {
-                    if (confirm(`Excluir revisão ${rev.version}?`)) deleteMut.mutate({ id: rev.id });
-                  }}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* Create Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" /> Registrar Nova Revisão
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Número da Revisão *</Label>
-                <Input type="number" value={version} onChange={e => setVersion(e.target.value)} placeholder="Ex: 64" />
-              </div>
-              <div>
-                <Label>Tipo *</Label>
-                <Select value={tipo} onValueChange={setTipo}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TIPO_CONFIG).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>
-                        <span className="flex items-center gap-2">{cfg.icon} {cfg.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label>Título *</Label>
-              <Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Correção de permissões de usuário" />
-            </div>
-            <div>
-              <Label>Descrição Detalhada *</Label>
-              <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={5} placeholder="Descreva detalhadamente o que foi alterado, corrigido ou adicionado..." />
-            </div>
-            <div>
-              <Label>Módulos Afetados (separados por vírgula)</Label>
-              <Input value={modulos} onChange={e => setModulos(e.target.value)} placeholder="Ex: Fechamento de Ponto, Configurações, Usuários" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={createMut.isPending}>
-              {createMut.isPending ? "Salvando..." : "Registrar Revisão"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

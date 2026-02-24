@@ -2098,3 +2098,6 @@
 - [x] Visualização do funcionário mostra "Padrão Empresa (60/100/20%)" em vez de "Padrão CLT (50/100/20%)"
 ## Central de Alertas: Fullscreen
 - [x] Fazer a Central de Alertas abrir em tela cheia (fullscreen) em vez de popup pequeno — DialogContent com 100vw/100vh
+## Controle de Revisões: Somente leitura + Registrar Rev. 75-80
+- [x] Remover botão "Nova Revisão" e botão de excluir — página somente leitura
+- [x] Inserir revisões 75 a 80 no banco com descrições detalhadas de cada atualização
