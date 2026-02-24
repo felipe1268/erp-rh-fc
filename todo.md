@@ -2089,3 +2089,5 @@
 - [x] Frontend mantém .sort(localeCompare) como fallback
 ## HE Percentuais: Input manual livre
 - [x] Trocar campos HE Dias Úteis, HE Domingos/Feriados e Adicional Noturno de spinner numérico para input texto livre (aceitar 60, 70, 80% etc.) — type=text com inputMode=numeric, sem limite max=100
+## Jornada de Trabalho: Campos de horário com digitação livre
+- [x] Converter selects de Entrada, Intervalo e Saída para combobox (opções pré-definidas + digitação manual livre, ex: 1h15 de intervalo) — componente TimeCombobox criado com dropdown + input texto, parse inteligente (1h15, 0730, 30min)

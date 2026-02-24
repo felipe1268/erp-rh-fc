@@ -22,6 +22,7 @@ import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTitulo
 import { nowBrasilia } from "@/lib/dateUtils";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -1519,55 +1520,46 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       <tr className="border-t-2 border-primary/30 bg-primary/5">
                         <td className="px-3 py-1.5 font-bold text-primary text-xs">Padrão</td>
                         <td className="px-1 py-1">
-                          <Select value={form.jornada_padrao_entrada || "none"} onValueChange={v => {
-                            const val = v === "none" ? "" : v;
-                            setForm(prev => {
-                              const updated: Record<string, string> = { ...prev, jornada_padrao_entrada: val };
-                              ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_entrada`] = val; });
-                              return updated;
-                            });
-                          }}>
-                            <SelectTrigger className="bg-primary/10 h-8 text-xs border-primary/30"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {["05:00","05:30","06:00","06:30","07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <TimeCombobox
+                            value={form.jornada_padrao_entrada || ""}
+                            onChange={(v) => {
+                              setForm(prev => {
+                                const updated: Record<string, string> = { ...prev, jornada_padrao_entrada: v };
+                                ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_entrada`] = v; });
+                                return updated;
+                              });
+                            }}
+                            options={ENTRADA_OPTIONS}
+                            triggerClassName="bg-primary/10 border-primary/30"
+                          />
                         </td>
                         <td className="px-1 py-1">
-                          <Select value={form.jornada_padrao_intervalo || "none"} onValueChange={v => {
-                            const val = v === "none" ? "" : v;
-                            setForm(prev => {
-                              const updated: Record<string, string> = { ...prev, jornada_padrao_intervalo: val };
-                              ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_intervalo`] = val; });
-                              return updated;
-                            });
-                          }}>
-                            <SelectTrigger className="bg-primary/10 h-8 text-xs border-primary/30"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              <SelectItem value="00:30">30 min</SelectItem>
-                              <SelectItem value="01:00">1 hora</SelectItem>
-                              <SelectItem value="01:30">1h30</SelectItem>
-                              <SelectItem value="02:00">2 horas</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <TimeCombobox
+                            value={form.jornada_padrao_intervalo || ""}
+                            onChange={(v) => {
+                              setForm(prev => {
+                                const updated: Record<string, string> = { ...prev, jornada_padrao_intervalo: v };
+                                ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_intervalo`] = v; });
+                                return updated;
+                              });
+                            }}
+                            options={INTERVALO_OPTIONS}
+                            triggerClassName="bg-primary/10 border-primary/30"
+                          />
                         </td>
                         <td className="px-1 py-1">
-                          <Select value={form.jornada_padrao_saida || "none"} onValueChange={v => {
-                            const val = v === "none" ? "" : v;
-                            setForm(prev => {
-                              const updated: Record<string, string> = { ...prev, jornada_padrao_saida: val };
-                              ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_saida`] = val; });
-                              return updated;
-                            });
-                          }}>
-                            <SelectTrigger className="bg-primary/10 h-8 text-xs border-primary/30"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","22:00","23:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <TimeCombobox
+                            value={form.jornada_padrao_saida || ""}
+                            onChange={(v) => {
+                              setForm(prev => {
+                                const updated: Record<string, string> = { ...prev, jornada_padrao_saida: v };
+                                ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => { updated[`jornada_${d}_saida`] = v; });
+                                return updated;
+                              });
+                            }}
+                            options={SAIDA_OPTIONS}
+                            triggerClassName="bg-primary/10 border-primary/30"
+                          />
                         </td>
                         <td className="px-1 py-1 text-center text-xs text-muted-foreground">-</td>
                       </tr>
@@ -1604,34 +1596,28 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                             {isWeekend && isFolga && <span className="ml-1 text-[10px] text-orange-500 font-bold">HE</span>}
                           </td>
                           <td className="px-1 py-1">
-                            <Select value={form[`jornada_${dia.key}_entrada`] || "none"} onValueChange={v => set(`jornada_${dia.key}_entrada`, v === "none" ? "" : v)}>
-                              <SelectTrigger className="bg-input h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">-</SelectItem>
-                                {["05:00","05:30","06:00","06:30","07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <TimeCombobox
+                              value={form[`jornada_${dia.key}_entrada`] || ""}
+                              onChange={(v) => set(`jornada_${dia.key}_entrada`, v)}
+                              options={ENTRADA_OPTIONS}
+                              triggerClassName="bg-input"
+                            />
                           </td>
                           <td className="px-1 py-1">
-                            <Select value={form[`jornada_${dia.key}_intervalo`] || "none"} onValueChange={v => set(`jornada_${dia.key}_intervalo`, v === "none" ? "" : v)}>
-                              <SelectTrigger className="bg-input h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">-</SelectItem>
-                                <SelectItem value="00:30">30 min</SelectItem>
-                                <SelectItem value="01:00">1 hora</SelectItem>
-                                <SelectItem value="01:30">1h30</SelectItem>
-                                <SelectItem value="02:00">2 horas</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <TimeCombobox
+                              value={form[`jornada_${dia.key}_intervalo`] || ""}
+                              onChange={(v) => set(`jornada_${dia.key}_intervalo`, v)}
+                              options={INTERVALO_OPTIONS}
+                              triggerClassName="bg-input"
+                            />
                           </td>
                           <td className="px-1 py-1">
-                            <Select value={form[`jornada_${dia.key}_saida`] || "none"} onValueChange={v => set(`jornada_${dia.key}_saida`, v === "none" ? "" : v)}>
-                              <SelectTrigger className="bg-input h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">-</SelectItem>
-                                {["11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","22:00","23:00"].map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <TimeCombobox
+                              value={form[`jornada_${dia.key}_saida`] || ""}
+                              onChange={(v) => set(`jornada_${dia.key}_saida`, v)}
+                              options={SAIDA_OPTIONS}
+                              triggerClassName="bg-input"
+                            />
                           </td>
                           <td className="px-1 py-1 text-center">
                             {horasDia ? (
