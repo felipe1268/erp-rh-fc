@@ -899,7 +899,7 @@ export const controleDocumentosRouter = router({
         valorCobranca: epiDeliveries.valorCobrado,
       }).from(epiDeliveries)
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
-        .where(eq(epiDeliveries.employeeId, input.employeeId))
+        .where(and(eq(epiDeliveries.employeeId, input.employeeId), isNull(epiDeliveries.deletedAt)))
         .orderBy(desc(epiDeliveries.dataEntrega));
       // VR - TODOS
       const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia));
@@ -935,7 +935,7 @@ export const controleDocumentosRouter = router({
 
       // PROCESSOS TRABALHISTAS
       const empProcessos = await db.select().from(processosTrabalhistas)
-        .where(eq(processosTrabalhistas.employeeId, input.employeeId))
+        .where(and(eq(processosTrabalhistas.employeeId, input.employeeId), isNull(processosTrabalhistas.deletedAt)))
         .orderBy(desc(processosTrabalhistas.dataDistribuicao));
 
       // Andamentos dos processos
@@ -1018,12 +1018,12 @@ export const controleDocumentosRouter = router({
 
       // AVISO PRÉVIO
       const empAvisosPrevios = await db.select().from(terminationNotices)
-        .where(eq(terminationNotices.employeeId, input.employeeId))
+        .where(and(eq(terminationNotices.employeeId, input.employeeId), isNull(terminationNotices.deletedAt)))
         .orderBy(desc(terminationNotices.dataInicio));
 
       // FÉRIAS
       const empFerias = await db.select().from(vacationPeriods)
-        .where(eq(vacationPeriods.employeeId, input.employeeId))
+        .where(and(eq(vacationPeriods.employeeId, input.employeeId), isNull(vacationPeriods.deletedAt)))
         .orderBy(desc(vacationPeriods.dataInicio));
 
       // CIPA

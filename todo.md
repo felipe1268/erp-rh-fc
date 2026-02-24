@@ -2049,3 +2049,8 @@
 - [x] Bug: Raio-X do Funcionário travado em "Carregando dados do funcionário..." - corrigido (colunas epi_discount_alerts)
 - [x] Remover "Tempo mín. troca padrão do EPI" dos Critérios globais (é por EPI individual, não regra global)
 - [x] IA sugere vida útil (dias) automaticamente ao cadastrar EPI baseado no tipo de equipamento (com justificativa e nível de confiança)
+
+## Rev. 77 — Bug Timeline + Responsividade Mobile
+- [x] Bug CRÍTICO: Timeline mostrando itens excluídos (EPI, advertências, etc.) — filtrar deletedAt IS NULL em EPIs, Acidentes, Processos, Aviso Prévio, Férias
+- [x] Responsividade mobile: Raio-X header, tabs, data grids, EPIs page — tudo responsivo para mobile portrait
+- [x] Registrar Rev. 77

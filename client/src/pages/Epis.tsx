@@ -319,7 +319,7 @@ export default function Epis() {
                 <Input value={epiForm.nome} onChange={e => setEpiForm(f => ({ ...f, nome: e.target.value }))}
                   placeholder="Ex: Capacete de Segurança, Luva de Proteção..." />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label>Número do CA</Label>
                   <div className="flex gap-2">
@@ -357,7 +357,7 @@ export default function Epis() {
                   <Input type="date" value={epiForm.validadeCa} onChange={e => setEpiForm(f => ({ ...f, validadeCa: e.target.value }))} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label>Fabricante</Label>
                   <Input value={epiForm.fabricante} onChange={e => setEpiForm(f => ({ ...f, fabricante: e.target.value }))}
@@ -369,7 +369,7 @@ export default function Epis() {
                     placeholder="Nome do fornecedor" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label className="flex items-center gap-1">
                     <Package className="h-3 w-3 text-indigo-600" />
@@ -404,7 +404,7 @@ export default function Epis() {
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label>Quantidade em Estoque</Label>
                   <Input type="number" min={0} value={epiForm.quantidadeEstoque}
@@ -511,7 +511,7 @@ export default function Epis() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label>Quantidade *</Label>
                   <Input type="number" min={1} value={entregaForm.quantidade}
@@ -714,7 +714,7 @@ export default function Epis() {
 
             {/* Employee Info - Box com borda */}
             <div className="border border-gray-300 rounded p-3 mb-6">
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-sm">
                 <div><span className="text-gray-500 text-xs">Funcionário:</span><br/><strong className="text-[#1B2A4A]">{fichaDelivery.nomeFunc || emp?.nomeCompleto || "—"}</strong></div>
                 <div><span className="text-gray-500 text-xs">Função:</span><br/><strong className="text-[#1B2A4A]">{fichaDelivery.funcaoFunc || emp?.funcao || "—"}</strong></div>
                 <div><span className="text-gray-500 text-xs">CPF:</span><br/><strong>{emp?.cpf || "—"}</strong></div>
@@ -797,7 +797,7 @@ export default function Epis() {
             </div>
 
             {/* Signature Lines */}
-            <div className="grid grid-cols-2 gap-16 mt-12 pt-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-16 mt-6 sm:mt-12 pt-4 sm:pt-8">
               <div className="text-center">
                 <div className="border-t border-black pt-2 text-sm">
                   Assinatura do Funcionário
@@ -857,7 +857,7 @@ export default function Epis() {
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
             <Card className="border-l-4 border-l-blue-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground">Total EPIs</p>
@@ -1194,13 +1194,13 @@ function EditEpiInline({ epi, onSave, onCancel, isPending }: { epi: any; onSave:
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} className="h-8 text-xs" placeholder="Nome" />
         <Input value={form.ca} onChange={e => setForm(f => ({ ...f, ca: e.target.value }))} className="h-8 text-xs" placeholder="CA" />
         <Input type="number" value={form.quantidadeEstoque} onChange={e => setForm(f => ({ ...f, quantidadeEstoque: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" placeholder="Estoque" />
         <Input type="number" step="0.01" value={form.valorProduto ?? ""} onChange={e => setForm(f => ({ ...f, valorProduto: e.target.value ? parseFloat(e.target.value) : null }))} className="h-8 text-xs" placeholder="Valor R$" />
       </div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Input value={form.fabricante} onChange={e => setForm(f => ({ ...f, fabricante: e.target.value }))} className="h-8 text-xs" placeholder="Fabricante" />
         <Input value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} className="h-8 text-xs" placeholder="Fornecedor" />
         <Input type="number" value={form.tempoMinimoTroca ?? ""} onChange={e => setForm(f => ({ ...f, tempoMinimoTroca: e.target.value ? parseInt(e.target.value) : null }))} className="h-8 text-xs" placeholder="Vida útil (dias)" />

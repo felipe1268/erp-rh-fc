@@ -380,32 +380,32 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ width: "100vw", height: "100vh" }}>
       {/* HEADER */}
-      <div className="shrink-0 bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-6 py-3 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20 h-9 w-9 shrink-0">
-            <ArrowLeft className="h-5 w-5" />
+      <div className="shrink-0 bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-3 sm:px-6 py-2 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between shadow-lg gap-1 sm:gap-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20 h-8 w-8 sm:h-9 sm:w-9 shrink-0">
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
-          <div className="h-10 w-10 rounded-full overflow-hidden bg-white/20 flex items-center justify-center shrink-0 border-2 border-white/40">
+          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full overflow-hidden bg-white/20 flex items-center justify-center shrink-0 border-2 border-white/40">
             {emp?.fotoUrl ? (
               <img src={emp.fotoUrl} alt="" className="w-full h-full object-cover object-top" />
             ) : (
-              <User className="h-6 w-6" />
+              <User className="h-4 w-4 sm:h-6 sm:w-6" />
             )}
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">RAIO-X DO FUNCIONÁRIO</h1>
-            {emp && <p className="text-sm text-white/80">{emp.nomeCompleto} — CPF: {formatCPF(emp.cpf)}</p>}
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-xl font-bold tracking-tight">RAIO-X DO FUNCIONÁRIO</h1>
+            {emp && <p className="text-xs sm:text-sm text-white/80 truncate">{emp.nomeCompleto} — CPF: {formatCPF(emp.cpf)}</p>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
-            <Printer className="h-4 w-4" /> Imprimir
+        <div className="flex items-center gap-1 sm:gap-2 ml-auto sm:ml-0">
+          <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+            <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Imprimir</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
-            <FileDown className="h-4 w-4" /> Gerar PDF
+          <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+            <FileDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Gerar PDF</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
-            <ArrowLeft className="h-4 w-4" /> Voltar
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/20 gap-1 sm:gap-1.5 border border-white/30 text-xs sm:text-sm px-2 sm:px-3 h-7 sm:h-9">
+            <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Voltar</span>
           </Button>
         </div>
       </div>
@@ -417,23 +417,23 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         ) : !emp ? (
           <div className="text-center py-20 text-muted-foreground text-lg">Funcionário não encontrado</div>
         ) : (
-          <div className="p-6 max-w-[1600px] mx-auto space-y-5">
+          <div className="p-3 sm:p-6 max-w-[1600px] mx-auto space-y-3 sm:space-y-5">
             {/* DADOS PESSOAIS */}
-            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-xl p-6 border border-blue-200 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
+            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-xl p-3 sm:p-6 border border-blue-200 shadow-sm">
+              <div className="flex items-start gap-3 sm:gap-4">
                 {/* FOTO DO COLABORADOR */}
                 <div className="shrink-0">
-                  <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center">
+                  <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center">
                     {emp.fotoUrl ? (
                       <img src={emp.fotoUrl} alt="Foto" className="w-full h-full object-cover object-top" />
                     ) : (
-                      <span className="text-3xl font-bold text-blue-400">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
+                      <span className="text-xl sm:text-3xl font-bold text-blue-400">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
                     )}
                   </div>
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-3xl font-bold text-blue-900">{emp.nomeCompleto}</h2>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
+                    <h2 className="text-lg sm:text-3xl font-bold text-blue-900">{emp.nomeCompleto}</h2>
                     <Badge className={`text-sm px-3 py-1 ${emp.status === "Ativo" ? "bg-green-100 text-green-800" : emp.status === "Desligado" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
                       {emp.status}
                     </Badge>
@@ -441,7 +441,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <Badge variant="outline" className="text-sm px-3 py-1 border-blue-300 text-blue-700 font-mono">{(emp as any).codigoInterno}</Badge>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-8 gap-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3">
                     {(() => {
                       const anivInfo = calcDiasAniversario(emp.dataNascimento);
                       const tempoEmp = calcTempoEmpresa(emp.dataAdmissao);
@@ -537,7 +537,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               )}
 
               {/* CARDS DE MÉTRICAS */}
-              <div className="grid grid-cols-4 lg:grid-cols-10 gap-2 mt-5">
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-10 gap-1.5 sm:gap-2 mt-3 sm:mt-5">
                 {[
                   { label: "ASOs", value: asos.length, tab: "asos", bg: "bg-blue-50 border-blue-200", textColor: "text-blue-700", iconColor: "text-blue-400", icon: Stethoscope },
                   { label: "Vencidos", value: asosVencidos, tab: "asos", bg: "bg-rose-50 border-rose-200", textColor: "text-rose-700", iconColor: "text-rose-400", icon: Stethoscope },
