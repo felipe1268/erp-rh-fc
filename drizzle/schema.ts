@@ -1613,3 +1613,33 @@ export const systemRevisions = mysqlTable("system_revisions", {
 }, (table) => [
 	index("sr_version").on(table.version),
 ]);
+
+
+// ============================================================
+// REGISTROS DIXI NÃO IDENTIFICADOS (pendentes de vinculação)
+// ============================================================
+export const unmatchedDixiRecords = mysqlTable("unmatched_dixi_records", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	obraId: int(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	dixiName: varchar({ length: 255 }).notNull(), // Nome original do relógio DIXI
+	dixiId: varchar({ length: 50 }), // ID do funcionário no relógio (se disponível)
+	data: date({ mode: 'string' }).notNull(),
+	entrada1: varchar({ length: 10 }),
+	saida1: varchar({ length: 10 }),
+	entrada2: varchar({ length: 10 }),
+	saida2: varchar({ length: 10 }),
+	entrada3: varchar({ length: 10 }),
+	saida3: varchar({ length: 10 }),
+	batidasBrutas: json(), // Todas as batidas originais
+	status: mysqlEnum(['pendente','vinculado','descartado']).default('pendente').notNull(),
+	linkedEmployeeId: int(), // Funcionário vinculado pelo usuário
+	resolvidoPor: varchar({ length: 255 }),
+	resolvidoEm: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+	index("udr_company_mes").on(table.companyId, table.mesReferencia),
+	index("udr_status").on(table.status),
+	index("udr_dixi_name").on(table.dixiName),
+]);

@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 
-type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio";
+type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados";
 
 // Helper to navigate to Controle de Documentos > Advertências with pre-filled data
 function navigateToAdvertencia(setLocation: (path: string) => void, employeeId: number, employeeName: string, data: string, descricao: string) {
@@ -93,6 +93,9 @@ export default function FechamentoPonto() {
   const [incFilterType, setIncFilterType] = useState<string>("all");
   const [incFilterStatus, setIncFilterStatus] = useState<string>("pendente");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [linkingName, setLinkingName] = useState<string | null>(null);
+  const [linkSearchTerm, setLinkSearchTerm] = useState("");
+  const [linkSelectedEmpId, setLinkSelectedEmpId] = useState<number | null>(null);
 
   // ===== QUERIES =====
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -107,6 +110,9 @@ export default function FechamentoPonto() {
   const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, ano: anoSelecionado }, { enabled: companyId > 0 });
   const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
   const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const unmatchedData = trpc.fechamentoPonto.getUnmatchedRecords.useQuery(
+    { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 }
+  );
   const rateioData = trpc.fechamentoPonto.getRateioPorObra.useQuery(
     { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 && viewMode === "rateio" }
   );
@@ -117,7 +123,7 @@ export default function FechamentoPonto() {
   const uploadMut = trpc.fechamentoPonto.uploadDixi.useMutation({
     onSuccess: (data) => {
       setUploadResult(data);
-      stats.refetch(); summary.refetch(); inconsistencies.refetch(); monthStatuses.refetch(); conflitos.refetch();
+      stats.refetch(); summary.refetch(); inconsistencies.refetch(); monthStatuses.refetch(); conflitos.refetch(); unmatchedData.refetch();
       toast.success(`${data.totalImported} registros importados com sucesso!`);
     },
     onError: (err) => toast.error("Erro no upload: " + err.message),
@@ -196,6 +202,21 @@ export default function FechamentoPonto() {
       } else {
         toast.success(data.message || `${data.resolved} conflitos resolvidos com rateio proporcional!`);
       }
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const linkUnmatchedMut = trpc.fechamentoPonto.linkUnmatchedToEmployee.useMutation({
+    onSuccess: (data) => {
+      unmatchedData.refetch(); stats.refetch(); summary.refetch(); inconsistencies.refetch();
+      toast.success(`${data.recordsLinked} registro(s) vinculado(s) a ${data.employeeName}`);
+      setLinkingName(null);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const discardUnmatchedMut = trpc.fechamentoPonto.discardUnmatched.useMutation({
+    onSuccess: () => {
+      unmatchedData.refetch();
+      toast.success("Registros descartados com sucesso.");
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
@@ -697,6 +718,13 @@ export default function FechamentoPonto() {
               className={viewMode === "rateio" ? "bg-teal-600 text-white" : ""}>
               <Building2 className="h-4 w-4 mr-1" /> Rateio por Obra
             </Button>
+            {(unmatchedData.data?.pendentes || 0) > 0 && (
+              <Button variant={viewMode === "nao_identificados" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("nao_identificados")}
+                className={viewMode === "nao_identificados" ? "bg-purple-600 text-white" : "text-purple-700"}>
+                <UserCheck className="h-4 w-4 mr-1" /> Não Identificados
+                <Badge variant="destructive" className="ml-1 text-xs bg-purple-600">{unmatchedData.data?.totalNomes}</Badge>
+              </Button>
+            )}
           </div>
         )}
 
@@ -2081,6 +2109,152 @@ export default function FechamentoPonto() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ===== NÃO IDENTIFICADOS VIEW ===== */}
+        {viewMode === "nao_identificados" && (
+          <Card>
+            <CardHeader className="pb-3 bg-purple-50 rounded-t-lg">
+              <CardTitle className="text-base flex items-center gap-2 text-purple-800">
+                <UserCheck className="h-5 w-5" />
+                Funcionários Não Identificados — {formatMesAno(mesAno)}
+              </CardTitle>
+              <p className="text-xs text-purple-600 mt-1">
+                Esses nomes foram encontrados nos arquivos DIXI mas não correspondem a nenhum colaborador cadastrado.
+                Vincule cada nome ao colaborador correto para importar os registros de ponto.
+              </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {unmatchedData.isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+              ) : !unmatchedData.data || unmatchedData.data.totalNomes === 0 ? (
+                <div className="text-center py-8">
+                  <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
+                  <p className="font-medium">Todos os funcionários foram identificados!</p>
+                  <p className="text-sm text-muted-foreground mt-1">Nenhum registro pendente de vinculação.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm bg-purple-50 p-3 rounded-lg">
+                    <AlertCircle className="h-4 w-4 text-purple-600" />
+                    <span><strong>{unmatchedData.data.totalNomes}</strong> nome(s) não identificado(s) com <strong>{unmatchedData.data.pendentes}</strong> registro(s) pendentes</span>
+                  </div>
+                  {unmatchedData.data.grouped.filter((g: any) => g.status === 'pendente').map((group: any) => (
+                    <div key={group.dixiName} className="border rounded-lg overflow-hidden">
+                      <div className="bg-gray-50 p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-full bg-purple-100 flex items-center justify-center">
+                            <UserCheck className="h-4 w-4 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm">{group.dixiName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {group.obraNome && <span>Relógio: {group.obraNome}</span>}
+                              {group.dixiId && <span className="ml-2">• ID DIXI: {group.dixiId}</span>}
+                              <span className="ml-2">• {group.totalDias} dia(s) de registro</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {linkingName === group.dixiName ? (
+                            <Button variant="ghost" size="sm" onClick={() => { setLinkingName(null); setLinkSearchTerm(""); setLinkSelectedEmpId(null); }}>
+                              <XCircle className="h-4 w-4 mr-1" /> Cancelar
+                            </Button>
+                          ) : (
+                            <>
+                              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => { setLinkingName(group.dixiName); setLinkSearchTerm(""); setLinkSelectedEmpId(null); }}>
+                                <UserCheck className="h-4 w-4 mr-1" /> Vincular
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => {
+                                if (confirm(`Descartar todos os ${group.totalDias} registros de "${group.dixiName}"?`)) {
+                                  discardUnmatchedMut.mutate({ companyId, dixiName: group.dixiName, mesReferencia: mesAno });
+                                }
+                              }}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {linkingName === group.dixiName && (
+                        <div className="p-3 bg-purple-50/50 border-t space-y-3">
+                          <p className="text-sm font-medium text-purple-800">Selecione o colaborador correspondente a "{group.dixiName}":</p>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Buscar por nome ou CPF..." value={linkSearchTerm}
+                              onChange={e => setLinkSearchTerm(e.target.value)}
+                              className="pl-9" />
+                          </div>
+                          <div className="max-h-48 overflow-y-auto border rounded-lg bg-white">
+                            {(employeesList.data || []).filter((emp: any) => {
+                              if (!linkSearchTerm) return true;
+                              const t = linkSearchTerm.toLowerCase();
+                              return emp.nomeCompleto?.toLowerCase().includes(t) || emp.cpf?.includes(t);
+                            }).slice(0, 20).map((emp: any) => (
+                              <div key={emp.id}
+                                className={`p-2 flex items-center justify-between cursor-pointer hover:bg-purple-50 border-b last:border-0 ${linkSelectedEmpId === emp.id ? 'bg-purple-100 ring-1 ring-purple-400' : ''}`}
+                                onClick={() => setLinkSelectedEmpId(emp.id)}>
+                                <div>
+                                  <p className="text-sm font-medium">{emp.nomeCompleto}</p>
+                                  <p className="text-xs text-muted-foreground">{formatCPF(emp.cpf)} • {emp.funcao || 'Sem função'}</p>
+                                </div>
+                                {linkSelectedEmpId === emp.id && <CheckCircle className="h-4 w-4 text-purple-600" />}
+                              </div>
+                            ))}
+                            {(employeesList.data || []).filter((emp: any) => {
+                              if (!linkSearchTerm) return true;
+                              const t = linkSearchTerm.toLowerCase();
+                              return emp.nomeCompleto?.toLowerCase().includes(t) || emp.cpf?.includes(t);
+                            }).length === 0 && (
+                              <div className="p-4 text-center text-sm text-muted-foreground">Nenhum colaborador encontrado</div>
+                            )}
+                          </div>
+                          {linkSelectedEmpId && (
+                            <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" onClick={() => {
+                              linkUnmatchedMut.mutate({ companyId, dixiName: group.dixiName, employeeId: linkSelectedEmpId, mesReferencia: mesAno });
+                            }} disabled={linkUnmatchedMut.isPending}>
+                              {linkUnmatchedMut.isPending ? "Vinculando..." : `Vincular ${group.totalDias} registro(s) ao colaborador selecionado`}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {/* Preview dos registros */}
+                      <div className="px-3 pb-2">
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-muted-foreground hover:text-foreground py-1">Ver {group.totalDias} registro(s)</summary>
+                          <div className="mt-1 overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead><tr className="border-b bg-gray-50">
+                                <th className="p-1 text-left">Data</th>
+                                <th className="p-1 text-center">Entrada</th>
+                                <th className="p-1 text-center">Saída Int.</th>
+                                <th className="p-1 text-center">Retorno</th>
+                                <th className="p-1 text-center">Saída</th>
+                              </tr></thead>
+                              <tbody>
+                                {group.records.slice(0, 10).map((r: any, i: number) => (
+                                  <tr key={i} className="border-b">
+                                    <td className="p-1">{r.data ? new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', weekday: 'short' }) : '-'}</td>
+                                    <td className="p-1 text-center font-mono">{r.entrada1 || '-'}</td>
+                                    <td className="p-1 text-center font-mono">{r.saida1 || '-'}</td>
+                                    <td className="p-1 text-center font-mono">{r.entrada2 || '-'}</td>
+                                    <td className="p-1 text-center font-mono">{r.saida2 || '-'}</td>
+                                  </tr>
+                                ))}
+                                {group.totalDias > 10 && (
+                                  <tr><td colSpan={5} className="p-1 text-center text-muted-foreground">... e mais {group.totalDias - 10} registros</td></tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </details>
+                      </div>
                     </div>
                   ))}
                 </div>

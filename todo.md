@@ -1818,3 +1818,15 @@
 - [x] Aplicado em aba Conflitos e visão Detalhe do Colaborador
 - [x] O sistema apenas alerta e sugere — o usuário decide e ajusta via Lançar Manual
 - [x] Registrada Rev. 68 no banco + shared/version.ts + 7 testes passando
+
+## Rev. 69 - Funcionários Não Identificados como Inconsistência Tratável
+- [x] Importar registros de funcionários não encontrados como pendentes (nova tabela unmatched_dixi_records)
+- [x] Armazenar nome original do relógio, batidas brutas, entrada/saída, obra e competência
+- [x] Nova aba "Não Identificados" no Fechamento de Ponto com badge de contagem
+- [x] Interface de vinculação: busca colaboradores do cadastro e vincula ao nome do relógio
+- [x] Ao vincular, reprocessa automaticamente (calcula horas, extras, atrasos, inconsistências)
+- [x] Opção de descartar registros inválidos com registro de quem descartou
+- [x] Agrupamento por nome com contagem de registros e datas
+- [x] Toast de importação reposicionado para canto inferior esquerdo
+- [x] 3 endpoints backend: listUnmatched, linkUnmatched, discardUnmatched
+- [x] Registrada Rev. 69 no banco + shared/version.ts + 13 testes passando

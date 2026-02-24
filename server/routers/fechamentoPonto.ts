@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -330,12 +330,44 @@ function processRecords(
   const timeRecordsToInsert: any[] = [];
   const inconsistencies: any[] = [];
   const unmatchedNames: string[] = [];
+  const unmatchedRecordsToInsert: any[] = [];
 
   for (const [normName, days] of Object.entries(grouped)) {
     const emp = nameToEmployee[normName];
     if (!emp) {
       const originalName = records.find(r => normalizeNameForMatch(r.nome) === normName)?.nome || normName;
+      const dixiId = records.find(r => normalizeNameForMatch(r.nome) === normName)?.dixiId || null;
       unmatchedNames.push(originalName);
+      
+      // Salvar registros não identificados para vinculação posterior
+      for (const [data, horas] of Object.entries(days)) {
+        horas.sort();
+        const filtered: string[] = [];
+        for (const h of horas) {
+          if (filtered.length === 0) { filtered.push(h); continue; }
+          const lastH = filtered[filtered.length - 1];
+          const [lh, lm] = lastH.split(":").map(Number);
+          const [ch, cm] = h.split(":").map(Number);
+          const diff = Math.abs((ch * 60 + cm) - (lh * 60 + lm));
+          if (diff >= 2) filtered.push(h);
+        }
+        unmatchedRecordsToInsert.push({
+          companyId,
+          obraId,
+          mesReferencia: dateToMesRef(data),
+          dixiName: originalName,
+          dixiId: dixiId,
+          data,
+          entrada1: filtered[0] ? filtered[0].substring(0, 5) : null,
+          saida1: filtered[1] ? filtered[1].substring(0, 5) : null,
+          entrada2: filtered[2] ? filtered[2].substring(0, 5) : null,
+          saida2: filtered[3] ? filtered[3].substring(0, 5) : null,
+          entrada3: filtered[4] ? filtered[4].substring(0, 5) : null,
+          saida3: filtered[5] ? filtered[5].substring(0, 5) : null,
+          batidasBrutas: JSON.stringify(filtered),
+          status: 'pendente' as const,
+        });
+      }
       continue;
     }
 
@@ -490,7 +522,7 @@ function processRecords(
     }
   }
 
-  return { timeRecordsToInsert, inconsistencies, unmatchedNames };
+  return { timeRecordsToInsert, inconsistencies, unmatchedNames, unmatchedRecordsToInsert };
 }
 
 // ============================================================
@@ -612,9 +644,30 @@ export const fechamentoPontoRouter = router({
         );
 
         // Process records - mesReferencia is auto-detected from each record's date
-        const { timeRecordsToInsert, inconsistencies, unmatchedNames } = processRecords(
+        const { timeRecordsToInsert, inconsistencies, unmatchedNames, unmatchedRecordsToInsert } = processRecords(
           records, empList as any, obraId, input.companyId, criteria, activeAvisos
         );
+
+        // Salvar registros não identificados para vinculação posterior
+        if (unmatchedRecordsToInsert.length > 0) {
+          // Limpar registros não identificados anteriores desta obra/mês
+          const unmatchedMeses = Array.from(new Set(unmatchedRecordsToInsert.map((r: any) => r.mesReferencia)));
+          for (const mesRef of unmatchedMeses) {
+            await db.delete(unmatchedDixiRecords).where(
+              and(
+                eq(unmatchedDixiRecords.companyId, input.companyId),
+                eq(unmatchedDixiRecords.mesReferencia, mesRef as string),
+                obraId ? eq(unmatchedDixiRecords.obraId, obraId) : sql`1=1`,
+              )
+            );
+          }
+          // Inserir novos registros não identificados em lotes
+          const batchSize = 50;
+          for (let i = 0; i < unmatchedRecordsToInsert.length; i += batchSize) {
+            const batch = unmatchedRecordsToInsert.slice(i, i + batchSize);
+            await db.insert(unmatchedDixiRecords).values(batch);
+          }
+        }
 
         // Group records by mesReferencia (auto-detected)
         const recordsByMes: Record<string, any[]> = {};
@@ -2124,5 +2177,271 @@ export const fechamentoPontoRouter = router({
           ? `${resolved} conflito(s) resolvido(s) com rateio proporcional. ${skippedOverlaps.length} conflito(s) com SOBREPOSIÇÃO DE HORÁRIOS precisam ser resolvidos manualmente (o funcionário não pode estar em 2 obras ao mesmo tempo).`
           : `${resolved} conflito(s) resolvido(s) com rateio proporcional.`
       };
+    }),
+
+  // ============================================================
+  // REGISTROS NÃO IDENTIFICADOS (UNMATCHED)
+  // ============================================================
+  getUnmatchedRecords: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      const conditions = [eq(unmatchedDixiRecords.companyId, input.companyId)];
+      if (input.mesReferencia) {
+        conditions.push(eq(unmatchedDixiRecords.mesReferencia, input.mesReferencia));
+      }
+      
+      const records = await db.select({
+        id: unmatchedDixiRecords.id,
+        obraId: unmatchedDixiRecords.obraId,
+        mesReferencia: unmatchedDixiRecords.mesReferencia,
+        dixiName: unmatchedDixiRecords.dixiName,
+        dixiId: unmatchedDixiRecords.dixiId,
+        data: unmatchedDixiRecords.data,
+        entrada1: unmatchedDixiRecords.entrada1,
+        saida1: unmatchedDixiRecords.saida1,
+        entrada2: unmatchedDixiRecords.entrada2,
+        saida2: unmatchedDixiRecords.saida2,
+        entrada3: unmatchedDixiRecords.entrada3,
+        saida3: unmatchedDixiRecords.saida3,
+        batidasBrutas: unmatchedDixiRecords.batidasBrutas,
+        status: unmatchedDixiRecords.status,
+        linkedEmployeeId: unmatchedDixiRecords.linkedEmployeeId,
+        obraNome: obras.nome,
+      }).from(unmatchedDixiRecords)
+        .leftJoin(obras, eq(unmatchedDixiRecords.obraId, obras.id))
+        .where(and(...conditions))
+        .orderBy(unmatchedDixiRecords.dixiName, unmatchedDixiRecords.data);
+
+      // Agrupar por nome DIXI
+      const grouped: Record<string, {
+        dixiName: string;
+        dixiId: string | null;
+        obraNome: string | null;
+        obraId: number | null;
+        totalDias: number;
+        status: string;
+        records: typeof records;
+      }> = {};
+      for (const r of records) {
+        const key = r.dixiName;
+        if (!grouped[key]) {
+          grouped[key] = {
+            dixiName: r.dixiName,
+            dixiId: r.dixiId,
+            obraNome: r.obraNome,
+            obraId: r.obraId,
+            totalDias: 0,
+            status: r.status,
+            records: [],
+          };
+        }
+        grouped[key].totalDias++;
+        grouped[key].records.push(r);
+      }
+
+      return {
+        total: records.length,
+        totalNomes: Object.keys(grouped).length,
+        pendentes: records.filter(r => r.status === 'pendente').length,
+        grouped: Object.values(grouped),
+      };
+    }),
+
+  linkUnmatchedToEmployee: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dixiName: z.string(),
+      employeeId: z.number(),
+      mesReferencia: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      
+      // Buscar todos os registros pendentes deste nome
+      const conditions = [
+        eq(unmatchedDixiRecords.companyId, input.companyId),
+        eq(unmatchedDixiRecords.dixiName, input.dixiName),
+        eq(unmatchedDixiRecords.status, 'pendente'),
+      ];
+      if (input.mesReferencia) {
+        conditions.push(eq(unmatchedDixiRecords.mesReferencia, input.mesReferencia));
+      }
+      
+      const pendingRecords = await db.select().from(unmatchedDixiRecords)
+        .where(and(...conditions));
+      
+      if (pendingRecords.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Nenhum registro pendente encontrado para este nome.' });
+      }
+
+      // Buscar dados do funcionário para calcular horas
+      const [emp] = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        jornadaTrabalho: employees.jornadaTrabalho,
+      }).from(employees).where(eq(employees.id, input.employeeId));
+      
+      if (!emp) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Funcionário não encontrado.' });
+      }
+
+      // Buscar critérios do sistema
+      const criteriaRows = await db.select().from(systemCriteria)
+        .where(eq(systemCriteria.companyId, input.companyId));
+      const criteria: CriteriaMap = { ...DEFAULT_CRITERIA };
+      for (const c of criteriaRows) {
+        (criteria as any)[c.chave] = parseFloat(String(c.valor));
+      }
+
+      // Converter registros não identificados em timeRecords reais
+      const newTimeRecords: any[] = [];
+      const newInconsistencies: any[] = [];
+      
+      for (const rec of pendingRecords) {
+        const entrada1 = rec.entrada1 || "";
+        const saida1 = rec.saida1 || "";
+        const entrada2 = rec.entrada2 || "";
+        const saida2 = rec.saida2 || "";
+        const entrada3 = rec.entrada3 || "";
+        const saida3 = rec.saida3 || "";
+        
+        let totalMinutes = 0;
+        if (entrada1 && saida1) totalMinutes += diffMinutes(entrada1, saida1);
+        if (entrada2 && saida2) totalMinutes += diffMinutes(entrada2, saida2);
+        if (entrada3 && saida3) totalMinutes += diffMinutes(entrada3, saida3);
+
+        let expectedMinutes = 480;
+        if (emp.jornadaTrabalho) {
+          try {
+            const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            const dayOfWeek = new Date(rec.data + "T12:00:00").getDay();
+            const dayMap: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
+            const dayKey = dayMap[dayOfWeek];
+            if (jornada[dayKey]?.entrada && jornada[dayKey]?.saida) {
+              const totalJornada = diffMinutes(jornada[dayKey].entrada, jornada[dayKey].saida);
+              const intervalo = jornada[dayKey].intervalo ? parseFloat(jornada[dayKey].intervalo.replace(":", ".")) * 60 : 60;
+              expectedMinutes = totalJornada - (typeof intervalo === "number" ? intervalo : 60);
+            }
+          } catch (e) { /* use default */ }
+        }
+
+        const diffBruto = totalMinutes - expectedMinutes;
+        let horasExtras = 0;
+        let atrasos = 0;
+        let faltas = "0";
+        
+        if (diffBruto > 0) {
+          horasExtras = diffBruto > criteria.pontoToleranciaSaida ? diffBruto : 0;
+        } else if (diffBruto < 0 && totalMinutes > 0) {
+          const atrasoReal = Math.abs(diffBruto);
+          if (atrasoReal >= criteria.pontoFaltaAposAtraso) {
+            faltas = "1";
+          } else if (atrasoReal > criteria.pontoToleranciaAtraso) {
+            atrasos = atrasoReal;
+          }
+        }
+
+        const batidas = rec.batidasBrutas ? (typeof rec.batidasBrutas === 'string' ? JSON.parse(rec.batidasBrutas) : rec.batidasBrutas) : [];
+        const numBatidas = Array.isArray(batidas) ? batidas.length : 0;
+
+        newTimeRecords.push({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          obraId: rec.obraId,
+          mesReferencia: rec.mesReferencia,
+          data: rec.data,
+          entrada1, saida1, entrada2, saida2, entrada3, saida3,
+          horasTrabalhadas: minutesToHHMM(totalMinutes),
+          horasExtras: horasExtras > 0 ? minutesToHHMM(horasExtras) : "0:00",
+          horasNoturnas: "0:00",
+          faltas,
+          atrasos: atrasos > 0 ? minutesToHHMM(atrasos) : "0:00",
+          fonte: "dixi",
+          ajusteManual: 0,
+          batidasBrutas: JSON.stringify(batidas),
+        });
+
+        if (numBatidas % 2 !== 0) {
+          newInconsistencies.push({
+            companyId: input.companyId, employeeId: input.employeeId, obraId: rec.obraId,
+            mesReferencia: rec.mesReferencia, data: rec.data,
+            tipoInconsistencia: "batida_impar" as const,
+            descricao: `${numBatidas} batida(s) registrada(s) - número ímpar indica falta de entrada ou saída`,
+            status: "pendente" as const,
+          });
+        } else if (numBatidas < 4 && numBatidas > 0) {
+          newInconsistencies.push({
+            companyId: input.companyId, employeeId: input.employeeId, obraId: rec.obraId,
+            mesReferencia: rec.mesReferencia, data: rec.data,
+            tipoInconsistencia: "falta_batida" as const,
+            descricao: `Apenas ${numBatidas} batida(s) - esperado 4 (entrada, saída intervalo, retorno, saída)`,
+            status: "pendente" as const,
+          });
+        }
+      }
+
+      // Inserir registros de ponto
+      if (newTimeRecords.length > 0) {
+        const batchSize = 50;
+        for (let i = 0; i < newTimeRecords.length; i += batchSize) {
+          await db.insert(timeRecords).values(newTimeRecords.slice(i, i + batchSize));
+        }
+      }
+
+      // Inserir inconsistências
+      if (newInconsistencies.length > 0) {
+        const batchSize = 50;
+        for (let i = 0; i < newInconsistencies.length; i += batchSize) {
+          await db.insert(timeInconsistencies).values(newInconsistencies.slice(i, i + batchSize));
+        }
+      }
+
+      // Marcar registros como vinculados
+      await db.update(unmatchedDixiRecords).set({
+        status: 'vinculado',
+        linkedEmployeeId: input.employeeId,
+        resolvidoPor: ctx.user?.name || 'sistema',
+        resolvidoEm: new Date().toISOString(),
+      }).where(and(...conditions));
+
+      return {
+        success: true,
+        recordsLinked: pendingRecords.length,
+        employeeName: emp.nomeCompleto,
+        inconsistenciesCreated: newInconsistencies.length,
+      };
+    }),
+
+  discardUnmatched: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dixiName: z.string(),
+      mesReferencia: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      const conditions = [
+        eq(unmatchedDixiRecords.companyId, input.companyId),
+        eq(unmatchedDixiRecords.dixiName, input.dixiName),
+        eq(unmatchedDixiRecords.status, 'pendente'),
+      ];
+      if (input.mesReferencia) {
+        conditions.push(eq(unmatchedDixiRecords.mesReferencia, input.mesReferencia));
+      }
+      
+      const result = await db.update(unmatchedDixiRecords).set({
+        status: 'descartado',
+        resolvidoPor: ctx.user?.name || 'sistema',
+        resolvidoEm: new Date().toISOString(),
+      }).where(and(...conditions));
+
+      return { success: true, discarded: (result as any)[0]?.affectedRows || 0 };
     }),
 });
