@@ -408,22 +408,33 @@ function processRecords(
       if (entrada2 && saida2) totalMinutes += diffMinutes(entrada2, saida2);
       if (entrada3 && saida3) totalMinutes += diffMinutes(entrada3, saida3);
 
-      let expectedMinutes = 480;
+      let expectedMinutes = 480; // default 8h se não tiver jornada definida
+      let isDiaFolgaJornada = false; // true se o dia NÃO tem jornada (sáb/dom sem escala = tudo é HE)
       if (emp.jornadaTrabalho) {
         try {
           const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
           const dayOfWeek = new Date(data + "T12:00:00").getDay();
           const dayMap: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
           const dayKey = dayMap[dayOfWeek];
-          if (jornada[dayKey]) {
+          if (jornada[dayKey] && jornada[dayKey].entrada && jornada[dayKey].saida) {
             const j = jornada[dayKey];
-            if (j.entrada && j.saida) {
-              const totalJornada = diffMinutes(j.entrada, j.saida);
-              const intervalo = j.intervalo ? parseFloat(j.intervalo.replace(":", ".")) * 60 : 60;
-              expectedMinutes = totalJornada - (typeof intervalo === "number" ? intervalo : 60);
+            const totalJornada = diffMinutes(j.entrada, j.saida);
+            // Intervalo no formato "HH:MM" -> converter para minutos
+            let intervaloMin = 60; // default 1h
+            if (j.intervalo) {
+              const parts = j.intervalo.split(":");
+              if (parts.length === 2) {
+                intervaloMin = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+              }
             }
+            expectedMinutes = totalJornada - intervaloMin;
+          } else {
+            // Dia sem jornada definida (ex: sáb/dom sem escala)
+            // expectedMinutes = 0 → qualquer hora trabalhada = hora extra
+            expectedMinutes = 0;
+            isDiaFolgaJornada = true;
           }
-        } catch (e) { /* use default */ }
+        } catch (e) { /* use default 480 */ }
       }
 
       // ---- APLICAR CRITÉRIOS DO SISTEMA ----
@@ -466,8 +477,12 @@ function processRecords(
         // (tolerância maior - o funcionário pode ter saído mais cedo legalmente)
       }
 
-      if (diffBruto > 0) {
-        // Trabalhou mais que o esperado
+      if (isDiaFolgaJornada && totalMinutes > 0) {
+        // DIA DE FOLGA (sáb/dom sem escala): TUDO é hora extra
+        horasExtras = totalMinutes;
+        // Não gerar atraso nem falta em dia de folga
+      } else if (diffBruto > 0) {
+        // Trabalhou mais que o esperado em dia normal
         horasExtras = diffBruto > tolSaida ? diffBruto : 0;
       } else if (diffBruto < 0 && totalMinutes > 0) {
         const atrasoReal = Math.abs(diffBruto);
@@ -481,6 +496,11 @@ function processRecords(
         }
         // Dentro da tolerância: atraso = 0
       }
+      
+      // Classificar tipo de HE: sábado=50%, domingo/feriado=100%, dia útil=50%
+      const dayOfWeekForHE = new Date(data + "T12:00:00").getDay();
+      // 0=dom, 6=sab
+      const tipoHE = dayOfWeekForHE === 0 ? '100' : (dayOfWeekForHE === 6 ? '50' : '50');
       
       // Calcular horas noturnas
       let nightMinutes = 0;
@@ -2334,6 +2354,7 @@ export const fechamentoPontoRouter = router({
         if (entrada3 && saida3) totalMinutes += diffMinutes(entrada3, saida3);
 
         let expectedMinutes = 480;
+        let isDiaFolgaJornada2 = false;
         if (emp.jornadaTrabalho) {
           try {
             const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
@@ -2342,8 +2363,15 @@ export const fechamentoPontoRouter = router({
             const dayKey = dayMap[dayOfWeek];
             if (jornada[dayKey]?.entrada && jornada[dayKey]?.saida) {
               const totalJornada = diffMinutes(jornada[dayKey].entrada, jornada[dayKey].saida);
-              const intervalo = jornada[dayKey].intervalo ? parseFloat(jornada[dayKey].intervalo.replace(":", ".")) * 60 : 60;
-              expectedMinutes = totalJornada - (typeof intervalo === "number" ? intervalo : 60);
+              let intervaloMin = 60;
+              if (jornada[dayKey].intervalo) {
+                const parts = jornada[dayKey].intervalo.split(":");
+                if (parts.length === 2) intervaloMin = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+              }
+              expectedMinutes = totalJornada - intervaloMin;
+            } else {
+              expectedMinutes = 0;
+              isDiaFolgaJornada2 = true;
             }
           } catch (e) { /* use default */ }
         }
@@ -2353,7 +2381,9 @@ export const fechamentoPontoRouter = router({
         let atrasos = 0;
         let faltas = "0";
         
-        if (diffBruto > 0) {
+        if (isDiaFolgaJornada2 && totalMinutes > 0) {
+          horasExtras = totalMinutes;
+        } else if (diffBruto > 0) {
           horasExtras = diffBruto > criteria.pontoToleranciaSaida ? diffBruto : 0;
         } else if (diffBruto < 0 && totalMinutes > 0) {
           const atrasoReal = Math.abs(diffBruto);

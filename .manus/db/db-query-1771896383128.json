@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (72, 'Jornada 44h Semanais e Cálculo de HE Robusto', 'Botão Aplicar 44h/semana no cadastro de colaboradores (Seg-Qui 07-17h, Sex 07-16h, Sáb 07-11h). Cálculo de horas semanais em tempo real no grid. Coluna Horas/dia por dia da semana. Sábado e Domingo sem jornada = toda hora trabalhada é HE automática. Separação correta HE 50% (sábado/dia útil) e HE 100% (domingo/feriado). Correção do parsing de intervalo no cálculo de expectedMinutes.', 'feature', 'Colaboradores, Fechamento de Ponto, Folha de Pagamento', 'Sistema', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (72, 'Jornada 44h Semanais e Cálculo de HE Robusto', 'Botão Aplicar 44h/semana no cadastro de colaboradores (Seg-Qui 07-17h, Sex 07-16h, Sáb 07-11h). Cálculo de horas semanais em tempo real no grid. Coluna Horas/dia por dia da semana. Sábado e Domingo sem jornada = toda hora trabalhada é HE automática. Separação correta HE 50% (sábado/dia útil) e HE 100% (domingo/feriado). Correção do parsing de intervalo no cálculo de expectedMinutes.', 'feature', 'Colaboradores, Fechamento de Ponto, Folha de Pagamento', 'Sistema', NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 104
+}

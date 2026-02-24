@@ -1867,3 +1867,13 @@
 - [x] Tipo Horista: badge amarelo na listagem
 - [x] Tipo Horista: destaque do campo Valor da Hora (amarelo) quando Horista selecionado
 - [x] Tipo Horista: label dinâmico "⚡ HORISTA" no campo Valor da Hora
+
+## Rev. 72 — Jornada de Trabalho Padrão e Cálculo de Horas Extras
+
+- [x] Critério padrão de jornada 44h semanais (Seg-Sex 07:00-17:00 + Sáb 07:00-11:00)
+- [x] Grid dia-a-dia no cadastro do colaborador (Padrão, Seg, Ter, Qua, Qui, Sex, Sáb, Dom)
+- [x] Entrada/Intervalo/Saída por dia da semana
+- [x] Sábado e Domingo = hora extra automática quando trabalhado
+- [x] Lógica robusta de cálculo de HE baseada na jornada contratada vs ponto real
+- [x] Integração do cálculo de HE na folha de pagamento
+- [x] Configurações globais de percentuais de HE (50%, 100%, noturno)

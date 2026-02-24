@@ -55,11 +55,22 @@ function formatJornada(val: unknown): string {
   try {
     const parsed = JSON.parse(s);
     if (typeof parsed === "object" && parsed !== null) {
-      // Agrupar dias com mesma jornada
+      // Calcular total de horas semanais
+      let totalMin = 0;
       const groups: { dias: string[]; entrada: string; intervalo: string; saida: string }[] = [];
       for (const d of ["seg","ter","qua","qui","sex","sab","dom"]) {
         if (!parsed[d]) continue;
         const { entrada, intervalo, saida } = parsed[d];
+        if (entrada && saida) {
+          const [eh, em2] = entrada.split(":").map(Number);
+          const [sh, sm] = saida.split(":").map(Number);
+          let mins = (sh * 60 + sm) - (eh * 60 + em2);
+          if (intervalo) {
+            const [ih, im] = intervalo.split(":").map(Number);
+            mins -= (ih * 60 + im);
+          }
+          if (mins > 0) totalMin += mins;
+        }
         const existing = groups.find(g => g.entrada === entrada && g.intervalo === intervalo && g.saida === saida);
         if (existing) {
           existing.dias.push(DIAS_LABELS[d] || d);
@@ -68,13 +79,17 @@ function formatJornada(val: unknown): string {
         }
       }
       if (groups.length === 0) return "-";
-      return groups.map(g => {
+      const totalH = Math.floor(totalMin / 60);
+      const totalM = totalMin % 60;
+      const totalStr = `${totalH}h${totalM > 0 ? String(totalM).padStart(2, '0') : ''}/sem`;
+      const detail = groups.map(g => {
         const diasStr = g.dias.length > 2
           ? `${g.dias[0]} a ${g.dias[g.dias.length - 1]}`
           : g.dias.join(", ");
         const intLabel = g.intervalo === "00:30" ? "30min" : g.intervalo === "01:00" ? "1h" : g.intervalo === "01:30" ? "1h30" : g.intervalo === "02:00" ? "2h" : g.intervalo || "";
-        return `${diasStr}: ${g.entrada} - ${g.saida}${intLabel ? " (int. " + intLabel + ")" : ""}`;
+        return `${diasStr}: ${g.entrada}-${g.saida}${intLabel ? " (" + intLabel + ")" : ""}`;
       }).join(" | ");
+      return `${totalStr} — ${detail}`;
     }
   } catch { /* not JSON */ }
   return s;
@@ -1158,7 +1173,91 @@ export default function Colaboradores() {
               </div>
               {/* Jornada de Trabalho - Dia a Dia */}
               <div className="mt-6">
-                <h4 className="text-sm font-semibold text-primary mb-3">Jornada de Trabalho</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-primary">Jornada de Trabalho</h4>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      // Calcular total de horas semanais
+                      const DIAS = ["seg","ter","qua","qui","sex","sab","dom"];
+                      let totalMin = 0;
+                      DIAS.forEach(d => {
+                        const ent = form[`jornada_${d}_entrada`];
+                        const sai = form[`jornada_${d}_saida`];
+                        const intv = form[`jornada_${d}_intervalo`];
+                        if (ent && sai && ent !== "none" && sai !== "none") {
+                          const [eh, em2] = ent.split(":").map(Number);
+                          const [sh, sm] = sai.split(":").map(Number);
+                          let mins = (sh * 60 + sm) - (eh * 60 + em2);
+                          if (intv && intv !== "none") {
+                            const [ih, im] = intv.split(":").map(Number);
+                            mins -= (ih * 60 + im);
+                          }
+                          if (mins > 0) totalMin += mins;
+                        }
+                      });
+                      const horas = Math.floor(totalMin / 60);
+                      const minutos = totalMin % 60;
+                      const totalStr = `${horas}h${minutos > 0 ? String(minutos).padStart(2, '0') : ''}`;
+                      const isOk = totalMin >= 2640 && totalMin <= 2640; // 44h = 2640min
+                      const isClose = totalMin >= 2580 && totalMin <= 2700; // ~43h-45h
+                      return totalMin > 0 ? (
+                        <span className={`text-xs font-bold px-2 py-1 rounded ${totalMin === 2640 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : isClose ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                          {totalStr}/semana {totalMin === 2640 ? '✅' : ''}
+                        </span>
+                      ) : null;
+                    })()}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                      onClick={() => {
+                        // Jornada padrão CLT 44h semanais (Opção C):
+                        // Seg-Qui: 07:00 - 17:00 (1h intervalo) = 9h/dia × 4 = 36h
+                        // Sex: 07:00 - 16:00 (1h intervalo) = 8h/dia
+                        // Sáb: Folga (qualquer hora trabalhada = HE 50%)
+                        // Dom: Folga (qualquer hora trabalhada = HE 100%)
+                        // Total: 36 + 8 = 44h semanais
+                        setForm(prev => ({
+                          ...prev,
+                          jornada_seg_entrada: "07:00", jornada_seg_intervalo: "01:00", jornada_seg_saida: "17:00",
+                          jornada_ter_entrada: "07:00", jornada_ter_intervalo: "01:00", jornada_ter_saida: "17:00",
+                          jornada_qua_entrada: "07:00", jornada_qua_intervalo: "01:00", jornada_qua_saida: "17:00",
+                          jornada_qui_entrada: "07:00", jornada_qui_intervalo: "01:00", jornada_qui_saida: "17:00",
+                          jornada_sex_entrada: "07:00", jornada_sex_intervalo: "01:00", jornada_sex_saida: "16:00",
+                          jornada_sab_entrada: "", jornada_sab_intervalo: "", jornada_sab_saida: "",
+                          jornada_dom_entrada: "", jornada_dom_intervalo: "", jornada_dom_saida: "",
+                          jornada_padrao_entrada: "", jornada_padrao_intervalo: "", jornada_padrao_saida: "",
+                        }));
+                        toast.success("Jornada 44h semanais aplicada! Seg-Qui 07-17h (9h), Sex 07-16h (8h), Sáb/Dom = Folga (HE)");
+                      }}
+                    >
+                      ⏰ Aplicar 44h/semana
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={() => {
+                        setForm(prev => {
+                          const updated = { ...prev };
+                          ["seg","ter","qua","qui","sex","sab","dom"].forEach(d => {
+                            updated[`jornada_${d}_entrada`] = "";
+                            updated[`jornada_${d}_intervalo`] = "";
+                            updated[`jornada_${d}_saida`] = "";
+                          });
+                          updated.jornada_padrao_entrada = "";
+                          updated.jornada_padrao_intervalo = "";
+                          updated.jornada_padrao_saida = "";
+                          return updated;
+                        });
+                      }}
+                    >
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs border border-border rounded-lg">
                     <thead>
@@ -1167,6 +1266,7 @@ export default function Colaboradores() {
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Entrada</th>
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Intervalo</th>
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Saída</th>
+                        <th className="px-3 py-2 text-center font-medium text-muted-foreground w-16">Horas</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1224,6 +1324,7 @@ export default function Colaboradores() {
                             </SelectContent>
                           </Select>
                         </td>
+                        <td className="px-1 py-1 text-center text-xs text-muted-foreground">-</td>
                       </tr>
                       {/* Dias individuais */}
                       {[
@@ -1234,9 +1335,29 @@ export default function Colaboradores() {
                         { key: "sex", label: "Sexta" },
                         { key: "sab", label: "Sábado" },
                         { key: "dom", label: "Domingo" },
-                      ].map(dia => (
-                        <tr key={dia.key} className="border-t border-border">
-                          <td className="px-3 py-1.5 font-medium text-foreground">{dia.label}</td>
+                      ].map(dia => {
+                        const ent = form[`jornada_${dia.key}_entrada`];
+                        const sai = form[`jornada_${dia.key}_saida`];
+                        const intv = form[`jornada_${dia.key}_intervalo`];
+                        let horasDia = "";
+                        if (ent && sai && ent !== "none" && sai !== "none") {
+                          const [eh, em2] = ent.split(":").map(Number);
+                          const [sh, sm] = sai.split(":").map(Number);
+                          let mins = (sh * 60 + sm) - (eh * 60 + em2);
+                          if (intv && intv !== "none") {
+                            const [ih, im] = intv.split(":").map(Number);
+                            mins -= (ih * 60 + im);
+                          }
+                          if (mins > 0) horasDia = `${Math.floor(mins / 60)}h${(mins % 60) > 0 ? String(mins % 60).padStart(2, '0') : ''}`;
+                        }
+                        const isFolga = !ent || ent === "none" || !sai || sai === "none";
+                        const isWeekend = dia.key === "sab" || dia.key === "dom";
+                        return (
+                        <tr key={dia.key} className={`border-t border-border ${isWeekend && isFolga ? 'bg-orange-50/50 dark:bg-orange-950/10' : isWeekend && !isFolga ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}`}>
+                          <td className="px-3 py-1.5 font-medium text-foreground">
+                            {dia.label}
+                            {isWeekend && isFolga && <span className="ml-1 text-[10px] text-orange-500 font-bold">HE</span>}
+                          </td>
                           <td className="px-1 py-1">
                             <Select value={form[`jornada_${dia.key}_entrada`] || "none"} onValueChange={v => set(`jornada_${dia.key}_entrada`, v === "none" ? "" : v)}>
                               <SelectTrigger className="bg-input h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -1267,8 +1388,15 @@ export default function Colaboradores() {
                               </SelectContent>
                             </Select>
                           </td>
+                          <td className="px-1 py-1 text-center">
+                            {horasDia ? (
+                              <span className={`text-xs font-semibold ${isWeekend ? 'text-orange-600 dark:text-orange-400' : 'text-foreground'}`}>{horasDia}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">{isFolga && isWeekend ? 'Folga' : '-'}</span>
+                            )}
+                          </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>

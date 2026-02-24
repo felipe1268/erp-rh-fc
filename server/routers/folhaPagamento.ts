@@ -1854,10 +1854,30 @@ export const folhaPagamentoRouter = router({
         }
       }
 
-      // Helper: determinar se uma data é domingo ou feriado
+      // Helper: determinar se uma data é domingo ou feriado (HE 100%)
+      // Sábado = HE 50% (dia útil extra), Domingo/Feriado = HE 100%
       function isDomFeriado(dateStr: string): boolean {
         const d = new Date(dateStr + 'T12:00:00Z');
-        return d.getUTCDay() === 0 || d.getUTCDay() === 6; // Sábado e Domingo = 100%
+        return d.getUTCDay() === 0; // Apenas domingo = 100%
+      }
+      
+      // Helper: verificar se é sábado (HE 50% se não tem jornada)
+      function isSabado(dateStr: string): boolean {
+        const d = new Date(dateStr + 'T12:00:00Z');
+        return d.getUTCDay() === 6;
+      }
+      
+      // Helper: verificar se o funcionário tem jornada definida para o dia
+      function temJornadaNoDia(empId: number, dateStr: string): boolean {
+        const emp = empMap.get(empId);
+        if (!emp?.jornadaTrabalho) return true; // sem jornada definida = assume que trabalha
+        try {
+          const jornada = typeof emp.jornadaTrabalho === 'string' ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+          const d = new Date(dateStr + 'T12:00:00Z');
+          const dayMap: Record<number, string> = { 0: 'dom', 1: 'seg', 2: 'ter', 3: 'qua', 4: 'qui', 5: 'sex', 6: 'sab' };
+          const dayKey = dayMap[d.getUTCDay()];
+          return !!(jornada[dayKey]?.entrada && jornada[dayKey]?.saida);
+        } catch { return true; }
       }
 
       // Converter HH:MM para horas decimais
@@ -1889,8 +1909,13 @@ export const folhaPagamentoRouter = router({
         const hn = hhmmToHours(rec.horasNoturnas);
         if (he > 0) {
           if (isDomFeriado(rec.data)) {
+            // Domingo/Feriado = HE 100%
             data.he100 += he;
+          } else if (isSabado(rec.data) && !temJornadaNoDia(rec.employeeId, rec.data)) {
+            // Sábado SEM jornada definida = HE 50% (folga trabalhada)
+            data.he50 += he;
           } else {
+            // Dia útil ou sábado COM jornada = HE 50%
             data.he50 += he;
           }
         }
