@@ -2073,3 +2073,17 @@
 - [x] Ordenar lista de colaboradores por nome em ordem alfabética por padrão (localeCompare pt-BR)
 ## Bug: Percentuais de Horas Extras não persistem
 - [x] Percentuais HE (Dias Úteis, Domingos/Feriados, Adicional Noturno) voltam ao valor padrão após salvar e recarregar — frontend usava nomes errados (hePercentual50/100/Noturno), corrigido para nomes do banco (heNormal50, he100, heNoturna) em Colaboradores.tsx e db.ts
+## Bug: Ordenação alfabética não funcionando em produção
+- [x] Mateus aparecia fora de ordem — causa raiz: caractere TAB (0x09) no início do nome, limpado no banco e sanitização automática adicionada
+## Rev. 79 — Auditoria Completa de Campos + Ordenação
+- [x] Auditoria: comparados 89 campos do schema vs 67 do validFields vs 67 do frontend
+- [x] 23 campos faltantes adicionados ao validFields (experiência, desligamento, HE feriado/interjornada, lista negra, obsAcordoHe, etc.)
+- [x] 5 campos do frontend que eram silenciosamente descartados: categoriaDesligamento, codigoInterno, dataDesligamentoEfetiva, motivoDesligamento, parentescoEmergencia
+- [x] complementoObs renomeado para descricaoComplemento (nome correto no banco)
+- [x] booleanFields corrigido: recebeComplemento e acordoHoraExtra são tinyint (boolean), não int
+- [x] Sanitização automática de nomeCompleto (remove TAB/\r/\n e espaços extras) no create e update
+- [x] Dados limpos no banco (TRIM de todos os nomes com caracteres de controle)
+- [x] 247 testes passando (21 arquivos)
+## Fix: Ordenação alfabética confirmada
+- [x] Backend já tinha orderBy(asc(nomeCompleto)) — problema era dado sujo (TAB no nome)
+- [x] Frontend mantém .sort(localeCompare) como fallback

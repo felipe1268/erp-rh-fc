@@ -1,4 +1,4 @@
-import { eq, and, like, or, desc, sql, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, like, or, desc, asc, sql, isNull, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users,
@@ -182,6 +182,10 @@ export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  // Sanitizar nomeCompleto: remover tabs, quebras de linha, espaços extras
+  if (data.nomeCompleto && typeof data.nomeCompleto === 'string') {
+    data = { ...data, nomeCompleto: data.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim() };
+  }
   // Gerar código interno automaticamente usando prefixo da empresa + auto-incremento atômico
   const companyId = data.companyId;
   
@@ -226,28 +230,50 @@ export async function createEmployee(data: InsertEmployee) {
 export async function updateEmployee(id: number, companyId: number, data: Partial<InsertEmployee>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Campos válidos da tabela employees
+  // Campos válidos da tabela employees (auditado: todos os campos editáveis do schema)
   const validFields = new Set([
+    // Dados pessoais
     "matricula", "nomeCompleto", "cpf", "rg", "orgaoEmissor", "dataNascimento",
     "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai",
     "ctps", "serieCtps", "pis", "tituloEleitor", "certificadoReservista",
     "cnh", "categoriaCnh", "validadeCnh",
+    // Endereço
     "logradouro", "numero", "complemento", "bairro", "cidade", "estado", "cep",
-    "telefone", "celular", "email", "contatoEmergencia", "telefoneEmergencia",
-    "cargo", "funcao", "setor", "dataAdmissao", "dataDemissao",
-    "salarioBase", "valorHora", "horasMensais", "tipoContrato", "jornadaTrabalho",
+    // Contato
+    "telefone", "celular", "email",
+    "contatoEmergencia", "telefoneEmergencia", "parentescoEmergencia",
+    // Profissional
+    "cargo", "funcao", "setor", "codigoInterno", "codigoContabil",
+    "dataAdmissao", "dataDemissao", "tipoContrato", "jornadaTrabalho",
+    "salarioBase", "valorHora", "horasMensais",
+    // Desligamento
+    "motivoDesligamento", "categoriaDesligamento", "dataDesligamentoEfetiva",
+    "desligadoPor", "desligadoUserId",
+    // Bancário
     "banco", "bancoNome", "agencia", "conta", "tipoConta",
     "tipoChavePix", "chavePix", "contaPix", "bancoPix",
+    // Status / Lista negra
     "status", "listaNegra", "motivoListaNegra", "dataListaNegra",
-    "obraAtualId", "fotoUrl", "observacoes", "codigoContabil",
-    "recebeComplemento", "valorComplemento", "complementoObs",
+    "listaNegraPor", "listaNegraUserId",
+    // Obra / Foto / Observações
+    "obraAtualId", "fotoUrl", "observacoes",
+    // Complemento salarial
+    "recebeComplemento", "valorComplemento", "descricaoComplemento",
+    // Horas extras
     "acordoHoraExtra", "heNormal50", "he100", "heNoturna",
+    "heFeriado", "heInterjornada", "obsAcordoHe",
+    // Experiência
+    "experienciaTipo", "experienciaInicio", "experienciaFim1", "experienciaFim2",
+    "experienciaStatus", "experienciaObs",
+    "experienciaProrrogadoEm", "experienciaProrrogadoPor",
+    "experienciaEfetivadoEm", "experienciaEfetivadoPor",
+    // Conta bancária empresa
     "contaBancariaEmpresaId",
   ]);
-  // Campos booleanos
-  const booleanFields = new Set(["listaNegra"]);
+  // Campos booleanos (tinyint no schema)
+  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra"]);
   // Campos inteiros
-  const intFields = new Set(["obraAtualId", "recebeComplemento", "acordoHoraExtra", "contaBancariaEmpresaId"]);
+  const intFields = new Set(["obraAtualId", "contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId"]);
   // Campos string de HE (são varchar no banco, não int)
   const stringFields = new Set(["heNormal50", "he100", "heNoturna"]);
   // Sanitizar: remover campos inválidos e converter tipos
@@ -267,6 +293,10 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     } else {
       sanitized[key] = value;
     }
+  }
+  // Sanitizar nomeCompleto: remover tabs, quebras de linha, espaços extras
+  if (sanitized.nomeCompleto && typeof sanitized.nomeCompleto === 'string') {
+    sanitized.nomeCompleto = sanitized.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim();
   }
   if (Object.keys(sanitized).length === 0) return;
   await db.update(employees).set(sanitized).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
@@ -304,7 +334,7 @@ export async function getEmployees(companyId: number, search?: string, status?: 
     }
     conditions.push(or(...orConditions)!);
   }
-  return db.select().from(employees).where(and(...conditions)).orderBy(employees.nomeCompleto);
+  return db.select().from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
 }
 
 export async function getEmployeeById(id: number, companyId: number) {

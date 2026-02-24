@@ -1,0 +1,32 @@
+{
+  "query": "SELECT id, SUBSTRING(nomeCompleto, 1, 50) as nome, HEX(SUBSTRING(nomeCompleto, 1, 1)) as first_char_hex FROM employees WHERE deletedAt IS NULL ORDER BY nomeCompleto ASC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, SUBSTRING(nomeCompleto, 1, 50) as nome, HEX(SUBSTRING(nomeCompleto, 1, 1)) as first_char_hex FROM employees WHERE deletedAt IS NULL ORDER BY nomeCompleto ASC LIMIT 5;",
+  "rows": [
+    {
+      "id": "420070",
+      "nome": "ACACIO LESCURA DE CAMARGO",
+      "first_char_hex": "41"
+    },
+    {
+      "id": "420165",
+      "nome": "ADRIANO PAZ FERREIRA",
+      "first_char_hex": "41"
+    },
+    {
+      "id": "420076",
+      "nome": "AGOSTINHO DIJALMA FERREIRA",
+      "first_char_hex": "41"
+    },
+    {
+      "id": "420122",
+      "nome": "ALEX ALESSANDRO MONTEIRO DA SILVA",
+      "first_char_hex": "41"
+    }
+  ],
+  "messages": [
+    "450001\t\tMATHEUS DONIZETTI ALVES RODRIGUES\t09"
+  ],
+  "stdout": "id\tnome\tfirst_char_hex\n450001\t\tMATHEUS DONIZETTI ALVES RODRIGUES\t09\n420070\tACACIO LESCURA DE CAMARGO\t41\n420165\tADRIANO PAZ FERREIRA\t41\n420076\tAGOSTINHO DIJALMA FERREIRA\t41\n420122\tALEX ALESSANDRO MONTEIRO DA SILVA\t41\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

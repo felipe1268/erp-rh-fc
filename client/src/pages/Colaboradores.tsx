@@ -1678,8 +1678,8 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       <div className="sm:col-span-2">
                         <Label className="text-xs font-medium text-amber-800">Observação</Label>
                         <Input
-                          value={form.complementoObs ?? ""}
-                          onChange={e => set("complementoObs", e.target.value)}
+                          value={form.descricaoComplemento ?? ""}
+                          onChange={e => set("descricaoComplemento", e.target.value)}
                           placeholder="Ex: Bônus de produtividade, ajuste salarial..."
                           className="bg-white mt-1 border-amber-300 focus:border-amber-500"
                         />
