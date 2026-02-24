@@ -2101,3 +2101,8 @@
 ## Controle de Revisões: Somente leitura + Registrar Rev. 75-80
 - [x] Remover botão "Nova Revisão" e botão de excluir — página somente leitura
 - [x] Inserir revisões 75 a 80 no banco com descrições detalhadas de cada atualização
+
+## Fase 29: Filtros no Controle de Revisões
+- [x] Cards de resumo (Total, Nova Funcionalidade, Correção de Bug, Melhoria, Segurança, Performance) devem funcionar como filtros clicáveis
+- [x] Ao clicar em um card, filtrar a lista de revisões mostrando apenas as do tipo selecionado
+- [x] Clicar novamente ou clicar em "Total" deve remover o filtro
