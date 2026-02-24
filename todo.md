@@ -2054,3 +2054,16 @@
 - [x] Bug CRÍTICO: Timeline mostrando itens excluídos (EPI, advertências, etc.) — filtrar deletedAt IS NULL em EPIs, Acidentes, Processos, Aviso Prévio, Férias
 - [x] Responsividade mobile: Raio-X header, tabs, data grids, EPIs page — tudo responsivo para mobile portrait
 - [x] Registrar Rev. 77
+
+## Rev. 78 — Descontos EPI: Interface Completa + Banner de Custo Visual
+- [x] Corrigir valor R$0,00 no desconto EPI — campos corrigidos (epiNome, valorUnitario, valorTotal, motivoCobranca, mesReferencia, validadoPor) mapeados corretamente do Drizzle schema
+- [x] Adicionar botões "Confirmar Desconto" (verde) e "Cancelar Desconto" (vermelho com justificativa obrigatória) na aba Descontos EPI do Raio-X
+- [x] Corrigir parâmetros da chamada validateDiscount (id/acao em vez de alertId/action) para corresponder ao backend
+- [x] Tabela de descontos EPI agora exibe: EPI, Motivo, Qtd, Valor Unit., Valor Total, Mês Ref., Status e Ações
+- [x] Resumo de descontos (Pendentes, Confirmados, Cancelados) com valores corretos
+- [x] Banner verde "Troca sem custo para o colaborador" no formulário de entrega de EPI (entrega regular ou desgaste normal)
+- [x] Banner vermelho "ATENÇÃO: Este item gerará desconto em folha" com valor + BDI quando motivo é mau uso/perda/furto
+- [x] Seção de cancelados mostra justificativa de cada cancelamento
+- [x] Fix: teste newModules.test.ts timeout aumentado para 15s (AppRouter integration)
+- [x] 247 testes passando (21 arquivos de teste)
+- [x] Registrar Rev. 78

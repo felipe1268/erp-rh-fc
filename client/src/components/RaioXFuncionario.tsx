@@ -1110,7 +1110,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         </div>
                         <p className="text-xs text-red-600">
                           Este colaborador possui {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').length} desconto(s) de EPI pendente(s) de validação pelo DP.
-                          Valor total: R$ {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}
+                          Valor total: R$ {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}
                         </p>
                       </div>
                     )}
@@ -1176,6 +1176,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   const pendentes = alerts.filter((a: any) => a.status === 'pendente');
                   const confirmados = alerts.filter((a: any) => a.status === 'confirmado');
                   const cancelados = alerts.filter((a: any) => a.status === 'cancelado');
+                  const motivoLabel = (m: string) => m === 'mau_uso' ? 'Mau Uso / Dano' : m === 'perda' ? 'Perda' : m === 'furto' ? 'Furto / Extravio' : m;
                   return (
                     <div className="space-y-4">
                       {/* Resumo */}
@@ -1183,17 +1184,17 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-amber-700">{pendentes.length}</p>
                           <p className="text-xs text-amber-600 font-medium">Pendentes</p>
-                          <p className="text-xs text-amber-500 mt-1">R$ {pendentes.reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}</p>
+                          <p className="text-xs text-amber-500 mt-1">R$ {pendentes.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}</p>
                         </div>
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-green-700">{confirmados.length}</p>
                           <p className="text-xs text-green-600 font-medium">Confirmados</p>
-                          <p className="text-xs text-green-500 mt-1">R$ {confirmados.reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}</p>
+                          <p className="text-xs text-green-500 mt-1">R$ {confirmados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}</p>
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-gray-500">{cancelados.length}</p>
                           <p className="text-xs text-gray-500 font-medium">Cancelados</p>
-                          <p className="text-xs text-gray-400 mt-1">R$ {cancelados.reduce((s: number, a: any) => s + parseFloat(a.valor || '0'), 0).toFixed(2)}</p>
+                          <p className="text-xs text-gray-400 mt-1">R$ {cancelados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}</p>
                         </div>
                       </div>
                       {/* Tabela */}
@@ -1202,32 +1203,90 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           <thead><tr className="bg-red-50 border-b">
                             <th className="p-3 text-left font-semibold text-red-900">EPI</th>
                             <th className="p-3 text-left font-semibold text-red-900">Motivo</th>
-                            <th className="p-3 text-right font-semibold text-red-900">Valor</th>
-                            <th className="p-3 text-left font-semibold text-red-900">Data</th>
+                            <th className="p-3 text-right font-semibold text-red-900">Qtd</th>
+                            <th className="p-3 text-right font-semibold text-red-900">Unit.</th>
+                            <th className="p-3 text-right font-semibold text-red-900">Total</th>
+                            <th className="p-3 text-left font-semibold text-red-900">Mês Ref.</th>
                             <th className="p-3 text-center font-semibold text-red-900">Status</th>
-                            <th className="p-3 text-left font-semibold text-red-900">Validado por</th>
-                            <th className="p-3 text-left font-semibold text-red-900">Justificativa</th>
+                            <th className="p-3 text-center font-semibold text-red-900">Ações</th>
                           </tr></thead>
                           <tbody>
                             {alerts.map((a: any) => (
                               <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.status === 'pendente' ? 'bg-amber-50/50' : ''}`}>
-                                <td className="p-3 font-medium">{a.nomeEpi || "-"}</td>
-                                <td className="p-3">{a.motivo || "-"}</td>
-                                <td className="p-3 text-right font-mono font-semibold text-red-600">R$ {parseFloat(a.valor || '0').toFixed(2)}</td>
-                                <td className="p-3">{formatDate(a.dataEntrega)}</td>
+                                <td className="p-3 font-medium text-xs">{a.epiNome || "-"}{a.ca ? ` (CA: ${a.ca})` : ''}</td>
+                                <td className="p-3 text-xs">{motivoLabel(a.motivoCobranca)}</td>
+                                <td className="p-3 text-right font-mono text-xs">{a.quantidade}</td>
+                                <td className="p-3 text-right font-mono text-xs">R$ {parseFloat(a.valorUnitario || '0').toFixed(2)}</td>
+                                <td className="p-3 text-right font-mono font-bold text-red-600">R$ {parseFloat(a.valorTotal || '0').toFixed(2)}</td>
+                                <td className="p-3 text-xs">{a.mesReferencia || "-"}</td>
                                 <td className="p-3 text-center">
                                   <Badge variant={a.status === 'pendente' ? 'secondary' : a.status === 'confirmado' ? 'destructive' : 'outline'}
                                     className={`text-xs ${a.status === 'pendente' ? 'bg-amber-100 text-amber-800' : a.status === 'confirmado' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
                                     {a.status === 'pendente' ? 'Pendente' : a.status === 'confirmado' ? 'Descontado' : 'Cancelado'}
                                   </Badge>
                                 </td>
-                                <td className="p-3 text-xs">{a.validadoPor || "-"}</td>
-                                <td className="p-3 text-xs max-w-[200px] truncate">{a.justificativa || "-"}</td>
+                                <td className="p-3 text-center">
+                                  {a.status === 'pendente' ? (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        onClick={() => {
+                                          if (confirm('Confirmar desconto de R$ ' + parseFloat(a.valorTotal || '0').toFixed(2) + ' na folha do colaborador?')) {
+                                            fetch('/api/trpc/epis.validateDiscount', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              credentials: 'include',
+                                              body: JSON.stringify({ json: { id: a.id, acao: 'confirmado' } }),
+                                            }).then(() => window.location.reload());
+                                          }
+                                        }}
+                                        className="px-2 py-1 text-xs font-semibold rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                        title="Confirmar desconto em folha"
+                                      >
+                                        Confirmar
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          const justificativa = prompt('Justificativa para cancelar o desconto:');
+                                          if (justificativa && justificativa.trim()) {
+                                            fetch('/api/trpc/epis.validateDiscount', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              credentials: 'include',
+                                              body: JSON.stringify({ json: { id: a.id, acao: 'cancelado', justificativa: justificativa.trim() } }),
+                                            }).then(() => window.location.reload());
+                                          } else if (justificativa !== null) {
+                                            alert('Justificativa obrigatória para cancelar o desconto.');
+                                          }
+                                        }}
+                                        className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                                        title="Cancelar desconto"
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">
+                                      {a.validadoPor ? `${a.validadoPor}` : '-'}
+                                      {a.dataValidacao ? ` em ${formatDate(a.dataValidacao)}` : ''}
+                                    </span>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+                      {cancelados.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-2">
+                          {cancelados.map((c: any) => (
+                            <div key={c.id} className="flex gap-2 py-1">
+                              <span className="font-medium">Cancelado:</span>
+                              <span>{c.epiNome}</span>
+                              <span className="italic">— {c.justificativa || 'Sem justificativa'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

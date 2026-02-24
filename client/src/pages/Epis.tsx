@@ -537,20 +537,39 @@ export default function Epis() {
                 </div>
               </div>
 
-              {showCharge && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-red-700 font-semibold mb-1">
-                    <AlertTriangle className="h-4 w-4" />
-                    Cobrança Automática
+              {/* Banner de custo dinâmico */}
+              {entregaForm.motivoTroca || !entregaForm.motivoTroca ? (
+                showCharge ? (
+                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 shadow-sm">
+                    <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-1">
+                      <AlertTriangle className="h-5 w-5" />
+                      ATENÇÃO: Este item gerará desconto em folha
+                    </div>
+                    <p className="text-sm text-red-600">
+                      Valor a ser descontado: <strong className="text-lg">R$ {chargeValue}</strong>
+                      <span className="text-xs ml-2">(valor + BDI {bdiPct}%)</span>
+                    </p>
+                    <p className="text-xs text-red-500 mt-1">
+                      Base legal: Art. 462, §1º da CLT — desconto por dano causado pelo empregado.
+                      O desconto será lançado automaticamente na folha do mês de referência.
+                    </p>
                   </div>
-                  <p className="text-sm text-red-600">
-                    Valor de cobrança: <strong>R$ {chargeValue}</strong>
-                  </p>
-                  <p className="text-xs text-red-500 mt-1">
-                    Base legal: Art. 462, §1º da CLT — desconto por dano causado pelo empregado
-                  </p>
-                </div>
-              )}
+                ) : (
+                  entregaForm.epiId && (
+                    <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-green-700 font-bold text-sm">
+                        <Shield className="h-5 w-5" />
+                        Troca sem custo para o colaborador
+                      </div>
+                      <p className="text-xs text-green-600 mt-1">
+                        {!entregaForm.motivoTroca || entregaForm.motivoTroca === '' 
+                          ? 'Entrega regular de EPI — sem cobrança.'
+                          : 'Troca por desgaste natural de uso — sem cobrança ao colaborador.'}
+                      </p>
+                    </div>
+                  )
+                )
+              ) : null}
 
               {/* Foto obrigatória para troca por desgaste/perda/mau uso */}
               {entregaForm.motivoTroca && ['desgaste_normal', 'perda', 'mau_uso', 'furto'].includes(entregaForm.motivoTroca) && (

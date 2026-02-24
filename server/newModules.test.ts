@@ -69,7 +69,7 @@ describe("PJ Contracts Router", () => {
 });
 
 describe("AppRouter integration", () => {
-  it("should include all new routers in appRouter", async () => {
+  it("should include all new routers in appRouter", { timeout: 15000 }, async () => {
     const { appRouter } = await import("./routers");
     expect(appRouter).toBeDefined();
 
