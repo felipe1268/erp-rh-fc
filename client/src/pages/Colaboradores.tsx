@@ -424,7 +424,7 @@ export default function Colaboradores() {
         ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
         ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
         ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
-        ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.hePercentual50 ?? 50}% / ${viewingEmployee.hePercentual100 ?? 100}% / ${viewingEmployee.hePercentualNoturno ?? 20}%` : "Padrão CLT (50/100/20%)"],
+        ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? 50}% / ${viewingEmployee.he100 ?? 100}% / ${viewingEmployee.heNoturna ?? 20}%` : "Padrão CLT (50/100/20%)"],
       ]},
       { title: "Documentos", fields: [
         ["CTPS", safeDisplay(viewingEmployee.ctps)],
@@ -1699,9 +1699,9 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       onCheckedChange={(checked) => {
                         set("acordoHoraExtra", checked ? "1" : "0");
                         if (!checked) {
-                          set("hePercentual50", "50");
-                          set("hePercentual100", "100");
-                          set("hePercentualNoturno", "20");
+                          set("heNormal50", "50");
+                          set("he100", "100");
+                          set("heNoturna", "20");
                         }
                       }}
                     />
@@ -1717,8 +1717,8 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           type="number"
                           min="0"
                           max="100"
-                          value={form.hePercentual50 ?? "50"}
-                          onChange={e => set("hePercentual50", e.target.value)}
+                          value={form.heNormal50 ?? "50"}
+                          onChange={e => set("heNormal50", e.target.value)}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
@@ -1733,8 +1733,8 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           type="number"
                           min="0"
                           max="100"
-                          value={form.hePercentual100 ?? "100"}
-                          onChange={e => set("hePercentual100", e.target.value)}
+                          value={form.he100 ?? "100"}
+                          onChange={e => set("he100", e.target.value)}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
@@ -1749,8 +1749,8 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           type="number"
                           min="0"
                           max="100"
-                          value={form.hePercentualNoturno ?? "20"}
-                          onChange={e => set("hePercentualNoturno", e.target.value)}
+                          value={form.heNoturna ?? "20"}
+                          onChange={e => set("heNoturna", e.target.value)}
                           className={`bg-white ${String(form.acordoHoraExtra) === "1" ? 'border-blue-300' : 'opacity-60'}`}
                           readOnly={String(form.acordoHoraExtra) !== "1"}
                         />
@@ -2118,7 +2118,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   [viewingEmployee.tipoContrato === 'Horista' ? '⚡ Valor da Hora' : "Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
                   ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
                   ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
-                  ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.hePercentual50 ?? 50}% / ${viewingEmployee.hePercentual100 ?? 100}% / ${viewingEmployee.hePercentualNoturno ?? 20}%` : "Padrão CLT (50/100/20%)"],
+                  ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? 50}% / ${viewingEmployee.he100 ?? 100}% / ${viewingEmployee.heNoturna ?? 20}%` : "Padrão CLT (50/100/20%)"],
                 ]},
                 { title: "Documentos", fields: [
                   ["CTPS", safeDisplay(viewingEmployee.ctps)],

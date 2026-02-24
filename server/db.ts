@@ -241,13 +241,15 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "status", "listaNegra", "motivoListaNegra", "dataListaNegra",
     "obraAtualId", "fotoUrl", "observacoes", "codigoContabil",
     "recebeComplemento", "valorComplemento", "complementoObs",
-    "acordoHoraExtra", "hePercentual50", "hePercentual100", "hePercentualNoturno",
+    "acordoHoraExtra", "heNormal50", "he100", "heNoturna",
     "contaBancariaEmpresaId",
   ]);
   // Campos booleanos
   const booleanFields = new Set(["listaNegra"]);
   // Campos inteiros
-  const intFields = new Set(["obraAtualId", "recebeComplemento", "acordoHoraExtra", "hePercentual50", "hePercentual100", "hePercentualNoturno", "contaBancariaEmpresaId"]);
+  const intFields = new Set(["obraAtualId", "recebeComplemento", "acordoHoraExtra", "contaBancariaEmpresaId"]);
+  // Campos string de HE (são varchar no banco, não int)
+  const stringFields = new Set(["heNormal50", "he100", "heNoturna"]);
   // Sanitizar: remover campos inválidos e converter tipos
   const { id: _id, companyId: _cid, createdAt: _ca, updatedAt: _ua, ...cleanData } = data as any;
   const sanitized: Record<string, any> = {};

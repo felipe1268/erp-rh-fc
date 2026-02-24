@@ -2071,3 +2071,5 @@
 - [x] Nome do EPI vindo da consulta CAEPI excede limite da coluna varchar — coluna `nome` em epis e `epi_nome` em epi_discount_alerts aumentadas de 255/500 para 1000 caracteres
 ## Ordenação Alfabética de Colaboradores
 - [x] Ordenar lista de colaboradores por nome em ordem alfabética por padrão (localeCompare pt-BR)
+## Bug: Percentuais de Horas Extras não persistem
+- [x] Percentuais HE (Dias Úteis, Domingos/Feriados, Adicional Noturno) voltam ao valor padrão após salvar e recarregar — frontend usava nomes errados (hePercentual50/100/Noturno), corrigido para nomes do banco (heNormal50, he100, heNoturna) em Colaboradores.tsx e db.ts
