@@ -372,21 +372,25 @@ export const episRouter = router({
         if (!caNum) return { found: false as const, error: "Número do CA inválido" };
 
         const baseUrl = "https://caepi.mte.gov.br/internet/consultacainternet.aspx";
-        const defaultHeaders = {
+        const defaultHeaders: Record<string, string> = {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
         };
-        const ajaxHeaders = {
+        const ajaxHeaders: Record<string, string> = {
           ...defaultHeaders,
           "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
           "X-MicrosoftAjax": "Delta=true",
           "X-Requested-With": "XMLHttpRequest",
         };
 
+        const controller1 = new AbortController();
+        const timeout1 = setTimeout(() => controller1.abort(), 15000);
+
         // Step 1: Get initial page to obtain ViewState tokens
-        const initRes = await fetch(baseUrl, { headers: defaultHeaders });
-        if (!initRes.ok) return { found: false as const, error: "Erro ao acessar site do CAEPI" };
+        const initRes = await fetch(baseUrl, { headers: defaultHeaders, signal: controller1.signal });
+        clearTimeout(timeout1);
+        if (!initRes.ok) return { found: false as const, error: `Erro ao acessar site do CAEPI (status ${initRes.status})` };
         const initHtml = await initRes.text();
 
         const extractToken = (html: string, id: string) => {
@@ -422,13 +426,18 @@ export const episRouter = router({
           "ctl00$PlaceHolderConteudo$btnConsultar": "Consultar",
         });
 
+        const controller2 = new AbortController();
+        const timeout2 = setTimeout(() => controller2.abort(), 15000);
+
         const searchRes = await fetch(baseUrl, {
           method: "POST",
           headers: { ...ajaxHeaders, "Cookie": cookieStr },
           body: searchData.toString(),
+          signal: controller2.signal,
         });
+        clearTimeout(timeout2);
 
-        if (!searchRes.ok) return { found: false as const, error: "Erro na consulta ao CAEPI" };
+        if (!searchRes.ok) return { found: false as const, error: `Erro na consulta ao CAEPI (status ${searchRes.status})` };
         const searchHtml = await searchRes.text();
 
         if (!searchHtml.includes("grdListaResultado")) {
@@ -459,13 +468,18 @@ export const episRouter = router({
           "ctl00$PlaceHolderConteudo$grdListaResultado$ctl02$btnDetalhar.y": "10",
         });
 
+        const controller3 = new AbortController();
+        const timeout3 = setTimeout(() => controller3.abort(), 15000);
+
         const detailRes = await fetch(baseUrl, {
           method: "POST",
           headers: { ...ajaxHeaders, "Cookie": cookies2 },
           body: detailData.toString(),
+          signal: controller3.signal,
         });
+        clearTimeout(timeout3);
 
-        if (!detailRes.ok) return { found: false as const, error: "Erro ao obter detalhes do CA" };
+        if (!detailRes.ok) return { found: false as const, error: `Erro ao obter detalhes do CA (status ${detailRes.status})` };
         const detailHtml = await detailRes.text();
 
         // Extract data using span IDs from the CAEPI detail page
@@ -528,7 +542,11 @@ export const episRouter = router({
           aprovadoPara,
         };
       } catch (err: any) {
-        return { found: false as const, error: err.message || "Erro ao consultar CA" };
+        console.error("[ConsultaCA] Erro:", err.name, err.message);
+        if (err.name === "AbortError") {
+          return { found: false as const, error: "Tempo limite excedido. O site do CAEPI pode estar lento. Tente novamente." };
+        }
+        return { found: false as const, error: `Erro ao consultar CA: ${err.message || "Tente novamente"}` };
       }
     }),
 });

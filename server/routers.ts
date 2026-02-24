@@ -1182,6 +1182,13 @@ export const appRouter = router({
         { categoria: "folha", chave: "folha_bloquear_consolidacao_inconsistencias", valor: "1", descricao: "Bloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         // ATESTADOS
         { categoria: "atestados", chave: "atestado_motivo_obrigatorio", valor: "1", descricao: "Motivo do atestado obrigatório (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        // EPIs / SEGURANÇA
+        { categoria: "epi", chave: "epi_bdi_percentual", valor: "40", descricao: "Percentual de BDI sobre custo do EPI para cobrança por perda/mau uso", valorPadraoClt: "40", unidade: "%" },
+        { categoria: "epi", chave: "epi_tempo_minimo_troca", valor: "180", descricao: "Tempo mínimo de troca padrão do EPI (dias)", valorPadraoClt: "180", unidade: "dias" },
+        { categoria: "epi", chave: "epi_cobranca_perda", valor: "1", descricao: "Cobrar EPI em caso de perda (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "epi", chave: "epi_cobranca_mau_uso", valor: "1", descricao: "Cobrar EPI em caso de mau uso/dano (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "epi", chave: "epi_cobranca_furto", valor: "1", descricao: "Cobrar EPI em caso de furto/extravio (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "epi", chave: "epi_foto_obrigatoria_troca", valor: "1", descricao: "Foto obrigatória para troca por mau uso/dano (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
       ];
 
       for (const d of defaults) {

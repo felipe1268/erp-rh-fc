@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-type ViewMode = "catalogo" | "entregas" | "novo_epi" | "nova_entrega" | "config_bdi" | "ficha_epi";
+type ViewMode = "catalogo" | "entregas" | "novo_epi" | "nova_entrega" | "ficha_epi";
 
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
@@ -43,7 +43,7 @@ function getEpiIcon(nome: string, className: string = "h-4 w-4") {
 }
 
 export default function Epis() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
@@ -252,69 +252,7 @@ export default function Epis() {
     return `R$ ${parseFloat(String(val)).toFixed(2)}`;
   };
 
-  // ============================================================
-  // BDI CONFIG VIEW
-  // ============================================================
-  if (viewMode === "config_bdi") {
-    return (
-      <DashboardLayout>
-        <PrintHeader />
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setViewMode("catalogo")}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
-            </Button>
-            <h1 className="text-xl font-bold">Configurações de EPI</h1>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-amber-600" />
-                BDI sobre EPI (%)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Percentual de BDI (Benefícios e Despesas Indiretas) aplicado sobre o custo do EPI quando o colaborador
-                perde, danifica ou tem o EPI furtado antes do tempo mínimo de troca. O colaborador não visualiza o BDI,
-                apenas o valor final de cobrança.
-              </p>
-              <div className="flex items-center gap-3">
-                <Label className="w-24">BDI (%)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={200}
-                  className="w-32"
-                  value={bdiValue || String(bdiQ.data?.bdiPercentual ?? 40)}
-                  onChange={e => setBdiValue(e.target.value)}
-                  placeholder="40"
-                />
-                <Button
-                  onClick={() => setBdiMut.mutate({ companyId, bdiPercentual: parseFloat(bdiValue || "40") })}
-                  disabled={setBdiMut.isPending}
-                  className="bg-[#1B2A4A] hover:bg-[#243660]"
-                >
-                  {setBdiMut.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
-                <p className="font-semibold text-amber-800 mb-1">Base Legal</p>
-                <p className="text-amber-700">
-                  Art. 462, §1º da CLT: "É lícito ao empregador efetuar descontos nos salários do empregado em caso de
-                  dano causado pelo empregado, desde que esta possibilidade tenha sido acordada ou na ocorrência de dolo do empregado."
-                </p>
-                <p className="text-amber-700 mt-2">
-                  NR-6 do MTE: O empregador deve fornecer EPIs gratuitamente, mas pode cobrar em caso de extravio ou dano doloso.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  // BDI config agora fica em Configurações > Critérios do Sistema > EPIs / Segurança
 
   // ============================================================
   // FORM: NOVO EPI
@@ -618,7 +556,13 @@ export default function Epis() {
             </Button>
             <h1 className="text-xl font-bold">Ficha de Entrega de EPI</h1>
             <div className="ml-auto flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Button variant="outline" size="sm" onClick={() => {
+                const nomeFunc = fichaDelivery.nomeFunc || emp?.nomeCompleto || 'Funcionario';
+                const oldTitle = document.title;
+                document.title = `EPI - ${nomeFunc}`;
+                window.print();
+                setTimeout(() => { document.title = oldTitle; }, 500);
+              }}>
                 <Printer className="h-4 w-4 mr-1" /> Imprimir
               </Button>
               <Button variant="outline" size="sm" onClick={() => {
@@ -649,32 +593,45 @@ export default function Epis() {
 
           {/* Printable Form */}
           <div className="bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4">
-            {/* Header with Logo */}
-            <div className="border-b-2 border-[#1B2A4A] pb-4 mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img src="/fc-logo.png" alt="FC Engenharia" className="h-14" onError={(e: any) => e.target.style.display = 'none'} />
-                  <div>
-                    <h2 className="text-xl font-bold text-[#1B2A4A] tracking-wide">FC ENGENHARIA</h2>
-                    <p className="text-xs text-gray-500 font-medium">PROJETOS E CONSULTORIA LTDA</p>
-                  </div>
-                </div>
+            {/* Header - Logo centralizado no topo */}
+            <div className="mb-6">
+              {/* Logo + Nome da empresa centralizado */}
+              <div className="flex flex-col items-center justify-center mb-4">
+                {selectedCompany?.logoUrl ? (
+                  <img src={selectedCompany.logoUrl} alt={selectedCompany?.razaoSocial || 'Empresa'} className="h-16 mb-2 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                ) : (
+                  <img src="/fc-logo.png" alt="FC Engenharia" className="h-16 mb-2 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                )}
+                <h2 className="text-lg font-bold text-[#1B2A4A] tracking-wide text-center">
+                  {selectedCompany?.razaoSocial || 'FC ENGENHARIA PROJETOS E CONSULTORIA LTDA'}
+                </h2>
+                {selectedCompany?.cnpj && (
+                  <p className="text-[10px] text-gray-500">CNPJ: {selectedCompany.cnpj}</p>
+                )}
+              </div>
+              {/* Barra azul com título do documento */}
+              <div className="bg-[#1B2A4A] text-white py-2 px-4 text-center">
+                <span className="text-sm font-bold tracking-wider">FICHA DE ENTREGA DE EPI</span>
+              </div>
+              {/* Data de entrega e emissão */}
+              <div className="flex justify-between mt-2 text-[10px] text-gray-500 px-1">
+                <span>Data da Entrega: {fichaDelivery.dataEntrega ? new Date(fichaDelivery.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</span>
                 <div className="text-right">
-                  <div className="bg-[#1B2A4A] text-white px-3 py-1 rounded text-xs font-bold mb-1">
-                    FICHA DE ENTREGA DE EPI
-                  </div>
-                  <p className="text-[10px] text-gray-500">Data da Entrega: {fichaDelivery.dataEntrega ? new Date(fichaDelivery.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p>
-                  <p className="text-[10px] text-gray-400">Emitido em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}</p>
+                  <span>Emitido em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}</span>
+                  <br/>
+                  <span>Emitido por: {user?.name || user?.email || "—"}</span>
                 </div>
               </div>
             </div>
 
-            {/* Employee Info */}
-            <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-              <div><strong>Funcionário:</strong> {fichaDelivery.nomeFunc || emp?.nomeCompleto || "—"}</div>
-              <div><strong>Função:</strong> {fichaDelivery.funcaoFunc || emp?.funcao || "—"}</div>
-              <div><strong>CPF:</strong> {emp?.cpf || "—"}</div>
-              <div><strong>Matrícula:</strong> {emp?.codigoInterno || "—"}</div>
+            {/* Employee Info - Box com borda */}
+            <div className="border border-gray-300 rounded p-3 mb-6">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-gray-500 text-xs">Funcionário:</span><br/><strong className="text-[#1B2A4A]">{fichaDelivery.nomeFunc || emp?.nomeCompleto || "—"}</strong></div>
+                <div><span className="text-gray-500 text-xs">Função:</span><br/><strong className="text-[#1B2A4A]">{fichaDelivery.funcaoFunc || emp?.funcao || "—"}</strong></div>
+                <div><span className="text-gray-500 text-xs">CPF:</span><br/><strong>{emp?.cpf || "—"}</strong></div>
+                <div><span className="text-gray-500 text-xs">Matrícula:</span><br/><strong>{emp?.codigoInterno || "—"}</strong></div>
+              </div>
             </div>
 
             {/* EPI Table */}
@@ -725,7 +682,7 @@ export default function Epis() {
                 </p>
                 <p className="bg-red-50 border border-red-200 rounded p-2 text-red-800">
                   <strong>💰 COBRANÇA:</strong> Em caso de <strong>perda, extravio, furto, dano por mau uso ou negligência</strong>,
-                  o valor indicado na coluna "Valor Unit." (custo + encargos administrativos) será <strong>descontado
+                  o valor indicado na coluna "Valor Unit." será <strong>descontado
                   integralmente na folha de pagamento do mesmo mês</strong> em que ocorrer a solicitação de troca,
                   conforme Art. 462, §1º da CLT e acordo firmado neste documento.
                 </p>
@@ -766,8 +723,9 @@ export default function Epis() {
             </div>
 
             {/* Legal Footer */}
-            <div className="mt-6 pt-4 border-t text-[10px] text-gray-400 text-center">
-              Conforme Art. 462, §1º da CLT e NR-6 (item 6.7.1) do MTE — Equipamentos de Proteção Individual
+            <div className="mt-6 pt-4 border-t-2 border-[#1B2A4A] text-[10px] text-gray-400 text-center">
+              <p>Conforme Art. 462, §1º da CLT e NR-6 (item 6.7.1) do MTE — Equipamentos de Proteção Individual</p>
+              <p className="mt-1 text-[#1B2A4A] font-medium">{selectedCompany?.razaoSocial || 'FC Engenharia Projetos e Consultoria Ltda'}</p>
             </div>
           </div>
         </div>
@@ -789,11 +747,6 @@ export default function Epis() {
             <h1 className="text-xl font-bold text-gray-800">Equipamentos de Proteção Individual</h1>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {isMaster && (
-              <Button variant="outline" size="sm" onClick={() => setViewMode("config_bdi")}>
-                <Settings2 className="h-4 w-4 mr-1" /> BDI / Config
-              </Button>
-            )}
             {viewMode === "catalogo" && (
               <>
                 {selectedEpis.size > 0 && (

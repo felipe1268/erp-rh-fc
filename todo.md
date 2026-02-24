@@ -2001,3 +2001,10 @@
 - [x] Busca automática do CA ao digitar (debounce 800ms), sem precisar clicar no botão
 
 - [x] Simplificar exibição cobrança automática EPI: mostrar apenas valor final com BDI (sem detalhar cálculo)
+- [x] Bug: consulta CA ainda retorna "Erro na consulta" para CA 48067 - adicionado timeout e logs detalhados
+- [x] Melhorar formatação da ficha de entrega de EPI: logo no topo centralizado, cores padrão FC Engenharia
+- [x] Nome do arquivo PDF da ficha EPI: "EPI - Nome do Colaborador" ao salvar/imprimir
+- [x] Remover texto "(custo + encargos administrativos)" da seção de cobrança na ficha EPI
+- [ ] Tornar linhas de EPI clicáveis no Raio-X do funcionário para abrir ficha de entrega e visualizar arquivo assinado
+- [x] Exibir nome do usuário que emitiu a ficha de EPI abaixo da data/hora de emissão
+- [x] Mover configurações de EPI (BDI, texto ficha) da página de EPIs para a tela de Configurações geral
