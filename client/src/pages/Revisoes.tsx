@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { formatDateTime } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -155,7 +156,7 @@ export default function Revisoes() {
                         <User className="h-3.5 w-3.5" /> {rev.criadoPor}
                       </span>
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" /> {rev.dataPublicacao ? new Date(rev.dataPublicacao).toLocaleString("pt-BR") : "—"}
+                        <Calendar className="h-3.5 w-3.5" /> {formatDateTime(rev.dataPublicacao)}
                       </span>
                     </div>
                   </div>

@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { EMPLOYEE_STATUS } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor, formatMoedaInput, formatMoedaSemPrefixo, parseMoedaBR, formatMoeda } from "@/lib/formatters";
+import { nowBrasilia } from "@/lib/dateUtils";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { useAuth } from "@/_core/hooks/useAuth";
 
@@ -390,7 +391,7 @@ export default function Colaboradores() {
   const handlePrintFicha = () => {
     if (!viewingEmployee) return;
     const empresa = getCompanyName(viewingEmployee.companyId);
-    const dataEmissao = new Date().toLocaleString("pt-BR");
+    const dataEmissao = nowBrasilia();
     const nomeUsuario = user?.name || user?.username || "Usuário";
 
     const sections = [
@@ -1171,6 +1172,94 @@ export default function Colaboradores() {
                   </Select>
                 </div>
               </div>
+
+              {/* Contrato de Experiência CLT */}
+              {(form.tipoContrato === 'CLT' || form.tipoContrato === 'Horista' || !form.tipoContrato) && (
+                <div className="mt-4 p-4 rounded-lg border-2 border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-800">
+                  <h4 className="text-sm font-bold text-orange-700 dark:text-orange-400 mb-3 flex items-center gap-2">
+                    <span className="text-lg">📋</span> Contrato de Experiência
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Tipo de Experiência</Label>
+                      <Select value={(form as any).experienciaTipo || 'none'} onValueChange={v => {
+                        set('experienciaTipo' as any, v === 'none' ? '' : v);
+                        // Auto-calcular datas quando tipo é selecionado e tem data de admissão
+                        const inicio = (form as any).experienciaInicio || form.dataAdmissao;
+                        if (inicio && v !== 'none') {
+                          const dias1 = v === '30_30' ? 30 : 45;
+                          const dias2 = v === '30_30' ? 60 : 90;
+                          const dtInicio = new Date(inicio + 'T12:00:00');
+                          const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1);
+                          const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2);
+                          set('experienciaFim1' as any, dtFim1.toISOString().split('T')[0]);
+                          set('experienciaFim2' as any, dtFim2.toISOString().split('T')[0]);
+                          if (!(form as any).experienciaInicio) set('experienciaInicio' as any, inicio);
+                        }
+                      }}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem experiência</SelectItem>
+                          <SelectItem value="30_30">30 + 30 = 60 dias</SelectItem>
+                          <SelectItem value="45_45">45 + 45 = 90 dias</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Início da Experiência</Label>
+                      <Input type="date" value={(form as any).experienciaInicio ?? form.dataAdmissao ?? ''} onChange={e => {
+                        set('experienciaInicio' as any, e.target.value);
+                        const tipo = (form as any).experienciaTipo;
+                        if (tipo && e.target.value) {
+                          const dias1 = tipo === '30_30' ? 30 : 45;
+                          const dias2 = tipo === '30_30' ? 60 : 90;
+                          const dtInicio = new Date(e.target.value + 'T12:00:00');
+                          const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1);
+                          const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2);
+                          set('experienciaFim1' as any, dtFim1.toISOString().split('T')[0]);
+                          set('experienciaFim2' as any, dtFim2.toISOString().split('T')[0]);
+                        }
+                      }} className="bg-input mt-1" />
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Geralmente igual à data de admissão</span>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Status da Experiência</Label>
+                      <Select value={(form as any).experienciaStatus || 'em_experiencia'} onValueChange={v => set('experienciaStatus' as any, v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="em_experiencia">Em Experiência (1º período)</SelectItem>
+                          <SelectItem value="prorrogado">Prorrogado (2º período)</SelectItem>
+                          <SelectItem value="efetivado">Efetivado</SelectItem>
+                          <SelectItem value="desligado_experiencia">Desligado na Experiência</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {(form as any).experienciaTipo && (
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-2 rounded bg-orange-100 dark:bg-orange-900/30">
+                        <span className="text-xs font-semibold text-orange-700 dark:text-orange-400">Fim do 1º Período:</span>
+                        <span className="text-sm font-bold text-orange-800 dark:text-orange-300 ml-2">
+                          {(form as any).experienciaFim1 ? new Date((form as any).experienciaFim1 + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                        </span>
+                        <span className="text-xs text-orange-600 dark:text-orange-500 ml-1">({(form as any).experienciaTipo === '30_30' ? '30' : '45'} dias)</span>
+                      </div>
+                      <div className="p-2 rounded bg-orange-100 dark:bg-orange-900/30">
+                        <span className="text-xs font-semibold text-orange-700 dark:text-orange-400">Fim do 2º Período (Efetivação):</span>
+                        <span className="text-sm font-bold text-orange-800 dark:text-orange-300 ml-2">
+                          {(form as any).experienciaFim2 ? new Date((form as any).experienciaFim2 + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                        </span>
+                        <span className="text-xs text-orange-600 dark:text-orange-500 ml-1">({(form as any).experienciaTipo === '30_30' ? '60' : '90'} dias)</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-3">
+                    <Label className="text-xs font-medium text-muted-foreground">Observações da Experiência</Label>
+                    <Input value={(form as any).experienciaObs ?? ''} onChange={e => set('experienciaObs' as any, e.target.value)} placeholder="Observações sobre o período de experiência..." className="bg-input mt-1" />
+                  </div>
+                </div>
+              )}
+
               {/* Jornada de Trabalho - Dia a Dia */}
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">

@@ -1,0 +1,90 @@
+{
+  "query": "SHOW COLUMNS FROM employees LIKE 'experiencia%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW COLUMNS FROM employees LIKE 'experiencia%';",
+  "rows": [
+    {
+      "Field": "experiencia_tipo",
+      "Type": "enum('30_30','45_45')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_inicio",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_fim1",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_fim2",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_status",
+      "Type": "enum('em_experiencia','prorrogado','efetivado','desligado_experiencia')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "em_experiencia",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_prorrogado_em",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_prorrogado_por",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_efetivado_em",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_efetivado_por",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "experiencia_obs",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nexperiencia_tipo\tenum('30_30','45_45')\tYES\t\tNULL\t\nexperiencia_inicio\tdate\tYES\t\tNULL\t\nexperiencia_fim1\tdate\tYES\t\tNULL\t\nexperiencia_fim2\tdate\tYES\t\tNULL\t\nexperiencia_status\tenum('em_experiencia','prorrogado','efetivado','desligado_experiencia')\tYES\t\tem_experiencia\t\nexperiencia_prorrogado_em\tdate\tYES\t\tNULL\t\nexperiencia_prorrogado_por\tvarchar(255)\tYES\t\tNULL\t\nexperiencia_efetivado_em\tdate\tYES\t\tNULL\t\nexperiencia_efetivado_por\tvarchar(255)\tYES\t\tNULL\t\nexperiencia_obs\ttext\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

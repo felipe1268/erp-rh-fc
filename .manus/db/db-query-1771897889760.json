@@ -1,0 +1,40 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' AND COLUMN_NAME LIKE 'experiencia%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' AND COLUMN_NAME LIKE 'experiencia%';",
+  "rows": [
+    {
+      "COLUMN_NAME": "experiencia_tipo"
+    },
+    {
+      "COLUMN_NAME": "experiencia_inicio"
+    },
+    {
+      "COLUMN_NAME": "experiencia_fim1"
+    },
+    {
+      "COLUMN_NAME": "experiencia_fim2"
+    },
+    {
+      "COLUMN_NAME": "experiencia_status"
+    },
+    {
+      "COLUMN_NAME": "experiencia_prorrogado_em"
+    },
+    {
+      "COLUMN_NAME": "experiencia_prorrogado_por"
+    },
+    {
+      "COLUMN_NAME": "experiencia_efetivado_em"
+    },
+    {
+      "COLUMN_NAME": "experiencia_efetivado_por"
+    },
+    {
+      "COLUMN_NAME": "experiencia_obs"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nexperiencia_tipo\nexperiencia_inicio\nexperiencia_fim1\nexperiencia_fim2\nexperiencia_status\nexperiencia_prorrogado_em\nexperiencia_prorrogado_por\nexperiencia_efetivado_em\nexperiencia_efetivado_por\nexperiencia_obs\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

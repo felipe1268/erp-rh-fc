@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { formatCPF, formatMoeda } from "@/lib/formatters";
+import { nowBrasilia, todayBrasilia } from "@/lib/dateUtils";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
@@ -144,7 +145,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const asosVencidos = asos.filter((a: any) => a.status === "VENCIDO").length;
   const asosAVencer = asos.filter((a: any) => a.status?.includes("DIAS PARA VENCER")).length;
   const userName = user?.name || user?.username || "Usuário";
-  const dataEmissao = new Date().toLocaleString("pt-BR");
+  const dataEmissao = nowBrasilia();
 
   // Total HE
   const totalHEHoras = horasExtras.reduce((s: number, h: any) => s + parseFloat(h.quantidadeHoras || "0"), 0);
@@ -1291,7 +1292,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <div class="info-item"><strong>Função:</strong> ${funcaoDetalhes.nome}</div>
                                 <div class="info-item"><strong>CBO:</strong> ${funcaoDetalhes.cbo || '-'}</div>
                                 <div class="info-item"><strong>Setor:</strong> ${emp?.setor || '-'}</div>
-                                <div class="info-item"><strong>Data:</strong> ${new Date().toLocaleDateString('pt-BR')}</div>
+                                <div class="info-item"><strong>Data:</strong> ${todayBrasilia()}</div>
                               </div>
                               <div class="section">
                                 <h2>Descrição da Função e Atividades</h2>
@@ -1305,7 +1306,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <div>${empName}<br/><small>Colaborador</small></div>
                                 <div>Responsável RH<br/><small>${companyName}</small></div>
                               </div>
-                              <div class="footer">Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} — ${companyName}</div>
+                              <div class="footer">Documento gerado em ${nowBrasilia()} — ${companyName}</div>
                             </body></html>`);
                             printW.document.close();
                             setTimeout(() => printW.print(), 300);

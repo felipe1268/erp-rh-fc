@@ -11,8 +11,10 @@ import {
   BarChart3, Landmark, Gavel, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, TrendingUp, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, X, ExternalLink,
-  Printer, Plane, DollarSign, TreePalm
+  Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -29,6 +31,19 @@ export default function Home() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
   const [alertasOpen, setAlertasOpen] = useState(false);
+  const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);
+  const [expMotivo, setExpMotivo] = useState('');
+  const [expObs, setExpObs] = useState('');
+  const utils = trpc.useUtils();
+  const prorrogarMut = trpc.employees.prorrogarExperiencia.useMutation({
+    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpObs(''); },
+  });
+  const efetivarMut = trpc.employees.efetivarExperiencia.useMutation({
+    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpObs(''); },
+  });
+  const desligarMut = trpc.employees.desligarExperiencia.useMutation({
+    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpMotivo(''); setExpObs(''); },
+  });
 
   const { data: homeData, isLoading } = trpc.home.getData.useQuery(
     { companyId: companyId! },
@@ -42,7 +57,7 @@ export default function Home() {
   const s = homeData?.stats;
 
   // Calcular total de alertas
-  const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.processosRiscoAlto ?? 0);
+  const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.processosRiscoAlto ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0);
 
   return (
     <DashboardLayout>
@@ -173,6 +188,133 @@ export default function Home() {
                   />
                 </div>
               </div>
+
+              {/* Contratos de Experiência - Card Destaque */}
+              {(homeData?.experiencias?.length ?? 0) > 0 && (
+                <Card className="border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4 text-orange-600" />
+                        Contratos de Experiência
+                        {(s?.experienciasVencidas ?? 0) > 0 && (
+                          <Badge variant="destructive" className="text-[10px] animate-pulse">{s!.experienciasVencidas} vencido{s!.experienciasVencidas !== 1 ? 's' : ''}!</Badge>
+                        )}
+                        {(s?.experienciasUrgentes ?? 0) > 0 && (
+                          <Badge className="bg-orange-100 text-orange-700 text-[10px]">{s!.experienciasUrgentes} urgente{s!.experienciasUrgentes !== 1 ? 's' : ''}</Badge>
+                        )}
+                        <Badge variant="secondary" className="text-[10px]">{s?.experienciasTotal ?? 0} total</Badge>
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {homeData!.experiencias.map((exp: any) => {
+                        const urgColors: Record<string, string> = {
+                          vencido: 'bg-red-100 border-red-300 dark:bg-red-950/40',
+                          urgente: 'bg-orange-100 border-orange-300 dark:bg-orange-950/40',
+                          atencao: 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30',
+                          normal: 'bg-white border-gray-200 dark:bg-gray-900',
+                        };
+                        const urgTextColors: Record<string, string> = {
+                          vencido: 'text-red-700 font-bold',
+                          urgente: 'text-orange-700 font-bold',
+                          atencao: 'text-yellow-700 font-semibold',
+                          normal: 'text-muted-foreground',
+                        };
+                        return (
+                          <div key={exp.id} className={`flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2.5 rounded-lg border ${urgColors[exp.urgencia] || urgColors.normal} gap-2`}>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold">{exp.nome}</span>
+                                <Badge variant="outline" className="text-[10px]">{exp.funcao || '-'}</Badge>
+                                <Badge className={`text-[10px] ${exp.status === 'prorrogado' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {exp.status === 'prorrogado' ? '2º período' : '1º período'}
+                                </Badge>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {exp.tipo === '30_30' ? '30+30' : '45+45'} dias · Início: {new Date(exp.inicio + 'T12:00:00').toLocaleDateString('pt-BR')} · 
+                                Fim 1º: {new Date(exp.fim1 + 'T12:00:00').toLocaleDateString('pt-BR')} · 
+                                Fim 2º: {new Date(exp.fim2 + 'T12:00:00').toLocaleDateString('pt-BR')}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-xs font-mono ${urgTextColors[exp.urgencia] || ''}`}>
+                                {exp.diasRestantes < 0 ? `Vencido há ${Math.abs(exp.diasRestantes)}d` : exp.diasRestantes === 0 ? 'VENCE HOJE' : `${exp.diasRestantes}d restantes`}
+                              </span>
+                              {exp.status === 'em_experiencia' && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setExpAction({ type: 'prorrogar', emp: exp }); setExpObs(''); }}>
+                                  <RefreshCw className="h-3 w-3" /> Prorrogar
+                                </Button>
+                              )}
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50" onClick={() => { setExpAction({ type: 'efetivar', emp: exp }); setExpObs(''); }}>
+                                <UserPlus className="h-3 w-3" /> Efetivar
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => { setExpAction({ type: 'desligar', emp: exp }); setExpMotivo(''); setExpObs(''); }}>
+                                <Ban className="h-3 w-3" /> Desligar
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Dialog de Ação de Experiência */}
+              <Dialog open={!!expAction} onOpenChange={v => !v && setExpAction(null)}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      {expAction?.type === 'prorrogar' && <><RefreshCw className="h-5 w-5 text-blue-600" /> Prorrogar Experiência</>}
+                      {expAction?.type === 'efetivar' && <><UserPlus className="h-5 w-5 text-green-600" /> Efetivar Colaborador</>}
+                      {expAction?.type === 'desligar' && <><Ban className="h-5 w-5 text-red-600" /> Desligar na Experiência</>}
+                    </DialogTitle>
+                  </DialogHeader>
+                  {expAction && (
+                    <div className="space-y-4">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <p className="text-sm font-semibold">{expAction.emp.nome}</p>
+                        <p className="text-xs text-muted-foreground">{expAction.emp.funcao} · {expAction.emp.tipo === '30_30' ? '30+30' : '45+45'} dias · {expAction.emp.status === 'prorrogado' ? '2º período' : '1º período'}</p>
+                        <p className="text-xs mt-1">
+                          {expAction.type === 'prorrogar' && 'O contrato será prorrogado para o 2º período de experiência.'}
+                          {expAction.type === 'efetivar' && 'O colaborador será efetivado oficialmente após o período de experiência.'}
+                          {expAction.type === 'desligar' && 'O colaborador será desligado durante o período de experiência.'}
+                        </p>
+                      </div>
+                      {expAction.type === 'desligar' && (
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Motivo do desligamento *</label>
+                          <Textarea value={expMotivo} onChange={e => setExpMotivo(e.target.value)} placeholder="Descreva o motivo do desligamento..." className="mt-1" rows={3} />
+                        </div>
+                      )}
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Observações (opcional)</label>
+                        <Textarea value={expObs} onChange={e => setExpObs(e.target.value)} placeholder="Observações adicionais..." className="mt-1" rows={2} />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setExpAction(null)}>Cancelar</Button>
+                        {expAction.type === 'prorrogar' && (
+                          <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={prorrogarMut.isPending} onClick={() => prorrogarMut.mutate({ employeeId: expAction.emp.id, companyId: companyId!, obs: expObs || undefined })}>
+                            {prorrogarMut.isPending ? 'Prorrogando...' : 'Confirmar Prorrogação'}
+                          </Button>
+                        )}
+                        {expAction.type === 'efetivar' && (
+                          <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={efetivarMut.isPending} onClick={() => efetivarMut.mutate({ employeeId: expAction.emp.id, companyId: companyId!, obs: expObs || undefined })}>
+                            {efetivarMut.isPending ? 'Efetivando...' : 'Confirmar Efetivação'}
+                          </Button>
+                        )}
+                        {expAction.type === 'desligar' && (
+                          <Button variant="destructive" disabled={desligarMut.isPending || !expMotivo.trim()} onClick={() => desligarMut.mutate({ employeeId: expAction.emp.id, companyId: companyId!, motivo: expMotivo, obs: expObs || undefined })}>
+                            {desligarMut.isPending ? 'Desligando...' : 'Confirmar Desligamento'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
 
               {/* Main Content Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -472,7 +614,7 @@ export default function Home() {
                               <div className="min-w-0 flex-1">
                                 <p className="text-foreground truncate">{log.details}</p>
                                 <p className="text-[10px] text-muted-foreground">
-                                  {log.userName} · {new Date(log.createdAt).toLocaleString("pt-BR")}
+                                  {log.userName} · {formatDateTime(log.createdAt)}
                                 </p>
                               </div>
                             </div>
@@ -640,6 +782,22 @@ function AlertasDialog({
       actionLabel: "Ver Colaboradores",
     },
     {
+      title: "Contratos de Experiência Vencidos/Urgentes",
+      icon: ClipboardCheck,
+      color: "text-orange-600",
+      bgColor: "bg-orange-50",
+      borderColor: "border-orange-200",
+      count: (stats?.experienciasVencidas ?? 0) + (stats?.experienciasUrgentes ?? 0),
+      items: (homeData?.experiencias ?? []).filter((e: any) => e.urgencia === 'vencido' || e.urgencia === 'urgente').map((e: any) => ({
+        label: e.nome,
+        sublabel: `${e.funcao || ''} · ${e.status === 'prorrogado' ? '2º período' : '1º período'}`,
+        detail: e.diasRestantes < 0 ? `Vencido há ${Math.abs(e.diasRestantes)} dias` : e.diasRestantes === 0 ? 'VENCE HOJE' : `${e.diasRestantes} dias restantes`,
+        detailColor: e.urgencia === 'vencido' ? 'text-red-600 font-bold' : 'text-orange-600 font-semibold',
+      })),
+      action: () => { onClose(); navigate("/colaboradores"); },
+      actionLabel: "Ver Colaboradores",
+    },
+    {
       title: "Processos Trabalhistas - Risco Alto/Crítico",
       icon: Gavel,
       color: "text-purple-600",
@@ -734,7 +892,7 @@ function AlertasDialog({
 
         {/* Footer */}
         <div className="px-6 py-3 border-t bg-muted/20 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Atualizado em {new Date().toLocaleString("pt-BR")}</p>
+          <p className="text-xs text-muted-foreground">Atualizado em {nowBrasilia()}</p>
           <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
         </div>
       </DialogContent>

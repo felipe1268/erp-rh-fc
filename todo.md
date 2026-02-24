@@ -1877,3 +1877,21 @@
 - [x] Lógica robusta de cálculo de HE baseada na jornada contratada vs ponto real
 - [x] Integração do cálculo de HE na folha de pagamento
 - [x] Configurações globais de percentuais de HE (50%, 100%, noturno)
+
+## Rev. 73 — Contrato de Experiência CLT
+
+- [x] Campos no cadastro: tipo de experiência (30+30 ou 45+45), data início experiência, status
+- [x] Cálculo automático de datas de vencimento (1º período e 2º período)
+- [x] Status automático: Em Experiência, Prorrogado, Efetivado, Desligado
+- [x] Card na tela inicial (Dashboard) com colaboradores em experiência
+- [x] Alertas visuais de vencimento próximo (7 dias, vencido)
+- [x] Ações rápidas: Prorrogar, Efetivar, Desligar direto do painel
+- [x] Endpoint backend para listar experiências e executar ações
+- [ ] Testes unitários para lógica de prazos (futuro)
+
+## Correção — Datas/Horas das Revisões (GMT-3)
+- [x] Corrigir datas existentes no banco (UTC → Brasília GMT-3)
+- [x] Ajustar exibição no frontend para usar horário de Brasília (dateUtils.ts centralizado)
+- [x] Garantir que futuras inserções gravem no fuso correto (process.env.TZ = 'UTC' no servidor)
+- [x] Migrar TODAS as chamadas toLocaleString/toLocaleDateString para dateUtils em todos os arquivos
+- [x] Criar utilitários: formatDateTime, formatDate, formatTime, nowBrasilia, todayBrasiliaLong

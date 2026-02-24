@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO system_revisions (version, title, description, changes, created_at) VALUES ('Rev. 73', 'Contrato de Experiência CLT', 'Sistema completo de acompanhamento de contratos de experiência com alertas automáticos e ações na tela inicial', '[\"Campos de experiência no cadastro: tipo (30+30 ou 45+45), datas automáticas, status\",\"Card de Contratos de Experiência na tela inicial com urgência por cores\",\"Ações diretas: Prorrogar, Efetivar ou Desligar com confirmação\",\"Alertas na Central de Alertas para contratos vencidos/urgentes\",\"Registro automático no histórico do colaborador\",\"Cálculo automático de datas de vencimento\"]', NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (version, title, description, changes, created_at) VALUES ('Rev. 73', 'Contrato de Experiência CLT', 'Sistema completo de acompanhamento de contratos de experiência com alertas automáticos e ações na tela inicial', '[\"Campos de experiência no cadastro: tipo (30+30 ou 45+45), datas automáticas, status\",\"Card de Contratos de Experiência na tela inicial com urgência por cores\",\"Ações diretas: Prorrogar, Efetivar ou Desligar com confirmação\",\"Alertas na Central de Alertas para contratos vencidos/urgentes\",\"Registro automático no histórico do colaborador\",\"Cálculo automático de datas de vencimento\"]', NOW());",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'title' in 'field list'"
+  ]
+}

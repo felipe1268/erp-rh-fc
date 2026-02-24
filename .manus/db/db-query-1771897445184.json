@@ -1,0 +1,150 @@
+{
+  "query": "SELECT id, version, titulo, dataPublicacao, createdAt FROM system_revisions ORDER BY version DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, dataPublicacao, createdAt FROM system_revisions ORDER BY version DESC LIMIT 20;",
+  "rows": [
+    {
+      "id": "21",
+      "version": "73",
+      "titulo": "Contrato de Experiência CLT",
+      "dataPublicacao": "2026-02-24 01:43:01",
+      "createdAt": "2026-02-24 01:43:01"
+    },
+    {
+      "id": "20",
+      "version": "72",
+      "titulo": "Jornada 44h Semanais e Cálculo de HE Robusto",
+      "dataPublicacao": "2026-02-24 01:26:23",
+      "createdAt": "2026-02-24 01:26:23"
+    },
+    {
+      "id": "19",
+      "version": "71",
+      "titulo": "Memória DIXI, Simulador Horistas, Tipo Horista",
+      "dataPublicacao": "2026-02-24 01:12:33",
+      "createdAt": "2026-02-24 01:12:33"
+    },
+    {
+      "id": "18",
+      "version": "70",
+      "titulo": "Salário/Hora Bidirecional + Código Interno em Destaque",
+      "dataPublicacao": "2026-02-24 00:00:00",
+      "createdAt": "2026-02-24 00:44:30"
+    },
+    {
+      "id": "17",
+      "version": "69",
+      "titulo": "Funcionários Não Identificados como Inconsistência Tratável",
+      "dataPublicacao": "2026-02-24 00:00:00",
+      "createdAt": "2026-02-24 00:31:01"
+    },
+    {
+      "id": "16",
+      "version": "68",
+      "titulo": "Detecção Inteligente de Transferência de Obra nos Conflitos",
+      "dataPublicacao": "2026-02-24 00:00:00",
+      "createdAt": "2026-02-24 00:00:09"
+    },
+    {
+      "id": "15",
+      "version": "67",
+      "titulo": "Correção do fluxo de Advertência nas Inconsistências de Ponto",
+      "dataPublicacao": "2026-02-23 23:45:00",
+      "createdAt": "2026-02-23 23:43:34"
+    },
+    {
+      "id": "14",
+      "version": "66",
+      "titulo": "Navegação de ponto no Fechamento — clique no nome abre detalhe de ponto",
+      "dataPublicacao": "2026-02-23 23:25:00",
+      "createdAt": "2026-02-23 23:23:40"
+    },
+    {
+      "id": "13",
+      "version": "65",
+      "titulo": "Correção definitiva desconsolidação + Layout responsivo Revisões",
+      "dataPublicacao": "2026-02-23 22:30:00",
+      "createdAt": "2026-02-23 23:08:10"
+    },
+    {
+      "id": "12",
+      "version": "64",
+      "titulo": "Correção Desconsolidação + Relógios na Obra + Controle de Revisões",
+      "dataPublicacao": "2026-02-23 19:30:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "11",
+      "version": "63",
+      "titulo": "Correções de Permissões e Perfis de Usuário",
+      "dataPublicacao": "2026-02-23 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "10",
+      "version": "62",
+      "titulo": "Setores, Funções e Contas Bancárias",
+      "dataPublicacao": "2026-02-22 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "9",
+      "version": "61",
+      "titulo": "Auditoria e Lixeira",
+      "dataPublicacao": "2026-02-21 16:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "8",
+      "version": "60",
+      "titulo": "Configurações e Painel de Controle",
+      "dataPublicacao": "2026-02-21 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "7",
+      "version": "55",
+      "titulo": "Módulos de Gestão de Pessoas",
+      "dataPublicacao": "2026-02-20 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "6",
+      "version": "50",
+      "titulo": "Dashboards e Relatórios",
+      "dataPublicacao": "2026-02-19 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "5",
+      "version": "40",
+      "titulo": "Folha de Pagamento e Vale Alimentação",
+      "dataPublicacao": "2026-02-17 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "4",
+      "version": "30",
+      "titulo": "Fechamento de Ponto e Upload DIXI",
+      "dataPublicacao": "2026-02-16 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "3",
+      "version": "20",
+      "titulo": "Módulo de Obras e Relógios de Ponto",
+      "dataPublicacao": "2026-02-14 10:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    },
+    {
+      "id": "2",
+      "version": "10",
+      "titulo": "Módulo de Empresas e Colaboradores",
+      "dataPublicacao": "2026-02-12 14:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\tdataPublicacao\tcreatedAt\n21\t73\tContrato de Experiência CLT\t2026-02-24 01:43:01\t2026-02-24 01:43:01\n20\t72\tJornada 44h Semanais e Cálculo de HE Robusto\t2026-02-24 01:26:23\t2026-02-24 01:26:23\n19\t71\tMemória DIXI, Simulador Horistas, Tipo Horista\t2026-02-24 01:12:33\t2026-02-24 01:12:33\n18\t70\tSalário/Hora Bidirecional + Código Interno em Destaque\t2026-02-24 00:00:00\t2026-02-24 00:44:30\n17\t69\tFuncionários Não Identificados como Inconsistência Tratável\t2026-02-24 00:00:00\t2026-02-24 00:31:01\n16\t68\tDetecção Inteligente de Transferência de Obra nos Conflitos\t2026-02-24 00:00:00\t2026-02-24 00:00:09\n15\t67\tCorreção do fluxo de Advertência nas Inconsistências de Ponto\t2026-02-23 23:45:00\t2026-02-23 23:43:34\n14\t66\tNavegação de ponto no Fechamento — clique no nome abre detalhe de ponto\t2026-02-23 23:25:00\t2026-02-23 23:23:40\n13\t65\tCorreção definitiva desconsolidação + Layout responsivo Revisões\t2026-02-23 22:30:00\t2026-02-23 23:08:10\n12\t64\tCorreção Desconsolidação + Relógios na Obra + Controle de Revisões\t2026-02-23 19:30:00\t2026-02-23 22:45:06\n11\t63\tCorreções de Permissões e Perfis de Usuário\t2026-02-23 10:00:00\t2026-02-23 22:45:06\n10\t62\tSetores, Funções e Contas Bancárias\t2026-02-22 10:00:00\t2026-02-23 22:45:06\n9\t61\tAuditoria e Lixeira\t2026-02-21 16:00:00\t2026-02-23 22:45:06\n8\t60\tConfigurações e Painel de Controle\t2026-02-21 10:00:00\t2026-02-23 22:45:06\n7\t55\tMódulos de Gestão de Pessoas\t2026-02-20 10:00:00\t2026-02-23 22:45:06\n6\t50\tDashboards e Relatórios\t2026-02-19 10:00:00\t2026-02-23 22:45:06\n5\t40\tFolha de Pagamento e Vale Alimentação\t2026-02-17 10:00:00\t2026-02-23 22:45:06\n4\t30\tFechamento de Ponto e Upload DIXI\t2026-02-16 10:00:00\t2026-02-23 22:45:06\n3\t20\tMódulo de Obras e Relógios de Ponto\t2026-02-14 10:00:00\t2026-02-23 22:45:06\n2\t10\tMódulo de Empresas e Colaboradores\t2026-02-12 14:00:00\t2026-02-23 22:45:06\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

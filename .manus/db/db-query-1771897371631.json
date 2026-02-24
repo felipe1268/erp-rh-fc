@@ -1,0 +1,37 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'system_revisions' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'system_revisions' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "version"
+    },
+    {
+      "COLUMN_NAME": "titulo"
+    },
+    {
+      "COLUMN_NAME": "descricao"
+    },
+    {
+      "COLUMN_NAME": "tipo"
+    },
+    {
+      "COLUMN_NAME": "modulos"
+    },
+    {
+      "COLUMN_NAME": "criadoPor"
+    },
+    {
+      "COLUMN_NAME": "dataPublicacao"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\nversion\ntitulo\ndescricao\ntipo\nmodulos\ncriadoPor\ndataPublicacao\ncreatedAt\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

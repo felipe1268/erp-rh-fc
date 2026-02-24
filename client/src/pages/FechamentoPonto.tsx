@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
+import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
@@ -348,8 +349,8 @@ export default function FechamentoPonto() {
   const handlePrint = () => {
     const empresa = "FC ENGENHARIA PROJETOS E CONSTRUÇÕES";
     const competencia = formatMesAno(mesAno);
-    const dataEmissao = new Date().toLocaleString("pt-BR");
-    const consolidadoInfo = isConsolidado ? `Consolidado por: ${consolidacaoStatus.data?.consolidadoPor || "—"} em ${consolidacaoStatus.data?.consolidadoEm ? new Date(consolidacaoStatus.data.consolidadoEm).toLocaleString("pt-BR") : "—"}` : "Não consolidado";
+    const dataEmissao = nowBrasilia();
+    const consolidadoInfo = isConsolidado ? `Consolidado por: ${consolidacaoStatus.data?.consolidadoPor || "—"} em ${formatDateTime(consolidacaoStatus.data?.consolidadoEm)}` : "Não consolidado";
 
     let titulo = "";
     let conteudo = "";
@@ -589,7 +590,7 @@ export default function FechamentoPonto() {
               <p className="text-sm text-green-700 mt-1">
                 Consolidado por <strong>{consolidacaoStatus.data?.consolidadoPor || "—"}</strong>
                 {consolidacaoStatus.data?.consolidadoEm && (
-                  <> em {new Date(consolidacaoStatus.data.consolidadoEm).toLocaleString("pt-BR")}</>
+                  <> em {formatDateTime(consolidacaoStatus.data.consolidadoEm)}</>
                 )}
                 . Nenhuma alteração permitida. {isAdmin ? "Apenas o Admin Master pode desconsolidar." : "Solicite ao Admin Master para desconsolidar."}
               </p>
@@ -2765,7 +2766,7 @@ export default function FechamentoPonto() {
               </div>
               <div className="bg-muted/50 rounded-lg p-3 text-sm">
                 <p><strong>Consolidado por:</strong> {consolidacaoStatus.data?.consolidadoPor || "—"}</p>
-                <p><strong>Data:</strong> {consolidacaoStatus.data?.consolidadoEm ? new Date(consolidacaoStatus.data.consolidadoEm).toLocaleString("pt-BR") : "—"}</p>
+                <p><strong>Data:</strong> {formatDateTime(consolidacaoStatus.data?.consolidadoEm)}</p>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">

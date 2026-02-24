@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
+import { nowBrasilia } from "@/lib/dateUtils";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -142,7 +143,7 @@ export default function ModuloPJ() {
     </style></head><body>`;
     
     html += `<h1>Relatório Consolidado PJ — ${mesLabel}</h1>`;
-    html += `<div class="header-info"><span>Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}</span><span>${relatorio.totais.qtdPrestadores} prestador(es) • ${relatorio.totais.qtdLancamentos} lançamento(s)</span></div>`;
+    html += `<div class="header-info"><span>Gerado em: ${nowBrasilia()}</span><span>${relatorio.totais.qtdPrestadores} prestador(es) • ${relatorio.totais.qtdLancamentos} lançamento(s)</span></div>`;
     
     // Resumo geral
     html += `<div style="text-align:center;margin:16px 0;">`;

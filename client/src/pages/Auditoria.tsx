@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
+import { formatDateTime } from "@/lib/dateUtils";
 import { FileText, Trash2, RotateCcw, AlertTriangle, Clock, User, Building2, Search, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -142,7 +143,7 @@ export default function Auditoria() {
                     {filteredLogs.map(log => (
                       <tr key={log.id} className="border-t border-border hover:bg-secondary/30 transition-colors">
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                          {new Date(log.createdAt).toLocaleString("pt-BR")}
+                          {formatDateTime(log.createdAt)}
                         </td>
                         <td className="px-4 py-3 font-medium">{log.userName ?? "Sistema"}</td>
                         <td className="px-4 py-3">
@@ -209,7 +210,7 @@ export default function Auditoria() {
                             <div className="flex items-center gap-4 mt-2 text-xs text-red-600">
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                Excluído em: {emp.deletedAt ? new Date(emp.deletedAt).toLocaleString("pt-BR") : "-"}
+                                Excluído em: {formatDateTime(emp.deletedAt)}
                               </span>
                               <span className="flex items-center gap-1">
                                 <User className="h-3 w-3" />

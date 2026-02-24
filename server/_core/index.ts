@@ -1,3 +1,6 @@
+// Forçar timezone UTC no Node.js para garantir que timestamps do banco sejam retornados em UTC
+process.env.TZ = 'UTC';
+
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";

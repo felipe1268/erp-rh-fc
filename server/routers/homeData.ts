@@ -305,7 +305,65 @@ export const homeDataRouter = router({
       const obrasAtivas = allObras.filter(o => o.status === "Em_Andamento" || (o.status as string) === "Em Andamento");
 
       // ============================================================
-      // 10. STATS CONSOLIDADOS
+      // 10. CONTRATOS DE EXPERIÊNCIA
+      // ============================================================
+      const experiencias = todosNaoDesligados
+        .filter(e => (e as any).experienciaTipo && (e as any).experienciaStatus !== 'efetivado' && (e as any).experienciaStatus !== 'desligado_experiencia')
+        .map(e => {
+          const exp = e as any;
+          const tipo = exp.experienciaTipo; // '30_30' ou '45_45'
+          const inicio = exp.experienciaInicio || e.dataAdmissao;
+          if (!inicio) return null;
+
+          const dias1 = tipo === '30_30' ? 30 : 45;
+          const dias2 = tipo === '30_30' ? 60 : 90;
+
+          const dtInicio = new Date(inicio + 'T12:00:00');
+          const dtFim1 = new Date(dtInicio);
+          dtFim1.setDate(dtFim1.getDate() + dias1);
+          const dtFim2 = new Date(dtInicio);
+          dtFim2.setDate(dtFim2.getDate() + dias2);
+
+          const fim1Str = dtFim1.toISOString().split('T')[0];
+          const fim2Str = dtFim2.toISOString().split('T')[0];
+
+          const status = exp.experienciaStatus || 'em_experiencia';
+          const isProrrogado = status === 'prorrogado';
+
+          // Calcular dias restantes
+          const fimRelevante = isProrrogado ? dtFim2 : dtFim1;
+          const diasRestantes = Math.ceil((fimRelevante.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+          // Determinar urgência
+          let urgencia: 'normal' | 'atencao' | 'urgente' | 'vencido' = 'normal';
+          if (diasRestantes < 0) urgencia = 'vencido';
+          else if (diasRestantes <= 7) urgencia = 'urgente';
+          else if (diasRestantes <= 15) urgencia = 'atencao';
+
+          return {
+            id: e.id,
+            nome: e.nomeCompleto,
+            funcao: e.funcao,
+            tipo,
+            inicio,
+            fim1: fim1Str,
+            fim2: fim2Str,
+            status,
+            diasRestantes,
+            urgencia,
+            prorrogadoEm: exp.experienciaProrrogadoEm,
+            obs: exp.experienciaObs,
+          };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => a.diasRestantes - b.diasRestantes);
+
+      const experienciasVencidas = experiencias.filter((e: any) => e.urgencia === 'vencido').length;
+      const experienciasUrgentes = experiencias.filter((e: any) => e.urgencia === 'urgente').length;
+      const experienciasAtencao = experiencias.filter((e: any) => e.urgencia === 'atencao').length;
+
+      // ============================================================
+      // 11. STATS CONSOLIDADOS
       // ============================================================
       const statsConsolidados = {
         totalFuncionarios: allEmps.length,
@@ -324,6 +382,10 @@ export const homeDataRouter = router({
         aniversariantesMes: aniversariantes.length,
         advertenciasRecentes: advertenciasRecentes.length,
         feriasAlerta: feriasAlerta.length,
+        experienciasTotal: experiencias.length,
+        experienciasVencidas,
+        experienciasUrgentes,
+        experienciasAtencao,
       };
 
       return {
@@ -336,6 +398,7 @@ export const homeDataRouter = router({
         proximasAudiencias,
         movimentacoes,
         advertenciasRecentes,
+        experiencias,
       };
     }),
 });

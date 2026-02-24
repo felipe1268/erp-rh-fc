@@ -426,6 +426,66 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.employeeId, details: `Foto 3x4 removida` });
       return { success: true };
     }),
+    // === CONTRATO DE EXPERIÊNCIA ===
+    prorrogarExperiencia: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      obs: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const emp = await getEmployeeById(input.employeeId, input.companyId);
+      if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      const expStatus = (emp as any).experienciaStatus;
+      if (expStatus !== 'em_experiencia') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Só é possível prorrogar contratos no 1º período de experiência' });
+      await updateEmployee(input.employeeId, input.companyId, {
+        experienciaStatus: 'prorrogado',
+        experienciaProrrogadoEm: new Date().toISOString().split('T')[0],
+        experienciaProrrogadoPor: ctx.user.name ?? 'Sistema',
+        experienciaObs: input.obs || null,
+      } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Contrato de experiência PRORROGADO para 2º período. ${input.obs || ''}` });
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: `Contrato de experiência prorrogado para 2º período por ${ctx.user.name}. ${input.obs || ''}`, data: new Date().toISOString().split('T')[0], registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      return { success: true };
+    }),
+    efetivarExperiencia: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      obs: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const emp = await getEmployeeById(input.employeeId, input.companyId);
+      if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      await updateEmployee(input.employeeId, input.companyId, {
+        experienciaStatus: 'efetivado',
+        experienciaEfetivadoEm: new Date().toISOString().split('T')[0],
+        experienciaEfetivadoPor: ctx.user.name ?? 'Sistema',
+        experienciaObs: input.obs || null,
+      } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Colaborador EFETIVADO após período de experiência. ${input.obs || ''}` });
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: `Colaborador efetivado após período de experiência por ${ctx.user.name}. ${input.obs || ''}`, data: new Date().toISOString().split('T')[0], registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      return { success: true };
+    }),
+    desligarExperiencia: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      motivo: z.string().min(1),
+      obs: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const emp = await getEmployeeById(input.employeeId, input.companyId);
+      if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      await updateEmployee(input.employeeId, input.companyId, {
+        experienciaStatus: 'desligado_experiencia',
+        status: 'Desligado',
+        dataDemissao: new Date().toISOString().split('T')[0],
+        dataDesligamentoEfetiva: new Date().toISOString().split('T')[0],
+        categoriaDesligamento: 'Término de contrato',
+        motivoDesligamento: input.motivo,
+        desligadoPor: ctx.user.name ?? 'Sistema',
+        desligadoUserId: ctx.user.id,
+        experienciaObs: input.obs || null,
+      } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Colaborador DESLIGADO durante período de experiência. Motivo: ${input.motivo}` });
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Desligamento' as any, descricao: `Desligado durante período de experiência por ${ctx.user.name}. Motivo: ${input.motivo}`, data: new Date().toISOString().split('T')[0], registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      return { success: true };
+    }),
   }),
 
   // ============================================================

@@ -369,6 +369,17 @@ export const employees = mysqlTable("employees", {
 	heInterjornada: varchar({ length: 10 }).default('50'),
 	obsAcordoHe: text(),
 	contaBancariaEmpresaId: int(), // FK para company_bank_accounts - qual conta da empresa paga este funcionário
+	// Contrato de Experiência CLT
+	experienciaTipo: mysqlEnum(['30_30','45_45']), // 30+30=60 dias ou 45+45=90 dias
+	experienciaInicio: date({ mode: 'string' }), // Data início da experiência (geralmente = dataAdmissao)
+	experienciaFim1: date({ mode: 'string' }), // Fim do 1º período (calculado automaticamente)
+	experienciaFim2: date({ mode: 'string' }), // Fim do 2º período / efetivação (calculado automaticamente)
+	experienciaStatus: mysqlEnum(['em_experiencia','prorrogado','efetivado','desligado_experiencia']).default('em_experiencia'),
+	experienciaProrrogadoEm: date({ mode: 'string' }), // Data em que foi prorrogado
+	experienciaProrrogadoPor: varchar({ length: 255 }), // Quem prorrogou
+	experienciaEfetivadoEm: date({ mode: 'string' }), // Data em que foi efetivado
+	experienciaEfetivadoPor: varchar({ length: 255 }), // Quem efetivou
+	experienciaObs: text(), // Observações sobre a experiência
 	// Soft Delete
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),

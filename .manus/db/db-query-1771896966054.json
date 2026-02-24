@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE employees \n  ADD COLUMN experiencia_tipo ENUM('30_30','45_45') NULL,\n  ADD COLUMN experiencia_inicio DATE NULL,\n  ADD COLUMN experiencia_fim1 DATE NULL,\n  ADD COLUMN experiencia_fim2 DATE NULL,\n  ADD COLUMN experiencia_status ENUM('em_experiencia','prorrogado','efetivado','desligado_experiencia') DEFAULT 'em_experiencia',\n  ADD COLUMN experiencia_prorrogado_em DATE NULL,\n  ADD COLUMN experiencia_prorrogado_por VARCHAR(255) NULL,\n  ADD COLUMN experiencia_efetivado_em DATE NULL,\n  ADD COLUMN experiencia_efetivado_por VARCHAR(255) NULL,\n  ADD COLUMN experiencia_obs TEXT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE employees \n  ADD COLUMN experiencia_tipo ENUM('30_30','45_45') NULL,\n  ADD COLUMN experiencia_inicio DATE NULL,\n  ADD COLUMN experiencia_fim1 DATE NULL,\n  ADD COLUMN experiencia_fim2 DATE NULL,\n  ADD COLUMN experiencia_status ENUM('em_experiencia','prorrogado','efetivado','desligado_experiencia') DEFAULT 'em_experiencia',\n  ADD COLUMN experiencia_prorrogado_em DATE NULL,\n  ADD COLUMN experiencia_prorrogado_por VARCHAR(255) NULL,\n  ADD COLUMN experiencia_efetivado_em DATE NULL,\n  ADD COLUMN experiencia_efetivado_por VARCHAR(255) NULL,\n  ADD COLUMN experiencia_obs TEXT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1501
+}

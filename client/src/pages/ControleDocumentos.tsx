@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
+import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
   Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X
@@ -884,7 +885,7 @@ export default function ControleDocumentos() {
                               </Button>}
                               {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Imprimir Documento CLT" onClick={() => {
                                 const userName = authUser?.name || authUser?.username || "Usuário";
-                                const dataEmissao = new Date().toLocaleString("pt-BR");
+                                const dataEmissao = nowBrasilia();
                                 const logoUrl = "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png";
                                 const tipo = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
                                 const tipoTitulo = a.tipoAdvertencia === "Suspensao" ? "SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "RESCISÃO POR JUSTA CAUSA" : a.tipoAdvertencia === "Escrita" ? "ADVERTÊNCIA POR ESCRITO" : "ADVERTÊNCIA VERBAL";
@@ -938,7 +939,7 @@ export default function ControleDocumentos() {
                                   <p>${a.tipoAdvertencia === "Suspensao" ? "A presente suspensão é aplicada com fundamento no Art. 474 da CLT, que limita a suspensão disciplinar a no máximo 30 (trinta) dias consecutivos. Durante o período de suspensão, o(a) colaborador(a) não deverá comparecer ao local de trabalho e terá os dias descontados de sua remuneração." : a.tipoAdvertencia === "JustaCausa" ? "Após esgotadas todas as medidas socioeducativas e disciplinares previstas, e diante da reincidência e/ou gravidade da falta cometida, a empresa não encontra outra alternativa senão a aplicação da penalidade máxima, com fundamento no Art. 482 da CLT." : "Esclarecemos que a presente advertência tem caráter educativo e visa orientar o(a) colaborador(a) sobre a conduta esperada, conforme previsto no Art. 482 da CLT e no regulamento interno da empresa."}</p>
                                   <p>${a.tipoAdvertencia !== "JustaCausa" ? "A reincidência poderá acarretar a aplicação de penalidades mais severas, incluindo " + (a.tipoAdvertencia === "Suspensao" ? "rescisão do contrato de trabalho por justa causa." : "advertência por escrito, suspensão disciplinar e, em último caso, rescisão do contrato de trabalho por justa causa.") : "O(A) colaborador(a) deverá comparecer ao Departamento Pessoal para as providências de rescisão contratual."}</p>
                                   <p>O(A) colaborador(a) declara estar ciente desta ${tipo.toLowerCase()} e compromete-se a adequar sua conduta.</p>
-                                  <p style="text-indent:0; margin-top: 25px;">_________________, ${new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}.</p>
+                                  <p style="text-indent:0; margin-top: 25px;">_________________, ${todayBrasiliaLong()}.</p>
                                 </div>
                                 <div class="signatures">
                                   <div class="sig-row">
@@ -1360,7 +1361,7 @@ export default function ControleDocumentos() {
               <div className="flex items-center gap-2">
                 <Button size="sm" className="gap-2 bg-white text-blue-800 hover:bg-blue-50" onClick={() => {
                   const userName = authUser?.name || authUser?.username || "Usuário";
-                  const dataEmissao = new Date().toLocaleString("pt-BR");
+                  const dataEmissao = nowBrasilia();
                   const t1 = testemunhasArr[0] || { nome: "", doc: "" };
                   const t2 = testemunhasArr[1] || { nome: "", doc: "" };
                   const t3 = testemunhasArr[2] || { nome: "", doc: "" };
@@ -1404,7 +1405,7 @@ export default function ControleDocumentos() {
                     <p>${a.tipoAdvertencia === "Suspensao" ? "A presente suspensão é aplicada com fundamento no Art. 474 da CLT, que limita a suspensão disciplinar a no máximo 30 (trinta) dias consecutivos. Durante o período de suspensão, o(a) colaborador(a) não deverá comparecer ao local de trabalho e terá os dias descontados de sua remuneração." : a.tipoAdvertencia === "JustaCausa" ? "Após esgotadas todas as medidas socioeducativas e disciplinares previstas, e diante da reincidência e/ou gravidade da falta cometida, a empresa não encontra outra alternativa senão a aplicação da penalidade máxima, com fundamento no Art. 482 da CLT." : "Esclarecemos que a presente advertência tem caráter educativo e visa orientar o(a) colaborador(a) sobre a conduta esperada, conforme previsto no Art. 482 da CLT e no regulamento interno da empresa."}</p>
                     <p>${a.tipoAdvertencia !== "JustaCausa" ? "A reincidência poderá acarretar a aplicação de penalidades mais severas, incluindo " + (a.tipoAdvertencia === "Suspensao" ? "rescisão do contrato de trabalho por justa causa." : "advertência por escrito, suspensão disciplinar e, em último caso, rescisão do contrato de trabalho por justa causa.") : "O(A) colaborador(a) deverá comparecer ao Departamento Pessoal para as providências de rescisão contratual."}</p>
                     <p>O(A) colaborador(a) declara estar ciente desta ${tipo.toLowerCase()} e compromete-se a adequar sua conduta.</p>
-                    <p style="text-indent:0; margin-top: 25px;">_________________, ${new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}.</p>
+                    <p style="text-indent:0; margin-top: 25px;">_________________, ${todayBrasiliaLong()}.</p>
                   </div>
                   <div class="signatures">
                     <div class="sig-row">
@@ -1484,7 +1485,7 @@ export default function ControleDocumentos() {
                     {a.tipoAdvertencia !== "JustaCausa" ? "A reincidência poderá acarretar a aplicação de penalidades mais severas, incluindo " + (a.tipoAdvertencia === "Suspensao" ? "rescisão do contrato de trabalho por justa causa." : "advertência por escrito, suspensão disciplinar e, em último caso, rescisão do contrato de trabalho por justa causa.") : "O(A) colaborador(a) deverá comparecer ao Departamento Pessoal para as providências de rescisão contratual."}
                   </p>
                   <p className="indent-10">O(A) colaborador(a) declara estar ciente desta {tipo.toLowerCase()} e compromete-se a adequar sua conduta.</p>
-                  <p className="mt-6">_________________, {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}.</p>
+                  <p className="mt-6">_________________, {todayBrasiliaLong()}.</p>
 
                   {/* Assinaturas */}
                   <div className="mt-16 space-y-12">
@@ -1511,7 +1512,7 @@ export default function ControleDocumentos() {
                   {/* Footer LGPD */}
                   <div className="mt-8 pt-3 border-t-2 border-[#1e3a6e] flex justify-between text-[9px] text-gray-500">
                     <span>ERP RH & DP — FC Engenharia</span>
-                    <span>Documento gerado por: <strong>{authUser?.name || authUser?.username || "Usuário"}</strong> em {new Date().toLocaleString("pt-BR")}</span>
+                    <span>Documento gerado por: <strong>{authUser?.name || authUser?.username || "Usuário"}</strong> em {nowBrasilia()}</span>
                     <span className="text-red-600 font-semibold">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span>
                   </div>
                 </div>

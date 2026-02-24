@@ -1,4 +1,5 @@
 import { useCompany } from "@/contexts/CompanyContext";
+import { nowBrasilia } from "@/lib/dateUtils";
 
 /**
  * Cabeçalho de impressão que exibe o logo e dados da empresa selecionada.
@@ -34,7 +35,7 @@ export default function PrintHeader({ title }: { title?: string }) {
         </div>
       )}
       <div style={{ fontSize: "10px", color: "#999", marginTop: "4px" }}>
-        Impresso em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+        Impresso em: {nowBrasilia()}
       </div>
     </div>
   );
