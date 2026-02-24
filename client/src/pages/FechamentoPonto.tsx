@@ -16,7 +16,7 @@ import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
-  ListChecks, Filter, ChevronDown, Zap
+  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -644,8 +644,17 @@ export default function FechamentoPonto() {
               <p className="font-bold text-orange-800 text-base">Conflito de Obras no Mesmo Dia</p>
               <p className="text-sm text-orange-700 mt-1">
                 <strong>{conflitosCount} registro(s)</strong> de funcionários que aparecem em <strong>2 ou mais obras no mesmo dia</strong>.
-                Isso é <strong>inaceitável</strong> — um funcionário não pode estar em dois lugares ao mesmo tempo.
-                Verifique se é erro de lançamento ou deslocamento real.
+                {(() => {
+                  const overlaps = (conflitos.data || []).filter((c: any) => c.hasOverlap).length;
+                  const transfers = (conflitos.data || []).filter((c: any) => c.transferAnalysis && c.transferAnalysis.length > 0).length;
+                  const other = conflitosCount - overlaps - transfers;
+                  const parts: string[] = [];
+                  if (overlaps > 0) parts.push(`${overlaps} sobreposição(s) (resolver manual)`);
+                  if (transfers > 0) parts.push(`${transfers} transferência(s) detectada(s)`);
+                  if (other > 0) parts.push(`${other} deslocamento(s) válido(s)`);
+                  return parts.length > 0 ? ` ${parts.join(', ')}.` : '';
+                })()}
+                {' '}Clique para expandir e resolver cada caso.
               </p>
             </div>
             <Badge className="bg-orange-600 text-white text-sm px-3 py-1 shrink-0">
@@ -1385,6 +1394,10 @@ export default function FechamentoPonto() {
                                       <Badge className="text-xs bg-red-100 text-red-800 border border-red-300">
                                         <XCircle className="h-3 w-3 mr-1" /> Sobreposição
                                       </Badge>
+                                    ) : c.transferAnalysis && c.transferAnalysis.length > 0 ? (
+                                      <Badge className="text-xs bg-blue-100 text-blue-800 border border-blue-300">
+                                        <ArrowRightLeft className="h-3 w-3 mr-1" /> Transferência
+                                      </Badge>
                                     ) : (
                                       <Badge className="text-xs bg-green-100 text-green-800 border border-green-300">
                                         <CheckCircle className="h-3 w-3 mr-1" /> Desloc. Válido
@@ -1427,12 +1440,67 @@ export default function FechamentoPonto() {
                                   <tr>
                                     <td colSpan={6} className="p-0">
                                       <div className={`border-t p-4 ${isOverlap ? "bg-red-50/50 border-red-200" : "bg-green-50/50 border-green-200"}`}>
+                                        {/* ALERTA: SOBREPOSIÇÃO REAL */}
                                         {isOverlap && (
-                                          <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded-lg flex items-center gap-2">
-                                            <AlertCircle className="h-4 w-4 text-red-700 flex-shrink-0" />
-                                            <p className="text-xs text-red-800 font-medium">
-                                              SOBREPOSIÇÃO DE HORÁRIOS: O funcionário aparece em 2 obras no mesmo período. 
-                                              Escolha manualmente qual obra manter ou exclua o registro incorreto.
+                                          <div className="mb-3 p-3 bg-red-100 border border-red-300 rounded-lg flex items-start gap-2">
+                                            <AlertCircle className="h-5 w-5 text-red-700 flex-shrink-0 mt-0.5" />
+                                            <div>
+                                              <p className="text-xs text-red-800 font-bold">SOBREPOSIÇÃO DE HORÁRIOS</p>
+                                              <p className="text-xs text-red-700 mt-0.5">
+                                                O funcionário aparece em 2 obras <strong>no mesmo horário</strong>. Isso é impossível.
+                                                Escolha qual obra manter ou exclua o registro incorreto.
+                                              </p>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {/* ALERTA: TRANSFERÊNCIA DETECTADA */}
+                                        {!isOverlap && c.transferAnalysis && c.transferAnalysis.length > 0 && (
+                                          <div className="mb-3 p-3 bg-blue-50 border border-blue-300 rounded-lg">
+                                            <div className="flex items-start gap-2 mb-2">
+                                              <ArrowRightLeft className="h-5 w-5 text-blue-700 flex-shrink-0 mt-0.5" />
+                                              <div>
+                                                <p className="text-xs text-blue-800 font-bold">TRANSFERÊNCIA DE OBRA DETECTADA</p>
+                                                <p className="text-xs text-blue-700 mt-0.5">
+                                                  O funcionário bateu ponto em horários diferentes em obras distintas. 
+                                                  Provavelmente foi <strong>transferido de obra</strong> durante o dia.
+                                                </p>
+                                              </div>
+                                            </div>
+                                            {c.transferAnalysis.map((t: any, ti: number) => (
+                                              <div key={ti} className="mt-2 p-2.5 bg-white border border-blue-200 rounded-lg">
+                                                <div className="flex items-center gap-2 text-xs">
+                                                  <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded">
+                                                    <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                                                    <span className="font-semibold text-blue-800">{t.fromObraNome}</span>
+                                                    <span className="text-blue-600 font-mono">({t.fromEntrada})</span>
+                                                  </div>
+                                                  <ArrowRight className="h-4 w-4 text-blue-500" />
+                                                  <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded">
+                                                    <Building2 className="h-3.5 w-3.5 text-green-600" />
+                                                    <span className="font-semibold text-green-800">{t.toObraNome}</span>
+                                                    <span className="text-green-600 font-mono">({t.toEntrada})</span>
+                                                  </div>
+                                                  <Badge className="bg-blue-100 text-blue-700 text-[10px] ml-auto">
+                                                    Gap: {t.gapMinutes >= 60 ? `${Math.floor(t.gapMinutes/60)}h${t.gapMinutes%60 > 0 ? String(t.gapMinutes%60).padStart(2,'0') : ''}` : `${t.gapMinutes}min`}
+                                                  </Badge>
+                                                </div>
+                                                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded flex items-center gap-2">
+                                                  <Info className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                                                  <p className="text-[11px] text-amber-800">
+                                                    <strong>Sugestão:</strong> Registre uma saída às <strong className="font-mono">{t.suggestedExit}</strong> na obra <strong>{t.fromObraNome}</strong> para fechar as horas corretamente.
+                                                    Use o botão "Lançar Manual" para ajustar.
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        {/* ALERTA: DESLOCAMENTO SEM ANÁLISE DETALHADA */}
+                                        {!isOverlap && (!c.transferAnalysis || c.transferAnalysis.length === 0) && (
+                                          <div className="mb-3 p-2 bg-green-100 border border-green-300 rounded-lg flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 text-green-700 flex-shrink-0" />
+                                            <p className="text-xs text-green-800 font-medium">
+                                              Deslocamento entre obras detectado — os horários não se sobrepõem.
                                             </p>
                                           </div>
                                         )}
@@ -1483,19 +1551,46 @@ export default function FechamentoPonto() {
                                                     </Button>
                                                   ))}
                                                 </div>
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                  {(c.records || c.obras || []).map((o: any, oi: number) => (
+                                                    <Button key={`del-${oi}`} size="sm" variant="ghost" className="gap-1.5 text-xs text-red-600 hover:bg-red-50"
+                                                      onClick={() => {
+                                                        if (!o.obraId) return toast.error("Obra sem ID");
+                                                        if (confirm(`Excluir TODOS os registros da obra "${o.obraNome}" neste dia?`)) {
+                                                          resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "excluir_registro", obraIdExcluir: o.obraId, justificativa: conflictJustificativa || `Excluído registro de ${o.obraNome} (erro de lançamento)` });
+                                                        }
+                                                      }}
+                                                      disabled={resolveConflitoMut.isPending}>
+                                                      <Trash2 className="h-3.5 w-3.5" /> Excluir {o.obraNome?.substring(0, 15)}
+                                                    </Button>
+                                                  ))}
+                                                </div>
                                               </div>
                                             ) : (
-                                              <div className="flex gap-2">
-                                                <Button size="sm" className="gap-1.5 text-xs bg-green-600 hover:bg-green-700"
-                                                  onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Deslocamento confirmado" })}
-                                                  disabled={resolveConflitoMut.isPending}>
-                                                  <MapPin className="h-3.5 w-3.5" /> Confirmar Deslocamento Real (Rateio Proporcional)
-                                                </Button>
-                                                <Button size="sm" variant="outline" className="gap-1.5 text-xs"
-                                                  onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Manter obra principal" })}
-                                                  disabled={resolveConflitoMut.isPending}>
-                                                  <Building2 className="h-3.5 w-3.5" /> Manter Obra Principal
-                                                </Button>
+                                              <div className="space-y-2">
+                                                {c.transferAnalysis && c.transferAnalysis.length > 0 && (
+                                                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                    <p className="text-xs text-blue-800 font-bold mb-2 flex items-center gap-1">
+                                                      <ArrowRightLeft className="h-3.5 w-3.5" /> Ações sugeridas para transferência:
+                                                    </p>
+                                                    <p className="text-[11px] text-blue-700 mb-2">
+                                                      Use "Lançar Manual" no topo da página para registrar a saída na obra anterior.
+                                                      Após ajustar, o conflito será resolvido automaticamente.
+                                                    </p>
+                                                  </div>
+                                                )}
+                                                <div className="flex gap-2">
+                                                  <Button size="sm" className="gap-1.5 text-xs bg-green-600 hover:bg-green-700"
+                                                    onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Deslocamento confirmado" })}
+                                                    disabled={resolveConflitoMut.isPending}>
+                                                    <MapPin className="h-3.5 w-3.5" /> Confirmar Deslocamento (Rateio Proporcional)
+                                                  </Button>
+                                                  <Button size="sm" variant="outline" className="gap-1.5 text-xs"
+                                                    onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Manter obra principal" })}
+                                                    disabled={resolveConflitoMut.isPending}>
+                                                    <Building2 className="h-3.5 w-3.5" /> Manter Obra Principal
+                                                  </Button>
+                                                </div>
                                               </div>
                                             )}
                                           </div>
@@ -1688,6 +1783,8 @@ export default function FechamentoPonto() {
                                 <div className="flex items-center gap-2">
                                   {isOverlap ? (
                                     <Badge className="bg-red-600 text-white text-xs"><XCircle className="h-3 w-3 mr-1" /> Sobreposição</Badge>
+                                  ) : c.transferAnalysis && c.transferAnalysis.length > 0 ? (
+                                    <Badge className="bg-blue-600 text-white text-xs"><ArrowRightLeft className="h-3 w-3 mr-1" /> Transferência</Badge>
                                   ) : (
                                     <Badge className="bg-green-600 text-white text-xs"><CheckCircle className="h-3 w-3 mr-1" /> Desloc. Válido</Badge>
                                   )}
@@ -1702,6 +1799,32 @@ export default function FechamentoPonto() {
                                       <p className="text-xs text-red-800 font-bold">
                                         SOBREPOSIÇÃO DE HORÁRIOS: O funcionário não pode estar em 2 obras ao mesmo tempo. Escolha qual obra manter.
                                       </p>
+                                    </div>
+                                  ) : c.transferAnalysis && c.transferAnalysis.length > 0 ? (
+                                    <div className="p-3 bg-blue-50 border border-blue-300 rounded-lg space-y-2">
+                                      <div className="flex items-start gap-2">
+                                        <ArrowRightLeft className="h-4 w-4 text-blue-700 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                          <p className="text-xs text-blue-800 font-bold">TRANSFERÊNCIA DE OBRA DETECTADA</p>
+                                          <p className="text-xs text-blue-700 mt-0.5">O funcionário bateu ponto em horários diferentes em obras distintas.</p>
+                                        </div>
+                                      </div>
+                                      {c.transferAnalysis.map((t: any, ti: number) => (
+                                        <div key={ti} className="p-2 bg-white border border-blue-200 rounded-lg">
+                                          <div className="flex items-center gap-2 text-xs flex-wrap">
+                                            <span className="font-semibold text-blue-800 bg-blue-50 px-2 py-0.5 rounded">{t.fromObraNome} ({t.fromEntrada})</span>
+                                            <ArrowRight className="h-3.5 w-3.5 text-blue-500" />
+                                            <span className="font-semibold text-green-800 bg-green-50 px-2 py-0.5 rounded">{t.toObraNome} ({t.toEntrada})</span>
+                                            <Badge className="bg-blue-100 text-blue-700 text-[10px] ml-auto">Gap: {t.gapMinutes}min</Badge>
+                                          </div>
+                                          <div className="mt-1.5 p-1.5 bg-amber-50 border border-amber-200 rounded flex items-center gap-1.5">
+                                            <Info className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                                            <p className="text-[10px] text-amber-800">
+                                              <strong>Sugestão:</strong> Registre saída às <strong className="font-mono">{t.suggestedExit}</strong> na obra <strong>{t.fromObraNome}</strong>.
+                                            </p>
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
                                   ) : (
                                     <p className="text-xs text-green-800 font-medium">Horários não se sobrepõem — deslocamento real válido. Escolha como resolver:</p>

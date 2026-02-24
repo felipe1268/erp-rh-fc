@@ -1806,3 +1806,15 @@
 - [x] Dialog de Resolver Inconsistência agora só oferece Justificar e Ajustar (advertência é ação separada)
 - [x] Registrada Rev. 67 no banco + shared/version.ts
 - [x] 36 testes passando (6 novos + 30 existentes)
+
+## Rev. 68 - Detecção Inteligente de Conflitos de Obra (Transferência vs Sobreposição)
+- [x] Analisar lógica atual de detecção de conflitos de obra no backend e frontend
+- [x] Distinguir entre SOBREPOSIÇÃO (horários iguais/muito próximos ≤5min) e TRANSFERÊNCIA (horários diferentes com gap >5min)
+- [x] Para TRANSFERÊNCIA: exibir análise visual Obra A → Obra B com gap de tempo e sugestão de saída
+- [x] Para SOBREPOSIÇÃO REAL: manter alerta vermelho "escolha qual obra manter"
+- [x] Backend enriquecido com campo transferAnalysis (fromObra, toObra, gapMinutes, suggestedExit)
+- [x] Badge visual: vermelho=Sobreposição, azul=Transferência, verde=Deslocamento Válido
+- [x] Alerta principal com contagem separada de sobreposições, transferências e deslocamentos
+- [x] Aplicado em aba Conflitos e visão Detalhe do Colaborador
+- [x] O sistema apenas alerta e sugere — o usuário decide e ajusta via Lançar Manual
+- [x] Registrada Rev. 68 no banco + shared/version.ts + 7 testes passando

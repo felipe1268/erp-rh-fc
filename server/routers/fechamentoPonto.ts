@@ -1520,11 +1520,75 @@ export const fechamentoPontoRouter = router({
         return false;
       };
 
+      // Analisar transferência: detectar se é deslocamento entre obras (horários diferentes)
+      // e sugerir horário de saída na obra anterior
+      const analyzeTransfer = (entries: typeof recs) => {
+        if (entries.length < 2) return null;
+        // Ordenar por horário de entrada (primeira batida)
+        const sorted = [...entries].sort((a, b) => {
+          const ta = parseTimeMin(a.entrada1);
+          const tb = parseTimeMin(b.entrada1);
+          return ta - tb;
+        });
+        
+        const transfers: Array<{
+          fromObraId: number | null;
+          fromObraNome: string | null;
+          toObraId: number | null;
+          toObraNome: string | null;
+          fromEntrada: string | null;
+          toEntrada: string | null;
+          suggestedExit: string; // horário sugerido de saída na obra anterior
+          gapMinutes: number; // diferença em minutos entre as batidas
+        }> = [];
+        
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const from = sorted[i];
+          const to = sorted[i + 1];
+          const fromEntrada = parseTimeMin(from.entrada1);
+          const toEntrada = parseTimeMin(to.entrada1);
+          const gap = toEntrada - fromEntrada;
+          
+          // Se a obra anterior não tem saída registrada, sugerir saída
+          const fromHasExit = !!(from.saida1 || from.saida2);
+          
+          if (gap > 0 && from.obraId !== to.obraId) {
+            // Sugerir saída = entrada na próxima obra (o funcionário saiu para ir à outra)
+            const suggestedExitMin = toEntrada;
+            const sugH = Math.floor(suggestedExitMin / 60);
+            const sugM = suggestedExitMin % 60;
+            const suggestedExit = `${String(sugH).padStart(2, '0')}:${String(sugM).padStart(2, '0')}`;
+            
+            transfers.push({
+              fromObraId: from.obraId,
+              fromObraNome: from.obraNome,
+              toObraId: to.obraId,
+              toObraNome: to.obraNome,
+              fromEntrada: from.entrada1,
+              toEntrada: to.entrada1,
+              suggestedExit,
+              gapMinutes: gap,
+            });
+          }
+        }
+        return transfers.length > 0 ? transfers : null;
+      };
+
       const conflitos: Array<{
         employeeId: number;
         employeeName: string;
         data: string;
         hasOverlap: boolean;
+        transferAnalysis: Array<{
+          fromObraId: number | null;
+          fromObraNome: string | null;
+          toObraId: number | null;
+          toObraNome: string | null;
+          fromEntrada: string | null;
+          toEntrada: string | null;
+          suggestedExit: string;
+          gapMinutes: number;
+        }> | null;
         obras: Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null }>;
         records: Array<{ obraId: number | null; obraNome: string | null; horasTrabalhadas: string | null; entrada1: string | null; saida1: string | null; entrada2: string | null; saida2: string | null; entrada3: string | null; saida3: string | null; ajusteManual: number | null }>;
       }> = [];
@@ -1535,11 +1599,13 @@ export const fechamentoPontoRouter = router({
           if (obraIds.size > 1) {
             const [empId, data] = key.split('|');
             const overlap = checkOverlap(entries);
+            const transferInfo = !overlap ? analyzeTransfer(entries) : null;
             conflitos.push({
               employeeId: Number(empId),
               employeeName: empNames[Number(empId)] || 'Desconhecido',
               data,
               hasOverlap: overlap,
+              transferAnalysis: transferInfo,
               obras: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas })),
               records: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas, entrada1: e.entrada1, saida1: e.saida1, entrada2: e.entrada2, saida2: e.saida2, entrada3: e.entrada3, saida3: e.saida3, ajusteManual: e.ajusteManual })),
             });
