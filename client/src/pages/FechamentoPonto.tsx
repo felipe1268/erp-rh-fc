@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 
-type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados";
+type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados" | "memoria_dixi" | "simulador_horistas";
 
 // Helper to navigate to Controle de Documentos > Advertências with pre-filled data
 function navigateToAdvertencia(setLocation: (path: string) => void, employeeId: number, employeeName: string, data: string, descricao: string) {
@@ -96,6 +96,14 @@ export default function FechamentoPonto() {
   const [linkingName, setLinkingName] = useState<string | null>(null);
   const [linkSearchTerm, setLinkSearchTerm] = useState("");
   const [linkSelectedEmpId, setLinkSelectedEmpId] = useState<number | null>(null);
+  // Simulador Horistas
+  const [simDiasUteis, setSimDiasUteis] = useState(22);
+  const [simHorasDia, setSimHorasDia] = useState(8);
+  // Memória DIXI
+  const [addMappingOpen, setAddMappingOpen] = useState(false);
+  const [newMappingDixiName, setNewMappingDixiName] = useState("");
+  const [newMappingEmpId, setNewMappingEmpId] = useState<number | null>(null);
+  const [memSearchTerm, setMemSearchTerm] = useState("");
 
   // ===== QUERIES =====
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -115,6 +123,13 @@ export default function FechamentoPonto() {
   );
   const rateioData = trpc.fechamentoPonto.getRateioPorObra.useQuery(
     { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 && viewMode === "rateio" }
+  );
+  const dixiMappings = trpc.fechamentoPonto.getDixiMappings.useQuery(
+    { companyId }, { enabled: companyId > 0 && viewMode === "memoria_dixi" }
+  );
+  const simuladorData = trpc.fechamentoPonto.simularFolhaHoristas.useQuery(
+    { companyId, diasUteis: simDiasUteis, horasPorDia: simHorasDia },
+    { enabled: companyId > 0 && viewMode === "simulador_horistas" }
   );
 
   const isConsolidado = consolidacaoStatus.data?.consolidado === true;
@@ -217,6 +232,23 @@ export default function FechamentoPonto() {
     onSuccess: () => {
       unmatchedData.refetch();
       toast.success("Registros descartados com sucesso.");
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const addDixiMappingMut = trpc.fechamentoPonto.addDixiMapping.useMutation({
+    onSuccess: () => {
+      dixiMappings.refetch();
+      setAddMappingOpen(false);
+      setNewMappingDixiName("");
+      setNewMappingEmpId(null);
+      toast.success("Vinculação salva na memória!");
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const deleteDixiMappingMut = trpc.fechamentoPonto.deleteDixiMapping.useMutation({
+    onSuccess: () => {
+      dixiMappings.refetch();
+      toast.success("Vinculação removida da memória.");
     },
     onError: (err) => toast.error("Erro: " + err.message),
   });
@@ -725,6 +757,14 @@ export default function FechamentoPonto() {
                 <Badge variant="destructive" className="ml-1 text-xs bg-purple-600">{unmatchedData.data?.totalNomes}</Badge>
               </Button>
             )}
+            <Button variant={viewMode === "memoria_dixi" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("memoria_dixi")}
+              className={viewMode === "memoria_dixi" ? "bg-indigo-600 text-white" : ""}>
+              <Zap className="h-4 w-4 mr-1" /> Memória DIXI
+            </Button>
+            <Button variant={viewMode === "simulador_horistas" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("simulador_horistas")}
+              className={viewMode === "simulador_horistas" ? "bg-emerald-600 text-white" : ""}>
+              <ListChecks className="h-4 w-4 mr-1" /> Simulador Horistas
+            </Button>
           </div>
         )}
 
@@ -2257,6 +2297,228 @@ export default function FechamentoPonto() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ===== MEMÓRIA DIXI VIEW ===== */}
+        {viewMode === "memoria_dixi" && (
+          <Card>
+            <CardHeader className="pb-3 bg-indigo-50 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2 text-indigo-800">
+                    <Zap className="h-5 w-5" />
+                    Memória de Vinculação DIXI
+                  </CardTitle>
+                  <p className="text-xs text-indigo-600 mt-1">
+                    Quando você vincula um nome não identificado a um colaborador, o sistema memoriza essa associação.
+                    Nos próximos uploads, o matching será automático.
+                  </p>
+                </div>
+                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => setAddMappingOpen(true)}>
+                  + Adicionar Manual
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {dixiMappings.isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+              ) : !dixiMappings.data || dixiMappings.data.length === 0 ? (
+                <div className="text-center py-8">
+                  <Zap className="h-10 w-10 text-indigo-300 mx-auto mb-3" />
+                  <p className="font-medium">Nenhuma vinculação memorizada ainda</p>
+                  <p className="text-sm text-muted-foreground mt-1">Vincule nomes na aba "Não Identificados" ou adicione manualmente.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="Buscar por nome DIXI ou colaborador..." value={memSearchTerm}
+                        onChange={e => setMemSearchTerm(e.target.value)} className="pl-9" />
+                    </div>
+                    <Badge variant="outline" className="text-indigo-700 border-indigo-300">
+                      {dixiMappings.data.length} vinculação(ões)
+                    </Badge>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead><tr className="bg-indigo-50/50 border-b">
+                        <th className="p-2.5 text-left font-medium text-indigo-800">Nome no DIXI</th>
+                        <th className="p-2.5 text-left font-medium text-indigo-800">ID DIXI</th>
+                        <th className="p-2.5 text-left font-medium text-indigo-800">Colaborador Vinculado</th>
+                        <th className="p-2.5 text-left font-medium text-indigo-800">Origem</th>
+                        <th className="p-2.5 text-left font-medium text-indigo-800">Criado por</th>
+                        <th className="p-2.5 text-center font-medium text-indigo-800">Ações</th>
+                      </tr></thead>
+                      <tbody>
+                        {(dixiMappings.data || []).filter((m: any) => {
+                          if (!memSearchTerm) return true;
+                          const t = memSearchTerm.toLowerCase();
+                          return m.dixiName?.toLowerCase().includes(t) || m.employeeName?.toLowerCase().includes(t);
+                        }).map((m: any) => (
+                          <tr key={m.id} className="border-b hover:bg-muted/30">
+                            <td className="p-2.5 font-medium">{m.dixiName}</td>
+                            <td className="p-2.5 text-muted-foreground font-mono text-xs">{m.dixiId || '—'}</td>
+                            <td className="p-2.5">
+                              <span className="text-indigo-700 font-medium">{m.employeeName}</span>
+                            </td>
+                            <td className="p-2.5">
+                              <Badge variant="outline" className={m.source === 'import_link' ? 'text-green-700 border-green-300 bg-green-50' : 'text-blue-700 border-blue-300 bg-blue-50'}>
+                                {m.source === 'import_link' ? 'Auto (vinculação)' : 'Manual'}
+                              </Badge>
+                            </td>
+                            <td className="p-2.5 text-xs text-muted-foreground">{m.createdBy || '—'}</td>
+                            <td className="p-2.5 text-center">
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-7 w-7 p-0"
+                                onClick={() => { if (confirm(`Remover vinculação "${m.dixiName}" → "${m.employeeName}"?`)) deleteDixiMappingMut.mutate({ id: m.id }); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {/* Dialog para adicionar mapeamento manual */}
+              <Dialog open={addMappingOpen} onOpenChange={setAddMappingOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Adicionar Vinculação Manual</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Nome no DIXI (exatamente como aparece no relógio)</Label>
+                      <Input value={newMappingDixiName} onChange={e => setNewMappingDixiName(e.target.value)}
+                        placeholder="Ex: JOSE DA SILVA" />
+                    </div>
+                    <div>
+                      <Label>Colaborador correspondente</Label>
+                      <Select value={String(newMappingEmpId || "")} onValueChange={v => setNewMappingEmpId(parseInt(v))}>
+                        <SelectTrigger><SelectValue placeholder="Selecione o colaborador..." /></SelectTrigger>
+                        <SelectContent>
+                          {(employeesList.data || []).map((e: any) => (
+                            <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setAddMappingOpen(false)}>Cancelar</Button>
+                    <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={!newMappingDixiName || !newMappingEmpId || addDixiMappingMut.isPending}
+                      onClick={() => {
+                        const emp = (employeesList.data || []).find((e: any) => e.id === newMappingEmpId);
+                        if (!emp) return;
+                        addDixiMappingMut.mutate({ companyId, dixiName: newMappingDixiName.trim(), employeeId: newMappingEmpId!, employeeName: emp.nomeCompleto });
+                      }}>
+                      {addDixiMappingMut.isPending ? "Salvando..." : "Salvar"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ===== SIMULADOR HORISTAS VIEW ===== */}
+        {viewMode === "simulador_horistas" && (
+          <Card>
+            <CardHeader className="pb-3 bg-emerald-50 rounded-t-lg">
+              <CardTitle className="text-base flex items-center gap-2 text-emerald-800">
+                <ListChecks className="h-5 w-5" />
+                Simulador de Folha — Horistas
+              </CardTitle>
+              <p className="text-xs text-emerald-600 mt-1">
+                Simule o custo mensal dos colaboradores do tipo "Horista" com base nos dias úteis do mês.
+              </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="flex items-end gap-4 mb-4 bg-emerald-50/50 p-3 rounded-lg border border-emerald-200">
+                <div className="flex-1 max-w-[160px]">
+                  <Label className="text-xs font-medium text-emerald-800">Dias Úteis no Mês</Label>
+                  <Input type="number" min={1} max={31} value={simDiasUteis}
+                    onChange={e => setSimDiasUteis(Math.max(1, Math.min(31, parseInt(e.target.value) || 22)))}
+                    className="mt-1" />
+                </div>
+                <div className="flex-1 max-w-[160px]">
+                  <Label className="text-xs font-medium text-emerald-800">Horas por Dia</Label>
+                  <Input type="number" min={1} max={24} value={simHorasDia}
+                    onChange={e => setSimHorasDia(Math.max(1, Math.min(24, parseInt(e.target.value) || 8)))}
+                    className="mt-1" />
+                </div>
+                <div className="text-sm text-emerald-700">
+                  <strong>{simDiasUteis * simHorasDia}h</strong> totais no mês
+                </div>
+              </div>
+
+              {simuladorData.isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Calculando simulação...</div>
+              ) : !simuladorData.data || simuladorData.data.totalFuncionarios === 0 ? (
+                <div className="text-center py-8">
+                  <ListChecks className="h-10 w-10 text-emerald-300 mx-auto mb-3" />
+                  <p className="font-medium">Nenhum colaborador do tipo "Horista" encontrado</p>
+                  <p className="text-sm text-muted-foreground mt-1">Cadastre colaboradores com tipo de contrato "Horista" e valor da hora preenchido.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-emerald-700">{simuladorData.data.totalFuncionarios}</p>
+                      <p className="text-xs text-emerald-600">Horistas Ativos</p>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-emerald-700">{simuladorData.data.horasTotaisMes}h</p>
+                      <p className="text-xs text-emerald-600">Horas/Mês por Pessoa</p>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-emerald-700">
+                        {simuladorData.data.totalFolha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                      <p className="text-xs text-emerald-600">Total Previsto da Folha</p>
+                    </div>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead><tr className="bg-emerald-50/50 border-b">
+                        <th className="p-2.5 text-left font-medium">Cód</th>
+                        <th className="p-2.5 text-left font-medium">Colaborador</th>
+                        <th className="p-2.5 text-left font-medium">Função</th>
+                        <th className="p-2.5 text-right font-medium">Valor/Hora</th>
+                        <th className="p-2.5 text-right font-medium">Horas Mês</th>
+                        <th className="p-2.5 text-right font-medium text-emerald-700">Salário Previsto</th>
+                      </tr></thead>
+                      <tbody>
+                        {simuladorData.data.funcionarios.map((f: any) => (
+                          <tr key={f.id} className="border-b hover:bg-muted/30">
+                            <td className="p-2.5 font-mono text-xs text-muted-foreground">{f.codigoInterno || '—'}</td>
+                            <td className="p-2.5 font-medium">{f.nomeCompleto}</td>
+                            <td className="p-2.5 text-muted-foreground">{f.funcao || '—'}</td>
+                            <td className="p-2.5 text-right font-mono">
+                              <span className="bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-xs font-bold">
+                                R$ {f.valorHora}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-right font-mono">{f.horasMes}h</td>
+                            <td className="p-2.5 text-right font-bold text-emerald-700">
+                              {f.salarioPrevisto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-emerald-50 font-bold">
+                          <td colSpan={5} className="p-2.5 text-right">TOTAL DA FOLHA (HORISTAS):</td>
+                          <td className="p-2.5 text-right text-emerald-700 text-base">
+                            {simuladorData.data.totalFolha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </CardContent>

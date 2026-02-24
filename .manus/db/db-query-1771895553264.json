@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (71, 'Memória DIXI, Simulador Horistas, Tipo Horista', 'Memória de vinculação DIXI: ao vincular um nome não identificado, o sistema memoriza e faz auto-match nos próximos uploads. Aba Memória DIXI com CRUD completo. Simulador de Folha para Horistas: calcula custo mensal com base em dias úteis e valor/hora. Novo tipo de contrato Horista com destaque visual do campo Valor da Hora.', 'feature', 'Fechamento de Ponto, Colaboradores', 'Sistema', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (71, 'Memória DIXI, Simulador Horistas, Tipo Horista', 'Memória de vinculação DIXI: ao vincular um nome não identificado, o sistema memoriza e faz auto-match nos próximos uploads. Aba Memória DIXI com CRUD completo. Simulador de Folha para Horistas: calcula custo mensal com base em dias úteis e valor/hora. Novo tipo de contrato Horista com destaque visual do campo Valor da Hora.', 'feature', 'Fechamento de Ponto, Colaboradores', 'Sistema', NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 204
+}

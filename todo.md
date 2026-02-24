@@ -1839,3 +1839,31 @@
 - [x] Estruturar para horista: valor da hora como dado mestre (destaque azul + estrela), salário como referência
 - [x] Formatação monetária correta (R$ com separadores de ponto e vírgula)
 - [x] Registrada Rev. 70 no banco + shared/version.ts + 9 testes passando
+
+## Rev. 71 - Memória de Vinculação DIXI + Simulador Folha + Tipo Contrato Horista
+- [ ] Criar tabela dixi_name_mappings para salvar associação nome relógio ↔ colaborador
+- [ ] Na importação DIXI, consultar memória antes de tentar match por nome
+- [ ] Ao vincular nome não identificado, salvar automaticamente na memória
+- [ ] Simulador de folha por mês: campo dias úteis → calcula salário previsto de cada horista
+- [ ] Interface do simulador na Folha de Pagamento ou Fechamento de Ponto
+- [ ] Tipo de contrato "Horista" no cadastro do colaborador
+- [ ] Ao selecionar Horista, destacar automaticamente campo Valor da Hora
+- [ ] Registrar Rev. 71
+
+## Rev. 71 — Memória DIXI, Simulador Horistas, Tipo Horista
+
+- [x] Tabela dixi_name_mappings no banco de dados
+- [x] Tipo de contrato "Horista" adicionado ao enum
+- [x] Memória DIXI: auto-save ao vincular nome não identificado
+- [x] Memória DIXI: consulta de mapeamentos no import para auto-match
+- [x] Memória DIXI: aba "Memória DIXI" no Fechamento de Ponto com CRUD
+- [x] Memória DIXI: adicionar vinculação manual via dialog
+- [x] Memória DIXI: remover vinculação
+- [x] Simulador Horistas: endpoint backend com cálculo por dias úteis
+- [x] Simulador Horistas: aba "Simulador Horistas" no Fechamento de Ponto
+- [x] Simulador Horistas: cards de resumo (total horistas, horas/mês, total folha)
+- [x] Simulador Horistas: tabela com valor/hora, horas mês e salário previsto
+- [x] Tipo Horista: opção no Select de tipoContrato em Colaboradores
+- [x] Tipo Horista: badge amarelo na listagem
+- [x] Tipo Horista: destaque do campo Valor da Hora (amarelo) quando Horista selecionado
+- [x] Tipo Horista: label dinâmico "⚡ HORISTA" no campo Valor da Hora

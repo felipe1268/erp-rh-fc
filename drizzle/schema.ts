@@ -326,7 +326,7 @@ export const employees = mysqlTable("employees", {
 	salarioBase: varchar({ length: 20 }),
 	valorHora: varchar({ length: 20 }),
 	horasMensais: varchar({ length: 10 }),
-	tipoContrato: mysqlEnum(['CLT','PJ','Temporario','Estagio','Aprendiz']),
+	tipoContrato: mysqlEnum(['CLT','PJ','Temporario','Estagio','Aprendiz','Horista']),
 	jornadaTrabalho: varchar({ length: 50 }),
 	banco: varchar({ length: 100 }),
 	bancoNome: varchar({ length: 100 }),
@@ -1642,4 +1642,25 @@ export const unmatchedDixiRecords = mysqlTable("unmatched_dixi_records", {
 	index("udr_company_mes").on(table.companyId, table.mesReferencia),
 	index("udr_status").on(table.status),
 	index("udr_dixi_name").on(table.dixiName),
+]);
+
+
+// ============================================================
+// MEMÓRIA DE VINCULAÇÃO DIXI (nome relógio ↔ colaborador)
+// ============================================================
+export const dixiNameMappings = mysqlTable("dixi_name_mappings", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	dixiName: varchar({ length: 255 }).notNull(), // Nome como aparece no relógio DIXI
+	dixiId: varchar({ length: 50 }), // ID do funcionário no relógio (se disponível)
+	employeeId: int().notNull(), // Colaborador vinculado
+	employeeName: varchar({ length: 255 }).notNull(), // Nome do colaborador (cache para exibição)
+	source: mysqlEnum(['manual','import_link']).default('manual').notNull(), // Como foi criada
+	createdBy: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("dnm_company").on(table.companyId),
+	index("dnm_dixi_name").on(table.companyId, table.dixiName),
+	index("dnm_employee").on(table.employeeId),
 ]);

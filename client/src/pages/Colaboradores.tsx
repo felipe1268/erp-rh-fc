@@ -618,7 +618,7 @@ export default function Colaboradores() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground min-w-[180px] whitespace-nowrap font-mono text-sm">{formatCPF(emp.cpf)}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${emp.tipoContrato === 'PJ' ? 'bg-purple-100 text-purple-700' : emp.tipoContrato === 'Temporario' ? 'bg-amber-100 text-amber-700' : emp.tipoContrato === 'Estagio' ? 'bg-cyan-100 text-cyan-700' : emp.tipoContrato === 'Aprendiz' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${emp.tipoContrato === 'PJ' ? 'bg-purple-100 text-purple-700' : emp.tipoContrato === 'Temporario' ? 'bg-amber-100 text-amber-700' : emp.tipoContrato === 'Estagio' ? 'bg-cyan-100 text-cyan-700' : emp.tipoContrato === 'Aprendiz' ? 'bg-pink-100 text-pink-700' : emp.tipoContrato === 'Horista' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
                         {emp.tipoContrato || 'CLT'}
                       </span>
                     </td>
@@ -1114,7 +1114,7 @@ export default function Colaboradores() {
                   <span className="text-[10px] text-muted-foreground mt-0.5 block">Referência mensal (varia conforme dias úteis)</span>
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-blue-700 font-semibold">Valor da Hora (R$) ⭐</Label>
+                  <Label className={`text-xs font-medium font-semibold ${form.tipoContrato === 'Horista' ? 'text-yellow-700' : 'text-blue-700'}`}>Valor da Hora (R$) {form.tipoContrato === 'Horista' ? '⚡ HORISTA' : '⭐'}</Label>
                   <Input value={form.valorHora ?? ""} onChange={e => {
                     const formatted = formatMoedaInput(e.target.value);
                     set("valorHora", formatted);
@@ -1123,8 +1123,10 @@ export default function Colaboradores() {
                     if (horaNum > 0 && !isNaN(horasNum) && horasNum > 0) {
                       set("salarioBase", formatMoedaSemPrefixo(horaNum * horasNum));
                     }
-                  }} placeholder="11,36" className="bg-input mt-1 border-blue-300 ring-1 ring-blue-100" />
-                  <span className="text-[10px] text-blue-600 mt-0.5 block font-medium">Dado mestre — base para cálculo da folha</span>
+                  }} placeholder="11,36" className={`bg-input mt-1 ${form.tipoContrato === 'Horista' ? 'border-yellow-400 ring-2 ring-yellow-200 bg-yellow-50' : 'border-blue-300 ring-1 ring-blue-100'}`} />
+                  <span className={`text-[10px] mt-0.5 block font-medium ${form.tipoContrato === 'Horista' ? 'text-yellow-700' : 'text-blue-600'}`}>
+                    {form.tipoContrato === 'Horista' ? 'Campo obrigatório para horistas — base do simulador de folha' : 'Dado mestre — base para cálculo da folha'}
+                  </span>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Horas Mensais</Label>
@@ -1149,6 +1151,7 @@ export default function Colaboradores() {
                       <SelectItem value="Temporario">Temporário</SelectItem>
                       <SelectItem value="Estagio">Estágio</SelectItem>
                       <SelectItem value="Aprendiz">Aprendiz</SelectItem>
+                      <SelectItem value="Horista">Horista</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1690,10 +1693,10 @@ export default function Colaboradores() {
                   ["Função", safeDisplay(viewingEmployee.funcao)],
                   ["Setor", safeDisplay(viewingEmployee.setor)],
                   ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
-                  ["Contrato", safeDisplay(viewingEmployee.tipoContrato)],
+                  ["Contrato", viewingEmployee.tipoContrato === 'Horista' ? '⚡ Horista' : safeDisplay(viewingEmployee.tipoContrato)],
                   ["Jornada", formatJornada(viewingEmployee.jornadaTrabalho)],
                   ["Salário Base", viewingEmployee.salarioBase ? formatMoeda(viewingEmployee.salarioBase) : "-"],
-                  ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
+                  [viewingEmployee.tipoContrato === 'Horista' ? '⚡ Valor da Hora' : "Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
                   ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
                   ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
                   ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.hePercentual50 ?? 50}% / ${viewingEmployee.hePercentual100 ?? 100}% / ${viewingEmployee.hePercentualNoturno ?? 20}%` : "Padrão CLT (50/100/20%)"],

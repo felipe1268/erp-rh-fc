@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -256,10 +256,20 @@ function parseDixiXLS(buffer: Buffer): {
 function matchEmployee(
   dixiName: string,
   employeeList: Array<{ id: number; nomeCompleto: string; jornadaTrabalho?: any; matricula?: string | null }>,
-  dixiId?: string
+  dixiId?: string,
+  memoryMappings?: Array<{ dixiName: string; employeeId: number }>
 ): { id: number; nomeCompleto: string; jornadaTrabalho?: any } | null {
   const normalized = normalizeNameForMatch(dixiName);
   const parts = normalized.split(" ");
+
+  // 0. Match by memory mapping (vinculações anteriores salvas)
+  if (memoryMappings && memoryMappings.length > 0) {
+    const normalizedMemory = memoryMappings.find(m => normalizeNameForMatch(m.dixiName) === normalized);
+    if (normalizedMemory) {
+      const emp = employeeList.find(e => e.id === normalizedMemory.employeeId);
+      if (emp) return emp;
+    }
+  }
 
   // 1. Match by matricula (ID do relógio DIXI = matrícula do funcionário)
   if (dixiId) {
@@ -312,6 +322,7 @@ function processRecords(
   companyId: number,
   criteria: CriteriaMap = DEFAULT_CRITERIA,
   activeAvisos: Array<{ employeeId: number; dataInicio: string; dataFim: string; reducaoJornada: string | null }> = [],
+  memoryMappings: Array<{ dixiName: string; employeeId: number }> = [],
 ) {
   // Group by person+day
   const grouped: Record<string, Record<string, string[]>> = {};
@@ -321,7 +332,7 @@ function processRecords(
     const key = normalizeNameForMatch(r.nome);
     if (!grouped[key]) {
       grouped[key] = {};
-      nameToEmployee[key] = matchEmployee(r.nome, employeeList, r.dixiId);
+      nameToEmployee[key] = matchEmployee(r.nome, employeeList, r.dixiId, memoryMappings);
     }
     if (!grouped[key][r.data]) grouped[key][r.data] = [];
     grouped[key][r.data].push(r.hora);
@@ -643,9 +654,15 @@ export const fechamentoPontoRouter = router({
           )
         );
 
+        // Carregar memória de vinculação DIXI para auto-match
+        const memMappings = await db.select({
+          dixiName: dixiNameMappings.dixiName,
+          employeeId: dixiNameMappings.employeeId,
+        }).from(dixiNameMappings).where(eq(dixiNameMappings.companyId, input.companyId));
+
         // Process records - mesReferencia is auto-detected from each record's date
         const { timeRecordsToInsert, inconsistencies, unmatchedNames, unmatchedRecordsToInsert } = processRecords(
-          records, empList as any, obraId, input.companyId, criteria, activeAvisos
+          records, empList as any, obraId, input.companyId, criteria, activeAvisos, memMappings
         );
 
         // Salvar registros não identificados para vinculação posterior
@@ -2410,6 +2427,35 @@ export const fechamentoPontoRouter = router({
         resolvidoEm: new Date().toISOString(),
       }).where(and(...conditions));
 
+      // ===== SALVAR NA MEMÓRIA DE VINCULAÇÃO DIXI =====
+      // Verifica se já existe um mapeamento para este nome
+      const existingMapping = await db.select().from(dixiNameMappings)
+        .where(and(
+          eq(dixiNameMappings.companyId, input.companyId),
+          eq(dixiNameMappings.dixiName, input.dixiName),
+        ));
+      
+      if (existingMapping.length === 0) {
+        // Criar novo mapeamento
+        await db.insert(dixiNameMappings).values({
+          companyId: input.companyId,
+          dixiName: input.dixiName,
+          dixiId: pendingRecords[0]?.dixiId || null,
+          employeeId: input.employeeId,
+          employeeName: emp.nomeCompleto,
+          source: 'import_link',
+          createdBy: ctx.user?.name || 'sistema',
+        });
+      } else if (existingMapping[0].employeeId !== input.employeeId) {
+        // Atualizar mapeamento existente para novo funcionário
+        await db.update(dixiNameMappings).set({
+          employeeId: input.employeeId,
+          employeeName: emp.nomeCompleto,
+          source: 'import_link',
+          createdBy: ctx.user?.name || 'sistema',
+        }).where(eq(dixiNameMappings.id, existingMapping[0].id));
+      }
+
       return {
         success: true,
         recordsLinked: pendingRecords.length,
@@ -2443,5 +2489,141 @@ export const fechamentoPontoRouter = router({
       }).where(and(...conditions));
 
       return { success: true, discarded: (result as any)[0]?.affectedRows || 0 };
+    }),
+
+  // ============================================================
+  // MEMÓRIA DE VINCULAÇÃO DIXI - CRUD
+  // ============================================================
+  getDixiMappings: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      
+      const mappings = await db.select({
+        id: dixiNameMappings.id,
+        dixiName: dixiNameMappings.dixiName,
+        dixiId: dixiNameMappings.dixiId,
+        employeeId: dixiNameMappings.employeeId,
+        employeeName: dixiNameMappings.employeeName,
+        source: dixiNameMappings.source,
+        createdBy: dixiNameMappings.createdBy,
+        createdAt: dixiNameMappings.createdAt,
+      }).from(dixiNameMappings)
+        .where(eq(dixiNameMappings.companyId, input.companyId))
+        .orderBy(dixiNameMappings.dixiName);
+      
+      return mappings;
+    }),
+
+  addDixiMapping: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dixiName: z.string(),
+      dixiId: z.string().optional(),
+      employeeId: z.number(),
+      employeeName: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      
+      // Verificar se já existe
+      const existing = await db.select().from(dixiNameMappings)
+        .where(and(
+          eq(dixiNameMappings.companyId, input.companyId),
+          eq(dixiNameMappings.dixiName, input.dixiName),
+        ));
+      
+      if (existing.length > 0) {
+        throw new TRPCError({ code: 'CONFLICT', message: `Já existe um mapeamento para o nome "${input.dixiName}".` });
+      }
+      
+      await db.insert(dixiNameMappings).values({
+        companyId: input.companyId,
+        dixiName: input.dixiName,
+        dixiId: input.dixiId || null,
+        employeeId: input.employeeId,
+        employeeName: input.employeeName,
+        source: 'manual',
+        createdBy: ctx.user?.name || 'sistema',
+      });
+      
+      return { success: true };
+    }),
+
+  deleteDixiMapping: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      await db.delete(dixiNameMappings).where(eq(dixiNameMappings.id, input.id));
+      return { success: true };
+    }),
+
+  // ============================================================
+  // SIMULADOR DE FOLHA POR MÊS (HORISTAS)
+  // ============================================================
+  simularFolhaHoristas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      diasUteis: z.number().min(1).max(31),
+      horasPorDia: z.number().min(1).max(24).default(8),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      
+      // Buscar todos os funcionários horistas ativos
+      const empList = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        funcao: employees.funcao,
+        setor: employees.setor,
+        valorHora: employees.valorHora,
+        horasMensais: employees.horasMensais,
+        salarioBase: employees.salarioBase,
+        tipoContrato: employees.tipoContrato,
+        codigoInterno: employees.codigoInterno,
+      }).from(employees).where(
+        and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.tipoContrato, 'Horista'),
+          sql`${employees.status} IN ('Ativo', 'Ferias')`,
+          sql`${employees.deletedAt} IS NULL`,
+        )
+      );
+      
+      const horasTotaisMes = input.diasUteis * input.horasPorDia;
+      
+      const simulacao = empList.map(emp => {
+        const valorHoraStr = emp.valorHora || '0';
+        const valorHora = parseFloat(valorHoraStr.replace(/\./g, '').replace(',', '.')) || 0;
+        const salarioPrevisto = valorHora * horasTotaisMes;
+        
+        return {
+          id: emp.id,
+          nomeCompleto: emp.nomeCompleto,
+          codigoInterno: emp.codigoInterno,
+          funcao: emp.funcao,
+          setor: emp.setor,
+          valorHora: valorHoraStr,
+          valorHoraNum: valorHora,
+          horasMes: horasTotaisMes,
+          salarioPrevisto,
+          salarioBase: emp.salarioBase,
+        };
+      });
+      
+      const totalFolha = simulacao.reduce((acc, e) => acc + e.salarioPrevisto, 0);
+      
+      return {
+        diasUteis: input.diasUteis,
+        horasPorDia: input.horasPorDia,
+        horasTotaisMes,
+        funcionarios: simulacao,
+        totalFolha,
+        totalFuncionarios: simulacao.length,
+      };
     }),
 });
