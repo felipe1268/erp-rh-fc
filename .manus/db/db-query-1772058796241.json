@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `fornecedores_epi` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`companyId` int NOT NULL,\n\t`nome` varchar(255) NOT NULL,\n\t`cnpj` varchar(20),\n\t`contato` varchar(255),\n\t`telefone` varchar(30),\n\t`email` varchar(255),\n\t`endereco` varchar(500),\n\t`observacoes` text,\n\t`ativo` tinyint NOT NULL DEFAULT 1,\n\t`createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t`updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n\tPRIMARY KEY (`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE `fornecedores_epi` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`companyId` int NOT NULL,\n\t`nome` varchar(255) NOT NULL,\n\t`cnpj` varchar(20),\n\t`contato` varchar(255),\n\t`telefone` varchar(30),\n\t`email` varchar(255),\n\t`endereco` varchar(500),\n\t`observacoes` text,\n\t`ativo` tinyint NOT NULL DEFAULT 1,\n\t`createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t`updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n\tPRIMARY KEY (`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 149
+}

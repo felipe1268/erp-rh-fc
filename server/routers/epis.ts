@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras } from "../../drizzle/schema";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, gte } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
@@ -887,5 +887,77 @@ Exemplos de referência:
           totalImported: 0,
         };
       }
+    }),
+
+  // ============================================================
+  // FORNECEDORES DE EPIs
+  // ============================================================
+  fornecedoresList: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      return db.select().from(fornecedoresEpi)
+        .where(and(eq(fornecedoresEpi.companyId, input.companyId), eq(fornecedoresEpi.ativo, 1)))
+        .orderBy(fornecedoresEpi.nome);
+    }),
+
+  fornecedoresCreate: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nome: z.string().min(1),
+      cnpj: z.string().optional(),
+      contato: z.string().optional(),
+      telefone: z.string().optional(),
+      email: z.string().optional(),
+      endereco: z.string().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const result = await db.insert(fornecedoresEpi).values({
+        companyId: input.companyId,
+        nome: input.nome,
+        cnpj: input.cnpj || null,
+        contato: input.contato || null,
+        telefone: input.telefone || null,
+        email: input.email || null,
+        endereco: input.endereco || null,
+        observacoes: input.observacoes || null,
+      });
+      return { id: result[0].insertId };
+    }),
+
+  fornecedoresUpdate: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      nome: z.string().min(1),
+      cnpj: z.string().optional(),
+      contato: z.string().optional(),
+      telefone: z.string().optional(),
+      email: z.string().optional(),
+      endereco: z.string().optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const { id, ...data } = input;
+      await db.update(fornecedoresEpi).set({
+        nome: data.nome,
+        cnpj: data.cnpj || null,
+        contato: data.contato || null,
+        telefone: data.telefone || null,
+        email: data.email || null,
+        endereco: data.endereco || null,
+        observacoes: data.observacoes || null,
+      }).where(eq(fornecedoresEpi.id, id));
+      return { success: true };
+    }),
+
+  fornecedoresDelete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.update(fornecedoresEpi).set({ ativo: 0 }).where(eq(fornecedoresEpi.id, input.id));
+      return { success: true };
     }),
 });

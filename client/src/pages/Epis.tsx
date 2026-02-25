@@ -62,11 +62,19 @@ export default function Epis() {
   const employeesQ = trpc.employees.list.useQuery({ companyId, status: "Ativo" }, { enabled: !!companyId });
   const bdiQ = trpc.epis.getBdi.useQuery({ companyId }, { enabled: !!companyId });
   const formTextQ = trpc.epis.getFormText.useQuery({ companyId }, { enabled: !!companyId });
+  const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId }, { enabled: !!companyId });
 
   const episList = episQ.data ?? [];
   const deliveriesList = deliveriesQ.data ?? [];
   const stats = statsQ.data;
   const employeesList = useMemo(() => (employeesQ.data ?? []).sort((a: any, b: any) => a.nomeCompleto.localeCompare(b.nomeCompleto)), [employeesQ.data]);
+  const fornecedoresList = fornecedoresQ.data ?? [];
+
+  // Fornecedor dialog state
+  const [showFornecedorDialog, setShowFornecedorDialog] = useState(false);
+  const [fornecedorForm, setFornecedorForm] = useState({ nome: "", cnpj: "", contato: "", telefone: "", email: "", endereco: "", observacoes: "" });
+  const [editingFornecedor, setEditingFornecedor] = useState<any>(null);
+  const [showFornecedorList, setShowFornecedorList] = useState(false);
 
   // Form state - EPI
   const [epiForm, setEpiForm] = useState({
@@ -184,6 +192,18 @@ export default function Epis() {
     onSuccess: () => { bdiQ.refetch(); toast.success("BDI atualizado!"); },
     onError: (err) => toast.error(err.message),
   });
+  const createFornecedorMut = trpc.epis.fornecedoresCreate.useMutation({
+    onSuccess: () => { fornecedoresQ.refetch(); setShowFornecedorDialog(false); resetFornecedorForm(); toast.success("Fornecedor cadastrado!"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const updateFornecedorMut = trpc.epis.fornecedoresUpdate.useMutation({
+    onSuccess: () => { fornecedoresQ.refetch(); setShowFornecedorDialog(false); resetFornecedorForm(); setEditingFornecedor(null); toast.success("Fornecedor atualizado!"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const deleteFornecedorMut = trpc.epis.fornecedoresDelete.useMutation({
+    onSuccess: () => { fornecedoresQ.refetch(); toast.success("Fornecedor removido!"); },
+    onError: (err) => toast.error(err.message),
+  });
   const uploadFichaMut = trpc.epis.uploadFicha.useMutation({
     onSuccess: () => { deliveriesQ.refetch(); toast.success("Ficha assinada anexada!"); },
     onError: (err) => toast.error(err.message),
@@ -209,6 +229,22 @@ export default function Epis() {
     setAiSuggestion(null);
     setAiSuggestionLoading(false);
     setCaLookupResult(null);
+  }
+  function resetFornecedorForm() {
+    setFornecedorForm({ nome: "", cnpj: "", contato: "", telefone: "", email: "", endereco: "", observacoes: "" });
+  }
+  function selectFornecedor(f: any) {
+    const cnpjFormatted = f.cnpj ? f.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : "";
+    setEpiForm(prev => ({
+      ...prev,
+      fornecedor: f.nome,
+      fornecedorCnpj: cnpjFormatted,
+      fornecedorContato: f.contato || "",
+      fornecedorTelefone: f.telefone || "",
+      fornecedorEmail: f.email || "",
+      fornecedorEndereco: f.endereco || "",
+    }));
+    toast.success(`Fornecedor "${f.nome}" selecionado`);
   }
 
   const TAMANHOS_ROUPA = ['PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
@@ -416,19 +452,45 @@ export default function Epis() {
                 </div>
                 <div>
                   <Label>Fornecedor</Label>
-                  <Input value={epiForm.fornecedor} onChange={e => setEpiForm(f => ({ ...f, fornecedor: e.target.value }))}
-                    placeholder="Nome do fornecedor" />
+                  <div className="flex gap-1">
+                    <Select value={epiForm.fornecedor || "__manual__"} onValueChange={(v) => {
+                      if (v === "__novo__") {
+                        setEditingFornecedor(null); resetFornecedorForm(); setShowFornecedorDialog(true);
+                      } else if (v === "__manual__") {
+                        setEpiForm(f => ({ ...f, fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "" }));
+                      } else {
+                        const found = fornecedoresList.find((f: any) => f.nome === v);
+                        if (found) selectFornecedor(found);
+                      }
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o fornecedor" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__manual__">Digitar manualmente</SelectItem>
+                        {fornecedoresList.map((f: any) => (
+                          <SelectItem key={f.id} value={f.nome}>
+                            {f.nome} {f.cnpj ? `(${f.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")})` : ""}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__novo__">+ Cadastrar novo fornecedor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {!epiForm.fornecedor && (
+                    <Input value={epiForm.fornecedor} onChange={e => setEpiForm(f => ({ ...f, fornecedor: e.target.value }))}
+                      placeholder="Ou digite o nome" className="mt-1" />
+                  )}
                 </div>
               </div>
 
-              {/* Dados do Fornecedor - CNPJ com busca automática */}
+              {/* Dados do Fornecedor */}
               <div className="border border-dashed border-blue-300 rounded-lg p-3 bg-blue-50/30 space-y-3">
                 <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
-                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor (CNPJ)
+                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor
+                  {epiForm.fornecedor && <Badge variant="outline" className="ml-2 text-xs">{epiForm.fornecedor}</Badge>}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <Label className="text-xs">CNPJ do Fornecedor</Label>
+                    <Label className="text-xs">CNPJ</Label>
                     <div className="flex gap-1">
                       <Input value={epiForm.fornecedorCnpj}
                         onChange={e => {
@@ -443,12 +505,8 @@ export default function Epis() {
                         {cnpjLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                       </Button>
                     </div>
-                    {cnpjResult?.success && (
-                      <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>
-                    )}
-                    {cnpjResult?.error && (
-                      <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>
-                    )}
+                    {cnpjResult?.success && <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>}
+                    {cnpjResult?.error && <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>}
                   </div>
                   <div>
                     <Label className="text-xs">Telefone</Label>
@@ -636,19 +694,45 @@ export default function Epis() {
                 </div>
                 <div>
                   <Label>Fornecedor</Label>
-                  <Input value={epiForm.fornecedor} onChange={e => setEpiForm(f => ({ ...f, fornecedor: e.target.value }))}
-                    placeholder="Nome do fornecedor" />
+                  <div className="flex gap-1">
+                    <Select value={epiForm.fornecedor || "__manual__"} onValueChange={(v) => {
+                      if (v === "__novo__") {
+                        setEditingFornecedor(null); resetFornecedorForm(); setShowFornecedorDialog(true);
+                      } else if (v === "__manual__") {
+                        setEpiForm(f => ({ ...f, fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "" }));
+                      } else {
+                        const found = fornecedoresList.find((f: any) => f.nome === v);
+                        if (found) selectFornecedor(found);
+                      }
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o fornecedor" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__manual__">Digitar manualmente</SelectItem>
+                        {fornecedoresList.map((f: any) => (
+                          <SelectItem key={f.id} value={f.nome}>
+                            {f.nome} {f.cnpj ? `(${f.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")})` : ""}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__novo__">+ Cadastrar novo fornecedor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {!epiForm.fornecedor && (
+                    <Input value={epiForm.fornecedor} onChange={e => setEpiForm(f => ({ ...f, fornecedor: e.target.value }))}
+                      placeholder="Ou digite o nome" className="mt-1" />
+                  )}
                 </div>
               </div>
 
-              {/* Dados do Fornecedor - CNPJ com busca automática */}
+              {/* Dados do Fornecedor */}
               <div className="border border-dashed border-blue-300 rounded-lg p-3 bg-blue-50/30 space-y-3">
                 <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
-                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor (CNPJ)
+                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor
+                  {epiForm.fornecedor && <Badge variant="outline" className="ml-2 text-xs">{epiForm.fornecedor}</Badge>}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <Label className="text-xs">CNPJ do Fornecedor</Label>
+                    <Label className="text-xs">CNPJ</Label>
                     <div className="flex gap-1">
                       <Input value={epiForm.fornecedorCnpj}
                         onChange={e => {
@@ -663,12 +747,8 @@ export default function Epis() {
                         {cnpjLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                       </Button>
                     </div>
-                    {cnpjResult?.success && (
-                      <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>
-                    )}
-                    {cnpjResult?.error && (
-                      <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>
-                    )}
+                    {cnpjResult?.success && <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>}
+                    {cnpjResult?.error && <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>}
                   </div>
                   <div>
                     <Label className="text-xs">Telefone</Label>
@@ -1184,6 +1264,9 @@ export default function Epis() {
                     <Trash2 className="h-4 w-4 mr-1" /> Excluir {selectedEpis.size}
                   </Button>
                 )}
+                <Button size="sm" variant="outline" onClick={() => setShowFornecedorList(true)}>
+                  <Package className="h-4 w-4 mr-1" /> Fornecedores
+                </Button>
                 <Button size="sm" onClick={() => setViewMode("novo_epi")} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   <Plus className="h-4 w-4 mr-1" /> Novo EPI
                 </Button>
@@ -1506,6 +1589,124 @@ export default function Epis() {
           )
         )}
       </div>
+      {/* Dialog para cadastrar/editar fornecedor */}
+      {showFornecedorDialog && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-[#1B3A5C]">
+              {editingFornecedor ? "Editar Fornecedor" : "Cadastrar Novo Fornecedor"}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <Label>Nome do Fornecedor *</Label>
+                <Input value={fornecedorForm.nome} onChange={e => setFornecedorForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Razão social ou nome fantasia" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">CNPJ</Label>
+                  <Input value={fornecedorForm.cnpj} onChange={e => {
+                    const v = e.target.value.replace(/\D/g, "").slice(0, 14);
+                    const formatted = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+                    setFornecedorForm(f => ({ ...f, cnpj: formatted }));
+                  }} placeholder="00.000.000/0000-00" />
+                </div>
+                <div>
+                  <Label className="text-xs">Contato</Label>
+                  <Input value={fornecedorForm.contato} onChange={e => setFornecedorForm(f => ({ ...f, contato: e.target.value }))}
+                    placeholder="Nome do contato" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Telefone</Label>
+                  <Input value={fornecedorForm.telefone} onChange={e => setFornecedorForm(f => ({ ...f, telefone: e.target.value }))}
+                    placeholder="(00) 0000-0000" />
+                </div>
+                <div>
+                  <Label className="text-xs">E-mail</Label>
+                  <Input value={fornecedorForm.email} onChange={e => setFornecedorForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="contato@fornecedor.com" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Endereço</Label>
+                <Input value={fornecedorForm.endereco} onChange={e => setFornecedorForm(f => ({ ...f, endereco: e.target.value }))}
+                  placeholder="Endereço completo" />
+              </div>
+              <div>
+                <Label className="text-xs">Observações</Label>
+                <Input value={fornecedorForm.observacoes} onChange={e => setFornecedorForm(f => ({ ...f, observacoes: e.target.value }))}
+                  placeholder="Observações adicionais" />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => { setShowFornecedorDialog(false); resetFornecedorForm(); setEditingFornecedor(null); }}>Cancelar</Button>
+              <Button className="bg-[#1B3A5C]" disabled={!fornecedorForm.nome || createFornecedorMut.isPending || updateFornecedorMut.isPending}
+                onClick={() => {
+                  const cleanCnpj = fornecedorForm.cnpj.replace(/\D/g, "");
+                  if (editingFornecedor) {
+                    updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+                  } else {
+                    createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+                  }
+                }}>
+                {(createFornecedorMut.isPending || updateFornecedorMut.isPending) ? "Salvando..." : editingFornecedor ? "Atualizar" : "Cadastrar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog para listar fornecedores */}
+      {showFornecedorList && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[80vh] overflow-auto">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-[#1B3A5C]">Fornecedores Cadastrados</h3>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => { setEditingFornecedor(null); resetFornecedorForm(); setShowFornecedorDialog(true); }}>
+                  <Plus className="h-4 w-4 mr-1" /> Novo
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowFornecedorList(false)}>Fechar</Button>
+              </div>
+            </div>
+            {fornecedoresList.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhum fornecedor cadastrado ainda.</p>
+            ) : (
+              <div className="space-y-2">
+                {fornecedoresList.map((f: any) => (
+                  <div key={f.id} className="border rounded-lg p-3 flex justify-between items-start hover:bg-gray-50">
+                    <div>
+                      <p className="font-medium text-sm">{f.nome}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {f.cnpj ? f.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : "Sem CNPJ"}
+                        {f.telefone ? ` | ${f.telefone}` : ""}
+                        {f.email ? ` | ${f.email}` : ""}
+                      </p>
+                      {f.endereco && <p className="text-xs text-muted-foreground">{f.endereco}</p>}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => {
+                        setEditingFornecedor(f);
+                        setFornecedorForm({ nome: f.nome, cnpj: f.cnpj ? f.cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : "", contato: f.contato || "", telefone: f.telefone || "", email: f.email || "", endereco: f.endereco || "", observacoes: f.observacoes || "" });
+                        setShowFornecedorDialog(true);
+                      }}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => {
+                        if (confirm(`Remover fornecedor "${f.nome}"?`)) deleteFornecedorMut.mutate({ id: f.id });
+                      }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

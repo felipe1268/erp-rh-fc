@@ -2132,3 +2132,19 @@ export const dissidioFuncionarios = mysqlTable("dissidio_funcionarios", {
 	index("df_employee").on(table.employeeId),
 	index("df_company").on(table.companyId),
 ]);
+
+
+export const fornecedoresEpi = mysqlTable("fornecedores_epi", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	cnpj: varchar({ length: 20 }),
+	contato: varchar({ length: 255 }),
+	telefone: varchar({ length: 30 }),
+	email: varchar({ length: 255 }),
+	endereco: varchar({ length: 500 }),
+	observacoes: text(),
+	ativo: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});

@@ -2337,3 +2337,20 @@
 - [x] Hub: layout assimétrico (título grande à esquerda, cards empilhados à direita)
 - [x] Sem logos (FC, etc) — apenas texto "ERP - Gestão Integrada"
 - [x] Cores azul marinho e amarelo/dourado sutis
+
+## Fase 53: Redesign Hub de Módulos - Visual mais impactante
+- [ ] Redesenhar Hub com design mais criativo, moderno e impactante
+- [ ] Melhorar hierarquia visual e apelo estético dos cards de módulos
+- [ ] Manter tema claro, cores FC sutis (azul marinho + dourado)
+- [ ] Título "ERP - Gestão Integrada" com mais destaque visual
+
+## Fase 54: Cadastro de Fornecedores de EPIs
+- [x] Criar tabela fornecedores_epi no banco (nome, cnpj, telefone, email, endereco, contato, observacoes)
+- [x] Criar procedures CRUD no backend (listar, criar, editar, excluir fornecedores)
+- [x] Integrar dropdown de fornecedores no formulário de cadastro/edição de EPI
+- [x] Ao selecionar fornecedor, preencher automaticamente CNPJ, telefone, email, endereço
+- [x] Botão "+" para cadastrar novo fornecedor direto do formulário de EPI
+- [x] Botão "Fornecedores" no catálogo para gerenciar lista completa
+- [x] Dialog de cadastro/edição de fornecedor com todos os campos
+- [x] Dialog de listagem de fornecedores com edição e exclusão
+- [ ] Testes vitest para as procedures de fornecedores
