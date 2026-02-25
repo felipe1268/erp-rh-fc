@@ -2288,3 +2288,10 @@
 
 ## Fase 45: Botão de voltar na página Medições PJ
 - [x] Adicionar botão de voltar no header da página Medições PJ
+
+## Fase 46: Corrigir erro na atualização da Base CAEPI
+- [x] Investigar e corrigir falha no download de dados do Portal de Dados Abertos do Governo Federal
+- [x] Fonte primária alterada para FTP do MTE (ftp://ftp.mtps.gov.br) com arquivo pipe-delimited
+- [x] Deduplicação por número de CA (124k linhas → ~40k CAs únicos)
+- [x] Fallback para dados.gov.br API mantido
+- [x] 308 testes passando

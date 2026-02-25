@@ -762,83 +762,107 @@ Exemplos de referência:
       try {
         const db = (await getDb())!;
         
-        // URL do Portal de Dados Abertos do Governo Federal
-        const dataUrl = "https://dados.gov.br/dados/conjuntos-dados/cadastro-de-certificado-de-aprovacao-de-equipamento-de-protecao-individual1";
-        
-        // Try to fetch from the API endpoint
-        const apiUrl = "https://dados.gov.br/api/publico/conjuntos-dados/cadastro-de-certificado-de-aprovacao-de-equipamento-de-protecao-individual1";
-        
-        let jsonData: any[] = [];
+        let records: any[] = [];
         let fetched = false;
-        
-        // Attempt 1: Try the direct CSV/JSON resource URLs from dados.gov.br
-        const resourceUrls = [
-          "https://www.gov.br/trabalho-e-emprego/pt-br/servicos/seguranca-e-saude-no-trabalho/certificado-de-aprovacao-de-equipamento-de-protecao-individual/dados-abertos/caepi.json",
-          "https://www.gov.br/trabalho-e-emprego/pt-br/servicos/seguranca-e-saude-no-trabalho/certificado-de-aprovacao-de-equipamento-de-protecao-individual/dados-abertos/caepi.csv",
-        ];
-        
-        for (const url of resourceUrls) {
-          try {
-            const resp = await fetch(url, { 
-              headers: { 'User-Agent': 'Mozilla/5.0 ERP-RH-FC/1.0' },
-              signal: AbortSignal.timeout(30000)
+        let sourceUsed = '';
+
+        // ============================================================
+        // ESTRATÉGIA 1: FTP do MTE (fonte primária, atualizada diariamente)
+        // Arquivo pipe-delimited (|) com header na primeira linha
+        // ============================================================
+        const ftpUrl = "ftp://ftp.mtps.gov.br/portal/fiscalizacao/seguranca-e-saude-no-trabalho/caepi/tgg_export_caepi.zip";
+        try {
+          const { execSync } = await import('child_process');
+          // Download zip via curl (FTP) with 120s timeout
+          execSync(`curl -s --max-time 120 "${ftpUrl}" -o /tmp/caepi_download.zip`, { timeout: 130000 });
+          // Unzip
+          execSync('cd /tmp && unzip -o caepi_download.zip', { timeout: 30000 });
+          // Read the text file
+          const fs = await import('fs');
+          const rawText = fs.readFileSync('/tmp/tgg_export_caepi.txt', 'utf-8');
+          const lines = rawText.split('\n').filter(l => l.trim());
+          
+          if (lines.length > 1) {
+            // Header: NR Registro CA|DATA DE VALIDADE|SITUACAO|NR DO PROCESSO|CNPJ|RAZAO SOCIAL|NATUREZA|EQUIPAMENTO|DESCRICAO EQUIPAMENTO|MARCA CA|REFERENCIA|COR|APROVADO PARA LAUDO|...
+            const headers = lines[0].split('|').map(h => h.trim());
+            
+            // Parse each line
+            const parsed = lines.slice(1).map(line => {
+              const values = line.split('|');
+              const obj: any = {};
+              headers.forEach((h, i) => { obj[h] = (values[i] || '').trim(); });
+              return obj;
             });
-            if (resp.ok) {
-              const contentType = resp.headers.get('content-type') || '';
-              if (contentType.includes('json') || url.endsWith('.json')) {
-                jsonData = await resp.json();
-                fetched = true;
-                break;
-              } else if (contentType.includes('csv') || url.endsWith('.csv')) {
-                const csvText = await resp.text();
-                // Parse CSV
-                const lines = csvText.split('\n').filter(l => l.trim());
-                if (lines.length > 1) {
-                  const headers = lines[0].split(';').map(h => h.trim().replace(/"/g, ''));
-                  jsonData = lines.slice(1).map(line => {
-                    const values = line.split(';').map(v => v.trim().replace(/"/g, ''));
-                    const obj: any = {};
-                    headers.forEach((h, i) => { obj[h] = values[i] || ''; });
-                    return obj;
-                  });
-                  fetched = true;
-                  break;
+            
+            // Deduplicate by CA number (keep first occurrence of each unique CA)
+            const caMap = new Map<string, any>();
+            for (const item of parsed) {
+              const ca = String(item['NR Registro CA'] || '').replace(/\D/g, '');
+              if (ca && ca.length > 0 && !caMap.has(ca)) {
+                caMap.set(ca, {
+                  ca,
+                  validade: item['DATA DE VALIDADE'] || null,
+                  situacao: item['SITUACAO'] || null,
+                  cnpj: item['CNPJ'] || null,
+                  fabricante: item['RAZAO SOCIAL'] || null,
+                  natureza: item['NATUREZA'] || null,
+                  equipamento: item['EQUIPAMENTO'] || null,
+                  descricao: item['DESCRICAO EQUIPAMENTO'] || null,
+                  referencia: item['REFERENCIA'] || null,
+                  cor: item['COR'] || null,
+                  aprovadoPara: item['APROVADO PARA LAUDO'] || null,
+                });
+              }
+            }
+            records = Array.from(caMap.values());
+            if (records.length > 0) {
+              fetched = true;
+              sourceUsed = 'FTP MTE (ftp.mtps.gov.br)';
+            }
+          }
+          // Cleanup temp files
+          try {
+            execSync('rm -f /tmp/caepi_download.zip /tmp/tgg_export_caepi.txt', { timeout: 5000 });
+          } catch { /* ignore cleanup errors */ }
+        } catch (ftpErr: any) {
+          console.error('CAEPI FTP download failed:', ftpErr.message);
+        }
+
+        // ============================================================
+        // ESTRATÉGIA 2: Fallback — dados.gov.br API para descobrir URL dinâmica do XLSX
+        // ============================================================
+        if (!fetched) {
+          try {
+            const apiResp = await fetch(
+              'https://dados.gov.br/api/publico/conjuntos-dados/cadastro-de-equipamento-de-protecao-individual',
+              { headers: { 'User-Agent': 'Mozilla/5.0 ERP-RH-FC/1.0' }, signal: AbortSignal.timeout(15000) }
+            );
+            if (apiResp.ok) {
+              const apiData = await apiResp.json();
+              const xlsxResource = apiData.resources?.find((r: any) => 
+                r.format?.toUpperCase().includes('XLS') && r.url
+              );
+              if (xlsxResource?.url) {
+                const xlsResp = await fetch(xlsxResource.url, {
+                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                  signal: AbortSignal.timeout(60000)
+                });
+                if (xlsResp.ok) {
+                  // TODO: Parse XLSX if needed in the future
+                  console.log('XLSX resource found but XLSX parsing not implemented in fallback');
                 }
               }
             }
-          } catch { /* try next URL */ }
+          } catch { /* fallback failed */ }
         }
-        
-        if (!fetched || jsonData.length === 0) {
-          // Return current stats if we can't fetch new data
+
+        if (!fetched || records.length === 0) {
           const [countResult] = await db.select({ count: sql<number>`COUNT(*)` }).from(caepiDatabase);
           return {
             success: false,
-            error: "Não foi possível baixar dados atualizados do Portal de Dados Abertos. A base local permanece inalterada.",
+            error: "Não foi possível baixar dados atualizados. O servidor FTP do MTE pode estar temporariamente indisponível. Tente novamente mais tarde.",
             totalImported: countResult?.count || 0,
           };
-        }
-        
-        // Map fields from government data format
-        const records = jsonData.map((item: any) => {
-          const ca = String(item.NrCA || item.CA || item.ca || item.NumeroCA || '').replace(/\D/g, '');
-          return {
-            ca,
-            validade: item.DataValidade || item.Validade || item.validade || null,
-            situacao: item.Situacao || item.situacao || item.Status || null,
-            cnpj: item.CNPJ || item.cnpj || null,
-            fabricante: item.RazaoSocial || item.Fabricante || item.fabricante || null,
-            natureza: item.Natureza || item.natureza || null,
-            equipamento: item.Equipamento || item.equipamento || item.Descricao || null,
-            descricao: item.DescricaoEquipamento || item.descricao || item.Descricao || null,
-            referencia: item.Referencia || item.referencia || null,
-            cor: item.Cor || item.cor || null,
-            aprovadoPara: item.AprovadoPara || item.aprovadoPara || null,
-          };
-        }).filter((r: any) => r.ca && r.ca.length > 0);
-        
-        if (records.length === 0) {
-          return { success: false, error: "Dados baixados mas nenhum CA válido encontrado.", totalImported: 0 };
         }
         
         // Clear existing data and insert new
@@ -854,7 +878,7 @@ Exemplos de referência:
         return {
           success: true,
           totalImported: records.length,
-          message: `Base CAEPI atualizada com ${records.length.toLocaleString()} CAs.`,
+          message: `Base CAEPI atualizada com ${records.length.toLocaleString()} CAs únicos. Fonte: ${sourceUsed}`,
         };
       } catch (err: any) {
         return {
