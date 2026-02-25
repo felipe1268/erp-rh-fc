@@ -2209,3 +2209,27 @@
 - [ ] Ficha de avaliação de desempenho → linkar com dossiê RH (Raio-X)
 - [ ] Ponto por geolocalização (GPS)
 - [ ] Nome/nº org igual em todos ERPs (TC e RDO) - padronizar nomenclatura
+
+## Fase 36: Frontend Novos Módulos + Dissídio por Ano + Campos Cadastro
+
+### Módulo Dissídio Separado por Ano
+- [ ] Schema: tabela dissidios com histórico por ano (ano_referencia, percentual, data_base, data_aplicacao, status)
+- [ ] Critérios CLT/MTE: data-base maio, percentual mínimo INPC, retroativo, piso salarial categoria
+- [ ] Backend: router dissidio com CRUD + aplicação em massa + simulação
+- [ ] Backend: aplicação automática do dissídio (reajuste salarial em massa por ano)
+- [ ] Frontend: tela Dissídio separada por ano com histórico e aplicação
+
+### Campos Novos no Cadastro do Colaborador
+- [ ] Frontend: campos pensão alimentícia (tipo, valor, percentual) no formulário
+- [ ] Frontend: campos licença maternidade (data início, data fim, status) no formulário
+- [ ] Frontend: campos seguro vida, sindicato, dissídio, CCT, DDS no formulário
+- [ ] Frontend: campo VT melhorado (valor, tipo, operadora) no formulário
+
+### Frontend Novos Módulos
+- [ ] Frontend: tela de Feriados (CRUD + seed nacionais)
+- [ ] Frontend: tela de PJ Medições (horas x valor hora)
+- [ ] Frontend: upload de documentos pessoais no cadastro do funcionário
+
+### Aba Descontos e Cruzamento HE na Folha
+- [ ] Frontend: aba Descontos na Folha (comparativo sistema vs contabilidade)
+- [ ] Frontend: aba Cruzamento HE na Folha (divergências sistema vs contabilidade)
