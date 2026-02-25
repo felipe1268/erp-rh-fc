@@ -1,0 +1,28 @@
+{
+  "query": "SELECT version, titulo, tipo, modulos FROM system_revisions ORDER BY version DESC LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo, modulos FROM system_revisions ORDER BY version DESC LIMIT 3;",
+  "rows": [
+    {
+      "version": "80",
+      "titulo": "HE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen",
+      "tipo": "feature",
+      "modulos": "Colaboradores,Horas Extras,Configurações,Central de Alertas,Revisões"
+    },
+    {
+      "version": "79",
+      "titulo": "Auditoria Completa de Campos + Persistência",
+      "tipo": "bugfix",
+      "modulos": "Colaboradores,Cadastro"
+    },
+    {
+      "version": "78",
+      "titulo": "Correção: Percentuais de HE não persistiam",
+      "tipo": "bugfix",
+      "modulos": "Colaboradores,Horas Extras"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\tmodulos\n80\tHE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen\tfeature\tColaboradores,Horas Extras,Configurações,Central de Alertas,Revisões\n79\tAuditoria Completa de Campos + Persistência\tbugfix\tColaboradores,Cadastro\n78\tCorreção: Percentuais de HE não persistiam\tbugfix\tColaboradores,Horas Extras\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

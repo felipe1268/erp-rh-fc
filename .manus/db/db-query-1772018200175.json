@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, version, titulo, tipo, DATE_FORMAT(createdAt, '%d/%m/%Y') as data FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, tipo, DATE_FORMAT(createdAt, '%d/%m/%Y') as data FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "60006",
+      "version": "80",
+      "titulo": "HE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen",
+      "tipo": "feature",
+      "data": "24/02/2026"
+    },
+    {
+      "id": "60005",
+      "version": "79",
+      "titulo": "Auditoria Completa de Campos + Persistência",
+      "tipo": "bugfix",
+      "data": "24/02/2026"
+    },
+    {
+      "id": "60004",
+      "version": "78",
+      "titulo": "Correção: Percentuais de HE não persistiam",
+      "tipo": "bugfix",
+      "data": "24/02/2026"
+    },
+    {
+      "id": "60003",
+      "version": "77",
+      "titulo": "Ordenação Alfabética de Colaboradores",
+      "tipo": "melhoria",
+      "data": "24/02/2026"
+    },
+    {
+      "id": "60002",
+      "version": "76",
+      "titulo": "Correção: Cadastro de EPI com nome longo (CA)",
+      "tipo": "bugfix",
+      "data": "24/02/2026"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\ttipo\tdata\n60006\t80\tHE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen\tfeature\t24/02/2026\n60005\t79\tAuditoria Completa de Campos + Persistência\tbugfix\t24/02/2026\n60004\t78\tCorreção: Percentuais de HE não persistiam\tbugfix\t24/02/2026\n60003\t77\tOrdenação Alfabética de Colaboradores\tmelhoria\t24/02/2026\n60002\t76\tCorreção: Cadastro de EPI com nome longo (CA)\tbugfix\t24/02/2026\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}
