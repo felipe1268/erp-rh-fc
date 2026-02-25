@@ -2354,3 +2354,13 @@
 - [x] Dialog de cadastro/edição de fornecedor com todos os campos
 - [x] Dialog de listagem de fornecedores com edição e exclusão
 - [ ] Testes vitest para as procedures de fornecedores
+
+## Fase 55: Bug - Tela de Login em branco
+- [ ] Investigar por que a tela de login não aparece nada ao acessar
+- [ ] Corrigir o bug e garantir que o login funcione corretamente
+
+## Fase 56: Hub Futurista tipo 2060
+- [x] Pesquisar referências de interfaces futuristas e sci-fi dashboards (Apple Vision Pro, glassmorphism, sci-fi HUD)
+- [x] Redesenhar Hub com visual futurista: mesh gradient animado, glassmorphism, cards com hover 3D, ícones flutuantes com glow
+- [x] Manter funcionalidade e usabilidade apesar do design avançado
+- [x] Tema claro com elementos futuristas (gradientes mesh, glassmorphism, animações staggered, accent glow)
