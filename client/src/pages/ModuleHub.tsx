@@ -20,6 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getLoginUrl } from "@/const";
 import { useState, useMemo, useEffect } from "react";
 
+/* ─── Robot image URL ─── */
+const ROBOT_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/XtVAYezVwPtXCXyB.png";
+
 /* ─── Module definitions ─── */
 type Module = {
   id: string;
@@ -30,6 +33,7 @@ type Module = {
   accentFrom: string;
   accentTo: string;
   accentGlow: string;
+  iconBg: string;
   path: string;
   active: boolean;
   features: string[];
@@ -45,6 +49,7 @@ const MODULES: Module[] = [
     accentFrom: "#3B82F6",
     accentTo: "#6366F1",
     accentGlow: "rgba(59,130,246,0.35)",
+    iconBg: "rgba(59,130,246,0.12)",
     path: "/painel",
     active: true,
     features: ["Colaboradores", "Folha de Pagamento", "Ponto Eletrônico", "Férias & Aviso Prévio", "Contratos PJ", "Vale Alimentação"],
@@ -58,6 +63,7 @@ const MODULES: Module[] = [
     accentFrom: "#10B981",
     accentTo: "#059669",
     accentGlow: "rgba(16,185,129,0.35)",
+    iconBg: "rgba(16,185,129,0.12)",
     path: "/painel",
     active: true,
     features: ["Controle de EPIs", "ASOs", "CIPA", "Base CAEPI", "Documentos SST"],
@@ -71,6 +77,7 @@ const MODULES: Module[] = [
     accentFrom: "#1B2A4A",
     accentTo: "#D4A843",
     accentGlow: "rgba(212,168,67,0.30)",
+    iconBg: "rgba(27,42,74,0.12)",
     path: "/painel",
     active: true,
     features: ["Processos Trabalhistas", "Audiências", "Provisões", "Análise de Risco"],
@@ -78,22 +85,22 @@ const MODULES: Module[] = [
   {
     id: "planejamento", title: "Planejamento", subtitle: "Controle de Obras",
     description: "Cronogramas, alocação de recursos e indicadores de desempenho.",
-    icon: CalendarRange, accentFrom: "#8B5CF6", accentTo: "#7C3AED", accentGlow: "", path: "", active: false, features: [],
+    icon: CalendarRange, accentFrom: "#8B5CF6", accentTo: "#7C3AED", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
   {
     id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira",
     description: "Contas a pagar e receber, fluxo de caixa e relatórios.",
-    icon: DollarSign, accentFrom: "#F59E0B", accentTo: "#D97706", accentGlow: "", path: "", active: false, features: [],
+    icon: DollarSign, accentFrom: "#F59E0B", accentTo: "#D97706", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
   {
     id: "orcamento", title: "Orçamento", subtitle: "Orçamento de Obras",
     description: "Composição de custos, BDI e propostas comerciais.",
-    icon: Calculator, accentFrom: "#06B6D4", accentTo: "#0891B2", accentGlow: "", path: "", active: false, features: [],
+    icon: Calculator, accentFrom: "#06B6D4", accentTo: "#0891B2", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
   {
     id: "compras", title: "Compras", subtitle: "Suprimentos",
     description: "Cotações, pedidos e controle de fornecedores.",
-    icon: ShoppingCart, accentFrom: "#F43F5E", accentTo: "#E11D48", accentGlow: "", path: "", active: false, features: [],
+    icon: ShoppingCart, accentFrom: "#F43F5E", accentTo: "#E11D48", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
 ];
 
@@ -110,67 +117,79 @@ function getFormattedDate(): string {
   });
 }
 
-/* ─── Animated mesh background (CSS only) ─── */
-const meshStyle = `
-@keyframes meshMove {
+/* ─── Styles ─── */
+const hubStyles = `
+@keyframes meshDrift {
   0%, 100% { background-position: 0% 50%; }
   25% { background-position: 100% 0%; }
   50% { background-position: 100% 100%; }
   75% { background-position: 0% 100%; }
 }
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(24px); }
+  from { opacity: 0; transform: translateY(28px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes fadeSlideRight {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 @keyframes pulseGlow {
-  0%, 100% { opacity: 0.6; }
+  0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
-@keyframes float {
+@keyframes floatRobot {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
+  50% { transform: translateY(-12px); }
 }
-.mesh-bg {
+@keyframes waveFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.hub-mesh-bg {
   background: 
-    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(59,130,246,0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 60% at 80% 20%, rgba(212,168,67,0.06) 0%, transparent 70%),
-    radial-gradient(ellipse 70% 50% at 50% 80%, rgba(16,185,129,0.05) 0%, transparent 70%),
-    linear-gradient(135deg, #FAFBFE 0%, #F0F4F8 30%, #FAFBFE 60%, #F8F6F0 100%);
+    radial-gradient(ellipse 90% 60% at 15% 50%, rgba(59,130,246,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 85% 30%, rgba(212,168,67,0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 50% 90%, rgba(16,185,129,0.04) 0%, transparent 70%),
+    linear-gradient(160deg, #FAFBFE 0%, #F4F6FA 25%, #FAFBFE 50%, #F9F7F2 75%, #FAFBFE 100%);
   background-size: 200% 200%;
-  animation: meshMove 20s ease-in-out infinite;
+  animation: meshDrift 25s ease-in-out infinite;
 }
-.animate-fade-up {
-  animation: fadeSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.hub-animate-up {
+  animation: fadeSlideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
 }
-.glass-card {
-  background: rgba(255,255,255,0.72);
-  backdrop-filter: blur(20px) saturate(1.8);
-  -webkit-backdrop-filter: blur(20px) saturate(1.8);
-  border: 1px solid rgba(255,255,255,0.5);
-  box-shadow: 
-    0 0 0 1px rgba(0,0,0,0.02),
-    0 4px 24px -4px rgba(0,0,0,0.06),
-    0 1px 2px rgba(0,0,0,0.03);
+.hub-animate-right {
+  animation: fadeSlideRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
 }
-.glass-card:hover {
-  background: rgba(255,255,255,0.85);
-  box-shadow: 
-    0 0 0 1px rgba(0,0,0,0.03),
-    0 8px 40px -8px rgba(0,0,0,0.10),
-    0 2px 4px rgba(0,0,0,0.04);
+.hub-glass {
+  background: rgba(255,255,255,0.70);
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  border: 1px solid rgba(255,255,255,0.55);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.02), 0 4px 24px -4px rgba(0,0,0,0.06);
 }
-.module-card {
+.hub-glass:hover {
+  background: rgba(255,255,255,0.88);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.03), 0 12px 48px -8px rgba(0,0,0,0.12);
+}
+.hub-module-card {
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
 }
-.module-card:hover {
-  transform: translateY(-6px) scale(1.01);
+.hub-module-card:hover {
+  transform: translateY(-4px) scale(1.015);
 }
-.glow-dot {
+.hub-glow-dot {
   animation: pulseGlow 3s ease-in-out infinite;
 }
-.float-icon {
-  animation: float 4s ease-in-out infinite;
+.hub-robot-float {
+  animation: floatRobot 5s ease-in-out infinite;
+}
+.hub-wave-line {
+  background: linear-gradient(90deg, transparent, rgba(212,168,67,0.15), rgba(59,130,246,0.10), transparent);
+  background-size: 200% 100%;
+  animation: waveFlow 8s linear infinite;
 }
 `;
 
@@ -189,11 +208,11 @@ export default function ModuleHub() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen mesh-bg">
-        <style>{meshStyle}</style>
+      <div className="flex items-center justify-center min-h-screen hub-mesh-bg">
+        <style>{hubStyles}</style>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#1B2A4A] to-[#D4A843] flex items-center justify-center animate-pulse">
-            <Zap className="h-6 w-6 text-white" />
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1B2A4A] to-[#D4A843] flex items-center justify-center animate-pulse shadow-lg">
+            <Zap className="h-7 w-7 text-white" />
           </div>
           <p className="text-gray-400 text-sm font-medium">Carregando plataforma...</p>
         </div>
@@ -211,25 +230,31 @@ export default function ModuleHub() {
 
   return (
     <>
-      <style>{meshStyle}</style>
-      <div className="min-h-screen mesh-bg">
+      <style>{hubStyles}</style>
+      <div className="min-h-screen hub-mesh-bg relative overflow-hidden">
 
-        {/* ═══════════ HEADER - Glassmorphism ═══════════ */}
+        {/* ═══════════ DECORATIVE WAVE LINES ═══════════ */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="hub-wave-line absolute top-[35%] left-0 right-0 h-[1px]" />
+          <div className="hub-wave-line absolute top-[55%] left-0 right-0 h-[1px]" style={{ animationDelay: '-3s' }} />
+          <div className="hub-wave-line absolute top-[75%] left-0 right-0 h-[1px]" style={{ animationDelay: '-6s' }} />
+        </div>
+
+        {/* ═══════════ HEADER ═══════════ */}
         <header className="sticky top-0 z-50" style={{
-          background: "rgba(255,255,255,0.65)",
-          backdropFilter: "blur(24px) saturate(1.8)",
-          WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+          background: "rgba(255,255,255,0.60)",
+          backdropFilter: "blur(28px) saturate(1.8)",
+          WebkitBackdropFilter: "blur(28px) saturate(1.8)",
           borderBottom: "1px solid rgba(255,255,255,0.4)",
-          boxShadow: "0 1px 12px rgba(0,0,0,0.04)",
+          boxShadow: "0 1px 12px rgba(0,0,0,0.03)",
         }}>
-          <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-            {/* Left - Brand */}
+          <div className="max-w-[1440px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-[#1B2A4A] to-[#2C3E6A] flex items-center justify-center shadow-lg shadow-[#1B2A4A]/20">
                   <Layers className="h-5 w-5 text-white" />
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#D4A843] border-2 border-white glow-dot" />
+                <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#D4A843] border-2 border-white hub-glow-dot" />
               </div>
               <div>
                 <h1 className="text-sm font-bold text-[#1B2A4A] tracking-tight leading-none">ERP - Gestão Integrada</h1>
@@ -237,9 +262,7 @@ export default function ModuleHub() {
               </div>
             </div>
 
-            {/* Right - Controls */}
             <div className="flex items-center gap-2.5">
-              {/* Company Selector */}
               <div className="flex items-center gap-2">
                 {selectedCompany?.logoUrl ? (
                   <img src={selectedCompany.logoUrl} alt="" className="h-6 w-6 object-contain rounded-lg" />
@@ -267,13 +290,10 @@ export default function ModuleHub() {
                 </Select>
               </div>
 
-              {/* Notification */}
               <button className="h-9 w-9 rounded-xl bg-white/50 hover:bg-white/70 backdrop-blur-sm flex items-center justify-center transition-all relative border border-white/60">
                 <Bell className="h-4 w-4 text-gray-400" />
-                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 bg-[#D4A843] rounded-full border-2 border-white glow-dot" />
               </button>
 
-              {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2.5 hover:bg-white/50 rounded-xl px-2.5 py-1.5 transition-all border border-transparent hover:border-white/60">
@@ -304,166 +324,160 @@ export default function ModuleHub() {
           </div>
         </header>
 
-        {/* ═══════════ MAIN CONTENT ═══════════ */}
-        <main className="max-w-[1400px] mx-auto px-6 lg:px-10 py-10">
+        {/* ═══════════ HERO SECTION - Robot + Title + Modules ═══════════ */}
+        <main className="relative max-w-[1440px] mx-auto px-6 lg:px-10">
 
-          {/* ──── Hero Greeting ──── */}
-          <div className={`mb-12 ${mounted ? 'animate-fade-up' : 'opacity-0'}`} style={{ animationDelay: '0.1s' }}>
-            <div className="flex items-start justify-between flex-wrap gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="h-1.5 w-1.5 rounded-full bg-[#D4A843] glow-dot" />
-                  <span className="text-xs font-semibold text-[#D4A843] uppercase tracking-[0.2em]">Plataforma Corporativa</span>
+          {/* ──── HERO ROW: Robot Left | Content Right ──── */}
+          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-0 pt-8 lg:pt-4">
+
+            {/* LEFT: Robot Image */}
+            <div
+              className={`relative flex-shrink-0 w-[280px] sm:w-[340px] lg:w-[400px] ${mounted ? 'hub-animate-right' : 'opacity-0'}`}
+              style={{ animationDelay: '0.1s' }}
+            >
+              <div className="hub-robot-float">
+                <img
+                  src={ROBOT_IMG}
+                  alt="Assistente IA FC Engenharia"
+                  className="w-full h-auto object-contain drop-shadow-2xl"
+                  style={{
+                    filter: "drop-shadow(0 20px 40px rgba(27,42,74,0.15))",
+                    maxHeight: "520px",
+                  }}
+                />
+              </div>
+              {/* Glow under robot */}
+              <div
+                className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[70%] h-[30px] rounded-full blur-2xl"
+                style={{ background: "radial-gradient(ellipse, rgba(59,130,246,0.15), transparent)" }}
+              />
+            </div>
+
+            {/* RIGHT: Title + Module Cards */}
+            <div className="flex-1 lg:pl-4 w-full">
+
+              {/* ERP Watermark */}
+              <div className="relative">
+                <span
+                  className="absolute -top-6 right-0 text-[120px] sm:text-[160px] lg:text-[200px] font-black leading-none pointer-events-none select-none"
+                  style={{ color: "rgba(27,42,74,0.04)" }}
+                >
+                  ERP
+                </span>
+              </div>
+
+              {/* Greeting */}
+              <div className={`mb-4 relative z-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-[#D4A843] hub-glow-dot" />
+                  <span className="text-[10px] font-bold text-[#D4A843] uppercase tracking-[0.25em]">Plataforma Corporativa</span>
                 </div>
-                <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-2">
-                  <span className="text-[#1B2A4A]">{greeting}, </span>
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
+                  <span className="text-[#1B2A4A]">Gestão</span>
+                  <br />
                   <span style={{
                     background: "linear-gradient(135deg, #1B2A4A 0%, #D4A843 100%)",
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
-                  }}>{firstName}</span>
+                  }}>Integrada</span>
                 </h2>
-                <p className="text-gray-400 text-sm flex items-center gap-2 font-medium">
-                  <Clock className="h-3.5 w-3.5" />
-                  {formattedDate}
-                </p>
-              </div>
-              {/* Quick stat pill */}
-              <div className="glass-card rounded-2xl px-5 py-3 flex items-center gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-extrabold text-[#1B2A4A]">{activeModules.length}</p>
-                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Ativos</p>
-                </div>
-                <div className="h-8 w-px bg-gray-200/60" />
-                <div className="text-center">
-                  <p className="text-2xl font-extrabold text-[#D4A843]">{futureModules.length}</p>
-                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Em breve</p>
+                <div className="flex items-center gap-3 mt-3">
+                  <p className="text-gray-400 text-sm flex items-center gap-1.5 font-medium">
+                    <Clock className="h-3.5 w-3.5" />
+                    {greeting}, <span className="text-[#1B2A4A] font-semibold">{firstName}</span>
+                  </p>
+                  <span className="text-gray-200">|</span>
+                  <p className="text-gray-300 text-xs">{formattedDate}</p>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* ──── Active Module Cards ──── */}
-          <div className={`mb-14 ${mounted ? 'animate-fade-up' : 'opacity-0'}`} style={{ animationDelay: '0.25s' }}>
-            <div className="flex items-center gap-3 mb-7">
-              <div className="h-8 w-1 rounded-full bg-gradient-to-b from-[#1B2A4A] to-[#D4A843]" />
-              <h3 className="text-lg font-bold text-[#1B2A4A]">Módulos Disponíveis</h3>
-            </div>
+              {/* Module Cards - Stacked */}
+              <div className="flex flex-col gap-3 mt-6 relative z-10">
+                {activeModules.map((mod, idx) => (
+                  <button
+                    key={mod.id}
+                    onClick={() => { setActiveModule(mod.id as ModuleId); navigate(mod.path); }}
+                    className={`hub-module-card group relative text-left rounded-2xl overflow-hidden hub-glass w-full ${mounted ? 'hub-animate-up' : 'opacity-0'}`}
+                    style={{ animationDelay: `${0.3 + idx * 0.12}s` }}
+                  >
+                    {/* Hover glow */}
+                    <div
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                      style={{
+                        background: `radial-gradient(ellipse 60% 80% at 0% 50%, ${mod.accentGlow} 0%, transparent 70%)`,
+                      }}
+                    />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {activeModules.map((mod, idx) => (
-                <button
-                  key={mod.id}
-                  onClick={() => { setActiveModule(mod.id as ModuleId); navigate(mod.path); }}
-                  className="module-card group relative text-left rounded-3xl overflow-hidden glass-card"
-                  style={{ animationDelay: `${0.3 + idx * 0.1}s` }}
-                >
-                  {/* Accent glow on hover */}
-                  <div
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-3xl pointer-events-none"
-                    style={{
-                      background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${mod.accentGlow} 0%, transparent 70%)`,
-                    }}
-                  />
+                    {/* Left accent bar */}
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl" style={{
+                      background: `linear-gradient(180deg, ${mod.accentFrom}, ${mod.accentTo})`,
+                    }} />
 
-                  {/* Top accent bar */}
-                  <div className="h-1.5 w-full" style={{
-                    background: `linear-gradient(90deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                  }} />
-
-                  <div className="relative p-6 pb-5">
-                    {/* Icon + Title Row */}
-                    <div className="flex items-start justify-between mb-5">
-                      <div className="flex items-center gap-4">
-                        {/* Floating icon with glow */}
-                        <div className="relative float-icon" style={{ animationDelay: `${idx * 0.5}s` }}>
-                          <div
-                            className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-lg"
-                            style={{
-                              background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                              boxShadow: `0 8px 24px -4px ${mod.accentGlow}`,
-                            }}
-                          >
-                            <mod.icon className="h-7 w-7 text-white" />
-                          </div>
-                        </div>
-                        <div>
-                          <h4 className="text-xl font-extrabold text-[#1B2A4A] tracking-tight group-hover:text-[#1B2A4A] transition-colors">
-                            {mod.title}
-                          </h4>
-                          <p className="text-xs text-gray-400 font-medium mt-0.5">{mod.subtitle}</p>
-                        </div>
-                      </div>
-                      {/* Arrow */}
+                    <div className="relative flex items-center gap-4 px-5 py-4 pl-6">
+                      {/* Icon */}
                       <div
-                        className="h-10 w-10 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:translate-x-0 -translate-x-2"
+                        className="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110"
                         style={{
                           background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                          boxShadow: `0 4px 12px -2px ${mod.accentGlow}`,
+                          boxShadow: `0 6px 20px -4px ${mod.accentGlow}`,
                         }}
                       >
-                        <ArrowUpRight className="h-5 w-5 text-white" />
+                        <mod.icon className="h-6 w-6 text-white" />
+                      </div>
+
+                      {/* Text */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-extrabold text-[#1B2A4A] tracking-tight">{mod.title}</h4>
+                          <span className="text-[10px] text-gray-300 font-medium hidden sm:inline">{mod.subtitle}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{mod.description}</p>
+                      </div>
+
+                      {/* Arrow */}
+                      <div
+                        className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 opacity-40 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-1"
+                        style={{
+                          background: `linear-gradient(135deg, ${mod.accentFrom}15, ${mod.accentTo}10)`,
+                        }}
+                      >
+                        <ArrowRight className="h-4 w-4" style={{ color: mod.accentFrom }} />
                       </div>
                     </div>
-
-                    {/* Description */}
-                    <p className="text-sm text-gray-500 leading-relaxed mb-5">{mod.description}</p>
-
-                    {/* Feature chips */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {mod.features.slice(0, 4).map(f => (
-                        <span
-                          key={f}
-                          className="text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors duration-300"
-                          style={{
-                            color: mod.accentFrom,
-                            background: `${mod.accentFrom}10`,
-                            border: `1px solid ${mod.accentFrom}18`,
-                          }}
-                        >
-                          {f}
-                        </span>
-                      ))}
-                      {mod.features.length > 4 && (
-                        <span className="text-[10px] font-semibold text-gray-300 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-                          +{mod.features.length - 4}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* ──── Future Modules ──── */}
-          <div className={`mb-8 ${mounted ? 'animate-fade-up' : 'opacity-0'}`} style={{ animationDelay: '0.5s' }}>
-            <div className="flex items-center gap-3 mb-7">
-              <div className="h-8 w-1 rounded-full bg-gradient-to-b from-gray-300 to-gray-200" />
-              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Em Desenvolvimento</h3>
+          {/* ──── FUTURE MODULES ──── */}
+          <div className={`mt-10 mb-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.7s' }}>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-6 w-1 rounded-full bg-gradient-to-b from-gray-300 to-gray-200" />
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Em Desenvolvimento</h3>
               <div className="h-px flex-1 bg-gradient-to-r from-gray-200 to-transparent" />
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {futureModules.map((mod, idx) => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {futureModules.map((mod) => (
                 <div
                   key={mod.id}
-                  className="relative glass-card rounded-2xl p-5 text-center group cursor-default"
-                  style={{ opacity: 0.7 }}
+                  className="relative hub-glass rounded-2xl p-4 text-center cursor-default"
+                  style={{ opacity: 0.65 }}
                 >
-                  <Lock className="absolute top-3 right-3 h-3 w-3 text-gray-200" />
+                  <Lock className="absolute top-2.5 right-2.5 h-3 w-3 text-gray-200" />
                   <div
-                    className="h-12 w-12 rounded-2xl flex items-center justify-center mx-auto mb-3 opacity-40"
+                    className="h-10 w-10 rounded-xl flex items-center justify-center mx-auto mb-2 opacity-40"
                     style={{
                       background: `linear-gradient(135deg, ${mod.accentFrom}15, ${mod.accentTo}10)`,
                     }}
                   >
                     <mod.icon className="h-5 w-5" style={{ color: mod.accentFrom }} />
                   </div>
-                  <h4 className="text-sm font-bold text-gray-400 mb-0.5">{mod.title}</h4>
-                  <p className="text-[10px] text-gray-300 mb-3">{mod.subtitle}</p>
-                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#D4A843]/60 bg-[#D4A843]/8 px-3 py-1 rounded-full uppercase tracking-wider">
-                    <Zap className="h-2.5 w-2.5" />
+                  <h4 className="text-xs font-bold text-gray-400 mb-0.5">{mod.title}</h4>
+                  <p className="text-[9px] text-gray-300 mb-2">{mod.subtitle}</p>
+                  <span className="inline-flex items-center gap-1 text-[8px] font-bold text-[#D4A843]/60 bg-[#D4A843]/8 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                    <Zap className="h-2 w-2" />
                     Em breve
                   </span>
                 </div>
@@ -473,8 +487,8 @@ export default function ModuleHub() {
         </main>
 
         {/* ═══════════ FOOTER ═══════════ */}
-        <footer className="py-6 mt-auto">
-          <div className="max-w-[1400px] mx-auto px-6 lg:px-10 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <footer className="py-5 relative z-10">
+          <div className="max-w-[1440px] mx-auto px-6 lg:px-10 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2C3E6A] flex items-center justify-center shadow-sm">
                 <Layers className="h-3 w-3 text-white" />

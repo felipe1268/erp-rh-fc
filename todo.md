@@ -2364,3 +2364,6 @@
 - [x] Redesenhar Hub com visual futurista: mesh gradient animado, glassmorphism, cards com hover 3D, ícones flutuantes com glow
 - [x] Manter funcionalidade e usabilidade apesar do design avançado
 - [x] Tema claro com elementos futuristas (gradientes mesh, glassmorphism, animações staggered, accent glow)
+- [x] Gerar robô de IA engenheiro com capacete branco FC + colete de segurança + tablet holografico
+- [x] Implementar layout: robô à esquerda + título "Gestão Integrada" + cards glass à direita
+- [x] Watermark "ERP" gigante, ondas decorativas animadas, sombra drop-shadow no robô
