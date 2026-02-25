@@ -2325,3 +2325,15 @@
 - [x] Cada módulo mostra apenas seus itens pertinentes, sem duplicidade
 - [x] Manter itens compartilhados (Cadastro: Empresas, Obras, etc.) em seção comum
 - [x] Navegação entre módulos via Hub ou troca na sidebar (seletor de módulo na sidebar)
+
+## Fase 51: Redesign Hub de Módulos - Tema Claro
+- [ ] Gerar 3 amostras de design claro com cores FC sutis
+- [x] Apresentar amostras ao usuário para escolha
+- [x] Implementar o design escolhido pelo usuário
+
+## Fase 52: Implementar Login split + Hub assimétrico
+- [x] Upload foto viaduto (escolhida pelo usuário) para S3
+- [x] Login: foto P&B à esquerda com "ERP - Gestão Integrada" + painel branco à direita com formulário
+- [x] Hub: layout assimétrico (título grande à esquerda, cards empilhados à direita)
+- [x] Sem logos (FC, etc) — apenas texto "ERP - Gestão Integrada"
+- [x] Cores azul marinho e amarelo/dourado sutis
