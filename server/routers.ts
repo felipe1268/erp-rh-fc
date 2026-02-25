@@ -53,6 +53,9 @@ import { insuranceRouter } from "./routers/insurance";
 import { dixiPontoRouter } from "./routers/dixiPonto";
 import { heSolicitacoesRouter } from "./routers/heSolicitacoes";
 import { pontoDescontosRouter } from "./routers/pontoDescontos";
+import { feriadosRouter } from "./routers/feriados";
+import { employeeDocumentsRouter } from "./routers/employeeDocuments";
+import { pjMedicoesRouter } from "./routers/pjMedicoes";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -245,15 +248,35 @@ export const appRouter = router({
       // === REGRA-MÃE DE UNICIDADE ===
       // Valida CPF em TODAS as empresas do grupo (não apenas na empresa atual)
       if (input.cpf && !input.cpf.startsWith('000.000')) {
+        // Verificar se está na Blacklist (sempre bloqueia)
+        const blacklisted = await checkBlacklist(input.cpf);
+        if (blacklisted) {
+          throw new TRPCError({ code: "FORBIDDEN", message: `\ud83d\udeab FUNCION\u00c1RIO NA BLACKLIST!\n\n${blacklisted.nomeCompleto} (CPF: ${input.cpf}) est\u00e1 na Blacklist da empresa.\nMotivo: ${blacklisted.motivoListaNegra || 'N\u00e3o informado'}\nData: ${blacklisted.dataListaNegra || 'N/A'}\nRegistrado por: ${(blacklisted as any).listaNegraPor || 'N/A'}\n\nPara reativar este funcion\u00e1rio, \u00e9 necess\u00e1ria a aprova\u00e7\u00e3o de 2 diretores da empresa.` });
+        }
+        // Verificar CPF duplicado com suporte a recontratação
         const dup = await checkDuplicateCpf(input.cpf);
         if (dup && (dup as any[]).length > 0) {
           const dupInfo = (dup as any[])[0];
-          throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado!\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nEmpresa: ${dupInfo.empresa || 'N/A'}\nStatus: ${dupInfo.status || 'N/A'}\n\nNão é possível cadastrar o mesmo CPF novamente em nenhuma empresa do grupo.` });
-        }
-        // Verificar se está na Blacklist
-        const blacklisted = await checkBlacklist(input.cpf);
-        if (blacklisted) {
-          throw new TRPCError({ code: "FORBIDDEN", message: `🚫 FUNCIONÁRIO NA BLACKLIST!\n\n${blacklisted.nomeCompleto} (CPF: ${input.cpf}) está na Blacklist da empresa.\nMotivo: ${blacklisted.motivoListaNegra || 'Não informado'}\nData: ${blacklisted.dataListaNegra || 'N/A'}\nRegistrado por: ${(blacklisted as any).listaNegraPor || 'N/A'}\n\nPara reativar este funcionário, é necessária a aprovação de 2 diretores da empresa.` });
+          // Se o funcionário está desligado e flag de recontratação está ativa, permitir
+          const isDesligado = dupInfo.status === 'Desligado' || dupInfo.status === 'Inativo';
+          if (isDesligado && input._recontratacao) {
+            // Verificar carência de recontratação
+            if (dupInfo.dataDesligamento) {
+              const dataDeslig = new Date(dupInfo.dataDesligamento);
+              const hoje = new Date();
+              const diffDias = Math.floor((hoje.getTime() - dataDeslig.getTime()) / (1000 * 60 * 60 * 24));
+              // Carência padrão de 90 dias (pode ser configurado nos critérios)
+              if (diffDias < 90) {
+                throw new TRPCError({ code: "CONFLICT", message: `\u26a0\ufe0f Car\u00eancia de recontrata\u00e7\u00e3o!\n\n${dupInfo.nomeCompleto} foi desligado h\u00e1 ${diffDias} dias.\nCar\u00eancia m\u00ednima: 90 dias.\nData de desligamento: ${dupInfo.dataDesligamento}\n\nAguarde o t\u00e9rmino da car\u00eancia para recontrata\u00e7\u00e3o.` });
+              }
+            }
+            // Permitir recontratação - não bloquear
+          } else if (isDesligado) {
+            // Funcionário desligado mas sem flag de recontratação - informar que pode recontratar
+            throw new TRPCError({ code: "CONFLICT", message: `\u26a0\ufe0f CPF j\u00e1 cadastrado (Funcion\u00e1rio Desligado)\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nEmpresa: ${dupInfo.empresa || 'N/A'}\nStatus: ${dupInfo.status}\nData Desligamento: ${dupInfo.dataDesligamento || 'N/A'}\n\n\ud83d\udd04 Este funcion\u00e1rio pode ser RECONTRATADO.\nUse a op\u00e7\u00e3o de recontrata\u00e7\u00e3o no cadastro para prosseguir.` });
+          } else {
+            throw new TRPCError({ code: "CONFLICT", message: `\u26a0\ufe0f CPF j\u00e1 cadastrado!\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nEmpresa: ${dupInfo.empresa || 'N/A'}\nStatus: ${dupInfo.status || 'N/A'}\n\nN\u00e3o \u00e9 poss\u00edvel cadastrar o mesmo CPF novamente em nenhuma empresa do grupo.` });
+          }
         }
       }
       // Verificar RG duplicado (se informado)
@@ -1207,6 +1230,19 @@ export const appRouter = router({
         { categoria: "epi", chave: "epi_cobranca_mau_uso", valor: "1", descricao: "Cobrar EPI em caso de mau uso/dano (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "epi", chave: "epi_cobranca_furto", valor: "1", descricao: "Cobrar EPI em caso de furto/extravio (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "epi", chave: "epi_foto_obrigatoria_troca", valor: "1", descricao: "Foto obrigatória para troca por mau uso/dano (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        // VALE - Regra dia 10
+        { categoria: "folha", chave: "folha_vale_corte_dia", valor: "10", descricao: "Admitidos após este dia não recebem vale no mês (0=desativado)", valorPadraoClt: "10", unidade: "dia" },
+        { categoria: "folha", chave: "folha_vale_proporcional", valor: "0", descricao: "Vale proporcional para admitidos após corte (0=Não recebe, 1=Proporcional)", valorPadraoClt: "0", unidade: "bool" },
+        // DIFERENÇAS SALARIAIS
+        { categoria: "folha", chave: "folha_alerta_diferenca_salarial", valor: "1", descricao: "Alertar diferenças salariais entre sistema e contabilidade (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "folha", chave: "folha_tolerancia_diferenca_centavos", valor: "50", descricao: "Tolerância em centavos para diferenças salariais", valorPadraoClt: "50", unidade: "centavos" },
+        // ADVERTÊNCIAS PONTO
+        { categoria: "ponto", chave: "ponto_adv_atrasos_mes", valor: "3", descricao: "Qtd atrasos/mês para sugerir advertência", valorPadraoClt: "3", unidade: "qtd" },
+        { categoria: "ponto", chave: "ponto_adv_faltas_mes", valor: "2", descricao: "Qtd faltas injustificadas/mês para sugerir advertência", valorPadraoClt: "2", unidade: "qtd" },
+        { categoria: "ponto", chave: "ponto_adv_he_nao_autorizada", valor: "1", descricao: "Sugerir advertência para HE não autorizada (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        // RECONTRATAÇÃO
+        { categoria: "cadastro", chave: "cadastro_permitir_recontratacao", valor: "1", descricao: "Permitir recontratação de funcionário desligado com mesmo CPF (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "cadastro", chave: "cadastro_recontratacao_carencia_dias", valor: "90", descricao: "Carência mínima em dias para recontratação", valorPadraoClt: "90", unidade: "dias" },
       ];
 
       const toInsert = defaults.filter(d => !existingChaves.has(d.chave));
@@ -1320,6 +1356,9 @@ export const appRouter = router({
   avisoPrevio: avisoPrevioFeriasRouter,
   cipa: cipaRouter,
   pj: pjContractsRouter,
+  feriados: feriadosRouter,
+  employeeDocuments: employeeDocumentsRouter,
+  pjMedicoes: pjMedicoesRouter,
   // ============================================================
   // LIXEIRA (TRASH) - Listar e restaurar itens excluídos
   // ============================================================

@@ -1,7 +1,7 @@
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -255,6 +255,132 @@ export const avisoPrevioFeriasRouter = router({
           deletedByUserId: ctx.user.id,
         } as any).where(eq(terminationNotices.id, input.id));
         return { success: true };
+      }),
+
+    /** Gerar dados para PDF do Aviso Prévio */
+    gerarPdf: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices)
+          .where(and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt)));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+
+        const [emp] = await db.select().from(employees).where(eq(employees.id, aviso.employeeId));
+        if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Funcionário não encontrado' });
+
+        const [empresa] = await db.select().from(companies).where(eq(companies.id, aviso.companyId));
+
+        // Parse previsão rescisão
+        let previsao: any = {};
+        try { previsao = JSON.parse(aviso.previsaoRescisao || '{}'); } catch { }
+
+        const tipoLabels: Record<string, string> = {
+          'empregador_trabalhado': 'Aviso Prévio Trabalhado (pelo Empregador)',
+          'empregador_indenizado': 'Aviso Prévio Indenizado (pelo Empregador)',
+          'empregado_trabalhado': 'Aviso Prévio Trabalhado (pelo Empregado)',
+          'empregado_indenizado': 'Aviso Prévio Indenizado (pelo Empregado)',
+        };
+
+        const reducaoLabels: Record<string, string> = {
+          '2h_dia': 'Redução de 2 horas diárias (Art. 488 CLT)',
+          '7_dias_corridos': '7 dias corridos (Art. 488, parágrafo único CLT)',
+          'nenhuma': 'Sem redução',
+        };
+
+        return {
+          // Dados da empresa
+          empresa: {
+            nome: empresa?.razaoSocial || empresa?.nomeFantasia || '',
+            cnpj: empresa?.cnpj || '',
+            endereco: empresa?.endereco || '',
+            cidade: empresa?.cidade || '',
+            estado: empresa?.estado || '',
+          },
+          // Dados do funcionário
+          funcionario: {
+            nome: emp.nomeCompleto,
+            cpf: emp.cpf,
+            cargo: emp.cargo || emp.funcao || '',
+            dataAdmissao: emp.dataAdmissao || '',
+            ctps: emp.ctps || '',
+            serieCtps: emp.serieCtps || '',
+          },
+          // Dados do aviso
+          aviso: {
+            tipo: aviso.tipo,
+            tipoLabel: tipoLabels[aviso.tipo] || aviso.tipo,
+            dataInicio: aviso.dataInicio,
+            dataFim: aviso.dataFim,
+            diasAviso: aviso.diasAviso,
+            anosServico: aviso.anosServico,
+            reducaoJornada: aviso.reducaoJornada,
+            reducaoLabel: reducaoLabels[aviso.reducaoJornada || 'nenhuma'] || '',
+            salarioBase: aviso.salarioBase,
+            status: aviso.status,
+            observacoes: aviso.observacoes,
+          },
+          // Previsão financeira
+          previsaoRescisao: previsao,
+          valorEstimadoTotal: aviso.valorEstimadoTotal,
+        };
+      }),
+
+    /** Alerta 80 dias - Obras próximas do fim com funcionários alocados */
+    alertaObras80Dias: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const hoje = new Date();
+        const hojeStr = hoje.toISOString().split('T')[0];
+        const em80dias = new Date(hoje);
+        em80dias.setDate(em80dias.getDate() + 80);
+        const em80diasStr = em80dias.toISOString().split('T')[0];
+
+        // Obras ativas com previsão de fim nos próximos 80 dias
+        const obrasAtivas = await db.select().from(obras)
+          .where(and(
+            eq(obras.companyId, input.companyId),
+            sql`${obras.deletedAt} IS NULL`,
+            sql`${obras.status} IN ('Em_Andamento', 'Em Andamento')`,
+            sql`${obras.dataPrevisaoFim} IS NOT NULL`,
+            sql`${obras.dataPrevisaoFim} BETWEEN ${hojeStr} AND ${em80diasStr}`,
+          ));
+
+        // Buscar funcionários ativos
+        const allEmps = await db.select().from(employees)
+          .where(and(
+            eq(employees.companyId, input.companyId),
+            sql`${employees.deletedAt} IS NULL`,
+            eq(employees.status, 'Ativo'),
+          ));
+
+        const result = obrasAtivas.map(obra => {
+          const fimPrevisto = new Date(obra.dataPrevisaoFim! + 'T00:00:00');
+          const diasRestantes = Math.ceil((fimPrevisto.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+          const funcsAlocados = allEmps.filter(e => e.obraAtualId === obra.id);
+
+          return {
+            obraId: obra.id,
+            obraNome: obra.nome,
+            obraCodigo: obra.codigo,
+            cliente: obra.cliente,
+            dataPrevisaoFim: obra.dataPrevisaoFim,
+            diasRestantes,
+            urgencia: diasRestantes <= 30 ? 'critico' as const : diasRestantes <= 60 ? 'urgente' as const : 'atencao' as const,
+            funcionarios: funcsAlocados.map(e => ({
+              id: e.id,
+              nome: e.nomeCompleto,
+              cargo: e.cargo || e.funcao || '',
+              dataAdmissao: e.dataAdmissao,
+              anosServico: e.dataAdmissao ? calcularAnosServico(e.dataAdmissao) : 0,
+              diasAvisoPrevio: e.dataAdmissao ? calcularDiasAviso(calcularAnosServico(e.dataAdmissao)) : 30,
+            })),
+            totalFuncionarios: funcsAlocados.length,
+          };
+        }).sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+        return result;
       }),
   }),
 

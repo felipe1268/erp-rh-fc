@@ -4,7 +4,8 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
-  timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria
+  timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria,
+  pontoDescontos, pontoDescontosResumo, heSolicitacoes, heSolicitacaoFuncionarios
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -2311,5 +2312,256 @@ export const folhaPagamentoRouter = router({
         .set({ contaBancariaEmpresaId: input.contaBancariaEmpresaId })
         .where(eq(employees.id, input.employeeId));
       return { success: true };
+    }),
+
+  // ============================================================
+  // COMPARATIVO DESCONTOS: Sistema vs Contabilidade
+  // ============================================================
+  comparativoDescontos: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // 1. Descontos calculados pelo sistema (motor CLT)
+      const descontosSistema = await db.select().from(pontoDescontos)
+        .where(and(
+          eq(pontoDescontos.companyId, input.companyId),
+          eq(pontoDescontos.mesReferencia, input.mesReferencia),
+        ));
+
+      const resumosSistema = await db.select().from(pontoDescontosResumo)
+        .where(and(
+          eq(pontoDescontosResumo.companyId, input.companyId),
+          eq(pontoDescontosResumo.mesReferencia, input.mesReferencia),
+        ));
+
+      // 2. Descontos da contabilidade (folha importada)
+      const folhaLanc = await db.select().from(folhaLancamentos)
+        .where(and(
+          eq(folhaLancamentos.companyId, input.companyId),
+          eq(folhaLancamentos.mesReferencia, input.mesReferencia),
+          eq(folhaLancamentos.tipoLancamento, 'pagamento'),
+        ));
+
+      let itensContabilidade: any[] = [];
+      if (folhaLanc.length > 0) {
+        itensContabilidade = await db.select().from(folhaItens)
+          .where(eq(folhaItens.folhaLancamentoId, folhaLanc[0].id));
+      }
+
+      // 3. Buscar funcionários
+      const empIds = Array.from(new Set([
+        ...descontosSistema.filter(d => d.employeeId).map(d => d.employeeId!),
+        ...itensContabilidade.filter(i => i.employeeId).map(i => i.employeeId!),
+      ]));
+
+      let emps: any[] = [];
+      if (empIds.length > 0) {
+        emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+      }
+      const empMap = new Map(emps.map((e: any) => [e.id, e]));
+
+      // 4. Montar comparativo por funcionário
+      const comparativo = empIds.map(empId => {
+        const emp = empMap.get(empId);
+        const resumo = resumosSistema.find(r => r.employeeId === empId);
+        const item = itensContabilidade.find(i => i.employeeId === empId);
+
+        // Descontos do sistema
+        const sistemaTotal = parseFloat(resumo?.valorTotalDescontos || '0');
+        const sistemaAtrasos = parseFloat(resumo?.valorTotalAtrasos || '0');
+        const sistemaFaltas = parseFloat(resumo?.valorTotalFaltas || '0');
+        const sistemaDsr = parseFloat(resumo?.valorTotalDsr || '0');
+
+        // Descontos da contabilidade (extrair do JSON de descontos)
+        let contabTotal = 0;
+        let contabDescontos: any[] = [];
+        if (item?.descontos) {
+          const desc = Array.isArray(item.descontos) ? item.descontos : [];
+          contabDescontos = desc;
+          contabTotal = desc.reduce((sum: number, d: any) => sum + parseBRL(d.valor || '0'), 0);
+        }
+
+        const diferenca = sistemaTotal - contabTotal;
+        const status = Math.abs(diferenca) < 0.01 ? 'ok' : diferenca > 0 ? 'sistema_maior' : 'contab_maior';
+
+        return {
+          employeeId: empId,
+          nome: emp?.nomeCompleto || 'Desconhecido',
+          cargo: emp?.cargo || emp?.funcao || '',
+          // Sistema
+          sistemaTotal,
+          sistemaAtrasos,
+          sistemaFaltas,
+          sistemaDsr,
+          sistemaDetalhes: resumo || null,
+          // Contabilidade
+          contabTotal,
+          contabDescontos,
+          // Comparação
+          diferenca,
+          status,
+        };
+      }).sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca));
+
+      const totalSistema = comparativo.reduce((s, c) => s + c.sistemaTotal, 0);
+      const totalContab = comparativo.reduce((s, c) => s + c.contabTotal, 0);
+
+      return {
+        comparativo,
+        resumo: {
+          totalFuncionarios: comparativo.length,
+          totalSistema,
+          totalContabilidade: totalContab,
+          diferencaTotal: totalSistema - totalContab,
+          comDivergencia: comparativo.filter(c => c.status !== 'ok').length,
+          semDivergencia: comparativo.filter(c => c.status === 'ok').length,
+        },
+      };
+    }),
+
+  // ============================================================
+  // CRUZAMENTO HE: Sistema (ponto) vs Contabilidade (folha)
+  // ============================================================
+  cruzamentoHE: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // 1. HE calculadas pelo sistema (ponto)
+      const pontoRecords = await db.select().from(timeRecords)
+        .where(and(
+          eq(timeRecords.companyId, input.companyId),
+          eq(timeRecords.mesReferencia, input.mesReferencia),
+        ));
+
+      // Agrupar HE por funcionário
+      const heSistemaMap = new Map<number, { he50: number; he100: number; heNoturna: number; totalMinutos: number }>();
+      for (const rec of pontoRecords) {
+        if (!rec.employeeId) continue;
+        const existing = heSistemaMap.get(rec.employeeId) || { he50: 0, he100: 0, heNoturna: 0, totalMinutos: 0 };
+        const heTotal = parseInt(String(rec.horasExtras || '0')) || 0;
+        const heNot = parseInt(String(rec.horasNoturnas || '0')) || 0;
+        existing.he50 += heTotal; // Total HE (sem separação 50/100 no ponto)
+        existing.heNoturna += heNot;
+        existing.totalMinutos += heTotal;
+        heSistemaMap.set(rec.employeeId, existing);
+      }
+
+      // 2. HE da contabilidade (folha importada)
+      const folhaLanc = await db.select().from(folhaLancamentos)
+        .where(and(
+          eq(folhaLancamentos.companyId, input.companyId),
+          eq(folhaLancamentos.mesReferencia, input.mesReferencia),
+          eq(folhaLancamentos.tipoLancamento, 'pagamento'),
+        ));
+
+      const heContabMap = new Map<number, { he50Valor: number; he100Valor: number; totalValor: number; itens: any[] }>();
+      if (folhaLanc.length > 0) {
+        const itens = await db.select().from(folhaItens)
+          .where(eq(folhaItens.folhaLancamentoId, folhaLanc[0].id));
+
+        for (const item of itens) {
+          if (!item.employeeId) continue;
+          const proventos = Array.isArray(item.proventos) ? item.proventos : [];
+          // Filtrar proventos de HE (descrição contém "hora extra", "HE", etc.)
+          const heItens = proventos.filter((p: any) => {
+            const desc = (p.descricao || '').toUpperCase();
+            return desc.includes('HORA EXTRA') || desc.includes('H.E.') || desc.includes('HE ') || desc.includes('EXTRAS');
+          });
+          const he50Valor = heItens.filter((p: any) => (p.descricao || '').includes('50')).reduce((s: number, p: any) => s + parseBRL(p.valor || '0'), 0);
+          const he100Valor = heItens.filter((p: any) => (p.descricao || '').includes('100')).reduce((s: number, p: any) => s + parseBRL(p.valor || '0'), 0);
+          const totalValor = heItens.reduce((s: number, p: any) => s + parseBRL(p.valor || '0'), 0);
+          heContabMap.set(item.employeeId, { he50Valor, he100Valor, totalValor, itens: heItens });
+        }
+      }
+
+      // 3. Solicitações de HE aprovadas
+      const heAprovadas = await db.select().from(heSolicitacoes)
+        .where(and(
+          eq(heSolicitacoes.companyId, input.companyId),
+          eq(heSolicitacoes.status, 'aprovada'),
+        ));
+
+      // Filtrar por mês
+      const [ano, mes] = input.mesReferencia.split('-').map(Number);
+      const heAprovMes = heAprovadas.filter(h => {
+        if (!h.dataSolicitacao) return false;
+        const [hAno, hMes] = h.dataSolicitacao.split('-').map(Number);
+        return hAno === ano && hMes === mes;
+      });
+
+      // Buscar funcionários das solicitações
+      let heFuncs: any[] = [];
+      if (heAprovMes.length > 0) {
+        const heIds = heAprovMes.map(h => h.id);
+        heFuncs = await db.select().from(heSolicitacaoFuncionarios)
+          .where(inArray(heSolicitacaoFuncionarios.solicitacaoId, heIds));
+      }
+
+      // Agrupar solicitações aprovadas por funcionário
+      const heAprovMap = new Map<number, number>(); // empId -> total minutos aprovados
+      for (const func of heFuncs) {
+        const sol = heAprovMes.find(h => h.id === func.solicitacaoId);
+        if (!sol) continue;
+        // Calcular minutos da solicitação
+        const [hI, mI] = (sol.horaInicio || '18:00').split(':').map(Number);
+        const [hF, mF] = (sol.horaFim || '20:00').split(':').map(Number);
+        const mins = (hF * 60 + mF) - (hI * 60 + mI);
+        const existing = heAprovMap.get(func.employeeId) || 0;
+        heAprovMap.set(func.employeeId, existing + Math.max(0, mins));
+      }
+
+      // 4. Buscar funcionários
+      const allEmpIds = Array.from(new Set([...Array.from(heSistemaMap.keys()), ...Array.from(heContabMap.keys()), ...Array.from(heAprovMap.keys())]));
+      let emps: any[] = [];
+      if (allEmpIds.length > 0) {
+        emps = await db.select().from(employees).where(inArray(employees.id, allEmpIds));
+      }
+      const empMap = new Map(emps.map((e: any) => [e.id, e]));
+
+      // 5. Montar cruzamento
+      const cruzamento = allEmpIds.map(empId => {
+        const emp = empMap.get(empId);
+        const sistema = heSistemaMap.get(empId) || { he50: 0, he100: 0, heNoturna: 0, totalMinutos: 0 };
+        const contab = heContabMap.get(empId) || { he50Valor: 0, he100Valor: 0, totalValor: 0, itens: [] };
+        const aprovadoMinutos = heAprovMap.get(empId) || 0;
+
+        const sistemaHoras = (sistema.totalMinutos / 60).toFixed(1);
+        const aprovadoHoras = (aprovadoMinutos / 60).toFixed(1);
+        const heNaoAutorizada = sistema.totalMinutos - aprovadoMinutos;
+
+        return {
+          employeeId: empId,
+          nome: emp?.nomeCompleto || 'Desconhecido',
+          cargo: emp?.cargo || emp?.funcao || '',
+          // Sistema (ponto)
+          sistemaHe50Min: sistema.he50,
+          sistemaHe100Min: sistema.he100,
+          sistemaHoras,
+          // Solicitações aprovadas
+          aprovadoMinutos,
+          aprovadoHoras,
+          // Contabilidade (folha)
+          contabHe50Valor: contab.he50Valor,
+          contabHe100Valor: contab.he100Valor,
+          contabTotalValor: contab.totalValor,
+          contabItens: contab.itens,
+          // Divergencias
+          heNaoAutorizadaMin: Math.max(0, heNaoAutorizada),
+          temDivergencia: contab.totalValor > 0 || sistema.totalMinutos > 0,
+        };
+      }).filter(c => c.temDivergencia).sort((a, b) => b.heNaoAutorizadaMin - a.heNaoAutorizadaMin);
+
+      return {
+        cruzamento,
+        resumo: {
+          totalFuncionarios: cruzamento.length,
+          totalHeSistema: cruzamento.reduce((s, c) => s + parseFloat(c.sistemaHoras), 0).toFixed(1),
+          totalHeAprovada: cruzamento.reduce((s, c) => s + parseFloat(c.aprovadoHoras), 0).toFixed(1),
+          totalHeContabValor: cruzamento.reduce((s, c) => s + c.contabTotalValor, 0),
+          comHeNaoAutorizada: cruzamento.filter(c => c.heNaoAutorizadaMin > 0).length,
+        },
+      };
     }),
 });

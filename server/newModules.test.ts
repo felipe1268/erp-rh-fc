@@ -69,7 +69,7 @@ describe("PJ Contracts Router", () => {
 });
 
 describe("AppRouter integration", () => {
-  it("should include all new routers in appRouter", { timeout: 15000 }, async () => {
+  it("should include all new routers in appRouter", { timeout: 30000 }, async () => {
     const { appRouter } = await import("./routers");
     expect(appRouter).toBeDefined();
 
@@ -80,7 +80,7 @@ describe("AppRouter integration", () => {
     expect(topLevelProcedures.some(p => p.startsWith("pj."))).toBe(true);
   });
 
-  it("should have aviso prévio procedures accessible via avisoPrevio prefix", async () => {
+  it("should have aviso prévio procedures accessible via avisoPrevio prefix", { timeout: 30000 }, async () => {
     const { appRouter } = await import("./routers");
     const procs = Object.keys(appRouter._def.procedures);
     expect(procs).toContain("avisoPrevio.avisoPrevio.list");

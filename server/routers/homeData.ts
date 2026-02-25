@@ -305,6 +305,33 @@ export const homeDataRouter = router({
       const obrasAtivas = allObras.filter(o => o.status === "Em_Andamento" || (o.status as string) === "Em Andamento");
 
       // ============================================================
+      // 9b. ALERTA 80 DIAS - OBRAS PRÓXIMAS DO FIM
+      // ============================================================
+      const em80dias = new Date(hoje);
+      em80dias.setDate(em80dias.getDate() + 80);
+      const em80diasStr = em80dias.toISOString().split('T')[0];
+
+      const obrasProximasFim = obrasAtivas
+        .filter(o => o.dataPrevisaoFim && o.dataPrevisaoFim <= em80diasStr && o.dataPrevisaoFim >= hojeStr)
+        .map(o => {
+          const fimPrevisto = new Date(o.dataPrevisaoFim! + 'T00:00:00');
+          const diasRestantes = Math.ceil((fimPrevisto.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+          // Contar funcionários alocados nesta obra
+          const funcsAlocados = ativos.filter(e => e.obraAtualId === o.id).length;
+          return {
+            id: o.id,
+            nome: o.nome,
+            codigo: o.codigo,
+            cliente: o.cliente,
+            dataPrevisaoFim: o.dataPrevisaoFim,
+            diasRestantes,
+            funcionariosAlocados: funcsAlocados,
+            urgencia: diasRestantes <= 30 ? 'critico' : diasRestantes <= 60 ? 'urgente' : 'atencao',
+          };
+        })
+        .sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+      // ============================================================
       // 10. CONTRATOS DE EXPERIÊNCIA
       // ============================================================
       const experiencias = todosNaoDesligados
@@ -373,6 +400,7 @@ export const homeDataRouter = router({
         licenca: allEmps.filter(e => e.status === "Licenca").length,
         desligados: allEmps.filter(e => e.status === "Desligado").length,
         obrasAtivas: obrasAtivas.length,
+        obrasProximasFim: obrasProximasFim.length,
         processosAtivos: processosAtivos.length,
         processosRiscoAlto: processosRiscoAlto.length,
         asosVencidos: asosAlerta.filter(a => a.vencido).length,
@@ -399,6 +427,7 @@ export const homeDataRouter = router({
         movimentacoes,
         advertenciasRecentes,
         experiencias,
+        obrasProximasFim,
       };
     }),
 });

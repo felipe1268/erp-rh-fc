@@ -759,4 +759,112 @@ export const pontoDescontosRouter = router({
 
     return { success: true };
   }),
+
+  // ============================================================
+  // SUGESTÃO DE ADVERTÊNCIAS BASEADA NO PONTO
+  // Verifica critérios e sugere advertências automáticas
+  // ============================================================
+  sugestaoAdvertencias: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(), // YYYY-MM
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Buscar critérios
+      const criterios = await db.select().from(systemCriteria)
+        .where(eq(systemCriteria.companyId, input.companyId));
+      const criterioMap = Object.fromEntries(criterios.map(c => [c.chave, c.valor]));
+
+      const limiteAtrasos = parseInt(criterioMap['ponto_adv_atrasos_mes'] || '3');
+      const limiteFaltas = parseInt(criterioMap['ponto_adv_faltas_mes'] || '2');
+      const alertaHE = criterioMap['ponto_adv_he_nao_autorizada'] === '1';
+
+      // Buscar descontos do mês
+      const descontos = await db.select().from(pontoDescontos)
+        .where(and(
+          eq(pontoDescontos.companyId, input.companyId),
+          eq(pontoDescontos.mesReferencia, input.mesReferencia),
+        ));
+
+      // Agrupar por funcionário
+      const empStats = new Map<number, { atrasos: number; faltas: number; heNaoAutorizada: number; nomeCompleto: string }>(); 
+      for (const d of descontos) {
+        const existing = empStats.get(d.employeeId) || { atrasos: 0, faltas: 0, heNaoAutorizada: 0, nomeCompleto: '' };
+        if (d.tipo === 'atraso') existing.atrasos++;
+        if (d.tipo === 'falta_injustificada') existing.faltas++;
+        if (d.tipo === 'he_nao_autorizada') existing.heNaoAutorizada++;
+        empStats.set(d.employeeId, existing);
+      }
+
+      // Buscar nomes
+      const empIds = Array.from(empStats.keys());
+      if (empIds.length > 0) {
+        const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+        for (const e of emps) {
+          const stats = empStats.get(e.id);
+          if (stats) stats.nomeCompleto = e.nomeCompleto;
+        }
+      }
+
+      // Buscar advertências já existentes no mês
+      const advExistentes = await db.select().from(warnings)
+        .where(and(
+          eq(warnings.companyId, input.companyId),
+          sql`${warnings.dataOcorrencia} LIKE ${input.mesReferencia + '%'}`,
+        ));
+      const advSet = new Set(advExistentes.map(a => `${a.employeeId}-${a.motivo}`));
+
+      const sugestoes: Array<{
+        employeeId: number;
+        nomeCompleto: string;
+        motivo: string;
+        descricao: string;
+        quantidade: number;
+        limite: number;
+        jaAdvertido: boolean;
+      }> = [];
+
+      for (const [empId, stats] of Array.from(empStats.entries())) {
+        if (stats.atrasos >= limiteAtrasos) {
+          sugestoes.push({
+            employeeId: empId,
+            nomeCompleto: stats.nomeCompleto,
+            motivo: 'atraso_reiterado',
+            descricao: `${stats.atrasos} atrasos no mês (limite: ${limiteAtrasos})`,
+            quantidade: stats.atrasos,
+            limite: limiteAtrasos,
+            jaAdvertido: advSet.has(`${empId}-atraso`) || advSet.has(`${empId}-atraso_reiterado`),
+          });
+        }
+        if (stats.faltas >= limiteFaltas) {
+          sugestoes.push({
+            employeeId: empId,
+            nomeCompleto: stats.nomeCompleto,
+            motivo: 'falta_injustificada',
+            descricao: `${stats.faltas} faltas injustificadas no mês (limite: ${limiteFaltas})`,
+            quantidade: stats.faltas,
+            limite: limiteFaltas,
+            jaAdvertido: advSet.has(`${empId}-falta`) || advSet.has(`${empId}-falta_injustificada`),
+          });
+        }
+        if (alertaHE && stats.heNaoAutorizada > 0) {
+          sugestoes.push({
+            employeeId: empId,
+            nomeCompleto: stats.nomeCompleto,
+            motivo: 'he_nao_autorizada',
+            descricao: `${stats.heNaoAutorizada} ocorrências de HE não autorizada`,
+            quantidade: stats.heNaoAutorizada,
+            limite: 1,
+            jaAdvertido: advSet.has(`${empId}-he_nao_autorizada`),
+          });
+        }
+      }
+
+      return {
+        sugestoes: sugestoes.sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto)),
+        criterios: { limiteAtrasos, limiteFaltas, alertaHE },
+      };
+    }),
 });

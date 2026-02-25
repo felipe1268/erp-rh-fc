@@ -1,0 +1,2 @@
+ALTER TABLE `processos_trabalhistas` MODIFY COLUMN `tipoAcao` enum('reclamatoria','indenizatoria','rescisao_indireta','acidente_trabalho','doenca_ocupacional','assedio','execucao_fiscal','mandado_seguranca','acao_civil_publica','outros') NOT NULL DEFAULT 'reclamatoria';--> statement-breakpoint
+ALTER TABLE `processos_trabalhistas` ADD `justica` enum('trabalho','federal','estadual','outros') DEFAULT 'trabalho' NOT NULL;

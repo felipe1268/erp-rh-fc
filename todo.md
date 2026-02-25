@@ -2164,5 +2164,48 @@
 - [x] HE não autorizada: flag no fechamento + sugestão de advertência
 - [x] Menu lateral: adicionar Solicitação de HE na seção Operacional
 - [ ] Renomear campo Matrícula para eSocial no cadastro do funcionário (frontend label)
-- [ ] Campos rateáveis por obra: VA, VT, Seguro, Sindicato, FGTS, INSS, Dissídio, CCT, Pensão, DDS
-- [ ] Regra vale: admitidos após dia 10 não recebem vale no mês de admissão (critério configurável)
+- [x] Campos rateáveis por obra: VA, VT, Seguro, Sindicato, FGTS, INSS, Dissídio, CCT, Pensão, DDS
+- [x] Regra vale: admitidos após dia 10 não recebem vale no mês de admissão (critério configurável)
+
+## Fase 35: Gap Analysis Completo - Reunião Gerencial RH (23/02/26)
+
+### Sprint 2A: Template Aviso Prévio + Alerta 80 dias
+- [x] Template de Aviso Prévio: gerar PDF/documento a partir da tela existente (tipo aviso_previo no documentTemplates)
+- [x] Alerta automático 80 dias antes do fim da obra para planejar avisos prévios dos funcionários alocados
+- [x] Exibir alerta no Painel Principal (Home) com lista de obras próximas do fim
+
+### Sprint 2B: Campos VT/Pensão/Licença + Campos Rateáveis por Obra
+- [x] Adicionar campos no employees: pensaoAlimenticia, valorPensao, tipoPensao, licencaMaternidade, dataInicioLicenca, dataFimLicenca
+- [x] Adicionar campos no employees: seguroVida, contribuicaoSindical, dissidio, convencaoColetiva
+- [x] Melhorar gestão de VT no cadastro (valor, tipo, operadora)
+- [x] Criar tabela feriados (nacionais + estaduais + municipais) para cálculos de salário horista
+- [x] Campos rateáveis por obra: VA, VT, Seguro, Sindicato, FGTS, INSS, Dissídio, CCT, Pensão, DDS
+
+### Sprint 2C: Aba Descontos na Folha + Unificar HE
+- [x] Aba Descontos na Folha de Pagamento: comparativo "sistema calculou" vs "contabilidade cobrou"
+- [x] Unificar lançamentos de HE: cruzar HE calculadas pelo sistema com HE da folha (upload contabilidade)
+- [x] Exibir divergências de HE para auditoria (sistema vs contabilidade)
+
+### Sprint 3A: Feriados + Salário Horista + Diferenças Salariais
+- [x] Tabela de feriados no banco (nacionais fixos + configuráveis por empresa)
+- [x] Ajustar simulador de horistas para considerar feriados e dias úteis variáveis por mês
+- [x] Critério de lançamento para diferenças salariais (dissídio, reajuste retroativo)
+- [x] Verificar/corrigir horário padrão e cálculos de HE nos critérios
+
+### Sprint 3B: PJ Medição Mensal + Upload Documentos Pessoais
+- [x] PJ como medição mensal: adicionar conceito de medição (horas trabalhadas x valor hora) no módulo PJ
+- [x] PJ: cálculo por horas trabalhadas/mês no pjPayments
+- [x] Upload de documentos pessoais (RG, CNH, CTPS, etc.) no cadastro do funcionário (S3)
+- [x] Visualização de documentos uploadados na ficha do funcionário
+
+### Sprint 3C: Regra Vale + Recontratação + Cadastro JF + Advertências Ponto
+- [x] Regra vale: admitidos após dia 10 não recebem vale no mês de admissão (critério configurável)
+- [x] Recontratação: fluxo de novo cadastro com mesmo CPF mantendo histórico anterior
+- [x] Cadastro manual de JF (campo justica adicionado ao módulo Processos)
+- [x] Verificar advertências automáticas por falta de ponto batido (sugestão de advertências implementada no motor CLT)
+
+### Futuro (não implementar agora)
+- [ ] Histograma da obra (orçado/planejado x realizado) - comparar mão de obra
+- [ ] Ficha de avaliação de desempenho → linkar com dossiê RH (Raio-X)
+- [ ] Ponto por geolocalização (GPS)
+- [ ] Nome/nº org igual em todos ERPs (TC e RDO) - padronizar nomenclatura

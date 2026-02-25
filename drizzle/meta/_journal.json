@@ -162,6 +162,27 @@
       "when": 1771985907339,
       "tag": "0022_exotic_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1772016320213,
+      "tag": "0023_wakeful_karnak",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1772016360767,
+      "tag": "0024_black_cyclops",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1772017157873,
+      "tag": "0025_moaning_gunslinger",
+      "breakpoints": true
     }
   ]
 }

@@ -380,6 +380,47 @@ export const employees = mysqlTable("employees", {
 	experienciaEfetivadoEm: date({ mode: 'string' }), // Data em que foi efetivado
 	experienciaEfetivadoPor: varchar({ length: 255 }), // Quem efetivou
 	experienciaObs: text(), // Observações sobre a experiência
+	// Vale Transporte (gestão completa)
+	vtTipo: mysqlEnum(['nenhum','onibus','van','misto']),
+	vtValorDiario: varchar({ length: 20 }), // Valor diário do VT
+	vtOperadora: varchar({ length: 100 }), // Operadora/empresa de transporte
+	vtLinhas: varchar({ length: 255 }), // Linhas utilizadas
+	vtDescontoFolha: varchar({ length: 20 }), // Valor descontado na folha (6% salário ou fixo)
+	// Pensão Alimentícia
+	pensaoAlimenticia: tinyint().default(0),
+	pensaoValor: varchar({ length: 20 }), // Valor fixo ou percentual
+	pensaoTipo: mysqlEnum(['percentual','valor_fixo']),
+	pensaoPercentual: varchar({ length: 10 }), // Ex: "30" para 30%
+	pensaoBeneficiario: varchar({ length: 255 }),
+	pensaoBanco: varchar({ length: 100 }),
+	pensaoAgencia: varchar({ length: 20 }),
+	pensaoConta: varchar({ length: 30 }),
+	pensaoObservacoes: text(),
+	// Licença Maternidade/Paternidade
+	licencaMaternidade: tinyint().default(0),
+	licencaTipo: mysqlEnum(['maternidade_120','maternidade_180','paternidade_5','paternidade_20']),
+	licencaDataInicio: date({ mode: 'string' }),
+	licencaDataFim: date({ mode: 'string' }),
+	licencaObservacoes: text(),
+	// Campos rateáveis por obra
+	seguroVida: varchar({ length: 20 }), // Valor do seguro de vida
+	contribuicaoSindical: varchar({ length: 20 }), // Valor contribuição assistencial/sindical
+	fgtsPercentual: varchar({ length: 10 }).default('8'), // Percentual FGTS (padrão 8%)
+	inssPercentual: varchar({ length: 10 }), // Faixa INSS
+	dissidioData: date({ mode: 'string' }), // Data do último dissídio
+	dissidioPercentual: varchar({ length: 10 }), // Percentual do dissídio
+	convencaoColetiva: varchar({ length: 255 }), // Nome/número da CCT
+	convencaoVigencia: date({ mode: 'string' }), // Vigência da CCT
+	ddsParticipacao: tinyint().default(1), // Participa do DDS (Diálogo Diário de Segurança)
+	// Upload de documentos pessoais (URLs S3)
+	docRgUrl: text(),
+	docCnhUrl: text(),
+	docCtpsUrl: text(),
+	docComprovanteResidenciaUrl: text(),
+	docCertidaoNascimentoUrl: text(),
+	docTituloEleitorUrl: text(),
+	docReservistaUrl: text(),
+	docOutrosUrl: text(), // JSON array com {nome, url}
 	// Soft Delete
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1101,7 +1142,8 @@ export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
 	vara: varchar({ length: 100 }), // Vara do Trabalho
 	comarca: varchar({ length: 100 }), // Cidade/Comarca
 	tribunal: varchar({ length: 100 }), // Ex: TRT-2, TRT-15
-	tipoAcao: mysqlEnum(['reclamatoria', 'indenizatoria', 'rescisao_indireta', 'acidente_trabalho', 'doenca_ocupacional', 'assedio', 'outros']).default('reclamatoria').notNull(),
+	justica: mysqlEnum(['trabalho','federal','estadual','outros']).default('trabalho').notNull(), // JT, JF, JE
+	tipoAcao: mysqlEnum(['reclamatoria', 'indenizatoria', 'rescisao_indireta', 'acidente_trabalho', 'doenca_ocupacional', 'assedio', 'execucao_fiscal', 'mandado_seguranca', 'acao_civil_publica', 'outros']).default('reclamatoria').notNull(),
 	// Partes
 	reclamante: varchar({ length: 255 }).notNull(), // Nome do reclamante (funcionário)
 	advogadoReclamante: varchar({ length: 255 }),
@@ -1915,4 +1957,93 @@ export const pontoDescontosResumo = mysqlTable("ponto_descontos_resumo", {
 }, (table) => [
 	index("pdr_company_mes").on(table.companyId, table.mesReferencia),
 	index("pdr_employee_mes").on(table.employeeId, table.mesReferencia),
+]);
+
+// ============================================================
+// TABELA DE FERIADOS (nacionais + estaduais + municipais)
+// ============================================================
+export const feriados = mysqlTable("feriados", {
+	id: int().autoincrement().notNull(),
+	companyId: int(), // NULL = feriado nacional (todas as empresas)
+	nome: varchar({ length: 255 }).notNull(),
+	data: date({ mode: 'string' }).notNull(), // Data fixa (ex: "2026-01-01") ou recorrente
+	tipo: mysqlEnum(['nacional','estadual','municipal','ponto_facultativo','compensado']).notNull(),
+	recorrente: tinyint().default(1).notNull(), // 1 = repete todo ano, 0 = apenas naquele ano
+	estado: varchar({ length: 2 }), // Para feriados estaduais
+	cidade: varchar({ length: 100 }), // Para feriados municipais
+	ativo: tinyint().default(1).notNull(),
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("fer_company").on(table.companyId),
+	index("fer_data").on(table.data),
+	index("fer_tipo").on(table.tipo),
+]);
+
+// ============================================================
+// DOCUMENTOS DO FUNCIONÁRIO (upload S3 com metadados)
+// ============================================================
+export const employeeDocuments = mysqlTable("employee_documents", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	tipo: mysqlEnum(['rg','cnh','ctps','comprovante_residencia','certidao_nascimento','titulo_eleitor','reservista','pis','foto_3x4','contrato_trabalho','termo_rescisao','atestado_medico','diploma','certificado','outros']).notNull(),
+	nome: varchar({ length: 255 }).notNull(), // Nome do arquivo
+	descricao: varchar({ length: 500 }),
+	fileUrl: text().notNull(), // URL S3
+	fileKey: text().notNull(), // Key S3
+	mimeType: varchar({ length: 100 }),
+	fileSize: int(), // em bytes
+	dataValidade: date({ mode: 'string' }), // Para documentos com validade
+	uploadPor: varchar({ length: 255 }),
+	uploadPorUserId: int(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+	deletedBy: varchar({ length: 255 }),
+}, (table) => [
+	index("edoc_company").on(table.companyId),
+	index("edoc_employee").on(table.employeeId),
+	index("edoc_tipo").on(table.tipo),
+]);
+
+// ============================================================
+// PJ MEDIÇÕES MENSAIS (horas trabalhadas x valor hora)
+// ============================================================
+export const pjMedicoes = mysqlTable("pj_medicoes", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	contractId: int().notNull(), // FK pj_contracts
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(), // "2026-01"
+	// Horas trabalhadas
+	horasTrabalhadas: varchar({ length: 20 }).notNull(), // Total de horas no mês
+	valorHora: varchar({ length: 20 }).notNull(), // Valor da hora contratada
+	valorBruto: varchar({ length: 20 }).notNull(), // horas x valorHora
+	// Deduções/acréscimos
+	descontos: varchar({ length: 20 }).default('0'),
+	acrescimos: varchar({ length: 20 }).default('0'),
+	descricaoDescontos: text(),
+	descricaoAcrescimos: text(),
+	// Valor final
+	valorLiquido: varchar({ length: 20 }).notNull(),
+	// Nota fiscal
+	notaFiscalNumero: varchar({ length: 50 }),
+	notaFiscalUrl: text(),
+	// Status
+	status: mysqlEnum(['rascunho','pendente_aprovacao','aprovada','paga','cancelada']).default('rascunho').notNull(),
+	aprovadoPor: varchar({ length: 255 }),
+	aprovadoEm: timestamp({ mode: 'string' }),
+	dataPagamento: date({ mode: 'string' }),
+	comprovanteUrl: text(),
+	observacoes: text(),
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("pjm_company_mes").on(table.companyId, table.mesReferencia),
+	index("pjm_contract").on(table.contractId),
+	index("pjm_employee").on(table.employeeId),
+	index("pjm_status").on(table.status),
 ]);
