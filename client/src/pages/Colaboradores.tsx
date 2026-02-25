@@ -799,6 +799,8 @@ export default function Colaboradores() {
               <TabsTrigger value="profissional" className="flex-1 text-xs sm:text-sm">Profissional</TabsTrigger>
               <TabsTrigger value="bancario" className="flex-1 text-xs sm:text-sm">Bancário</TabsTrigger>
               <TabsTrigger value="beneficios" className="flex-1 text-xs sm:text-sm">Benefícios</TabsTrigger>
+              <TabsTrigger value="obrigacoes" className="flex-1 text-xs sm:text-sm">Obrigações</TabsTrigger>
+              <TabsTrigger value="sindical" className="flex-1 text-xs sm:text-sm">Sindical</TabsTrigger>
             </TabsList>
 
             {/* ===== ABA PESSOAL ===== */}
@@ -1883,12 +1885,12 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
               </div>
             </TabsContent>
 
-            {/* ===== ABA BENEFÍCIOS ===== */}
+            {/* ===== ABA BENEFÍCIOS (VT, VA/VR, Farmácia, Cesta Básica) ===== */}
             <TabsContent value="beneficios" className="pt-4">
               <div className="space-y-5">
                 {/* Vale Transporte */}
                 <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Vale Transporte</h4>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🚌 Vale Transporte (VT)</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Recebe VT?</Label>
@@ -1904,7 +1906,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                     </div>
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Valor VT Diário (R$)</Label>
-                      <Input value={form.vtValorDiario ?? ""} onChange={e => set("vtValorDiario", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                      <Input value={form.vtValorDiario ?? ""} onChange={e => set("vtValorDiario", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
                     </div>
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Tipo VT</Label>
@@ -1930,9 +1932,110 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   </div>
                 </div>
 
+                {/* Vale Alimentação / Refeição */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🍽️ Vale Alimentação / Refeição</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Recebe VA/VR?</Label>
+                      <Select value={form.vaRecebe || "none"} onValueChange={v => set("vaRecebe", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="va">VA (Alimentação)</SelectItem>
+                          <SelectItem value="vr">VR (Refeição)</SelectItem>
+                          <SelectItem value="ambos">VA + VR</SelectItem>
+                          <SelectItem value="nao">Não recebe</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Valor VA/VR Mensal (R$)</Label>
+                      <Input value={form.vaValor ?? ""} onChange={e => set("vaValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Operadora VA/VR</Label>
+                      <Input value={form.vaOperadora ?? ""} onChange={e => set("vaOperadora", e.target.value)} className="bg-input mt-1" placeholder="Ex: Alelo, Sodexo, VR" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Nº Cartão VA/VR</Label>
+                      <Input value={form.vaNumeroCartao ?? ""} onChange={e => set("vaNumeroCartao", e.target.value)} className="bg-input mt-1" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Outros Benefícios */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🎁 Outros Benefícios</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Cesta Básica</Label>
+                      <Select value={form.cestaBasica || "none"} onValueChange={v => set("cestaBasica", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.cestaBasica === "sim" && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Valor Cesta (R$)</Label>
+                        <Input value={form.cestaBasicaValor ?? ""} onChange={e => set("cestaBasicaValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Auxílio Farmácia</Label>
+                      <Select value={form.auxFarmacia || "none"} onValueChange={v => set("auxFarmacia", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.auxFarmacia === "sim" && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Valor Farmácia (R$)</Label>
+                        <Input value={form.auxFarmaciaValor ?? ""} onChange={e => set("auxFarmaciaValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Plano de Saúde</Label>
+                      <Select value={form.planoSaude || "none"} onValueChange={v => set("planoSaude", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.planoSaude === "sim" && (
+                      <>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Operadora</Label>
+                          <Input value={form.planoSaudeOperadora ?? ""} onChange={e => set("planoSaudeOperadora", e.target.value)} className="bg-input mt-1" placeholder="Ex: Unimed, Amil" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Valor Plano (R$)</Label>
+                          <Input value={form.planoSaudeValor ?? ""} onChange={e => set("planoSaudeValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ===== ABA OBRIGAÇÕES LEGAIS (Pensão, Licença) ===== */}
+            <TabsContent value="obrigacoes" className="pt-4">
+              <div className="space-y-5">
                 {/* Pensão Alimentícia */}
                 <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Pensão Alimentícia</h4>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">⚖️ Pensão Alimentícia</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Possui Pensão?</Label>
@@ -1960,7 +2063,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                         </div>
                         <div>
                           <Label className="text-xs font-medium text-muted-foreground">{form.pensaoTipo === 'percentual' ? 'Percentual (%)' : 'Valor (R$)'}</Label>
-                          <Input value={form.pensaoValor ?? ""} onChange={e => set("pensaoValor", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                          <Input value={form.pensaoValor ?? ""} onChange={e => set("pensaoValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
                         </div>
                         <div>
                           <Label className="text-xs font-medium text-muted-foreground">Nº Processo Judicial</Label>
@@ -1975,9 +2078,9 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   </div>
                 </div>
 
-                {/* Licença Maternidade */}
+                {/* Licença Maternidade / Paternidade */}
                 <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Licença Maternidade / Paternidade</h4>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">👶 Licença Maternidade / Paternidade</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Em Licença?</Label>
@@ -2019,12 +2122,12 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   </div>
                 </div>
 
-                {/* Seguro de Vida / Sindicato / Dissídio */}
+                {/* Seguro de Vida */}
                 <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Encargos e Contribuições</h4>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🛡️ Seguro de Vida</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Seguro de Vida</Label>
+                      <Label className="text-xs font-medium text-muted-foreground">Possui Seguro de Vida?</Label>
                       <Select value={form.seguroVida || "none"} onValueChange={v => set("seguroVida", v === "none" ? "" : v)}>
                         <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
@@ -2037,38 +2140,93 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                     {form.seguroVida === "sim" && (
                       <div>
                         <Label className="text-xs font-medium text-muted-foreground">Valor Seguro (R$)</Label>
-                        <Input value={form.seguroVidaValor ?? ""} onChange={e => set("seguroVidaValor", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                        <Input value={form.seguroVidaValor ?? ""} onChange={e => set("seguroVidaValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
                       </div>
                     )}
+                  </div>
+                </div>
+
+                {/* DDS */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🦺 DDS (Diálogo Diário de Segurança)</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Contribuição Sindical</Label>
-                      <Select value={form.contribuicaoSindical || "none"} onValueChange={v => set("contribuicaoSindical", v === "none" ? "" : v)}>
+                      <Label className="text-xs font-medium text-muted-foreground">Participa do DDS?</Label>
+                      <Select value={form.dds || "none"} onValueChange={v => set("dds", v === "none" ? "" : v)}>
                         <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Selecione</SelectItem>
-                          <SelectItem value="sim">Sim - Autorizado</SelectItem>
-                          <SelectItem value="nao">Não - Sem autorização</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {form.contribuicaoSindical === "sim" && (
+                    {form.dds === "sim" && (
                       <div>
-                        <Label className="text-xs font-medium text-muted-foreground">Valor Contribuição (R$)</Label>
-                        <Input value={form.contribuicaoSindicalValor ?? ""} onChange={e => set("contribuicaoSindicalValor", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                        <Label className="text-xs font-medium text-muted-foreground">Valor DDS (R$)</Label>
+                        <Input value={form.ddsValor ?? ""} onChange={e => set("ddsValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ===== ABA SINDICAL (Sindicato, CCT, Dissídio) ===== */}
+            <TabsContent value="sindical" className="pt-4">
+              <div className="space-y-5">
+                {/* Sindicato */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🏛️ Sindicato e Convenção Coletiva</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Sindicato</Label>
-                      <Input value={form.sindicato ?? ""} onChange={e => set("sindicato", e.target.value)} className="bg-input mt-1" placeholder="Nome do sindicato" />
+                      <Input value={form.sindicato ?? ""} onChange={e => set("sindicato", e.target.value)} className="bg-input mt-1" placeholder="Ex: SINTRACON-SP" />
                     </div>
                     <div>
                       <Label className="text-xs font-medium text-muted-foreground">Convenção Coletiva (CCT)</Label>
                       <Input value={form.convencaoColetiva ?? ""} onChange={e => set("convencaoColetiva", e.target.value)} className="bg-input mt-1" placeholder="Nº ou referência da CCT" />
                     </div>
                     <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Data-Base Dissídio</Label>
-                      <Select value={form.dissidioMesBase || "none"} onValueChange={v => set("dissidioMesBase", v === "none" ? "" : v)}>
+                      <Label className="text-xs font-medium text-muted-foreground">Contribuição Sindical</Label>
+                      <Select value={form.contribuicaoSindical || "none"} onValueChange={v => set("contribuicaoSindical", v === "none" ? "" : v)}>
                         <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim — Autorizado pelo funcionário</SelectItem>
+                          <SelectItem value="nao">Não — Sem autorização</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Reforma Trabalhista (Lei 13.467/2017): contribuição sindical é facultativa</span>
+                    </div>
+                    {form.contribuicaoSindical === "sim" && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Valor Contribuição (R$)</Label>
+                        <Input value={form.contribuicaoSindicalValor ?? ""} onChange={e => set("contribuicaoSindicalValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dissídio */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">📊 Dissídio Coletivo</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Dissídio Aplicável?</Label>
+                      <Select value={form.dissidioAplicavel || "sim"} onValueChange={v => set("dissidioAplicavel", v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sim">Sim — Participará do reajuste</SelectItem>
+                          <SelectItem value="nao">Não — Excluir do reajuste</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT Art. 611-A: Convenção coletiva prevalece sobre a lei em matéria salarial</span>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Data-Base do Dissídio</Label>
+                      <Select value={form.dissidioMesBase || "none"} onValueChange={v => set("dissidioMesBase", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Selecione</SelectItem>
                           <SelectItem value="1">Janeiro</SelectItem>
@@ -2085,173 +2243,11 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                           <SelectItem value="12">Dezembro</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">DDS (Diálogo Diário de Segurança)</Label>
-                      <Select value={form.dds || "none"} onValueChange={v => set("dds", v === "none" ? "" : v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Selecione</SelectItem>
-                          <SelectItem value="sim">Sim - Participa</SelectItem>
-                          <SelectItem value="nao">Não</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Mês em que o reajuste salarial é aplicado conforme CCT</span>
                     </div>
                   </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* ===== ABA BENEFÍCIOS ===== */}
-            <TabsContent value="beneficios" className="pt-4">
-              <div className="space-y-5">
-                {/* Vale Transporte */}
-                <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Vale Transporte (VT)</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Recebe VT?</Label>
-                      <select value={form.vtRecebe ?? "1"} onChange={e => set("vtRecebe", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="1">Sim</option>
-                        <option value="0">Não</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Valor VT (R$)</Label>
-                      <Input value={form.vtValor ?? ""} onChange={e => set("vtValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Tipo VT</Label>
-                      <select value={form.vtTipo ?? ""} onChange={e => set("vtTipo", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="">Selecione</option>
-                        <option value="bilhete_unico">Bilhete Único</option>
-                        <option value="cartao_empresa">Cartão Empresa</option>
-                        <option value="dinheiro">Dinheiro</option>
-                        <option value="pix">PIX</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Operadora VT</Label>
-                      <Input value={form.vtOperadora ?? ""} onChange={e => set("vtOperadora", e.target.value)} placeholder="Ex: SPTrans" className="bg-input mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Nº Cartão VT</Label>
-                      <Input value={form.vtNumeroCartao ?? ""} onChange={e => set("vtNumeroCartao", e.target.value)} className="bg-input mt-1" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pensão Alimentícia */}
-                <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Pensão Alimentícia</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Possui Pensão?</Label>
-                      <select value={form.pensaoAlimenticia ?? "0"} onChange={e => set("pensaoAlimenticia", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="0">Não</option>
-                        <option value="1">Sim</option>
-                      </select>
-                    </div>
-                    {String(form.pensaoAlimenticia) === "1" && (
-                      <>
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">Tipo Pensão</Label>
-                          <select value={form.pensaoTipo ?? "percentual"} onChange={e => set("pensaoTipo", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                            <option value="percentual">Percentual (%)</option>
-                            <option value="valor_fixo">Valor Fixo (R$)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">{form.pensaoTipo === "valor_fixo" ? "Valor (R$)" : "Percentual (%)"}</Label>
-                          <Input value={form.pensaoValor ?? ""} onChange={e => set("pensaoValor", e.target.value)} placeholder={form.pensaoTipo === "valor_fixo" ? "0.00" : "0.00"} className="bg-input mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">Beneficiário</Label>
-                          <Input value={form.pensaoBeneficiario ?? ""} onChange={e => set("pensaoBeneficiario", e.target.value)} placeholder="Nome do beneficiário" className="bg-input mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">Nº Processo</Label>
-                          <Input value={form.pensaoProcesso ?? ""} onChange={e => set("pensaoProcesso", e.target.value)} placeholder="Nº do processo judicial" className="bg-input mt-1" />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Licença Maternidade */}
-                <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Licença Maternidade</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Em Licença Maternidade?</Label>
-                      <select value={form.licencaMaternidade ?? "0"} onChange={e => set("licencaMaternidade", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="0">Não</option>
-                        <option value="1">Sim</option>
-                      </select>
-                    </div>
-                    {String(form.licencaMaternidade) === "1" && (
-                      <>
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">Data Início</Label>
-                          <Input type="date" value={form.licencaMaternidadeInicio ?? ""} onChange={e => set("licencaMaternidadeInicio", e.target.value)} className="bg-input mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">Data Fim</Label>
-                          <Input type="date" value={form.licencaMaternidadeFim ?? ""} onChange={e => set("licencaMaternidadeFim", e.target.value)} className="bg-input mt-1" />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Seguro de Vida */}
-                <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3">Seguro de Vida / Sindicato / Dissídio</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Seguro de Vida?</Label>
-                      <select value={form.seguroVida ?? "0"} onChange={e => set("seguroVida", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="0">Não</option>
-                        <option value="1">Sim</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Valor Seguro (R$)</Label>
-                      <Input value={form.seguroVidaValor ?? ""} onChange={e => set("seguroVidaValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Contribuição Sindical?</Label>
-                      <select value={form.contribuicaoSindical ?? "0"} onChange={e => set("contribuicaoSindical", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="0">Não</option>
-                        <option value="1">Sim</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Valor Sindicato (R$)</Label>
-                      <Input value={form.contribuicaoSindicalValor ?? ""} onChange={e => set("contribuicaoSindicalValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Dissídio Aplicável?</Label>
-                      <select value={form.dissidioAplicavel ?? "1"} onChange={e => set("dissidioAplicavel", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="1">Sim</option>
-                        <option value="0">Não (excluir do reajuste)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Convenção Coletiva (CCT)</Label>
-                      <Input value={form.convencaoColetiva ?? ""} onChange={e => set("convencaoColetiva", e.target.value)} placeholder="Ex: SINTRACON-SP" className="bg-input mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">DDS (Diálogo Diário Segurança)?</Label>
-                      <select value={form.dds ?? "0"} onChange={e => set("dds", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
-                        <option value="0">Não</option>
-                        <option value="1">Sim</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Valor DDS (R$)</Label>
-                      <Input value={form.ddsValor ?? ""} onChange={e => set("ddsValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
-                    </div>
+                  <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">💡 <strong>Dica:</strong> Para aplicar o dissídio em massa, acesse o módulo <strong>Dissídio</strong> no menu lateral. Lá você pode simular e aplicar o reajuste para todos os funcionários elegíveis de uma vez, separado por ano.</p>
                   </div>
                 </div>
               </div>

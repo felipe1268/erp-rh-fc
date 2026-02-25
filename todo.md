@@ -2238,3 +2238,10 @@
 - [x] Adicionar campo 'fornecedor' no schema da tabela de EPIs (+ CNPJ, contato, telefone, email, endereço)
 - [x] Atualizar backend (router) para aceitar e retornar campos do fornecedor
 - [x] Atualizar frontend do formulário de EPIs com busca automática por CNPJ via BrasilAPI
+
+## Fase 38: Reorganização das Abas do Cadastro de Colaboradores
+- [x] Auditar todas as abas e campos existentes para identificar duplicações
+- [x] Separar Benefícios (VT, VA/VR, Farmácia, Cesta Básica, Plano Saúde) de Obrigações Legais (Pensão, Licença, Seguro, DDS)
+- [x] Eliminar campos duplicados entre abas (removida aba duplicada)
+- [x] Criar aba Sindical separada (Sindicato, CCT, Contribuição, Dissídio)
+- [x] Validar que nenhum campo ficou duplicado ou fora de contexto (0 erros TS)
