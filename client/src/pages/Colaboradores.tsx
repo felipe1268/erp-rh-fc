@@ -2169,48 +2169,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   </div>
                 </div>
 
-                {/* Dissídio */}
-                <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">📊 Dissídio Coletivo</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Dissídio Aplicável?</Label>
-                      <Select value={form.dissidioAplicavel || "sim"} onValueChange={v => set("dissidioAplicavel", v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sim">Sim — Participará do reajuste</SelectItem>
-                          <SelectItem value="nao">Não — Excluir do reajuste</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">CLT Art. 611-A: Convenção coletiva prevalece sobre a lei em matéria salarial</span>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Data-Base do Dissídio</Label>
-                      <Select value={form.dissidioMesBase || "none"} onValueChange={v => set("dissidioMesBase", v === "none" ? "" : v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione o mês" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Selecione</SelectItem>
-                          <SelectItem value="1">Janeiro</SelectItem>
-                          <SelectItem value="2">Fevereiro</SelectItem>
-                          <SelectItem value="3">Março</SelectItem>
-                          <SelectItem value="4">Abril</SelectItem>
-                          <SelectItem value="5">Maio</SelectItem>
-                          <SelectItem value="6">Junho</SelectItem>
-                          <SelectItem value="7">Julho</SelectItem>
-                          <SelectItem value="8">Agosto</SelectItem>
-                          <SelectItem value="9">Setembro</SelectItem>
-                          <SelectItem value="10">Outubro</SelectItem>
-                          <SelectItem value="11">Novembro</SelectItem>
-                          <SelectItem value="12">Dezembro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Mês em que o reajuste salarial é aplicado conforme CCT</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                    <p className="text-xs text-blue-700 dark:text-blue-300">💡 <strong>Dica:</strong> Para aplicar o dissídio em massa, acesse o módulo <strong>Dissídio</strong> no menu lateral. Lá você pode simular e aplicar o reajuste para todos os funcionários elegíveis de uma vez, separado por ano.</p>
-                  </div>
-                </div>
+                {/* Dissídio removido — agora é gerenciado em Configurações > Sindical */}
               </div>
             </TabsContent>
           </Tabs>

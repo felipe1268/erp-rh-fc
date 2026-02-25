@@ -2261,3 +2261,12 @@
 
 ## Fase 41: Correção de ordem do gráfico Tempo de Empresa
 - [x] Reorganizar barras do gráfico "Tempo de Empresa" em ordem crescente (< 3 meses → 3-6 meses → 6-12 meses → 1-2 anos → 2-5 anos → 5-10 anos)
+
+## Fase 42: Refatorar Dissídio — mover para Configurações
+- [x] Remover seção "Dissídio Coletivo" inteira da aba Sindical do cadastro de colaboradores
+- [x] Manter apenas Sindicato, CCT e Contribuição Sindical na aba Sindical
+- [x] Criar nova aba "Sindical / Dissídio" em Configurações com cadastro de ano + percentual de reajuste
+- [x] Botão "Aplicar" ao lado de cada ano para reajustar todos os CLT da empresa de uma vez (com confirmação)
+- [x] Regra: percentual nunca pode regredir (validação mantida no backend)
+- [x] Sem exclusão individual — é lei, todos os CLT ativos são reajustados
+- [x] 8 testes unitários para sindical router

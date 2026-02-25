@@ -13,7 +13,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -65,7 +65,7 @@ const CATEGORIAS = [
   { key: "dissidio", label: "Dissídio Coletivo", icon: TrendingUp, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he";
+type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -273,6 +273,7 @@ export default function Configuracoes() {
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin" },
     { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin" },
+    { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin" },
     { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master" },
   ];
@@ -698,6 +699,11 @@ export default function Configuracoes() {
           <ContratoPJTab companyId={companyId} userName={user?.name || ''} />
         )}
 
+        {/* TAB: Sindical / Dissídio */}
+        {activeTab === "sindical" && (
+          <SindicalDissidioTab companyId={companyId} isMaster={isMaster} />
+        )}
+
         {/* TAB: Sincronizar HE */}
         {activeTab === "sync_he" && (
           <SyncHETab companyId={companyId} />
@@ -771,6 +777,269 @@ export default function Configuracoes() {
         </FullScreenDialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// COMPONENTE: Sindical / Dissídio Coletivo
+// Cadastro de ano + percentual de reajuste
+// Botão "Aplicar" para reajustar todos os CLT ativos
+// ============================================================
+function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
+  const [novoAno, setNovoAno] = useState<number>(new Date().getFullYear());
+  const [novoPercentual, setNovoPercentual] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [confirmAplicar, setConfirmAplicar] = useState<number | null>(null);
+
+  const listaQuery = trpc.sindical.listar.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  const cadastrarMutation = trpc.sindical.cadastrar.useMutation({
+    onSuccess: () => {
+      toast.success("Dissídio cadastrado com sucesso!");
+      setNovoPercentual("");
+      setShowForm(false);
+      listaQuery.refetch();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const aplicarMutation = trpc.sindical.aplicar.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Dissídio ${data.ano} aplicado! ${data.aplicados} funcionário(s) reajustado(s) em ${data.percentual}%`);
+      setConfirmAplicar(null);
+      listaQuery.refetch();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const excluirMutation = trpc.sindical.excluir.useMutation({
+    onSuccess: () => {
+      toast.success("Dissídio excluído");
+      listaQuery.refetch();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const dissidios = listaQuery.data || [];
+  const anosExistentes = new Set(dissidios.map((d: any) => d.anoReferencia));
+
+  // Gerar lista de anos disponíveis para cadastro
+  const anoAtual = new Date().getFullYear();
+  const anosDisponiveis = [];
+  for (let a = anoAtual + 1; a >= 2020; a--) {
+    if (!anosExistentes.has(a)) anosDisponiveis.push(a);
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Landmark className="w-5 h-5 text-blue-600" />
+                Sindical — Dissídio Coletivo Anual
+              </CardTitle>
+              <CardDescription>
+                Cadastre o percentual de reajuste por ano. Ao aplicar, <strong>todos os funcionários CLT ativos</strong> terão o salário reajustado automaticamente. É lei — não há exclusão individual.
+              </CardDescription>
+            </div>
+            {isMaster && !showForm && (
+              <Button onClick={() => setShowForm(true)} className="gap-1.5">
+                <Plus className="w-4 h-4" /> Novo Ano
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Formulário de cadastro */}
+          {showForm && (
+            <div className="mb-6 p-4 border-2 border-dashed border-blue-300 rounded-lg bg-blue-50/50">
+              <h4 className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                <Plus className="w-4 h-4" /> Cadastrar Novo Dissídio
+              </h4>
+              <div className="flex items-end gap-4">
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Ano</Label>
+                  <Select value={String(novoAno)} onValueChange={v => setNovoAno(Number(v))}>
+                    <SelectTrigger className="w-[120px] bg-white mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {anosDisponiveis.map(a => (
+                        <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Percentual de Reajuste (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={novoPercentual}
+                    onChange={e => setNovoPercentual(e.target.value)}
+                    placeholder="Ex: 5.50"
+                    className="w-[160px] bg-white mt-1"
+                  />
+                </div>
+                <Button
+                  onClick={() => cadastrarMutation.mutate({ companyId, anoReferencia: novoAno, percentualReajuste: novoPercentual })}
+                  disabled={cadastrarMutation.isPending || !novoPercentual}
+                  className="gap-1.5"
+                >
+                  {cadastrarMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Cadastrar
+                </Button>
+                <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+              </div>
+              <p className="text-[10px] text-blue-600 mt-2">
+                Art. 468 CLT — O percentual nunca pode ser menor que o ano anterior.
+              </p>
+            </div>
+          )}
+
+          {/* Lista de dissídios cadastrados */}
+          {listaQuery.isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+              Carregando...
+            </div>
+          ) : dissidios.length === 0 ? (
+            <div className="text-center py-8">
+              <Landmark className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">Nenhum dissídio cadastrado</p>
+              <p className="text-xs text-gray-400 mt-1">Clique em "Novo Ano" para cadastrar o primeiro reajuste.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {dissidios.map((d: any) => {
+                const isAplicado = d.status === 'aplicado';
+                const isRascunho = d.status === 'rascunho';
+                const isConfirmando = confirmAplicar === d.anoReferencia;
+
+                return (
+                  <div
+                    key={d.id}
+                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                      isAplicado
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-white border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-6">
+                      {/* Ano */}
+                      <div className="text-center min-w-[60px]">
+                        <p className={`text-2xl font-bold ${isAplicado ? 'text-green-700' : 'text-blue-700'}`}>
+                          {d.anoReferencia}
+                        </p>
+                        <p className="text-[10px] text-gray-500 uppercase font-medium">Ano</p>
+                      </div>
+
+                      {/* Percentual */}
+                      <div className="text-center min-w-[80px]">
+                        <p className={`text-xl font-bold ${isAplicado ? 'text-green-700' : 'text-orange-600'}`}>
+                          {parseFloat(d.percentualReajuste).toFixed(2)}%
+                        </p>
+                        <p className="text-[10px] text-gray-500 uppercase font-medium">Reajuste</p>
+                      </div>
+
+                      {/* Status */}
+                      <div>
+                        {isAplicado ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            <Check className="w-3.5 h-3.5" /> Aplicado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                            <Clock className="w-3.5 h-3.5" /> Pendente
+                          </span>
+                        )}
+                        {d.dataAplicacao && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            Aplicado em {new Date(d.dataAplicacao + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            {d.aplicadoPor && ` por ${d.aplicadoPor}`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ações */}
+                    <div className="flex items-center gap-2">
+                      {isRascunho && isMaster && (
+                        <>
+                          {isConfirmando ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-red-600 font-medium">Confirmar aplicação?</span>
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 gap-1"
+                                onClick={() => aplicarMutation.mutate({ companyId, anoReferencia: d.anoReferencia })}
+                                disabled={aplicarMutation.isPending}
+                              >
+                                {aplicarMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                Sim, Aplicar
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setConfirmAplicar(null)}>
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+                                onClick={() => setConfirmAplicar(d.anoReferencia)}
+                              >
+                                <PlayCircle className="w-4 h-4" /> Aplicar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-500 hover:text-red-700"
+                                onClick={() => {
+                                  if (confirm(`Excluir dissídio de ${d.anoReferencia}?`)) {
+                                    excluirMutation.mutate({ companyId, anoReferencia: d.anoReferencia });
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Informação legal */}
+      <Card className="bg-amber-50 border-amber-200">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-amber-800">
+              <p className="font-medium mb-1">Regras do Dissídio Coletivo</p>
+              <ul className="space-y-1 text-xs text-amber-700">
+                <li>• <strong>Obrigatório:</strong> O dissídio é lei — todos os funcionários CLT ativos são reajustados, sem exceção.</li>
+                <li>• <strong>Nunca regredir:</strong> O percentual de um ano não pode ser menor que o do ano anterior (Art. 468 CLT).</li>
+                <li>• <strong>Irreversível:</strong> Após aplicado, o reajuste não pode ser desfeito.</li>
+                <li>• <strong>Valor da hora:</strong> O sistema recalcula automaticamente o valor/hora de cada funcionário (salário ÷ 220h).</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
