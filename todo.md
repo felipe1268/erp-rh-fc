@@ -2136,3 +2136,4 @@
 - [x] Testes unitários do parser AFD (10 testes passando)
 - [ ] API Dixi: autenticação OAuth2 não funcionou (endpoints retornam 404) — preparado para futuro
 - [ ] Frontend: aba Relógios com vinculação SN→Obra (usar tela existente de Relógios de Ponto)
+- [x] Bug: Dixi Ponto não aparece na lista de módulos configuráveis em Configurações (seção OPERACIONAL)

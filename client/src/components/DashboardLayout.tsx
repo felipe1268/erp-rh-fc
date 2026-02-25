@@ -273,22 +273,58 @@ function DashboardLayoutContent({
     let sections = menuSections;
     if (menuConfigQuery.data) {
       // Mapear configuração salva de volta para o formato com ícones
-      sections = (menuConfigQuery.data as any[]).map((section: any) => ({
+      const savedData = menuConfigQuery.data as any[];
+      const allSavedPaths = new Set(savedData.flatMap((s: any) => s.items.map((i: any) => i.path)));
+      
+      sections = savedData.map((section: any) => ({
         title: section.title,
         items: section.items
           .filter((item: any) => item.visible !== false)
           .map((item: any) => {
-            // Encontrar o item original para pegar o ícone e propriedade "soon"
             const original = allMenuItems.find(m => m.path === item.path);
             return {
               icon: ICON_MAP[item.label] || original?.icon || LayoutDashboard,
-              // Path is stable even when label is renamed
               label: item.label,
               path: item.path,
               soon: (original as any)?.soon || false,
             };
           }),
       }));
+      
+      // Merge new items from menuSections that don't exist in saved config
+      for (const defSection of menuSections) {
+        const existingSection = sections.find(s => s.title === defSection.title);
+        for (const defItem of defSection.items) {
+          if (!allSavedPaths.has(defItem.path)) {
+            const newItem = {
+              icon: defItem.icon,
+              label: defItem.label,
+              path: defItem.path,
+              soon: (defItem as any)?.soon || false,
+            };
+            if (existingSection) {
+              existingSection.items.push(newItem);
+            } else {
+              sections.push({ title: defSection.title, items: [newItem] });
+            }
+            allSavedPaths.add(defItem.path);
+          }
+        }
+      }
+      // Add entirely new sections
+      for (const defSection of menuSections) {
+        if (!sections.find(s => s.title === defSection.title)) {
+          sections.push({
+            title: defSection.title,
+            items: defSection.items.map(i => ({
+              icon: i.icon,
+              label: i.label,
+              path: i.path,
+              soon: (i as any)?.soon || false,
+            })),
+          });
+        }
+      }
     }
     // Filtrar itens baseado no role do usuário
     if (!isAdminUser) {

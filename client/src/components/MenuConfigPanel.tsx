@@ -56,6 +56,13 @@ const DEFAULT_MENU = [
     { label: "Controle de Documentos", path: "/controle-documentos", visible: true },
     { label: "Vale Alimentação", path: "/vale-alimentacao", visible: true },
     { label: "Controle de EPIs", path: "/epis", visible: true },
+    { label: "Dixi Ponto", path: "/dixi-ponto", visible: true },
+  ]},
+  { title: "Gestão de Pessoas", items: [
+    { label: "Aviso Prévio", path: "/aviso-previo", visible: true },
+    { label: "Férias", path: "/ferias", visible: true },
+    { label: "CIPA", path: "/cipa", visible: true },
+    { label: "Contratos PJ", path: "/modulo-pj", visible: true },
   ]},
   { title: "Jurídico", items: [{ label: "Processos Trabalhistas", path: "/processos-trabalhistas", visible: true }] },
   { title: "Relatórios", items: [{ label: "Raio-X do Funcionário", path: "/relatorios/raio-x", visible: true }] },
@@ -156,7 +163,35 @@ export default function MenuConfigPanel() {
   });
 
   useEffect(() => {
-    if (configQuery.data) setMenuConfig(configQuery.data);
+    if (configQuery.data) {
+      // Merge saved config with DEFAULT_MENU to include new items added after save
+      const saved = configQuery.data as MenuSection[];
+      const allSavedPaths = new Set(saved.flatMap(s => s.items.map(i => i.path)));
+      const merged = saved.map(s => ({ ...s, items: [...s.items] }));
+      
+      for (const defSection of DEFAULT_MENU) {
+        const existingSection = merged.find(s => s.title === defSection.title);
+        for (const defItem of defSection.items) {
+          if (!allSavedPaths.has(defItem.path)) {
+            if (existingSection) {
+              existingSection.items.push({ ...defItem });
+            } else {
+              // Section doesn't exist in saved config, add entire section
+              merged.push({ title: defSection.title, items: defSection.items.map(i => ({ ...i })) });
+              break; // Already added all items from this section
+            }
+            allSavedPaths.add(defItem.path);
+          }
+        }
+      }
+      // Also add entirely new sections that don't exist in saved config
+      for (const defSection of DEFAULT_MENU) {
+        if (!merged.find(s => s.title === defSection.title)) {
+          merged.push({ title: defSection.title, items: defSection.items.map(i => ({ ...i })) });
+        }
+      }
+      setMenuConfig(merged);
+    }
   }, [configQuery.data]);
 
   const toggleSection = (title: string) => {
