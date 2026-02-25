@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-type ViewMode = "catalogo" | "entregas" | "novo_epi" | "nova_entrega" | "ficha_epi";
+type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi";
 
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
@@ -134,7 +134,7 @@ export default function Epis() {
     onError: (err) => toast.error(err.message),
   });
   const updateEpiMut = trpc.epis.update.useMutation({
-    onSuccess: () => { episQ.refetch(); statsQ.refetch(); setEditingEpi(null); toast.success("EPI atualizado!"); },
+    onSuccess: () => { episQ.refetch(); statsQ.refetch(); setEditingEpi(null); setViewMode("catalogo"); resetEpiForm(); toast.success("EPI atualizado com sucesso!"); },
     onError: (err) => toast.error(err.message),
   });
   const deleteEpiMut = trpc.epis.delete.useMutation({
@@ -326,6 +326,247 @@ export default function Epis() {
   };
 
   // BDI config agora fica em Configurações > Critérios do Sistema > EPIs / Segurança
+
+  // Load EPI data into form for editing
+  function loadEpiForEdit(epi: any) {
+    setEpiForm({
+      nome: epi.nome || "",
+      ca: epi.ca || "",
+      validadeCa: epi.validadeCa || "",
+      fabricante: epi.fabricante || "",
+      fornecedor: epi.fornecedor || "",
+      fornecedorCnpj: epi.fornecedorCnpj ? epi.fornecedorCnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") : "",
+      fornecedorContato: epi.fornecedorContato || "",
+      fornecedorTelefone: epi.fornecedorTelefone || "",
+      fornecedorEmail: epi.fornecedorEmail || "",
+      fornecedorEndereco: epi.fornecedorEndereco || "",
+      categoria: epi.categoria || "EPI",
+      tamanho: epi.tamanho || "",
+      quantidadeEstoque: epi.quantidadeEstoque ?? 0,
+      valorProduto: epi.valorProduto ? String(parseFloat(String(epi.valorProduto))) : "",
+      tempoMinimoTroca: epi.tempoMinimoTroca ? String(epi.tempoMinimoTroca) : "",
+    });
+    setCaLookupResult(null);
+    setCnpjResult(null);
+    setAiSuggestion(null);
+  }
+
+  // ============================================================
+  // FORM: EDITAR EPI (tela completa igual ao cadastro)
+  // ============================================================
+  if (viewMode === "editar_epi" && editingEpi) {
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => { setViewMode("catalogo"); setEditingEpi(null); resetEpiForm(); }}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
+            </Button>
+            <h1 className="text-xl font-bold">Editar EPI: {editingEpi.nome}</h1>
+          </div>
+
+          <Card>
+            <CardContent className="p-6 space-y-4 w-full">
+              <div>
+                <Label>Nome do EPI *</Label>
+                <Input value={epiForm.nome} onChange={e => setEpiForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Ex: Capacete de Segurança, Luva de Proteção..." />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label>Número do CA</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input value={epiForm.ca} onChange={e => setEpiForm(f => ({ ...f, ca: e.target.value }))}
+                        placeholder="Digite o CA (ex: 15532)" onKeyDown={e => { if (e.key === 'Enter') handleCaLookup(); }} />
+                      {caLookupLoading && (
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <span className="animate-spin text-sm">⏳</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {caLookupResult?.found && (
+                    <div className="mt-2 bg-green-50 border border-green-200 rounded p-2 text-xs text-green-700">
+                      <p className="font-semibold">✓ CA {caLookupResult.ca} encontrado</p>
+                      {caLookupResult.descricao && <p>{caLookupResult.descricao.substring(0, 100)}</p>}
+                      {caLookupResult.situacao && <p>Situação: <strong className={caLookupResult.situacao === 'VÁLIDO' ? 'text-green-700' : 'text-red-600'}>{caLookupResult.situacao}</strong></p>}
+                      {caLookupResult.fabricante && <p>Fabricante: {caLookupResult.fabricante}</p>}
+                      {caLookupResult.validade && <p>Validade: {caLookupResult.validade}</p>}
+                      {caLookupResult.referencia && <p>Referência: {caLookupResult.referencia}</p>}
+                    </div>
+                  )}
+                  {caLookupResult && !caLookupResult.found && (
+                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-700">
+                      <p>⚠ {caLookupResult.error || 'CA não encontrado'}</p>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <Label>Validade do CA</Label>
+                  <Input type="date" value={epiForm.validadeCa} onChange={e => setEpiForm(f => ({ ...f, validadeCa: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label>Fabricante</Label>
+                  <Input value={epiForm.fabricante} onChange={e => setEpiForm(f => ({ ...f, fabricante: e.target.value }))}
+                    placeholder="Nome do fabricante" />
+                </div>
+                <div>
+                  <Label>Fornecedor</Label>
+                  <Input value={epiForm.fornecedor} onChange={e => setEpiForm(f => ({ ...f, fornecedor: e.target.value }))}
+                    placeholder="Nome do fornecedor" />
+                </div>
+              </div>
+
+              {/* Dados do Fornecedor - CNPJ com busca automática */}
+              <div className="border border-dashed border-blue-300 rounded-lg p-3 bg-blue-50/30 space-y-3">
+                <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
+                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor (CNPJ)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">CNPJ do Fornecedor</Label>
+                    <div className="flex gap-1">
+                      <Input value={epiForm.fornecedorCnpj}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 14);
+                          const formatted = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+                          setEpiForm(f => ({ ...f, fornecedorCnpj: v.length <= 14 ? formatted : f.fornecedorCnpj }));
+                          if (v.length === 14) buscarCnpjFornecedor(v);
+                        }}
+                        placeholder="00.000.000/0000-00" className="flex-1" />
+                      <Button type="button" size="sm" variant="outline" disabled={cnpjLoading || epiForm.fornecedorCnpj.replace(/\D/g, "").length !== 14}
+                        onClick={() => buscarCnpjFornecedor(epiForm.fornecedorCnpj)}>
+                        {cnpjLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {cnpjResult?.success && (
+                      <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>
+                    )}
+                    {cnpjResult?.error && (
+                      <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs">Telefone</Label>
+                    <Input value={epiForm.fornecedorTelefone} onChange={e => setEpiForm(f => ({ ...f, fornecedorTelefone: e.target.value }))}
+                      placeholder="(00) 0000-0000" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">E-mail</Label>
+                    <Input value={epiForm.fornecedorEmail} onChange={e => setEpiForm(f => ({ ...f, fornecedorEmail: e.target.value }))}
+                      placeholder="contato@fornecedor.com" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Endereço</Label>
+                  <Input value={epiForm.fornecedorEndereco} onChange={e => setEpiForm(f => ({ ...f, fornecedorEndereco: e.target.value }))}
+                    placeholder="Endereço completo do fornecedor" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label className="flex items-center gap-1">
+                    <Package className="h-3 w-3 text-indigo-600" />
+                    Categoria
+                  </Label>
+                  <Select value={epiForm.categoria} onValueChange={(v: any) => setEpiForm(f => ({ ...f, categoria: v, tamanho: '' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EPI">EPI (Equipamento de Proteção)</SelectItem>
+                      <SelectItem value="Uniforme">Uniforme (Roupa)</SelectItem>
+                      <SelectItem value="Calcado">Calçado (Bota/Sapato)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {epiForm.categoria !== 'EPI' && (
+                  <div>
+                    <Label className="flex items-center gap-1">
+                      {epiForm.categoria === 'Uniforme' ? (
+                        <><Shirt className="h-3 w-3 text-indigo-600" /> Tamanho</>
+                      ) : (
+                        <><Footprints className="h-3 w-3 text-amber-800" /> Número do Calçado</>
+                      )}
+                    </Label>
+                    <Select value={epiForm.tamanho || undefined} onValueChange={v => setEpiForm(f => ({ ...f, tamanho: v }))}>
+                      <SelectTrigger><SelectValue placeholder={epiForm.categoria === 'Uniforme' ? 'Selecione o tamanho...' : 'Selecione o número...'} /></SelectTrigger>
+                      <SelectContent>
+                        {(epiForm.categoria === 'Uniforme' ? TAMANHOS_ROUPA : TAMANHOS_CALCADO).map(t => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div>
+                  <Label>Quantidade em Estoque</Label>
+                  <Input type="number" min={0} value={epiForm.quantidadeEstoque}
+                    onChange={e => setEpiForm(f => ({ ...f, quantidadeEstoque: parseInt(e.target.value) || 0 }))} />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1">
+                    <DollarSign className="h-3 w-3 text-green-600" />
+                    Valor do Produto (R$)
+                  </Label>
+                  <Input type="number" min={0} step="0.01" value={epiForm.valorProduto}
+                    onChange={e => setEpiForm(f => ({ ...f, valorProduto: e.target.value }))}
+                    placeholder="0.00" />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1">
+                    <Clock className="h-3 w-3 text-blue-600" />
+                    Vida Útil (dias)
+                    {aiSuggestionLoading && <span className="text-xs text-blue-500 animate-pulse ml-1">🧠 IA analisando...</span>}
+                  </Label>
+                  <Input type="number" min={0} value={epiForm.tempoMinimoTroca}
+                    onChange={e => { setEpiForm(f => ({ ...f, tempoMinimoTroca: e.target.value })); if (aiSuggestion) setAiSuggestion(null); }}
+                    placeholder="Ex: 180" />
+                  {aiSuggestion && (
+                    <div className="mt-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                      <span className="font-semibold">🧠 Sugestão IA:</span> {aiSuggestion.vidaUtilDias} dias
+                      <span className="text-blue-500 ml-1">({aiSuggestion.confianca === 'alta' ? 'Alta confiança' : aiSuggestion.confianca === 'media' ? 'Média confiança' : 'Baixa confiança'})</span>
+                      <p className="text-[10px] text-blue-500 mt-0.5">{aiSuggestion.justificativa}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={() => { setViewMode("catalogo"); setEditingEpi(null); resetEpiForm(); }}>Cancelar</Button>
+                <Button onClick={() => {
+                  if (!epiForm.nome.trim()) return toast.error("Nome do EPI é obrigatório");
+                  updateEpiMut.mutate({
+                    id: editingEpi.id,
+                    nome: epiForm.nome,
+                    ca: epiForm.ca || undefined,
+                    validadeCa: epiForm.validadeCa || undefined,
+                    fabricante: epiForm.fabricante || undefined,
+                    fornecedor: epiForm.fornecedor || undefined,
+                    fornecedorCnpj: epiForm.fornecedorCnpj?.replace(/\D/g, "") || undefined,
+                    fornecedorContato: epiForm.fornecedorContato || undefined,
+                    fornecedorTelefone: epiForm.fornecedorTelefone || undefined,
+                    fornecedorEmail: epiForm.fornecedorEmail || undefined,
+                    fornecedorEndereco: epiForm.fornecedorEndereco || undefined,
+                    categoria: epiForm.categoria,
+                    tamanho: epiForm.tamanho || undefined,
+                    quantidadeEstoque: epiForm.quantidadeEstoque,
+                    valorProduto: epiForm.valorProduto ? parseFloat(epiForm.valorProduto) : undefined,
+                    tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
+                  });
+                }} disabled={updateEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                  {updateEpiMut.isPending ? "Salvando..." : "Salvar Alterações"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // ============================================================
   // FORM: NOVO EPI
@@ -1065,26 +1306,17 @@ export default function Epis() {
                       {filteredEpis.map((epi: any) => {
                         const caVencido = epi.validadeCa && epi.validadeCa < hoje;
                         const estoqueBaixo = (epi.quantidadeEstoque || 0) <= 5;
-                        if (editingEpi?.id === epi.id) {
-                          return (
-                            <tr key={epi.id} className="border-b bg-blue-50">
-                              <td colSpan={10} className="p-3">
-                                <EditEpiInline epi={epi} onSave={(data: any) => updateEpiMut.mutate({ id: epi.id, ...data })} onCancel={() => setEditingEpi(null)} isPending={updateEpiMut.isPending} />
-                              </td>
-                            </tr>
-                          );
-                        }
                         return (
                           <tr key={epi.id} className="border-b last:border-0 hover:bg-muted/30">
                             <td className="p-3 text-center">
                               <input type="checkbox" checked={selectedEpis.has(epi.id)}
                                 onChange={() => toggleSelectEpi(epi.id)} className="rounded" />
                             </td>
-                            <td className="p-3">
-                              <div className="flex items-center gap-2">
+                            <td className="p-3 cursor-pointer" onClick={() => { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode("editar_epi"); }}>
+                              <div className="flex items-center gap-2 hover:text-blue-700 transition-colors">
                                 {getEpiIcon(epi.nome, "h-4 w-4 shrink-0")}
                                 <div>
-                                  <span className="font-medium">{epi.nome}</span>
+                                  <span className="font-medium hover:underline">{epi.nome}</span>
                                   {epi.fabricante && <span className="text-xs text-muted-foreground ml-1">({epi.fabricante})</span>}
                                 </div>
                               </div>
@@ -1121,7 +1353,7 @@ export default function Epis() {
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar"
-                                  onClick={() => setEditingEpi(epi)}>
+                                  onClick={() => { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode("editar_epi"); }}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir"

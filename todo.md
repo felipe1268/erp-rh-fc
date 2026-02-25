@@ -2306,3 +2306,15 @@
 - [x] Botão de voltar ao Hub de Módulos na sidebar
 - [x] Rota / = Hub de Módulos, /painel = Dashboard principal
 - [x] 308 testes passando (25 arquivos)
+
+## Fase 48: Redesenhar Login + Hub com visual cinematográfico
+- [x] Gerar imagem cinematográfica de engenharia civil para fundo
+- [x] Atualizar tela de Login: trocar "Sistema de Gestão RH & DP" por "FC Gestão Integrada"
+- [x] Logo FC em destaque na tela de login e hub
+- [x] Redesenhar ModuleHub com visual premium, impactante e profissional
+- [x] Cards de módulos com efeito glass/translúcido sobre a imagem
+
+## Fase 49: Tela de edição de EPI + correção de salvamento
+- [x] Criar tela de edição de EPI igual à de cadastro, preenchida com dados atuais
+- [x] Corrigir bug: alterações no EPI não estão sendo salvas (updateEpiMut onSuccess agora navega de volta e reseta form)
+- [x] Ao clicar no EPI no catálogo, abrir formulário de edição (nome clicável + botão editar)
