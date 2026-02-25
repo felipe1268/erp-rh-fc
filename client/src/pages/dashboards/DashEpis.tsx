@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -5,19 +6,96 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   HardHat, Package, AlertTriangle, ShieldAlert, TrendingUp, Users,
-  DollarSign, Calendar, Building2, ClipboardList, Loader2, ArrowRight,
-  Shirt, Footprints, Shield
+  DollarSign, Calendar, Building2, ClipboardList, Loader2,
+  Shirt, Footprints, Shield, Filter, X, SlidersHorizontal
 } from "lucide-react";
 import { Link } from "wouter";
 
 const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+// Gera lista de meses dos últimos 24 meses para o filtro de período
+function getMonthOptions() {
+  const opts: { value: string; label: string }[] = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    opts.push({ value: key, label: label.charAt(0).toUpperCase() + label.slice(1) });
+  }
+  return opts;
+}
+
 export default function DashEpis() {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const { data, isLoading } = trpc.dashboards.epis.useQuery({ companyId }, { enabled: companyId > 0 });
+
+  // Filtros
+  const [periodoInicio, setPeriodoInicio] = useState<string>("todos");
+  const [periodoFim, setPeriodoFim] = useState<string>("todos");
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todos");
+  const [obraFiltro, setObraFiltro] = useState<string>("todos");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const monthOptions = useMemo(() => getMonthOptions(), []);
+
+  // Extrair categorias e obras disponíveis dos dados
+  const categorias = useMemo(() => {
+    if (!data?.porCategoria) return [];
+    return Object.keys(data.porCategoria);
+  }, [data?.porCategoria]);
+
+  const obrasDisponiveis = useMemo(() => {
+    if (!data?.custoPorObraList) return [];
+    return data.custoPorObraList.map((o: any) => o.nome);
+  }, [data?.custoPorObraList]);
+
+  // Dados filtrados de consumo mensal
+  const consumoFiltrado = useMemo(() => {
+    if (!data?.consumoMensal) return [];
+    let filtered = data.consumoMensal;
+    if (periodoInicio !== "todos") {
+      filtered = filtered.filter((c: any) => c.mesKey >= periodoInicio);
+    }
+    if (periodoFim !== "todos") {
+      filtered = filtered.filter((c: any) => c.mesKey <= periodoFim);
+    }
+    return filtered;
+  }, [data?.consumoMensal, periodoInicio, periodoFim]);
+
+  // Custo por obra filtrado
+  const obrasFiltradas = useMemo(() => {
+    if (!data?.custoPorObraList) return [];
+    if (obraFiltro === "todos") return data.custoPorObraList;
+    return data.custoPorObraList.filter((o: any) => o.nome === obraFiltro);
+  }, [data?.custoPorObraList, obraFiltro]);
+
+  // Categoria filtrada
+  const categoriasFiltradas = useMemo(() => {
+    if (!data?.porCategoria) return {};
+    if (categoriaFiltro === "todos") return data.porCategoria;
+    const filtered: Record<string, any> = {};
+    if (data.porCategoria[categoriaFiltro]) {
+      filtered[categoriaFiltro] = data.porCategoria[categoriaFiltro];
+    }
+    return filtered;
+  }, [data?.porCategoria, categoriaFiltro]);
+
+  const hasActiveFilters = periodoInicio !== "todos" || periodoFim !== "todos" || categoriaFiltro !== "todos" || obraFiltro !== "todos";
+
+  const clearFilters = () => {
+    setPeriodoInicio("todos");
+    setPeriodoFim("todos");
+    setCategoriaFiltro("todos");
+    setObraFiltro("todos");
+  };
 
   if (isLoading) return (
     <DashboardLayout>
@@ -28,7 +106,8 @@ export default function DashEpis() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        {/* HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Link href="/dashboards" className="text-sm text-muted-foreground hover:text-foreground">Dashboards</Link>
@@ -37,7 +116,23 @@ export default function DashEpis() {
             <h1 className="text-2xl font-bold tracking-tight">Dashboard de EPIs</h1>
             <p className="text-muted-foreground text-sm mt-1">Controle completo de equipamentos de proteção individual</p>
           </div>
-          <PrintActions title="Dashboard EPIs" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant={showFilters ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              <span className="hidden sm:inline">Filtros</span>
+              {hasActiveFilters && (
+                <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
+                  !
+                </Badge>
+              )}
+            </Button>
+            <PrintActions title="Dashboard EPIs" />
+          </div>
         </div>
 
         {!data ? (
@@ -45,9 +140,124 @@ export default function DashEpis() {
         ) : (
           <>
             {/* ============================================================ */}
+            {/* FILTROS RESPONSIVOS */}
+            {/* ============================================================ */}
+            {showFilters && (
+              <Card className="border-dashed">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Filter className="h-4 w-4 text-primary" />
+                      Filtros
+                    </div>
+                    {hasActiveFilters && (
+                      <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs gap-1 h-7">
+                        <X className="h-3 w-3" /> Limpar filtros
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Período Início */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Período — De</label>
+                      <Select value={periodoInicio} onValueChange={setPeriodoInicio}>
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos os meses</SelectItem>
+                          {monthOptions.map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Período Fim */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Período — Até</label>
+                      <Select value={periodoFim} onValueChange={setPeriodoFim}>
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos os meses</SelectItem>
+                          {monthOptions.map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Categoria */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Categoria</label>
+                      <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Todas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todas as categorias</SelectItem>
+                          {categorias.map(c => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Obra */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Obra</label>
+                      <Select value={obraFiltro} onValueChange={setObraFiltro}>
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Todas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todas as obras</SelectItem>
+                          {obrasDisponiveis.map((o: string) => (
+                            <SelectItem key={o} value={o}>{o}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {hasActiveFilters && (
+                    <div className="mt-3 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-muted-foreground">Filtros ativos:</span>
+                      {periodoInicio !== "todos" && (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          De: {monthOptions.find(m => m.value === periodoInicio)?.label}
+                          <X className="h-3 w-3 cursor-pointer" onClick={() => setPeriodoInicio("todos")} />
+                        </Badge>
+                      )}
+                      {periodoFim !== "todos" && (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          Até: {monthOptions.find(m => m.value === periodoFim)?.label}
+                          <X className="h-3 w-3 cursor-pointer" onClick={() => setPeriodoFim("todos")} />
+                        </Badge>
+                      )}
+                      {categoriaFiltro !== "todos" && (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          {categoriaFiltro}
+                          <X className="h-3 w-3 cursor-pointer" onClick={() => setCategoriaFiltro("todos")} />
+                        </Badge>
+                      )}
+                      {obraFiltro !== "todos" && (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          {obraFiltro}
+                          <X className="h-3 w-3 cursor-pointer" onClick={() => setObraFiltro("todos")} />
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ============================================================ */}
             {/* KPIs PRINCIPAIS */}
             {/* ============================================================ */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
               <DashKpi label="Itens Cadastrados" value={data.resumo.totalItens} icon={HardHat} color="blue" />
               <DashKpi label="Estoque Total" value={data.resumo.estoqueTotal} icon={Package} color="green" sub="unidades em estoque" />
               <DashKpi label="Valor Inventário" value={fmtBRL(data.resumo.valorTotalInventario || 0)} icon={DollarSign} color="teal" />
@@ -55,27 +265,27 @@ export default function DashEpis() {
             </div>
 
             {/* KPIs ALERTAS */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               <DashKpi label="Estoque Baixo" value={data.resumo.estoqueBaixo} icon={AlertTriangle} color="red" sub="≤ 5 unidades" />
               <DashKpi label="CA Vencido" value={data.resumo.caVencido} icon={ShieldAlert} color="orange" />
               <DashKpi label="CA Vencendo (90d)" value={data.resumo.casVencendoCount || 0} icon={Calendar} color="yellow" sub="próximos 90 dias" />
               <DashKpi label="Total Entregas" value={data.resumo.totalEntregas} icon={TrendingUp} color="indigo" />
-              <DashKpi label="Funcionários Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" />
+              <DashKpi label="Func. Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" />
             </div>
 
             {/* Descontos pendentes */}
             {(data.resumo.alertasPendentes || 0) > 0 && (
               <Card className="border-l-4 border-l-amber-500 bg-amber-50/50">
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                    <DollarSign className="h-5 w-5 text-amber-600" />
+                <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                  <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                    <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                   </div>
                   <div>
-                    <p className="font-semibold text-amber-800">
+                    <p className="font-semibold text-amber-800 text-sm sm:text-base">
                       {data.resumo.alertasPendentes} alerta(s) de desconto pendente(s)
                     </p>
-                    <p className="text-sm text-amber-700">
-                      Valor total: {fmtBRL(data.resumo.valorDescontosPendentes || 0)} — Valide em EPIs &gt; Entregas
+                    <p className="text-xs sm:text-sm text-amber-700">
+                      Valor total: {fmtBRL(data.resumo.valorDescontosPendentes || 0)}
                     </p>
                   </div>
                 </CardContent>
@@ -88,25 +298,25 @@ export default function DashEpis() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
                 <DashChart
-                  title="Consumo Mensal de EPIs (últimos 12 meses)"
+                  title={`Consumo Mensal de EPIs${hasActiveFilters ? ' (filtrado)' : ' (últimos 12 meses)'}`}
                   type="bar"
-                  labels={data.consumoMensal?.map((r: any) => r.mes) || []}
+                  labels={consumoFiltrado.map((r: any) => r.mes)}
                   datasets={[
-                    { label: "Unidades", data: data.consumoMensal?.map((r: any) => r.unidades) || [], backgroundColor: "#3B82F6" },
-                    { label: "Entregas", data: data.consumoMensal?.map((r: any) => r.entregas) || [], backgroundColor: "#93C5FD" },
+                    { label: "Unidades", data: consumoFiltrado.map((r: any) => r.unidades), backgroundColor: "#3B82F6" },
+                    { label: "Entregas", data: consumoFiltrado.map((r: any) => r.entregas), backgroundColor: "#93C5FD" },
                   ]}
                   height={280}
                 />
               </div>
               <div>
-                {data.porCategoria && Object.keys(data.porCategoria).length > 0 ? (
+                {Object.keys(categoriasFiltradas).length > 0 ? (
                   <DashChart
                     title="Distribuição por Categoria"
                     type="doughnut"
-                    labels={Object.keys(data.porCategoria)}
+                    labels={Object.keys(categoriasFiltradas)}
                     datasets={[{
                       label: "Itens",
-                      data: Object.values(data.porCategoria).map((c: any) => c.itens),
+                      data: Object.values(categoriasFiltradas).map((c: any) => c.itens),
                       backgroundColor: ["#10B981", "#6366F1", "#F59E0B", "#EF4444"],
                     }]}
                     height={280}
@@ -137,7 +347,7 @@ export default function DashEpis() {
               )}
               {data.topFuncionarios?.length > 0 && (
                 <DashChart
-                  title="Top 10 Funcionários (mais EPIs recebidos)"
+                  title="Top 10 Funcionários (mais EPIs)"
                   type="horizontalBar"
                   labels={data.topFuncionarios.map((f: any) => f.nome.length > 25 ? f.nome.slice(0, 25) + "..." : f.nome)}
                   datasets={[{ label: "Unidades", data: data.topFuncionarios.map((f: any) => f.qtd), backgroundColor: "#8B5CF6" }]}
@@ -150,13 +360,13 @@ export default function DashEpis() {
             {/* GRÁFICOS LINHA 3: Custo por Obra + Motivo de Troca */}
             {/* ============================================================ */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {data.custoPorObraList?.length > 0 && (
+              {obrasFiltradas.length > 0 && (
                 <DashChart
-                  title="Entregas por Obra"
+                  title={`Entregas por Obra${obraFiltro !== 'todos' ? ` — ${obraFiltro}` : ''}`}
                   type="horizontalBar"
-                  labels={data.custoPorObraList.map((o: any) => o.nome.length > 30 ? o.nome.slice(0, 30) + "..." : o.nome)}
-                  datasets={[{ label: "Unidades", data: data.custoPorObraList.map((o: any) => o.unidades), backgroundColor: "#F59E0B" }]}
-                  height={Math.max(200, data.custoPorObraList.length * 30)}
+                  labels={obrasFiltradas.map((o: any) => o.nome.length > 30 ? o.nome.slice(0, 30) + "..." : o.nome)}
+                  datasets={[{ label: "Unidades", data: obrasFiltradas.map((o: any) => o.unidades), backgroundColor: "#F59E0B" }]}
+                  height={Math.max(200, obrasFiltradas.length * 30)}
                 />
               )}
               {data.porMotivo && Object.keys(data.porMotivo).length > 0 && (
@@ -177,7 +387,7 @@ export default function DashEpis() {
             {/* ============================================================ */}
             {/* TABELA: Distribuição por Categoria (detalhada) */}
             {/* ============================================================ */}
-            {data.porCategoria && Object.keys(data.porCategoria).length > 0 && (
+            {Object.keys(categoriasFiltradas).length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -197,7 +407,7 @@ export default function DashEpis() {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(data.porCategoria).map(([cat, vals]: [string, any]) => (
+                        {Object.entries(categoriasFiltradas).map(([cat, vals]: [string, any]) => (
                           <tr key={cat} className="border-b border-border/50">
                             <td className="py-2 pr-3 font-medium flex items-center gap-2">
                               {cat === 'EPI' && <Shield className="h-4 w-4 text-emerald-500" />}
@@ -210,12 +420,14 @@ export default function DashEpis() {
                             <td className="py-2 text-right font-medium">{fmtBRL(vals.valor)}</td>
                           </tr>
                         ))}
-                        <tr className="border-t-2 font-bold">
-                          <td className="py-2 pr-3">Total</td>
-                          <td className="py-2 pr-3 text-right">{Object.values(data.porCategoria).reduce((s: number, v: any) => s + v.itens, 0)}</td>
-                          <td className="py-2 pr-3 text-right">{Object.values(data.porCategoria).reduce((s: number, v: any) => s + v.estoque, 0)}</td>
-                          <td className="py-2 text-right">{fmtBRL(Object.values(data.porCategoria).reduce((s: number, v: any) => s + v.valor, 0))}</td>
-                        </tr>
+                        {Object.keys(categoriasFiltradas).length > 1 && (
+                          <tr className="border-t-2 font-bold">
+                            <td className="py-2 pr-3">Total</td>
+                            <td className="py-2 pr-3 text-right">{Object.values(categoriasFiltradas).reduce((s: number, v: any) => s + v.itens, 0)}</td>
+                            <td className="py-2 pr-3 text-right">{Object.values(categoriasFiltradas).reduce((s: number, v: any) => s + v.estoque, 0)}</td>
+                            <td className="py-2 text-right">{fmtBRL(Object.values(categoriasFiltradas).reduce((s: number, v: any) => s + v.valor, 0))}</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -352,7 +564,7 @@ export default function DashEpis() {
             {/* ============================================================ */}
             {/* TABELA: Entregas por Obra (detalhada) */}
             {/* ============================================================ */}
-            {data.custoPorObraList?.length > 0 && (
+            {obrasFiltradas.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -371,18 +583,20 @@ export default function DashEpis() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.custoPorObraList.map((o: any, i: number) => (
+                        {obrasFiltradas.map((o: any, i: number) => (
                           <tr key={i} className="border-b border-border/50">
                             <td className="py-2 pr-3 font-medium">{o.nome}</td>
                             <td className="py-2 pr-3 text-right">{o.entregas}</td>
                             <td className="py-2 text-right font-bold">{o.unidades}</td>
                           </tr>
                         ))}
-                        <tr className="border-t-2 font-bold">
-                          <td className="py-2 pr-3">Total</td>
-                          <td className="py-2 pr-3 text-right">{data.custoPorObraList.reduce((s: number, o: any) => s + o.entregas, 0)}</td>
-                          <td className="py-2 text-right">{data.custoPorObraList.reduce((s: number, o: any) => s + o.unidades, 0)}</td>
-                        </tr>
+                        {obrasFiltradas.length > 1 && (
+                          <tr className="border-t-2 font-bold">
+                            <td className="py-2 pr-3">Total</td>
+                            <td className="py-2 pr-3 text-right">{obrasFiltradas.reduce((s: number, o: any) => s + o.entregas, 0)}</td>
+                            <td className="py-2 text-right">{obrasFiltradas.reduce((s: number, o: any) => s + o.unidades, 0)}</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

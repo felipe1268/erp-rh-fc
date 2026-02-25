@@ -2277,3 +2277,11 @@
 - [x] Redesenhar dashboard EPIs com gráficos: consumo mensal, custo por obra, top EPIs consumidos, CAs vencendo, distribuição por categoria
 - [x] Adicionar cards de insight: custo médio por funcionário, taxa de reposição, EPIs mais trocados, valor total investido
 - [x] 308 testes passando (25 arquivos)
+
+## Fase 44: Filtros responsivos no Dashboard EPIs
+- [x] Adicionar filtros responsivos: período (De/Até), categoria, obra
+- [x] Layout adaptável para mobile e desktop (grid 1→2→4 colunas)
+- [x] Botão Filtros com indicador de filtros ativos
+- [x] Tags de filtros ativos com remoção individual
+- [x] Botão Limpar filtros
+- [x] Gráficos e tabelas reagem aos filtros selecionados
