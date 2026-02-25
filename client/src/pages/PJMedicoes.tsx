@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { FileText, Plus, Search, Loader2, CheckCircle, XCircle, Clock, DollarSign } from "lucide-react";
+import { FileText, Plus, Search, Loader2, CheckCircle, XCircle, Clock, DollarSign, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 
@@ -106,6 +106,9 @@ export default function PJMedicoes() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
+          <Button variant="ghost" size="sm" className="mb-2 -ml-2 gap-1 text-muted-foreground hover:text-foreground" onClick={() => window.history.back()}>
+            <ArrowLeft className="w-4 h-4" /> Voltar
+          </Button>
           <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
             Medições PJ

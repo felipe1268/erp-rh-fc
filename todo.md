@@ -2285,3 +2285,6 @@
 - [x] Tags de filtros ativos com remoção individual
 - [x] Botão Limpar filtros
 - [x] Gráficos e tabelas reagem aos filtros selecionados
+
+## Fase 45: Botão de voltar na página Medições PJ
+- [x] Adicionar botão de voltar no header da página Medições PJ
