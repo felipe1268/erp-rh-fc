@@ -2270,3 +2270,10 @@
 - [x] Regra: percentual nunca pode regredir (validação mantida no backend)
 - [x] Sem exclusão individual — é lei, todos os CLT ativos são reajustados
 - [x] 8 testes unitários para sindical router
+
+## Fase 43: Melhorar Dashboard EPIs com mais insights
+- [x] Corrigir formatação R$ para padrão brasileiro em todo o sistema (Epis.tsx e RaioXFuncionario.tsx)
+- [x] Criar endpoint backend com analytics expandidos de EPIs (consumo mensal, custo por obra, distribuição por categoria, ranking)
+- [x] Redesenhar dashboard EPIs com gráficos: consumo mensal, custo por obra, top EPIs consumidos, CAs vencendo, distribuição por categoria
+- [x] Adicionar cards de insight: custo médio por funcionário, taxa de reposição, EPIs mais trocados, valor total investido
+- [x] 308 testes passando (25 arquivos)

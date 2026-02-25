@@ -145,7 +145,7 @@ export default function Epis() {
     onSuccess: (result: any) => {
       deliveriesQ.refetch(); episQ.refetch(); statsQ.refetch();
       if (result?.valorCobrado) {
-        toast.success(`Entrega registrada! Valor cobrado: R$ ${parseFloat(result.valorCobrado).toFixed(2)}`);
+        toast.success(`Entrega registrada! Valor cobrado: ${parseFloat(result.valorCobrado).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
       } else {
         toast.success("Entrega registrada!");
       }
@@ -322,7 +322,7 @@ export default function Epis() {
 
   const formatCurrency = (val: any) => {
     if (!val) return "—";
-    return `R$ ${parseFloat(String(val)).toFixed(2)}`;
+    return parseFloat(String(val)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   // BDI config agora fica em Configurações > Critérios do Sistema > EPIs / Segurança
@@ -574,7 +574,7 @@ export default function Epis() {
                     {episList.map((e: any) => (
                       <SelectItem key={e.id} value={String(e.id)}>
                         {e.nome} {e.ca ? `(CA: ${e.ca})` : ""} — Estoque: {e.quantidadeEstoque ?? 0}
-                        {e.valorProduto ? ` — R$ ${parseFloat(String(e.valorProduto)).toFixed(2)}` : ""}
+                        {e.valorProduto ? ` — ${parseFloat(String(e.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -847,7 +847,7 @@ export default function Epis() {
                     {epi?.valorProduto ? (() => {
                       const bdiPct = bdiQ.data?.bdiPercentual ?? 40;
                       const valorComBdi = parseFloat(String(epi.valorProduto)) * (1 + bdiPct / 100);
-                      return `R$ ${valorComBdi.toFixed(2)}`;
+                      return valorComBdi.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     })() : "—"}
                   </td>
                   <td className="p-2 text-center">{fichaDelivery.motivo || "Entrega regular"}</td>
@@ -999,7 +999,7 @@ export default function Epis() {
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground">Valor Inventário</p>
                 <p className="text-lg font-bold text-emerald-700">
-                  {stats.valorTotalInventario > 0 ? `R$ ${stats.valorTotalInventario.toFixed(2)}` : "—"}
+                  {stats.valorTotalInventario > 0 ? stats.valorTotalInventario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
                 </p>
               </CardContent>
             </Card>
@@ -1113,7 +1113,7 @@ export default function Epis() {
                               </Badge>
                             </td>
                             <td className="p-3 text-center text-xs">
-                              {epi.valorProduto ? `R$ ${parseFloat(String(epi.valorProduto)).toFixed(2)}` : "—"}
+                              {epi.valorProduto ? parseFloat(String(epi.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
                             </td>
                             <td className="p-3 text-center text-xs">
                               {epi.tempoMinimoTroca ? `${epi.tempoMinimoTroca} dias` : "—"}

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras } from "../../drizzle/schema";
+import { eq, and, desc, sql, isNull, gte } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 
@@ -398,6 +398,108 @@ export const episRouter = router({
       const ha30diasStr = ha30dias.toISOString().split("T")[0];
       const entregasMes = allDeliveries.filter(d => d.dataEntrega >= ha30diasStr).length;
 
+      // Unidades entregues (soma de quantidades)
+      const unidadesEntregues = allDeliveries.reduce((sum, d) => sum + (d.quantidade || 1), 0);
+
+      // ---- ANALYTICS EXPANDIDOS ----
+
+      // 1. Distribuição por categoria (EPI, Uniforme, Calçado)
+      const porCategoria = allEpis.reduce((acc, e) => {
+        const cat = e.categoria || 'EPI';
+        if (!acc[cat]) acc[cat] = { qtdItens: 0, estoque: 0, valor: 0 };
+        acc[cat].qtdItens++;
+        acc[cat].estoque += (e.quantidadeEstoque || 0);
+        acc[cat].valor += (e.valorProduto ? parseFloat(String(e.valorProduto)) : 0) * (e.quantidadeEstoque || 0);
+        return acc;
+      }, {} as Record<string, { qtdItens: number; estoque: number; valor: number }>);
+
+      // 2. Consumo mensal (últimos 12 meses)
+      const consumoMensal: { mes: string; entregas: number; unidades: number; custo: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const mesLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        const entregas = allDeliveries.filter(del => del.dataEntrega?.startsWith(mesKey));
+        const unidades = entregas.reduce((s, del) => s + (del.quantidade || 1), 0);
+        const custo = entregas.reduce((s, del) => s + parseFloat(String(del.valorCobrado || '0')), 0);
+        consumoMensal.push({ mes: mesLabel, entregas: entregas.length, unidades, custo });
+      }
+
+      // 3. Top 10 EPIs mais entregues
+      const epiEntregaCount: Record<number, { nome: string; ca: string; entregas: number; unidades: number }> = {};
+      allDeliveries.forEach(del => {
+        if (!epiEntregaCount[del.epiId]) {
+          const epiInfo = allEpis.find(e => e.id === del.epiId);
+          epiEntregaCount[del.epiId] = { nome: epiInfo?.nome || 'Desconhecido', ca: epiInfo?.ca || '-', entregas: 0, unidades: 0 };
+        }
+        epiEntregaCount[del.epiId].entregas++;
+        epiEntregaCount[del.epiId].unidades += (del.quantidade || 1);
+      });
+      const topEpis = Object.values(epiEntregaCount)
+        .sort((a, b) => b.unidades - a.unidades)
+        .slice(0, 10);
+
+      // 4. Top 10 funcionários que mais recebem EPIs
+      const funcEntregaCount: Record<number, { nome: string; entregas: number; unidades: number }> = {};
+      const allEmployees = await db.select({ id: employees.id, nome: employees.nomeCompleto })
+        .from(employees).where(eq(employees.companyId, input.companyId));
+      const empMap = new Map(allEmployees.map(e => [e.id, e.nome]));
+      allDeliveries.forEach(del => {
+        if (!funcEntregaCount[del.employeeId]) {
+          funcEntregaCount[del.employeeId] = { nome: empMap.get(del.employeeId) || 'Desconhecido', entregas: 0, unidades: 0 };
+        }
+        funcEntregaCount[del.employeeId].entregas++;
+        funcEntregaCount[del.employeeId].unidades += (del.quantidade || 1);
+      });
+      const topFuncionarios = Object.values(funcEntregaCount)
+        .sort((a, b) => b.unidades - a.unidades)
+        .slice(0, 10);
+
+      // 5. CAs vencendo nos próximos 90 dias
+      const em90dias = new Date();
+      em90dias.setDate(em90dias.getDate() + 90);
+      const em90diasStr = em90dias.toISOString().split("T")[0];
+      const casVencendo = allEpis
+        .filter(e => e.validadeCa && e.validadeCa >= hoje && e.validadeCa <= em90diasStr)
+        .map(e => ({ nome: e.nome, ca: e.ca, validadeCa: e.validadeCa, estoque: e.quantidadeEstoque || 0 }))
+        .sort((a, b) => (a.validadeCa || '').localeCompare(b.validadeCa || ''));
+
+      // 6. Custo médio por funcionário (baseado em valor cobrado nas entregas)
+      const totalCusto = allDeliveries.reduce((s, d) => s + parseFloat(String(d.valorCobrado || '0')), 0);
+      const funcUnicos = new Set(allDeliveries.map(d => d.employeeId)).size;
+      const custoMedioPorFunc = funcUnicos > 0 ? totalCusto / funcUnicos : 0;
+
+      // 7. Entregas por motivo de troca
+      const porMotivo: Record<string, number> = {};
+      allDeliveries.forEach(del => {
+        const motivo = del.motivoTroca || del.motivo || 'Entrega regular';
+        porMotivo[motivo] = (porMotivo[motivo] || 0) + 1;
+      });
+
+      // 8. Custo por obra
+      const allObras = await db.select({ id: obras.id, nome: obras.nome })
+        .from(obras).where(eq(obras.companyId, input.companyId));
+      const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
+      const custoPorObra: Record<string, { nome: string; entregas: number; unidades: number; custo: number }> = {};
+      for (const del of allDeliveries) {
+        const emp = allEmployees.find(e => e.id === del.employeeId);
+        // Get employee's obra from the full employee record
+        const empFull = await db.select({ obraAtualId: employees.obraAtualId }).from(employees).where(eq(employees.id, del.employeeId)).limit(1);
+        const obraId = empFull[0]?.obraAtualId;
+        const obraNome = obraId ? (obraMap.get(obraId) || 'Sem obra') : 'Sem obra';
+        if (!custoPorObra[obraNome]) custoPorObra[obraNome] = { nome: obraNome, entregas: 0, unidades: 0, custo: 0 };
+        custoPorObra[obraNome].entregas++;
+        custoPorObra[obraNome].unidades += (del.quantidade || 1);
+        custoPorObra[obraNome].custo += parseFloat(String(del.valorCobrado || '0'));
+      }
+      const custoPorObraList = Object.values(custoPorObra).sort((a, b) => b.unidades - a.unidades);
+
+      // 9. Alertas de desconto pendentes
+      const alertasPendentes = await db.select().from(epiDiscountAlerts)
+        .where(and(eq(epiDiscountAlerts.companyId, input.companyId), eq(epiDiscountAlerts.status, 'pendente')));
+      const valorDescontosPendentes = alertasPendentes.reduce((s, a) => s + parseFloat(String(a.valorTotal || '0')), 0);
+
       return {
         totalItens,
         estoqueTotal,
@@ -406,6 +508,19 @@ export const episRouter = router({
         totalEntregas,
         entregasMes,
         valorTotalInventario,
+        unidadesEntregues,
+        // Analytics expandidos
+        porCategoria,
+        consumoMensal,
+        topEpis,
+        topFuncionarios,
+        casVencendo,
+        custoMedioPorFunc,
+        porMotivo,
+        custoPorObraList,
+        alertasPendentes: alertasPendentes.length,
+        valorDescontosPendentes,
+        funcUnicos,
       };
     }),
 

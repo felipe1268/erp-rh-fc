@@ -1110,7 +1110,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         </div>
                         <p className="text-xs text-red-600">
                           Este colaborador possui {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').length} desconto(s) de EPI pendente(s) de validação pelo DP.
-                          Valor total: R$ {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}
+                          Valor total: {((raioX as any)?.epiDiscountAlerts || []).filter((a: any) => a.status === 'pendente').reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                       </div>
                     )}
@@ -1147,7 +1147,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <td className="p-3">{formatDate(e.dataDevolucao)}</td>
                                 <td className="p-3">
                                   <span className={isMauUso ? 'text-red-600 font-semibold' : ''}>{e.motivo || "Entrega regular"}</span>
-                                  {isMauUso && e.valorCobranca && <span className="ml-1 text-xs text-red-500">(R$ {parseFloat(e.valorCobranca).toFixed(2)})</span>}
+                                  {isMauUso && e.valorCobranca && <span className="ml-1 text-xs text-red-500">({parseFloat(e.valorCobranca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span>}
                                 </td>
                                 <td className="p-3 text-center">
                                   {hasLink ? (
@@ -1184,17 +1184,17 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-amber-700">{pendentes.length}</p>
                           <p className="text-xs text-amber-600 font-medium">Pendentes</p>
-                          <p className="text-xs text-amber-500 mt-1">R$ {pendentes.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}</p>
+                          <p className="text-xs text-amber-500 mt-1">{pendentes.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-green-700">{confirmados.length}</p>
                           <p className="text-xs text-green-600 font-medium">Confirmados</p>
-                          <p className="text-xs text-green-500 mt-1">R$ {confirmados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}</p>
+                          <p className="text-xs text-green-500 mt-1">{confirmados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                           <p className="text-2xl font-bold text-gray-500">{cancelados.length}</p>
                           <p className="text-xs text-gray-500 font-medium">Cancelados</p>
-                          <p className="text-xs text-gray-400 mt-1">R$ {cancelados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toFixed(2)}</p>
+                          <p className="text-xs text-gray-400 mt-1">{cancelados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                       </div>
                       {/* Tabela */}
@@ -1216,8 +1216,8 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <td className="p-3 font-medium text-xs">{a.epiNome || "-"}{a.ca ? ` (CA: ${a.ca})` : ''}</td>
                                 <td className="p-3 text-xs">{motivoLabel(a.motivoCobranca)}</td>
                                 <td className="p-3 text-right font-mono text-xs">{a.quantidade}</td>
-                                <td className="p-3 text-right font-mono text-xs">R$ {parseFloat(a.valorUnitario || '0').toFixed(2)}</td>
-                                <td className="p-3 text-right font-mono font-bold text-red-600">R$ {parseFloat(a.valorTotal || '0').toFixed(2)}</td>
+                                <td className="p-3 text-right font-mono text-xs">{parseFloat(a.valorUnitario || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                <td className="p-3 text-right font-mono font-bold text-red-600">{parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                 <td className="p-3 text-xs">{a.mesReferencia || "-"}</td>
                                 <td className="p-3 text-center">
                                   <Badge variant={a.status === 'pendente' ? 'secondary' : a.status === 'confirmado' ? 'destructive' : 'outline'}
@@ -1230,7 +1230,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                     <div className="flex items-center justify-center gap-1">
                                       <button
                                         onClick={() => {
-                                          if (confirm('Confirmar desconto de R$ ' + parseFloat(a.valorTotal || '0').toFixed(2) + ' na folha do colaborador?')) {
+                                          if (confirm('Confirmar desconto de ' + parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) + ' na folha do colaborador?')) {
                                             fetch('/api/trpc/epis.validateDiscount', {
                                               method: 'POST',
                                               headers: { 'Content-Type': 'application/json' },

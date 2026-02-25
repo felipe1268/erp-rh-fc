@@ -5,6 +5,7 @@ import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
+  epiDiscountAlerts,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
 
@@ -701,30 +702,43 @@ async function getDashEpis(companyId: number) {
   const hoje = new Date().toISOString().split("T")[0];
 
   const allEpis = await db.select().from(epis).where(eq(epis.companyId, companyId));
-  const allDel = await db.select().from(epiDeliveries).where(eq(epiDeliveries.companyId, companyId));
-  const allEmps = await db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao })
-    .from(employees).where(and(eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`));
+  const allDel = await db.select().from(epiDeliveries)
+    .where(and(eq(epiDeliveries.companyId, companyId), isNull(epiDeliveries.deletedAt)));
+  const allEmps = await db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, obraAtualId: employees.obraAtualId })
+    .from(employees).where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)));
   const empMap = new Map(allEmps.map(e => [e.id, e]));
+  const allObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(eq(obras.companyId, companyId));
+  const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
   const estoqueTotal = allEpis.reduce((s, e) => s + (e.quantidadeEstoque || 0), 0);
   const estoqueBaixo = allEpis.filter(e => (e.quantidadeEstoque || 0) <= 5);
   const caVencido = allEpis.filter(e => e.validadeCa && e.validadeCa < hoje);
 
+  // Valor total do inventário
+  const valorTotalInventario = allEpis.reduce((s, e) => {
+    const v = e.valorProduto ? parseFloat(String(e.valorProduto)) : 0;
+    return s + v * (e.quantidadeEstoque || 0);
+  }, 0);
+
   // Entregas por mês (últimos 12 meses)
-  const porMes: Record<string, number> = {};
-  for (const d of allDel) {
-    const mes = d.dataEntrega?.substring(0, 7) || "?";
-    porMes[mes] = (porMes[mes] || 0) + d.quantidade;
+  const consumoMensal: { mes: string; mesKey: string; entregas: number; unidades: number; custo: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const mesLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+    const entregas = allDel.filter(del => del.dataEntrega?.startsWith(mesKey));
+    const unidades = entregas.reduce((s, del) => s + (del.quantidade || 1), 0);
+    const custo = entregas.reduce((s, del) => s + parseFloat(String(del.valorCobrado || '0')), 0);
+    consumoMensal.push({ mes: mesLabel, mesKey, entregas: entregas.length, unidades, custo });
   }
-  const evolucaoMensal = Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b))
-    .map(([mes, qtd]) => ({ mes, qtd }));
 
   // Top EPIs mais entregues
-  const porEpi: Record<number, { nome: string; qtd: number }> = {};
+  const porEpi: Record<number, { nome: string; ca: string; qtd: number }> = {};
   for (const d of allDel) {
     if (!porEpi[d.epiId]) {
       const ep = allEpis.find(e => e.id === d.epiId);
-      porEpi[d.epiId] = { nome: ep?.nome || "EPI #" + d.epiId, qtd: 0 };
+      porEpi[d.epiId] = { nome: ep?.nome || "EPI #" + d.epiId, ca: ep?.ca || '-', qtd: 0 };
     }
     porEpi[d.epiId].qtd += d.quantidade;
   }
@@ -748,6 +762,60 @@ async function getDashEpis(companyId: number) {
     .map(e => ({ nome: e.nome, ca: e.ca, estoque: e.quantidadeEstoque || 0, validadeCa: e.validadeCa }))
     .sort((a, b) => a.estoque - b.estoque).slice(0, 10);
 
+  // Distribuição por categoria
+  const porCategoria: Record<string, { itens: number; estoque: number; valor: number }> = {};
+  allEpis.forEach(e => {
+    const cat = e.categoria === 'Calcado' ? 'Calçado' : (e.categoria || 'EPI');
+    if (!porCategoria[cat]) porCategoria[cat] = { itens: 0, estoque: 0, valor: 0 };
+    porCategoria[cat].itens++;
+    porCategoria[cat].estoque += (e.quantidadeEstoque || 0);
+    porCategoria[cat].valor += (e.valorProduto ? parseFloat(String(e.valorProduto)) : 0) * (e.quantidadeEstoque || 0);
+  });
+
+  // CAs vencendo nos próximos 90 dias
+  const em90dias = new Date();
+  em90dias.setDate(em90dias.getDate() + 90);
+  const em90diasStr = em90dias.toISOString().split("T")[0];
+  const casVencendo = allEpis
+    .filter(e => e.validadeCa && e.validadeCa >= hoje && e.validadeCa <= em90diasStr)
+    .map(e => ({ nome: e.nome, ca: e.ca, validadeCa: e.validadeCa, estoque: e.quantidadeEstoque || 0 }))
+    .sort((a, b) => (a.validadeCa || '').localeCompare(b.validadeCa || ''));
+
+  // Custo por obra
+  const custoPorObra: Record<string, { nome: string; entregas: number; unidades: number }> = {};
+  allDel.forEach(del => {
+    const emp = empMap.get(del.employeeId);
+    const obraNome = emp?.obraAtualId ? (obraMap.get(emp.obraAtualId) || 'Sem obra') : 'Sem obra';
+    if (!custoPorObra[obraNome]) custoPorObra[obraNome] = { nome: obraNome, entregas: 0, unidades: 0 };
+    custoPorObra[obraNome].entregas++;
+    custoPorObra[obraNome].unidades += (del.quantidade || 1);
+  });
+  const custoPorObraList = Object.values(custoPorObra).sort((a, b) => b.unidades - a.unidades);
+
+  // Entregas por motivo
+  const porMotivo: Record<string, number> = {};
+  allDel.forEach(del => {
+    const motivo = del.motivoTroca || del.motivo || 'Entrega regular';
+    const label = motivo === 'mau_uso' ? 'Mau uso' : motivo === 'perda' ? 'Perda' : motivo === 'furto' ? 'Furto' : motivo === 'extravio' ? 'Extravio' : motivo === 'desgaste' ? 'Desgaste' : motivo;
+    porMotivo[label] = (porMotivo[label] || 0) + 1;
+  });
+
+  // Alertas de desconto pendentes
+  const alertasPendentes = await db.select().from(epiDiscountAlerts)
+    .where(and(eq(epiDiscountAlerts.companyId, companyId), eq(epiDiscountAlerts.status, 'pendente')));
+  const valorDescontosPendentes = alertasPendentes.reduce((s, a) => s + parseFloat(String(a.valorTotal || '0')), 0);
+
+  // Custo médio por funcionário
+  const totalCusto = allDel.reduce((s, d) => s + parseFloat(String(d.valorCobrado || '0')), 0);
+  const funcUnicos = new Set(allDel.map(d => d.employeeId)).size;
+  const custoMedioPorFunc = funcUnicos > 0 ? totalCusto / funcUnicos : 0;
+
+  // Entregas últimos 30 dias
+  const ha30dias = new Date();
+  ha30dias.setDate(ha30dias.getDate() - 30);
+  const ha30diasStr = ha30dias.toISOString().split("T")[0];
+  const entregasMes = allDel.filter(d => d.dataEntrega >= ha30diasStr).length;
+
   return {
     resumo: {
       totalItens: allEpis.length,
@@ -756,12 +824,25 @@ async function getDashEpis(companyId: number) {
       caVencido: caVencido.length,
       totalEntregas: allDel.length,
       totalUnidadesEntregues: allDel.reduce((s, d) => s + d.quantidade, 0),
+      valorTotalInventario,
+      entregasMes,
+      custoMedioPorFunc,
+      funcUnicos,
+      alertasPendentes: alertasPendentes.length,
+      valorDescontosPendentes,
+      casVencendoCount: casVencendo.length,
     },
-    evolucaoMensal,
+    consumoMensal,
     topEpis,
     topFuncionarios,
     estoqueCritico,
     caVencidos: caVencido.map(e => ({ nome: e.nome, ca: e.ca, validadeCa: e.validadeCa })),
+    casVencendo,
+    porCategoria,
+    custoPorObraList,
+    porMotivo,
+    // Legacy compat
+    evolucaoMensal: consumoMensal.map(c => ({ mes: c.mesKey, qtd: c.unidades })),
   };
 }
 
