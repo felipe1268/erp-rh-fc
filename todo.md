@@ -2245,3 +2245,16 @@
 - [x] Eliminar campos duplicados entre abas (removida aba duplicada)
 - [x] Criar aba Sindical separada (Sindicato, CCT, Contribuição, Dissídio)
 - [x] Validar que nenhum campo ficou duplicado ou fora de contexto (0 erros TS)
+
+## Fase 39: Limpeza de campos desnecessários no cadastro
+- [x] Remover campo Cesta Básica da aba Benefícios (substituído por VA) — já removido em sessão anterior
+- [x] Remover campo DDS da aba Obrigações (já existe módulo próprio na SST) — já removido em sessão anterior
+
+## Fase 40: Dissídio - Regra "nunca regredir" + Critério anual
+- [x] Regra: dissídio nunca pode regredir salário, só aumentar (validação backend criar + atualizar)
+- [x] Critério de % dissídio anual nos Critérios do Sistema (categoria adicionada em Configurações)
+- [x] Aplicação em massa do reajuste anual em todos os salários da base (tela Dissidio.tsx completa)
+- [x] Remover Cesta Básica da aba Benefícios — já removido
+- [x] Remover DDS da aba Obrigações — já removido
+- [x] 26 testes unitários para dissídio (regra não regressão, cálculo reajuste, retroativo, simulação em massa)
+- [x] Total: 300 testes passando (24 arquivos)

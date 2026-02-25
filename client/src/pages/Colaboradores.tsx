@@ -1885,7 +1885,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
               </div>
             </TabsContent>
 
-            {/* ===== ABA BENEFÍCIOS (VT, VA/VR, Farmácia, Cesta Básica) ===== */}
+            {/* ===== ABA BENEFÍCIOS (VT, VA/VR, Farmácia, Plano Saúde) ===== */}
             <TabsContent value="beneficios" className="pt-4">
               <div className="space-y-5">
                 {/* Vale Transporte */}
@@ -1969,23 +1969,6 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🎁 Outros Benefícios</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Cesta Básica</Label>
-                      <Select value={form.cestaBasica || "none"} onValueChange={v => set("cestaBasica", v === "none" ? "" : v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Selecione</SelectItem>
-                          <SelectItem value="sim">Sim</SelectItem>
-                          <SelectItem value="nao">Não</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {form.cestaBasica === "sim" && (
-                      <div>
-                        <Label className="text-xs font-medium text-muted-foreground">Valor Cesta (R$)</Label>
-                        <Input value={form.cestaBasicaValor ?? ""} onChange={e => set("cestaBasicaValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
-                      </div>
-                    )}
-                    <div>
                       <Label className="text-xs font-medium text-muted-foreground">Auxílio Farmácia</Label>
                       <Select value={form.auxFarmacia || "none"} onValueChange={v => set("auxFarmacia", v === "none" ? "" : v)}>
                         <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -2030,7 +2013,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
               </div>
             </TabsContent>
 
-            {/* ===== ABA OBRIGAÇÕES LEGAIS (Pensão, Licença) ===== */}
+            {/* ===== ABA OBRIGAÇÕES LEGAIS (Pensão, Licença, Seguro de Vida) ===== */}
             <TabsContent value="obrigacoes" className="pt-4">
               <div className="space-y-5">
                 {/* Pensão Alimentícia */}
@@ -2146,29 +2129,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                   </div>
                 </div>
 
-                {/* DDS */}
-                <div>
-                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">🦺 DDS (Diálogo Diário de Segurança)</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Participa do DDS?</Label>
-                      <Select value={form.dds || "none"} onValueChange={v => set("dds", v === "none" ? "" : v)}>
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Selecione</SelectItem>
-                          <SelectItem value="sim">Sim</SelectItem>
-                          <SelectItem value="nao">Não</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {form.dds === "sim" && (
-                      <div>
-                        <Label className="text-xs font-medium text-muted-foreground">Valor DDS (R$)</Label>
-                        <Input value={form.ddsValor ?? ""} onChange={e => set("ddsValor", e.target.value)} className="bg-input mt-1" placeholder="0,00" />
-                      </div>
-                    )}
-                  </div>
-                </div>
+
               </div>
             </TabsContent>
 

@@ -99,6 +99,30 @@ export const dissidioRouter = router({
       ));
     if (existente) throw new TRPCError({ code: 'CONFLICT', message: `Já existe dissídio cadastrado para o ano ${input.anoReferencia}` });
     
+    // ===== REGRA DE NEGÓCIO CRÍTICA =====
+    // Percentual de dissídio NUNCA pode regredir (diminuir) em relação ao ano anterior
+    // Fundamentação: Art. 468 CLT — Alteração contratual lesiva é vedada
+    // O reajuste salarial coletivo é um direito adquirido da categoria
+    const percentualNovo = parseFloat(input.percentualReajuste);
+    const dissidiosAnteriores = await db.select().from(dissidios)
+      .where(and(
+        eq(dissidios.companyId, input.companyId),
+        sql`${dissidios.anoReferencia} < ${input.anoReferencia}`,
+        sql`${dissidios.status} != 'cancelado'`,
+      ))
+      .orderBy(desc(dissidios.anoReferencia))
+      .limit(1);
+    
+    if (dissidiosAnteriores.length > 0) {
+      const percentualAnterior = parseFloat(dissidiosAnteriores[0].percentualReajuste);
+      if (percentualNovo < percentualAnterior) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Percentual de reajuste não pode ser menor que o ano anterior (${dissidiosAnteriores[0].anoReferencia}: ${percentualAnterior}%). Valor informado: ${percentualNovo}%. Art. 468 CLT — Vedada alteração contratual lesiva.`,
+        });
+      }
+    }
+    
     const [result] = await db.insert(dissidios).values({
       ...input,
       criadoPor: ctx.user.name || 'Sistema',
@@ -133,6 +157,33 @@ export const dissidioRouter = router({
     if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN' });
     const db = (await getDb())!;
     const { id, ...data } = input;
+    
+    // Se está atualizando o percentual, validar regra de não regressão
+    if (data.percentualReajuste) {
+      const [dissidioAtual] = await db.select().from(dissidios).where(eq(dissidios.id, id));
+      if (dissidioAtual) {
+        const percentualNovo = parseFloat(data.percentualReajuste);
+        const dissidiosAnteriores = await db.select().from(dissidios)
+          .where(and(
+            eq(dissidios.companyId, dissidioAtual.companyId),
+            sql`${dissidios.anoReferencia} < ${dissidioAtual.anoReferencia}`,
+            sql`${dissidios.status} != 'cancelado'`,
+          ))
+          .orderBy(desc(dissidios.anoReferencia))
+          .limit(1);
+        
+        if (dissidiosAnteriores.length > 0) {
+          const percentualAnterior = parseFloat(dissidiosAnteriores[0].percentualReajuste);
+          if (percentualNovo < percentualAnterior) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Percentual de reajuste não pode ser menor que o ano anterior (${dissidiosAnteriores[0].anoReferencia}: ${percentualAnterior}%). Valor informado: ${percentualNovo}%. Art. 468 CLT — Vedada alteração contratual lesiva.`,
+            });
+          }
+        }
+      }
+    }
+    
     await db.update(dissidios).set(data).where(eq(dissidios.id, id));
     return { success: true };
   }),

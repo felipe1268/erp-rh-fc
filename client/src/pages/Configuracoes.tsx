@@ -13,7 +13,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2 } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -62,6 +62,7 @@ const CATEGORIAS = [
   { key: "rescisao", label: "Rescisão", icon: UserX, color: "text-gray-600", bgColor: "bg-gray-50", borderColor: "border-gray-200" },
   { key: "epi", label: "EPIs / Segurança", icon: HardHat, color: "text-emerald-600", bgColor: "bg-emerald-50", borderColor: "border-emerald-200" },
   { key: "atestados", label: "Atestados", icon: ClipboardList, color: "text-violet-600", bgColor: "bg-violet-50", borderColor: "border-violet-200" },
+  { key: "dissidio", label: "Dissídio Coletivo", icon: TrendingUp, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200" },
 ];
 
 type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he";
