@@ -73,6 +73,7 @@ const menuSections = [
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
       { icon: Wifi, label: "Dixi Ponto", path: "/dixi-ponto" },
+      { icon: Clock, label: "Solicitação de HE", path: "/solicitacao-he" },
     ],
   },
   {
@@ -158,6 +159,8 @@ const ICON_MAP: Record<string, any> = {
   "Férias": Palmtree,
   "CIPA": Shield,
   "Contratos PJ": FileSignature,
+  "Solicitação de HE": Clock,
+  "Revisões do Sistema": GitBranch,
 };
 
 const allMenuItems = menuSections.flatMap(s => s.items);

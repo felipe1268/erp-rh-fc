@@ -1787,3 +1787,132 @@ export const epiDiscountAlerts = mysqlTable("epi_discount_alerts", {
 	index("eda_status").on(table.status),
 	index("eda_mes").on(table.companyId, table.mesReferencia),
 ]);
+
+
+// ============================================================
+// Solicitações de Horas Extras
+// Fluxo: Gestor solicita → Admin Master aprova/rejeita
+// No fechamento, sistema cruza batida com solicitação aprovada
+export const heSolicitacoes = mysqlTable("he_solicitacoes", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	obraId: int(),
+	dataSolicitacao: date({ mode: 'string' }).notNull(), // Data em que a HE será realizada
+	horaInicio: varchar({ length: 10 }), // Horário previsto de início da HE
+	horaFim: varchar({ length: 10 }), // Horário previsto de fim da HE
+	motivo: text().notNull(),
+	status: mysqlEnum(['pendente','aprovada','rejeitada','cancelada']).default('pendente').notNull(),
+	solicitadoPor: varchar({ length: 255 }).notNull(), // Nome do solicitante
+	solicitadoPorId: int().notNull(), // ID do usuário solicitante
+	aprovadoPor: varchar({ length: 255 }), // Nome do admin que aprovou/rejeitou
+	aprovadoPorId: int(), // ID do admin
+	aprovadoEm: timestamp({ mode: 'string' }),
+	motivoRejeicao: text(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("he_sol_company").on(table.companyId),
+	index("he_sol_obra").on(table.obraId),
+	index("he_sol_data").on(table.dataSolicitacao),
+	index("he_sol_status").on(table.status),
+	index("he_sol_company_status").on(table.companyId, table.status),
+]);
+
+// Funcionários vinculados a uma solicitação de HE
+export const heSolicitacaoFuncionarios = mysqlTable("he_solicitacao_funcionarios", {
+	id: int().autoincrement().notNull(),
+	solicitacaoId: int().notNull(),
+	employeeId: int().notNull(),
+	horasRealizadas: varchar({ length: 10 }), // Preenchido após fechamento
+	status: mysqlEnum(['pendente','realizada','nao_realizada']).default('pendente').notNull(),
+	observacao: text(),
+}, (table) => [
+	index("he_sol_func_sol").on(table.solicitacaoId),
+	index("he_sol_func_emp").on(table.employeeId),
+]);
+
+// ============================================================
+// Descontos calculados automaticamente pelo motor CLT
+// Gerados no fechamento de ponto, revisados pelo RH
+export const pontoDescontos = mysqlTable("ponto_descontos", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(), // YYYY-MM
+	data: date({ mode: 'string' }).notNull(), // Data do evento
+	tipo: mysqlEnum([
+		'atraso',           // Atraso além da tolerância
+		'saida_antecipada', // Saída antes do horário
+		'falta_injustificada', // Falta sem justificativa
+		'falta_dsr',        // Perda do DSR por falta/atraso na semana
+		'falta_feriado',    // Perda do feriado por falta na semana
+		'he_nao_autorizada' // Hora extra sem solicitação aprovada
+	]).notNull(),
+	// Valores de tempo
+	minutosAtraso: int().default(0), // Minutos de atraso/saída antecipada
+	minutosHe: int().default(0), // Minutos de HE não autorizada
+	// Valores monetários calculados
+	valorDesconto: varchar({ length: 20 }).default('0'), // Valor em R$ do desconto
+	valorDsr: varchar({ length: 20 }).default('0'), // Valor em R$ do DSR perdido
+	valorTotal: varchar({ length: 20 }).default('0'), // valorDesconto + valorDsr
+	// Detalhes do cálculo
+	baseCalculo: text(), // JSON com detalhes: salário, valor hora, fórmula usada
+	// Referências
+	timeRecordId: int(), // FK para time_records
+	heSolicitacaoId: int(), // FK para he_solicitacoes (quando HE não autorizada)
+	// Controle de revisão
+	status: mysqlEnum(['calculado','revisado','abonado','fechado']).default('calculado').notNull(),
+	abonadoPor: varchar({ length: 255 }),
+	abonadoEm: timestamp({ mode: 'string' }),
+	motivoAbono: text(),
+	// Artigo CLT de referência
+	fundamentacaoLegal: varchar({ length: 255 }), // Ex: "Art. 58 §1º CLT", "Lei 605/49 Art. 6º"
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("pd_company_mes").on(table.companyId, table.mesReferencia),
+	index("pd_employee_mes").on(table.employeeId, table.mesReferencia),
+	index("pd_tipo").on(table.tipo),
+	index("pd_status").on(table.status),
+	index("pd_data").on(table.data),
+]);
+
+// ============================================================
+// Resumo mensal de descontos por funcionário (consolidado)
+export const pontoDescontosResumo = mysqlTable("ponto_descontos_resumo", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	mesReferencia: varchar({ length: 7 }).notNull(),
+	// Contadores
+	totalAtrasos: int().default(0),
+	totalMinutosAtraso: int().default(0),
+	totalFaltasInjustificadas: int().default(0),
+	totalSaidasAntecipadas: int().default(0),
+	totalMinutosSaidaAntecipada: int().default(0),
+	totalDsrPerdidos: int().default(0),
+	totalFeriadosPerdidos: int().default(0),
+	totalHeNaoAutorizadas: int().default(0),
+	totalMinutosHeNaoAutorizada: int().default(0),
+	// Valores monetários
+	valorTotalAtrasos: varchar({ length: 20 }).default('0'),
+	valorTotalFaltas: varchar({ length: 20 }).default('0'),
+	valorTotalDsr: varchar({ length: 20 }).default('0'),
+	valorTotalFeriados: varchar({ length: 20 }).default('0'),
+	valorTotalSaidasAntecipadas: varchar({ length: 20 }).default('0'),
+	valorTotalHeNaoAutorizada: varchar({ length: 20 }).default('0'),
+	valorTotalDescontos: varchar({ length: 20 }).default('0'), // Soma de todos
+	// Reflexo nas férias (Art. 130 CLT)
+	faltasAcumuladasPeriodoAquisitivo: int().default(0),
+	diasFeriasResultante: int().default(30), // 30, 24, 18, 12 ou 0
+	// Status
+	status: mysqlEnum(['calculado','revisado','fechado']).default('calculado').notNull(),
+	revisadoPor: varchar({ length: 255 }),
+	revisadoEm: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("pdr_company_mes").on(table.companyId, table.mesReferencia),
+	index("pdr_employee_mes").on(table.employeeId, table.mesReferencia),
+]);

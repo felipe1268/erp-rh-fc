@@ -1,0 +1,178 @@
+{
+  "query": "SHOW COLUMNS FROM ponto_descontos;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW COLUMNS FROM ponto_descontos;",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "companyId",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "employeeId",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "mesReferencia",
+      "Type": "varchar(7)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "data",
+      "Type": "date",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "tipo",
+      "Type": "enum('atraso','saida_antecipada','falta_injustificada','falta_dsr','falta_feriado','he_nao_autorizada')",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "minutosAtraso",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "minutosHe",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "valorDesconto",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "valorDsr",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "valorTotal",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "baseCalculo",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "timeRecordId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "heSolicitacaoId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "enum('calculado','revisado','abonado','fechado')",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "calculado",
+      "Extra": ""
+    },
+    {
+      "Field": "abonadoPor",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "abonadoEm",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "motivoAbono",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "fundamentacaoLegal",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "createdAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "updatedAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint\tNO\t\tNULL\tauto_increment\ncompanyId\tint\tNO\tMUL\tNULL\t\nemployeeId\tint\tNO\tMUL\tNULL\t\nmesReferencia\tvarchar(7)\tNO\t\tNULL\t\ndata\tdate\tNO\tMUL\tNULL\t\ntipo\tenum('atraso','saida_antecipada','falta_injustificada','falta_dsr','falta_feriado','he_nao_autorizada')\tNO\tMUL\tNULL\t\nminutosAtraso\tint\tYES\t\t0\t\nminutosHe\tint\tYES\t\t0\t\nvalorDesconto\tvarchar(20)\tYES\t\t0\t\nvalorDsr\tvarchar(20)\tYES\t\t0\t\nvalorTotal\tvarchar(20)\tYES\t\t0\t\nbaseCalculo\ttext\tYES\t\tNULL\t\ntimeRecordId\tint\tYES\t\tNULL\t\nheSolicitacaoId\tint\tYES\t\tNULL\t\nstatus\tenum('calculado','revisado','abonado','fechado')\tNO\tMUL\tcalculado\t\nabonadoPor\tvarchar(255)\tYES\t\tNULL\t\nabonadoEm\ttimestamp\tYES\t\tNULL\t\nmotivoAbono\ttext\tYES\t\tNULL\t\nfundamentacaoLegal\tvarchar(255)\tYES\t\tNULL\t\ncreatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\nupdatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\tDEFAULT_GENERATED on update CURRENT_TIMESTAMP\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

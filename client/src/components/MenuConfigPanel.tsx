@@ -23,6 +23,7 @@ const ICON_MAP: Record<string, any> = {
   "EPIs": HardHat, "Jurídico": Gavel, "Usuários e Permissões": Lock,
   "Auditoria do Sistema": FileText, "Configurações": Settings,
   "Avaliação de Desempenho": Star,
+  "Solicitação de HE": Clock,
 };
 
 const PATH_ICON_MAP: Record<string, any> = {
@@ -38,6 +39,7 @@ const PATH_ICON_MAP: Record<string, any> = {
   "/dashboards/epis": HardHat, "/dashboards/juridico": Gavel,
   "/usuarios": Lock, "/auditoria": FileText, "/configuracoes": Settings,
   "/avaliacao": Star,
+  "/solicitacao-he": Clock,
 };
 const DEFAULT_MENU = [
   { title: "Principal", items: [{ label: "Painel", path: "/", visible: true }] },
@@ -57,6 +59,7 @@ const DEFAULT_MENU = [
     { label: "Vale Alimentação", path: "/vale-alimentacao", visible: true },
     { label: "Controle de EPIs", path: "/epis", visible: true },
     { label: "Dixi Ponto", path: "/dixi-ponto", visible: true },
+    { label: "Solicitação de HE", path: "/solicitacao-he", visible: true },
   ]},
   { title: "Gestão de Pessoas", items: [
     { label: "Aviso Prévio", path: "/aviso-previo", visible: true },

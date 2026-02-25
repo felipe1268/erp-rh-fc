@@ -1454,7 +1454,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                               </div>
                               <div class="info-grid">
                                 <div class="info-item"><strong>Colaborador:</strong> ${empName}</div>
-                                <div class="info-item"><strong>Matrícula:</strong> ${empMatricula || '-'}</div>
+                                <div class="info-item"><strong>eSocial:</strong> ${empMatricula || '-'}</div>
                                 <div class="info-item"><strong>Função:</strong> ${funcaoDetalhes.nome}</div>
                                 <div class="info-item"><strong>CBO:</strong> ${funcaoDetalhes.cbo || '-'}</div>
                                 <div class="info-item"><strong>Setor:</strong> ${emp?.setor || '-'}</div>

@@ -51,6 +51,8 @@ import { cipaRouter } from "./routers/cipa";
 import { pjContractsRouter } from "./routers/pjContracts";
 import { insuranceRouter } from "./routers/insurance";
 import { dixiPontoRouter } from "./routers/dixiPonto";
+import { heSolicitacoesRouter } from "./routers/heSolicitacoes";
+import { pontoDescontosRouter } from "./routers/pontoDescontos";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -636,6 +638,16 @@ export const appRouter = router({
   // DIXI PONTO (AFD)
   // ============================================================
   dixiPonto: dixiPontoRouter,
+
+  // ============================================================
+  // SOLICITAÇÃO DE HORAS EXTRAS
+  // ============================================================
+  heSolicitacoes: heSolicitacoesRouter,
+
+  // ============================================================
+  // DESCONTOS CLT (Motor de Cálculo)
+  // ============================================================
+  pontoDescontos: pontoDescontosRouter,
 
   // ============================================================
   // PROCESSOS TRABALHISTAS

@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "cc20bb55-12e5-43e6-8114-f6065165c0fd",
-  "prevId": "9b19bbf3-7d10-4106-85a4-cd34c970a90a",
+  "id": "24c31325-c3dd-484f-9a54-aecc5d222cb9",
+  "prevId": "cc20bb55-12e5-43e6-8114-f6065165c0fd",
   "tables": {
     "accidents": {
       "name": "accidents",
@@ -4911,6 +4911,244 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
+    "he_solicitacao_funcionarios": {
+      "name": "he_solicitacao_funcionarios",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "solicitacaoId": {
+          "name": "solicitacaoId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "employeeId": {
+          "name": "employeeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "horasRealizadas": {
+          "name": "horasRealizadas",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('pendente','realizada','nao_realizada')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pendente'"
+        },
+        "observacao": {
+          "name": "observacao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "he_sol_func_sol": {
+          "name": "he_sol_func_sol",
+          "columns": [
+            "solicitacaoId"
+          ],
+          "isUnique": false
+        },
+        "he_sol_func_emp": {
+          "name": "he_sol_func_emp",
+          "columns": [
+            "employeeId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "he_solicitacoes": {
+      "name": "he_solicitacoes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "companyId": {
+          "name": "companyId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "obraId": {
+          "name": "obraId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dataSolicitacao": {
+          "name": "dataSolicitacao",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "horaInicio": {
+          "name": "horaInicio",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "horaFim": {
+          "name": "horaFim",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "motivo": {
+          "name": "motivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('pendente','aprovada','rejeitada','cancelada')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pendente'"
+        },
+        "solicitadoPor": {
+          "name": "solicitadoPor",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "solicitadoPorId": {
+          "name": "solicitadoPorId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aprovadoPor": {
+          "name": "aprovadoPor",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "aprovadoPorId": {
+          "name": "aprovadoPorId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "aprovadoEm": {
+          "name": "aprovadoEm",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "motivoRejeicao": {
+          "name": "motivoRejeicao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "observacoes": {
+          "name": "observacoes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "he_sol_company": {
+          "name": "he_sol_company",
+          "columns": [
+            "companyId"
+          ],
+          "isUnique": false
+        },
+        "he_sol_obra": {
+          "name": "he_sol_obra",
+          "columns": [
+            "obraId"
+          ],
+          "isUnique": false
+        },
+        "he_sol_data": {
+          "name": "he_sol_data",
+          "columns": [
+            "dataSolicitacao"
+          ],
+          "isUnique": false
+        },
+        "he_sol_status": {
+          "name": "he_sol_status",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "he_sol_company_status": {
+          "name": "he_sol_company_status",
+          "columns": [
+            "companyId",
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
     "hydrants": {
       "name": "hydrants",
       "columns": {
@@ -7588,6 +7826,448 @@
           "name": "ponto_consolidacao_company_mes",
           "columns": [
             "companyId",
+            "mesReferencia"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "ponto_descontos": {
+      "name": "ponto_descontos",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "companyId": {
+          "name": "companyId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "employeeId": {
+          "name": "employeeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mesReferencia": {
+          "name": "mesReferencia",
+          "type": "varchar(7)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "data": {
+          "name": "data",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tipo": {
+          "name": "tipo",
+          "type": "enum('atraso','saida_antecipada','falta_injustificada','falta_dsr','falta_feriado','he_nao_autorizada')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "minutosAtraso": {
+          "name": "minutosAtraso",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "minutosHe": {
+          "name": "minutosHe",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "valorDesconto": {
+          "name": "valorDesconto",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorDsr": {
+          "name": "valorDsr",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorTotal": {
+          "name": "valorTotal",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "baseCalculo": {
+          "name": "baseCalculo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "timeRecordId": {
+          "name": "timeRecordId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "heSolicitacaoId": {
+          "name": "heSolicitacaoId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('calculado','revisado','abonado','fechado')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'calculado'"
+        },
+        "abonadoPor": {
+          "name": "abonadoPor",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "abonadoEm": {
+          "name": "abonadoEm",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "motivoAbono": {
+          "name": "motivoAbono",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fundamentacaoLegal": {
+          "name": "fundamentacaoLegal",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "pd_company_mes": {
+          "name": "pd_company_mes",
+          "columns": [
+            "companyId",
+            "mesReferencia"
+          ],
+          "isUnique": false
+        },
+        "pd_employee_mes": {
+          "name": "pd_employee_mes",
+          "columns": [
+            "employeeId",
+            "mesReferencia"
+          ],
+          "isUnique": false
+        },
+        "pd_tipo": {
+          "name": "pd_tipo",
+          "columns": [
+            "tipo"
+          ],
+          "isUnique": false
+        },
+        "pd_status": {
+          "name": "pd_status",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "pd_data": {
+          "name": "pd_data",
+          "columns": [
+            "data"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "ponto_descontos_resumo": {
+      "name": "ponto_descontos_resumo",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "companyId": {
+          "name": "companyId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "employeeId": {
+          "name": "employeeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mesReferencia": {
+          "name": "mesReferencia",
+          "type": "varchar(7)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "totalAtrasos": {
+          "name": "totalAtrasos",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalMinutosAtraso": {
+          "name": "totalMinutosAtraso",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalFaltasInjustificadas": {
+          "name": "totalFaltasInjustificadas",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalSaidasAntecipadas": {
+          "name": "totalSaidasAntecipadas",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalMinutosSaidaAntecipada": {
+          "name": "totalMinutosSaidaAntecipada",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalDsrPerdidos": {
+          "name": "totalDsrPerdidos",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalFeriadosPerdidos": {
+          "name": "totalFeriadosPerdidos",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalHeNaoAutorizadas": {
+          "name": "totalHeNaoAutorizadas",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalMinutosHeNaoAutorizada": {
+          "name": "totalMinutosHeNaoAutorizada",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "valorTotalAtrasos": {
+          "name": "valorTotalAtrasos",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorTotalFaltas": {
+          "name": "valorTotalFaltas",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorTotalDsr": {
+          "name": "valorTotalDsr",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorTotalFeriados": {
+          "name": "valorTotalFeriados",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorTotalSaidasAntecipadas": {
+          "name": "valorTotalSaidasAntecipadas",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorTotalHeNaoAutorizada": {
+          "name": "valorTotalHeNaoAutorizada",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "valorTotalDescontos": {
+          "name": "valorTotalDescontos",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "faltasAcumuladasPeriodoAquisitivo": {
+          "name": "faltasAcumuladasPeriodoAquisitivo",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "diasFeriasResultante": {
+          "name": "diasFeriasResultante",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 30
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('calculado','revisado','fechado')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'calculado'"
+        },
+        "revisadoPor": {
+          "name": "revisadoPor",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revisadoEm": {
+          "name": "revisadoEm",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "pdr_company_mes": {
+          "name": "pdr_company_mes",
+          "columns": [
+            "companyId",
+            "mesReferencia"
+          ],
+          "isUnique": false
+        },
+        "pdr_employee_mes": {
+          "name": "pdr_employee_mes",
+          "columns": [
+            "employeeId",
             "mesReferencia"
           ],
           "isUnique": false

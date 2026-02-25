@@ -155,6 +155,13 @@
       "when": 1771978809093,
       "tag": "0021_vengeful_ares",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1771985907339,
+      "tag": "0022_exotic_glorian",
+      "breakpoints": true
     }
   ]
 }

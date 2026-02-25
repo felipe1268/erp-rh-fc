@@ -17,7 +17,7 @@ import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
-  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight
+  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 
-type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados" | "memoria_dixi" | "simulador_horistas";
+type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados" | "memoria_dixi" | "simulador_horistas" | "descontos_clt";
 
 // Helper to navigate to Controle de Documentos > Advertências with pre-filled data
 function navigateToAdvertencia(setLocation: (path: string) => void, employeeId: number, employeeName: string, data: string, descricao: string) {
@@ -49,6 +49,382 @@ const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julh
 function formatMesAno(mesAno: string): string {
   const [ano, mes] = mesAno.split("-");
   return `${MESES[parseInt(mes, 10) - 1]} ${ano}`;
+}
+
+// ============================================================
+// COMPONENTE: Painel de Descontos CLT
+// ============================================================
+const TIPO_LABELS: Record<string, string> = {
+  atraso: "Atraso",
+  falta_injustificada: "Falta Injustificada",
+  saida_antecipada: "Saída Antecipada",
+  falta_dsr: "DSR Perdido",
+  he_nao_autorizada: "HE Não Autorizada",
+};
+const TIPO_COLORS: Record<string, string> = {
+  atraso: "bg-yellow-100 text-yellow-800",
+  falta_injustificada: "bg-red-100 text-red-800",
+  saida_antecipada: "bg-orange-100 text-orange-800",
+  falta_dsr: "bg-purple-100 text-purple-800",
+  he_nao_autorizada: "bg-pink-100 text-pink-800",
+};
+const STATUS_DESC_LABELS: Record<string, string> = {
+  calculado: "Calculado",
+  revisado: "Revisado",
+  abonado: "Abonado",
+  fechado: "Fechado",
+};
+const STATUS_DESC_COLORS: Record<string, string> = {
+  calculado: "bg-blue-100 text-blue-800",
+  revisado: "bg-green-100 text-green-800",
+  abonado: "bg-emerald-100 text-emerald-800",
+  fechado: "bg-gray-200 text-gray-700",
+};
+
+function DescontosCLTPanel({ companyId, mesAno, isMaster }: { companyId: number; mesAno: string; isMaster: boolean }) {
+  const [activeSubTab, setActiveSubTab] = useState<"resumo" | "detalhes">("resumo");
+  const [filterTipo, setFilterTipo] = useState<string>("all");
+  const [filterEmpId, setFilterEmpId] = useState<number | undefined>(undefined);
+  const [abonoId, setAbonoId] = useState<number | null>(null);
+  const [abonoMotivo, setAbonoMotivo] = useState("");
+
+  const utils = trpc.useUtils();
+  const totais = trpc.pontoDescontos.totaisMes.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const resumo = trpc.pontoDescontos.listResumo.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const detalhes = trpc.pontoDescontos.listByMonth.useQuery(
+    { companyId, mesReferencia: mesAno, tipo: filterTipo !== "all" ? filterTipo : undefined, employeeId: filterEmpId },
+    { enabled: companyId > 0 }
+  );
+
+  const calcularMut = trpc.pontoDescontos.calcularMes.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      utils.pontoDescontos.totaisMes.invalidate();
+      utils.pontoDescontos.listResumo.invalidate();
+      utils.pontoDescontos.listByMonth.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const abonarMut = trpc.pontoDescontos.abonar.useMutation({
+    onSuccess: () => {
+      toast.success("Desconto abonado com sucesso!");
+      setAbonoId(null);
+      setAbonoMotivo("");
+      utils.pontoDescontos.listByMonth.invalidate();
+      utils.pontoDescontos.listResumo.invalidate();
+      utils.pontoDescontos.totaisMes.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const fecharMut = trpc.pontoDescontos.fecharMes.useMutation({
+    onSuccess: () => {
+      toast.success("Mês de descontos fechado!");
+      utils.pontoDescontos.listByMonth.invalidate();
+      utils.pontoDescontos.listResumo.invalidate();
+      utils.pontoDescontos.totaisMes.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  function handleCalcular() {
+    if (!confirm("Deseja calcular/recalcular os descontos CLT do mês? Os cálculos anteriores serão substituídos.")) return;
+    calcularMut.mutate({ companyId, mesReferencia: mesAno });
+  }
+
+  function handleFechar() {
+    if (!confirm("Deseja FECHAR os descontos do mês? Após o fechamento, não será possível alterar.")) return;
+    fecharMut.mutate({ companyId, mesReferencia: mesAno });
+  }
+
+  function handleAbonar() {
+    if (!abonoId || abonoMotivo.length < 5) { toast.error("Informe o motivo do abono (mínimo 5 caracteres)"); return; }
+    abonarMut.mutate({ id: abonoId, motivoAbono: abonoMotivo });
+  }
+
+  const t = totais.data;
+
+  return (
+    <div className="space-y-4">
+      {/* Header + Actions */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Shield className="h-5 w-5 text-rose-600" />
+          Motor de Descontos CLT — {formatMesAno(mesAno)}
+        </h3>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={handleCalcular} disabled={calcularMut.isPending}
+            className="bg-rose-600 hover:bg-rose-700 text-white">
+            {calcularMut.isPending ? "Calculando..." : "Calcular Descontos"}
+          </Button>
+          {isMaster && (t?.totalEventos || 0) > 0 && (
+            <Button size="sm" variant="outline" onClick={handleFechar} disabled={fecharMut.isPending}>
+              <Lock className="h-4 w-4 mr-1" /> Fechar Mês
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Totais Cards */}
+      {t && t.totalEventos > 0 ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <Card className="border-t-2 border-t-yellow-400">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-yellow-600">{t.totalAtrasos}</p>
+              <p className="text-xs text-muted-foreground">Atrasos</p>
+            </CardContent>
+          </Card>
+          <Card className="border-t-2 border-t-red-400">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-red-600">{t.totalFaltas}</p>
+              <p className="text-xs text-muted-foreground">Faltas</p>
+            </CardContent>
+          </Card>
+          <Card className="border-t-2 border-t-orange-400">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-orange-600">{t.totalSaidas}</p>
+              <p className="text-xs text-muted-foreground">Saídas Antecip.</p>
+            </CardContent>
+          </Card>
+          <Card className="border-t-2 border-t-purple-400">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-purple-600">{t.totalDsr}</p>
+              <p className="text-xs text-muted-foreground">DSR Perdidos</p>
+            </CardContent>
+          </Card>
+          <Card className="border-t-2 border-t-pink-400">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-pink-600">{t.totalHeNaoAut}</p>
+              <p className="text-xs text-muted-foreground">HE Não Autoriz.</p>
+            </CardContent>
+          </Card>
+          <Card className="border-t-2 border-t-blue-400">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-blue-600">{t.funcionariosAfetados}</p>
+              <p className="text-xs text-muted-foreground">Funcionários</p>
+            </CardContent>
+          </Card>
+          <Card className="border-t-2 border-t-rose-600">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-rose-600">
+                {parseFloat(t.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+              <p className="text-xs text-muted-foreground">Total Descontos</p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Shield className="h-12 w-12 text-muted-foreground/30 mb-4" />
+            <p className="font-medium">Nenhum desconto calculado para este mês</p>
+            <p className="text-sm text-muted-foreground mt-1">Clique em "Calcular Descontos" para analisar os registros de ponto.</p>
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 mt-4 text-sm text-rose-800 max-w-md text-center">
+              <strong>Fundamentação:</strong> Art. 58 §1º CLT (tolerância), Art. 462 CLT (descontos), Lei 605/49 (DSR), Art. 130 CLT (férias).
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sub-tabs */}
+      {t && t.totalEventos > 0 && (
+        <>
+          <div className="flex gap-2 border-b pb-2">
+            <Button variant={activeSubTab === "resumo" ? "default" : "ghost"} size="sm"
+              onClick={() => setActiveSubTab("resumo")}
+              className={activeSubTab === "resumo" ? "bg-rose-600 text-white" : ""}>
+              <Users className="h-4 w-4 mr-1" /> Resumo por Funcionário
+            </Button>
+            <Button variant={activeSubTab === "detalhes" ? "default" : "ghost"} size="sm"
+              onClick={() => setActiveSubTab("detalhes")}
+              className={activeSubTab === "detalhes" ? "bg-rose-600 text-white" : ""}>
+              <FileText className="h-4 w-4 mr-1" /> Detalhes Analíticos
+            </Button>
+          </div>
+
+          {/* Resumo por Funcionário */}
+          {activeSubTab === "resumo" && (
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead><tr className="bg-rose-50 border-b">
+                  <th className="p-2.5 text-left">Funcionário</th>
+                  <th className="p-2.5 text-left">Função</th>
+                  <th className="p-2.5 text-center">Atrasos</th>
+                  <th className="p-2.5 text-center">Faltas</th>
+                  <th className="p-2.5 text-center">Saídas Ant.</th>
+                  <th className="p-2.5 text-center">DSR Perd.</th>
+                  <th className="p-2.5 text-center">HE Não Aut.</th>
+                  <th className="p-2.5 text-right">Total Desc.</th>
+                  <th className="p-2.5 text-center">Férias</th>
+                  <th className="p-2.5 text-center">Status</th>
+                </tr></thead>
+                <tbody>
+                  {(resumo.data || []).map((r: any) => (
+                    <tr key={r.id} className="border-b hover:bg-muted/30 cursor-pointer"
+                      onClick={() => { setFilterEmpId(r.employeeId); setActiveSubTab("detalhes"); }}>
+                      <td className="p-2.5 font-medium">{r.employeeName || `ID ${r.employeeId}`}</td>
+                      <td className="p-2.5 text-muted-foreground">{r.employeeFuncao || "-"}</td>
+                      <td className="p-2.5 text-center">
+                        {r.totalAtrasos > 0 ? <Badge className="bg-yellow-100 text-yellow-800">{r.totalAtrasos}</Badge> : "-"}
+                      </td>
+                      <td className="p-2.5 text-center">
+                        {r.totalFaltasInjustificadas > 0 ? <Badge className="bg-red-100 text-red-800">{r.totalFaltasInjustificadas}</Badge> : "-"}
+                      </td>
+                      <td className="p-2.5 text-center">
+                        {r.totalSaidasAntecipadas > 0 ? <Badge className="bg-orange-100 text-orange-800">{r.totalSaidasAntecipadas}</Badge> : "-"}
+                      </td>
+                      <td className="p-2.5 text-center">
+                        {r.totalDsrPerdidos > 0 ? <Badge className="bg-purple-100 text-purple-800">{r.totalDsrPerdidos}</Badge> : "-"}
+                      </td>
+                      <td className="p-2.5 text-center">
+                        {r.totalHeNaoAutorizadas > 0 ? <Badge className="bg-pink-100 text-pink-800">{r.totalHeNaoAutorizadas}</Badge> : "-"}
+                      </td>
+                      <td className="p-2.5 text-right font-bold text-rose-700">
+                        {parseFloat(r.valorTotalDescontos || "0").toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <span className="text-xs">{r.diasFeriasResultante}d</span>
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <Badge className={STATUS_DESC_COLORS[r.status] || "bg-gray-100"}>
+                          {STATUS_DESC_LABELS[r.status] || r.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                  {(resumo.data || []).length === 0 && (
+                    <tr><td colSpan={10} className="p-8 text-center text-muted-foreground">Nenhum resumo encontrado</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Detalhes Analíticos */}
+          {activeSubTab === "detalhes" && (
+            <div className="space-y-3">
+              <div className="flex gap-2 items-center">
+                <Select value={filterTipo} onValueChange={setFilterTipo}>
+                  <SelectTrigger className="w-48"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Tipos</SelectItem>
+                    <SelectItem value="atraso">Atrasos</SelectItem>
+                    <SelectItem value="falta_injustificada">Faltas</SelectItem>
+                    <SelectItem value="saida_antecipada">Saídas Antecipadas</SelectItem>
+                    <SelectItem value="falta_dsr">DSR Perdidos</SelectItem>
+                    <SelectItem value="he_nao_autorizada">HE Não Autorizadas</SelectItem>
+                  </SelectContent>
+                </Select>
+                {filterEmpId && (
+                  <Button variant="outline" size="sm" onClick={() => setFilterEmpId(undefined)}>
+                    <XCircle className="h-3 w-3 mr-1" /> Limpar filtro funcionário
+                  </Button>
+                )}
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-rose-50 border-b">
+                    <th className="p-2.5 text-left">Data</th>
+                    <th className="p-2.5 text-left">Funcionário</th>
+                    <th className="p-2.5 text-center">Tipo</th>
+                    <th className="p-2.5 text-center">Min.</th>
+                    <th className="p-2.5 text-right">Valor</th>
+                    <th className="p-2.5 text-right">DSR</th>
+                    <th className="p-2.5 text-right">Total</th>
+                    <th className="p-2.5 text-center">Status</th>
+                    <th className="p-2.5 text-left">Fund. Legal</th>
+                    <th className="p-2.5 text-center">Ações</th>
+                  </tr></thead>
+                  <tbody>
+                    {(detalhes.data || []).map((d: any) => (
+                      <tr key={d.id} className="border-b hover:bg-muted/30">
+                        <td className="p-2.5">{d.data ? new Date(d.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td>
+                        <td className="p-2.5 font-medium">{d.employeeName || `ID ${d.employeeId}`}</td>
+                        <td className="p-2.5 text-center">
+                          <Badge className={TIPO_COLORS[d.tipo] || "bg-gray-100"}>
+                            {TIPO_LABELS[d.tipo] || d.tipo}
+                          </Badge>
+                        </td>
+                        <td className="p-2.5 text-center font-mono">{d.minutosAtraso || d.minutosHe || "-"}</td>
+                        <td className="p-2.5 text-right font-mono">
+                          {parseFloat(d.valorDesconto || "0") > 0
+                            ? parseFloat(d.valorDesconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : "-"}
+                        </td>
+                        <td className="p-2.5 text-right font-mono">
+                          {parseFloat(d.valorDsr || "0") > 0
+                            ? parseFloat(d.valorDsr).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : "-"}
+                        </td>
+                        <td className="p-2.5 text-right font-bold text-rose-700">
+                          {parseFloat(d.valorTotal || "0") > 0
+                            ? parseFloat(d.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : "-"}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <Badge className={STATUS_DESC_COLORS[d.status] || "bg-gray-100"}>
+                            {STATUS_DESC_LABELS[d.status] || d.status}
+                          </Badge>
+                        </td>
+                        <td className="p-2.5 text-xs text-muted-foreground max-w-[200px] truncate" title={d.fundamentacaoLegal}>
+                          {d.fundamentacaoLegal || "-"}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          {d.status === "calculado" && (
+                            <Button variant="ghost" size="sm" className="text-emerald-600 hover:text-emerald-700"
+                              onClick={() => { setAbonoId(d.id); setAbonoMotivo(""); }}>
+                              Abonar
+                            </Button>
+                          )}
+                          {d.status === "abonado" && (
+                            <span className="text-xs text-emerald-600" title={`Abonado por: ${d.abonadoPor}\nMotivo: ${d.motivoAbono}`}>
+                              Abonado
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {(detalhes.data || []).length === 0 && (
+                      <tr><td colSpan={10} className="p-8 text-center text-muted-foreground">Nenhum desconto encontrado</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Dialog de Abono */}
+      {abonoId && (
+        <Dialog open={!!abonoId} onOpenChange={() => setAbonoId(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Abonar Desconto</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm">
+                O desconto será zerado e marcado como abonado. Esta ação ficará registrada na auditoria.
+              </div>
+              <div>
+                <Label>Motivo do Abono *</Label>
+                <Textarea value={abonoMotivo} onChange={e => setAbonoMotivo(e.target.value)}
+                  placeholder="Informe o motivo do abono (ex: atestado médico, autorização do gestor...)" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAbonoId(null)}>Cancelar</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAbonar} disabled={abonarMut.isPending}>
+                {abonarMut.isPending ? "Abonando..." : "Confirmar Abono"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
 }
 
 export default function FechamentoPonto() {
@@ -797,6 +1173,10 @@ export default function FechamentoPonto() {
             <Button variant={viewMode === "simulador_horistas" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("simulador_horistas")}
               className={viewMode === "simulador_horistas" ? "bg-emerald-600 text-white" : ""}>
               <ListChecks className="h-4 w-4 mr-1" /> Simulador Horistas
+            </Button>
+            <Button variant={viewMode === "descontos_clt" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("descontos_clt")}
+              className={viewMode === "descontos_clt" ? "bg-rose-600 text-white" : ""}>
+              <Shield className="h-4 w-4 mr-1" /> Descontos CLT
             </Button>
           </div>
         )}
@@ -2653,6 +3033,11 @@ export default function FechamentoPonto() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* ===== DESCONTOS CLT VIEW ===== */}
+        {viewMode === "descontos_clt" && (
+          <DescontosCLTPanel companyId={companyId} mesAno={mesAno} isMaster={isMaster} />
         )}
 
         {/* ===== UPLOAD DIALOG (FULL SCREEN) ===== */}

@@ -2137,3 +2137,32 @@
 - [ ] API Dixi: autenticação OAuth2 não funcionou (endpoints retornam 404) — preparado para futuro
 - [ ] Frontend: aba Relógios com vinculação SN→Obra (usar tela existente de Relógios de Ponto)
 - [x] Bug: Dixi Ponto não aparece na lista de módulos configuráveis em Configurações (seção OPERACIONAL)
+
+## Fase 33: Motor de Cálculo CLT - Descontos Automáticos no Fechamento de Ponto
+- [x] Schema: tabela ponto_descontos para armazenar cálculos de descontos por funcionário/mês
+- [x] Critérios do Sistema: adicionar parâmetros CLT (tolerância atraso, desconto DSR, limite atestados, etc.)
+- [x] Backend: engine de cálculo CLT (atraso proporcional, falta, DSR, saída antecipada)
+- [x] Backend: detecção automática de atrasos/faltas/saídas antecipadas a partir das marcações
+- [x] Backend: cálculo de DSR perdido por semana (atraso > tolerância ou falta na semana)
+- [x] Backend: reflexo de faltas nas férias (Art. 130 CLT)
+- [x] Backend: procedure para gerar/recalcular descontos de um mês
+- [x] Frontend: aba/painel de Descontos no Fechamento de Ponto com revisão antes de fechar
+- [x] Frontend: status por funcionário (Pendente → Revisado → Fechado)
+- [x] Frontend: possibilidade de abonar/ajustar manualmente descontos
+- [ ] Folha de Pagamento: aba Descontos mostrando cálculos automáticos
+- [ ] Folha de Pagamento: comparativo sistema vs contabilidade para auditoria
+- [x] Testes unitários do motor de cálculo CLT
+
+## Fase 34: Módulo de Solicitação de Horas Extras
+- [x] Schema: tabela he_solicitacoes (obra, funcionários, data, horário, motivo, status, aprovador)
+- [x] Backend: CRUD de solicitações + aprovar/rejeitar (somente admin master)
+- [x] Backend: cruzamento automático batida vs solicitação aprovada no fechamento
+- [x] Frontend: página Solicitação de HE no menu Operacional
+- [x] Frontend: aba Solicitar (selecionar obra, funcionários, data, horário, motivo)
+- [x] Frontend: aba Aprovações (admin master aprova/rejeita pendentes)
+- [x] Frontend: aba Histórico (todas solicitações com status)
+- [x] HE não autorizada: flag no fechamento + sugestão de advertência
+- [x] Menu lateral: adicionar Solicitação de HE na seção Operacional
+- [ ] Renomear campo Matrícula para eSocial no cadastro do funcionário (frontend label)
+- [ ] Campos rateáveis por obra: VA, VT, Seguro, Sindicato, FGTS, INSS, Dissídio, CCT, Pensão, DDS
+- [ ] Regra vale: admitidos após dia 10 não recebem vale no mês de admissão (critério configurável)

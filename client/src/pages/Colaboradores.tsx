@@ -428,8 +428,8 @@ export default function Colaboradores() {
       ]},
       { title: "Profissional", fields: [
         ["Cód. Interno (JFC)", viewingEmployee.codigoInterno ? `🔒 ${viewingEmployee.codigoInterno}` : "-"],
-        ["Matrícula", safeDisplay(viewingEmployee.matricula)],
-        ["Função", safeDisplay(viewingEmployee.funcao)],
+        ["eSocial", safeDisplay(viewingEmployee.matricula)],
+         ["Função", safeDisplay(viewingEmployee.funcao)],
         ["Setor", safeDisplay(viewingEmployee.setor)],
         ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
         ["Contrato", safeDisplay(viewingEmployee.tipoContrato)],
@@ -1066,7 +1066,7 @@ export default function Colaboradores() {
                   )}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Matrícula</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">eSocial</Label>
                   <Input value={form.matricula ?? ""} onChange={e => set("matricula", e.target.value)} className="bg-input mt-1" />
                 </div>
                 <div>
@@ -2109,8 +2109,8 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                 ]},
                 { title: "Profissional", fields: [
                   ["Cód. Interno (JFC)", viewingEmployee.codigoInterno ? `🔒 ${viewingEmployee.codigoInterno}` : "-"],
-                  ["Matrícula", safeDisplay(viewingEmployee.matricula)],
-                  ["Função", safeDisplay(viewingEmployee.funcao)],
+                 ["eSocial", safeDisplay(viewingEmployee.matricula)],
+                   ["Função", safeDisplay(viewingEmployee.funcao)],
                   ["Setor", safeDisplay(viewingEmployee.setor)],
                   ["Admissão", formatDate(viewingEmployee.dataAdmissao)],
                   ["Contrato", viewingEmployee.tipoContrato === 'Horista' ? '⚡ Horista' : safeDisplay(viewingEmployee.tipoContrato)],
