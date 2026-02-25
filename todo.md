@@ -2258,3 +2258,6 @@
 - [x] Remover DDS da aba Obrigações — já removido
 - [x] 26 testes unitários para dissídio (regra não regressão, cálculo reajuste, retroativo, simulação em massa)
 - [x] Total: 300 testes passando (24 arquivos)
+
+## Fase 41: Correção de ordem do gráfico Tempo de Empresa
+- [x] Reorganizar barras do gráfico "Tempo de Empresa" em ordem crescente (< 3 meses → 3-6 meses → 6-12 meses → 1-2 anos → 2-5 anos → 5-10 anos)

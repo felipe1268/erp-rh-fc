@@ -194,7 +194,11 @@ async function getDashFuncionarios(companyId: number) {
     estadoCivilDist: estadoCivilDist.map(r => ({ label: r.estadoCivil || "Não informado", value: Number(r.count) })),
     cidadeDist: cidadeDist.map(r => ({ label: r.cidade || "Não informado", value: Number(r.count) })),
     ageDist: ageDist.map(r => ({ faixa: r.faixa, sexo: r.sexo || "Outro", count: Number(r.count) })),
-    tenureDist: tenureDist.map(r => ({ label: r.faixa, value: Number(r.count) })),
+    tenureDist: (() => {
+      const ordemCrescente = ['< 3 meses', '3-6 meses', '6-12 meses', '1-2 anos', '2-5 anos', '5-10 anos', '10+ anos'];
+      const mapped = tenureDist.map(r => ({ label: r.faixa, value: Number(r.count) }));
+      return mapped.sort((a, b) => ordemCrescente.indexOf(a.label) - ordemCrescente.indexOf(b.label));
+    })(),
     turnover: { admissoes: admissoesMensal.map(r => ({ mes: r.mes, count: Number(r.count) })), demissoes: demissoesMensal.map(r => ({ mes: r.mes, count: Number(r.count) })) },
     destaques: {
       maisVelho: oldest ? { nome: oldest.nome, data: oldest.data, funcao: oldest.funcao } : null,
