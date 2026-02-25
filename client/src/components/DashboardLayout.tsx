@@ -72,6 +72,7 @@ const menuSections = [
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
+      { icon: Wifi, label: "Dixi Ponto", path: "/dixi-ponto" },
     ],
   },
   {
@@ -139,6 +140,7 @@ const ICON_MAP: Record<string, any> = {
   "Controle de Documentos": FolderOpen,
   "Vale Alimentação": UtensilsCrossed,
   "Controle de EPIs": HardHat,
+  "Dixi Ponto": Wifi,
   "Processos Trabalhistas": Gavel,
   "Raio-X do Funcionário": UserSearch,
   "Todos os Dashboards": BarChart3,

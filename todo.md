@@ -2117,3 +2117,22 @@
 - [x] Backend: procedure para listar funcionários com HE diferente e bulk-sync
 - [x] Frontend: tabela com checkboxes, selecionar todos, e botão sincronizar selecionados
 - [x] Remover banner inline do formulário do funcionário (ficou fora do escopo)
+
+## Fase 32: Módulo de Integração Dixi Ponto
+- [x] Schema: tabelas dixi_afd_importacoes e dixi_afd_marcacoes
+- [x] Backend: parser AFD (TypeScript) conforme Portaria 671 (Tipo 1=header, Tipo 3=marcação, Tipo 9=trailer)
+- [x] Backend: procedure de importação AFD com validações (SN, CPF, duplicidade)
+- [x] Backend: preview de importação (SN, período, marcações, CPFs identificados/não identificados)
+- [x] Backend: listagem de marcações com filtros (importação, data, CPF)
+- [x] Backend: histórico de importações com detalhes e exclusão
+- [x] Backend: dashboard stats (obras ativas, relógios, funcionários, importações, marcações, alertas)
+- [x] Frontend: página Dixi Ponto com 5 abas (Dashboard, Importar AFD, Histórico, Marcações, Alertas)
+- [x] Frontend: aba Importar com upload AFD + preview detalhado + confirmar importação
+- [x] Frontend: aba Histórico com log de importações expandível + exclusão
+- [x] Frontend: aba Marcações com filtros (importação, data, CPF) + tabela paginada
+- [x] Frontend: aba Alertas (CPFs não encontrados agrupados com contagem)
+- [x] Frontend: Dashboard com 6 cards de métricas + última importação
+- [x] Adicionar menu lateral "Dixi Ponto" na seção OPERACIONAL
+- [x] Testes unitários do parser AFD (10 testes passando)
+- [ ] API Dixi: autenticação OAuth2 não funcionou (endpoints retornam 404) — preparado para futuro
+- [ ] Frontend: aba Relógios com vinculação SN→Obra (usar tela existente de Relógios de Ponto)

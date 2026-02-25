@@ -50,6 +50,7 @@ import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
 import { cipaRouter } from "./routers/cipa";
 import { pjContractsRouter } from "./routers/pjContracts";
 import { insuranceRouter } from "./routers/insurance";
+import { dixiPontoRouter } from "./routers/dixiPonto";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -630,6 +631,11 @@ export const appRouter = router({
   // FECHAMENTO DE PONTO (upload DIXI, cálculo horas, inconsistências)
   // ============================================================
   fechamentoPonto: fechamentoPontoRouter,
+
+  // ============================================================
+  // DIXI PONTO (AFD)
+  // ============================================================
+  dixiPonto: dixiPontoRouter,
 
   // ============================================================
   // PROCESSOS TRABALHISTAS

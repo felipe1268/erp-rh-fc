@@ -1709,6 +1709,58 @@ export const caepiDatabase = mysqlTable("caepi_database", {
 // ============================================================
 // ALERTAS DE DESCONTO DE EPI
 // ============================================================
+// ============================================================
+// DIXI AFD - LOG DE IMPORTAÇÕES
+// ============================================================
+export const dixiAfdImportacoes = mysqlTable("dixi_afd_importacoes", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	dataImportacao: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	metodo: mysqlEnum(['AFD','API','XLS']).default('AFD').notNull(),
+	arquivoNome: varchar({ length: 255 }),
+	snRelogio: varchar({ length: 50 }),
+	obraId: int(),
+	obraNome: varchar({ length: 255 }),
+	totalMarcacoes: int().default(0).notNull(),
+	totalFuncionarios: int().default(0).notNull(),
+	totalInconsistencias: int().default(0).notNull(),
+	periodoInicio: varchar({ length: 10 }),
+	periodoFim: varchar({ length: 10 }),
+	status: mysqlEnum(['sucesso','parcial','erro']).default('sucesso').notNull(),
+	importadoPor: varchar({ length: 255 }),
+	detalhes: json(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("dai_company").on(table.companyId),
+	index("dai_sn").on(table.snRelogio),
+	index("dai_data").on(table.dataImportacao),
+]);
+
+// ============================================================
+// DIXI AFD - MARCAÇÕES BRUTAS (registros individuais do AFD)
+// ============================================================
+export const dixiAfdMarcacoes = mysqlTable("dixi_afd_marcacoes", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	importacaoId: int().notNull(),
+	nsr: varchar({ length: 20 }),
+	cpf: varchar({ length: 14 }).notNull(),
+	data: date({ mode: 'string' }).notNull(),
+	hora: varchar({ length: 10 }).notNull(),
+	snRelogio: varchar({ length: 50 }),
+	obraId: int(),
+	employeeId: int(),
+	employeeName: varchar({ length: 255 }),
+	status: mysqlEnum(['processado','cpf_nao_encontrado','duplicado','erro']).default('processado').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("dam_company").on(table.companyId),
+	index("dam_importacao").on(table.importacaoId),
+	index("dam_cpf").on(table.cpf),
+	index("dam_data").on(table.data),
+	index("dam_employee").on(table.employeeId),
+]);
+
 export const epiDiscountAlerts = mysqlTable("epi_discount_alerts", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
