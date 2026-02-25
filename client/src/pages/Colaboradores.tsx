@@ -798,6 +798,7 @@ export default function Colaboradores() {
               <TabsTrigger value="endereco" className="flex-1 text-xs sm:text-sm">Endereço</TabsTrigger>
               <TabsTrigger value="profissional" className="flex-1 text-xs sm:text-sm">Profissional</TabsTrigger>
               <TabsTrigger value="bancario" className="flex-1 text-xs sm:text-sm">Bancário</TabsTrigger>
+              <TabsTrigger value="beneficios" className="flex-1 text-xs sm:text-sm">Benefícios</TabsTrigger>
             </TabsList>
 
             {/* ===== ABA PESSOAL ===== */}
@@ -975,6 +976,16 @@ export default function Colaboradores() {
                   <Input type="date" value={form.validadeCnh ?? ""} onChange={e => set("validadeCnh", e.target.value)} className="bg-input mt-1" />
                 </div>
               </div>
+
+              {/* Upload de Documentos Pessoais */}
+              {editingId && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
+                    <Upload className="w-4 h-4" /> Documentos Digitalizados
+                  </h4>
+                  <DocumentUploadSection employeeId={editingId!} companyId={companyId || 0} />
+                </div>
+              )}
             </TabsContent>
 
             {/* ===== ABA ENDEREÇO ===== */}
@@ -1871,6 +1882,380 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                 </div>
               </div>
             </TabsContent>
+
+            {/* ===== ABA BENEFÍCIOS ===== */}
+            <TabsContent value="beneficios" className="pt-4">
+              <div className="space-y-5">
+                {/* Vale Transporte */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Vale Transporte</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Recebe VT?</Label>
+                      <Select value={form.vtRecebe || "none"} onValueChange={v => set("vtRecebe", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                          <SelectItem value="optou_nao">Optou por não receber</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Valor VT Diário (R$)</Label>
+                      <Input value={form.vtValorDiario ?? ""} onChange={e => set("vtValorDiario", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Tipo VT</Label>
+                      <Select value={form.vtTipo || "none"} onValueChange={v => set("vtTipo", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="bilhete_unico">Bilhete Único</SelectItem>
+                          <SelectItem value="cartao_empresa">Cartão Empresa</SelectItem>
+                          <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                          <SelectItem value="pix">PIX</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Operadora VT</Label>
+                      <Input value={form.vtOperadora ?? ""} onChange={e => set("vtOperadora", e.target.value)} className="bg-input mt-1" placeholder="Ex: SPTrans, BOM" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Nº Cartão VT</Label>
+                      <Input value={form.vtNumeroCartao ?? ""} onChange={e => set("vtNumeroCartao", e.target.value)} className="bg-input mt-1" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pensão Alimentícia */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Pensão Alimentícia</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Possui Pensão?</Label>
+                      <Select value={form.pensaoAlimenticia || "none"} onValueChange={v => set("pensaoAlimenticia", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.pensaoAlimenticia === "sim" && (
+                      <>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Tipo de Pensão</Label>
+                          <Select value={form.pensaoTipo || "none"} onValueChange={v => set("pensaoTipo", v === "none" ? "" : v)}>
+                            <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Selecione</SelectItem>
+                              <SelectItem value="percentual">Percentual do Salário</SelectItem>
+                              <SelectItem value="valor_fixo">Valor Fixo</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">{form.pensaoTipo === 'percentual' ? 'Percentual (%)' : 'Valor (R$)'}</Label>
+                          <Input value={form.pensaoValor ?? ""} onChange={e => set("pensaoValor", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Nº Processo Judicial</Label>
+                          <Input value={form.pensaoProcesso ?? ""} onChange={e => set("pensaoProcesso", e.target.value)} className="bg-input mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Beneficiário</Label>
+                          <Input value={form.pensaoBeneficiario ?? ""} onChange={e => set("pensaoBeneficiario", e.target.value)} className="bg-input mt-1" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Licença Maternidade */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Licença Maternidade / Paternidade</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Em Licença?</Label>
+                      <Select value={form.licencaMaternidade || "none"} onValueChange={v => set("licencaMaternidade", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.licencaMaternidade === "sim" && (
+                      <>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Tipo</Label>
+                          <Select value={form.licencaTipo || "none"} onValueChange={v => set("licencaTipo", v === "none" ? "" : v)}>
+                            <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Selecione</SelectItem>
+                              <SelectItem value="maternidade_120">Maternidade 120 dias (CLT Art. 392)</SelectItem>
+                              <SelectItem value="maternidade_180">Maternidade 180 dias (Empresa Cidadã)</SelectItem>
+                              <SelectItem value="paternidade_5">Paternidade 5 dias (CF Art. 7º XIX)</SelectItem>
+                              <SelectItem value="paternidade_20">Paternidade 20 dias (Empresa Cidadã)</SelectItem>
+                              <SelectItem value="adocao">Adoção (CLT Art. 392-A)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Data Início</Label>
+                          <Input type="date" value={form.licencaDataInicio ?? ""} onChange={e => set("licencaDataInicio", e.target.value)} className="bg-input mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Data Fim Prevista</Label>
+                          <Input type="date" value={form.licencaDataFim ?? ""} onChange={e => set("licencaDataFim", e.target.value)} className="bg-input mt-1" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Seguro de Vida / Sindicato / Dissídio */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Encargos e Contribuições</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Seguro de Vida</Label>
+                      <Select value={form.seguroVida || "none"} onValueChange={v => set("seguroVida", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.seguroVida === "sim" && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Valor Seguro (R$)</Label>
+                        <Input value={form.seguroVidaValor ?? ""} onChange={e => set("seguroVidaValor", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Contribuição Sindical</Label>
+                      <Select value={form.contribuicaoSindical || "none"} onValueChange={v => set("contribuicaoSindical", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim - Autorizado</SelectItem>
+                          <SelectItem value="nao">Não - Sem autorização</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.contribuicaoSindical === "sim" && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Valor Contribuição (R$)</Label>
+                        <Input value={form.contribuicaoSindicalValor ?? ""} onChange={e => set("contribuicaoSindicalValor", e.target.value)} className="bg-input mt-1" placeholder="0.00" />
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Sindicato</Label>
+                      <Input value={form.sindicato ?? ""} onChange={e => set("sindicato", e.target.value)} className="bg-input mt-1" placeholder="Nome do sindicato" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Convenção Coletiva (CCT)</Label>
+                      <Input value={form.convencaoColetiva ?? ""} onChange={e => set("convencaoColetiva", e.target.value)} className="bg-input mt-1" placeholder="Nº ou referência da CCT" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Data-Base Dissídio</Label>
+                      <Select value={form.dissidioMesBase || "none"} onValueChange={v => set("dissidioMesBase", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="1">Janeiro</SelectItem>
+                          <SelectItem value="2">Fevereiro</SelectItem>
+                          <SelectItem value="3">Março</SelectItem>
+                          <SelectItem value="4">Abril</SelectItem>
+                          <SelectItem value="5">Maio</SelectItem>
+                          <SelectItem value="6">Junho</SelectItem>
+                          <SelectItem value="7">Julho</SelectItem>
+                          <SelectItem value="8">Agosto</SelectItem>
+                          <SelectItem value="9">Setembro</SelectItem>
+                          <SelectItem value="10">Outubro</SelectItem>
+                          <SelectItem value="11">Novembro</SelectItem>
+                          <SelectItem value="12">Dezembro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">DDS (Diálogo Diário de Segurança)</Label>
+                      <Select value={form.dds || "none"} onValueChange={v => set("dds", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="sim">Sim - Participa</SelectItem>
+                          <SelectItem value="nao">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ===== ABA BENEFÍCIOS ===== */}
+            <TabsContent value="beneficios" className="pt-4">
+              <div className="space-y-5">
+                {/* Vale Transporte */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Vale Transporte (VT)</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Recebe VT?</Label>
+                      <select value={form.vtRecebe ?? "1"} onChange={e => set("vtRecebe", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="1">Sim</option>
+                        <option value="0">Não</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Valor VT (R$)</Label>
+                      <Input value={form.vtValor ?? ""} onChange={e => set("vtValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Tipo VT</Label>
+                      <select value={form.vtTipo ?? ""} onChange={e => set("vtTipo", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="">Selecione</option>
+                        <option value="bilhete_unico">Bilhete Único</option>
+                        <option value="cartao_empresa">Cartão Empresa</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="pix">PIX</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Operadora VT</Label>
+                      <Input value={form.vtOperadora ?? ""} onChange={e => set("vtOperadora", e.target.value)} placeholder="Ex: SPTrans" className="bg-input mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Nº Cartão VT</Label>
+                      <Input value={form.vtNumeroCartao ?? ""} onChange={e => set("vtNumeroCartao", e.target.value)} className="bg-input mt-1" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pensão Alimentícia */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Pensão Alimentícia</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Possui Pensão?</Label>
+                      <select value={form.pensaoAlimenticia ?? "0"} onChange={e => set("pensaoAlimenticia", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="0">Não</option>
+                        <option value="1">Sim</option>
+                      </select>
+                    </div>
+                    {String(form.pensaoAlimenticia) === "1" && (
+                      <>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Tipo Pensão</Label>
+                          <select value={form.pensaoTipo ?? "percentual"} onChange={e => set("pensaoTipo", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                            <option value="percentual">Percentual (%)</option>
+                            <option value="valor_fixo">Valor Fixo (R$)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">{form.pensaoTipo === "valor_fixo" ? "Valor (R$)" : "Percentual (%)"}</Label>
+                          <Input value={form.pensaoValor ?? ""} onChange={e => set("pensaoValor", e.target.value)} placeholder={form.pensaoTipo === "valor_fixo" ? "0.00" : "0.00"} className="bg-input mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Beneficiário</Label>
+                          <Input value={form.pensaoBeneficiario ?? ""} onChange={e => set("pensaoBeneficiario", e.target.value)} placeholder="Nome do beneficiário" className="bg-input mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Nº Processo</Label>
+                          <Input value={form.pensaoProcesso ?? ""} onChange={e => set("pensaoProcesso", e.target.value)} placeholder="Nº do processo judicial" className="bg-input mt-1" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Licença Maternidade */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Licença Maternidade</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Em Licença Maternidade?</Label>
+                      <select value={form.licencaMaternidade ?? "0"} onChange={e => set("licencaMaternidade", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="0">Não</option>
+                        <option value="1">Sim</option>
+                      </select>
+                    </div>
+                    {String(form.licencaMaternidade) === "1" && (
+                      <>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Data Início</Label>
+                          <Input type="date" value={form.licencaMaternidadeInicio ?? ""} onChange={e => set("licencaMaternidadeInicio", e.target.value)} className="bg-input mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-muted-foreground">Data Fim</Label>
+                          <Input type="date" value={form.licencaMaternidadeFim ?? ""} onChange={e => set("licencaMaternidadeFim", e.target.value)} className="bg-input mt-1" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Seguro de Vida */}
+                <div>
+                  <h4 className="text-sm font-semibold text-primary mb-3">Seguro de Vida / Sindicato / Dissídio</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Seguro de Vida?</Label>
+                      <select value={form.seguroVida ?? "0"} onChange={e => set("seguroVida", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="0">Não</option>
+                        <option value="1">Sim</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Valor Seguro (R$)</Label>
+                      <Input value={form.seguroVidaValor ?? ""} onChange={e => set("seguroVidaValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Contribuição Sindical?</Label>
+                      <select value={form.contribuicaoSindical ?? "0"} onChange={e => set("contribuicaoSindical", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="0">Não</option>
+                        <option value="1">Sim</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Valor Sindicato (R$)</Label>
+                      <Input value={form.contribuicaoSindicalValor ?? ""} onChange={e => set("contribuicaoSindicalValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Dissídio Aplicável?</Label>
+                      <select value={form.dissidioAplicavel ?? "1"} onChange={e => set("dissidioAplicavel", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="1">Sim</option>
+                        <option value="0">Não (excluir do reajuste)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Convenção Coletiva (CCT)</Label>
+                      <Input value={form.convencaoColetiva ?? ""} onChange={e => set("convencaoColetiva", e.target.value)} placeholder="Ex: SINTRACON-SP" className="bg-input mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">DDS (Diálogo Diário Segurança)?</Label>
+                      <select value={form.dds ?? "0"} onChange={e => set("dds", e.target.value)} className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm mt-1">
+                        <option value="0">Não</option>
+                        <option value="1">Sim</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Valor DDS (R$)</Label>
+                      <Input value={form.ddsValor ?? ""} onChange={e => set("ddsValor", e.target.value)} placeholder="0.00" className="bg-input mt-1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
           </Tabs>
 
           {/* Observações */}
@@ -2291,6 +2676,109 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
       </FullScreenDialog>
        <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
+  );
+}
+// ===== Document Upload Section Component =====
+function DocumentUploadSection({ employeeId, companyId }: { employeeId: number; companyId: number }) {
+  const [uploading, setUploading] = useState(false);
+  const TIPOS_DOC: { label: string; value: 'rg'|'cnh'|'ctps'|'comprovante_residencia'|'certidao_nascimento'|'titulo_eleitor'|'reservista'|'pis'|'foto_3x4'|'contrato_trabalho'|'termo_rescisao'|'atestado_medico'|'diploma'|'certificado'|'outros' }[] = [
+    { label: 'RG', value: 'rg' },
+    { label: 'CNH', value: 'cnh' },
+    { label: 'CTPS', value: 'ctps' },
+    { label: 'PIS', value: 'pis' },
+    { label: 'Título Eleitor', value: 'titulo_eleitor' },
+    { label: 'Reservista', value: 'reservista' },
+    { label: 'Comp. Residência', value: 'comprovante_residencia' },
+    { label: 'Certidão Nasc.', value: 'certidao_nascimento' },
+    { label: 'Foto 3x4', value: 'foto_3x4' },
+    { label: 'Contrato Trabalho', value: 'contrato_trabalho' },
+    { label: 'Termo Rescisão', value: 'termo_rescisao' },
+    { label: 'Atestado Médico', value: 'atestado_medico' },
+    { label: 'Diploma', value: 'diploma' },
+    { label: 'Certificado', value: 'certificado' },
+    { label: 'Outros', value: 'outros' },
+  ];
+
+  const { data: docs, refetch } = trpc.employeeDocuments.listar.useQuery(
+    { employeeId, companyId },
+    { enabled: employeeId > 0 }
+  );
+
+  const uploadMut = trpc.employeeDocuments.upload.useMutation({
+    onSuccess: () => { toast.success('Documento enviado!'); refetch(); setUploading(false); },
+    onError: (e: any) => { toast.error(e.message || 'Erro ao enviar'); setUploading(false); },
+  });
+
+  const excluirMut = trpc.employeeDocuments.excluir.useMutation({
+    onSuccess: () => { toast.success('Documento excluído'); refetch(); },
+    onError: (e: any) => toast.error(e.message || 'Erro ao excluir'),
+  });
+
+  const handleUpload = (tipoDoc: typeof TIPOS_DOC[number]['value']) => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*,.pdf';
+    inp.multiple = true;
+    inp.onchange = async (e: any) => {
+      const files = Array.from(e.target.files || []) as File[];
+      if (!files.length) return;
+      for (const file of files) {
+        if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name}: Arquivo muito grande (máx 10MB)`); continue; }
+        setUploading(true);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const base64 = (ev.target?.result as string).split(',')[1];
+          uploadMut.mutate({
+            employeeId,
+            companyId,
+            tipo: tipoDoc,
+            nome: file.name,
+            fileBase64: base64,
+            mimeType: file.type,
+            fileSize: file.size,
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    inp.click();
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {TIPOS_DOC.map(tipo => (
+          <Button key={tipo.value} variant="outline" size="sm" className="text-xs h-7" onClick={() => handleUpload(tipo.value)} disabled={uploading}>
+            <Upload className="w-3 h-3 mr-1" /> {tipo.label}
+          </Button>
+        ))}
+      </div>
+      {uploading && <p className="text-xs text-blue-500 animate-pulse">Enviando documento(s)...</p>}
+      {docs && docs.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {docs.map((d: any) => (
+            <div key={d.id} className="flex items-center gap-2 p-2 border border-border rounded-md bg-muted/30">
+              <FileText className="w-4 h-4 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium truncate">{TIPOS_DOC.find(t => t.value === d.tipo)?.label || d.tipo}</div>
+                <div className="text-[10px] text-muted-foreground truncate">{d.nome}</div>
+                {d.dataValidade && (
+                  <div className={`text-[10px] ${new Date(d.dataValidade) < new Date() ? 'text-red-500 font-semibold' : 'text-muted-foreground'}`}>
+                    Val: {new Date(d.dataValidade + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </div>
+                )}
+              </div>
+              <a href={d.fileUrl} target="_blank" rel="noopener" className="text-xs text-primary hover:underline">Ver</a>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { if (confirm('Excluir este documento?')) excluirMut.mutate({ id: d.id }); }}>
+                <Trash2 className="w-3 h-3 text-destructive" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground italic">Nenhum documento digitalizado enviado</p>
+      )}
+    </div>
   );
 }
 // Seções SST removidas - módulos não fazem parte do escopo

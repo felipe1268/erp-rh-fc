@@ -30,6 +30,7 @@ import {
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
   ClipboardList, UserSearch, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
+  CalendarDays, TrendingUp, FileSpreadsheet,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -83,6 +84,7 @@ const menuSections = [
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: Shield, label: "CIPA", path: "/cipa" },
       { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
+      { icon: FileSpreadsheet, label: "PJ Medições", path: "/pj-medicoes" },
     ],
   },
   {
@@ -107,6 +109,13 @@ const menuSections = [
       { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
       { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },
       { icon: Gavel, label: "Jurídico", path: "/dashboards/juridico" },
+    ],
+  },
+  {
+    title: "Tabelas e Configurações",
+    items: [
+      { icon: CalendarDays, label: "Feriados", path: "/feriados" },
+      { icon: TrendingUp, label: "Dissídio", path: "/dissidio" },
     ],
   },
   {
@@ -161,6 +170,9 @@ const ICON_MAP: Record<string, any> = {
   "Contratos PJ": FileSignature,
   "Solicitação de HE": Clock,
   "Revisões do Sistema": GitBranch,
+  "Feriados": CalendarDays,
+  "Dissídio": TrendingUp,
+  "PJ Medições": FileSpreadsheet,
 };
 
 const allMenuItems = menuSections.flatMap(s => s.items);

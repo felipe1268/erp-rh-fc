@@ -2213,23 +2213,28 @@
 ## Fase 36: Frontend Novos Módulos + Dissídio por Ano + Campos Cadastro
 
 ### Módulo Dissídio Separado por Ano
-- [ ] Schema: tabela dissidios com histórico por ano (ano_referencia, percentual, data_base, data_aplicacao, status)
-- [ ] Critérios CLT/MTE: data-base maio, percentual mínimo INPC, retroativo, piso salarial categoria
-- [ ] Backend: router dissidio com CRUD + aplicação em massa + simulação
-- [ ] Backend: aplicação automática do dissídio (reajuste salarial em massa por ano)
-- [ ] Frontend: tela Dissídio separada por ano com histórico e aplicação
+- [x] Schema: tabela dissidios com histórico por ano (ano_referencia, percentual, data_base, data_aplicacao, status)
+- [x] Critérios CLT/MTE: data-base maio, percentual mínimo INPC, retroativo, piso salarial categoria
+- [x] Backend: router dissidio com CRUD + aplicação em massa + simulação
+- [x] Backend: aplicação automática do dissídio (reajuste salarial em massa por ano)
+- [x] Frontend: tela Dissídio separada por ano com histórico e aplicação
 
 ### Campos Novos no Cadastro do Colaborador
-- [ ] Frontend: campos pensão alimentícia (tipo, valor, percentual) no formulário
-- [ ] Frontend: campos licença maternidade (data início, data fim, status) no formulário
-- [ ] Frontend: campos seguro vida, sindicato, dissídio, CCT, DDS no formulário
-- [ ] Frontend: campo VT melhorado (valor, tipo, operadora) no formulário
+- [x] Frontend: campos pensão alimentícia (tipo, valor, percentual) no formulário
+- [x] Frontend: campos licença maternidade (data início, data fim, status) no formulário
+- [x] Frontend: campos seguro vida, sindicato, dissídio, CCT, DDS no formulário
+- [x] Frontend: campo VT melhorado (valor, tipo, operadora) no formulário
 
 ### Frontend Novos Módulos
-- [ ] Frontend: tela de Feriados (CRUD + seed nacionais)
-- [ ] Frontend: tela de PJ Medições (horas x valor hora)
-- [ ] Frontend: upload de documentos pessoais no cadastro do funcionário
+- [x] Frontend: tela de Feriados (CRUD + seed nacionais)
+- [x] Frontend: tela de PJ Medições (horas x valor hora)
+- [x] Frontend: upload de documentos pessoais no cadastro do funcionário
 
 ### Aba Descontos e Cruzamento HE na Folha
-- [ ] Frontend: aba Descontos na Folha (comparativo sistema vs contabilidade)
-- [ ] Frontend: aba Cruzamento HE na Folha (divergências sistema vs contabilidade)
+- [x] Frontend: aba Descontos na Folha (comparativo sistema vs contabilidade)
+- [x] Frontend: aba Cruzamento HE na Folha (divergências sistema vs contabilidade)
+
+## Fase 37: Campo Fornecedor no Cadastro de EPIs
+- [ ] Adicionar campo 'fornecedor' no schema da tabela de EPIs
+- [ ] Atualizar backend (router) para aceitar e retornar campo fornecedor
+- [ ] Atualizar frontend do formulário de EPIs com campo Fornecedor

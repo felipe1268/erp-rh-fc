@@ -458,6 +458,11 @@ export const epis = mysqlTable("epis", {
 	validadeCa: date({ mode: 'string' }),
 	fabricante: varchar({ length: 255 }),
 	fornecedor: varchar({ length: 255 }),
+	fornecedorCnpj: varchar("fornecedor_cnpj", { length: 20 }),
+	fornecedorContato: varchar("fornecedor_contato", { length: 255 }),
+	fornecedorTelefone: varchar("fornecedor_telefone", { length: 30 }),
+	fornecedorEmail: varchar("fornecedor_email", { length: 255 }),
+	fornecedorEndereco: varchar("fornecedor_endereco", { length: 500 }),
 	categoria: mysqlEnum('categoria', ['EPI','Uniforme','Calcado']).default('EPI').notNull(),
 	tamanho: varchar({ length: 20 }), // P, M, G, GG, XGG, XXGG ou 34-48 para calçados
 	quantidadeEstoque: int().default(0),
@@ -2046,4 +2051,83 @@ export const pjMedicoes = mysqlTable("pj_medicoes", {
 	index("pjm_contract").on(table.contractId),
 	index("pjm_employee").on(table.employeeId),
 	index("pjm_status").on(table.status),
+]);
+
+// ============================================================
+// DISSÍDIO COLETIVO — HISTÓRICO POR ANO
+// Fundamentação Legal:
+// - Art. 611 CLT: Convenção Coletiva de Trabalho (CCT)
+// - Art. 611-A CLT: Prevalência do negociado sobre o legislado
+// - Art. 614 §3º CLT: Vigência máxima de 2 anos
+// - Art. 616 CLT: Obrigatoriedade de negociação coletiva
+// - MTE: Data-base anual para reajuste salarial
+// - Lei 10.192/2001 Art. 13: Vedação de reajuste automático por índice
+// ============================================================
+export const dissidios = mysqlTable("dissidios", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	// Identificação do dissídio
+	anoReferencia: int().notNull(), // Ex: 2025, 2026
+	titulo: varchar({ length: 255 }).notNull(), // Ex: "Dissídio 2025/2026 - SINTRACON-SP"
+	sindicato: varchar({ length: 255 }), // Nome do sindicato
+	numeroCCT: varchar({ length: 100 }), // Número da CCT/ACT
+	// Data-base e vigência
+	mesDataBase: int().default(5).notNull(), // Mês da data-base (padrão: maio = 5)
+	dataBaseInicio: date({ mode: 'string' }).notNull(), // Data início vigência (ex: 2025-05-01)
+	dataBaseFim: date({ mode: 'string' }).notNull(), // Data fim vigência (ex: 2026-04-30)
+	// Percentuais de reajuste
+	percentualReajuste: varchar({ length: 10 }).notNull(), // Percentual geral (ex: "5.50")
+	percentualINPC: varchar({ length: 10 }), // INPC acumulado do período
+	percentualGanhoReal: varchar({ length: 10 }), // Ganho real acima do INPC
+	// Piso salarial
+	pisoSalarial: varchar({ length: 20 }), // Valor do piso salarial da categoria
+	pisoSalarialAnterior: varchar({ length: 20 }), // Piso do ano anterior para comparação
+	// Benefícios da CCT
+	valorVA: varchar({ length: 20 }), // Valor VA definido na CCT
+	valorVT: varchar({ length: 20 }), // Valor VT definido na CCT
+	valorSeguroVida: varchar({ length: 20 }), // Seguro de vida obrigatório
+	contribuicaoAssistencial: varchar({ length: 10 }), // Percentual contribuição assistencial
+	// Aplicação
+	dataAplicacao: date({ mode: 'string' }), // Data em que o dissídio foi aplicado
+	aplicadoPor: varchar({ length: 255 }),
+	retroativo: tinyint().default(1).notNull(), // Se o reajuste é retroativo à data-base
+	dataRetroativoInicio: date({ mode: 'string' }), // Se retroativo, desde quando
+	// Status
+	status: mysqlEnum(['rascunho','aguardando_homologacao','homologado','aplicado','cancelado']).default('rascunho').notNull(),
+	// Observações
+	observacoes: text(),
+	documentoUrl: text(), // URL do documento da CCT/ACT
+	// Metadados
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("diss_company_ano").on(table.companyId, table.anoReferencia),
+	index("diss_status").on(table.companyId, table.status),
+]);
+
+// Registro individual de aplicação do dissídio por funcionário
+export const dissidioFuncionarios = mysqlTable("dissidio_funcionarios", {
+	id: int().autoincrement().notNull(),
+	dissidioId: int().notNull(), // FK para dissidios
+	employeeId: int().notNull(), // FK para employees
+	companyId: int().notNull(),
+	// Valores antes e depois
+	salarioAnterior: varchar({ length: 20 }).notNull(),
+	salarioNovo: varchar({ length: 20 }).notNull(),
+	percentualAplicado: varchar({ length: 10 }).notNull(), // Pode ser diferente do geral
+	diferencaValor: varchar({ length: 20 }), // Diferença em R$
+	// Retroativo
+	mesesRetroativos: int().default(0), // Quantidade de meses retroativos
+	valorRetroativo: varchar({ length: 20 }), // Valor total retroativo a pagar
+	// Status
+	status: mysqlEnum(['pendente','aplicado','excluido']).default('pendente').notNull(),
+	motivoExclusao: text(), // Se excluído, motivo
+	// Metadados
+	aplicadoEm: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("df_dissidio").on(table.dissidioId),
+	index("df_employee").on(table.employeeId),
+	index("df_company").on(table.companyId),
 ]);

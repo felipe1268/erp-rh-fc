@@ -8,7 +8,7 @@ import {
   AlertTriangle, CheckCircle, FileText, Users, Lock, Unlock, Search,
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp,
-  Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin
+  Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -43,7 +43,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(clean) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he";
 
 export default function FolhaPagamento() {
   const { selectedCompanyId } = useCompany();
@@ -1253,6 +1253,28 @@ export default function FolhaPagamento() {
     );
   }
 
+  // ===== DESCONTOS CLT VIEW =====
+  if (viewMode === "descontos_clt" && viewLancId) {
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        {fileInputs}
+        <DescontosCLTView companyId={companyId} mesAno={mesAno} lancamentoId={viewLancId} onBack={() => setViewMode("resumo")} />
+      </DashboardLayout>
+    );
+  }
+
+  // ===== CRUZAMENTO HE VIEW =====
+  if (viewMode === "cruzamento_he" && viewLancId) {
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        {fileInputs}
+        <CruzamentoHEView companyId={companyId} mesAno={mesAno} lancamentoId={viewLancId} onBack={() => setViewMode("resumo")} />
+      </DashboardLayout>
+    );
+  }
+
   // ===== MAIN VIEW (resumo) =====
   return (
     <DashboardLayout>
@@ -1468,6 +1490,12 @@ export default function FolhaPagamento() {
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView("custos_obra", pagamento.id, "pagamento")}>
                       <Building2 className="h-3 w-3 mr-1" /> Custos/Obra
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs h-8 text-red-700 border-red-200" onClick={() => openView("descontos_clt", pagamento.id, "pagamento")}>
+                      <Scale className="h-3 w-3 mr-1" /> Descontos CLT
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs h-8 text-blue-700 border-blue-200" onClick={() => openView("cruzamento_he", pagamento.id, "pagamento")}>
+                      <Clock className="h-3 w-3 mr-1" /> Cruzamento HE
                     </Button>
                     {pagamento.status !== "consolidado" && (
                       <Button size="sm" variant="outline" className="text-xs h-8 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: pagamento.id })}>
@@ -2004,5 +2032,182 @@ export default function FolhaPagamento() {
         </FullScreenDialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+// ===== DESCONTOS CLT VIEW COMPONENT =====
+function DescontosCLTView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
+  const { data: comparativo, isLoading } = trpc.folha.comparativoDescontos.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <Scale className="h-5 w-5 text-red-700" /> Comparativo Descontos CLT
+            </h1>
+            <p className="text-sm text-muted-foreground">Sistema calculou vs Contabilidade cobrou — {mesAno}</p>
+          </div>
+        </div>
+        <PrintActions title={`Comparativo Descontos CLT - ${mesAno}`} />
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>
+      ) : !comparativo?.comparativo?.length ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Scale className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>Nenhum dado de desconto encontrado para este mês</p>
+          <p className="text-xs mt-1">Certifique-se de que os descontos foram calculados no Fechamento de Ponto</p>
+        </div>
+      ) : (
+        <div className="border border-border rounded-lg overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium">Funcionário</th>
+                <th className="text-center px-3 py-2 font-medium">Tipo</th>
+                <th className="text-right px-3 py-2 font-medium">Sistema (R$)</th>
+                <th className="text-right px-3 py-2 font-medium">Contabilidade (R$)</th>
+                <th className="text-right px-3 py-2 font-medium">Diferença (R$)</th>
+                <th className="text-center px-3 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparativo.comparativo.map((c: any, i: number) => {
+                const diff = c.diferenca || 0;
+                const hasDiff = Math.abs(diff) > 0.01;
+                return (
+                  <tr key={i} className={`border-t border-border ${hasDiff ? 'bg-red-50/50' : 'hover:bg-muted/30'}`}>
+                    <td className="px-4 py-2 font-medium">{c.nome}</td>
+                    <td className="px-3 py-2 text-center">
+                      <span className="text-xs px-2 py-0.5 rounded bg-muted">{c.tipo}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right">R$ {(c.valorSistema || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">R$ {(c.valorContabilidade || 0).toFixed(2)}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${hasDiff ? 'text-red-700' : 'text-green-700'}`}>
+                      {hasDiff ? `R$ ${diff.toFixed(2)}` : '-'}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {hasDiff ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-red-700"><AlertTriangle className="w-3 h-3" /> Divergente</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700"><CheckCircle className="w-3 h-3" /> OK</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== CRUZAMENTO HE VIEW COMPONENT =====
+function CruzamentoHEView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
+  const { data: cruzamento, isLoading } = trpc.folha.cruzamentoHE.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <Clock className="h-5 w-5 text-blue-700" /> Cruzamento Horas Extras
+            </h1>
+            <p className="text-sm text-muted-foreground">Sistema (ponto) vs Contabilidade (folha) — {mesAno}</p>
+          </div>
+        </div>
+        <PrintActions title={`Cruzamento HE - ${mesAno}`} />
+      </div>
+
+      {/* Resumo */}
+      {cruzamento && (
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="border border-border rounded-lg p-3">
+            <div className="text-xs text-muted-foreground">Total HE Sistema</div>
+            <div className="text-lg font-bold">{cruzamento.resumo?.totalHeSistema || '0'}h</div>
+          </div>
+          <div className="border border-border rounded-lg p-3">
+            <div className="text-xs text-muted-foreground">Total HE Folha</div>
+            <div className="text-lg font-bold">R$ {cruzamento.resumo?.totalHeContabValor?.toFixed(2) || '0'}</div>
+          </div>
+          <div className="border border-border rounded-lg p-3">
+            <div className="text-xs text-muted-foreground">Divergências</div>
+            <div className="text-lg font-bold text-red-700">{cruzamento.resumo?.comHeNaoAutorizada || 0}</div>
+          </div>
+          <div className="border border-border rounded-lg p-3">
+            <div className="text-xs text-muted-foreground">Conferidos OK</div>
+            <div className="text-lg font-bold text-green-700">{cruzamento.resumo?.totalFuncionarios || 0}</div>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex justify-center py-12"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>
+      ) : !cruzamento?.cruzamento?.length ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Clock className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>Nenhum dado de HE encontrado para cruzamento</p>
+        </div>
+      ) : (
+        <div className="border border-border rounded-lg overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium">Funcionário</th>
+                <th className="text-right px-3 py-2 font-medium">HE Sistema (h)</th>
+                <th className="text-right px-3 py-2 font-medium">HE Folha (h)</th>
+                <th className="text-right px-3 py-2 font-medium">Diferença (h)</th>
+                <th className="text-right px-3 py-2 font-medium">Valor Sistema (R$)</th>
+                <th className="text-right px-3 py-2 font-medium">Valor Folha (R$)</th>
+                <th className="text-center px-3 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cruzamento.cruzamento.map((f: any, i: number) => {
+                const diffH = (f.heSistema || 0) - (f.heFolha || 0);
+                const hasDiff = Math.abs(diffH) > 0.1;
+                return (
+                  <tr key={i} className={`border-t border-border ${hasDiff ? 'bg-amber-50/50' : 'hover:bg-muted/30'}`}>
+                    <td className="px-4 py-2 font-medium">{f.nome}</td>
+                    <td className="px-3 py-2 text-right">{(f.heSistema || 0).toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{(f.heFolha || 0).toFixed(1)}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${hasDiff ? 'text-red-700' : 'text-green-700'}`}>
+                      {hasDiff ? diffH.toFixed(1) : '-'}
+                    </td>
+                    <td className="px-3 py-2 text-right">R$ {(f.valorSistema || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">R$ {(f.valorFolha || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-center">
+                      {hasDiff ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-red-700"><AlertTriangle className="w-3 h-3" /> Divergente</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700"><CheckCircle className="w-3 h-3" /> OK</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

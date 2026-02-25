@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (82, 'Gap Analysis Completo + Fornecedor CNPJ + Dissídio', 'Implementação completa do Gap Analysis (20 módulos): Template Aviso Prévio PDF, Alerta 80 dias obras, Campos VT/Pensão/Licença/Seguro/Sindicato/Dissídio, Tabela Feriados, PJ Medições, Upload Documentos S3, Comparativo Descontos Folha, Cruzamento HE, Regra vale dia 10, Recontratação CPF, JF Processos, Sugestão advertências. Módulo Dissídio por ano com critérios CLT/MTE. Campo Fornecedor com busca CNPJ via BrasilAPI no EPI.', 'feature', '[\"EPIs\",\"Dissídio\",\"Folha\",\"Feriados\",\"PJ\",\"Documentos\",\"Aviso Prévio\",\"Cadastro\"]', 'Manus AI', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (82, 'Gap Analysis Completo + Fornecedor CNPJ + Dissídio', 'Implementação completa do Gap Analysis (20 módulos): Template Aviso Prévio PDF, Alerta 80 dias obras, Campos VT/Pensão/Licença/Seguro/Sindicato/Dissídio, Tabela Feriados, PJ Medições, Upload Documentos S3, Comparativo Descontos Folha, Cruzamento HE, Regra vale dia 10, Recontratação CPF, JF Processos, Sugestão advertências. Módulo Dissídio por ano com critérios CLT/MTE. Campo Fornecedor com busca CNPJ via BrasilAPI no EPI.', 'feature', '[\"EPIs\",\"Dissídio\",\"Folha\",\"Feriados\",\"PJ\",\"Documentos\",\"Aviso Prévio\",\"Cadastro\"]', 'Manus AI', NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 61
+}

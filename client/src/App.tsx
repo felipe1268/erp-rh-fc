@@ -42,6 +42,9 @@ import ContratoPJView from "./pages/ContratoPJView";
 import Revisoes from "./pages/Revisoes";
 import DixiPonto from "./pages/DixiPonto";
 import SolicitacaoHE from "./pages/SolicitacaoHE";
+import Feriados from "./pages/Feriados";
+import Dissidio from "./pages/Dissidio";
+import PJMedicoes from "./pages/PJMedicoes";
 
 function Router() {
   return (
@@ -73,6 +76,9 @@ function Router() {
       <Route path={"/revisoes"} component={Revisoes} />
       <Route path={"/dixi-ponto"} component={DixiPonto} />
       <Route path={"/solicitacao-he"} component={SolicitacaoHE} />
+      <Route path={"/feriados"} component={Feriados} />
+      <Route path={"/dissidio"} component={Dissidio} />
+      <Route path={"/pj-medicoes"} component={PJMedicoes} />
       {/* Relatórios */}
       <Route path={"/relatorios/raio-x"} component={RaioXPage} />
       {/* Dashboards */}

@@ -56,6 +56,7 @@ import { pontoDescontosRouter } from "./routers/pontoDescontos";
 import { feriadosRouter } from "./routers/feriados";
 import { employeeDocumentsRouter } from "./routers/employeeDocuments";
 import { pjMedicoesRouter } from "./routers/pjMedicoes";
+import { dissidioRouter } from "./routers/dissidio";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -1359,6 +1360,7 @@ export const appRouter = router({
   feriados: feriadosRouter,
   employeeDocuments: employeeDocumentsRouter,
   pjMedicoes: pjMedicoesRouter,
+  dissidio: dissidioRouter,
   // ============================================================
   // LIXEIRA (TRASH) - Listar e restaurar itens excluídos
   // ============================================================

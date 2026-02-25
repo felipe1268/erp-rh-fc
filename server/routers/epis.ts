@@ -25,6 +25,11 @@ export const episRouter = router({
       validadeCa: z.string().optional(),
       fabricante: z.string().optional(),
       fornecedor: z.string().optional(),
+      fornecedorCnpj: z.string().optional(),
+      fornecedorContato: z.string().optional(),
+      fornecedorTelefone: z.string().optional(),
+      fornecedorEmail: z.string().optional(),
+      fornecedorEndereco: z.string().optional(),
       categoria: z.enum(['EPI','Uniforme','Calcado']).default('EPI'),
       tamanho: z.string().optional(),
       quantidadeEstoque: z.number().default(0),
@@ -40,6 +45,11 @@ export const episRouter = router({
         validadeCa: input.validadeCa || null,
         fabricante: input.fabricante || null,
         fornecedor: input.fornecedor || null,
+        fornecedorCnpj: input.fornecedorCnpj || null,
+        fornecedorContato: input.fornecedorContato || null,
+        fornecedorTelefone: input.fornecedorTelefone || null,
+        fornecedorEmail: input.fornecedorEmail || null,
+        fornecedorEndereco: input.fornecedorEndereco || null,
         categoria: input.categoria,
         tamanho: input.tamanho || null,
         quantidadeEstoque: input.quantidadeEstoque,
@@ -57,6 +67,11 @@ export const episRouter = router({
       validadeCa: z.string().optional(),
       fabricante: z.string().optional(),
       fornecedor: z.string().optional(),
+      fornecedorCnpj: z.string().nullable().optional(),
+      fornecedorContato: z.string().nullable().optional(),
+      fornecedorTelefone: z.string().nullable().optional(),
+      fornecedorEmail: z.string().nullable().optional(),
+      fornecedorEndereco: z.string().nullable().optional(),
       categoria: z.enum(['EPI','Uniforme','Calcado']).optional(),
       tamanho: z.string().nullable().optional(),
       quantidadeEstoque: z.number().optional(),
@@ -72,6 +87,11 @@ export const episRouter = router({
       if (data.validadeCa !== undefined) updateData.validadeCa = data.validadeCa;
       if (data.fabricante !== undefined) updateData.fabricante = data.fabricante;
       if (data.fornecedor !== undefined) updateData.fornecedor = data.fornecedor;
+      if (data.fornecedorCnpj !== undefined) updateData.fornecedorCnpj = data.fornecedorCnpj;
+      if (data.fornecedorContato !== undefined) updateData.fornecedorContato = data.fornecedorContato;
+      if (data.fornecedorTelefone !== undefined) updateData.fornecedorTelefone = data.fornecedorTelefone;
+      if (data.fornecedorEmail !== undefined) updateData.fornecedorEmail = data.fornecedorEmail;
+      if (data.fornecedorEndereco !== undefined) updateData.fornecedorEndereco = data.fornecedorEndereco;
       if (data.categoria !== undefined) updateData.categoria = data.categoria;
       if (data.tamanho !== undefined) updateData.tamanho = data.tamanho;
       if (data.quantidadeEstoque !== undefined) updateData.quantidadeEstoque = data.quantidadeEstoque;

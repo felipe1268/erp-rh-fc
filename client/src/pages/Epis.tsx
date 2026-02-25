@@ -12,7 +12,7 @@ import {
   Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
-  Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella
+  Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
@@ -71,10 +71,40 @@ export default function Epis() {
   // Form state - EPI
   const [epiForm, setEpiForm] = useState({
     nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "",
+    fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "",
     categoria: "EPI" as "EPI" | "Uniforme" | "Calcado",
     tamanho: "",
     quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "",
   });
+
+  // CNPJ fornecedor lookup
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [cnpjResult, setCnpjResult] = useState<any>(null);
+  const buscarCnpjFornecedor = async (cnpj: string) => {
+    const clean = cnpj.replace(/\D/g, "");
+    if (clean.length !== 14) return;
+    setCnpjLoading(true);
+    setCnpjResult(null);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`);
+      if (!res.ok) { setCnpjResult({ error: "CNPJ não encontrado" }); return; }
+      const data = await res.json();
+      const nome = data.nome_fantasia || data.razao_social || "";
+      const tel = data.ddd_telefone_1 ? `(${data.ddd_telefone_1.substring(0,2)}) ${data.ddd_telefone_1.substring(2)}` : "";
+      const end = [data.logradouro, data.numero, data.complemento, data.bairro, data.municipio, data.uf].filter(Boolean).join(", ");
+      setEpiForm(f => ({
+        ...f,
+        fornecedor: nome,
+        fornecedorCnpj: clean,
+        fornecedorTelefone: tel,
+        fornecedorEmail: data.email || "",
+        fornecedorEndereco: end,
+        fornecedorContato: data.razao_social || "",
+      }));
+      setCnpjResult({ success: true, razaoSocial: data.razao_social, nomeFantasia: data.nome_fantasia });
+    } catch { setCnpjResult({ error: "Erro ao buscar CNPJ" }); }
+    finally { setCnpjLoading(false); }
+  };
 
   // Form state - Entrega
   const [entregaForm, setEntregaForm] = useState({
@@ -175,7 +205,7 @@ export default function Epis() {
   };
 
   function resetEpiForm() {
-    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "" });
+    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "" }); setCnpjResult(null);
     setAiSuggestion(null);
     setAiSuggestionLoading(false);
     setCaLookupResult(null);
@@ -369,6 +399,53 @@ export default function Epis() {
                     placeholder="Nome do fornecedor" />
                 </div>
               </div>
+
+              {/* Dados do Fornecedor - CNPJ com busca automática */}
+              <div className="border border-dashed border-blue-300 rounded-lg p-3 bg-blue-50/30 space-y-3">
+                <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
+                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor (CNPJ)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">CNPJ do Fornecedor</Label>
+                    <div className="flex gap-1">
+                      <Input value={epiForm.fornecedorCnpj}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 14);
+                          const formatted = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+                          setEpiForm(f => ({ ...f, fornecedorCnpj: v.length <= 14 ? formatted : f.fornecedorCnpj }));
+                          if (v.length === 14) buscarCnpjFornecedor(v);
+                        }}
+                        placeholder="00.000.000/0000-00" className="flex-1" />
+                      <Button type="button" size="sm" variant="outline" disabled={cnpjLoading || epiForm.fornecedorCnpj.replace(/\D/g, "").length !== 14}
+                        onClick={() => buscarCnpjFornecedor(epiForm.fornecedorCnpj)}>
+                        {cnpjLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {cnpjResult?.success && (
+                      <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>
+                    )}
+                    {cnpjResult?.error && (
+                      <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs">Telefone</Label>
+                    <Input value={epiForm.fornecedorTelefone} onChange={e => setEpiForm(f => ({ ...f, fornecedorTelefone: e.target.value }))}
+                      placeholder="(00) 0000-0000" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">E-mail</Label>
+                    <Input value={epiForm.fornecedorEmail} onChange={e => setEpiForm(f => ({ ...f, fornecedorEmail: e.target.value }))}
+                      placeholder="contato@fornecedor.com" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Endereço</Label>
+                  <Input value={epiForm.fornecedorEndereco} onChange={e => setEpiForm(f => ({ ...f, fornecedorEndereco: e.target.value }))}
+                    placeholder="Endereço completo do fornecedor" />
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label className="flex items-center gap-1">
@@ -445,6 +522,11 @@ export default function Epis() {
                     companyId, nome: epiForm.nome,
                     ca: epiForm.ca || undefined, validadeCa: epiForm.validadeCa || undefined,
                     fabricante: epiForm.fabricante || undefined, fornecedor: epiForm.fornecedor || undefined,
+                    fornecedorCnpj: epiForm.fornecedorCnpj?.replace(/\D/g, "") || undefined,
+                    fornecedorContato: epiForm.fornecedorContato || undefined,
+                    fornecedorTelefone: epiForm.fornecedorTelefone || undefined,
+                    fornecedorEmail: epiForm.fornecedorEmail || undefined,
+                    fornecedorEndereco: epiForm.fornecedorEndereco || undefined,
                     categoria: epiForm.categoria,
                     tamanho: epiForm.tamanho || undefined,
                     quantidadeEstoque: epiForm.quantidadeEstoque,

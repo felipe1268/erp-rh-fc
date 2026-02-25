@@ -9,6 +9,7 @@ import {
   Gavel, UserSearch, BarChart3, Lock, FileText, Settings, Star,
   ClipboardList, GripVertical, Eye, EyeOff,
   RotateCcw, Save, Loader2, ChevronDown, ChevronRight, Pencil, Check, X,
+  CalendarDays, TrendingUp, FileSpreadsheet,
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -24,6 +25,9 @@ const ICON_MAP: Record<string, any> = {
   "Auditoria do Sistema": FileText, "Configurações": Settings,
   "Avaliação de Desempenho": Star,
   "Solicitação de HE": Clock,
+  "Feriados": CalendarDays,
+  "Dissídio": TrendingUp,
+  "PJ Medições": FileSpreadsheet,
 };
 
 const PATH_ICON_MAP: Record<string, any> = {
@@ -40,6 +44,9 @@ const PATH_ICON_MAP: Record<string, any> = {
   "/usuarios": Lock, "/auditoria": FileText, "/configuracoes": Settings,
   "/avaliacao": Star,
   "/solicitacao-he": Clock,
+  "/feriados": CalendarDays,
+  "/dissidio": TrendingUp,
+  "/pj-medicoes": FileSpreadsheet,
 };
 const DEFAULT_MENU = [
   { title: "Principal", items: [{ label: "Painel", path: "/", visible: true }] },
@@ -66,6 +73,11 @@ const DEFAULT_MENU = [
     { label: "Férias", path: "/ferias", visible: true },
     { label: "CIPA", path: "/cipa", visible: true },
     { label: "Contratos PJ", path: "/modulo-pj", visible: true },
+    { label: "PJ Medições", path: "/pj-medicoes", visible: true },
+  ]},
+  { title: "Tabelas e Configurações", items: [
+    { label: "Feriados", path: "/feriados", visible: true },
+    { label: "Dissídio", path: "/dissidio", visible: true },
   ]},
   { title: "Jurídico", items: [{ label: "Processos Trabalhistas", path: "/processos-trabalhistas", visible: true }] },
   { title: "Relatórios", items: [{ label: "Raio-X do Funcionário", path: "/relatorios/raio-x", visible: true }] },
