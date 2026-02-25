@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useModule, ModuleId } from "@/contexts/ModuleContext";
 import { APP_VERSION } from "../../../shared/version";
 import {
   Users, Shield, Gavel, CalendarRange, DollarSign, ShoppingCart, Calculator,
@@ -131,6 +132,7 @@ export default function ModuleHub() {
   const { user, loading, logout } = useAuth();
   const [, navigate] = useLocation();
   const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany } = useCompany();
+  const { setActiveModule } = useModule();
 
   if (loading) {
     return (
@@ -275,7 +277,7 @@ export default function ModuleHub() {
           {activeModules.map(mod => (
             <button
               key={mod.id}
-              onClick={() => navigate(mod.path)}
+              onClick={() => { setActiveModule(mod.id as ModuleId); navigate(mod.path); }}
               className={`group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-7 text-left transition-all duration-500 hover:bg-white/[0.07] hover:border-white/[0.12] hover:-translate-y-1 hover:shadow-2xl ${mod.glowColor}`}
             >
               {/* Subtle glow effect */}

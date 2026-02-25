@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
+import { ModuleProvider } from "./contexts/ModuleContext";
 import ModuleHub from "./pages/ModuleHub";
 import Home from "./pages/Home";
 import Empresas from "./pages/Empresas";
@@ -106,7 +107,9 @@ function App() {
         <TooltipProvider>
           <Toaster position="bottom-left" />
           <CompanyProvider>
-            <Router />
+            <ModuleProvider>
+              <Router />
+            </ModuleProvider>
           </CompanyProvider>
         </TooltipProvider>
       </ThemeProvider>

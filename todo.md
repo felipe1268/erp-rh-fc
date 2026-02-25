@@ -2318,3 +2318,10 @@
 - [x] Criar tela de edição de EPI igual à de cadastro, preenchida com dados atuais
 - [x] Corrigir bug: alterações no EPI não estão sendo salvas (updateEpiMut onSuccess agora navega de volta e reseta form)
 - [x] Ao clicar no EPI no catálogo, abrir formulário de edição (nome clicável + botão editar)
+
+## Fase 50: Reorganizar sidebar por módulo (RH & DP, SST, Jurídico)
+- [x] Mapear itens atuais da sidebar e classificar por módulo
+- [x] Criar seções separadas na sidebar: RH & DP, SST, Jurídico
+- [x] Cada módulo mostra apenas seus itens pertinentes, sem duplicidade
+- [x] Manter itens compartilhados (Cadastro: Empresas, Obras, etc.) em seção comum
+- [x] Navegação entre módulos via Hub ou troca na sidebar (seletor de módulo na sidebar)

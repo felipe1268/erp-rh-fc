@@ -39,9 +39,27 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useModule, ModuleId, MODULE_LABELS } from "@/contexts/ModuleContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const menuSections = [
+// ========== MENU DEFINITIONS PER MODULE ==========
+// Each module has its own exclusive sections. No duplicity.
+
+type MenuItem = {
+  icon: any;
+  label: string;
+  path: string;
+  soon?: boolean;
+  adminMasterOnly?: boolean;
+};
+
+type MenuSection = {
+  title: string;
+  items: MenuItem[];
+};
+
+// RH & DP - Recursos Humanos e Departamento Pessoal
+const menuSectionsRHDP: MenuSection[] = [
   {
     title: "Principal",
     items: [
@@ -72,7 +90,6 @@ const menuSections = [
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
-      { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
       { icon: Wifi, label: "Dixi Ponto", path: "/dixi-ponto" },
       { icon: Clock, label: "Solicitação de HE", path: "/solicitacao-he" },
     ],
@@ -82,15 +99,8 @@ const menuSections = [
     items: [
       { icon: AlertTriangle, label: "Aviso Prévio", path: "/aviso-previo" },
       { icon: Palmtree, label: "Férias", path: "/ferias" },
-      { icon: Shield, label: "CIPA", path: "/cipa" },
       { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
       { icon: FileSpreadsheet, label: "PJ Medições", path: "/pj-medicoes" },
-    ],
-  },
-  {
-    title: "Jurídico",
-    items: [
-      { icon: Gavel, label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
     ],
   },
   {
@@ -107,8 +117,6 @@ const menuSections = [
       { icon: Clock, label: "Cartão de Ponto", path: "/dashboards/cartao-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/dashboards/folha-pagamento" },
       { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
-      { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },
-      { icon: Gavel, label: "Jurídico", path: "/dashboards/juridico" },
     ],
   },
   {
@@ -118,6 +126,71 @@ const menuSections = [
       { icon: TrendingUp, label: "Dissídio", path: "/dissidio" },
     ],
   },
+];
+
+// SST - Segurança e Saúde do Trabalho
+const menuSectionsSST: MenuSection[] = [
+  {
+    title: "Principal",
+    items: [
+      { icon: LayoutDashboard, label: "Painel", path: "/painel" },
+    ],
+  },
+  {
+    title: "Cadastro",
+    items: [
+      { icon: Building2, label: "Empresas", path: "/empresas" },
+      { icon: Users, label: "Colaboradores", path: "/colaboradores" },
+      { icon: Landmark, label: "Obras", path: "/obras" },
+    ],
+  },
+  {
+    title: "Segurança do Trabalho",
+    items: [
+      { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
+      { icon: Shield, label: "CIPA", path: "/cipa" },
+    ],
+  },
+  {
+    title: "Dashboards",
+    items: [
+      { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },
+    ],
+  },
+];
+
+// Jurídico - Gestão Jurídica Trabalhista
+const menuSectionsJuridico: MenuSection[] = [
+  {
+    title: "Principal",
+    items: [
+      { icon: LayoutDashboard, label: "Painel", path: "/painel" },
+    ],
+  },
+  {
+    title: "Cadastro",
+    items: [
+      { icon: Building2, label: "Empresas", path: "/empresas" },
+      { icon: Users, label: "Colaboradores", path: "/colaboradores" },
+      { icon: Landmark, label: "Obras", path: "/obras" },
+    ],
+  },
+  {
+    title: "Jurídico",
+    items: [
+      { icon: Gavel, label: "Processos Trabalhistas", path: "/processos-trabalhistas" },
+    ],
+  },
+  {
+    title: "Dashboards",
+    items: [
+      { icon: Gavel, label: "Jurídico", path: "/dashboards/juridico" },
+    ],
+  },
+];
+
+// Shared admin sections (appended to every module)
+const adminSections: MenuSection[] = [
   {
     title: "Administração",
     items: [
@@ -128,14 +201,16 @@ const menuSections = [
       { icon: Trash2, label: "Lixeira", path: "/lixeira" },
     ],
   },
-  {
-    title: "Em Breve",
-    items: [
-      { icon: Star, label: "Avaliação de Desempenho", path: "/avaliacao", soon: true },
-    ],
-  },
 ];
 
+const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
+  "rh-dp": menuSectionsRHDP,
+  "sst": menuSectionsSST,
+  "juridico": menuSectionsJuridico,
+  "all": [...menuSectionsRHDP], // fallback: show RH & DP
+};
+
+// Icon map for custom menu config
 const ICON_MAP: Record<string, any> = {
   "Painel": LayoutDashboard,
   "Empresas": Building2,
@@ -175,7 +250,13 @@ const ICON_MAP: Record<string, any> = {
   "PJ Medições": FileSpreadsheet,
 };
 
-const allMenuItems = menuSections.flatMap(s => s.items);
+// Module color/icon config for the selector
+const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> = {
+  "rh-dp": { icon: Users, color: "text-blue-400", bg: "bg-blue-500/20" },
+  "sst": { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/20" },
+  "juridico": { icon: Gavel, color: "text-slate-300", bg: "bg-slate-400/20" },
+  "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
+};
 
 // Variáveis em nível de módulo para persistir estado entre remounts
 let _sidebarScrollTop = 0;
@@ -245,13 +326,13 @@ function DashboardLayoutContent({
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const { selectedCompany } = useCompany();
+  const { activeModule, setActiveModule } = useModule();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
 
   // Preservar posição do scroll do menu lateral ao navegar
-  // Usar variável de módulo para persistir entre remounts do componente
   const restoreScroll = () => {
     const scrollVal = _sidebarScrollTop;
     requestAnimationFrame(() => {
@@ -263,106 +344,54 @@ function DashboardLayoutContent({
     });
   };
 
-  // Restaurar scroll na montagem inicial do componente
-  useEffect(() => {
-    restoreScroll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { restoreScroll(); }, []);
+  useEffect(() => { restoreScroll(); }, [location]);
 
-  // Restaurar scroll quando a rota muda
-  useEffect(() => {
-    restoreScroll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location]);
-
-  // Carregar configuração personalizada do menu
-  const menuConfigQuery = trpc.menuConfig.get.useQuery(undefined, { staleTime: 60000 });
   const isAdminUser = user?.role === 'admin' || user?.role === 'admin_master';
   const isMasterUser = user?.role === 'admin_master';
-  
+
   // Paths restritos por nível de acesso
   const adminOnlyPaths = ['/usuarios', '/auditoria', '/configuracoes', '/lixeira'];
-  const masterOnlyPaths = ['/usuarios'];
-  
+
+  // Build the effective sections based on active module
   const effectiveSections = useMemo(() => {
-    let sections = menuSections;
-    if (menuConfigQuery.data) {
-      // Mapear configuração salva de volta para o formato com ícones
-      const savedData = menuConfigQuery.data as any[];
-      const allSavedPaths = new Set(savedData.flatMap((s: any) => s.items.map((i: any) => i.path)));
-      
-      sections = savedData.map((section: any) => ({
-        title: section.title,
-        items: section.items
-          .filter((item: any) => item.visible !== false)
-          .map((item: any) => {
-            const original = allMenuItems.find(m => m.path === item.path);
-            return {
-              icon: ICON_MAP[item.label] || original?.icon || LayoutDashboard,
-              label: item.label,
-              path: item.path,
-              soon: (original as any)?.soon || false,
-            };
-          }),
-      }));
-      
-      // Merge new items from menuSections that don't exist in saved config
-      for (const defSection of menuSections) {
-        const existingSection = sections.find(s => s.title === defSection.title);
-        for (const defItem of defSection.items) {
-          if (!allSavedPaths.has(defItem.path)) {
-            const newItem = {
-              icon: defItem.icon,
-              label: defItem.label,
-              path: defItem.path,
-              soon: (defItem as any)?.soon || false,
-            };
-            if (existingSection) {
-              existingSection.items.push(newItem);
-            } else {
-              sections.push({ title: defSection.title, items: [newItem] });
-            }
-            allSavedPaths.add(defItem.path);
-          }
-        }
-      }
-      // Add entirely new sections
-      for (const defSection of menuSections) {
-        if (!sections.find(s => s.title === defSection.title)) {
-          sections.push({
-            title: defSection.title,
-            items: defSection.items.map(i => ({
-              icon: i.icon,
-              label: i.label,
-              path: i.path,
-              soon: (i as any)?.soon || false,
-            })),
-          });
-        }
-      }
-    }
-    // Filtrar itens baseado no role do usuário
+    const moduleSections = MODULE_SECTIONS[activeModule] || MODULE_SECTIONS["rh-dp"];
+    // Combine module sections + admin sections
+    let sections: MenuSection[] = [...moduleSections, ...adminSections];
+
+    // Filter admin-only paths for non-admin users
     if (!isAdminUser) {
       sections = sections.map(s => ({
         ...s,
-        items: s.items.filter((item: any) => !adminOnlyPaths.includes(item.path)),
+        items: s.items.filter(item => !adminOnlyPaths.includes(item.path)),
       }));
     }
-    // Filtrar itens exclusivos do Admin Master
+    // Filter admin master only items
     if (!isMasterUser) {
       sections = sections.map(s => ({
         ...s,
-        items: s.items.filter((item: any) => !item.adminMasterOnly),
+        items: s.items.filter(item => !item.adminMasterOnly),
       }));
     }
-    return sections.filter((s: any) => s.items.length > 0);
-  }, [menuConfigQuery.data, isAdminUser, isMasterUser]);
+    return sections.filter(s => s.items.length > 0);
+  }, [activeModule, isAdminUser, isMasterUser]);
 
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
-  const activeMenuItem = allEffectiveItems.find(item => item.path === location) || allMenuItems.find(item => item.path === location);
+  const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => s.items));
+  const activeMenuItem = allEffectiveItems.find(item => item.path === location)
+    || allModuleItems.find(item => item.path === location);
+
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
-    _expandedSections ?? Object.fromEntries(menuSections.map(s => [s.title, true]))
+    _expandedSections ?? Object.fromEntries(effectiveSections.map(s => [s.title, true]))
   );
+
+  // Reset expanded sections when module changes
+  useEffect(() => {
+    const newExpanded = Object.fromEntries(effectiveSections.map(s => [s.title, true]));
+    setExpandedSections(newExpanded);
+    _expandedSections = newExpanded;
+  }, [activeModule]);
+
   const toggleSection = (title: string) => {
     setExpandedSections(prev => {
       const next = { ...prev, [title]: !prev[title] };
@@ -373,9 +402,7 @@ function DashboardLayoutContent({
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    if (isCollapsed) {
-      setIsResizing(false);
-    }
+    if (isCollapsed) setIsResizing(false);
   }, [isCollapsed]);
 
   useEffect(() => {
@@ -401,6 +428,9 @@ function DashboardLayoutContent({
       document.body.style.userSelect = "";
     };
   }, [isResizing, setSidebarWidth]);
+
+  const currentTheme = MODULE_THEME[activeModule];
+  const ModIcon = currentTheme.icon;
 
   return (
     <>
@@ -445,6 +475,73 @@ function DashboardLayoutContent({
               )}
             </div>
           </SidebarHeader>
+
+          {/* Module Selector */}
+          {!isCollapsed && (
+            <div className="px-3 pb-2">
+              <Select value={activeModule} onValueChange={(v) => setActiveModule(v as ModuleId)}>
+                <SelectTrigger className="w-full h-10 bg-sidebar-accent/50 border-sidebar-border text-sm font-semibold">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-6 w-6 rounded-md ${currentTheme.bg} flex items-center justify-center`}>
+                      <ModIcon className={`h-3.5 w-3.5 ${currentTheme.color}`} />
+                    </div>
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rh-dp">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-blue-500/20 flex items-center justify-center">
+                        <Users className="h-3 w-3 text-blue-400" />
+                      </div>
+                      RH & DP
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="sst">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-emerald-500/20 flex items-center justify-center">
+                        <Shield className="h-3 w-3 text-emerald-400" />
+                      </div>
+                      SST
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="juridico">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-slate-400/20 flex items-center justify-center">
+                        <Gavel className="h-3 w-3 text-slate-300" />
+                      </div>
+                      Jurídico
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {isCollapsed && (
+            <div className="px-2 pb-2 flex justify-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={`h-8 w-8 rounded-lg ${currentTheme.bg} flex items-center justify-center hover:opacity-80 transition-opacity`}
+                    title={MODULE_LABELS[activeModule]}
+                  >
+                    <ModIcon className={`h-4 w-4 ${currentTheme.color}`} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="right" align="start">
+                  <DropdownMenuItem onClick={() => setActiveModule("rh-dp")} className="cursor-pointer">
+                    <Users className="mr-2 h-4 w-4 text-blue-400" /> RH & DP
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveModule("sst")} className="cursor-pointer">
+                    <Shield className="mr-2 h-4 w-4 text-emerald-400" /> SST
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveModule("juridico")} className="cursor-pointer">
+                    <Gavel className="mr-2 h-4 w-4 text-slate-300" /> Jurídico
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
 
           <SidebarContent
             ref={sidebarScrollRef}
