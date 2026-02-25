@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
+import ModuleHub from "./pages/ModuleHub";
 import Home from "./pages/Home";
 import Empresas from "./pages/Empresas";
 import Colaboradores from "./pages/Colaboradores";
@@ -50,7 +51,10 @@ function Router() {
   return (
     <Switch>
       <Route path={"/login"} component={Login} />
-      <Route path={"/"} component={Home} />
+      {/* Hub de Módulos - Tela Inicial */}
+      <Route path={"/"} component={ModuleHub} />
+      {/* Painel Principal (antigo Home) */}
+      <Route path={"/painel"} component={Home} />
       <Route path={"/empresas"} component={Empresas} />
       <Route path={"/colaboradores"} component={Colaboradores} />
       <Route path={"/obras"} component={Obras} />

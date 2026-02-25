@@ -2295,3 +2295,14 @@
 - [x] Deduplicação por número de CA (124k linhas → ~40k CAs únicos)
 - [x] Fallback para dados.gov.br API mantido
 - [x] 308 testes passando
+
+## Fase 47: Reestruturar como FC Gestão Integrada
+- [x] Criar tela Hub de Módulos como página inicial (cards visuais para cada módulo)
+- [x] Módulos atuais: RH & DP, SST (Segurança do Trabalho), Jurídico
+- [x] Módulos futuros (Em breve): Planejamento, Financeiro, Orçamento, Compras
+- [x] Reorganizar sidebar com botão voltar ao Hub (logo FC clicável)
+- [x] Atualizar branding para "FC Gestão Integrada" (título, header, footer, HTML)
+- [x] Preparar sistema de permissões por módulo (campo modulesAccess na tabela users)
+- [x] Botão de voltar ao Hub de Módulos na sidebar
+- [x] Rota / = Hub de Módulos, /painel = Dashboard principal
+- [x] 308 testes passando (25 arquivos)

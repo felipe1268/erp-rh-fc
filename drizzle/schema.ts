@@ -854,6 +854,7 @@ export const users = mysqlTable("users", {
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
+	modulesAccess: text().$type<string>(),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),

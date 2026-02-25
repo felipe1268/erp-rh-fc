@@ -26,7 +26,7 @@ import {
   LayoutDashboard, LogOut, PanelLeft, Users,
   Clock, Star, Lock, Building2, FileText,
   ChevronDown, ChevronRight,
-  BarChart3, Settings,
+  BarChart3, Settings, Grid2X2,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
   ClipboardList, UserSearch, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
@@ -45,7 +45,7 @@ const menuSections = [
   {
     title: "Principal",
     items: [
-      { icon: LayoutDashboard, label: "Painel", path: "/" },
+      { icon: LayoutDashboard, label: "Painel", path: "/painel" },
     ],
   },
   {
@@ -421,16 +421,28 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  {selectedCompany?.logoUrl ? (
-                    <img src={selectedCompany.logoUrl} alt={selectedCompany.nomeFantasia || selectedCompany.razaoSocial} className="h-8 object-contain" />
-                  ) : (
-                    <Building2 className="h-6 w-6 text-sidebar-foreground/70 shrink-0" />
-                  )}
-                  <span className="font-bold tracking-tight truncate text-[#D4A843] text-sm uppercase">
-                    {selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "ERP RH & DP"}
-                  </span>
+                  <button
+                    onClick={() => setLocation("/")}
+                    className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
+                    title="Voltar ao Hub de Módulos"
+                  >
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#D4A843] to-[#B8922F] flex items-center justify-center shrink-0">
+                      <span className="text-[#1B2A4A] font-black text-[10px]">FC</span>
+                    </div>
+                    <span className="font-bold tracking-tight truncate text-[#D4A843] text-sm">
+                      FC Gestão Integrada
+                    </span>
+                  </button>
                 </div>
-              ) : null}
+              ) : (
+                <button
+                  onClick={() => setLocation("/")}
+                  className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#D4A843] to-[#B8922F] flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity"
+                  title="Voltar ao Hub de Módulos"
+                >
+                  <span className="text-[#1B2A4A] font-black text-[10px]">FC</span>
+                </button>
+              )}
             </div>
           </SidebarHeader>
 

@@ -369,7 +369,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     }
 
     // FOOTER
-    html += `<div class="footer"><span>ERP RH & DP \u2014 ${nomeEmpresa}</span><span>Gerado por: ${userName} em ${dataEmissao}</span><span class="lgpd">Dados protegidos pela LGPD (Lei 13.709/2018)</span></div></body></html>`;
+    html += `<div class="footer"><span>FC Gest\u00e3o Integrada \u2014 ${nomeEmpresa}</span><span>Gerado por: ${userName} em ${dataEmissao}</span><span class="lgpd">Dados protegidos pela LGPD (Lei 13.709/2018)</span></div></body></html>`;
 
     printWindow.document.write(html);
     printWindow.document.close();
