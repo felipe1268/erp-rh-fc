@@ -2235,6 +2235,6 @@
 - [x] Frontend: aba Cruzamento HE na Folha (divergências sistema vs contabilidade)
 
 ## Fase 37: Campo Fornecedor no Cadastro de EPIs
-- [ ] Adicionar campo 'fornecedor' no schema da tabela de EPIs
-- [ ] Atualizar backend (router) para aceitar e retornar campo fornecedor
-- [ ] Atualizar frontend do formulário de EPIs com campo Fornecedor
+- [x] Adicionar campo 'fornecedor' no schema da tabela de EPIs (+ CNPJ, contato, telefone, email, endereço)
+- [x] Atualizar backend (router) para aceitar e retornar campos do fornecedor
+- [x] Atualizar frontend do formulário de EPIs com busca automática por CNPJ via BrasilAPI
