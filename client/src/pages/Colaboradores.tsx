@@ -1764,6 +1764,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       <strong>Acordo ativo:</strong> Os percentuais acima serão usados no cálculo de horas extras deste funcionário ao invés dos valores padrão da empresa.
                     </div>
                   )}
+
                 </div>
               </div>
             </TabsContent>

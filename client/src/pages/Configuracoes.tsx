@@ -64,7 +64,7 @@ const CATEGORIAS = [
   { key: "atestados", label: "Atestados", icon: ClipboardList, color: "text-violet-600", bgColor: "bg-violet-50", borderColor: "border-violet-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj";
+type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -272,6 +272,7 @@ export default function Configuracoes() {
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin" },
     { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin" },
+    { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master" },
   ];
   const tabs = allTabs.filter(tab => {
@@ -696,6 +697,11 @@ export default function Configuracoes() {
           <ContratoPJTab companyId={companyId} userName={user?.name || ''} />
         )}
 
+        {/* TAB: Sincronizar HE */}
+        {activeTab === "sync_he" && (
+          <SyncHETab companyId={companyId} />
+        )}
+
         {/* TAB: Limpeza */}
         {activeTab === "limpeza" && (
           <Card className="border-red-200">
@@ -764,6 +770,213 @@ export default function Configuracoes() {
         </FullScreenDialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// COMPONENTE: Sincronizar HE com Critérios da Empresa
+// ============================================================
+function SyncHETab({ companyId }: { companyId: number }) {
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const utils = trpc.useUtils();
+
+  const heQuery = trpc.criteria.listHEDivergentes.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  const syncMutation = trpc.criteria.syncHE.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.updated} funcionário(s) sincronizado(s) com sucesso!`);
+      setSelectedIds([]);
+      heQuery.refetch();
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const criterios = heQuery.data?.criterios;
+  const funcionarios = heQuery.data?.funcionarios || [];
+  const filtered = funcionarios.filter(f =>
+    !searchTerm || f.nomeCompleto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    f.funcao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    f.setor?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const allSelected = filtered.length > 0 && filtered.every(f => selectedIds.includes(f.id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !filtered.find(f => f.id === id)));
+    } else {
+      const newIds = filtered.map(f => f.id);
+      setSelectedIds(prev => Array.from(new Set([...prev, ...newIds])));
+    }
+  };
+
+  const toggleOne = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  if (heQuery.isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /><span className="ml-2 text-muted-foreground">Carregando...</span></div>;
+
+  return (
+    <div className="space-y-4">
+      {/* Cabeçalho */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <RefreshCw className="w-5 h-5 text-orange-600" />
+            Sincronizar Percentuais de Horas Extras
+          </CardTitle>
+          <CardDescription>
+            Funcionários cujos percentuais de HE diferem dos critérios atuais da empresa.
+            Selecione quais deseja atualizar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Critérios atuais da empresa */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <p className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-2">
+              <Scale className="w-4 h-4" />
+              Critérios Atuais da Empresa
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-700">{criterios?.heDiasUteis || '50'}%</p>
+                <p className="text-xs text-blue-600">HE Dias Úteis</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-700">{criterios?.heDomingosFeriados || '100'}%</p>
+                <p className="text-xs text-blue-600">HE Domingos/Feriados</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-700">{criterios?.heAdicionalNoturno || '20'}%</p>
+                <p className="text-xs text-blue-600">Adicional Noturno</p>
+              </div>
+            </div>
+          </div>
+
+          {funcionarios.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Check className="w-12 h-12 mx-auto mb-3 text-green-500" />
+              <p className="font-semibold text-green-700">Todos sincronizados!</p>
+              <p className="text-sm mt-1">Todos os funcionários já estão com os percentuais de HE alinhados aos critérios da empresa.</p>
+            </div>
+          ) : (
+            <>
+              {/* Barra de ações */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-semibold">
+                    {funcionarios.length} divergente{funcionarios.length !== 1 ? 's' : ''}
+                  </div>
+                  {selectedIds.length > 0 && (
+                    <Button
+                      size="sm"
+                      className="bg-orange-600 hover:bg-orange-700"
+                      onClick={() => syncMutation.mutate({ companyId, employeeIds: selectedIds })}
+                      disabled={syncMutation.isPending}
+                    >
+                      {syncMutation.isPending ? (
+                        <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Sincronizando...</>
+                      ) : (
+                        <><RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Sincronizar {selectedIds.length} selecionado{selectedIds.length !== 1 ? 's' : ''}</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  placeholder="Buscar por nome, função ou setor..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="max-w-xs text-sm"
+                />
+              </div>
+
+              {/* Tabela */}
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left w-10">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={toggleAll}
+                          className="w-4 h-4 rounded"
+                        />
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600">Funcionário</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600">Função</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-600">HE Dias Úteis</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-600">HE Dom/Fer</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-600">Ad. Noturno</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {filtered.map(emp => {
+                      const isSelected = selectedIds.includes(emp.id);
+                      return (
+                        <tr
+                          key={emp.id}
+                          className={`hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-orange-50' : ''}`}
+                          onClick={() => toggleOne(emp.id)}
+                        >
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleOne(emp.id)}
+                              onClick={e => e.stopPropagation()}
+                              className="w-4 h-4 rounded"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <p className="font-medium text-gray-900 truncate max-w-[200px]">{emp.nomeCompleto}</p>
+                            {emp.setor && <p className="text-xs text-muted-foreground">{emp.setor}</p>}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">{emp.funcao || '—'}</td>
+                          <td className="px-3 py-2 text-center">
+                            <span className={`font-mono text-sm ${emp.heAtual.diasUteis !== criterios?.heDiasUteis ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                              {emp.heAtual.diasUteis}%
+                            </span>
+                            {emp.heAtual.diasUteis !== criterios?.heDiasUteis && (
+                              <span className="text-xs text-muted-foreground ml-1">→ {criterios?.heDiasUteis}%</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <span className={`font-mono text-sm ${emp.heAtual.domingosFeriados !== criterios?.heDomingosFeriados ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                              {emp.heAtual.domingosFeriados}%
+                            </span>
+                            {emp.heAtual.domingosFeriados !== criterios?.heDomingosFeriados && (
+                              <span className="text-xs text-muted-foreground ml-1">→ {criterios?.heDomingosFeriados}%</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <span className={`font-mono text-sm ${emp.heAtual.adicionalNoturno !== criterios?.heAdicionalNoturno ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                              {emp.heAtual.adicionalNoturno}%
+                            </span>
+                            {emp.heAtual.adicionalNoturno !== criterios?.heAdicionalNoturno && (
+                              <span className="text-xs text-muted-foreground ml-1">→ {criterios?.heAdicionalNoturno}%</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-3">
+                <Info className="w-3.5 h-3.5 inline mr-1" />
+                Funcionários com <strong>acordo individual ativo</strong> não aparecem nesta lista, pois possuem valores personalizados.
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

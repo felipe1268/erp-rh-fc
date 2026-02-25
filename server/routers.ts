@@ -1205,6 +1205,98 @@ export const appRouter = router({
       }
       return { success: true, message: toInsert.length > 0 ? "Critérios padrão inicializados" : "Critérios já atualizados", created: toInsert.length };
     }),
+
+    // Listar funcionários com HE diferente dos critérios da empresa
+    listHEDivergentes: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return { criterios: { heDiasUteis: '50', heDomingosFeriados: '100', heAdicionalNoturno: '20' }, funcionarios: [] };
+      const { systemCriteria, employees } = await import("../drizzle/schema");
+      const { eq, and, isNull } = await import("drizzle-orm");
+
+      // Buscar critérios HE da empresa
+      const criteriaRows = await db.select().from(systemCriteria)
+        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.categoria, 'horas_extras')));
+      const map = new Map(criteriaRows.map(c => [c.chave, c.valor]));
+      const criterios = {
+        heDiasUteis: map.get('he_dias_uteis') || '50',
+        heDomingosFeriados: map.get('he_domingos_feriados') || '100',
+        heAdicionalNoturno: map.get('he_adicional_noturno') || '20',
+      };
+
+      // Buscar funcionários ativos sem acordo individual que têm valores diferentes
+      const allEmps = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        setor: employees.setor,
+        acordoHoraExtra: employees.acordoHoraExtra,
+        heNormal50: employees.heNormal50,
+        he100: employees.he100,
+        heNoturna: employees.heNoturna,
+      }).from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          isNull(employees.deletedAt)
+        ));
+
+      const divergentes = allEmps.filter(emp => {
+        // Pular quem tem acordo individual
+        if (emp.acordoHoraExtra === 1) return false;
+        const empHE = emp.heNormal50 || '50';
+        const empHEDom = emp.he100 || '100';
+        const empHENot = emp.heNoturna || '20';
+        return empHE !== criterios.heDiasUteis || empHEDom !== criterios.heDomingosFeriados || empHENot !== criterios.heAdicionalNoturno;
+      }).map(emp => ({
+        id: emp.id,
+        nomeCompleto: emp.nomeCompleto,
+        cpf: emp.cpf,
+        funcao: emp.funcao,
+        setor: emp.setor,
+        acordoHoraExtra: emp.acordoHoraExtra,
+        heAtual: { diasUteis: emp.heNormal50 || '50', domingosFeriados: emp.he100 || '100', adicionalNoturno: emp.heNoturna || '20' },
+      }));
+
+      return { criterios, funcionarios: divergentes };
+    }),
+
+    // Sincronizar HE de funcionários selecionados com critérios da empresa
+    syncHE: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      employeeIds: z.array(z.number()),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode sincronizar" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { systemCriteria, employees } = await import("../drizzle/schema");
+      const { eq, and, inArray } = await import("drizzle-orm");
+
+      // Buscar critérios HE da empresa
+      const criteriaRows = await db.select().from(systemCriteria)
+        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.categoria, 'horas_extras')));
+      const map = new Map(criteriaRows.map(c => [c.chave, c.valor]));
+      const heDiasUteis = map.get('he_dias_uteis') || '50';
+      const heDomingosFeriados = map.get('he_domingos_feriados') || '100';
+      const heAdicionalNoturno = map.get('he_adicional_noturno') || '20';
+
+      // Atualizar em lote
+      let updated = 0;
+      for (const empId of input.employeeIds) {
+        await db.update(employees).set({
+          heNormal50: heDiasUteis,
+          he100: heDomingosFeriados,
+          heNoturna: heAdicionalNoturno,
+        }).where(and(eq(employees.id, empId), eq(employees.companyId, input.companyId)));
+        updated++;
+      }
+
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "sync_he", entityId: input.companyId, details: `Sincronizado HE de ${updated} funcionário(s) com critérios da empresa: ${heDiasUteis}%/${heDomingosFeriados}%/${heAdicionalNoturno}%` });
+      return { success: true, updated };
+    }),
   }),
 
   avisoPrevio: avisoPrevioFeriasRouter,

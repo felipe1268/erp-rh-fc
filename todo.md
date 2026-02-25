@@ -2111,3 +2111,9 @@
 - [x] Rankings e gráficos do Dashboard mostrando dados antigos (seed de teste) — corrigido: faltava filtro deletedAt
 - [x] Verificar se dados de seed ainda existem no banco e limpar se necessário — causa: advertências soft-deleted não eram filtradas
 - [x] Garantir que dashboards refletem apenas dados reais atuais — isNull(warnings.deletedAt) adicionado em 7 queries
+
+## Fase 31: Correção HE Percentuais — Usar Critério da Empresa como Padrão
+- [x] Tela dedicada em Configurações para sincronizar HE de funcionários com critérios da empresa
+- [x] Backend: procedure para listar funcionários com HE diferente e bulk-sync
+- [x] Frontend: tabela com checkboxes, selecionar todos, e botão sincronizar selecionados
+- [x] Remover banner inline do formulário do funcionário (ficou fora do escopo)
