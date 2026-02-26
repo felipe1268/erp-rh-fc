@@ -2596,3 +2596,8 @@
 
 ## Fase 87: Adicionar idade atual na ficha Raio X do funcionário
 - [x] Calcular e exibir idade atual baseada na data de nascimento (tela + impressão)
+
+## Fase 88: Corrigir dropdown e melhorar layout do Novo Aviso Prévio
+- [x] Remover limite de 20 itens no dropdown de colaboradores (mostrar todos os 160)
+- [x] Aumentar altura do dropdown e adicionar contador de resultados
+- [x] Melhorar layout geral do formulário (card com header, ícones, avatar, função/setor no dropdown)

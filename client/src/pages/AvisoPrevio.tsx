@@ -416,144 +416,207 @@ export default function AvisoPrevio() {
 
         {/* Create Dialog */}
         <FullScreenDialog open={showDialog} onClose={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); }} title="Novo Aviso Prévio" icon={<AlertTriangle className="h-5 w-5 text-white" />}>
-          <div className="w-full max-w-3xl mx-auto">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Employee Select */}
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Colaborador *</label>
-                <div className="relative" style={{ zIndex: 60 }}>
-                  <div
-                    className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 transition-colors relative"
-                    style={{ zIndex: 61 }}
-                    onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}
-                  >
-                    <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
-                    {empDropdownOpen ? (
-                      <input
-                        autoFocus
-                        className="flex-1 bg-transparent outline-none text-sm"
-                        placeholder="Digite nome ou CPF..."
-                        value={empSearch}
-                        onChange={e => setEmpSearch(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }}
-                        onClick={e => e.stopPropagation()}
-                      />
-                    ) : (
-                      <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
-                        {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Selecione o colaborador..."}
-                      </span>
-                    )}
-                    {form.employeeId && (
-                      <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setForm({ ...form, employeeId: undefined }); setEmpSearch(""); setCalculoPreview(null); setEmpDropdownOpen(false); }}>
-                        <X className="h-4 w-4" />
-                      </button>
+          <div className="w-full max-w-4xl mx-auto px-2">
+            {/* Card principal do formulário */}
+            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+              {/* Header do card */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b px-6 py-4">
+                <h3 className="text-lg font-bold text-amber-900 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  Dados do Aviso Prévio
+                </h3>
+                <p className="text-xs text-amber-700 mt-1">Preencha os dados abaixo conforme CLT Art. 487-491 e Lei 12.506/2011</p>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* Seção 1: Colaborador */}
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                    <Users className="h-4 w-4 text-amber-600" />
+                    Colaborador <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative" style={{ zIndex: 60 }}>
+                    <div
+                      className="flex items-center border-2 border-gray-200 rounded-lg px-4 py-3 bg-white cursor-pointer hover:border-amber-400 transition-all relative focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100"
+                      style={{ zIndex: 61 }}
+                      onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}
+                    >
+                      <Search className="h-5 w-5 text-amber-500 mr-3 shrink-0" />
+                      {empDropdownOpen ? (
+                        <input
+                          autoFocus
+                          className="flex-1 bg-transparent outline-none text-sm font-medium"
+                          placeholder="🔍 Digite o nome ou CPF do colaborador..."
+                          value={empSearch}
+                          onChange={e => setEmpSearch(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span className={`flex-1 text-sm ${selectedEmp ? "text-gray-900 font-semibold" : "text-gray-400"}`}>
+                          {selectedEmp ? `${selectedEmp.nomeCompleto} — CPF: ${formatCPF(selectedEmp.cpf)}` : "Clique para selecionar o colaborador..."}
+                        </span>
+                      )}
+                      {form.employeeId && (
+                        <button type="button" className="ml-2 p-1 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors" onClick={e => { e.stopPropagation(); setForm({ ...form, employeeId: undefined }); setEmpSearch(""); setCalculoPreview(null); setEmpDropdownOpen(false); }}>
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {empDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-amber-200 rounded-xl shadow-2xl overflow-hidden" style={{ zIndex: 62 }}>
+                          <div className="bg-amber-50 px-4 py-2 border-b text-xs text-amber-700 font-medium">
+                            {filteredEmps.length} colaborador{filteredEmps.length !== 1 ? 'es' : ''} encontrado{filteredEmps.length !== 1 ? 's' : ''}
+                          </div>
+                          <div className="max-h-72 overflow-y-auto">
+                            {filteredEmps.length === 0 ? (
+                              <div className="p-6 text-sm text-gray-400 text-center">
+                                <Search className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                                Nenhum resultado para "{empSearch}"
+                              </div>
+                            ) : filteredEmps.map((e: any) => (
+                              <div
+                                key={e.id}
+                                className="px-4 py-3 hover:bg-amber-50 cursor-pointer text-sm flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors"
+                                onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); setCalculoPreview(null); }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs">
+                                    {(e.nomeCompleto || '').charAt(0)}
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-gray-800 block">{e.nomeCompleto}</span>
+                                    <span className="text-xs text-gray-500">{e.funcao || 'Sem função'} {e.setor ? `• ${e.setor}` : ''}</span>
+                                  </div>
+                                </div>
+                                <span className="text-xs text-gray-400 font-mono">{formatCPF(e.cpf)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
-                  {empDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
-                        {filteredEmps.length === 0 ? (
-                          <div className="p-3 text-sm text-muted-foreground text-center">Nenhum resultado para "{empSearch}"</div>
-                        ) : filteredEmps.slice(0, 20).map((e: any) => (
-                          <div
-                            key={e.id}
-                            className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between"
-                            onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); setCalculoPreview(null); }}
-                          >
-                            <span className="font-medium">{e.nomeCompleto}</span>
-                            <span className="text-muted-foreground">{formatCPF(e.cpf)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
                 </div>
-              </div>
 
-              <div>
-                <label className="text-sm font-medium">Tipo de Aviso Prévio *</label>
-                <Select value={form.tipo || ""} onValueChange={v => { setForm({ ...form, tipo: v }); setCalculoPreview(null); }}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="empregador_trabalhado">Empregador (Trabalhado)</SelectItem>
-                    <SelectItem value="empregador_indenizado">Empregador (Indenizado)</SelectItem>
-                    <SelectItem value="empregado_trabalhado">Empregado (Trabalhado)</SelectItem>
-                    <SelectItem value="empregado_indenizado">Empregado (Indenizado)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Seção 2: Tipo e Data - Grid 2 colunas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-amber-600" />
+                      Tipo de Aviso Prévio <span className="text-red-500">*</span>
+                    </label>
+                    <Select value={form.tipo || ""} onValueChange={v => { setForm({ ...form, tipo: v }); setCalculoPreview(null); }}>
+                      <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="empregador_trabalhado">Empregador (Trabalhado)</SelectItem>
+                        <SelectItem value="empregador_indenizado">Empregador (Indenizado)</SelectItem>
+                        <SelectItem value="empregado_trabalhado">Empregado (Trabalhado)</SelectItem>
+                        <SelectItem value="empregado_indenizado">Empregado (Indenizado)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div>
-                <label className="text-sm font-medium">Data de Início *</label>
-                <Input type="date" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />
-              </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-amber-600" />
+                      Data de Início <span className="text-red-500">*</span>
+                    </label>
+                    <Input type="date" className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />
+                  </div>
+                </div>
 
-              <div>
-                <label className="text-sm font-medium">Redução de Jornada (Art. 488 CLT)</label>
-                <Select value={form.reducaoJornada || "nenhuma"} onValueChange={v => setForm({ ...form, reducaoJornada: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nenhuma">Nenhuma</SelectItem>
-                    <SelectItem value="2h_dia">2 horas por dia</SelectItem>
-                    <SelectItem value="7_dias_corridos">7 dias corridos no final</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Seção 3: Redução e Botão Calcular */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-amber-600" />
+                      Redução de Jornada (Art. 488 CLT)
+                    </label>
+                    <Select value={form.reducaoJornada || "nenhuma"} onValueChange={v => setForm({ ...form, reducaoJornada: v })}>
+                      <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nenhuma">Nenhuma</SelectItem>
+                        <SelectItem value="2h_dia">2 horas por dia</SelectItem>
+                        <SelectItem value="7_dias_corridos">7 dias corridos no final</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div>
-                <label className="text-sm font-medium">&nbsp;</label>
-                <Button variant="outline" className="w-full" onClick={calcularPreview} disabled={!form.employeeId || !form.tipo}>
-                  <DollarSign className="h-4 w-4 mr-2" /> Calcular Previsão
-                </Button>
-              </div>
+                  <div className="flex items-end">
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 font-semibold"
+                      onClick={calcularPreview}
+                      disabled={!form.employeeId || !form.tipo}
+                    >
+                      <DollarSign className="h-4 w-4 mr-2" /> Calcular Previsão de Rescisão
+                    </Button>
+                  </div>
+                </div>
 
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Observações</label>
-                <Textarea value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} rows={2} placeholder="Observações adicionais..." />
+                {/* Seção 4: Observações */}
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-2 block">Observações</label>
+                  <Textarea
+                    value={form.observacoes || ""}
+                    onChange={e => setForm({ ...form, observacoes: e.target.value })}
+                    rows={3}
+                    className="border-2 border-gray-200 hover:border-amber-400 transition-colors resize-none"
+                    placeholder="Observações adicionais sobre o aviso prévio..."
+                  />
+                </div>
               </div>
             </div>
 
             {/* Preview do cálculo */}
             {calculoPreview && (
-              <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="font-semibold text-green-800 mb-3 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" /> Previsão Calculada
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-3">
-                  <div className="text-center">
-                    <p className="text-xs text-green-600">Anos de Serviço</p>
-                    <p className="text-xl font-bold">{calculoPreview.anosServico}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-green-600">Dias de Aviso</p>
-                    <p className="text-xl font-bold">{calculoPreview.diasAviso}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-green-600">Data Fim Estimada</p>
-                    <p className="text-xl font-bold">{formatDate(calculoPreview.dataFimEstimada)}</p>
-                  </div>
+              <div className="mt-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-green-100 px-6 py-3 border-b border-green-200">
+                  <p className="font-bold text-green-800 flex items-center gap-2">
+                    <DollarSign className="h-5 w-5" /> Previsão de Rescisão Calculada
+                  </p>
                 </div>
-                {calculoPreview.previsaoRescisao && (
-                  <div className="grid grid-cols-2 gap-2 text-sm border-t border-green-200 pt-3">
-                    <div className="flex justify-between"><span>Saldo Salário:</span><span className="font-medium">{formatMoeda(calculoPreview.previsaoRescisao.saldoSalario)}</span></div>
-                    <div className="flex justify-between"><span>13º Proporcional:</span><span className="font-medium">{formatMoeda(calculoPreview.previsaoRescisao.decimoTerceiroProporcional)}</span></div>
-                    <div className="flex justify-between"><span>Férias Proporcionais:</span><span className="font-medium">{formatMoeda(calculoPreview.previsaoRescisao.feriasProporcional)}</span></div>
-                    <div className="flex justify-between"><span>1/3 Constitucional:</span><span className="font-medium">{formatMoeda(calculoPreview.previsaoRescisao.tercoConstitucional)}</span></div>
-                    <div className="flex justify-between"><span>FGTS Estimado:</span><span className="font-medium">{formatMoeda(calculoPreview.previsaoRescisao.fgtsEstimado)}</span></div>
-                    <div className="flex justify-between"><span>Multa 40% FGTS:</span><span className="font-medium">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span></div>
-                    <div className="col-span-2 border-t pt-2 flex justify-between text-lg font-bold text-green-700">
-                      <span>TOTAL ESTIMADO:</span>
-                      <span>{formatMoeda(calculoPreview.previsaoRescisao.total)}</span>
+                <div className="p-6">
+                  <div className="grid grid-cols-3 gap-4 mb-5">
+                    <div className="text-center bg-white rounded-lg p-4 border border-green-100">
+                      <p className="text-xs text-green-600 font-medium mb-1">Anos de Serviço</p>
+                      <p className="text-2xl font-bold text-green-800">{calculoPreview.anosServico}</p>
+                    </div>
+                    <div className="text-center bg-white rounded-lg p-4 border border-green-100">
+                      <p className="text-xs text-green-600 font-medium mb-1">Dias de Aviso</p>
+                      <p className="text-2xl font-bold text-green-800">{calculoPreview.diasAviso}</p>
+                    </div>
+                    <div className="text-center bg-white rounded-lg p-4 border border-green-100">
+                      <p className="text-xs text-green-600 font-medium mb-1">Data Fim Estimada</p>
+                      <p className="text-2xl font-bold text-green-800">{formatDate(calculoPreview.dataFimEstimada)}</p>
                     </div>
                   </div>
-                )}
+                  {calculoPreview.previsaoRescisao && (
+                    <div className="bg-white rounded-lg border border-green-100 p-4">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Saldo Salário:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.saldoSalario)}</span></div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">13º Proporcional:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.decimoTerceiroProporcional)}</span></div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Férias Proporcionais:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.feriasProporcional)}</span></div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">1/3 Constitucional:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.tercoConstitucional)}</span></div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">FGTS Estimado:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.fgtsEstimado)}</span></div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Multa 40% FGTS:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span></div>
+                      </div>
+                      <div className="mt-4 pt-3 border-t-2 border-green-200 flex justify-between items-center">
+                        <span className="text-lg font-bold text-green-800">TOTAL ESTIMADO:</span>
+                        <span className="text-2xl font-bold text-green-700">{formatMoeda(calculoPreview.previsaoRescisao.total)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); }}>Cancelar</Button>
-              <Button onClick={handleSubmit} disabled={createAviso.isPending}>
+            <div className="flex justify-end gap-3 mt-6 pt-4">
+              <Button variant="outline" className="h-11 px-6" onClick={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); }}>Cancelar</Button>
+              <Button className="h-11 px-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold" onClick={handleSubmit} disabled={createAviso.isPending}>
                 {createAviso.isPending ? "Salvando..." : "Criar Aviso Prévio"}
               </Button>
             </div>
