@@ -7,6 +7,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
 // HELPERS
@@ -802,7 +803,7 @@ export const fechamentoPontoRouter = router({
           }).from(employees).where(inArray(employees.id, empIds));
           const valorHoraMap: Record<number, number> = {};
           for (const e of empValores) {
-            valorHoraMap[e.id] = parseFloat(String(e.valorHora || "0").replace(",", ".")) || 0;
+            valorHoraMap[e.id] = parseBRL(e.valorHora);
           }
 
           const rateioByEmp: Record<number, { horasNormais: number; horasExtras: number; totalHoras: number; dias: number }> = {};
@@ -2681,7 +2682,7 @@ export const fechamentoPontoRouter = router({
       
       const simulacao = empList.map(emp => {
         const valorHoraStr = emp.valorHora || '0';
-        const valorHora = parseFloat(valorHoraStr.replace(/\./g, '').replace(',', '.')) || 0;
+        const valorHora = parseBRL(valorHoraStr);
         const salarioPrevisto = valorHora * horasTotaisMes;
         
         return {

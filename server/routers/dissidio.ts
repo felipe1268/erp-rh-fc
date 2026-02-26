@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { dissidios, dissidioFuncionarios, employees } from "../../drizzle/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
+import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
 // MÓDULO DISSÍDIO COLETIVO — SEPARADO POR ANO
@@ -224,7 +225,7 @@ export const dissidioRouter = router({
     }
     
     const simulacao = funcs.map(f => {
-      const salarioAtual = parseFloat(f.salarioBase || '0');
+      const salarioAtual = parseBRL(f.salarioBase);
       let salarioNovo = salarioAtual * (1 + percentual / 100);
       
       // Se o novo salário ficar abaixo do piso, ajustar para o piso
@@ -325,7 +326,7 @@ export const dissidioRouter = router({
         continue;
       }
       
-      const salarioAtual = parseFloat(func.salarioBase || '0');
+      const salarioAtual = parseBRL(func.salarioBase);
       let salarioNovo = salarioAtual * (1 + percentual / 100);
       
       // Garantir piso salarial

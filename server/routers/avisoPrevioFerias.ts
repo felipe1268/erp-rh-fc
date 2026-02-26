@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
 // CÁLCULOS CLT
@@ -164,7 +165,7 @@ export const avisoPrevioFeriasRouter = router({
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
         const anosServico = calcularAnosServico(dataAdmissao);
         const diasAviso = calcularDiasAviso(anosServico);
-        const salarioBase = parseFloat(emp.salarioBase || "0");
+        const salarioBase = parseBRL(emp.salarioBase);
         
         const hoje = new Date();
         const mesesTrabalhadosAno = hoje.getMonth() + 1;
@@ -198,7 +199,7 @@ export const avisoPrevioFeriasRouter = router({
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
         const anosServico = calcularAnosServico(dataAdmissao);
         const diasAviso = calcularDiasAviso(anosServico);
-        const salarioBase = parseFloat(emp.salarioBase || "0");
+        const salarioBase = parseBRL(emp.salarioBase);
         const dataFim = calcularDataFim(input.dataInicio, diasAviso);
         
         const hoje = new Date();
@@ -597,7 +598,7 @@ export const avisoPrevioFeriasRouter = router({
               const fimConcessivo = new Date(p.fimConcessivo);
               // Se o período concessivo vence neste mês ou nos próximos 2 meses
               if (fimConcessivo >= inicioMes && fimConcessivo <= new Date(input.ano, mes + 3, 0)) {
-                const salario = parseFloat(func.salario || "0");
+                const salario = parseBRL(func.salario);
                 const valorFerias = salario + (salario / 3); // salário + 1/3
                 totalMes += valorFerias;
                 funcionariosNoMes.push({
@@ -649,7 +650,7 @@ export const avisoPrevioFeriasRouter = router({
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp) throw new TRPCError({ code: "NOT_FOUND" });
         
-        const salario = parseFloat(emp.salarioBase || "0");
+        const salario = parseBRL(emp.salarioBase);
         const diasGozo = input.diasGozo;
         const diasAbono = input.abonoPecuniario ? Math.floor(diasGozo / 3) : 0;
         const diasEfetivos = diasGozo - diasAbono;

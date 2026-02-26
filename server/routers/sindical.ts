@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { dissidios, dissidioFuncionarios, employees } from "../../drizzle/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
+import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
 // MÓDULO SINDICAL — Configurações de Dissídio Simplificado
@@ -113,7 +114,7 @@ export const sindicalRouter = router({
     const hojeStr = new Date().toISOString();
 
     for (const func of funcs) {
-      const salarioAtual = parseFloat(func.salarioBase || '0');
+      const salarioAtual = parseBRL(func.salarioBase);
       const salarioNovo = salarioAtual * (1 + percentual / 100);
       const diferenca = salarioNovo - salarioAtual;
       const percentualReal = salarioAtual > 0 ? ((salarioNovo - salarioAtual) / salarioAtual * 100) : 0;

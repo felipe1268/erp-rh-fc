@@ -2614,3 +2614,28 @@
 - [x] Botão "Calcular Previsão de Rescisão" agora exibe valores ao clicar (corrigido com trpc.useUtils())
 - [x] Exibe valores detalhados: saldo salário, aviso prévio indenizado, 13º proporcional, férias + 1/3, FGTS, multa 40%, total
 - [x] Exibe data limite de pagamento (Art. 477 §6º CLT - 10 dias úteis)
+
+## Fase 91: Apontamentos de Campo + Solicitação de Aviso Prévio
+
+### Módulo 1: Apontamentos de Campo
+- [ ] Schema: tabela field_notes (employeeId, data, tipo ocorrência, descrição, solicitanteId, status pendente/resolvido, respostaRH)
+- [ ] Backend: CRUD de apontamentos com filtro por empresa/status/data
+- [ ] Frontend: Tela de registro de ocorrência (gestor seleciona funcionário, data, tipo, descrição obrigatória)
+- [ ] Frontend: Painel RH com lista de pendências para resolver no fechamento do ponto
+- [ ] Integração: Apontamentos aparecem na timeline do funcionário
+
+### Módulo 2: Solicitação de Aviso Prévio (Fluxo de Aprovação)
+- [ ] Schema: tabela termination_requests (employeeId, solicitanteId, dataDesejada, motivoDetalhado obrigatório, status pendente/aprovado/rejeitado, parecerRH obrigatório, analisadoPorId, dataAnalise)
+- [ ] Backend: Criar solicitação (gestor), Analisar solicitação (RH aprovar/rejeitar com parecer)
+- [ ] Frontend: Formulário de solicitação (gestor: funcionário, data desejada, motivo detalhado obrigatório)
+- [ ] Frontend: Painel de análise RH (lista de solicitações pendentes, aprovar/rejeitar com parecer obrigatório)
+- [ ] Se aprovado: cria aviso prévio automaticamente e registra na timeline
+- [ ] Se rejeitado: registra na timeline do funcionário com motivo da rejeição
+- [ ] Notificação para RH quando nova solicitação é criada
+- [ ] Navegação: adicionar no menu lateral em Gestão de Pessoas
+
+## Fase 92: Corrigir cálculos de rescisão completamente errados
+- [x] Identificado: parseFloat("2.774,20") retornava 2.774 (R$2,77) em vez de 2774.20
+- [x] Criado utilitário parseBRL() compartilhado em server/utils/parseBRL.ts
+- [x] Corrigido em 5 arquivos: avisoPrevioFerias, dissidio, sindical, fechamentoPonto, folhaPagamento
+- [x] 13 testes unitários passando para parseBRL
