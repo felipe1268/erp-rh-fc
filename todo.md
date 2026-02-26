@@ -2483,3 +2483,6 @@
 - [x] Corrigir backend: ao excluir entrega de EPI, cancelar desconto pendente associado automaticamente
 - [x] Limpar descontos órfãos que referenciam entregas já excluídas no banco
 - [x] Testar e validar (340 testes passando)
+
+## Fase 66: Adicionar Tamanho U (Único) na Aba de Tamanhos de Camisa
+- [x] Adicionar opção "U" (Único) nos tamanhos de camisa
