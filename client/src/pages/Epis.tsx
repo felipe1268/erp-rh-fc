@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
 import {
   Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
@@ -442,7 +443,7 @@ export default function Epis() {
       categoria: epi.categoria || "EPI",
       tamanho: epi.tamanho || "",
       quantidadeEstoque: epi.quantidadeEstoque ?? 0,
-      valorProduto: epi.valorProduto ? String(parseFloat(String(epi.valorProduto))) : "",
+      valorProduto: epi.valorProduto ? floatToCurrency(epi.valorProduto) : "",
       tempoMinimoTroca: epi.tempoMinimoTroca ? String(epi.tempoMinimoTroca) : "",
       corCapacete: epi.corCapacete || "",
     });
@@ -596,9 +597,9 @@ export default function Epis() {
                     <DollarSign className="h-3 w-3 text-green-600" />
                     Valor do Produto (R$)
                   </Label>
-                  <Input type="number" min={0} step="0.01" value={epiForm.valorProduto}
-                    onChange={e => setEpiForm(f => ({ ...f, valorProduto: e.target.value }))}
-                    placeholder="0.00" />
+                  <Input type="text" inputMode="numeric" value={epiForm.valorProduto}
+                    onChange={e => setEpiForm(f => ({ ...f, valorProduto: handleCurrencyInput(e.target.value) }))}
+                    placeholder="0,00" />
                 </div>
                 <div>
                   <Label className="flex items-center gap-1">
@@ -637,7 +638,7 @@ export default function Epis() {
                     categoria: epiForm.categoria,
                     tamanho: epiForm.tamanho || undefined,
                     quantidadeEstoque: epiForm.quantidadeEstoque,
-                    valorProduto: epiForm.valorProduto ? parseFloat(epiForm.valorProduto) : undefined,
+                    valorProduto: epiForm.valorProduto ? parseCurrencyToFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
                     corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
                   });
@@ -815,9 +816,9 @@ export default function Epis() {
                     <DollarSign className="h-3 w-3 text-green-600" />
                     Valor do Produto (R$)
                   </Label>
-                  <Input type="number" min={0} step="0.01" value={epiForm.valorProduto}
-                    onChange={e => setEpiForm(f => ({ ...f, valorProduto: e.target.value }))}
-                    placeholder="0.00" />
+                  <Input type="text" inputMode="numeric" value={epiForm.valorProduto}
+                    onChange={e => setEpiForm(f => ({ ...f, valorProduto: handleCurrencyInput(e.target.value) }))}
+                    placeholder="0,00" />
                 </div>
                 <div>
                   <Label className="flex items-center gap-1">
@@ -853,7 +854,7 @@ export default function Epis() {
                     categoria: epiForm.categoria,
                     tamanho: epiForm.tamanho || undefined,
                     quantidadeEstoque: epiForm.quantidadeEstoque,
-                    valorProduto: epiForm.valorProduto ? parseFloat(epiForm.valorProduto) : undefined,
+                    valorProduto: epiForm.valorProduto ? parseCurrencyToFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
                     corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
                   });
@@ -1704,7 +1705,7 @@ function EditEpiInline({ epi, onSave, onCancel, isPending }: { epi: any; onSave:
         <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} className="h-8 text-xs" placeholder="Nome" />
         <Input value={form.ca} onChange={e => setForm(f => ({ ...f, ca: e.target.value }))} className="h-8 text-xs" placeholder="CA" />
         <Input type="number" value={form.quantidadeEstoque} onChange={e => setForm(f => ({ ...f, quantidadeEstoque: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" placeholder="Estoque" />
-        <Input type="number" step="0.01" value={form.valorProduto ?? ""} onChange={e => setForm(f => ({ ...f, valorProduto: e.target.value ? parseFloat(e.target.value) : null }))} className="h-8 text-xs" placeholder="Valor R$" />
+        <Input type="text" inputMode="numeric" value={form.valorProduto !== null ? floatToCurrency(form.valorProduto) : ""} onChange={e => { const formatted = handleCurrencyInput(e.target.value); setForm(f => ({ ...f, valorProduto: formatted ? parseCurrencyToFloat(formatted) : null })); }} className="h-8 text-xs" placeholder="Valor R$" />
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Input value={form.fabricante} onChange={e => setForm(f => ({ ...f, fabricante: e.target.value }))} className="h-8 text-xs" placeholder="Fabricante" />

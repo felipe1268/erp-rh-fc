@@ -2494,3 +2494,9 @@
 - [x] Atualizar componente DashChart para exibir valor + percentual em todos os tipos de gráfico (plugin chartjs-plugin-datalabels)
 - [x] Verificar gráficos inline nos dashboards - todos 44 gráficos usam DashChart (6 dashboards)
 - [x] Testar e validar - percentuais exibidos corretamente em doughnut, bar, horizontalBar, line
+
+## Fase 69: Formatação automática de moeda no campo Valor do Produto (EPI)
+- [x] Criar utilitário de máscara de moeda brasileira (ponto milhar, vírgula decimal)
+- [x] Aplicar máscara nos campos de editar EPI, novo EPI e edição inline
+- [x] Converter corretamente ao salvar (parseCurrencyToFloat)
+- [x] Testado: 1055000 → 10.550,00 formatado automaticamente
