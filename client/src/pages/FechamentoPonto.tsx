@@ -771,11 +771,14 @@ export default function FechamentoPonto() {
       conteudo = `<div style="margin-bottom:16px;padding:10px;background:#f0f0f0;border-radius:6px;"><strong>Colaborador:</strong> ${emp?.nomeCompleto || "-"} | <strong>CPF:</strong> ${formatCPF(emp?.cpf || "")} | <strong>Função:</strong> ${emp?.funcao || "-"}</div>`;
       groups.forEach((g: any) => {
         conteudo += `<h3 style="margin-top:20px;color:#0d9488;font-size:14px;">🏗 ${g.obraNome} — ${g.records.length} registros</h3>`;
-        conteudo += `<table><thead><tr><th>Data</th><th>Dia</th><th>Entrada</th><th>Saída Int.</th><th>Retorno</th><th>Saída</th><th>H. Trab.</th><th>H. Extra</th><th>Fonte</th><th>Status</th></tr></thead><tbody>`;
+        conteudo += `<table><thead><tr><th>Data</th><th>Dia</th><th>Entrada</th><th>Saída Int.</th><th>Retorno</th><th>Saída</th><th>H. Trab.</th><th>H. Extra</th><th>Saldo</th><th>Fonte</th><th>Status</th></tr></thead><tbody>`;
         g.records.forEach((r: any) => {
           const hasIncons = (employeeDetail.data?.inconsistencies || []).some((i: any) => i.data === r.data);
           const bgColor = r.ajusteManual ? "#faf5ff" : hasIncons ? "#fffbeb" : "";
-          conteudo += `<tr style="background:${bgColor}"><td>${r.data ? new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td><td>${dayOfWeek(r.data)}</td><td>${r.entrada1 || "-"}</td><td>${r.saida1 || "-"}</td><td>${r.entrada2 || "-"}</td><td>${r.saida2 || "-"}</td><td style="font-weight:600">${r.horasTrabalhadas || "-"}</td><td style="color:#16a34a;font-weight:600">${r.horasExtras && r.horasExtras !== "0:00" ? r.horasExtras : "-"}</td><td>${r.ajusteManual ? "Manual" : "DIXI"}</td><td>${hasIncons ? "⚠ Inconsistente" : "✓ OK"}</td></tr>`;
+          const pHM = (s: string) => { if (!s || s === "-" || s === "0:00") return 0; const [hh, mm] = s.split(":").map(Number); return (hh||0)*60+(mm||0); };
+          const ext = pHM(r.horasExtras); const atr = pHM(r.atrasos); const trb = pHM(r.horasTrabalhadas);
+          const saldoStr = ext > 0 ? `<span style="color:#16a34a;font-weight:600">+${Math.floor(ext/60)}:${String(ext%60).padStart(2,'0')}</span>` : atr > 0 ? `<span style="color:#dc2626;font-weight:600">-${Math.floor(atr/60)}:${String(atr%60).padStart(2,'0')}</span>` : (trb === 0 && !r.entrada1 ? "-" : "0:00");
+          conteudo += `<tr style="background:${bgColor}"><td>${r.data ? new Date(r.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td><td>${dayOfWeek(r.data)}</td><td>${r.entrada1 || "-"}</td><td>${r.saida1 || "-"}</td><td>${r.entrada2 || "-"}</td><td>${r.saida2 || "-"}</td><td style="font-weight:600">${r.horasTrabalhadas || "-"}</td><td style="color:#16a34a;font-weight:600">${r.horasExtras && r.horasExtras !== "0:00" ? r.horasExtras : "-"}</td><td>${saldoStr}</td><td>${r.ajusteManual ? "Manual" : "DIXI"}</td><td>${hasIncons ? "⚠ Inconsistente" : "✓ OK"}</td></tr>`;
         });
         conteudo += `</tbody></table>`;
       });
@@ -796,12 +799,15 @@ export default function FechamentoPonto() {
       // RESUMO POR COLABORADOR
       titulo = "Resumo por Colaborador";
       conteudo += `<div style="margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap;"><div><strong>Colaboradores:</strong> ${stats.data?.totalColaboradores || 0}</div><div><strong>Registros:</strong> ${stats.data?.totalRegistros || 0}</div><div><strong>Inconsistências:</strong> ${stats.data?.totalInconsistencias || 0}</div><div><strong>Múltiplas Obras:</strong> ${multiSiteCount}</div><div><strong>Conflitos:</strong> ${conflitosCount}</div></div>`;
-      conteudo += `<table><thead><tr><th>Colaborador</th><th>CPF</th><th>Função</th><th>Obra(s)</th><th>Dias</th><th>H. Trab.</th><th>H. Extras</th><th>Atrasos</th><th>Status</th></tr></thead><tbody>`;
+      conteudo += `<table><thead><tr><th>Colaborador</th><th>CPF</th><th>Função</th><th>Obra(s)</th><th>Dias</th><th>H. Trab.</th><th>H. Extras</th><th>Atrasos</th><th>Saldo</th><th>Status</th></tr></thead><tbody>`;
       (filteredSummary || []).forEach((emp: any) => {
         const hasConflict = (conflitos.data || []).some((c: any) => c.employeeId === emp.employeeId);
         const bgColor = hasConflict ? "#fff7ed" : emp.multiplasObras ? "#fef2f2" : "";
         const statusText = hasConflict ? "⚠ Conflito" : emp.multiplasObras ? "🔴 Multi-Obra" : "✓ OK";
-        conteudo += `<tr style="background:${bgColor}"><td>${emp.employeeName}</td><td>${formatCPF(emp.employeeCpf || "")}</td><td>${emp.employeeFuncao || "-"}</td><td>${(emp.obraNomes || []).join(", ") || "-"}</td><td style="text-align:center">${emp.diasTrabalhados}</td><td style="text-align:center">${emp.horasTrabalhadas}</td><td style="text-align:center;color:#16a34a;font-weight:600">${emp.horasExtras !== "0:00" ? emp.horasExtras : "-"}</td><td style="text-align:center;color:#dc2626">${emp.atrasos !== "0:00" ? emp.atrasos : "-"}</td><td style="text-align:center">${statusText}</td></tr>`;
+        const pHM2 = (s: string) => { if (!s || s === "-" || s === "0:00") return 0; const [hh, mm] = s.split(":").map(Number); return (hh||0)*60+(mm||0); };
+        const extR = pHM2(emp.horasExtras); const atrR = pHM2(emp.atrasos);
+        const saldoR = extR > 0 ? `<span style="color:#16a34a;font-weight:600">+${Math.floor(extR/60)}:${String(extR%60).padStart(2,'0')}</span>` : atrR > 0 ? `<span style="color:#dc2626;font-weight:600">-${Math.floor(atrR/60)}:${String(atrR%60).padStart(2,'0')}</span>` : "0:00";
+        conteudo += `<tr style="background:${bgColor}"><td>${emp.employeeName}</td><td>${formatCPF(emp.employeeCpf || "")}</td><td>${emp.employeeFuncao || "-"}</td><td>${(emp.obraNomes || []).join(", ") || "-"}</td><td style="text-align:center">${emp.diasTrabalhados}</td><td style="text-align:center">${emp.horasTrabalhadas}</td><td style="text-align:center;color:#16a34a;font-weight:600">${emp.horasExtras !== "0:00" ? emp.horasExtras : "-"}</td><td style="text-align:center;color:#dc2626">${emp.atrasos !== "0:00" ? emp.atrasos : "-"}</td><td style="text-align:center">${saldoR}</td><td style="text-align:center">${statusText}</td></tr>`;
       });
       conteudo += `</tbody></table>`;
     }
@@ -1443,6 +1449,7 @@ export default function FechamentoPonto() {
                               <th className="p-2 font-medium text-center">H. Trab.</th>
                               <th className="p-2 font-medium text-center">H. Extras</th>
                               <th className="p-2 font-medium text-center">Atrasos</th>
+                              <th className="p-2 font-medium text-center">Saldo</th>
                               <th className="p-2 font-medium text-center">Status</th>
                               <th className="p-2 font-medium text-center">Raio-X</th>
                             </tr>
@@ -1484,6 +1491,15 @@ export default function FechamentoPonto() {
                                   </td>
                                   <td className="p-2 text-center font-mono">
                                     {emp.atrasos !== "0:00" ? <span className="text-red-600">{emp.atrasos}</span> : "-"}
+                                  </td>
+                                  <td className="p-2 text-center font-mono">
+                                    {(() => {
+                                      const pHM4 = (s: string) => { if (!s || s === "-" || s === "0:00") return 0; const [h, m] = s.split(":").map(Number); return (h||0)*60+(m||0); };
+                                      const ext4 = pHM4(emp.horasExtras); const atr4 = pHM4(emp.atrasos);
+                                      if (ext4 > 0) return <span className="text-green-600 font-semibold">+{Math.floor(ext4/60)}:{String(ext4%60).padStart(2,'0')}</span>;
+                                      if (atr4 > 0) return <span className="text-red-600 font-semibold">-{Math.floor(atr4/60)}:{String(atr4%60).padStart(2,'0')}</span>;
+                                      return <span className="text-muted-foreground">0:00</span>;
+                                    })()}
                                   </td>
                                   <td className="p-2 text-center">
                                     {hasConflict ? (
@@ -1806,6 +1822,7 @@ export default function FechamentoPonto() {
                                                       <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saída</th>
                                                       <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Trab.</th>
                                                       <th className="px-3 py-1.5 text-center font-medium text-slate-600">H. Extra</th>
+                                                      <th className="px-3 py-1.5 text-center font-medium text-slate-600">Saldo</th>
                                                       <th className="px-3 py-1.5 text-center font-medium text-slate-600">Fonte</th>
                                                     </tr>
                                                   </thead>
@@ -1824,6 +1841,18 @@ export default function FechamentoPonto() {
                                                         <td className="px-3 py-1.5 text-center font-mono">{rec.saida2 || <span className="text-red-400">--:--</span>}</td>
                                                         <td className="px-3 py-1.5 text-center font-semibold">{rec.horasTrabalhadas || "-"}</td>
                                                         <td className="px-3 py-1.5 text-center font-semibold text-green-700">{rec.horasExtras && rec.horasExtras !== "0:00" ? rec.horasExtras : "-"}</td>
+                                                        <td className="px-3 py-1.5 text-center font-mono">
+                                                          {(() => {
+                                                            const parseHM2 = (s: string) => { if (!s || s === "-" || s === "0:00") return 0; const [h, m] = s.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+                                                            const trab = parseHM2(rec.horasTrabalhadas);
+                                                            const extra = parseHM2(rec.horasExtras);
+                                                            const atraso = parseHM2(rec.atrasos);
+                                                            if (extra > 0) return <span className="text-green-600 font-semibold">+{Math.floor(extra/60)}:{String(extra%60).padStart(2,'0')}</span>;
+                                                            if (atraso > 0) return <span className="text-red-600 font-semibold">-{Math.floor(atraso/60)}:{String(atraso%60).padStart(2,'0')}</span>;
+                                                            if (trab === 0 && !rec.entrada1) return <span className="text-muted-foreground">-</span>;
+                                                            return <span className="text-muted-foreground">0:00</span>;
+                                                          })()}
+                                                        </td>
                                                         <td className="px-3 py-1.5 text-center">
                                                           <Badge variant={rec.ajusteManual ? "secondary" : "outline"} className="text-[10px]">
                                                             {rec.ajusteManual ? "Manual" : "DIXI"}
@@ -2528,6 +2557,7 @@ export default function FechamentoPonto() {
                                 <th className="p-2 font-medium text-center">Saída</th>
                                 <th className="p-2 font-medium text-center">H. Trab.</th>
                                 <th className="p-2 font-medium text-center">H. Extra</th>
+                                <th className="p-2 font-medium text-center">Saldo</th>
                                 <th className="p-2 font-medium text-center">Fonte</th>
                                 <th className="p-2 font-medium text-center">Status</th>
                               </tr>
@@ -2547,6 +2577,18 @@ export default function FechamentoPonto() {
                                     <td className="p-2 text-center font-mono font-semibold">{rec.horasTrabalhadas || "-"}</td>
                                     <td className="p-2 text-center font-mono">
                                       {rec.horasExtras && rec.horasExtras !== "0:00" ? <span className="text-green-600 font-semibold">{rec.horasExtras}</span> : "-"}
+                                    </td>
+                                    <td className="p-2 text-center font-mono">
+                                      {(() => {
+                                        const parseHM3 = (s: string) => { if (!s || s === "-" || s === "0:00") return 0; const [h, m] = s.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+                                        const trab3 = parseHM3(rec.horasTrabalhadas);
+                                        const extra3 = parseHM3(rec.horasExtras);
+                                        const atraso3 = parseHM3(rec.atrasos);
+                                        if (extra3 > 0) return <span className="text-green-600 font-semibold">+{Math.floor(extra3/60)}:{String(extra3%60).padStart(2,'0')}</span>;
+                                        if (atraso3 > 0) return <span className="text-red-600 font-semibold">-{Math.floor(atraso3/60)}:{String(atraso3%60).padStart(2,'0')}</span>;
+                                        if (trab3 === 0 && !rec.entrada1) return <span className="text-muted-foreground">-</span>;
+                                        return <span className="text-muted-foreground">0:00</span>;
+                                      })()}
                                     </td>
                                     <td className="p-2 text-center">
                                       {rec.ajusteManual ? (

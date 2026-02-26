@@ -483,7 +483,35 @@ function processRecords(
         // Não gerar atraso nem falta em dia de folga
       } else if (diffBruto > 0) {
         // Trabalhou mais que o esperado em dia normal
-        horasExtras = diffBruto > tolSaida ? diffBruto : 0;
+        // REGRA: Chegada antecipada SEMPRE conta como hora extra (sem tolerância)
+        // A tolerância de saída só se aplica para não gerar HE por poucos minutos a mais no fim
+        // Mas se chegou cedo, isso é intencional e deve contar
+        
+        // Verificar se o excesso vem de chegada antecipada
+        let chegouCedo = false;
+        if (entrada1 && emp.jornadaTrabalho) {
+          try {
+            const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            const dayOfWeek2 = new Date(data + "T12:00:00").getDay();
+            const dayMap2: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
+            const dayKey2 = dayMap2[dayOfWeek2];
+            if (jornada[dayKey2]?.entrada) {
+              const entradaEsperada = diffMinutes("00:00", jornada[dayKey2].entrada);
+              const entradaReal = diffMinutes("00:00", entrada1);
+              if (entradaReal < entradaEsperada) {
+                chegouCedo = true;
+              }
+            }
+          } catch (e) { /* ignore */ }
+        }
+        
+        if (chegouCedo) {
+          // Chegou cedo: SEMPRE conta como hora extra (sem tolerância)
+          horasExtras = diffBruto;
+        } else {
+          // Saiu tarde: aplica tolerância de saída
+          horasExtras = diffBruto > tolSaida ? diffBruto : 0;
+        }
       } else if (diffBruto < 0 && totalMinutes > 0) {
         const atrasoReal = Math.abs(diffBruto);
         if (atrasoReal >= faltaApos && !avisoAtivo) {
@@ -491,10 +519,10 @@ function processRecords(
           faltas = "1";
           atrasos = 0;
         } else if (atrasoReal > tolAtraso) {
-          // Atraso fora da tolerância: registrar
+          // Atraso fora da tolerância (>10min): registrar como atraso
           atrasos = atrasoReal;
         }
-        // Dentro da tolerância: atraso = 0
+        // Dentro da tolerância (<=10min): atraso = 0, não desconta
       }
       
       // Classificar tipo de HE: sábado=50%, domingo/feriado=100%, dia útil=50%
@@ -2384,7 +2412,26 @@ export const fechamentoPontoRouter = router({
         if (isDiaFolgaJornada2 && totalMinutes > 0) {
           horasExtras = totalMinutes;
         } else if (diffBruto > 0) {
-          horasExtras = diffBruto > criteria.pontoToleranciaSaida ? diffBruto : 0;
+          // Verificar se chegou cedo (hora extra por chegada antecipada)
+          let chegouCedo2 = false;
+          if (entrada1 && emp.jornadaTrabalho) {
+            try {
+              const jornada2 = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+              const dow2 = new Date(rec.data + "T12:00:00").getDay();
+              const dm2: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
+              const dk2 = dm2[dow2];
+              if (jornada2[dk2]?.entrada) {
+                const entEsp = diffMinutes("00:00", jornada2[dk2].entrada);
+                const entReal = diffMinutes("00:00", entrada1);
+                if (entReal < entEsp) chegouCedo2 = true;
+              }
+            } catch (e) { /* ignore */ }
+          }
+          if (chegouCedo2) {
+            horasExtras = diffBruto; // Chegou cedo: SEMPRE conta HE
+          } else {
+            horasExtras = diffBruto > criteria.pontoToleranciaSaida ? diffBruto : 0;
+          }
         } else if (diffBruto < 0 && totalMinutes > 0) {
           const atrasoReal = Math.abs(diffBruto);
           if (atrasoReal >= criteria.pontoFaltaAposAtraso) {
@@ -2392,6 +2439,7 @@ export const fechamentoPontoRouter = router({
           } else if (atrasoReal > criteria.pontoToleranciaAtraso) {
             atrasos = atrasoReal;
           }
+          // Dentro da tolerância (<=10min): atraso = 0, não desconta
         }
 
         const batidas = rec.batidasBrutas ? (typeof rec.batidasBrutas === 'string' ? JSON.parse(rec.batidasBrutas) : rec.batidasBrutas) : [];

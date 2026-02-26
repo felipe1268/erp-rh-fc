@@ -2531,3 +2531,11 @@
 - [x] Tornar cards de estatísticas responsivos (flex com scroll horizontal em mobile)
 - [x] Tornar barra de filtros (abas + busca + filtro condição) responsiva com flex-wrap
 - [x] Tabela do catálogo já tinha overflow-x-auto (mantido)
+
+## Fase 76: Tolerância de atraso e horas negativas no cartão de ponto
+- [x] Implementar tolerância de 10 minutos para atraso (não desconta se atraso <= 10min)
+- [x] Contabilizar chegada antecipada como hora extra (sem tolerância)
+- [x] Adicionar coluna "Saldo" no relatório de ponto (detalhe por obra e resumo por colaborador)
+- [x] Exibir saldo positivo em verde (+HH:MM) e negativo em vermelho (-HH:MM)
+- [x] Aplicar mesma lógica nos dois blocos de cálculo (processRecords e vinculação)
+- [x] Adicionar coluna Saldo nas tabelas de impressão/PDF
