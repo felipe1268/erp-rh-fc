@@ -2500,3 +2500,9 @@
 - [x] Aplicar máscara nos campos de editar EPI, novo EPI e edição inline
 - [x] Converter corretamente ao salvar (parseCurrencyToFloat)
 - [x] Testado: 1055000 → 10.550,00 formatado automaticamente
+
+## Fase 70: Corrigir exibição de percentuais nos gráficos
+- [x] Remover labels fixos que sobrepõem textos em gráficos de barras (datalabels desativados para bar/line)
+- [x] Manter % apenas no tooltip (hover) para bar/horizontalBar/line - tooltip escuro com valor + %
+- [x] Em doughnut/pie: % dentro das fatias ≥5%, legenda com "Label: valor (%)" 
+- [x] Testar e validar visual limpo em todos os dashboards (FC Engenharia com dados reais)

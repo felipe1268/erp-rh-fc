@@ -63,6 +63,89 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
         borderWidth: ds.borderWidth ?? (isPieOrDoughnut ? 2 : 1),
       }));
 
+      // For pie/doughnut: show % inside large slices only
+      // For bar/line/horizontalBar: NO datalabels (clean), % only in tooltip
+      const datalabelsConfig = isPieOrDoughnut && showPercentage ? {
+        display: function (context: any) {
+          const value = context.dataset.data[context.dataIndex];
+          const dataArr = context.dataset.data as number[];
+          const total = dataArr.reduce((a: number, b: number) => a + b, 0);
+          if (total === 0) return false;
+          const pct = (value / total) * 100;
+          return pct >= 5; // Only show inside slices >= 5%
+        },
+        formatter: function (value: number, context: any) {
+          const dataArr = context.dataset.data as number[];
+          const total = dataArr.reduce((a: number, b: number) => a + b, 0);
+          if (total === 0) return "";
+          const pct = ((value / total) * 100).toFixed(1);
+          return `${pct}%`;
+        },
+        color: "#fff",
+        font: { size: 11, weight: "bold" as const },
+        anchor: "center" as const,
+        align: "center" as const,
+        textAlign: "center" as const,
+      } : { display: false as const };
+
+      // Enhanced tooltip with value + % for ALL chart types
+      const tooltipConfig = {
+        backgroundColor: "rgba(15, 23, 42, 0.92)",
+        titleFont: { size: 12, weight: "bold" as const },
+        bodyFont: { size: 12 },
+        padding: 10,
+        cornerRadius: 8,
+        displayColors: true,
+        boxPadding: 4,
+        callbacks: {
+          label: function (context: any) {
+            const dataset = context.dataset;
+            const value = context.parsed !== undefined
+              ? (typeof context.parsed === "object" ? (isHorizontalBar ? context.parsed.x : context.parsed.y) : context.parsed)
+              : context.raw;
+            const dataArr = dataset.data as number[];
+            const total = dataArr.reduce((a: number, b: number) => a + b, 0);
+            const pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
+            const labelStr = dataset.label || context.label || "";
+            if (isPieOrDoughnut) {
+              return ` ${context.label}: ${value} (${pct}%)`;
+            }
+            return ` ${labelStr}: ${value} (${pct}%)`;
+          },
+        },
+      };
+
+      // For pie/doughnut: show % in legend labels
+      const legendConfig = {
+        display: datasets.length > 1 || isPieOrDoughnut,
+        position: isPieOrDoughnut ? "right" as const : "top" as const,
+        labels: {
+          font: { size: 11 },
+          padding: 8,
+          ...(isPieOrDoughnut && showPercentage ? {
+            generateLabels: function (chart: any) {
+              const data = chart.data;
+              if (!data.labels || !data.datasets.length) return [];
+              const dataset = data.datasets[0];
+              const total = (dataset.data as number[]).reduce((a: number, b: number) => a + b, 0);
+              return data.labels.map((label: string, i: number) => {
+                const value = dataset.data[i] as number;
+                const pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
+                const bgColors = Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor : COLORS;
+                return {
+                  text: `${label}: ${value} (${pct}%)`,
+                  fillStyle: bgColors[i % bgColors.length],
+                  strokeStyle: "#fff",
+                  lineWidth: 1,
+                  hidden: chart.getDatasetMeta(0).data[i]?.hidden || false,
+                  index: i,
+                };
+              });
+            },
+          } : {}),
+        },
+      };
+
       chartRef.current = new CJS(canvasRef.current, {
         type: chartType,
         data: { labels, datasets: processedDatasets },
@@ -71,73 +154,9 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
           maintainAspectRatio: false,
           indexAxis: isHorizontalBar ? "y" : "x",
           plugins: {
-            legend: {
-              display: datasets.length > 1 || isPieOrDoughnut,
-              position: isPieOrDoughnut ? "right" : "top",
-              labels: { font: { size: 11 }, padding: 8 },
-            },
-            tooltip: {
-              callbacks: {
-                label: function (context: any) {
-                  const dataset = context.dataset;
-                  const value = context.parsed !== undefined
-                    ? (typeof context.parsed === "object" ? (isHorizontalBar ? context.parsed.x : context.parsed.y) : context.parsed)
-                    : context.raw;
-                  const dataArr = dataset.data as number[];
-                  const total = dataArr.reduce((a: number, b: number) => a + b, 0);
-                  const pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
-                  const labelStr = dataset.label || context.label || "";
-                  if (isPieOrDoughnut) {
-                    return `${context.label}: ${value} (${pct}%)`;
-                  }
-                  return `${labelStr}: ${value} (${pct}%)`;
-                },
-              },
-            },
-            datalabels: showPercentage ? {
-              display: function (context: any) {
-                const value = context.dataset.data[context.dataIndex];
-                // Hide labels for very small values to avoid clutter
-                const dataArr = context.dataset.data as number[];
-                const total = dataArr.reduce((a: number, b: number) => a + b, 0);
-                if (total === 0) return false;
-                const pct = (value / total) * 100;
-                return pct >= 2; // Only show if >= 2%
-              },
-              formatter: function (value: number, context: any) {
-                const dataArr = context.dataset.data as number[];
-                const total = dataArr.reduce((a: number, b: number) => a + b, 0);
-                if (total === 0) return "";
-                const pct = ((value / total) * 100).toFixed(1);
-                if (isPieOrDoughnut) {
-                  return `${value}\n${pct}%`;
-                }
-                return `${value} (${pct}%)`;
-              },
-              color: function (context: any) {
-                if (isPieOrDoughnut) return "#fff";
-                // For bar/line charts, use dark color
-                return "#374151";
-              },
-              font: function (context: any) {
-                if (isPieOrDoughnut) {
-                  return { size: 11, weight: "bold" as const };
-                }
-                return { size: 10 };
-              },
-              anchor: function (context: any) {
-                if (isPieOrDoughnut) return "center";
-                if (isHorizontalBar) return "end";
-                return "end";
-              } as any,
-              align: function (context: any) {
-                if (isPieOrDoughnut) return "center";
-                if (isHorizontalBar) return "start";
-                return "top";
-              } as any,
-              textAlign: "center" as const,
-              padding: 2,
-            } : { display: false },
+            legend: legendConfig,
+            tooltip: tooltipConfig,
+            datalabels: datalabelsConfig,
           },
           scales: isPieOrDoughnut ? {} : {
             y: { beginAtZero: true, ticks: { font: { size: 11 } } },
