@@ -2489,3 +2489,8 @@
 
 ## Fase 67: Alterar tamanho "U" para "Único"
 - [x] Alterar label de "U" para "Único" na lista de tamanhos de uniforme
+
+## Fase 68: Adicionar % em todos os gráficos dos dashboards
+- [x] Atualizar componente DashChart para exibir valor + percentual em todos os tipos de gráfico (plugin chartjs-plugin-datalabels)
+- [x] Verificar gráficos inline nos dashboards - todos 44 gráficos usam DashChart (6 dashboards)
+- [x] Testar e validar - percentuais exibidos corretamente em doughnut, bar, horizontalBar, line

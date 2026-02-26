@@ -3,11 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Lazy load Chart.js
 let ChartJS: any = null;
+let ChartDataLabels: any = null;
 const loadChartJS = async () => {
-  if (ChartJS) return ChartJS;
-  const mod = await import("chart.js/auto");
+  if (ChartJS) return { CJS: ChartJS, DL: ChartDataLabels };
+  const [mod, dlMod] = await Promise.all([
+    import("chart.js/auto"),
+    import("chartjs-plugin-datalabels"),
+  ]);
   ChartJS = mod.default || mod.Chart;
-  return ChartJS;
+  ChartDataLabels = dlMod.default || dlMod;
+  ChartJS.register(ChartDataLabels);
+  return { CJS: ChartJS, DL: ChartDataLabels };
 };
 
 type ChartType = "bar" | "doughnut" | "pie" | "line" | "horizontalBar";
@@ -27,6 +33,7 @@ interface DashChartProps {
   }>;
   height?: number;
   className?: string;
+  showPercentage?: boolean;
 }
 
 const COLORS = [
@@ -35,24 +42,25 @@ const COLORS = [
   "#84CC16", "#A855F7", "#22D3EE", "#FB923C", "#4ADE80",
 ];
 
-export default function DashChart({ title, type, labels, datasets, height = 280, className }: DashChartProps) {
+export default function DashChart({ title, type, labels, datasets, height = 280, className, showPercentage = true }: DashChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
 
   useEffect(() => {
     let mounted = true;
-    loadChartJS().then((CJS) => {
+    loadChartJS().then(({ CJS }) => {
       if (!mounted || !canvasRef.current) return;
       if (chartRef.current) chartRef.current.destroy();
 
       const isHorizontalBar = type === "horizontalBar";
       const chartType = isHorizontalBar ? "bar" : type;
+      const isPieOrDoughnut = ["doughnut", "pie"].includes(type);
 
       const processedDatasets = datasets.map((ds, i) => ({
         ...ds,
-        backgroundColor: ds.backgroundColor || (["doughnut", "pie"].includes(type) ? COLORS : COLORS[i % COLORS.length]),
-        borderColor: ds.borderColor || (["doughnut", "pie"].includes(type) ? "#fff" : COLORS[i % COLORS.length]),
-        borderWidth: ds.borderWidth ?? (["doughnut", "pie"].includes(type) ? 2 : 1),
+        backgroundColor: ds.backgroundColor || (isPieOrDoughnut ? COLORS : COLORS[i % COLORS.length]),
+        borderColor: ds.borderColor || (isPieOrDoughnut ? "#fff" : COLORS[i % COLORS.length]),
+        borderWidth: ds.borderWidth ?? (isPieOrDoughnut ? 2 : 1),
       }));
 
       chartRef.current = new CJS(canvasRef.current, {
@@ -64,12 +72,74 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
           indexAxis: isHorizontalBar ? "y" : "x",
           plugins: {
             legend: {
-              display: datasets.length > 1 || ["doughnut", "pie"].includes(type),
-              position: ["doughnut", "pie"].includes(type) ? "right" : "top",
+              display: datasets.length > 1 || isPieOrDoughnut,
+              position: isPieOrDoughnut ? "right" : "top",
               labels: { font: { size: 11 }, padding: 8 },
             },
+            tooltip: {
+              callbacks: {
+                label: function (context: any) {
+                  const dataset = context.dataset;
+                  const value = context.parsed !== undefined
+                    ? (typeof context.parsed === "object" ? (isHorizontalBar ? context.parsed.x : context.parsed.y) : context.parsed)
+                    : context.raw;
+                  const dataArr = dataset.data as number[];
+                  const total = dataArr.reduce((a: number, b: number) => a + b, 0);
+                  const pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
+                  const labelStr = dataset.label || context.label || "";
+                  if (isPieOrDoughnut) {
+                    return `${context.label}: ${value} (${pct}%)`;
+                  }
+                  return `${labelStr}: ${value} (${pct}%)`;
+                },
+              },
+            },
+            datalabels: showPercentage ? {
+              display: function (context: any) {
+                const value = context.dataset.data[context.dataIndex];
+                // Hide labels for very small values to avoid clutter
+                const dataArr = context.dataset.data as number[];
+                const total = dataArr.reduce((a: number, b: number) => a + b, 0);
+                if (total === 0) return false;
+                const pct = (value / total) * 100;
+                return pct >= 2; // Only show if >= 2%
+              },
+              formatter: function (value: number, context: any) {
+                const dataArr = context.dataset.data as number[];
+                const total = dataArr.reduce((a: number, b: number) => a + b, 0);
+                if (total === 0) return "";
+                const pct = ((value / total) * 100).toFixed(1);
+                if (isPieOrDoughnut) {
+                  return `${value}\n${pct}%`;
+                }
+                return `${value} (${pct}%)`;
+              },
+              color: function (context: any) {
+                if (isPieOrDoughnut) return "#fff";
+                // For bar/line charts, use dark color
+                return "#374151";
+              },
+              font: function (context: any) {
+                if (isPieOrDoughnut) {
+                  return { size: 11, weight: "bold" as const };
+                }
+                return { size: 10 };
+              },
+              anchor: function (context: any) {
+                if (isPieOrDoughnut) return "center";
+                if (isHorizontalBar) return "end";
+                return "end";
+              } as any,
+              align: function (context: any) {
+                if (isPieOrDoughnut) return "center";
+                if (isHorizontalBar) return "start";
+                return "top";
+              } as any,
+              textAlign: "center" as const,
+              padding: 2,
+            } : { display: false },
           },
-          scales: ["doughnut", "pie"].includes(type) ? {} : {
+          scales: isPieOrDoughnut ? {} : {
             y: { beginAtZero: true, ticks: { font: { size: 11 } } },
             x: { ticks: { font: { size: 11 }, maxRotation: 45 } },
           },
@@ -78,7 +148,7 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
     });
 
     return () => { mounted = false; if (chartRef.current) chartRef.current.destroy(); };
-  }, [type, labels, datasets, height]);
+  }, [type, labels, datasets, height, showPercentage]);
 
   return (
     <Card className={className}>
