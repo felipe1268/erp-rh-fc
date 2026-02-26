@@ -89,20 +89,34 @@ export default function AvisoPrevio() {
     onSuccess: () => { refetch(); toast.success("Aviso prévio excluído!"); },
   });
 
+  // tRPC utils for imperative queries
+  const utils = trpc.useUtils();
+
   // Calcular preview
+  const [calculoLoading, setCalculoLoading] = useState(false);
   const calcularPreview = async () => {
     if (!form.employeeId || !form.tipo) {
       toast.error("Selecione o funcionário e o tipo");
       return;
     }
+    setCalculoLoading(true);
     try {
-      const result = await (trpc as any).avisoPrevio.avisoPrevio.calcular.query({
+      const result = await (utils as any).avisoPrevio.avisoPrevio.calcular.fetch({
         employeeId: form.employeeId,
         tipo: form.tipo,
       });
-      setCalculoPreview(result);
+      // Calcular data limite de pagamento (CLT Art. 477 §6º: 10 dias corridos)
+      const dataFim = result.dataFimEstimada;
+      const dtFim = new Date(dataFim + "T00:00:00");
+      dtFim.setDate(dtFim.getDate() + 10);
+      const dataPagamento = dtFim.toISOString().split("T")[0];
+      setCalculoPreview({ ...result, dataPagamento });
+      toast.success("Previsão calculada com sucesso!");
     } catch (e: any) {
-      toast.error(e.message || "Erro ao calcular");
+      console.error("Erro ao calcular rescisão:", e);
+      toast.error(e.message || "Erro ao calcular previsão de rescisão");
+    } finally {
+      setCalculoLoading(false);
     }
   };
 
@@ -562,9 +576,13 @@ export default function AvisoPrevio() {
                       variant="outline"
                       className="w-full h-12 border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 font-semibold"
                       onClick={calcularPreview}
-                      disabled={!form.employeeId || !form.tipo}
+                      disabled={!form.employeeId || !form.tipo || calculoLoading}
                     >
-                      <DollarSign className="h-4 w-4 mr-2" /> Calcular Previsão de Rescisão
+                      {calculoLoading ? (
+                        <><Clock className="h-4 w-4 mr-2 animate-spin" /> Calculando...</>
+                      ) : (
+                        <><DollarSign className="h-4 w-4 mr-2" /> Calcular Previsão de Rescisão</>
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -592,7 +610,7 @@ export default function AvisoPrevio() {
                   </p>
                 </div>
                 <div className="p-6">
-                  <div className="grid grid-cols-3 gap-4 mb-5">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
                     <div className="text-center bg-white rounded-lg p-4 border border-green-100">
                       <p className="text-xs text-green-600 font-medium mb-1">Anos de Serviço</p>
                       <p className="text-2xl font-bold text-green-800">{calculoPreview.anosServico}</p>
@@ -605,6 +623,11 @@ export default function AvisoPrevio() {
                       <p className="text-xs text-green-600 font-medium mb-1">Data Fim Estimada</p>
                       <p className="text-2xl font-bold text-green-800">{formatDate(calculoPreview.dataFimEstimada)}</p>
                     </div>
+                    <div className="text-center bg-white rounded-lg p-4 border border-red-100">
+                      <p className="text-xs text-red-600 font-medium mb-1">Data Limite Pgto</p>
+                      <p className="text-lg font-bold text-red-700">{formatDate(calculoPreview.dataPagamento)}</p>
+                      <p className="text-[10px] text-red-500 mt-1">Art. 477 §6º CLT</p>
+                    </div>
                   </div>
                   {calculoPreview.previsaoRescisao && (
                     <div className="bg-white rounded-lg border border-green-100 p-4">
@@ -613,6 +636,7 @@ export default function AvisoPrevio() {
                         <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">13º Proporcional:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.decimoTerceiroProporcional)}</span></div>
                         <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Férias Proporcionais:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.feriasProporcional)}</span></div>
                         <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">1/3 Constitucional:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.tercoConstitucional)}</span></div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Aviso Prévio Indenizado:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.avisoPrevioIndenizado)}</span></div>
                         <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">FGTS Estimado:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.fgtsEstimado)}</span></div>
                         <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Multa 40% FGTS:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span></div>
                       </div>

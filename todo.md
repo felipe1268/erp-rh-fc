@@ -2609,3 +2609,8 @@
 
 ## Fase 89b: Limpeza de deletedAt de todos os funcionários
 - [x] Limpar deletedAt de todos os 299 funcionários no banco de dados
+
+## Fase 90: Corrigir Cálculo de Previsão de Rescisão no Aviso Prévio
+- [x] Botão "Calcular Previsão de Rescisão" agora exibe valores ao clicar (corrigido com trpc.useUtils())
+- [x] Exibe valores detalhados: saldo salário, aviso prévio indenizado, 13º proporcional, férias + 1/3, FGTS, multa 40%, total
+- [x] Exibe data limite de pagamento (Art. 477 §6º CLT - 10 dias úteis)
