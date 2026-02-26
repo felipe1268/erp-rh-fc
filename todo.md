@@ -2526,3 +2526,8 @@
 
 ## Fase 74: Exibir badge "Novo" na listagem de EPIs (igual ao "Reutilizado")
 - [x] Adicionar badge verde "Novo" na listagem do catálogo para EPIs com condição Novo
+
+## Fase 75: Responsividade da página de EPIs
+- [x] Tornar cards de estatísticas responsivos (flex com scroll horizontal em mobile)
+- [x] Tornar barra de filtros (abas + busca + filtro condição) responsiva com flex-wrap
+- [x] Tabela do catálogo já tinha overflow-x-auto (mantido)

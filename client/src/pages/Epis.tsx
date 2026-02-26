@@ -1340,46 +1340,46 @@ export default function Epis() {
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
-            <Card className="border-l-4 border-l-blue-500">
+          <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+            <Card className="border-l-4 border-l-blue-500 min-w-[130px] shrink-0">
               <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground">Total EPIs</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Total EPIs</p>
                 <p className="text-lg font-bold">{stats.totalItens}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-green-500">
+            <Card className="border-l-4 border-l-green-500 min-w-[130px] shrink-0">
               <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground">Estoque Total</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Total</p>
                 <p className="text-lg font-bold">{stats.estoqueTotal}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-amber-500">
+            <Card className="border-l-4 border-l-amber-500 min-w-[130px] shrink-0">
               <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground">Estoque Baixo</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Baixo</p>
                 <p className="text-lg font-bold text-amber-600">{stats.estoqueBaixo}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-red-500">
+            <Card className="border-l-4 border-l-red-500 min-w-[130px] shrink-0">
               <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground">CA Vencido</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">CA Vencido</p>
                 <p className="text-lg font-bold text-red-600">{stats.caVencido}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-purple-500">
+            <Card className="border-l-4 border-l-purple-500 min-w-[130px] shrink-0">
               <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground">Total Entregas</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Total Entregas</p>
                 <p className="text-lg font-bold">{stats.totalEntregas}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-cyan-500">
+            <Card className="border-l-4 border-l-cyan-500 min-w-[130px] shrink-0">
               <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground">Entregas/Mês</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Entregas/Mês</p>
                 <p className="text-lg font-bold">{stats.entregasMes}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-emerald-500">
+            <Card className="border-l-4 border-l-emerald-500 min-w-[140px] shrink-0">
               <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground">Valor Inventário</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">Valor Inventário</p>
                 <p className="text-lg font-bold text-emerald-700">
                   {stats.valorTotalInventario > 0 ? stats.valorTotalInventario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
                 </p>
@@ -1389,8 +1389,8 @@ export default function Epis() {
         )}
 
         {/* Tabs + Search */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg shrink-0">
             <button onClick={() => setViewMode("catalogo")}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "catalogo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
               <Package className="h-3.5 w-3.5 inline mr-1" /> Catálogo
@@ -1400,12 +1400,12 @@ export default function Epis() {
               <ClipboardList className="h-3.5 w-3.5 inline mr-1" /> Entregas
             </button>
           </div>
-          <div className="relative flex-1 w-full sm:max-w-md">
+          <div className="relative flex-1 min-w-[200px] sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
           <Select value={filterCondicao} onValueChange={(v: any) => setFilterCondicao(v)}>
-            <SelectTrigger className="w-[160px] shrink-0">
+            <SelectTrigger className="w-[150px] sm:w-[160px] shrink-0">
               <SelectValue placeholder="Condição" />
             </SelectTrigger>
             <SelectContent>
