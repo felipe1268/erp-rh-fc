@@ -481,6 +481,24 @@ export default function FechamentoPonto() {
   const [newMappingDixiName, setNewMappingDixiName] = useState("");
   const [newMappingEmpId, setNewMappingEmpId] = useState<number | null>(null);
   const [memSearchTerm, setMemSearchTerm] = useState("");
+  // Modal de ajuste rápido de inconsistência
+  const [quickFixOpen, setQuickFixOpen] = useState(false);
+  const [quickFixRec, setQuickFixRec] = useState<any>(null); // o registro do timeRecord
+  const [quickFixData, setQuickFixData] = useState({
+    entrada1: "", saida1: "", entrada2: "", saida2: "",
+    motivoAjuste: "", descricaoMotivo: "",
+  });
+  const MOTIVOS_AJUSTE = [
+    "Esqueceu de bater o ponto",
+    "Saiu mais cedo",
+    "Ficou doente",
+    "Falta justificada",
+    "Liberado pela chefia",
+    "Problema no relógio de ponto",
+    "Atraso justificado",
+    "Serviço externo",
+    "Outro",
+  ];
 
   // ===== QUERIES =====
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
@@ -2601,7 +2619,25 @@ export default function FechamentoPonto() {
                                       {hasConflict ? (
                                         <Badge className="text-xs bg-orange-600 text-white"><AlertCircle className="h-3 w-3 mr-1" /> Conflito</Badge>
                                       ) : hasIncons ? (
-                                        <Badge variant="destructive" className="text-xs"><AlertTriangle className="h-3 w-3 mr-1" /> Inconsistente</Badge>
+                                        <Badge
+                                          variant="destructive"
+                                          className="text-xs cursor-pointer hover:opacity-80 transition-opacity"
+                                          onClick={() => {
+                                            if (isConsolidado) return;
+                                            setQuickFixRec(rec);
+                                            setQuickFixData({
+                                              entrada1: rec.entrada1 || "",
+                                              saida1: rec.saida1 || "",
+                                              entrada2: rec.entrada2 || "",
+                                              saida2: rec.saida2 || "",
+                                              motivoAjuste: "",
+                                              descricaoMotivo: "",
+                                            });
+                                            setQuickFixOpen(true);
+                                          }}
+                                        >
+                                          <AlertTriangle className="h-3 w-3 mr-1" /> Inconsistente
+                                        </Badge>
                                       ) : (
                                         <Badge variant="outline" className="text-xs text-green-600 border-green-300">OK</Badge>
                                       )}
@@ -3370,6 +3406,146 @@ export default function FechamentoPonto() {
         </FullScreenDialog>
       </div>
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* ===== MODAL DE AJUSTE RÁPIDO DE INCONSISTÊNCIA ===== */}
+      <Dialog open={quickFixOpen} onOpenChange={setQuickFixOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <PenLine className="h-5 w-5" /> Ajuste Rápido de Ponto
+            </DialogTitle>
+          </DialogHeader>
+          {quickFixRec && (
+            <div className="space-y-4">
+              {/* Info do registro */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-amber-800">
+                    {quickFixRec.data ? new Date(quickFixRec.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
+                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    {employeeDetail.data?.employee?.nomeCompleto || "Colaborador"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-amber-600 mt-1">
+                  Preencha os horários que estão faltando e informe o motivo do ajuste.
+                </p>
+              </div>
+
+              {/* Campos de horário — apenas os que estão vazios ficam destacados */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Entrada</Label>
+                  <Input
+                    type="time"
+                    value={quickFixData.entrada1}
+                    onChange={(e) => setQuickFixData(d => ({ ...d, entrada1: e.target.value }))}
+                    className={!quickFixRec.entrada1 ? "border-amber-400 bg-amber-50" : ""}
+                  />
+                  {!quickFixRec.entrada1 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
+                <div>
+                  <Label className="text-xs">Saída Int.</Label>
+                  <Input
+                    type="time"
+                    value={quickFixData.saida1}
+                    onChange={(e) => setQuickFixData(d => ({ ...d, saida1: e.target.value }))}
+                    className={!quickFixRec.saida1 ? "border-amber-400 bg-amber-50" : ""}
+                  />
+                  {!quickFixRec.saida1 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
+                <div>
+                  <Label className="text-xs">Retorno</Label>
+                  <Input
+                    type="time"
+                    value={quickFixData.entrada2}
+                    onChange={(e) => setQuickFixData(d => ({ ...d, entrada2: e.target.value }))}
+                    className={!quickFixRec.entrada2 ? "border-amber-400 bg-amber-50" : ""}
+                  />
+                  {!quickFixRec.entrada2 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
+                <div>
+                  <Label className="text-xs">Saída</Label>
+                  <Input
+                    type="time"
+                    value={quickFixData.saida2}
+                    onChange={(e) => setQuickFixData(d => ({ ...d, saida2: e.target.value }))}
+                    className={!quickFixRec.saida2 ? "border-amber-400 bg-amber-50" : ""}
+                  />
+                  {!quickFixRec.saida2 && <span className="text-[10px] text-amber-600">* Faltando</span>}
+                </div>
+              </div>
+
+              {/* Motivo do ajuste — obrigatório */}
+              <div>
+                <Label className="text-xs font-semibold">Motivo do Ajuste <span className="text-red-500">*</span></Label>
+                <Select value={quickFixData.motivoAjuste} onValueChange={(v) => setQuickFixData(d => ({ ...d, motivoAjuste: v }))}>
+                  <SelectTrigger className={!quickFixData.motivoAjuste ? "border-red-300" : ""}>
+                    <SelectValue placeholder="Selecione o motivo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MOTIVOS_AJUSTE.map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Descrição adicional — obrigatória se motivo = Outro */}
+              <div>
+                <Label className="text-xs">
+                  Descrição {quickFixData.motivoAjuste === "Outro" ? <span className="text-red-500">* (obrigatória)</span> : "(opcional)"}
+                </Label>
+                <Textarea
+                  value={quickFixData.descricaoMotivo}
+                  onChange={(e) => setQuickFixData(d => ({ ...d, descricaoMotivo: e.target.value }))}
+                  placeholder="Descreva o motivo do ajuste..."
+                  rows={2}
+                  className={quickFixData.motivoAjuste === "Outro" && !quickFixData.descricaoMotivo ? "border-red-300" : ""}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQuickFixOpen(false)}>Cancelar</Button>
+            <Button
+              className="bg-[#1B2A4A] hover:bg-[#243658] text-white"
+              disabled={!quickFixData.motivoAjuste || (quickFixData.motivoAjuste === "Outro" && !quickFixData.descricaoMotivo) || manualMut.isPending}
+              onClick={() => {
+                if (!quickFixRec || !selectedEmployeeId) return;
+                const justificativa = quickFixData.motivoAjuste === "Outro"
+                  ? quickFixData.descricaoMotivo
+                  : quickFixData.descricaoMotivo
+                    ? `${quickFixData.descricaoMotivo}`
+                    : "";
+                manualMut.mutate({
+                  companyId,
+                  employeeId: selectedEmployeeId,
+                  obraId: quickFixRec.obraId || undefined,
+                  mesReferencia: mesAno,
+                  data: quickFixRec.data,
+                  entrada1: quickFixData.entrada1 || undefined,
+                  saida1: quickFixData.saida1 || undefined,
+                  entrada2: quickFixData.entrada2 || undefined,
+                  saida2: quickFixData.saida2 || undefined,
+                  justificativa,
+                  motivoAjuste: quickFixData.motivoAjuste,
+                }, {
+                  onSuccess: () => {
+                    setQuickFixOpen(false);
+                    employeeDetail.refetch();
+                    inconsistencies.refetch();
+                    stats.refetch();
+                    toast.success("Ajuste salvo com sucesso! Inconsistência resolvida.");
+                  },
+                });
+              }}
+            >
+              {manualMut.isPending ? "Salvando..." : "Salvar Ajuste"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -2539,3 +2539,14 @@
 - [x] Exibir saldo positivo em verde (+HH:MM) e negativo em vermelho (-HH:MM)
 - [x] Aplicar mesma lógica nos dois blocos de cálculo (processRecords e vinculação)
 - [x] Adicionar coluna Saldo nas tabelas de impressão/PDF
+
+## Fase 77: Modal de ajuste rápido para inconsistências no cartão de ponto
+- [x] Tornar badge "Inconsistente" clicável (abre modal de ajuste)
+- [x] Criar modal com campos de horário pré-preenchidos, destacando faltantes em amarelo
+- [x] Motivo obrigatório: Esqueceu de bater, Saiu mais cedo, Ficou doente, Falta justificada, Liberado pela chefia, Problema no relógio, Atraso justificado, Serviço externo, Outro
+- [x] Campo de descrição obrigatório quando motivo = Outro
+- [x] Backend atualizado para aceitar motivoAjuste e gravar na justificativa
+- [x] Registro marcado como ajuste manual e inconsistência resolvida automaticamente
+
+## Fase 78: Bug - Logout redireciona para tela de login OAuth ao invés da Home
+- [x] Corrigir logout para redirecionar para /login (tela de login do sistema) após fazer logout

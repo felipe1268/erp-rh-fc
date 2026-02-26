@@ -273,7 +273,10 @@ export default function DashboardLayout({
   }
 
   if (!user) {
-    window.location.href = "/login";
+    // Redirect to our custom login page, not OAuth
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#1B2A4A]">
         <div className="flex flex-col items-center gap-4">

@@ -1144,6 +1144,7 @@ export const fechamentoPontoRouter = router({
       entrada3: z.string().optional(),
       saida3: z.string().optional(),
       justificativa: z.string().optional(),
+      motivoAjuste: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -1160,6 +1161,10 @@ export const fechamentoPontoRouter = router({
           eq(timeRecords.data, input.data),
         ))
         .limit(1);
+
+      // Build justificativa with motivo
+      const motivoPrefix = input.motivoAjuste ? `[${input.motivoAjuste}] ` : "";
+      const justFinal = motivoPrefix + (input.justificativa || "");
 
       const record = {
         companyId: input.companyId,
@@ -1181,7 +1186,7 @@ export const fechamentoPontoRouter = router({
         fonte: "manual",
         ajusteManual: 1,
         ajustadoPor: ctx.user?.name || "RH",
-        justificativa: input.justificativa || null,
+        justificativa: justFinal || null,
       };
 
       if (existing.length > 0) {
