@@ -113,6 +113,7 @@ export default function Epis() {
 
   const [viewMode, setViewMode] = useState<ViewMode>("catalogo");
   const [search, setSearch] = useState("");
+  const [filterCondicao, setFilterCondicao] = useState<"Todos" | "Novo" | "Reutilizado">("Todos");
   const [editingEpi, setEditingEpi] = useState<any>(null);
   const [selectedEpis, setSelectedEpis] = useState<Set<number>>(new Set());
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
@@ -403,14 +404,18 @@ export default function Epis() {
 
   // Filtered lists
   const filteredEpis = useMemo(() => {
-    if (!search) return episList;
+    let list = episList;
+    if (filterCondicao !== "Todos") {
+      list = list.filter((e: any) => (e.condicao || "Novo") === filterCondicao);
+    }
+    if (!search) return list;
     const s = search.toLowerCase();
-    return episList.filter((e: any) =>
+    return list.filter((e: any) =>
       e.nome?.toLowerCase().includes(s) ||
       (e.ca || "").toLowerCase().includes(s) ||
       (e.fabricante || "").toLowerCase().includes(s)
     );
-  }, [episList, search]);
+  }, [episList, search, filterCondicao]);
 
   const filteredDeliveries = useMemo(() => {
     if (!search) return deliveriesList;
@@ -1399,6 +1404,16 @@ export default function Epis() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
+          <Select value={filterCondicao} onValueChange={(v: any) => setFilterCondicao(v)}>
+            <SelectTrigger className="w-[160px] shrink-0">
+              <SelectValue placeholder="Condição" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todos">Todas Condições</SelectItem>
+              <SelectItem value="Novo">Novo</SelectItem>
+              <SelectItem value="Reutilizado">Reutilizado</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* ============================================================ */}
@@ -1460,9 +1475,13 @@ export default function Epis() {
                                       {epi.corCapacete}
                                     </span>
                                   )}
-                                  {epi.condicao === 'Reutilizado' && (
+                                  {epi.condicao === 'Reutilizado' ? (
                                     <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 border border-orange-200 text-orange-700">
                                       <RefreshCw className="h-2.5 w-2.5" /> Reutilizado
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 border border-green-200 text-green-700">
+                                      <ShieldCheck className="h-2.5 w-2.5" /> Novo
                                     </span>
                                   )}
                                 </div>

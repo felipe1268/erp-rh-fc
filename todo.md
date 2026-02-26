@@ -2518,3 +2518,11 @@
 - [x] Adicionar campo select "Condição" (Novo/Reutilizado) nos formulários de cadastro e edição de EPI
 - [x] Exibir condição na listagem/catálogo de EPIs (badge laranja "Reutilizado")
 - [x] Marcar fase 71 como concluída (máscara de moeda já funcionava)
+
+## Fase 73: Filtro de Condição (Novo/Reutilizado) no Catálogo de EPIs
+- [x] Adicionar estado de filtro de condição (Todos/Novo/Reutilizado)
+- [x] Adicionar Select de filtro ao lado da barra de busca no catálogo
+- [x] Aplicar filtro na lista de EPIs exibidos
+
+## Fase 74: Exibir badge "Novo" na listagem de EPIs (igual ao "Reutilizado")
+- [x] Adicionar badge verde "Novo" na listagem do catálogo para EPIs com condição Novo
