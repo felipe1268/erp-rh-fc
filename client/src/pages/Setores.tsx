@@ -65,9 +65,9 @@ const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyI
     <DashboardLayout>
       <PrintHeader />
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Setores</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Setores</h1>
             <p className="text-muted-foreground text-sm">Cadastro e gestão de setores</p>
           </div>
           <div className="flex items-center gap-3">

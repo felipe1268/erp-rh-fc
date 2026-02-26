@@ -195,9 +195,9 @@ export default function Obras() {
     <DashboardLayout>
       <PrintHeader />
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Obras</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Obras</h1>
             <p className="text-muted-foreground text-sm">Cadastro e gestão de obras e projetos</p>
           </div>
           <div className="flex items-center gap-2">
@@ -208,13 +208,13 @@ export default function Obras() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por nome, nº orçamento ou SN..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todos os Status</SelectItem>
               {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}

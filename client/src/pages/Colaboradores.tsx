@@ -581,7 +581,7 @@ export default function Colaboradores() {
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 bg-card border-border">
+            <SelectTrigger className="w-full sm:w-40 bg-card border-border">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

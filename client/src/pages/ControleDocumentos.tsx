@@ -460,9 +460,9 @@ export default function ControleDocumentos() {
       <PrintHeader />
       <div className="space-y-6">
         {/* HEADER */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Controle de Documentos</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Controle de Documentos</h1>
             <p className="text-muted-foreground text-sm">Gestão de ASOs, Treinamentos, Atestados e Advertências</p>
           </div>
           <PrintActions title="Controle de Documentos" />
@@ -506,7 +506,7 @@ export default function ControleDocumentos() {
         )}
 
         {/* SEARCH + FILTER */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por nome ou CPF..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />

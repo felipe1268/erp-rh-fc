@@ -2435,3 +2435,10 @@
 - [ ] Obra que mais solicita EPI
 - [ ] EPI mais perdido/estragado
 - [ ] Sugestões adicionais (taxa de reposição, previsão de consumo, validade média, etc.)
+
+## Fase 64: Filtros Responsivos + Alerta de Desconto EPI
+- [x] Analisar lógica do alerta de desconto na página de EPIs
+- [x] Tornar alerta de desconto clicável com DescontosDialog (quem, qual EPI, valor, motivo)
+- [x] Explicar lógica do alerta ao usuário
+- [x] Tornar TODOS os filtros responsivos (8 páginas corrigidas: Epis, FechamentoPonto, ControleDocumentos, Ferias, Obras, Setores, Colaboradores, FolhaPagamento)
+- [x] Testes e verificação visual (340 testes passando)

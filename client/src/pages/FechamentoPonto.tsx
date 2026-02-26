@@ -852,7 +852,7 @@ export default function FechamentoPonto() {
       <PrintHeader />
       <div className="space-y-5">
         {/* HEADER */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             {viewMode === "detalhe" && selectedEmployeeId ? (
               <div className="flex items-center gap-3">
@@ -1394,11 +1394,11 @@ export default function FechamentoPonto() {
                             <Badge className="ml-2 text-xs bg-purple-100 text-purple-700"><PenLine className="h-3 w-3 mr-1" /> Ajustes Manuais</Badge>
                           )}
                         </CardTitle>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5">
                             <Building2 className="h-4 w-4 text-muted-foreground" />
                             <Select value={filterObra} onValueChange={setFilterObra}>
-                              <SelectTrigger className="w-52 h-9"><SelectValue placeholder="Todas as Obras" /></SelectTrigger>
+                              <SelectTrigger className="w-full sm:w-52 h-9"><SelectValue placeholder="Todas as Obras" /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all">Todas as Obras</SelectItem>
                                 {(obrasList.data || []).map((o: any) => (
@@ -1420,7 +1420,7 @@ export default function FechamentoPonto() {
                           </div>
                           <div className="relative">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8 w-48 h-9" />
+                            <Input placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8 w-full sm:w-48 h-9" />
                           </div>
                           {(cardFilter || filterObra !== "all" || statusFilter !== "all") && (
                             <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCardFilter(null); setFilterObra("all"); setSearchTerm(""); setStatusFilter("all"); }}>

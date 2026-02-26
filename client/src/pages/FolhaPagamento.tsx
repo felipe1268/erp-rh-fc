@@ -351,14 +351,14 @@ export default function FolhaPagamento() {
       <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
               <div>
-                <h1 className="text-xl font-bold">Detalhes — {viewTipo}</h1>
-                <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)} | {filteredItens.length} funcionários</p>
+                <h1 className="text-lg sm:text-xl font-bold">Detalhes — {viewTipo}</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">{formatMesAno(mesAno)} | {filteredItens.length} funcionários</p>
               </div>
             </div>
             <PrintActions title={`Folha de Pagamento - ${viewTipo} - ${formatMesAno(mesAno)}`} />
@@ -579,16 +579,16 @@ export default function FolhaPagamento() {
       <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
               <div>
-                <h1 className="text-xl font-bold flex items-center gap-2">
+                <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-[#1B2A4A]" /> Custos por Obra — {viewTipo === "vale" ? "Vale" : "Pagamento"}
                 </h1>
-                <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)} | Distribuição proporcional baseada no controle de ponto</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{formatMesAno(mesAno)} | Distribuição proporcional</p>
               </div>
             </div>
             <PrintActions title={`Custos por Obra — ${viewTipo === "vale" ? "Vale" : "Pagamento"} — ${formatMesAno(mesAno)}`} showExcel onExportExcel={() => {
@@ -931,16 +931,16 @@ export default function FolhaPagamento() {
       <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
               <div>
-                <h1 className="text-xl font-bold flex items-center gap-2">
+                <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
                   <Clock className="h-5 w-5 text-amber-600" /> Horas Extras — {formatMesAno(mesAno)}
                 </h1>
-                <p className="text-sm text-muted-foreground">Análise detalhada de horas extras por funcionário e por obra</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Análise detalhada de horas extras por funcionário e por obra</p>
               </div>
             </div>
             <PrintActions title={`Horas Extras - ${formatMesAno(mesAno)}`} />
@@ -1142,16 +1142,16 @@ export default function FolhaPagamento() {
       <PrintHeader />
         {fileInputs}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
               <div>
-                <h1 className="text-xl font-bold flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-green-700" /> Verificação Cruzada — Folha × Ponto × Cadastro
+                <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-green-700" /> Verificação Cruzada
                 </h1>
-                <p className="text-sm text-muted-foreground">{formatMesAno(mesAno)}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{formatMesAno(mesAno)} | Folha × Ponto × Cadastro</p>
               </div>
             </div>
             <PrintActions title={`Verificação Cruzada - ${formatMesAno(mesAno)}`} />
@@ -2044,16 +2044,16 @@ function DescontosCLTView({ companyId, mesAno, lancamentoId, onBack }: { company
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
           </Button>
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <Scale className="h-5 w-5 text-red-700" /> Comparativo Descontos CLT
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+              <Scale className="h-5 w-5 text-red-700" /> Descontos CLT
             </h1>
-            <p className="text-sm text-muted-foreground">Sistema calculou vs Contabilidade cobrou — {mesAno}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Sistema vs Contabilidade — {mesAno}</p>
           </div>
         </div>
         <PrintActions title={`Comparativo Descontos CLT - ${mesAno}`} />
@@ -2122,16 +2122,16 @@ function CruzamentoHEView({ companyId, mesAno, lancamentoId, onBack }: { company
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
           </Button>
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <Clock className="h-5 w-5 text-blue-700" /> Cruzamento Horas Extras
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+              <Clock className="h-5 w-5 text-blue-700" /> Cruzamento HE
             </h1>
-            <p className="text-sm text-muted-foreground">Sistema (ponto) vs Contabilidade (folha) — {mesAno}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Ponto vs Folha — {mesAno}</p>
           </div>
         </div>
         <PrintActions title={`Cruzamento HE - ${mesAno}`} />
