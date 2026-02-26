@@ -2580,3 +2580,10 @@
 - [x] Adicionar: Amasiado, Separado, Separado Judicialmente, Outro (União Estável já existia)
 - [x] Atualizar enum no schema do banco de dados (ALTER TABLE employees)
 - [x] Atualizar formulário de cadastro de colaboradores com novas opções
+
+## Fase 85: Corrigir campo de busca de colaboradores em todas as telas
+- [x] Corrigido campo de busca no Aviso Prévio (z-index do input/overlay/dropdown)
+- [x] Corrigido campo de busca na CIPA
+- [x] Corrigido campo de busca nas Férias
+- [x] Corrigido campo de busca no Controle de Documentos
+- [x] Corrigido campo de busca no Módulo PJ

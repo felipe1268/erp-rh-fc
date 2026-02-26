@@ -521,28 +521,28 @@ export default function CipaCompleta() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-sm font-medium">Colaborador *</label>
-                <div className="relative">
-                  <div className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30" onClick={() => setEmpDropdownOpen(!empDropdownOpen)}>
+                <div className="relative" style={{ zIndex: 60 }}>
+                  <div className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 relative" style={{ zIndex: 61 }} onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}>
                     <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
                     {empDropdownOpen ? (
-                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onClick={e => e.stopPropagation()} />
+                      <input autoFocus className="flex-1 bg-transparent outline-none text-sm" placeholder="Digite nome ou CPF..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }} onClick={e => e.stopPropagation()} />
                     ) : (
                       <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
                         {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Selecione..."}
                       </span>
                     )}
                     {membroForm.employeeId && (
-                      <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setMembroForm({ ...membroForm, employeeId: undefined }); setEmpSearch(""); }}>
+                      <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setMembroForm({ ...membroForm, employeeId: undefined }); setEmpSearch(""); setEmpDropdownOpen(false); }}>
                         <X className="h-4 w-4" />
                       </button>
                     )}
                   </div>
                   {empDropdownOpen && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                      <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
                         {filteredEmps.length === 0 ? (
-                          <div className="p-3 text-sm text-muted-foreground text-center">Nenhum resultado</div>
+                          <div className="p-3 text-sm text-muted-foreground text-center">Nenhum resultado para "{empSearch}"</div>
                         ) : filteredEmps.slice(0, 20).map((e: any) => (
                           <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setMembroForm({ ...membroForm, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
                             <span className="font-medium">{e.nomeCompleto}</span>
