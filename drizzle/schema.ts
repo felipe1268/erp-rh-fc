@@ -2141,9 +2141,9 @@ export const dissidioFuncionarios = mysqlTable("dissidio_funcionarios", {
 // ============================================================
 export const userCompanies = mysqlTable("user_companies", {
 	id: int().autoincrement().notNull(),
-	userId: int().notNull(),
-	companyId: int().notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	userId: int('user_id').notNull(),
+	companyId: int('company_id').notNull(),
+	createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("uc_user").on(table.userId),
@@ -2157,11 +2157,11 @@ export const userCompanies = mysqlTable("user_companies", {
 // ============================================================
 export const userPermissions = mysqlTable("user_permissions", {
 	id: int().autoincrement().notNull(),
-	userId: int().notNull(),
-	moduleId: varchar({ length: 50 }).notNull(), // 'rh-dp', 'sst', 'juridico'
-	featureKey: varchar({ length: 100 }).notNull(), // 'colaboradores', 'folha-pagamento', etc.
-	canAccess: tinyint().default(1).notNull(), // 1 = pode acessar, 0 = bloqueado
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	userId: int('user_id').notNull(),
+	moduleId: varchar('module_id', { length: 50 }).notNull(), // 'rh-dp', 'sst', 'juridico'
+	featureKey: varchar('feature_key', { length: 100 }).notNull(), // 'colaboradores', 'folha-pagamento', etc.
+	canAccess: tinyint('can_access').default(1).notNull(), // 1 = pode acessar, 0 = bloqueado
+	createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("up_user").on(table.userId),
@@ -2180,6 +2180,6 @@ export const fornecedoresEpi = mysqlTable("fornecedores_epi", {
 	endereco: varchar({ length: 500 }),
 	observacoes: text(),
 	ativo: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });

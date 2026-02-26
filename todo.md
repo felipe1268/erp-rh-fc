@@ -2442,3 +2442,13 @@
 - [x] Explicar lógica do alerta ao usuário
 - [x] Tornar TODOS os filtros responsivos (8 páginas corrigidas: Epis, FechamentoPonto, ControleDocumentos, Ferias, Obras, Setores, Colaboradores, FolhaPagamento)
 - [x] Testes e verificação visual (340 testes passando)
+
+## Bug: Listagem de usuários travada em "Carregando..."
+- [x] Investigar e corrigir bug na listagem de usuários após mudanças de permissões (schema Drizzle mapeava colunas camelCase mas tabela usava snake_case)
+
+## Fase 65: Reorganizar Tela de Usuários + Corrigir Bug
+- [x] Corrigir bug: aba "Usuários" travada em "Carregando..." (mapeamento de colunas snake_case no schema)
+- [x] Reorganizar estrutura: remover abas "Tipos de Perfil" e "Perfis por Empresa"
+- [x] Criar painel de configuração completo ao clicar no usuário (perfil, módulos, empresas)
+- [x] Ao configurar usuário: definir perfil global, módulos acessíveis, empresas visíveis
+- [x] Simplificar UX para fluxo mais intuitivo

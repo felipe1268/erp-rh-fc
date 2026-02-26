@@ -1,0 +1,46 @@
+{
+  "query": "SELECT id, name, email, role FROM users;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, name, email, role FROM users;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Felipe Alves",
+      "email": "felipe1268@gmail.com",
+      "role": "admin_master"
+    },
+    {
+      "id": "570172",
+      "name": "Ana Beatriz  Silva Conceição",
+      "email": "Ana@fcengenhariacivil.com.br",
+      "role": "admin"
+    },
+    {
+      "id": "601043",
+      "name": "Felipe Costa Alves",
+      "email": "felipe@fcengenhariacivil.com.br",
+      "role": "admin_master"
+    },
+    {
+      "id": "990252",
+      "name": "Isabela Augusta da Silva Velloso Monteiro",
+      "email": "isabela.velloso@fcengenhariacivil.com.br",
+      "role": "admin"
+    },
+    {
+      "id": "1020024",
+      "name": "Nayara Rodrigues ",
+      "email": "nayara.rodrigues@fcengenhariacivil.com.br",
+      "role": "user"
+    },
+    {
+      "id": "1530049",
+      "name": "Myrielle Fialho Borges Arcanjo",
+      "email": "NULL",
+      "role": "user"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\n1\tFelipe Alves\tfelipe1268@gmail.com\tadmin_master\n570172\tAna Beatriz  Silva Conceição\tAna@fcengenhariacivil.com.br\tadmin\n601043\tFelipe Costa Alves\tfelipe@fcengenhariacivil.com.br\tadmin_master\n990252\tIsabela Augusta da Silva Velloso Monteiro\tisabela.velloso@fcengenhariacivil.com.br\tadmin\n1020024\tNayara Rodrigues \tnayara.rodrigues@fcengenhariacivil.com.br\tuser\n1530049\tMyrielle Fialho Borges Arcanjo\tNULL\tuser\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}
