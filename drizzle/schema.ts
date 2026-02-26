@@ -469,6 +469,7 @@ export const epis = mysqlTable("epis", {
 	valorProduto: decimal("valor_produto", { precision: 10, scale: 2 }),
 	tempoMinimoTroca: int("tempo_minimo_troca"),
 	corCapacete: varchar("cor_capacete", { length: 30 }),
+	condicao: mysqlEnum('condicao', ['Novo','Reutilizado']).default('Novo').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });

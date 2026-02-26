@@ -36,6 +36,7 @@ export const episRouter = router({
       valorProduto: z.number().optional(),
       tempoMinimoTroca: z.number().optional(),
       corCapacete: z.string().nullable().optional(),
+      condicao: z.enum(['Novo','Reutilizado']).default('Novo'),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -57,6 +58,7 @@ export const episRouter = router({
         valorProduto: input.valorProduto != null ? String(input.valorProduto) : null,
         tempoMinimoTroca: input.tempoMinimoTroca || null,
         corCapacete: input.corCapacete || null,
+        condicao: input.condicao,
       } as any);
       return { id: result[0].insertId };
     }),
@@ -80,6 +82,7 @@ export const episRouter = router({
       valorProduto: z.number().nullable().optional(),
       tempoMinimoTroca: z.number().nullable().optional(),
       corCapacete: z.string().nullable().optional(),
+      condicao: z.enum(['Novo','Reutilizado']).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -101,6 +104,7 @@ export const episRouter = router({
       if (data.valorProduto !== undefined) updateData.valorProduto = data.valorProduto != null ? String(data.valorProduto) : null;
       if (data.tempoMinimoTroca !== undefined) updateData.tempoMinimoTroca = data.tempoMinimoTroca;
       if (data.corCapacete !== undefined) updateData.corCapacete = data.corCapacete;
+      if (data.condicao !== undefined) updateData.condicao = data.condicao;
       await db.update(epis).set(updateData).where(eq(epis.id, id));
       return { success: true };
     }),

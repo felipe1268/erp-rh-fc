@@ -2506,3 +2506,15 @@
 - [x] Manter % apenas no tooltip (hover) para bar/horizontalBar/line - tooltip escuro com valor + %
 - [x] Em doughnut/pie: % dentro das fatias ≥5%, legenda com "Label: valor (%)" 
 - [x] Testar e validar visual limpo em todos os dashboards (FC Engenharia com dados reais)
+
+## Fase 71: Bug - Máscara de moeda não está funcionando no campo Valor do Produto
+- [x] Corrigir campo Valor do Produto: trocar input type="number" por type="text" com máscara de moeda
+- [x] Garantir formatação automática conforme digita (ex: 55454 → 554,54) - CONFIRMADO FUNCIONANDO
+
+## Fase 72: Adicionar campo "Condição" (Novo/Reutilizado) no cadastro de EPI
+- [x] Adicionar coluna `condicao` na tabela `epis` no schema do banco de dados
+- [x] Migrar banco de dados (SQL direto + schema atualizado)
+- [x] Atualizar rotas backend (create/update) para aceitar o campo condição
+- [x] Adicionar campo select "Condição" (Novo/Reutilizado) nos formulários de cadastro e edição de EPI
+- [x] Exibir condição na listagem/catálogo de EPIs (badge laranja "Reutilizado")
+- [x] Marcar fase 71 como concluída (máscara de moeda já funcionava)

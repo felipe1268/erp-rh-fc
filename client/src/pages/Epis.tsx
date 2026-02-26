@@ -147,6 +147,7 @@ export default function Epis() {
     tamanho: "",
     quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "",
     corCapacete: "",
+    condicao: "Novo" as "Novo" | "Reutilizado",
   });
 
   // CNPJ fornecedor lookup
@@ -289,7 +290,7 @@ export default function Epis() {
   };
 
   function resetEpiForm() {
-    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "", corCapacete: "" }); setCnpjResult(null);
+    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "", corCapacete: "", condicao: "Novo" as "Novo" | "Reutilizado" }); setCnpjResult(null);
     setAiSuggestion(null);
     setAiSuggestionLoading(false);
     setCaLookupResult(null);
@@ -446,6 +447,7 @@ export default function Epis() {
       valorProduto: epi.valorProduto ? floatToCurrency(epi.valorProduto) : "",
       tempoMinimoTroca: epi.tempoMinimoTroca ? String(epi.tempoMinimoTroca) : "",
       corCapacete: epi.corCapacete || "",
+      condicao: (epi.condicao || "Novo") as "Novo" | "Reutilizado",
     });
     setCaLookupResult(null);
     setCnpjResult(null);
@@ -586,6 +588,21 @@ export default function Epis() {
                   </div>
                 )}
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label className="flex items-center gap-1">
+                    <RefreshCw className="h-3 w-3 text-teal-600" />
+                    Condição do EPI
+                  </Label>
+                  <Select value={epiForm.condicao} onValueChange={(v: any) => setEpiForm(f => ({ ...f, condicao: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Novo">Novo</SelectItem>
+                      <SelectItem value="Reutilizado">Reutilizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label>Quantidade em Estoque</Label>
@@ -641,6 +658,7 @@ export default function Epis() {
                     valorProduto: epiForm.valorProduto ? parseCurrencyToFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
                     corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
+                    condicao: epiForm.condicao,
                   });
                 }} disabled={updateEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {updateEpiMut.isPending ? "Salvando..." : "Salvar Alterações"}
@@ -805,6 +823,21 @@ export default function Epis() {
                   </div>
                 )}
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label className="flex items-center gap-1">
+                    <RefreshCw className="h-3 w-3 text-teal-600" />
+                    Condição do EPI
+                  </Label>
+                  <Select value={epiForm.condicao} onValueChange={(v: any) => setEpiForm(f => ({ ...f, condicao: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Novo">Novo</SelectItem>
+                      <SelectItem value="Reutilizado">Reutilizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label>Quantidade em Estoque</Label>
@@ -857,6 +890,7 @@ export default function Epis() {
                     valorProduto: epiForm.valorProduto ? parseCurrencyToFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
                     corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
+                    condicao: epiForm.condicao,
                   });
                 }} disabled={createEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {createEpiMut.isPending ? "Salvando..." : "Cadastrar EPI"}
@@ -1424,6 +1458,11 @@ export default function Epis() {
                                     <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 border border-amber-200 text-amber-700">
                                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CORES_CAPACETE.find(c => c.value === epi.corCapacete)?.hex || '#999' }} />
                                       {epi.corCapacete}
+                                    </span>
+                                  )}
+                                  {epi.condicao === 'Reutilizado' && (
+                                    <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 border border-orange-200 text-orange-700">
+                                      <RefreshCw className="h-2.5 w-2.5" /> Reutilizado
                                     </span>
                                   )}
                                 </div>
