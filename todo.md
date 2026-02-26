@@ -2452,3 +2452,18 @@
 - [x] Criar painel de configuração completo ao clicar no usuário (perfil, módulos, empresas)
 - [x] Ao configurar usuário: definir perfil global, módulos acessíveis, empresas visíveis
 - [x] Simplificar UX para fluxo mais intuitivo
+
+## Fase 63: Dashboard de EPIs Aprimorado (implementação)
+- [x] Criar queries backend para análises avançadas de EPI
+- [x] Item mais utilizado (maior quantidade de entregas)
+- [x] Item menos utilizado (menor quantidade de entregas)
+- [x] Item mais caro (maior valor unitário)
+- [x] Item mais barato (menor valor unitário)
+- [x] Funcionário que mais recebe EPI (maior quantidade de entregas)
+- [x] Funcionário que recebe menos EPI (menor quantidade de entregas)
+- [x] Custo de EPI por funcionário (valor total gasto por pessoa)
+- [x] Obra que mais solicita EPI (maior volume de entregas por obra)
+- [x] EPI mais perdido/estragado (maior taxa de reposição por motivo)
+- [x] Sugestões adicionais: taxa de reposição, previsão de consumo, evolução custo mensal, custo por obra detalhado, motivos de reposição
+- [x] Redesenhar frontend do Dashboard de EPIs com novos cards e gráficos
+- [x] Testar e validar todas as análises (340 testes passando)

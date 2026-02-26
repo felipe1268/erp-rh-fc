@@ -19,12 +19,15 @@ import {
   HardHat, Package, AlertTriangle, ShieldAlert, TrendingUp, Users,
   DollarSign, Calendar, Building2, ClipboardList, Loader2,
   Shirt, Footprints, Shield, Filter, X, SlidersHorizontal,
-  ChevronRight, CheckCircle2, XCircle, FileText, User
+  ChevronRight, CheckCircle2, XCircle, FileText, User,
+  ArrowUp, ArrowDown, TrendingDown, BarChart3, Target,
+  Zap, Repeat, Activity, Award, Flame
 } from "lucide-react";
 import { Link } from "wouter";
 
 const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '-';
+const fmtPct = (v: number) => `${v.toFixed(1)}%`;
 
 // ============================================================
 // COMPONENTE: Dialog de Descontos Pendentes de EPI
@@ -52,7 +55,6 @@ function DescontosDialog({ open, onClose, companyId }: { open: boolean; onClose:
 
   const handleValidar = (id: number, action: 'confirmado' | 'cancelado') => {
     if (validandoId === id && acao === action) {
-      // Confirmar
       validateMut.mutate({ id, acao: action, justificativa });
     } else {
       setValidandoId(id);
@@ -72,19 +74,16 @@ function DescontosDialog({ open, onClose, companyId }: { open: boolean; onClose:
             Alertas de Desconto de EPI Pendentes
           </DialogTitle>
           <DialogDescription>
-            Estes descontos foram gerados automaticamente quando um EPI foi entregue por motivo de perda, dano ou mau uso.
-            O DP deve validar ou cancelar cada desconto antes de fechar a folha do mês.
+            Descontos gerados automaticamente por perda, dano ou mau uso. O DP deve validar ou cancelar antes de fechar a folha.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Explicação da lógica */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
           <p className="font-semibold mb-1 flex items-center gap-1"><FileText className="h-4 w-4" /> Como funciona:</p>
           <ul className="list-disc list-inside space-y-0.5 text-xs">
-            <li>Quando um EPI é entregue com motivo <strong>"Perda"</strong>, <strong>"Dano"</strong> ou <strong>"Mau Uso"</strong>, o sistema gera automaticamente um alerta de desconto.</li>
-            <li>O valor é calculado com base no preço unitário do EPI + BDI configurado nas configurações.</li>
-            <li>O desconto fica <strong>pendente</strong> até que o DP <strong>confirme</strong> (será lançado na folha) ou <strong>cancele</strong> (não será descontado).</li>
-            <li>Base legal: <strong>Art. 462, §1º da CLT</strong> — desconto por dano causado pelo empregado.</li>
+            <li>Motivo <strong>"Perda"</strong>, <strong>"Dano"</strong> ou <strong>"Mau Uso"</strong> gera alerta de desconto automaticamente.</li>
+            <li>Valor = preço unitário do EPI + BDI configurado.</li>
+            <li>Base legal: <strong>Art. 462, §1º da CLT</strong>.</li>
           </ul>
         </div>
 
@@ -124,25 +123,12 @@ function DescontosDialog({ open, onClose, companyId }: { open: boolean; onClose:
                           <div className="text-xs"><span className="text-muted-foreground">Total:</span> <strong className="text-red-600">{fmtBRL(parseFloat(String(a.valorTotal || '0')))}</strong></div>
                           <div className="text-xs"><span className="text-muted-foreground">Ref:</span> <strong>{a.mesReferencia}</strong></div>
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">Criado em: {fmtDate(a.createdAt)}</div>
                       </div>
                       <div className="flex sm:flex-col gap-2 shrink-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50"
-                          onClick={() => handleValidar(a.id, 'confirmado')}
-                          disabled={validateMut.isPending}
-                        >
+                        <Button size="sm" variant="outline" className="text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50" onClick={() => handleValidar(a.id, 'confirmado')} disabled={validateMut.isPending}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> Confirmar
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50"
-                          onClick={() => handleValidar(a.id, 'cancelado')}
-                          disabled={validateMut.isPending}
-                        >
+                        <Button size="sm" variant="outline" className="text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => handleValidar(a.id, 'cancelado')} disabled={validateMut.isPending}>
                           <XCircle className="h-3.5 w-3.5" /> Cancelar
                         </Button>
                       </div>
@@ -150,23 +136,11 @@ function DescontosDialog({ open, onClose, companyId }: { open: boolean; onClose:
                     {validandoId === a.id && (
                       <div className="mt-3 pt-3 border-t space-y-2">
                         <p className="text-xs font-medium">
-                          {acao === 'confirmado'
-                            ? '✅ Confirmar desconto na folha de pagamento?'
-                            : '❌ Cancelar este desconto (não será lançado na folha)?'}
+                          {acao === 'confirmado' ? 'Confirmar desconto na folha?' : 'Cancelar desconto (não será lançado)?'}
                         </p>
-                        <Textarea
-                          placeholder="Justificativa (opcional)"
-                          value={justificativa}
-                          onChange={(e) => setJustificativa(e.target.value)}
-                          className="text-xs h-16"
-                        />
+                        <Textarea placeholder="Justificativa (opcional)" value={justificativa} onChange={(e) => setJustificativa(e.target.value)} className="text-xs h-16" />
                         <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            className={acao === 'confirmado' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
-                            onClick={() => validateMut.mutate({ id: a.id, acao, justificativa })}
-                            disabled={validateMut.isPending}
-                          >
+                          <Button size="sm" className={acao === 'confirmado' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} onClick={() => validateMut.mutate({ id: a.id, acao, justificativa })} disabled={validateMut.isPending}>
                             {validateMut.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                             {acao === 'confirmado' ? 'Confirmar Desconto' : 'Cancelar Desconto'}
                           </Button>
@@ -198,6 +172,38 @@ function getMonthOptions() {
   return opts;
 }
 
+// ============================================================
+// COMPONENTE: Insight Card (para destaques)
+// ============================================================
+function InsightCard({ icon: Icon, title, value, sub, color, badge }: {
+  icon: any; title: string; value: string; sub?: string; color: string; badge?: string;
+}) {
+  const colorMap: Record<string, { bg: string; text: string; border: string; iconBg: string }> = {
+    green: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", iconBg: "bg-emerald-100" },
+    red: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", iconBg: "bg-red-100" },
+    blue: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", iconBg: "bg-blue-100" },
+    amber: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", iconBg: "bg-amber-100" },
+    purple: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", iconBg: "bg-purple-100" },
+    orange: { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", iconBg: "bg-orange-100" },
+    teal: { bg: "bg-teal-50", text: "text-teal-700", border: "border-teal-200", iconBg: "bg-teal-100" },
+    indigo: { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", iconBg: "bg-indigo-100" },
+  };
+  const c = colorMap[color] || colorMap.blue;
+  return (
+    <div className={`${c.bg} ${c.border} border rounded-xl p-4 space-y-2`}>
+      <div className="flex items-center gap-2">
+        <div className={`h-8 w-8 rounded-lg ${c.iconBg} flex items-center justify-center`}>
+          <Icon className={`h-4 w-4 ${c.text}`} />
+        </div>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</span>
+        {badge && <Badge variant="secondary" className="text-[10px] ml-auto">{badge}</Badge>}
+      </div>
+      <p className={`text-lg font-bold ${c.text} leading-tight`}>{value}</p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
 export default function DashEpis() {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
@@ -213,7 +219,6 @@ export default function DashEpis() {
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
-  // Extrair categorias e obras disponíveis dos dados
   const categorias = useMemo(() => {
     if (!data?.porCategoria) return [];
     return Object.keys(data.porCategoria);
@@ -224,34 +229,33 @@ export default function DashEpis() {
     return data.custoPorObraList.map((o: any) => o.nome);
   }, [data?.custoPorObraList]);
 
-  // Dados filtrados de consumo mensal
   const consumoFiltrado = useMemo(() => {
     if (!data?.consumoMensal) return [];
     let filtered = data.consumoMensal;
-    if (periodoInicio !== "todos") {
-      filtered = filtered.filter((c: any) => c.mesKey >= periodoInicio);
-    }
-    if (periodoFim !== "todos") {
-      filtered = filtered.filter((c: any) => c.mesKey <= periodoFim);
-    }
+    if (periodoInicio !== "todos") filtered = filtered.filter((c: any) => c.mesKey >= periodoInicio);
+    if (periodoFim !== "todos") filtered = filtered.filter((c: any) => c.mesKey <= periodoFim);
     return filtered;
   }, [data?.consumoMensal, periodoInicio, periodoFim]);
 
-  // Custo por obra filtrado
+  const custoFiltrado = useMemo(() => {
+    if (!data?.custoMensal) return [];
+    let filtered = data.custoMensal;
+    if (periodoInicio !== "todos") filtered = filtered.filter((c: any) => c.mesKey >= periodoInicio);
+    if (periodoFim !== "todos") filtered = filtered.filter((c: any) => c.mesKey <= periodoFim);
+    return filtered;
+  }, [data?.custoMensal, periodoInicio, periodoFim]);
+
   const obrasFiltradas = useMemo(() => {
     if (!data?.custoPorObraList) return [];
     if (obraFiltro === "todos") return data.custoPorObraList;
     return data.custoPorObraList.filter((o: any) => o.nome === obraFiltro);
   }, [data?.custoPorObraList, obraFiltro]);
 
-  // Categoria filtrada
   const categoriasFiltradas = useMemo(() => {
     if (!data?.porCategoria) return {};
     if (categoriaFiltro === "todos") return data.porCategoria;
     const filtered: Record<string, any> = {};
-    if (data.porCategoria[categoriaFiltro]) {
-      filtered[categoriaFiltro] = data.porCategoria[categoriaFiltro];
-    }
+    if (data.porCategoria[categoriaFiltro]) filtered[categoriaFiltro] = data.porCategoria[categoriaFiltro];
     return filtered;
   }, [data?.porCategoria, categoriaFiltro]);
 
@@ -281,21 +285,14 @@ export default function DashEpis() {
               <span className="text-muted-foreground">/</span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Dashboard de EPIs</h1>
-            <p className="text-muted-foreground text-sm mt-1">Controle completo de equipamentos de proteção individual</p>
+            <p className="text-muted-foreground text-sm mt-1">Análise completa de equipamentos de proteção individual</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant={showFilters ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowFilters(!showFilters)}
-              className="gap-2"
-            >
+            <Button variant={showFilters ? "default" : "outline"} size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
               <SlidersHorizontal className="h-4 w-4" />
               <span className="hidden sm:inline">Filtros</span>
               {hasActiveFilters && (
-                <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-                  !
-                </Badge>
+                <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">!</Badge>
               )}
             </Button>
             <PrintActions title="Dashboard EPIs" />
@@ -306,16 +303,13 @@ export default function DashEpis() {
           <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
         ) : (
           <>
-            {/* ============================================================ */}
-            {/* FILTROS RESPONSIVOS */}
-            {/* ============================================================ */}
+            {/* FILTROS */}
             {showFilters && (
               <Card className="border-dashed">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-sm font-medium">
-                      <Filter className="h-4 w-4 text-primary" />
-                      Filtros
+                      <Filter className="h-4 w-4 text-primary" /> Filtros
                     </div>
                     {hasActiveFilters && (
                       <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs gap-1 h-7">
@@ -324,66 +318,43 @@ export default function DashEpis() {
                     )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Período Início */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Período — De</label>
                       <Select value={periodoInicio} onValueChange={setPeriodoInicio}>
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Todos" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todos">Todos os meses</SelectItem>
-                          {monthOptions.map(m => (
-                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                          ))}
+                          {monthOptions.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-
-                    {/* Período Fim */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Período — Até</label>
                       <Select value={periodoFim} onValueChange={setPeriodoFim}>
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Todos" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todos">Todos os meses</SelectItem>
-                          {monthOptions.map(m => (
-                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                          ))}
+                          {monthOptions.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-
-                    {/* Categoria */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Categoria</label>
                       <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Todas" />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Todas" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todos">Todas as categorias</SelectItem>
-                          {categorias.map(c => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
-                          ))}
+                          {categorias.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-
-                    {/* Obra */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Obra</label>
                       <Select value={obraFiltro} onValueChange={setObraFiltro}>
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Todas" />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Todas" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todos">Todas as obras</SelectItem>
-                          {obrasDisponiveis.map((o: string) => (
-                            <SelectItem key={o} value={o}>{o}</SelectItem>
-                          ))}
+                          {obrasDisponiveis.map((o: string) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -391,30 +362,10 @@ export default function DashEpis() {
                   {hasActiveFilters && (
                     <div className="mt-3 flex items-center gap-2 flex-wrap">
                       <span className="text-xs text-muted-foreground">Filtros ativos:</span>
-                      {periodoInicio !== "todos" && (
-                        <Badge variant="secondary" className="text-xs gap-1">
-                          De: {monthOptions.find(m => m.value === periodoInicio)?.label}
-                          <X className="h-3 w-3 cursor-pointer" onClick={() => setPeriodoInicio("todos")} />
-                        </Badge>
-                      )}
-                      {periodoFim !== "todos" && (
-                        <Badge variant="secondary" className="text-xs gap-1">
-                          Até: {monthOptions.find(m => m.value === periodoFim)?.label}
-                          <X className="h-3 w-3 cursor-pointer" onClick={() => setPeriodoFim("todos")} />
-                        </Badge>
-                      )}
-                      {categoriaFiltro !== "todos" && (
-                        <Badge variant="secondary" className="text-xs gap-1">
-                          {categoriaFiltro}
-                          <X className="h-3 w-3 cursor-pointer" onClick={() => setCategoriaFiltro("todos")} />
-                        </Badge>
-                      )}
-                      {obraFiltro !== "todos" && (
-                        <Badge variant="secondary" className="text-xs gap-1">
-                          {obraFiltro}
-                          <X className="h-3 w-3 cursor-pointer" onClick={() => setObraFiltro("todos")} />
-                        </Badge>
-                      )}
+                      {periodoInicio !== "todos" && <Badge variant="secondary" className="text-xs gap-1">{monthOptions.find(m => m.value === periodoInicio)?.label}<X className="h-3 w-3 cursor-pointer" onClick={() => setPeriodoInicio("todos")} /></Badge>}
+                      {periodoFim !== "todos" && <Badge variant="secondary" className="text-xs gap-1">Até: {monthOptions.find(m => m.value === periodoFim)?.label}<X className="h-3 w-3 cursor-pointer" onClick={() => setPeriodoFim("todos")} /></Badge>}
+                      {categoriaFiltro !== "todos" && <Badge variant="secondary" className="text-xs gap-1">{categoriaFiltro}<X className="h-3 w-3 cursor-pointer" onClick={() => setCategoriaFiltro("todos")} /></Badge>}
+                      {obraFiltro !== "todos" && <Badge variant="secondary" className="text-xs gap-1">{obraFiltro}<X className="h-3 w-3 cursor-pointer" onClick={() => setObraFiltro("todos")} /></Badge>}
                     </div>
                   )}
                 </CardContent>
@@ -424,11 +375,12 @@ export default function DashEpis() {
             {/* ============================================================ */}
             {/* KPIs PRINCIPAIS */}
             {/* ============================================================ */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               <DashKpi label="Itens Cadastrados" value={data.resumo.totalItens} icon={HardHat} color="blue" />
               <DashKpi label="Estoque Total" value={data.resumo.estoqueTotal} icon={Package} color="green" sub="unidades em estoque" />
               <DashKpi label="Valor Inventário" value={fmtBRL(data.resumo.valorTotalInventario || 0)} icon={DollarSign} color="teal" />
               <DashKpi label="Entregas (30d)" value={data.resumo.entregasMes || 0} icon={ClipboardList} color="purple" sub="últimos 30 dias" />
+              <DashKpi label="Custo Total Entregas" value={fmtBRL(data.custoTotalEntregas || 0)} icon={DollarSign} color="indigo" sub="valor total distribuído" />
             </div>
 
             {/* KPIs ALERTAS */}
@@ -440,78 +392,210 @@ export default function DashEpis() {
               <DashKpi label="Func. Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" />
             </div>
 
-            {/* Descontos pendentes - CLICÁVEL */}
+            {/* Descontos pendentes */}
             {(data.resumo.alertasPendentes || 0) > 0 && (
-              <Card
-                className="border-l-4 border-l-amber-500 bg-amber-50/50 cursor-pointer hover:bg-amber-50 transition-colors group"
-                onClick={() => setShowDescontosDialog(true)}
-              >
+              <Card className="border-l-4 border-l-amber-500 bg-amber-50/50 cursor-pointer hover:bg-amber-50 transition-colors group" onClick={() => setShowDescontosDialog(true)}>
                 <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
                   <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
                     <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-amber-800 text-sm sm:text-base">
-                      {data.resumo.alertasPendentes} alerta(s) de desconto pendente(s)
-                    </p>
-                    <p className="text-xs sm:text-sm text-amber-700">
-                      Valor total: {fmtBRL(data.resumo.valorDescontosPendentes || 0)}
-                    </p>
+                    <p className="font-semibold text-amber-800 text-sm sm:text-base">{data.resumo.alertasPendentes} alerta(s) de desconto pendente(s)</p>
+                    <p className="text-xs sm:text-sm text-amber-700">Valor total: {fmtBRL(data.resumo.valorDescontosPendentes || 0)}</p>
                   </div>
                   <ChevronRight className="h-5 w-5 text-amber-400 group-hover:text-amber-600 transition-colors shrink-0" />
                 </CardContent>
               </Card>
             )}
-
-            {/* DIALOG DE DESCONTOS PENDENTES */}
-            <DescontosDialog
-              open={showDescontosDialog}
-              onClose={() => setShowDescontosDialog(false)}
-              companyId={companyId}
-            />
+            <DescontosDialog open={showDescontosDialog} onClose={() => setShowDescontosDialog(false)} companyId={companyId} />
 
             {/* ============================================================ */}
-            {/* GRÁFICOS LINHA 1: Consumo Mensal + Distribuição por Categoria */}
+            {/* INSIGHTS PRINCIPAIS - NOVAS ANÁLISES */}
             {/* ============================================================ */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2">
-                <DashChart
-                  title={`Consumo Mensal de EPIs${hasActiveFilters ? ' (filtrado)' : ' (últimos 12 meses)'}`}
-                  type="bar"
-                  labels={consumoFiltrado.map((r: any) => r.mes)}
-                  datasets={[
-                    { label: "Unidades", data: consumoFiltrado.map((r: any) => r.unidades), backgroundColor: "#3B82F6" },
-                    { label: "Entregas", data: consumoFiltrado.map((r: any) => r.entregas), backgroundColor: "#93C5FD" },
-                  ]}
-                  height={280}
-                />
-              </div>
-              <div>
-                {Object.keys(categoriasFiltradas).length > 0 ? (
-                  <DashChart
-                    title="Distribuição por Categoria"
-                    type="doughnut"
-                    labels={Object.keys(categoriasFiltradas)}
-                    datasets={[{
-                      label: "Itens",
-                      data: Object.values(categoriasFiltradas).map((c: any) => c.itens),
-                      backgroundColor: ["#10B981", "#6366F1", "#F59E0B", "#EF4444"],
-                    }]}
-                    height={280}
+            <div>
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Zap className="h-5 w-5 text-amber-500" />
+                Insights de EPI
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Item mais utilizado */}
+                {data.itemMaisUtilizado && (
+                  <InsightCard
+                    icon={ArrowUp}
+                    title="Item Mais Utilizado"
+                    value={data.itemMaisUtilizado.nome.length > 40 ? data.itemMaisUtilizado.nome.slice(0, 40) + '...' : data.itemMaisUtilizado.nome}
+                    sub={`${data.itemMaisUtilizado.qtd} unidades entregues`}
+                    color="green"
+                    badge={data.itemMaisUtilizado.categoria}
                   />
-                ) : (
-                  <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Distribuição por Categoria</CardTitle></CardHeader>
-                    <CardContent className="flex items-center justify-center h-[280px] text-muted-foreground text-sm">
-                      Nenhum dado disponível
-                    </CardContent>
-                  </Card>
+                )}
+                {/* Item menos utilizado */}
+                {data.itemMenosUtilizado && (
+                  <InsightCard
+                    icon={ArrowDown}
+                    title="Item Menos Utilizado"
+                    value={data.itemMenosUtilizado.nome.length > 40 ? data.itemMenosUtilizado.nome.slice(0, 40) + '...' : data.itemMenosUtilizado.nome}
+                    sub={`${data.itemMenosUtilizado.qtd} unidade(s) entregue(s)`}
+                    color="amber"
+                    badge={data.itemMenosUtilizado.categoria}
+                  />
+                )}
+                {/* Item mais caro */}
+                {data.itemMaisCaro && (
+                  <InsightCard
+                    icon={DollarSign}
+                    title="Item Mais Caro"
+                    value={data.itemMaisCaro.nome.length > 40 ? data.itemMaisCaro.nome.slice(0, 40) + '...' : data.itemMaisCaro.nome}
+                    sub={`${fmtBRL(data.itemMaisCaro.valor)} por unidade`}
+                    color="red"
+                    badge={data.itemMaisCaro.categoria}
+                  />
+                )}
+                {/* Item mais barato */}
+                {data.itemMaisBarato && (
+                  <InsightCard
+                    icon={TrendingDown}
+                    title="Item Mais Barato"
+                    value={data.itemMaisBarato.nome.length > 40 ? data.itemMaisBarato.nome.slice(0, 40) + '...' : data.itemMaisBarato.nome}
+                    sub={`${fmtBRL(data.itemMaisBarato.valor)} por unidade`}
+                    color="teal"
+                    badge={data.itemMaisBarato.categoria}
+                  />
                 )}
               </div>
             </div>
 
+            {/* INSIGHTS FUNCIONÁRIOS + OBRA */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Funcionário que mais recebe */}
+              {data.funcMaisEpi && (
+                <InsightCard
+                  icon={Award}
+                  title="Func. Mais Recebe EPI"
+                  value={data.funcMaisEpi.nome.length > 30 ? data.funcMaisEpi.nome.slice(0, 30) + '...' : data.funcMaisEpi.nome}
+                  sub={`${data.funcMaisEpi.qtd} unidades • ${data.funcMaisEpi.funcao}`}
+                  color="purple"
+                />
+              )}
+              {/* Funcionário que menos recebe */}
+              {data.funcMenosEpi && (
+                <InsightCard
+                  icon={User}
+                  title="Func. Menos Recebe EPI"
+                  value={data.funcMenosEpi.nome.length > 30 ? data.funcMenosEpi.nome.slice(0, 30) + '...' : data.funcMenosEpi.nome}
+                  sub={`${data.funcMenosEpi.qtd} unidade(s) • ${data.funcMenosEpi.funcao}`}
+                  color="blue"
+                />
+              )}
+              {/* Obra que mais solicita */}
+              {data.obraMaisSolicita && (
+                <InsightCard
+                  icon={Building2}
+                  title="Obra Mais Solicita EPI"
+                  value={data.obraMaisSolicita.nome.length > 30 ? data.obraMaisSolicita.nome.slice(0, 30) + '...' : data.obraMaisSolicita.nome}
+                  sub={`${data.obraMaisSolicita.unidades} unidades • ${data.obraMaisSolicita.entregas} entregas`}
+                  color="orange"
+                />
+              )}
+              {/* Previsão de consumo */}
+              <InsightCard
+                icon={Target}
+                title="Previsão Próx. Mês"
+                value={`~${data.mediaConsumo3m || 0} unidades`}
+                sub={`Média últ. 3 meses • ~${data.mediaEntregas3m || 0} entregas`}
+                color="indigo"
+              />
+            </div>
+
+            {/* TAXA DE REPOSIÇÃO + CUSTO MÉDIO */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <InsightCard
+                icon={Repeat}
+                title="Taxa de Reposição"
+                value={fmtPct(data.taxaReposicao || 0)}
+                sub={`${data.totalReposicoes || 0} reposições de ${data.resumo.totalEntregas} entregas`}
+                color="red"
+              />
+              <InsightCard
+                icon={Activity}
+                title="Custo Médio por Funcionário"
+                value={fmtBRL(data.resumo.custoMedioPorFunc || 0)}
+                sub={`${data.resumo.funcUnicos || 0} funcionários atendidos`}
+                color="teal"
+              />
+              <InsightCard
+                icon={Flame}
+                title="EPI Mais Perdido/Estragado"
+                value={data.topEpiPerdidos?.[0]?.nome?.length > 35 ? data.topEpiPerdidos[0].nome.slice(0, 35) + '...' : (data.topEpiPerdidos?.[0]?.nome || 'Nenhum')}
+                sub={data.topEpiPerdidos?.[0] ? `${data.topEpiPerdidos[0].qtd} ocorrências` : 'Sem reposições registradas'}
+                color="orange"
+              />
+            </div>
+
             {/* ============================================================ */}
-            {/* GRÁFICOS LINHA 2: Top EPIs + Top Funcionários */}
+            {/* GRÁFICOS LINHA 1: Consumo Mensal + Evolução Custo */}
+            {/* ============================================================ */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <DashChart
+                title={`Consumo Mensal de EPIs${hasActiveFilters ? ' (filtrado)' : ' (últimos 12 meses)'}`}
+                type="bar"
+                labels={consumoFiltrado.map((r: any) => r.mes)}
+                datasets={[
+                  { label: "Unidades", data: consumoFiltrado.map((r: any) => r.unidades), backgroundColor: "#3B82F6" },
+                  { label: "Entregas", data: consumoFiltrado.map((r: any) => r.entregas), backgroundColor: "#93C5FD" },
+                ]}
+                height={280}
+              />
+              <DashChart
+                title="Evolução do Custo Mensal (R$)"
+                type="line"
+                labels={custoFiltrado.map((r: any) => r.mes)}
+                datasets={[{
+                  label: "Custo Estimado (R$)",
+                  data: custoFiltrado.map((r: any) => r.custoEstimado),
+                  borderColor: "#10B981",
+                  backgroundColor: "rgba(16, 185, 129, 0.1)",
+                  fill: true,
+                  tension: 0.3,
+                }]}
+                height={280}
+              />
+            </div>
+
+            {/* ============================================================ */}
+            {/* GRÁFICOS LINHA 2: Distribuição por Categoria + Motivos de Reposição */}
+            {/* ============================================================ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.keys(categoriasFiltradas).length > 0 && (
+                <DashChart
+                  title="Distribuição por Categoria"
+                  type="doughnut"
+                  labels={Object.keys(categoriasFiltradas)}
+                  datasets={[{
+                    label: "Itens",
+                    data: Object.values(categoriasFiltradas).map((c: any) => c.itens),
+                    backgroundColor: ["#10B981", "#6366F1", "#F59E0B", "#EF4444"],
+                  }]}
+                  height={280}
+                />
+              )}
+              {data.reposicaoPorMotivo && Object.keys(data.reposicaoPorMotivo).length > 0 && (
+                <DashChart
+                  title="Motivos de Reposição (Perdas/Danos)"
+                  type="doughnut"
+                  labels={Object.keys(data.reposicaoPorMotivo)}
+                  datasets={[{
+                    label: "Ocorrências",
+                    data: Object.values(data.reposicaoPorMotivo) as number[],
+                    backgroundColor: ["#EF4444", "#F59E0B", "#8B5CF6", "#3B82F6", "#EC4899", "#14B8A6"],
+                  }]}
+                  height={280}
+                />
+              )}
+            </div>
+
+            {/* ============================================================ */}
+            {/* GRÁFICOS LINHA 3: Top EPIs + Top Funcionários */}
             {/* ============================================================ */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {data.topEpis?.length > 0 && (
@@ -535,42 +619,67 @@ export default function DashEpis() {
             </div>
 
             {/* ============================================================ */}
-            {/* GRÁFICOS LINHA 3: Custo por Obra + Motivo de Troca */}
+            {/* GRÁFICOS LINHA 4: Custo por Funcionário + Entregas por Obra */}
             {/* ============================================================ */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {data.custoPorFuncionario?.length > 0 && (
+                <DashChart
+                  title="Top 10 Custo de EPI por Funcionário (R$)"
+                  type="horizontalBar"
+                  labels={data.custoPorFuncionario.map((f: any) => f.nome.length > 25 ? f.nome.slice(0, 25) + "..." : f.nome)}
+                  datasets={[{ label: "Custo (R$)", data: data.custoPorFuncionario.map((f: any) => f.custo), backgroundColor: "#F59E0B" }]}
+                  height={Math.max(220, data.custoPorFuncionario.length * 28)}
+                />
+              )}
               {obrasFiltradas.length > 0 && (
                 <DashChart
                   title={`Entregas por Obra${obraFiltro !== 'todos' ? ` — ${obraFiltro}` : ''}`}
                   type="horizontalBar"
                   labels={obrasFiltradas.map((o: any) => o.nome.length > 30 ? o.nome.slice(0, 30) + "..." : o.nome)}
-                  datasets={[{ label: "Unidades", data: obrasFiltradas.map((o: any) => o.unidades), backgroundColor: "#F59E0B" }]}
+                  datasets={[{ label: "Unidades", data: obrasFiltradas.map((o: any) => o.unidades), backgroundColor: "#3B82F6" }]}
                   height={Math.max(200, obrasFiltradas.length * 30)}
-                />
-              )}
-              {data.porMotivo && Object.keys(data.porMotivo).length > 0 && (
-                <DashChart
-                  title="Entregas por Motivo"
-                  type="doughnut"
-                  labels={Object.keys(data.porMotivo)}
-                  datasets={[{
-                    label: "Entregas",
-                    data: Object.values(data.porMotivo) as number[],
-                    backgroundColor: ["#3B82F6", "#EF4444", "#F59E0B", "#10B981", "#8B5CF6", "#EC4899"],
-                  }]}
-                  height={260}
                 />
               )}
             </div>
 
             {/* ============================================================ */}
-            {/* TABELA: Distribuição por Categoria (detalhada) */}
+            {/* GRÁFICO: EPIs Mais Perdidos/Estragados */}
+            {/* ============================================================ */}
+            {data.topEpiPerdidos?.length > 0 && (
+              <DashChart
+                title="Top 10 EPIs Mais Perdidos/Estragados"
+                type="horizontalBar"
+                labels={data.topEpiPerdidos.map((e: any) => e.nome.length > 35 ? e.nome.slice(0, 35) + "..." : e.nome)}
+                datasets={[{ label: "Ocorrências", data: data.topEpiPerdidos.map((e: any) => e.qtd), backgroundColor: "#EF4444" }]}
+                height={Math.max(200, data.topEpiPerdidos.length * 28)}
+              />
+            )}
+
+            {/* ============================================================ */}
+            {/* GRÁFICO: Entregas por Motivo */}
+            {/* ============================================================ */}
+            {data.porMotivo && Object.keys(data.porMotivo).length > 0 && (
+              <DashChart
+                title="Todas as Entregas por Motivo"
+                type="doughnut"
+                labels={Object.keys(data.porMotivo)}
+                datasets={[{
+                  label: "Entregas",
+                  data: Object.values(data.porMotivo) as number[],
+                  backgroundColor: ["#3B82F6", "#EF4444", "#F59E0B", "#10B981", "#8B5CF6", "#EC4899"],
+                }]}
+                height={260}
+              />
+            )}
+
+            {/* ============================================================ */}
+            {/* TABELA: Resumo por Categoria */}
             {/* ============================================================ */}
             {Object.keys(categoriasFiltradas).length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Package className="h-4 w-4 text-blue-500" />
-                    Resumo por Categoria
+                    <Package className="h-4 w-4 text-blue-500" /> Resumo por Categoria
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -614,14 +723,136 @@ export default function DashEpis() {
             )}
 
             {/* ============================================================ */}
+            {/* TABELA: Custo por Obra (detalhado com R$) */}
+            {/* ============================================================ */}
+            {data.custoPorObraRanking?.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-blue-500" /> Custo de EPI por Obra (detalhado)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Obra</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Entregas</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Unidades</th>
+                          <th className="py-2 font-medium text-muted-foreground text-right">Custo (R$)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.custoPorObraRanking.map((o: any, i: number) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-2 pr-3 font-medium">{o.nome}</td>
+                            <td className="py-2 pr-3 text-right">{o.entregas}</td>
+                            <td className="py-2 pr-3 text-right font-bold">{o.unidades}</td>
+                            <td className="py-2 text-right font-medium">{fmtBRL(o.custo || 0)}</td>
+                          </tr>
+                        ))}
+                        {data.custoPorObraRanking.length > 1 && (
+                          <tr className="border-t-2 font-bold">
+                            <td className="py-2 pr-3">Total</td>
+                            <td className="py-2 pr-3 text-right">{data.custoPorObraRanking.reduce((s: number, o: any) => s + o.entregas, 0)}</td>
+                            <td className="py-2 pr-3 text-right">{data.custoPorObraRanking.reduce((s: number, o: any) => s + o.unidades, 0)}</td>
+                            <td className="py-2 text-right">{fmtBRL(data.custoPorObraRanking.reduce((s: number, o: any) => s + (o.custo || 0), 0))}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ============================================================ */}
+            {/* TABELA: Custo por Funcionário (detalhado) */}
+            {/* ============================================================ */}
+            {data.custoPorFuncionario?.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Users className="h-4 w-4 text-purple-500" /> Custo de EPI por Funcionário (Top 10)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Funcionário</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Função</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Entregas</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Unidades</th>
+                          <th className="py-2 font-medium text-muted-foreground text-right">Custo (R$)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.custoPorFuncionario.map((f: any, i: number) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                            <td className="py-2 pr-3 font-medium">{f.nome}</td>
+                            <td className="py-2 pr-3 text-muted-foreground">{f.funcao}</td>
+                            <td className="py-2 pr-3 text-right">{f.entregas}</td>
+                            <td className="py-2 pr-3 text-right">{f.qtd}</td>
+                            <td className="py-2 text-right font-bold text-amber-700">{fmtBRL(f.custo)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ============================================================ */}
+            {/* TABELA: EPIs Mais Perdidos/Estragados */}
+            {/* ============================================================ */}
+            {data.topEpiPerdidos?.length > 0 && (
+              <Card className="border-l-4 border-l-red-500">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Flame className="h-4 w-4 text-red-500" /> EPIs Mais Perdidos/Estragados (Ranking)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">#</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">EPI</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">CA</th>
+                          <th className="py-2 font-medium text-muted-foreground text-right">Ocorrências</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.topEpiPerdidos.map((e: any, i: number) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-2 pr-3 text-muted-foreground">{i + 1}</td>
+                            <td className="py-2 pr-3 font-medium">{e.nome}</td>
+                            <td className="py-2 pr-3"><Badge variant="outline" className="text-xs">{e.ca}</Badge></td>
+                            <td className="py-2 text-right font-bold text-red-600">{e.qtd}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ============================================================ */}
             {/* TABELA: CAs Vencendo nos próximos 90 dias */}
             {/* ============================================================ */}
             {data.casVencendo?.length > 0 && (
               <Card className="border-l-4 border-l-yellow-500">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-yellow-500" />
-                    CAs Vencendo nos Próximos 90 Dias ({data.casVencendo.length})
+                    <Calendar className="h-4 w-4 text-yellow-500" /> CAs Vencendo nos Próximos 90 Dias ({data.casVencendo.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -665,8 +896,7 @@ export default function DashEpis() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  Estoque Crítico (menores estoques)
+                  <AlertTriangle className="h-4 w-4 text-red-500" /> Estoque Crítico (menores estoques)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -708,8 +938,7 @@ export default function DashEpis() {
               <Card className="border-l-4 border-l-red-500">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 text-red-500" />
-                    Certificados de Aprovação Vencidos ({data.caVencidos.length})
+                    <ShieldAlert className="h-4 w-4 text-red-500" /> Certificados de Aprovação Vencidos ({data.caVencidos.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -732,49 +961,6 @@ export default function DashEpis() {
                             </td>
                           </tr>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ============================================================ */}
-            {/* TABELA: Entregas por Obra (detalhada) */}
-            {/* ============================================================ */}
-            {obrasFiltradas.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-blue-500" />
-                    Entregas por Obra (detalhado)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left">
-                          <th className="py-2 pr-3 font-medium text-muted-foreground">Obra</th>
-                          <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Entregas</th>
-                          <th className="py-2 font-medium text-muted-foreground text-right">Unidades</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {obrasFiltradas.map((o: any, i: number) => (
-                          <tr key={i} className="border-b border-border/50">
-                            <td className="py-2 pr-3 font-medium">{o.nome}</td>
-                            <td className="py-2 pr-3 text-right">{o.entregas}</td>
-                            <td className="py-2 text-right font-bold">{o.unidades}</td>
-                          </tr>
-                        ))}
-                        {obrasFiltradas.length > 1 && (
-                          <tr className="border-t-2 font-bold">
-                            <td className="py-2 pr-3">Total</td>
-                            <td className="py-2 pr-3 text-right">{obrasFiltradas.reduce((s: number, o: any) => s + o.entregas, 0)}</td>
-                            <td className="py-2 text-right">{obrasFiltradas.reduce((s: number, o: any) => s + o.unidades, 0)}</td>
-                          </tr>
-                        )}
                       </tbody>
                     </table>
                   </div>

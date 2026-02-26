@@ -733,29 +733,150 @@ async function getDashEpis(companyId: number) {
     consumoMensal.push({ mes: mesLabel, mesKey, entregas: entregas.length, unidades, custo });
   }
 
-  // Top EPIs mais entregues
-  const porEpi: Record<number, { nome: string; ca: string; qtd: number }> = {};
+  // Top EPIs mais entregues (com custo)
+  const porEpi: Record<number, { nome: string; ca: string; qtd: number; custo: number; valor: number; categoria: string }> = {};
   for (const d of allDel) {
     if (!porEpi[d.epiId]) {
       const ep = allEpis.find(e => e.id === d.epiId);
-      porEpi[d.epiId] = { nome: ep?.nome || "EPI #" + d.epiId, ca: ep?.ca || '-', qtd: 0 };
+      porEpi[d.epiId] = {
+        nome: ep?.nome || "EPI #" + d.epiId,
+        ca: ep?.ca || '-',
+        qtd: 0,
+        custo: 0,
+        valor: ep?.valorProduto ? parseFloat(String(ep.valorProduto)) : 0,
+        categoria: ep?.categoria === 'Calcado' ? 'Calçado' : (ep?.categoria || 'EPI'),
+      };
     }
     porEpi[d.epiId].qtd += d.quantidade;
+    porEpi[d.epiId].custo += parseFloat(String(d.valorCobrado || '0'));
   }
-  const topEpis = Object.values(porEpi).sort((a, b) => b.qtd - a.qtd).slice(0, 10);
+  const allEpiStats = Object.values(porEpi);
+  const topEpis = [...allEpiStats].sort((a, b) => b.qtd - a.qtd).slice(0, 10);
 
-  // Funcionários que mais receberam EPIs
-  const porFunc: Record<number, { qtd: number; entregas: number }> = {};
+  // ===== NOVAS ANÁLISES =====
+
+  // Item MAIS utilizado (maior quantidade de entregas)
+  const itemMaisUtilizado = allEpiStats.length > 0
+    ? [...allEpiStats].sort((a, b) => b.qtd - a.qtd)[0]
+    : null;
+
+  // Item MENOS utilizado (menor quantidade de entregas, pelo menos 1 entrega)
+  const itemMenosUtilizado = allEpiStats.length > 0
+    ? [...allEpiStats].sort((a, b) => a.qtd - b.qtd)[0]
+    : null;
+
+  // Item MAIS caro (maior valor unitário cadastrado)
+  const episComValor = allEpis.filter(e => e.valorProduto && parseFloat(String(e.valorProduto)) > 0);
+  const itemMaisCaro = episComValor.length > 0
+    ? episComValor.sort((a, b) => parseFloat(String(b.valorProduto || '0')) - parseFloat(String(a.valorProduto || '0')))[0]
+    : null;
+
+  // Item MAIS barato (menor valor unitário cadastrado, > 0)
+  const itemMaisBarato = episComValor.length > 0
+    ? episComValor.sort((a, b) => parseFloat(String(a.valorProduto || '0')) - parseFloat(String(b.valorProduto || '0')))[0]
+    : null;
+
+  // Funcionários que mais receberam EPIs (com custo)
+  const porFunc: Record<number, { qtd: number; entregas: number; custo: number }> = {};
   for (const d of allDel) {
-    if (!porFunc[d.employeeId]) porFunc[d.employeeId] = { qtd: 0, entregas: 0 };
+    if (!porFunc[d.employeeId]) porFunc[d.employeeId] = { qtd: 0, entregas: 0, custo: 0 };
     porFunc[d.employeeId].qtd += d.quantidade;
     porFunc[d.employeeId].entregas++;
+    porFunc[d.employeeId].custo += parseFloat(String(d.valorCobrado || '0'));
   }
-  const topFuncionarios = Object.entries(porFunc)
+  const allFuncStats = Object.entries(porFunc)
     .map(([empId, d]) => {
       const emp = empMap.get(Number(empId));
-      return { nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", qtd: d.qtd, entregas: d.entregas };
-    }).sort((a, b) => b.qtd - a.qtd).slice(0, 10);
+      return { id: Number(empId), nome: emp?.nome || `#${empId}`, funcao: emp?.funcao || "-", qtd: d.qtd, entregas: d.entregas, custo: d.custo };
+    });
+  const topFuncionarios = [...allFuncStats].sort((a, b) => b.qtd - a.qtd).slice(0, 10);
+
+  // Funcionário que MAIS recebe EPI
+  const funcMaisEpi = allFuncStats.length > 0
+    ? [...allFuncStats].sort((a, b) => b.qtd - a.qtd)[0]
+    : null;
+
+  // Funcionário que MENOS recebe EPI (pelo menos 1 entrega)
+  const funcMenosEpi = allFuncStats.length > 0
+    ? [...allFuncStats].sort((a, b) => a.qtd - b.qtd)[0]
+    : null;
+
+  // Custo de EPI por funcionário (ranking completo top 10)
+  const custoPorFuncionario = [...allFuncStats]
+    .filter(f => f.custo > 0)
+    .sort((a, b) => b.custo - a.custo)
+    .slice(0, 10);
+
+  // EPI mais perdido/estragado (motivos de reposição: perda, dano, mau_uso, furto, extravio)
+  const motivosReposicao = ['perda', 'dano', 'mau_uso', 'furto', 'extravio', 'desgaste'];
+  const epiPorReposicao: Record<number, { nome: string; ca: string; qtd: number }> = {};
+  for (const d of allDel) {
+    const motivo = (d.motivoTroca || '').toLowerCase();
+    if (motivosReposicao.includes(motivo)) {
+      if (!epiPorReposicao[d.epiId]) {
+        const ep = allEpis.find(e => e.id === d.epiId);
+        epiPorReposicao[d.epiId] = { nome: ep?.nome || "EPI #" + d.epiId, ca: ep?.ca || '-', qtd: 0 };
+      }
+      epiPorReposicao[d.epiId].qtd += d.quantidade;
+    }
+  }
+  const epiMaisPerdido = Object.values(epiPorReposicao).sort((a, b) => b.qtd - a.qtd);
+  const topEpiPerdidos = epiMaisPerdido.slice(0, 10);
+
+  // Detalhamento por motivo de reposição (para gráfico)
+  const reposicaoPorMotivo: Record<string, number> = {};
+  for (const d of allDel) {
+    const motivo = (d.motivoTroca || '').toLowerCase();
+    if (motivosReposicao.includes(motivo)) {
+      const label = motivo === 'mau_uso' ? 'Mau uso' : motivo === 'perda' ? 'Perda' : motivo === 'furto' ? 'Furto' : motivo === 'extravio' ? 'Extravio' : motivo === 'desgaste' ? 'Desgaste' : motivo === 'dano' ? 'Dano' : motivo;
+      reposicaoPorMotivo[label] = (reposicaoPorMotivo[label] || 0) + 1;
+    }
+  }
+  const totalReposicoes = Object.values(reposicaoPorMotivo).reduce((s, v) => s + v, 0);
+  const taxaReposicao = allDel.length > 0 ? ((totalReposicoes / allDel.length) * 100) : 0;
+
+  // Custo por obra (com valor R$)
+  const custoPorObraDetalhado: Record<string, { nome: string; entregas: number; unidades: number; custo: number }> = {};
+  allDel.forEach(del => {
+    const emp = empMap.get(del.employeeId);
+    const obraNome = emp?.obraAtualId ? (obraMap.get(emp.obraAtualId) || 'Sem obra') : 'Sem obra';
+    if (!custoPorObraDetalhado[obraNome]) custoPorObraDetalhado[obraNome] = { nome: obraNome, entregas: 0, unidades: 0, custo: 0 };
+    custoPorObraDetalhado[obraNome].entregas++;
+    custoPorObraDetalhado[obraNome].unidades += (del.quantidade || 1);
+    custoPorObraDetalhado[obraNome].custo += parseFloat(String(del.valorCobrado || '0'));
+  });
+  const custoPorObraRanking = Object.values(custoPorObraDetalhado).sort((a, b) => b.unidades - a.unidades);
+
+  // Obra que MAIS solicita EPI
+  const obraMaisSolicita = custoPorObraRanking.length > 0 ? custoPorObraRanking[0] : null;
+
+  // Evolução do custo mensal (para gráfico de linha)
+  const custoMensal = consumoMensal.map(c => {
+    const mesEntregas = allDel.filter(d => d.dataEntrega?.startsWith(c.mesKey));
+    const custoMes = mesEntregas.reduce((s, d) => {
+      const ep = allEpis.find(e => e.id === d.epiId);
+      const valor = ep?.valorProduto ? parseFloat(String(ep.valorProduto)) : 0;
+      return s + (valor * d.quantidade);
+    }, 0);
+    return { ...c, custoEstimado: custoMes };
+  });
+
+  // Média de vida útil (tempo entre entregas do mesmo EPI para mesmo funcionário)
+  // Previsão de consumo próximo mês (média dos últimos 3 meses)
+  const ultimos3 = consumoMensal.slice(-3);
+  const mediaConsumo3m = ultimos3.length > 0
+    ? Math.round(ultimos3.reduce((s, c) => s + c.unidades, 0) / ultimos3.length)
+    : 0;
+  const mediaEntregas3m = ultimos3.length > 0
+    ? Math.round(ultimos3.reduce((s, c) => s + c.entregas, 0) / ultimos3.length)
+    : 0;
+
+  // Custo total geral de EPIs entregues (baseado no valor do produto)
+  const custoTotalEntregas = allDel.reduce((s, d) => {
+    const ep = allEpis.find(e => e.id === d.epiId);
+    const valor = ep?.valorProduto ? parseFloat(String(ep.valorProduto)) : 0;
+    return s + (valor * d.quantidade);
+  }, 0);
 
   // Estoque por item (top 10 menores)
   const estoqueCritico = allEpis
@@ -781,16 +902,8 @@ async function getDashEpis(companyId: number) {
     .map(e => ({ nome: e.nome, ca: e.ca, validadeCa: e.validadeCa, estoque: e.quantidadeEstoque || 0 }))
     .sort((a, b) => (a.validadeCa || '').localeCompare(b.validadeCa || ''));
 
-  // Custo por obra
-  const custoPorObra: Record<string, { nome: string; entregas: number; unidades: number }> = {};
-  allDel.forEach(del => {
-    const emp = empMap.get(del.employeeId);
-    const obraNome = emp?.obraAtualId ? (obraMap.get(emp.obraAtualId) || 'Sem obra') : 'Sem obra';
-    if (!custoPorObra[obraNome]) custoPorObra[obraNome] = { nome: obraNome, entregas: 0, unidades: 0 };
-    custoPorObra[obraNome].entregas++;
-    custoPorObra[obraNome].unidades += (del.quantidade || 1);
-  });
-  const custoPorObraList = Object.values(custoPorObra).sort((a, b) => b.unidades - a.unidades);
+  // Custo por obra (legado - mantido para compatibilidade)
+  const custoPorObraList = custoPorObraRanking;
 
   // Entregas por motivo
   const porMotivo: Record<string, number> = {};
@@ -833,6 +946,7 @@ async function getDashEpis(companyId: number) {
       casVencendoCount: casVencendo.length,
     },
     consumoMensal,
+    custoMensal,
     topEpis,
     topFuncionarios,
     estoqueCritico,
@@ -841,6 +955,23 @@ async function getDashEpis(companyId: number) {
     porCategoria,
     custoPorObraList,
     porMotivo,
+    // Novas análises
+    itemMaisUtilizado: itemMaisUtilizado ? { nome: itemMaisUtilizado.nome, ca: itemMaisUtilizado.ca, qtd: itemMaisUtilizado.qtd, categoria: itemMaisUtilizado.categoria } : null,
+    itemMenosUtilizado: itemMenosUtilizado ? { nome: itemMenosUtilizado.nome, ca: itemMenosUtilizado.ca, qtd: itemMenosUtilizado.qtd, categoria: itemMenosUtilizado.categoria } : null,
+    itemMaisCaro: itemMaisCaro ? { nome: itemMaisCaro.nome, ca: itemMaisCaro.ca, valor: parseFloat(String(itemMaisCaro.valorProduto || '0')), categoria: itemMaisCaro.categoria === 'Calcado' ? 'Calçado' : (itemMaisCaro.categoria || 'EPI') } : null,
+    itemMaisBarato: itemMaisBarato ? { nome: itemMaisBarato.nome, ca: itemMaisBarato.ca, valor: parseFloat(String(itemMaisBarato.valorProduto || '0')), categoria: itemMaisBarato.categoria === 'Calcado' ? 'Calçado' : (itemMaisBarato.categoria || 'EPI') } : null,
+    funcMaisEpi: funcMaisEpi ? { nome: funcMaisEpi.nome, funcao: funcMaisEpi.funcao, qtd: funcMaisEpi.qtd, entregas: funcMaisEpi.entregas } : null,
+    funcMenosEpi: funcMenosEpi ? { nome: funcMenosEpi.nome, funcao: funcMenosEpi.funcao, qtd: funcMenosEpi.qtd, entregas: funcMenosEpi.entregas } : null,
+    custoPorFuncionario,
+    topEpiPerdidos,
+    reposicaoPorMotivo,
+    taxaReposicao,
+    totalReposicoes,
+    obraMaisSolicita,
+    custoPorObraRanking,
+    mediaConsumo3m,
+    mediaEntregas3m,
+    custoTotalEntregas,
     // Legacy compat
     evolucaoMensal: consumoMensal.map(c => ({ mes: c.mesKey, qtd: c.unidades })),
   };
