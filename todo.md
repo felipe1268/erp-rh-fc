@@ -2665,3 +2665,9 @@
 - [x] Atualizar preview de rescisão com detalhamento completo (verbas rescisórias, FGTS informativo, total)
 - [x] Atualizar seção de detalhes do aviso prévio salvo com novo layout
 - [x] Criar 23 testes unitários para validar cálculos de rescisão (todos passando)
+
+## Fase 95: Simplificar formulário de Aviso Prévio
+- [x] Remover campo "Data de Desligamento" (automática = data de início do aviso)
+- [x] Remover campo "VR Diário (override)" — VR é calculado automaticamente pela config de benefícios × dias
+- [x] Manter campo "Dias Trabalhados no Mês" como ajuste opcional
+- [x] Reorganizar layout do formulário (grid 2 colunas em vez de 3)

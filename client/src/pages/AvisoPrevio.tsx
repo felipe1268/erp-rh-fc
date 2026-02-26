@@ -104,8 +104,7 @@ export default function AvisoPrevio() {
       const result = await (utils as any).avisoPrevio.avisoPrevio.calcular.fetch({
         employeeId: form.employeeId,
         tipo: form.tipo,
-        dataDesligamento: form.dataDesligamento || undefined,
-        vrDiarioOverride: form.vrDiarioOverride ? parseFloat(String(form.vrDiarioOverride).replace(/\./g, '').replace(',', '.')) : undefined,
+        dataDesligamento: form.dataInicio || undefined,
         diasTrabalhadosOverride: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
       });
       setCalculoPreview(result);
@@ -154,10 +153,9 @@ export default function AvisoPrevio() {
       employeeId: form.employeeId,
       tipo: form.tipo,
       dataInicio: form.dataInicio,
-      dataDesligamento: form.dataDesligamento || form.dataInicio,
+      dataDesligamento: form.dataInicio,
       reducaoJornada: form.reducaoJornada || "nenhuma",
       observacoes: form.observacoes,
-      vrDiario: form.vrDiarioOverride ? parseFloat(String(form.vrDiarioOverride).replace(/\./g, '').replace(',', '.')) : undefined,
       diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
     });
   };
@@ -537,8 +535,8 @@ export default function AvisoPrevio() {
                   </Popover>
                 </div>
 
-                {/* Seção 2: Tipo e Datas */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {/* Seção 2: Tipo e Data */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <FileText className="h-4 w-4 text-amber-600" />
@@ -558,27 +556,18 @@ export default function AvisoPrevio() {
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-amber-600" />
-                      Data de Início <span className="text-red-500">*</span>
+                      Data de Desligamento <span className="text-red-500">*</span>
                     </label>
                     <Input type="date" className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />
                   </div>
-
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-red-600" />
-                      Data de Desligamento
-                    </label>
-                    <Input type="date" className="h-12 border-2 border-gray-200 hover:border-red-300 transition-colors" value={form.dataDesligamento || ""} onChange={e => setForm({ ...form, dataDesligamento: e.target.value })} />
-                    <p className="text-[10px] text-gray-400 mt-1">Se vazio, usa a data de início</p>
-                  </div>
                 </div>
 
-                {/* Seção 3: Redução, Dias Trabalhados, VR Override */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {/* Seção 3: Redução e Dias Trabalhados */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <Clock className="h-4 w-4 text-amber-600" />
-                      Redução de Jornada (Art. 488)
+                      Redução de Jornada (Art. 488 CLT)
                     </label>
                     <Select value={form.reducaoJornada || "nenhuma"} onValueChange={v => setForm({ ...form, reducaoJornada: v })}>
                       <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue /></SelectTrigger>
@@ -600,23 +589,9 @@ export default function AvisoPrevio() {
                       className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"
                       value={form.diasTrabalhadosOverride || ""}
                       onChange={e => setForm({ ...form, diasTrabalhadosOverride: e.target.value })}
-                      placeholder="Auto (dia do mês)"
+                      placeholder="Automático (dia da data)"
                     />
-                    <p className="text-[10px] text-gray-400 mt-1">Se vazio, usa o dia da data de desligamento</p>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-amber-600" />
-                      VR Diário (override)
-                    </label>
-                    <Input
-                      className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"
-                      value={form.vrDiarioOverride || ""}
-                      onChange={e => setForm({ ...form, vrDiarioOverride: e.target.value })}
-                      placeholder="Auto (config benefícios)"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">Se vazio, usa a config de benefícios</p>
+                    <p className="text-[10px] text-gray-400 mt-1">Se vazio, calcula pelo dia da data de desligamento. Futuramente integrado com fechamento de ponto.</p>
                   </div>
                 </div>
 
