@@ -2550,3 +2550,9 @@
 
 ## Fase 78: Bug - Logout redireciona para tela de login OAuth ao invés da Home
 - [x] Corrigir logout para redirecionar para /login (tela de login do sistema) após fazer logout
+
+## Fase 79: Bug persistente - Logout não volta para tela inicial do sistema
+- [x] Investigar todo o fluxo de logout (useAuth, DashboardLayout, ModuleHub, Login.tsx, App.tsx)
+- [x] Corrigir ModuleHub.tsx: redirecionava para getLoginUrl() (OAuth Manus) quando !user, agora vai para /login
+- [x] Verificar todos os window.location.href no projeto - todos apontam para /login
+- [x] Único getLoginUrl() restante é o botão "Entrar com Manus OAuth" na tela de Login (correto)
