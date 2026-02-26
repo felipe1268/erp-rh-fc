@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
@@ -15,9 +17,10 @@ import { formatCPF, formatMoeda } from "@/lib/formatters";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
-  CheckCircle2, XCircle, Timer, Ban,
+  CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { cn } from "@/lib/utils";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -125,15 +128,9 @@ export default function AvisoPrevio() {
     };
   }, [avisosList]);
 
-  // Employee search for form
-  const [empSearch, setEmpSearch] = useState("");
-  const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
+  // Employee search for form (Popover + Command)
+  const [empPopoverOpen, setEmpPopoverOpen] = useState(false);
   const selectedEmp = activeEmployees.find((e: any) => e.id === form.employeeId);
-  const filteredEmps = activeEmployees.filter((e: any) => {
-    if (!empSearch) return true;
-    const s = empSearch.toLowerCase();
-    return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""));
-  });
 
   const handleSubmit = () => {
     if (!form.employeeId || !form.tipo || !form.dataInicio) {
@@ -435,70 +432,85 @@ export default function AvisoPrevio() {
                     <Users className="h-4 w-4 text-amber-600" />
                     Colaborador <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative" style={{ zIndex: 60 }}>
-                    <div
-                      className="flex items-center border-2 border-gray-200 rounded-lg px-4 py-3 bg-white cursor-pointer hover:border-amber-400 transition-all relative focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100"
-                      style={{ zIndex: 61 }}
-                      onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}
-                    >
-                      <Search className="h-5 w-5 text-amber-500 mr-3 shrink-0" />
-                      {empDropdownOpen ? (
-                        <input
-                          autoFocus
-                          className="flex-1 bg-transparent outline-none text-sm font-medium"
-                          placeholder="🔍 Digite o nome ou CPF do colaborador..."
-                          value={empSearch}
-                          onChange={e => setEmpSearch(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }}
-                          onClick={e => e.stopPropagation()}
-                        />
-                      ) : (
-                        <span className={`flex-1 text-sm ${selectedEmp ? "text-gray-900 font-semibold" : "text-gray-400"}`}>
-                          {selectedEmp ? `${selectedEmp.nomeCompleto} — CPF: ${formatCPF(selectedEmp.cpf)}` : "Clique para selecionar o colaborador..."}
-                        </span>
-                      )}
-                      {form.employeeId && (
-                        <button type="button" className="ml-2 p-1 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors" onClick={e => { e.stopPropagation(); setForm({ ...form, employeeId: undefined }); setEmpSearch(""); setCalculoPreview(null); setEmpDropdownOpen(false); }}>
-                          <X className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                    {empDropdownOpen && (
-                      <>
-                        <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-amber-200 rounded-xl shadow-2xl overflow-hidden" style={{ zIndex: 62 }}>
-                          <div className="bg-amber-50 px-4 py-2 border-b text-xs text-amber-700 font-medium">
-                            {filteredEmps.length} colaborador{filteredEmps.length !== 1 ? 'es' : ''} encontrado{filteredEmps.length !== 1 ? 's' : ''}
-                          </div>
-                          <div className="max-h-72 overflow-y-auto">
-                            {filteredEmps.length === 0 ? (
-                              <div className="p-6 text-sm text-gray-400 text-center">
-                                <Search className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                                Nenhum resultado para "{empSearch}"
+                  <Popover open={empPopoverOpen} onOpenChange={setEmpPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        role="combobox"
+                        aria-expanded={empPopoverOpen}
+                        className={cn(
+                          "flex w-full items-center justify-between border-2 rounded-lg px-4 py-3 bg-white text-sm transition-all",
+                          empPopoverOpen ? "border-amber-400 ring-2 ring-amber-100" : "border-gray-200 hover:border-amber-400",
+                          !form.employeeId && "text-gray-400"
+                        )}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Search className="h-5 w-5 text-amber-500 shrink-0" />
+                          {selectedEmp ? (
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
+                                {(selectedEmp.nomeCompleto || '').charAt(0)}
                               </div>
-                            ) : filteredEmps.map((e: any) => (
-                              <div
+                              <span className="font-semibold text-gray-900 truncate">{selectedEmp.nomeCompleto}</span>
+                              <span className="text-xs text-gray-400 font-mono shrink-0">CPF: {formatCPF(selectedEmp.cpf)}</span>
+                            </div>
+                          ) : (
+                            <span>Selecione o colaborador...</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {form.employeeId && (
+                            <span
+                              className="p-1 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 cursor-pointer"
+                              onClick={e => { e.stopPropagation(); e.preventDefault(); setForm({ ...form, employeeId: undefined }); setCalculoPreview(null); setEmpPopoverOpen(false); }}
+                            >
+                              <X className="h-4 w-4" />
+                            </span>
+                          )}
+                          <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+                        </div>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+                      <Command>
+                        <CommandInput placeholder="Digite nome, CPF ou função..." />
+                        <CommandList className="max-h-72">
+                          <CommandEmpty className="py-6 text-center text-sm text-gray-400">
+                            <Search className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                            Nenhum colaborador encontrado
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {activeEmployees.map((e: any) => (
+                              <CommandItem
                                 key={e.id}
-                                className="px-4 py-3 hover:bg-amber-50 cursor-pointer text-sm flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors"
-                                onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); setCalculoPreview(null); }}
+                                value={`${e.nomeCompleto || ''} ${e.cpf || ''} ${e.funcao || ''} ${e.setor || ''}`}
+                                onSelect={() => {
+                                  setForm({ ...form, employeeId: e.id });
+                                  setCalculoPreview(null);
+                                  setEmpPopoverOpen(false);
+                                }}
+                                className="flex items-center justify-between py-2.5 cursor-pointer"
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs">
+                                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
                                     {(e.nomeCompleto || '').charAt(0)}
                                   </div>
                                   <div>
-                                    <span className="font-semibold text-gray-800 block">{e.nomeCompleto}</span>
+                                    <span className="font-semibold text-gray-800 block text-sm">{e.nomeCompleto}</span>
                                     <span className="text-xs text-gray-500">{e.funcao || 'Sem função'} {e.setor ? `• ${e.setor}` : ''}</span>
                                   </div>
                                 </div>
-                                <span className="text-xs text-gray-400 font-mono">{formatCPF(e.cpf)}</span>
-                              </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-xs text-gray-400 font-mono">{formatCPF(e.cpf)}</span>
+                                  {form.employeeId === e.id && <Check className="h-4 w-4 text-amber-600" />}
+                                </div>
+                              </CommandItem>
                             ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 {/* Seção 2: Tipo e Data - Grid 2 colunas */}

@@ -2601,3 +2601,8 @@
 - [x] Remover limite de 20 itens no dropdown de colaboradores (mostrar todos os 160)
 - [x] Aumentar altura do dropdown e adicionar contador de resultados
 - [x] Melhorar layout geral do formulário (card com header, ícones, avatar, função/setor no dropdown)
+
+## Fase 89: Corrigir filtro de busca de colaboradores no Aviso Prévio
+- [x] Refatorado para usar Popover + Command (cmdk) do shadcn/ui
+- [x] Corrigido value do CommandItem para incluir nome+CPF+função+setor (cmdk filtra pelo value)
+- [x] Filtro agora funciona nativamente via cmdk (testado: "myrielle" filtra para 1 resultado)

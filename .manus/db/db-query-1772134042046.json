@@ -1,0 +1,21 @@
+{
+  "query": "SELECT status, COUNT(*) as qtd FROM employees GROUP BY status; SELECT COUNT(*) as com_deleted FROM employees WHERE deletedAt IS NOT NULL",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT status, COUNT(*) as qtd FROM employees GROUP BY status; SELECT COUNT(*) as com_deleted FROM employees WHERE deletedAt IS NOT NULL",
+  "rows": [
+    {
+      "status": "Ativo",
+      "qtd": "298"
+    },
+    {
+      "status": "Desligado",
+      "qtd": "1"
+    }
+  ],
+  "messages": [
+    "com_deleted",
+    "139"
+  ],
+  "stdout": "status\tqtd\nAtivo\t298\nDesligado\t1\ncom_deleted\n139\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}
