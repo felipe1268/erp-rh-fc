@@ -24,7 +24,7 @@ const ICON_MAP: Record<string, any> = {
   "EPIs": HardHat, "Jurídico": Gavel, "Usuários e Permissões": Lock,
   "Auditoria do Sistema": FileText, "Configurações": Settings,
   "Avaliação de Desempenho": Star,
-  "Solicitação de HE": Clock,
+  "Solicitação de Hora Extra": Clock,
   "Feriados": CalendarDays,
   "Dissídio": TrendingUp,
   "PJ Medições": FileSpreadsheet,
@@ -65,7 +65,7 @@ const DEFAULT_MENU = [
     { label: "Controle de Documentos", path: "/controle-documentos", visible: true },
     { label: "Vale Alimentação", path: "/vale-alimentacao", visible: true },
     { label: "Controle de EPIs", path: "/epis", visible: true },
-    { label: "Solicitação de HE", path: "/solicitacao-he", visible: true },
+    { label: "Solicitação de Hora Extra", path: "/solicitacao-he", visible: true },
   ]},
   { title: "Gestão de Pessoas", items: [
     { label: "Aviso Prévio", path: "/aviso-previo", visible: true },

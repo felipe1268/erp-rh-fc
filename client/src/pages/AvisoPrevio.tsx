@@ -58,6 +58,7 @@ export default function AvisoPrevio() {
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [editingItem, setEditingItem] = useState<any>(null);
 
   // Form state
   const [form, setForm] = useState<any>({});
@@ -159,16 +160,47 @@ export default function AvisoPrevio() {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
-    createAviso.mutate({
-      companyId,
-      employeeId: form.employeeId,
-      tipo: form.tipo,
-      dataInicio: form.dataDesligamento,
-      dataDesligamento: form.dataDesligamento,
-      reducaoJornada: form.reducaoJornada || "nenhuma",
-      observacoes: form.observacoes,
-      diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
+    if (editingItem) {
+      // Modo edição
+      updateAviso.mutate({
+        id: editingItem.id,
+        tipo: form.tipo,
+        dataInicio: form.dataDesligamento,
+        dataDesligamento: form.dataDesligamento,
+        reducaoJornada: form.reducaoJornada || "nenhuma",
+        observacoes: form.observacoes,
+        diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
+      });
+      setShowDialog(false);
+      setEditingItem(null);
+      setForm({});
+      setCalculoPreview(null);
+    } else {
+      createAviso.mutate({
+        companyId,
+        employeeId: form.employeeId,
+        tipo: form.tipo,
+        dataInicio: form.dataDesligamento,
+        dataDesligamento: form.dataDesligamento,
+        reducaoJornada: form.reducaoJornada || "nenhuma",
+        observacoes: form.observacoes,
+        diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
+      });
+    }
+  };
+
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
+    setForm({
+      employeeId: item.employeeId,
+      tipo: item.tipo,
+      dataDesligamento: item.dataInicio,
+      reducaoJornada: item.reducaoJornada || "nenhuma",
+      observacoes: item.observacoes || "",
+      diasTrabalhadosOverride: "",
     });
+    setCalculoPreview(null);
+    setShowDialog(true);
   };
 
   const handleConcluir = (id: number) => {
@@ -196,7 +228,7 @@ export default function AvisoPrevio() {
               Gestão de avisos prévios conforme CLT Art. 487-491 e Lei 12.506/2011
             </p>
           </div>
-          <Button onClick={() => { setForm({}); setCalculoPreview(null); setShowDialog(true); }}>
+          <Button onClick={() => { setForm({}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}>
             <Plus className="h-4 w-4 mr-2" /> Novo Aviso Prévio
           </Button>
         </div>
@@ -340,6 +372,9 @@ export default function AvisoPrevio() {
                             </Button>
                             {a.status === "em_andamento" && (
                               <>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Editar" onClick={() => handleEdit(a)}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" title="Concluir" onClick={() => handleConcluir(a.id)}>
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -445,7 +480,7 @@ export default function AvisoPrevio() {
         )}
 
         {/* Create Dialog */}
-        <FullScreenDialog open={showDialog} onClose={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); }} title="Novo Aviso Prévio" icon={<AlertTriangle className="h-5 w-5 text-white" />}>
+        <FullScreenDialog open={showDialog} onClose={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); setEditingItem(null); }} title={editingItem ? "Editar Aviso Prévio" : "Novo Aviso Prévio"} icon={<AlertTriangle className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-4xl mx-auto px-2">
             {/* Card principal do formulário */}
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">

@@ -3,82 +3,85 @@
  * Usar estas constantes em todos os dashboards para manter consistência visual.
  *
  * REGRA DE OURO:
- * - AZUL (#2563EB) = Admissões / Ativos / Principal
- * - VERMELHO (#DC2626) = Demissões / Desligados / Negativo
+ * - AZUL (#3B82F6) = Admissões / Ativos / Principal
+ * - VERMELHO (#EF4444) = Demissões / Desligados / Negativo
+ *
+ * PALETA: Tons suaves e harmoniosos, agradáveis aos olhos.
+ * Inspirada em paletas profissionais com saturação moderada.
  */
 
-// Cores primárias para séries de dados (usar em ordem) — vibrantes e variadas
+// Cores primárias para séries de dados (usar em ordem) — suaves e harmoniosas
 export const CHART_PALETTE = [
-  "#2563EB", // Azul Royal (admissões, ativos, principal)
-  "#F59E0B", // Âmbar vibrante (destaque quente)
-  "#8B5CF6", // Violeta intenso
-  "#DC2626", // Vermelho (demissões, negativo)
-  "#06B6D4", // Ciano oceano
-  "#EC4899", // Rosa vibrante
-  "#10B981", // Esmeralda
-  "#F97316", // Laranja fogo
-  "#6366F1", // Índigo profundo
-  "#14B8A6", // Teal tropical
-  "#A855F7", // Púrpura elétrico
-  "#EAB308", // Amarelo ouro
+  "#5B8DEF", // Azul suave (principal)
+  "#67C587", // Verde menta
+  "#F5A962", // Pêssego dourado
+  "#A78BDB", // Lavanda suave
+  "#5CC5CF", // Turquesa claro
+  "#F28B82", // Coral rosado
+  "#7BAAF7", // Azul celeste
+  "#81C995", // Verde sage
+  "#F7CB73", // Amarelo mel
+  "#B39DDB", // Lilás suave
+  "#4DB6AC", // Teal sereno
+  "#F48FB1", // Rosa claro
 ];
 
 // Cores semânticas (usar para conceitos específicos)
 export const SEMANTIC_COLORS = {
   // Admissões e Demissões (REGRA DO FELIPE)
-  admissao: "#2563EB",    // Azul Royal
-  demissao: "#DC2626",    // Vermelho
+  admissao: "#5B8DEF",    // Azul suave
+  demissao: "#EF5350",    // Vermelho suave
 
   // Status geral
-  positivo: "#2563EB",    // Azul (admissões = positivo)
-  negativo: "#DC2626",    // Vermelho (demissões = negativo)
-  alerta: "#F59E0B",      // Âmbar vibrante
-  neutro: "#6B7280",      // Cinza
-  info: "#06B6D4",        // Ciano oceano
+  positivo: "#5B8DEF",    // Azul suave
+  negativo: "#EF5350",    // Vermelho suave
+  alerta: "#F5A962",      // Pêssego dourado
+  neutro: "#90A4AE",      // Cinza azulado
+  info: "#5CC5CF",        // Turquesa claro
 
   // Financeiro
-  proventos: "#10B981",   // Esmeralda
-  descontos: "#DC2626",   // Vermelho
-  liquido: "#2563EB",     // Azul
-  fgts: "#06B6D4",        // Ciano oceano
-  inss: "#8B5CF6",        // Violeta intenso
+  proventos: "#67C587",   // Verde menta
+  descontos: "#EF5350",   // Vermelho suave
+  liquido: "#5B8DEF",     // Azul suave
+  fgts: "#5CC5CF",        // Turquesa claro
+  inss: "#A78BDB",        // Lavanda suave
 
   // Gênero
-  masculino: "#2563EB",   // Azul
-  feminino: "#EC4899",    // Rosa vibrante
-  outro: "#6B7280",       // Cinza
+  masculino: "#5B8DEF",   // Azul suave
+  feminino: "#F48FB1",    // Rosa claro
+  outro: "#90A4AE",       // Cinza azulado
 
   // Status de funcionário
-  ativo: "#10B981",       // Esmeralda
-  ferias: "#2563EB",      // Azul
-  afastado: "#F59E0B",    // Âmbar vibrante
-  licenca: "#8B5CF6",     // Violeta intenso
-  desligado: "#DC2626",   // Vermelho
-  recluso: "#6B7280",     // Cinza
-  listaNegra: "#1F2937",  // Grafite escuro
+  ativo: "#67C587",       // Verde menta
+  ferias: "#5B8DEF",      // Azul suave
+  afastado: "#F5A962",    // Pêssego dourado
+  licenca: "#A78BDB",     // Lavanda suave
+  desligado: "#EF5350",   // Vermelho suave
+  recluso: "#90A4AE",     // Cinza azulado
+  listaNegra: "#546E7A",  // Cinza escuro
 
   // Risco jurídico
-  riscoAlto: "#DC2626",   // Vermelho
-  riscoMedio: "#F59E0B",  // Âmbar
-  riscoBaixo: "#10B981",  // Esmeralda
-  riscoRemoto: "#6B7280", // Cinza
+  riscoAlto: "#EF5350",   // Vermelho suave
+  riscoMedio: "#F5A962",  // Pêssego dourado
+  riscoBaixo: "#67C587",  // Verde menta
+  riscoRemoto: "#90A4AE", // Cinza azulado
 
   // Dias da semana
-  domingo: "#DC2626",
-  sabado: "#F59E0B",
-  diaSemana: "#2563EB",
+  domingo: "#EF5350",
+  sabado: "#F5A962",
+  diaSemana: "#5B8DEF",
 };
 
 // Cores com transparência para preenchimento de áreas
 export const CHART_FILL = {
-  azul: "rgba(37, 99, 235, 0.15)",
-  verde: "rgba(16, 185, 129, 0.15)",
-  vermelho: "rgba(220, 38, 38, 0.15)",
-  ambar: "rgba(245, 158, 11, 0.15)",
-  violeta: "rgba(139, 92, 246, 0.15)",
-  ciano: "rgba(6, 182, 212, 0.15)",
-  rosa: "rgba(236, 72, 153, 0.15)",
-  laranja: "rgba(249, 115, 22, 0.15)",
+  azul: "rgba(91, 141, 239, 0.12)",
+  verde: "rgba(103, 197, 135, 0.12)",
+  vermelho: "rgba(239, 83, 80, 0.12)",
+  ambar: "rgba(245, 169, 98, 0.12)",
+  violeta: "rgba(167, 139, 219, 0.12)",
+  ciano: "rgba(92, 197, 207, 0.12)",
+  rosa: "rgba(244, 143, 177, 0.12)",
+  laranja: "rgba(245, 169, 98, 0.12)",
 };
 
 // Gerar cores para N itens (usa a paleta em ciclo)

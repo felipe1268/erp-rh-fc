@@ -92,7 +92,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
-      { icon: Clock, label: "Solicitação de HE", path: "/solicitacao-he" },
+      { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
     ],
   },
   {
@@ -227,7 +227,7 @@ const ICON_MAP: Record<string, any> = {
   "Férias": Palmtree,
   "CIPA": Shield,
   "Contratos PJ": FileSignature,
-  "Solicitação de HE": Clock,
+  "Solicitação de Hora Extra": Clock,
   "Revisões do Sistema": GitBranch,
   "Feriados": CalendarDays,
   "Dissídio": TrendingUp,

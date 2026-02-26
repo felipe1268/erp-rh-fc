@@ -2730,3 +2730,17 @@
 - [ ] Corrigir cálculo VR na rescisão (Total VA mensal / 30 × dias, sem janta, com checkboxes)
 - [ ] Atualizar frontend BeneficiosAlimentacaoTab com checkboxes de ativação por item
 - [ ] Aviso prévio: 3 dias extras só com 1 ano completo de serviço (Lei 12.506)
+
+## Fase 104: Botão de Edição no Aviso Prévio
+- [x] Adicionar botão de edição (ícone lápis) na coluna de Ações da tabela de Aviso Prévio
+- [x] Implementar formulário de edição com campos preenchidos do registro existente
+- [x] Criar/atualizar rota backend para update do aviso prévio
+
+## Fase 104-B: Melhorias diversas
+- [x] Renomear "Solicitação de HE" para "Solicitação de Hora Extra" no menu lateral
+- [x] Expandir Timeline do Raio-X com TODOS os eventos do funcionário (aviso prévio cancelado/concluído, advertências, férias, mudanças de cargo/setor, alterações salariais, ASOs, treinamentos, CIPA, PJ, HE, desconto EPI, processos trabalhistas)
+- [x] Adicionar botão de edição (ícone lápis) na coluna de Ações da tabela de Aviso Prévio
+
+## Fase 104-C: Correções visuais
+- [x] Corrigir paleta de cores dos gráficos do dashboard - cores mais suaves e harmoniosas
+- [x] Tornar drill-down modal full screen em vez de popup pequeno

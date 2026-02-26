@@ -643,17 +643,60 @@ export const avisoPrevioFeriasRouter = router({
     update: protectedProcedure
       .input(z.object({
         id: z.number(),
+        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']).optional(),
+        dataInicio: z.string().optional(),
+        dataDesligamento: z.string().optional(),
         reducaoJornada: z.enum(['2h_dia','7_dias_corridos','nenhuma']).optional(),
         status: z.enum(['em_andamento','concluido','cancelado']).optional(),
         dataConclusao: z.string().optional(),
         motivoCancelamento: z.string().optional(),
         observacoes: z.string().optional(),
+        diasTrabalhados: z.number().optional(),
+        recalcular: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
-        const { id, ...rest } = input;
+        const { id, recalcular, diasTrabalhados, dataDesligamento, ...rest } = input;
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+
+        // Se recalcular=true, busca o aviso e o funcionário para recalcular tudo
+        if (recalcular) {
+          const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, id));
+          if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+          const [emp] = await db.select().from(employees).where(eq(employees.id, aviso.employeeId));
+          if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Funcionário não encontrado' });
+
+          const tipo = input.tipo || aviso.tipo;
+          const dataInicioFinal = input.dataInicio || aviso.dataInicio;
+          const dataDesligFinal = dataDesligamento || dataInicioFinal;
+          const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
+          const anosServico = calcularAnosServico(dataAdmissao, dataDesligFinal);
+          const diasAviso = calcularDiasAviso(anosServico);
+          const salarioBase = parseBRL(emp.salarioBase);
+          const dataFim = calcularDataFim(dataInicioFinal, diasAviso);
+          const dtDeslig = new Date(dataDesligFinal + 'T00:00:00');
+          const diasTrabalhadosMes = diasTrabalhados ?? dtDeslig.getDate();
+
+          const previsao = calcularRescisaoCompleta({
+            salarioBase,
+            dataAdmissao,
+            dataDesligamento: dataDesligFinal,
+            tipo,
+            vrDiario: 0,
+            diasTrabalhadosMes,
+          });
+
+          updateData.tipo = tipo;
+          updateData.dataInicio = dataInicioFinal;
+          updateData.dataFim = dataFim;
+          updateData.diasAviso = diasAviso;
+          updateData.anosServico = anosServico;
+          updateData.salarioBase = salarioBase.toFixed(2);
+          updateData.previsaoRescisao = JSON.stringify(previsao);
+          updateData.valorEstimadoTotal = previsao.total;
+        }
+
         await db.update(terminationNotices).set(updateData).where(eq(terminationNotices.id, id));
         return { success: true };
       }),

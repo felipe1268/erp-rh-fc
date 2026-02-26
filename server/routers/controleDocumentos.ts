@@ -1070,8 +1070,64 @@ export const controleDocumentosRouter = router({
         .orderBy(desc(epiDiscountAlerts.createdAt));
 
       // Add new events to timeline
-      empAvisosPrevios.forEach(a => timeline.push({ data: a.dataInicio, tipo: "Aviso Prévio", descricao: `${a.tipo.startsWith('empregador') ? 'Pelo Empregador' : 'Pelo Empregado'} — ${a.diasAviso || 30} dias`, cor: "orange", icone: "alert-triangle" }));
-      empFerias.forEach(f => { if (f.dataInicio) timeline.push({ data: f.dataInicio, tipo: "Férias", descricao: `${f.diasGozo || 30} dias${f.abonoPecuniario ? ' + abono pecuniário' : ''}`, cor: "cyan", icone: "palmtree" }); });
+      // AVISO PRÉVIO - com status detalhado
+      empAvisosPrevios.forEach(a => {
+        const quem = a.tipo.startsWith('empregador') ? 'Pelo Empregador' : 'Pelo Empregado';
+        const statusMap: Record<string, { label: string; cor: string }> = {
+          em_andamento: { label: 'Em Andamento', cor: 'orange' },
+          concluido: { label: 'Concluído', cor: 'green' },
+          cancelado: { label: 'Cancelado', cor: 'red' },
+        };
+        const st = statusMap[a.status] || { label: a.status, cor: 'orange' };
+        timeline.push({ data: a.dataInicio, tipo: 'Aviso Prévio', descricao: `${quem} — ${a.diasAviso || 30} dias — Status: ${st.label}`, cor: st.cor, icone: 'alert-triangle' });
+        // Se concluído, adicionar evento de conclusão
+        if (a.status === 'concluido' && a.dataFim) {
+          timeline.push({ data: a.dataFim, tipo: 'Aviso Prévio Concluído', descricao: `Aviso prévio encerrado (${quem})`, cor: 'green', icone: 'check-circle' });
+        }
+        // Se cancelado, adicionar evento de cancelamento
+        if (a.status === 'cancelado') {
+          timeline.push({ data: a.updatedAt ? new Date(a.updatedAt).toISOString().split('T')[0] : a.dataInicio, tipo: 'Aviso Prévio Cancelado', descricao: `Aviso prévio cancelado (${quem})`, cor: 'red', icone: 'x-circle' });
+        }
+      });
+      // FÉRIAS - com período completo
+      empFerias.forEach(f => {
+        if (f.dataInicio) {
+          const desc = `${f.diasGozo || 30} dias${f.abonoPecuniario ? ' + abono pecuniário' : ''}${f.dataFim ? ` (até ${f.dataFim})` : ''}`;
+          timeline.push({ data: f.dataInicio, tipo: 'Férias', descricao: desc, cor: 'cyan', icone: 'palmtree' });
+        }
+      });
+      // CIPA - participação
+      empCipa.forEach(c => {
+        if (c.mandatoInicio) {
+          timeline.push({ data: c.mandatoInicio, tipo: 'CIPA', descricao: `Membro CIPA — ${c.cargoCipa || 'Membro'} (${c.representacao || '-'}) — Status: ${c.statusMembro || '-'}`, cor: 'emerald', icone: 'shield' });
+        }
+      });
+      // PJ CONTRATOS
+      empPjContratos.forEach(c => {
+        if (c.dataInicio) {
+          timeline.push({ data: c.dataInicio, tipo: 'Contrato PJ', descricao: `Contrato PJ — ${c.status || 'Ativo'}${c.dataFim ? ` (até ${c.dataFim})` : ''}`, cor: 'indigo', icone: 'file-signature' });
+        }
+      });
+      // HORAS EXTRAS
+      empHorasExtras.forEach(h => {
+        const heData = h.dataPagamento || (h.mesReferencia ? `${h.mesReferencia}-01` : null);
+        if (heData) {
+          timeline.push({ data: heData, tipo: 'Hora Extra', descricao: `${parseFloat(h.quantidadeHoras || '0').toFixed(1)}h — ${h.descricao || 'Sem descrição'}`, cor: 'amber', icone: 'clock' });
+        }
+      });
+      // DESCONTO EPI
+      empEpiDiscountAlerts.forEach(d => {
+        if (d.createdAt) {
+          const dataStr = new Date(d.createdAt).toISOString().split('T')[0];
+          timeline.push({ data: dataStr, tipo: 'Desconto EPI', descricao: `${d.epiNome || 'EPI'} — R$ ${d.valorTotal || '0'} — ${d.status || 'Pendente'}`, cor: d.status === 'confirmado' ? 'red' : 'amber', icone: 'hard-hat' });
+        }
+      });
+      // PROCESSOS TRABALHISTAS
+      processosComAndamentos.forEach((p: any) => {
+        if (p.dataAbertura) {
+          timeline.push({ data: p.dataAbertura, tipo: 'Processo Trabalhista', descricao: `Processo nº ${p.numeroProcesso || '-'} — ${p.status || '-'}`, cor: 'red', icone: 'gavel' });
+        }
+      });
 
       // Re-sort timeline
       timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
