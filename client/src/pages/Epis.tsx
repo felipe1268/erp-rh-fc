@@ -15,6 +15,7 @@ import {
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import FornecedorDialog from "@/components/FornecedorDialog";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -548,49 +549,7 @@ export default function Epis() {
                 </div>
               </div>
 
-              {/* Dados do Fornecedor */}
-              <div className="border border-dashed border-blue-300 rounded-lg p-3 bg-blue-50/30 space-y-3">
-                <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
-                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor
-                  {epiForm.fornecedor && <Badge variant="outline" className="ml-2 text-xs">{epiForm.fornecedor}</Badge>}
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-xs">CNPJ</Label>
-                    <div className="flex gap-1">
-                      <Input value={epiForm.fornecedorCnpj}
-                        onChange={e => {
-                          const v = e.target.value.replace(/\D/g, "").slice(0, 14);
-                          const formatted = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-                          setEpiForm(f => ({ ...f, fornecedorCnpj: v.length <= 14 ? formatted : f.fornecedorCnpj }));
-                          if (v.length === 14) buscarCnpjFornecedor(v);
-                        }}
-                        placeholder="00.000.000/0000-00" className="flex-1" />
-                      <Button type="button" size="sm" variant="outline" disabled={cnpjLoading || epiForm.fornecedorCnpj.replace(/\D/g, "").length !== 14}
-                        onClick={() => buscarCnpjFornecedor(epiForm.fornecedorCnpj)}>
-                        {cnpjLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {cnpjResult?.success && <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>}
-                    {cnpjResult?.error && <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>}
-                  </div>
-                  <div>
-                    <Label className="text-xs">Telefone</Label>
-                    <Input value={epiForm.fornecedorTelefone} onChange={e => setEpiForm(f => ({ ...f, fornecedorTelefone: e.target.value }))}
-                      placeholder="(00) 0000-0000" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">E-mail</Label>
-                    <Input value={epiForm.fornecedorEmail} onChange={e => setEpiForm(f => ({ ...f, fornecedorEmail: e.target.value }))}
-                      placeholder="contato@fornecedor.com" />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Endereço</Label>
-                  <Input value={epiForm.fornecedorEndereco} onChange={e => setEpiForm(f => ({ ...f, fornecedorEndereco: e.target.value }))}
-                    placeholder="Endereço completo do fornecedor" />
-                </div>
-              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label className="flex items-center gap-1">
@@ -689,6 +648,21 @@ export default function Epis() {
             </CardContent>
           </Card>
         </div>
+        {showFornecedorDialog && <FornecedorDialog
+          fornecedorForm={fornecedorForm} setFornecedorForm={setFornecedorForm}
+          cnpjLoading={cnpjLoading} setCnpjLoading={setCnpjLoading}
+          cnpjResult={cnpjResult} setCnpjResult={setCnpjResult}
+          editingFornecedor={editingFornecedor}
+          onClose={() => { setShowFornecedorDialog(false); resetFornecedorForm(); setEditingFornecedor(null); setCnpjResult(null); }}
+          onSave={(cleanCnpj: string) => {
+            if (editingFornecedor) {
+              updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+            } else {
+              createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+            }
+          }}
+          isPending={createFornecedorMut.isPending || updateFornecedorMut.isPending}
+        />}
       </DashboardLayout>
     );
   }
@@ -794,49 +768,7 @@ export default function Epis() {
                 </div>
               </div>
 
-              {/* Dados do Fornecedor */}
-              <div className="border border-dashed border-blue-300 rounded-lg p-3 bg-blue-50/30 space-y-3">
-                <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
-                  <Search className="h-3.5 w-3.5" /> Dados do Fornecedor
-                  {epiForm.fornecedor && <Badge variant="outline" className="ml-2 text-xs">{epiForm.fornecedor}</Badge>}
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-xs">CNPJ</Label>
-                    <div className="flex gap-1">
-                      <Input value={epiForm.fornecedorCnpj}
-                        onChange={e => {
-                          const v = e.target.value.replace(/\D/g, "").slice(0, 14);
-                          const formatted = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-                          setEpiForm(f => ({ ...f, fornecedorCnpj: v.length <= 14 ? formatted : f.fornecedorCnpj }));
-                          if (v.length === 14) buscarCnpjFornecedor(v);
-                        }}
-                        placeholder="00.000.000/0000-00" className="flex-1" />
-                      <Button type="button" size="sm" variant="outline" disabled={cnpjLoading || epiForm.fornecedorCnpj.replace(/\D/g, "").length !== 14}
-                        onClick={() => buscarCnpjFornecedor(epiForm.fornecedorCnpj)}>
-                        {cnpjLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {cnpjResult?.success && <p className="text-xs text-green-700 mt-1">✓ {cnpjResult.razaoSocial}</p>}
-                    {cnpjResult?.error && <p className="text-xs text-red-600 mt-1">✗ {cnpjResult.error}</p>}
-                  </div>
-                  <div>
-                    <Label className="text-xs">Telefone</Label>
-                    <Input value={epiForm.fornecedorTelefone} onChange={e => setEpiForm(f => ({ ...f, fornecedorTelefone: e.target.value }))}
-                      placeholder="(00) 0000-0000" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">E-mail</Label>
-                    <Input value={epiForm.fornecedorEmail} onChange={e => setEpiForm(f => ({ ...f, fornecedorEmail: e.target.value }))}
-                      placeholder="contato@fornecedor.com" />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Endereço</Label>
-                  <Input value={epiForm.fornecedorEndereco} onChange={e => setEpiForm(f => ({ ...f, fornecedorEndereco: e.target.value }))}
-                    placeholder="Endereço completo do fornecedor" />
-                </div>
-              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label className="flex items-center gap-1">
@@ -932,6 +864,21 @@ export default function Epis() {
             </CardContent>
           </Card>
         </div>
+        {showFornecedorDialog && <FornecedorDialog
+          fornecedorForm={fornecedorForm} setFornecedorForm={setFornecedorForm}
+          cnpjLoading={cnpjLoading} setCnpjLoading={setCnpjLoading}
+          cnpjResult={cnpjResult} setCnpjResult={setCnpjResult}
+          editingFornecedor={editingFornecedor}
+          onClose={() => { setShowFornecedorDialog(false); resetFornecedorForm(); setEditingFornecedor(null); setCnpjResult(null); }}
+          onSave={(cleanCnpj: string) => {
+            if (editingFornecedor) {
+              updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+            } else {
+              createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+            }
+          }}
+          isPending={createFornecedorMut.isPending || updateFornecedorMut.isPending}
+        />}
       </DashboardLayout>
     );
   }
@@ -1667,73 +1614,21 @@ export default function Epis() {
         )}
       </div>
       {/* Dialog para cadastrar/editar fornecedor */}
-      {showFornecedorDialog && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-[#1B3A5C]">
-              {editingFornecedor ? "Editar Fornecedor" : "Cadastrar Novo Fornecedor"}
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <Label>Nome do Fornecedor *</Label>
-                <Input value={fornecedorForm.nome} onChange={e => setFornecedorForm(f => ({ ...f, nome: e.target.value }))}
-                  placeholder="Razão social ou nome fantasia" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">CNPJ</Label>
-                  <Input value={fornecedorForm.cnpj} onChange={e => {
-                    const v = e.target.value.replace(/\D/g, "").slice(0, 14);
-                    const formatted = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-                    setFornecedorForm(f => ({ ...f, cnpj: formatted }));
-                  }} placeholder="00.000.000/0000-00" />
-                </div>
-                <div>
-                  <Label className="text-xs">Contato</Label>
-                  <Input value={fornecedorForm.contato} onChange={e => setFornecedorForm(f => ({ ...f, contato: e.target.value }))}
-                    placeholder="Nome do contato" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Telefone</Label>
-                  <Input value={fornecedorForm.telefone} onChange={e => setFornecedorForm(f => ({ ...f, telefone: e.target.value }))}
-                    placeholder="(00) 0000-0000" />
-                </div>
-                <div>
-                  <Label className="text-xs">E-mail</Label>
-                  <Input value={fornecedorForm.email} onChange={e => setFornecedorForm(f => ({ ...f, email: e.target.value }))}
-                    placeholder="contato@fornecedor.com" />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Endereço</Label>
-                <Input value={fornecedorForm.endereco} onChange={e => setFornecedorForm(f => ({ ...f, endereco: e.target.value }))}
-                  placeholder="Endereço completo" />
-              </div>
-              <div>
-                <Label className="text-xs">Observações</Label>
-                <Input value={fornecedorForm.observacoes} onChange={e => setFornecedorForm(f => ({ ...f, observacoes: e.target.value }))}
-                  placeholder="Observações adicionais" />
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={() => { setShowFornecedorDialog(false); resetFornecedorForm(); setEditingFornecedor(null); }}>Cancelar</Button>
-              <Button className="bg-[#1B3A5C]" disabled={!fornecedorForm.nome || createFornecedorMut.isPending || updateFornecedorMut.isPending}
-                onClick={() => {
-                  const cleanCnpj = fornecedorForm.cnpj.replace(/\D/g, "");
-                  if (editingFornecedor) {
-                    updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
-                  } else {
-                    createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
-                  }
-                }}>
-                {(createFornecedorMut.isPending || updateFornecedorMut.isPending) ? "Salvando..." : editingFornecedor ? "Atualizar" : "Cadastrar"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showFornecedorDialog && <FornecedorDialog
+        fornecedorForm={fornecedorForm} setFornecedorForm={setFornecedorForm}
+        cnpjLoading={cnpjLoading} setCnpjLoading={setCnpjLoading}
+        cnpjResult={cnpjResult} setCnpjResult={setCnpjResult}
+        editingFornecedor={editingFornecedor}
+        onClose={() => { setShowFornecedorDialog(false); resetFornecedorForm(); setEditingFornecedor(null); setCnpjResult(null); }}
+        onSave={(cleanCnpj: string) => {
+          if (editingFornecedor) {
+            updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+          } else {
+            createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+          }
+        }}
+        isPending={createFornecedorMut.isPending || updateFornecedorMut.isPending}
+      />}
 
       {/* Dialog para listar fornecedores */}
       {showFornecedorList && (

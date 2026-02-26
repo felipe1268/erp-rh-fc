@@ -2467,3 +2467,11 @@
 - [x] Sugestões adicionais: taxa de reposição, previsão de consumo, evolução custo mensal, custo por obra detalhado, motivos de reposição
 - [x] Redesenhar frontend do Dashboard de EPIs com novos cards e gráficos
 - [x] Testar e validar todas as análises (340 testes passando)
+
+## Fase 64: Correções na Tela de Fornecedores de EPI
+- [x] Remover seção "Dados do Fornecedor" do formulário principal de EPI (novo e editar)
+- [x] Corrigir botão "Cadastrar novo fornecedor" que não abria o dialog (dialog estava no return da MAIN VIEW mas não nos returns de novo_epi/editar_epi)
+- [x] Extrair FornecedorDialog para componente reutilizável
+- [x] Implementar autocompletar CNPJ via BrasilAPI no cadastro de fornecedor
+- [x] Ao digitar CNPJ, preencher automaticamente nome, telefone, endereço, email
+- [x] Testar e validar todas as correções
