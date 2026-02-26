@@ -2606,3 +2606,6 @@
 - [x] Refatorado para usar Popover + Command (cmdk) do shadcn/ui
 - [x] Corrigido value do CommandItem para incluir nome+CPF+função+setor (cmdk filtra pelo value)
 - [x] Filtro agora funciona nativamente via cmdk (testado: "myrielle" filtra para 1 resultado)
+
+## Fase 89b: Limpeza de deletedAt de todos os funcionários
+- [x] Limpar deletedAt de todos os 299 funcionários no banco de dados
