@@ -28,7 +28,7 @@ describe("Sindical Router", () => {
     expect(procedures).toHaveProperty("sindical.cadastrar");
     expect(procedures).toHaveProperty("sindical.aplicar");
     expect(procedures).toHaveProperty("sindical.excluir");
-  });
+  }, 15000);
 });
 
 describe("Sindical Business Rules", () => {

@@ -2382,3 +2382,6 @@
 - [x] Robô ocupando tela toda no mobile - resolvido
 - [x] Esconder robô no mobile (hidden lg:block) - robô só aparece em desktop
 - [x] Focar nos cards de módulos no mobile - cards aparecem direto
+
+## Fase 59: Adicionar revisões no rodapé do Hub
+- [x] Adicionar rodapé no Hub de Módulos com número de revisão do sistema (Rev. 97)
