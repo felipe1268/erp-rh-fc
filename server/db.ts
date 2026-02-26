@@ -1,4 +1,4 @@
-import { eq, and, like, or, desc, asc, sql, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, like, or, desc, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users,
@@ -12,6 +12,7 @@ import {
   obras, InsertObra, obraFuncionarios, obraHorasRateio, obraSns,
   sectors, InsertSector, jobFunctions, InsertJobFunction,
   systemRevisions,
+  userCompanies,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -93,6 +94,45 @@ export async function getCompanies() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(companies).where(isNull(companies.deletedAt)).orderBy(companies.razaoSocial);
+}
+
+// Retorna empresas que o usuário pode ver (admin_master vê todas)
+export async function getCompaniesForUser(userId: number, role: string) {
+  const db = await getDb();
+  if (!db) return [];
+  // Admin Master vê todas as empresas
+  if (role === 'admin_master') {
+    return getCompanies();
+  }
+  // Demais usuários: só empresas vinculadas
+  const links = await db.select({ companyId: userCompanies.companyId })
+    .from(userCompanies).where(eq(userCompanies.userId, userId));
+  if (links.length === 0) return [];
+  const companyIds = links.map(l => l.companyId);
+  return db.select().from(companies)
+    .where(and(isNull(companies.deletedAt), inArray(companies.id, companyIds)))
+    .orderBy(companies.razaoSocial);
+}
+
+// Listar vínculos de um usuário
+export async function getUserCompanyLinks(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userCompanies).where(eq(userCompanies.userId, userId));
+}
+
+// Definir empresas de um usuário (substitui todos os vínculos)
+export async function setUserCompanies(userId: number, companyIds: number[]) {
+  const db = await getDb();
+  if (!db) return;
+  // Remove vínculos antigos
+  await db.delete(userCompanies).where(eq(userCompanies.userId, userId));
+  // Insere novos vínculos
+  if (companyIds.length > 0) {
+    await db.insert(userCompanies).values(
+      companyIds.map(cid => ({ userId, companyId: cid }))
+    );
+  }
 }
 
 export async function getCompanyById(id: number) {

@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Plus, Settings, Trash2, Shield, Key, Pencil, Users, UserPlus, Eye, EyeOff, Layers, CheckCircle, XCircle, Save } from "lucide-react";
+import { Plus, Settings, Trash2, Shield, Key, Pencil, Users, UserPlus, Eye, EyeOff, Layers, CheckCircle, XCircle, Save, Building2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
@@ -65,6 +66,9 @@ export default function Usuarios() {
   const [newPassword, setNewPassword] = useState("");
   const [newProfileType, setNewProfileType] = useState<string>("");
 
+  // Empresas vinculadas (novo usuário)
+  const [newCompanyIds, setNewCompanyIds] = useState<number[]>([]);
+
   // Edit user states
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editName, setEditName] = useState("");
@@ -72,6 +76,7 @@ export default function Usuarios() {
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState("user");
+  const [editCompanyIds, setEditCompanyIds] = useState<number[]>([]);
 
   // Profile states
   const [createProfileOpen, setCreateProfileOpen] = useState(false);
@@ -91,6 +96,7 @@ export default function Usuarios() {
 
   // Queries
   const usersQuery = trpc.userManagement.listUsers.useQuery();
+  const allCompaniesQuery = trpc.companies.list.useQuery();
   const { data: profiles } = trpc.profiles.listByCompany.useQuery(
     { companyId: companyId! },
     { enabled: !!companyId }
@@ -137,7 +143,7 @@ export default function Usuarios() {
     onSuccess: (data) => {
       toast.success(`Usuário ${data.username} criado! Senha padrão: ${data.defaultPassword}`);
       setShowCreateUser(false);
-      setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewProfileType("");
+      setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewProfileType(""); setNewCompanyIds([]);
       usersQuery.refetch();
     },
     onError: (err) => toast.error(err.message),
@@ -198,6 +204,11 @@ export default function Usuarios() {
     onError: (e) => toast.error("Erro: " + e.message),
   });
 
+  const setUserCompaniesMut = trpc.userManagement.setUserCompanies.useMutation({
+    onSuccess: () => { toast.success("Empresas do usuário atualizadas!"); usersQuery.refetch(); },
+    onError: (e) => toast.error("Erro: " + e.message),
+  });
+
   // Handlers
   const handleCreateUser = () => {
     if (!newUsername || !newName) { toast.error("Preencha usuário e nome"); return; }
@@ -205,6 +216,7 @@ export default function Usuarios() {
       username: newUsername, name: newName,
       email: newEmail || undefined, role: newRole,
       password: newPassword || undefined,
+      companyIds: newCompanyIds.length > 0 ? newCompanyIds : undefined,
     });
   };
 
@@ -315,6 +327,7 @@ export default function Usuarios() {
                         <th className="pb-2 pr-4 font-medium">Email</th>
                         <th className="pb-2 pr-4 font-medium">Método</th>
                         <th className="pb-2 pr-4 font-medium">Perfil Global</th>
+                        <th className="pb-2 pr-4 font-medium">Empresas</th>
                         <th className="pb-2 pr-4 font-medium">Perfil Empresa</th>
                         <th className="pb-2 pr-4 font-medium">Último Acesso</th>
                         <th className="pb-2 font-medium">Ações</th>
@@ -362,6 +375,24 @@ export default function Usuarios() {
                               )}
                             </td>
                             <td className="py-3 pr-4">
+                              {u.role === 'admin_master' ? (
+                                <span className="text-xs font-medium px-2 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">Todas</span>
+                              ) : u.companyIds && u.companyIds.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {u.companyIds.map((cid: number) => {
+                                    const comp = allCompaniesQuery.data?.find((c: any) => c.id === cid);
+                                    return (
+                                      <span key={cid} className="text-xs font-medium px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                        {comp?.nomeFantasia || comp?.razaoSocial || `#${cid}`}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-amber-600 italic">Nenhuma</span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-4">
                               {companyId ? (
                                 userProfiles.length > 0 ? (
                                   <div className="flex flex-wrap gap-1">
@@ -384,7 +415,7 @@ export default function Usuarios() {
                             <td className="py-3">
                               <div className="flex items-center gap-1 flex-wrap">
                                 <Button size="sm" variant="outline" className="text-xs h-7 px-2" title="Editar"
-                                  onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); setEditPassword(""); setEditRole(u.role || "user"); }}>
+                                  onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); setEditPassword(""); setEditRole(u.role || "user"); setEditCompanyIds(u.companyIds || []); }}>
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                                 {u.loginMethod === "local" && (
@@ -696,6 +727,52 @@ export default function Usuarios() {
                 </div>
               )}
             </div>
+            {/* Seletor de Empresas */}
+            {newRole !== 'admin_master' && (
+              <div className="border-t pt-3">
+                <label className="text-sm font-medium flex items-center gap-1 mb-2">
+                  <Building2 className="h-3.5 w-3.5" /> Empresas que o usuário pode acessar
+                </label>
+                <p className="text-xs text-muted-foreground mb-2">Selecione quais empresas este usuário poderá visualizar no sistema. Se nenhuma for selecionada, o usuário não verá nenhuma empresa.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {allCompaniesQuery.data?.map((c: any) => (
+                    <label key={c.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                      newCompanyIds.includes(c.id) ? 'bg-blue-50 border-blue-300' : 'bg-secondary/20 border-border hover:bg-secondary/40'
+                    }`}>
+                      <Checkbox
+                        checked={newCompanyIds.includes(c.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) setNewCompanyIds(prev => [...prev, c.id]);
+                          else setNewCompanyIds(prev => prev.filter(id => id !== c.id));
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium block truncate">{c.nomeFantasia || c.razaoSocial}</span>
+                        <span className="text-xs text-muted-foreground">{c.cnpj}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {allCompaniesQuery.data && allCompaniesQuery.data.length > 1 && (
+                  <div className="flex gap-2 mt-2">
+                    <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setNewCompanyIds(allCompaniesQuery.data!.map((c: any) => c.id))}>
+                      Selecionar Todas
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setNewCompanyIds([])}>
+                      Limpar
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {newRole === 'admin_master' && (
+              <div className="border-t pt-3">
+                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <Building2 className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm text-purple-700">Admin Master tem acesso automático a todas as empresas.</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setShowCreateUser(false)}>Cancelar</Button>
@@ -759,6 +836,53 @@ export default function Usuarios() {
               </div>
             )}
 
+            {/* Seletor de Empresas na Edição */}
+            {isAdmin && editingUser?.role !== 'admin_master' && editRole !== 'admin_master' && (
+              <div className="border-t pt-3">
+                <label className="text-sm font-medium flex items-center gap-1 mb-2">
+                  <Building2 className="h-3.5 w-3.5" /> Empresas que o usuário pode acessar
+                </label>
+                <p className="text-xs text-muted-foreground mb-2">Selecione quais empresas este usuário poderá visualizar no sistema.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {allCompaniesQuery.data?.map((c: any) => (
+                    <label key={c.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                      editCompanyIds.includes(c.id) ? 'bg-blue-50 border-blue-300' : 'bg-secondary/20 border-border hover:bg-secondary/40'
+                    }`}>
+                      <Checkbox
+                        checked={editCompanyIds.includes(c.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) setEditCompanyIds(prev => [...prev, c.id]);
+                          else setEditCompanyIds(prev => prev.filter(id => id !== c.id));
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium block truncate">{c.nomeFantasia || c.razaoSocial}</span>
+                        <span className="text-xs text-muted-foreground">{c.cnpj}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {allCompaniesQuery.data && allCompaniesQuery.data.length > 1 && (
+                  <div className="flex gap-2 mt-2">
+                    <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setEditCompanyIds(allCompaniesQuery.data!.map((c: any) => c.id))}>
+                      Selecionar Todas
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setEditCompanyIds([])}>
+                      Limpar
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {(editingUser?.role === 'admin_master' || editRole === 'admin_master') && (
+              <div className="border-t pt-3">
+                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <Building2 className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm text-purple-700">Admin Master tem acesso automático a todas as empresas.</span>
+                </div>
+              </div>
+            )}
+
             <div className="bg-secondary/30 border rounded-lg p-3 text-sm">
               <p className="text-muted-foreground"><strong>Método de Login:</strong> {editingUser?.loginMethod === "local" ? "Local (username/senha)" : editingUser?.loginMethod === "apple" ? "Apple ID" : "OAuth"}</p>
               <p className="text-muted-foreground"><strong>Perfil Atual:</strong> {roleLabels[editingUser?.role] || "Usuário"}</p>
@@ -778,6 +902,10 @@ export default function Usuarios() {
                 newPassword: editPassword.trim() || undefined,
                 role: (isMaster && editingUser?.id !== user?.id) ? editRole as "user" | "admin" | "admin_master" : undefined,
               });
+              // Salvar empresas vinculadas
+              if (isAdmin && editRole !== 'admin_master') {
+                setUserCompaniesMut.mutate({ userId: editingUser.id, companyIds: editCompanyIds });
+              }
             }} disabled={updateUserMutation.isPending}>
               {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}
             </Button>

@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "c13d9774-4924-43ff-b44f-31c1df70238e",
-  "prevId": "dac4be0b-19eb-4b56-a60b-842c85d489a3",
+  "id": "4c7a4970-231c-485c-9ee4-566ee95edbd1",
+  "prevId": "c13d9774-4924-43ff-b44f-31c1df70238e",
   "tables": {
     "accidents": {
       "name": "accidents",
@@ -11186,6 +11186,60 @@
           "name": "udr_dixi_name",
           "columns": [
             "dixiName"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "user_companies": {
+      "name": "user_companies",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "companyId": {
+          "name": "companyId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'CURRENT_TIMESTAMP'"
+        }
+      },
+      "indexes": {
+        "uc_user": {
+          "name": "uc_user",
+          "columns": [
+            "userId"
+          ],
+          "isUnique": false
+        },
+        "uc_company": {
+          "name": "uc_company",
+          "columns": [
+            "companyId"
           ],
           "isUnique": false
         }

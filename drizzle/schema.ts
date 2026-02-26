@@ -2135,6 +2135,21 @@ export const dissidioFuncionarios = mysqlTable("dissidio_funcionarios", {
 ]);
 
 
+// ============================================================
+// VÍNCULO USUÁRIO ↔ EMPRESA (controle de acesso por empresa)
+// Admin Master vê todas; demais usuários só veem empresas vinculadas
+// ============================================================
+export const userCompanies = mysqlTable("user_companies", {
+	id: int().autoincrement().notNull(),
+	userId: int().notNull(),
+	companyId: int().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("uc_user").on(table.userId),
+	index("uc_company").on(table.companyId),
+]);
+
 export const fornecedoresEpi = mysqlTable("fornecedores_epi", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),

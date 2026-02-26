@@ -2393,3 +2393,11 @@
 - [x] Criar legenda visual ao lado do campo com cores e suas funções
 - [x] Salvar cor do capacete no banco ao cadastrar/editar EPI
 - [x] Testes unitários (9 testes passando)
+
+## Fase 61: Controle de Acesso por Empresa (Permissões de Visibilidade)
+- [x] Criar tabela user_companies no banco (vínculo N:N entre usuários e empresas)
+- [x] Criar procedures backend para gerenciar permissões (listar, atribuir, remover)
+- [x] Atualizar tela de gestão de usuários com seleção de empresas permitidas
+- [x] Filtrar seletor de empresas no CompanyContext com base nas permissões
+- [x] Admin Master vê todas as empresas automaticamente (sem restrição)
+- [x] Testes unitários (12 testes, 329 total passando)

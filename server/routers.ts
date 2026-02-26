@@ -6,6 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import {
   createCompany, updateCompany, getCompanies, getCompanyById, deleteCompany, restoreCompany,
+  getCompaniesForUser, getUserCompanyLinks, setUserCompanies,
   createEmployee, updateEmployee, getEmployees, getEmployeeById, deleteEmployee, softDeleteEmployee, restoreEmployee, getDeletedEmployees, permanentDeleteEmployee, getEmployeeStats,
   createEmployeeHistory, getEmployeeHistory,
   createUserProfile, getUserProfiles, getUserProfilesByCompany, updateUserProfile, deleteUserProfile,
@@ -103,7 +104,7 @@ export const appRouter = router({
   // COMPANIES (MULTI-TENANT)
   // ============================================================
   companies: router({
-    list: protectedProcedure.query(async () => getCompanies()),
+    list: protectedProcedure.query(async ({ ctx }) => getCompaniesForUser(ctx.user.id, ctx.user.role)),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getCompanyById(input.id)),
     create: protectedProcedure.input(z.object({
       cnpj: z.string().min(14), razaoSocial: z.string().min(1),
@@ -820,7 +821,29 @@ export const appRouter = router({
   userManagement: router({
     listUsers: protectedProcedure.query(async () => {
       const allUsers = await getAllUsers();
-      return allUsers.map((u: any) => ({ ...u, password: undefined }));
+      // Buscar vínculos de empresa para cada usuário
+      const usersWithCompanies = await Promise.all(allUsers.map(async (u: any) => {
+        const links = await getUserCompanyLinks(u.id);
+        return { ...u, password: undefined, companyIds: links.map((l: any) => l.companyId) };
+      }));
+      return usersWithCompanies;
+    }),
+    // Listar vínculos de empresa de um usuário
+    getUserCompanies: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+      const links = await getUserCompanyLinks(input.userId);
+      return links.map((l: any) => l.companyId);
+    }),
+    // Definir empresas que um usuário pode acessar
+    setUserCompanies: protectedProcedure.input(z.object({
+      userId: z.number(),
+      companyIds: z.array(z.number()),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar acesso a empresas' });
+      }
+      await setUserCompanies(input.userId, input.companyIds);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_companies', entityId: input.userId, details: `Empresas do usuário atualizadas: [${input.companyIds.join(', ')}]` });
+      return { success: true };
     }),
     createLocalUser: protectedProcedure.input(z.object({
       username: z.string().min(3),
@@ -828,6 +851,7 @@ export const appRouter = router({
       email: z.string().email().optional(),
       role: z.enum(["user", "admin", "admin_master"]).default("user"),
       password: z.string().optional(),
+      companyIds: z.array(z.number()).optional(),
     })).mutation(async ({ input }) => {
       const bcrypt = await import("bcryptjs");
       const { getDb } = await import("./db");
@@ -845,7 +869,12 @@ export const appRouter = router({
         username: input.username, password: hashed,
         mustChangePassword: 1, loginMethod: "local", role: input.role,
       });
-      return { id: Number(result[0].insertId), username: input.username, defaultPassword: defaultPwd };
+      const newUserId = Number(result[0].insertId);
+      // Se companyIds foram passados, vincular o usuário às empresas
+      if (input.companyIds && input.companyIds.length > 0) {
+        await setUserCompanies(newUserId, input.companyIds);
+      }
+      return { id: newUserId, username: input.username, defaultPassword: defaultPwd };
     }),
     loginLocal: publicProcedure.input(z.object({
       username: z.string(), password: z.string(),
