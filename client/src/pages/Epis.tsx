@@ -310,7 +310,7 @@ export default function Epis() {
     toast.success(`Fornecedor "${f.nome}" selecionado`);
   }
 
-  const TAMANHOS_ROUPA = ['U', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
+  const TAMANHOS_ROUPA = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
   const TAMANHOS_CALCADO = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
   function resetEntregaForm() {
     setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "" });

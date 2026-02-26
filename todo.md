@@ -2486,3 +2486,6 @@
 
 ## Fase 66: Adicionar Tamanho U (Único) na Aba de Tamanhos de Camisa
 - [x] Adicionar opção "U" (Único) nos tamanhos de camisa
+
+## Fase 67: Alterar tamanho "U" para "Único"
+- [x] Alterar label de "U" para "Único" na lista de tamanhos de uniforme
