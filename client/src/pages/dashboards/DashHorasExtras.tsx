@@ -1,3 +1,4 @@
+import { SEMANTIC_COLORS, CHART_PALETTE } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -91,7 +92,7 @@ export default function DashHorasExtras() {
                   title="Horas Extras por Obra"
                   type="horizontalBar"
                   labels={data.rankingObra.map(r => r.obra.length > 25 ? r.obra.slice(0, 25) + "..." : r.obra)}
-                  datasets={[{ label: "Horas", data: data.rankingObra.map(r => r.horas), backgroundColor: "#3B82F6" }]}
+                  datasets={[{ label: "Horas", data: data.rankingObra.map(r => r.horas), backgroundColor: CHART_PALETTE[0] }]}
                   height={Math.max(200, data.rankingObra.length * 35)}
                 />
               )}
@@ -100,7 +101,7 @@ export default function DashHorasExtras() {
                   title="Horas Extras por Setor"
                   type="horizontalBar"
                   labels={data.rankingSetor.map(r => r.setor)}
-                  datasets={[{ label: "Horas", data: data.rankingSetor.map(r => r.horas), backgroundColor: "#10B981" }]}
+                  datasets={[{ label: "Horas", data: data.rankingSetor.map(r => r.horas), backgroundColor: CHART_PALETTE[1] }]}
                   height={Math.max(200, data.rankingSetor.length * 35)}
                 />
               )}
@@ -112,7 +113,7 @@ export default function DashHorasExtras() {
                 title="Distribuição por Percentual de Acréscimo"
                 type="doughnut"
                 labels={data.percentuais.map(p => p.percentual)}
-                datasets={[{ data: data.percentuais.map(p => p.count), backgroundColor: ["#F59E0B", "#EF4444", "#3B82F6", "#10B981", "#8B5CF6"] }]}
+                datasets={[{ data: data.percentuais.map(p => p.count), backgroundColor: [CHART_PALETTE[2], CHART_PALETTE[3], CHART_PALETTE[0], CHART_PALETTE[1], CHART_PALETTE[4]] }]}
                 height={240}
               />
             )}

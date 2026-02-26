@@ -1,3 +1,4 @@
+import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -108,8 +109,8 @@ export default function DashCartaoPonto() {
                 datasets={[{
                   label: "Horas",
                   data: data.evolucaoDiaria.map(d => d.horas),
-                  borderColor: "#3B82F6",
-                  backgroundColor: "rgba(59,130,246,0.1)",
+                  borderColor: CHART_PALETTE[0],
+                  backgroundColor: CHART_FILL.azul,
                   fill: true,
                   tension: 0.3,
                 }]}
@@ -126,7 +127,7 @@ export default function DashCartaoPonto() {
                 datasets={[{
                   label: "Horas",
                   data: data.porDiaSemana.map(d => d.horas),
-                  backgroundColor: ["#EF4444", "#3B82F6", "#3B82F6", "#3B82F6", "#3B82F6", "#3B82F6", "#F59E0B"],
+                  backgroundColor: [SEMANTIC_COLORS.negativo, CHART_PALETTE[0], CHART_PALETTE[0], CHART_PALETTE[0], CHART_PALETTE[0], CHART_PALETTE[0], SEMANTIC_COLORS.alerta],
                 }]}
                 height={260}
               />
@@ -137,7 +138,7 @@ export default function DashCartaoPonto() {
                 datasets={[{
                   label: "Registros",
                   data: data.porDiaSemana.map(d => d.registros),
-                  backgroundColor: "#10B981",
+                  backgroundColor: CHART_PALETTE[1],
                 }]}
                 height={260}
               />

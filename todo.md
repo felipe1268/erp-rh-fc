@@ -2556,3 +2556,27 @@
 - [x] Corrigir ModuleHub.tsx: redirecionava para getLoginUrl() (OAuth Manus) quando !user, agora vai para /login
 - [x] Verificar todos os window.location.href no projeto - todos apontam para /login
 - [x] Único getLoginUrl() restante é o botão "Entrar com Manus OAuth" na tela de Login (correto)
+
+## Fase 80: Bugs no Ranking de Faltas do Dashboard de Cartão de Ponto
+- [x] Corrigir clique no colaborador do ranking: FechamentoPonto agora lê ?funcionario=X&mes=Y da URL
+- [x] Corrigir critério de 0.5 dias de falta: agora falta = 1 dia inteiro (sem meio dia)
+
+## Fase 81: Responsividade geral do sistema
+- [x] Tornar todas as tabelas do sistema responsivas (min-width:600px global em mobile + overflow-x-auto)
+- [x] Ajustar grids fixos (grid-cols-3/4/5/6) para responsivos com breakpoints sm/md em 10+ arquivos
+- [x] Adicionar overflow-x-auto em tabelas (Configuracoes, Lixeira, PJMedicoes, SolicitacaoHE)
+- [x] Grid de meses (12 colunas) agora 4 cols em mobile, 6 em tablet, 12 em desktop
+
+## Fase 82: Remover módulo Dixi Ponto
+- [x] Remover item "Dixi Ponto" do menu lateral (DashboardLayout, MenuConfigPanel, ModuleContext)
+- [x] Remover rota /dixi-ponto do App.tsx e import
+- [x] Arquivo DixiPonto.tsx mantido (desconectado)
+
+## Fase 83: Padronizar cores dos gráficos em todos os dashboards
+- [x] Criar paleta de cores padronizada (chartColors.ts) com CHART_PALETTE, SEMANTIC_COLORS e CHART_FILL
+- [x] Aplicar paleta nos 6 dashboards: Funcionários, Cartão de Ponto, Folha, EPIs, Horas Extras, Jurídico
+
+## Fase 84: Adicionar opções de Estado Civil no cadastro de colaboradores
+- [x] Adicionar: Amasiado, Separado, Separado Judicialmente, Outro (União Estável já existia)
+- [x] Atualizar enum no schema do banco de dados (ALTER TABLE employees)
+- [x] Atualizar formulário de cadastro de colaboradores com novas opções

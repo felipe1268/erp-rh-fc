@@ -65,7 +65,6 @@ const DEFAULT_MENU = [
     { label: "Controle de Documentos", path: "/controle-documentos", visible: true },
     { label: "Vale Alimentação", path: "/vale-alimentacao", visible: true },
     { label: "Controle de EPIs", path: "/epis", visible: true },
-    { label: "Dixi Ponto", path: "/dixi-ponto", visible: true },
     { label: "Solicitação de HE", path: "/solicitacao-he", visible: true },
   ]},
   { title: "Gestão de Pessoas", items: [

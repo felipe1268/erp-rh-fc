@@ -194,7 +194,7 @@ export default function Dissidio() {
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Novo Dissídio Coletivo</DialogTitle></DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Ano Referência</Label>
                   <Input type="number" value={form.anoReferencia} onChange={e => setForm(p => ({ ...p, anoReferencia: Number(e.target.value) }))} />
@@ -213,7 +213,7 @@ export default function Dissidio() {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Reajuste Total (%)</Label>
                   <Input type="number" step="0.01" placeholder="Ex: 5.50" value={form.percentualReajuste} onChange={e => setForm(p => ({ ...p, percentualReajuste: e.target.value }))} />
@@ -257,7 +257,7 @@ export default function Dissidio() {
                   <Input placeholder="Número da convenção" value={form.numeroCCT} onChange={e => setForm(p => ({ ...p, numeroCCT: e.target.value }))} />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Valor VA (R$)</Label>
                   <Input type="number" step="0.01" value={form.valorVA} onChange={e => setForm(p => ({ ...p, valorVA: e.target.value }))} />
@@ -330,7 +330,7 @@ export default function Dissidio() {
         {editMode && editForm && (
           <Card className="border-primary">
             <CardContent className="pt-4 space-y-4">
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <Label className="text-xs">Reajuste (%)</Label>
                   <Input type="number" step="0.01" value={editForm.percentualReajuste} onChange={e => setEditForm((p: any) => ({ ...p, percentualReajuste: e.target.value }))} />
@@ -360,7 +360,7 @@ export default function Dissidio() {
         )}
 
         {/* Summary cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-4 text-center">
               <TrendingUp className="w-8 h-8 mx-auto mb-2 text-primary" />
@@ -393,7 +393,7 @@ export default function Dissidio() {
 
         {/* INPC / Ganho Real */}
         {(detalhes.percentualINPC || detalhes.percentualGanhoReal) && (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <Card><CardContent className="pt-4 text-center"><p className="text-lg font-bold">{detalhes.percentualINPC || '—'}%</p><p className="text-xs text-muted-foreground">INPC</p></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><p className="text-lg font-bold">{detalhes.percentualGanhoReal || '—'}%</p><p className="text-xs text-muted-foreground">Ganho Real</p></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><p className="text-lg font-bold">{detalhes.retroativo ? 'Sim' : 'Não'}</p><p className="text-xs text-muted-foreground">Retroativo</p></CardContent></Card>
@@ -474,7 +474,7 @@ export default function Dissidio() {
         </div>
 
         {/* Resumo da simulação */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-blue-200">
             <CardContent className="pt-4 text-center">
               <p className="text-3xl font-bold text-blue-600">{simulacao.resumo.totalFuncionarios}</p>

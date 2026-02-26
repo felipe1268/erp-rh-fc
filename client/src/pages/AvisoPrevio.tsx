@@ -357,7 +357,7 @@ export default function AvisoPrevio() {
                   <p className="text-sm text-muted-foreground">{TIPO_LABELS[selectedItem.tipo]?.label}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="bg-blue-50 rounded-lg p-4 text-center">
                   <Calendar className="h-5 w-5 mx-auto text-blue-600 mb-1" />
                   <p className="text-xs text-blue-600 uppercase">Início</p>
@@ -518,7 +518,7 @@ export default function AvisoPrevio() {
                 <p className="font-semibold text-green-800 mb-3 flex items-center gap-2">
                   <DollarSign className="h-4 w-4" /> Previsão Calculada
                 </p>
-                <div className="grid grid-cols-3 gap-4 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-3">
                   <div className="text-center">
                     <p className="text-xs text-green-600">Anos de Serviço</p>
                     <p className="text-xl font-bold">{calculoPreview.anosServico}</p>

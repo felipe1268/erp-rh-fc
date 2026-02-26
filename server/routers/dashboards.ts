@@ -260,14 +260,11 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string) {
     porFuncionario[r.employeeId].horasExtras += he;
     porFuncionario[r.employeeId].faltas += ft;
 
-    // Contar dia de falta: se horasTrabalhadas == 0 e faltas > 0, conta como 1 dia
-    // Se horasTrabalhadas > 0 mas < 50% da jornada (4h), conta como 0.5 dia
-    if (ft > 0 && ht === 0) {
+    // Contar dia de falta: se há falta registrada (faltas > 0), conta como 1 dia inteiro
+    // Não existe "meio dia" de falta — ou faltou ou não faltou
+    if (ft > 0) {
       porFuncionario[r.employeeId].faltasDias += 1;
       totalFaltasDias += 1;
-    } else if (ft > 0 && ht > 0 && ht < 4) {
-      porFuncionario[r.employeeId].faltasDias += 0.5;
-      totalFaltasDias += 0.5;
     }
 
     // Atrasos: aplicar tolerância CLT Art. 58 §1º

@@ -352,7 +352,7 @@ export default function SolicitacaoHE() {
                       Nenhum funcionário ativo encontrado{formData.obraId ? " nesta obra" : ""}
                     </div>
                   ) : (
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto"><table className="w-full text-sm">
                       <thead className="bg-gray-50 sticky top-0">
                         <tr>
                           <th className="p-2 text-left w-10"></th>
@@ -382,7 +382,7 @@ export default function SolicitacaoHE() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></div>
                   )}
                 </div>
               </div>

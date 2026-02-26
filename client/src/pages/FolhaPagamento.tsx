@@ -661,7 +661,7 @@ export default function FolhaPagamento() {
                         {/* Mês anterior */}
                         <div className="border rounded-lg p-3 bg-white">
                           <p className="text-xs font-semibold text-muted-foreground mb-2">Comparativo com {mesAnteriorLabel}</p>
-                          <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-center">
                             <div>
                               <p className="text-sm font-bold">Custo</p>
                               <VariacaoTag valor={comp.mesAnterior.variacaoCusto} />
@@ -682,7 +682,7 @@ export default function FolhaPagamento() {
                         {/* Ano anterior */}
                         <div className="border rounded-lg p-3 bg-white">
                           <p className="text-xs font-semibold text-muted-foreground mb-2">Comparativo com {anoAnteriorLabel}</p>
-                          <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-center">
                             <div>
                               <p className="text-sm font-bold">Custo</p>
                               <VariacaoTag valor={comp.anoAnterior.variacaoCusto} />
@@ -1387,7 +1387,7 @@ export default function FolhaPagamento() {
 
               {vale ? (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                     <div className="bg-orange-50 rounded-lg p-2 text-center">
                       <p className="text-lg font-bold text-orange-700">{vale.totalFuncionarios}</p>
                       <p className="text-[10px] text-muted-foreground">Funcionários</p>
@@ -1481,7 +1481,7 @@ export default function FolhaPagamento() {
 
               {pagamento ? (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                     <div className="bg-green-50 rounded-lg p-2 text-center">
                       <p className="text-lg font-bold text-green-700">{pagamento.totalFuncionarios}</p>
                       <p className="text-[10px] text-muted-foreground">Funcionários</p>
@@ -1582,7 +1582,7 @@ export default function FolhaPagamento() {
                   </div>
                   {decimoTerceiro1 ? (
                     <div className="space-y-3">
-                      <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                         <div className="bg-purple-50 rounded-lg p-2 text-center">
                           <p className="text-lg font-bold text-purple-700">{decimoTerceiro1.totalFuncionarios}</p>
                           <p className="text-[10px] text-muted-foreground">Funcionários</p>
@@ -1707,7 +1707,7 @@ export default function FolhaPagamento() {
                     </div>
                     {decimoTerceiro2 ? (
                       <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                           <div className="bg-indigo-50 rounded-lg p-2 text-center">
                             <p className="text-lg font-bold text-indigo-700">{decimoTerceiro2.totalFuncionarios}</p>
                             <p className="text-[10px] text-muted-foreground">Funcionários</p>

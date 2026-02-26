@@ -1,3 +1,4 @@
+import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -85,9 +86,9 @@ export default function DashFolhaPagamento() {
                 type="line"
                 labels={data.evolucaoMensal.map((r: any) => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
                 datasets={[
-                  { label: "Proventos", data: data.evolucaoMensal.map((r: any) => r.proventos), borderColor: "#22C55E", backgroundColor: "rgba(34,197,94,0.1)", fill: false, tension: 0.3 },
-                  { label: "Descontos", data: data.evolucaoMensal.map((r: any) => r.descontos), borderColor: "#EF4444", backgroundColor: "rgba(239,68,68,0.1)", fill: false, tension: 0.3 },
-                  { label: "Líquido", data: data.evolucaoMensal.map((r: any) => r.liquido), borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.1)", fill: true, tension: 0.3 },
+                  { label: "Proventos", data: data.evolucaoMensal.map((r: any) => r.proventos), borderColor: SEMANTIC_COLORS.proventos, backgroundColor: CHART_FILL.verde, fill: false, tension: 0.3 },
+                  { label: "Descontos", data: data.evolucaoMensal.map((r: any) => r.descontos), borderColor: SEMANTIC_COLORS.descontos, backgroundColor: CHART_FILL.vermelho, fill: false, tension: 0.3 },
+                  { label: "Líquido", data: data.evolucaoMensal.map((r: any) => r.liquido), borderColor: SEMANTIC_COLORS.liquido, backgroundColor: CHART_FILL.azul, fill: true, tension: 0.3 },
                 ]}
                 height={300}
               />
@@ -100,8 +101,8 @@ export default function DashFolhaPagamento() {
                 type="bar"
                 labels={data.evolucaoMensal.map((r: any) => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
                 datasets={[
-                  { label: "FGTS", data: data.evolucaoMensal.map((r: any) => r.fgts), backgroundColor: "#14B8A6" },
-                  { label: "INSS", data: data.evolucaoMensal.map((r: any) => r.inss), backgroundColor: "#8B5CF6" },
+                  { label: "FGTS", data: data.evolucaoMensal.map((r: any) => r.fgts), backgroundColor: SEMANTIC_COLORS.fgts },
+                  { label: "INSS", data: data.evolucaoMensal.map((r: any) => r.inss), backgroundColor: SEMANTIC_COLORS.inss },
                 ]}
                 height={280}
               />
@@ -113,7 +114,7 @@ export default function DashFolhaPagamento() {
                 title="Custo por Função (Top 10)"
                 type="horizontalBar"
                 labels={data.porFuncao.map((f: any) => f.funcao)}
-                datasets={[{ label: "Custo Total", data: data.porFuncao.map((f: any) => f.custo), backgroundColor: "#3B82F6" }]}
+                datasets={[{ label: "Custo Total", data: data.porFuncao.map((f: any) => f.custo), backgroundColor: CHART_PALETTE[0] }]}
                 height={280}
               />
               <DashChart

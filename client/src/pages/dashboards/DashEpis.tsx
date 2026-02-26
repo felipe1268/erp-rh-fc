@@ -1,3 +1,4 @@
+import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
@@ -394,8 +395,8 @@ export default function DashEpis() {
                 type="bar"
                 labels={consumoFiltrado.map((r: any) => r.mes)}
                 datasets={[
-                  { label: "Unidades", data: consumoFiltrado.map((r: any) => r.unidades), backgroundColor: "#3B82F6" },
-                  { label: "Entregas", data: consumoFiltrado.map((r: any) => r.entregas), backgroundColor: "#93C5FD" },
+                  { label: "Unidades", data: consumoFiltrado.map((r: any) => r.unidades), backgroundColor: CHART_PALETTE[0] },
+                  { label: "Entregas", data: consumoFiltrado.map((r: any) => r.entregas), backgroundColor: CHART_PALETTE[5] },
                 ]}
                 height={280}
               />
@@ -406,8 +407,8 @@ export default function DashEpis() {
                 datasets={[{
                   label: "Custo Estimado (R$)",
                   data: custoFiltrado.map((r: any) => r.custoEstimado),
-                  borderColor: "#10B981",
-                  backgroundColor: "rgba(16, 185, 129, 0.1)",
+                  borderColor: CHART_PALETTE[1],
+                  backgroundColor: CHART_FILL.verde,
                   fill: true,
                   tension: 0.3,
                 }]}
@@ -427,7 +428,7 @@ export default function DashEpis() {
                   datasets={[{
                     label: "Itens",
                     data: Object.values(categoriasFiltradas).map((c: any) => c.itens),
-                    backgroundColor: ["#10B981", "#6366F1", "#F59E0B", "#EF4444"],
+                    backgroundColor: [CHART_PALETTE[1], CHART_PALETTE[4], CHART_PALETTE[2], CHART_PALETTE[3]],
                   }]}
                   height={280}
                 />
@@ -440,7 +441,7 @@ export default function DashEpis() {
                   datasets={[{
                     label: "Ocorrências",
                     data: Object.values(data.reposicaoPorMotivo) as number[],
-                    backgroundColor: ["#EF4444", "#F59E0B", "#8B5CF6", "#3B82F6", "#EC4899", "#14B8A6"],
+                    backgroundColor: [CHART_PALETTE[3], CHART_PALETTE[2], CHART_PALETTE[4], CHART_PALETTE[0], CHART_PALETTE[6], CHART_PALETTE[8]],
                   }]}
                   height={280}
                 />
@@ -456,7 +457,7 @@ export default function DashEpis() {
                   title="Top 10 EPIs Mais Entregues"
                   type="horizontalBar"
                   labels={data.topEpis.map((e: any) => e.nome.length > 30 ? e.nome.slice(0, 30) + "..." : e.nome)}
-                  datasets={[{ label: "Unidades", data: data.topEpis.map((e: any) => e.qtd), backgroundColor: "#10B981" }]}
+                  datasets={[{ label: "Unidades", data: data.topEpis.map((e: any) => e.qtd), backgroundColor: CHART_PALETTE[1] }]}
                   height={Math.max(220, data.topEpis.length * 28)}
                 />
               )}
@@ -465,7 +466,7 @@ export default function DashEpis() {
                   title="Top 10 Funcionários (mais EPIs)"
                   type="horizontalBar"
                   labels={data.topFuncionarios.map((f: any) => f.nome.length > 25 ? f.nome.slice(0, 25) + "..." : f.nome)}
-                  datasets={[{ label: "Unidades", data: data.topFuncionarios.map((f: any) => f.qtd), backgroundColor: "#8B5CF6" }]}
+                  datasets={[{ label: "Unidades", data: data.topFuncionarios.map((f: any) => f.qtd), backgroundColor: CHART_PALETTE[4] }]}
                   height={Math.max(220, data.topFuncionarios.length * 28)}
                 />
               )}
@@ -480,7 +481,7 @@ export default function DashEpis() {
                   title="Top 10 Custo de EPI por Funcionário (R$)"
                   type="horizontalBar"
                   labels={data.custoPorFuncionario.map((f: any) => f.nome.length > 25 ? f.nome.slice(0, 25) + "..." : f.nome)}
-                  datasets={[{ label: "Custo (R$)", data: data.custoPorFuncionario.map((f: any) => f.custo), backgroundColor: "#F59E0B" }]}
+                  datasets={[{ label: "Custo (R$)", data: data.custoPorFuncionario.map((f: any) => f.custo), backgroundColor: CHART_PALETTE[2] }]}
                   height={Math.max(220, data.custoPorFuncionario.length * 28)}
                 />
               )}
@@ -489,7 +490,7 @@ export default function DashEpis() {
                   title={`Entregas por Obra${obraFiltro !== 'todos' ? ` — ${obraFiltro}` : ''}`}
                   type="horizontalBar"
                   labels={obrasFiltradas.map((o: any) => o.nome.length > 30 ? o.nome.slice(0, 30) + "..." : o.nome)}
-                  datasets={[{ label: "Unidades", data: obrasFiltradas.map((o: any) => o.unidades), backgroundColor: "#3B82F6" }]}
+                  datasets={[{ label: "Unidades", data: obrasFiltradas.map((o: any) => o.unidades), backgroundColor: CHART_PALETTE[0] }]}
                   height={Math.max(200, obrasFiltradas.length * 30)}
                 />
               )}
@@ -503,7 +504,7 @@ export default function DashEpis() {
                 title="Top 10 EPIs Mais Perdidos/Estragados"
                 type="horizontalBar"
                 labels={data.topEpiPerdidos.map((e: any) => e.nome.length > 35 ? e.nome.slice(0, 35) + "..." : e.nome)}
-                datasets={[{ label: "Ocorrências", data: data.topEpiPerdidos.map((e: any) => e.qtd), backgroundColor: "#EF4444" }]}
+                datasets={[{ label: "Ocorrências", data: data.topEpiPerdidos.map((e: any) => e.qtd), backgroundColor: CHART_PALETTE[3] }]}
                 height={Math.max(200, data.topEpiPerdidos.length * 28)}
               />
             )}
@@ -519,7 +520,7 @@ export default function DashEpis() {
                 datasets={[{
                   label: "Entregas",
                   data: Object.values(data.porMotivo) as number[],
-                  backgroundColor: ["#3B82F6", "#EF4444", "#F59E0B", "#10B981", "#8B5CF6", "#EC4899"],
+                  backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[3], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[4], CHART_PALETTE[6]],
                 }]}
                 height={260}
               />

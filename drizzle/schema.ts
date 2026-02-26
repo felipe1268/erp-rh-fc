@@ -289,7 +289,7 @@ export const employees = mysqlTable("employees", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataNascimento: date({ mode: 'string' }),
 	sexo: mysqlEnum(['M','F','Outro']),
-	estadoCivil: mysqlEnum(['Solteiro','Casado','Divorciado','Viuvo','Uniao_Estavel']),
+	estadoCivil: mysqlEnum(['Solteiro','Casado','Divorciado','Viuvo','Uniao_Estavel','Amasiado','Separado','Separado_Judicialmente','Outro']),
 	nacionalidade: varchar({ length: 50 }),
 	naturalidade: varchar({ length: 100 }),
 	nomeMae: varchar({ length: 255 }),

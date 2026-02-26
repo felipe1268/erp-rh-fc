@@ -144,14 +144,29 @@
     min-height: 100dvh;
   }
 
-  /* Tabelas responsivas */
+  /* Tabelas responsivas - scroll horizontal */
   .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Todas as tabelas dentro de cards devem ter scroll horizontal */
+  table {
+    min-width: 600px;
   }
 
   /* Cards e formulários */
   .grid {
     gap: 0.75rem;
+  }
+
+  /* Textos menores em mobile */
+  h1 { font-size: 1.25rem !important; }
+  h2 { font-size: 1.1rem !important; }
+
+  /* Botões menores em mobile */
+  .gap-2 > button, .gap-3 > button {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.625rem;
   }
 }
 

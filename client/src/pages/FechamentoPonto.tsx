@@ -21,8 +21,8 @@ import {
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState, useRef, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
@@ -439,8 +439,25 @@ export default function FechamentoPonto() {
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth() + 1);
   const mesAno = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}`;
 
-  const [viewMode, setViewMode] = useState<ViewMode>("resumo");
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  // Ler query params da URL para abrir detalhe do funcionário automaticamente (ex: vindo do dashboard)
+  const searchString = useSearch();
+  const urlParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const urlFuncionario = urlParams.get("funcionario");
+  const urlMes = urlParams.get("mes");
+
+  const [viewMode, setViewMode] = useState<ViewMode>(urlFuncionario ? "detalhe" : "resumo");
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(urlFuncionario ? Number(urlFuncionario) : null);
+
+  // Setar mês da URL se fornecido (ex: 2026-01)
+  useEffect(() => {
+    if (urlMes) {
+      const [ano, mes] = urlMes.split("-");
+      if (ano && mes) {
+        setAnoSelecionado(Number(ano));
+        setMesSelecionado(Number(mes));
+      }
+    }
+  }, [urlMes]);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [showResolveDialog, setShowResolveDialog] = useState(false);
@@ -926,7 +943,7 @@ export default function FechamentoPonto() {
           </div>
 
           {/* 12 Meses */}
-          <div className="grid grid-cols-12 gap-1.5">
+          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-12 gap-1.5">
             {MESES_CURTOS.map((nome, i) => {
               const mes = i + 1;
               const isSelected = mes === mesSelecionado;
@@ -3055,7 +3072,7 @@ export default function FechamentoPonto() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-emerald-700">{simuladorData.data.totalFuncionarios}</p>
                       <p className="text-xs text-emerald-600">Horistas Ativos</p>

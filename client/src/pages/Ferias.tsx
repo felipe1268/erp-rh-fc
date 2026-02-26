@@ -509,7 +509,7 @@ export default function Ferias() {
                 </div>
               </div>
               {selectedItem.dataInicio && (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="bg-green-50 rounded-lg p-4 text-center">
                     <p className="text-xs text-green-600 uppercase">Início Gozo</p>
                     <p className="font-bold text-lg">{formatDate(selectedItem.dataInicio)}</p>

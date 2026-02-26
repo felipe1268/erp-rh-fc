@@ -1111,7 +1111,7 @@ function SyncHETab({ companyId }: { companyId: number }) {
               <Scale className="w-4 h-4" />
               Critérios Atuais da Empresa
             </p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-700">{criterios?.heDiasUteis || '50'}%</p>
                 <p className="text-xs text-blue-600">HE Dias Úteis</p>
@@ -1166,7 +1166,7 @@ function SyncHETab({ companyId }: { companyId: number }) {
 
               {/* Tabela */}
               <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-3 py-2 text-left w-10">
@@ -1235,7 +1235,7 @@ function SyncHETab({ companyId }: { companyId: number }) {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
               </div>
 
               <p className="text-xs text-muted-foreground mt-3">
@@ -1457,7 +1457,7 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
       </div>
 
       {/* Resumo */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
           <p className="text-2xl font-bold text-blue-700">{recipients.length}</p>
           <p className="text-xs text-gray-500">Total Cadastrados</p>
@@ -1695,7 +1695,7 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
       </div>
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
           <p className="text-2xl font-bold text-indigo-700">{stats.total}</p>
           <p className="text-xs text-gray-500">Total Enviadas</p>
@@ -1778,7 +1778,7 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
         </Card>
       ) : (
         <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Status</th>
@@ -1827,7 +1827,7 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
     </div>

@@ -865,6 +865,10 @@ export default function Colaboradores() {
                       <SelectItem value="Divorciado">Divorciado(a)</SelectItem>
                       <SelectItem value="Viuvo">Viúvo(a)</SelectItem>
                       <SelectItem value="Uniao_Estavel">União Estável</SelectItem>
+                      <SelectItem value="Amasiado">Amasiado(a)</SelectItem>
+                      <SelectItem value="Separado">Separado(a)</SelectItem>
+                      <SelectItem value="Separado_Judicialmente">Separado(a) Judicialmente</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

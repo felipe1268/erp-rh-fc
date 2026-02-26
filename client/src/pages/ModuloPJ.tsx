@@ -446,7 +446,7 @@ export default function ModuloPJ() {
 
             {/* Resumo do mês */}
             {(pagamentos as any[]).length > 0 && (
-              <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 <Card className="bg-amber-50 border-amber-200">
                   <CardContent className="p-4 text-center">
                     <p className="text-xs text-amber-600 uppercase font-semibold">Adiantamentos</p>
@@ -552,7 +552,7 @@ export default function ModuloPJ() {
               </div>
               <div className="bg-purple-50 rounded-lg p-4">
                 <p className="text-xs text-purple-600 uppercase font-semibold mb-2">Valores e Pagamento</p>
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="text-2xl font-bold text-purple-700">{formatMoeda(selectedContrato.valorMensal)}</p>
                     <p className="text-xs text-muted-foreground">Valor Mensal</p>
@@ -662,7 +662,7 @@ export default function ModuloPJ() {
 
               <div className="col-span-2 bg-purple-50 rounded-lg p-4">
                 <p className="text-sm font-semibold text-purple-800 mb-3">Regra de Pagamento (Folha PJ)</p>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs font-medium">% Adiantamento</label>
                     <Input type="number" value={form.percentualAdiantamento || 40} onChange={e => setForm({ ...form, percentualAdiantamento: parseInt(e.target.value) || 40 })} />

@@ -1,3 +1,4 @@
+import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL, getChartColors } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -26,8 +27,8 @@ function calcTenure(dateStr: string | null) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  "Ativo": "#22C55E", "Ferias": "#3B82F6", "Afastado": "#F59E0B",
-  "Licenca": "#8B5CF6", "Desligado": "#EF4444", "Recluso": "#6B7280", "Lista_Negra": "#1F2937",
+  "Ativo": SEMANTIC_COLORS.ativo, "Ferias": SEMANTIC_COLORS.ferias, "Afastado": SEMANTIC_COLORS.alerta,
+  "Licenca": SEMANTIC_COLORS.licenca, "Desligado": SEMANTIC_COLORS.desligado, "Recluso": SEMANTIC_COLORS.recluso, "Lista_Negra": SEMANTIC_COLORS.listaNegra,
 };
 
 export default function DashFuncionarios() {
@@ -135,14 +136,14 @@ export default function DashFuncionarios() {
             title="Status dos Funcionários"
             type="doughnut"
             labels={data.statusDist.map(s => s.label)}
-            datasets={[{ data: data.statusDist.map(s => s.value), backgroundColor: data.statusDist.map(s => STATUS_COLORS[s.label] || "#6B7280") }]}
+            datasets={[{ data: data.statusDist.map(s => s.value), backgroundColor: data.statusDist.map(s => STATUS_COLORS[s.label] || SEMANTIC_COLORS.neutro) }]}
             height={240}
           />
           <DashChart
             title="Distribuição por Gênero"
             type="pie"
             labels={data.sexDist.map(s => s.label)}
-            datasets={[{ data: data.sexDist.map(s => s.value), backgroundColor: data.sexDist.map(s => s.label === 'M' ? '#3B82F6' : s.label === 'F' ? '#EC4899' : '#9CA3AF') }]}
+            datasets={[{ data: data.sexDist.map(s => s.value), backgroundColor: data.sexDist.map(s => s.label === 'M' ? SEMANTIC_COLORS.masculino : s.label === 'F' ? SEMANTIC_COLORS.feminino : SEMANTIC_COLORS.neutro) }]}
             height={240}
           />
           <DashChart
@@ -160,8 +161,8 @@ export default function DashFuncionarios() {
           type="bar"
           labels={faixas}
           datasets={[
-            { label: "Masculino", data: mascData, backgroundColor: "#3B82F6" },
-            { label: "Feminino", data: femData, backgroundColor: "#EC4899" },
+            { label: "Masculino", data: mascData, backgroundColor: SEMANTIC_COLORS.masculino },
+            { label: "Feminino", data: femData, backgroundColor: SEMANTIC_COLORS.feminino },
           ]}
           height={280}
         />
@@ -172,14 +173,14 @@ export default function DashFuncionarios() {
             title="Top 10 Funções"
             type="horizontalBar"
             labels={data.funcaoDist.map(s => s.label)}
-            datasets={[{ label: "Funcionários", data: data.funcaoDist.map(s => s.value), backgroundColor: "#3B82F6" }]}
+            datasets={[{ label: "Funcionários", data: data.funcaoDist.map(s => s.value), backgroundColor: CHART_PALETTE[0] }]}
             height={280}
           />
           <DashChart
             title="Top 10 Setores"
             type="horizontalBar"
             labels={data.setorDist.map(s => s.label)}
-            datasets={[{ label: "Funcionários", data: data.setorDist.map(s => s.value), backgroundColor: "#10B981" }]}
+            datasets={[{ label: "Funcionários", data: data.setorDist.map(s => s.value), backgroundColor: CHART_PALETTE[1] }]}
             height={280}
           />
         </div>
@@ -190,14 +191,14 @@ export default function DashFuncionarios() {
             title="Tempo de Empresa"
             type="bar"
             labels={data.tenureDist.map(s => s.label)}
-            datasets={[{ label: "Funcionários", data: data.tenureDist.map(s => s.value), backgroundColor: "#8B5CF6" }]}
+            datasets={[{ label: "Funcionários", data: data.tenureDist.map(s => s.value), backgroundColor: CHART_PALETTE[4] }]}
             height={260}
           />
           <DashChart
             title="Top 10 Cidades"
             type="horizontalBar"
             labels={data.cidadeDist.map(s => s.label)}
-            datasets={[{ label: "Funcionários", data: data.cidadeDist.map(s => s.value), backgroundColor: "#06B6D4" }]}
+            datasets={[{ label: "Funcionários", data: data.cidadeDist.map(s => s.value), backgroundColor: CHART_PALETTE[5] }]}
             height={260}
           />
         </div>
@@ -215,7 +216,7 @@ export default function DashFuncionarios() {
             title="Advertências por Tipo"
             type="doughnut"
             labels={data.advertenciasTipo.map(s => s.label)}
-            datasets={[{ data: data.advertenciasTipo.map(s => s.value), backgroundColor: ["#EF4444", "#F59E0B", "#F97316", "#DC2626", "#7C3AED"] }]}
+            datasets={[{ data: data.advertenciasTipo.map(s => s.value), backgroundColor: [SEMANTIC_COLORS.negativo, SEMANTIC_COLORS.alerta, CHART_PALETTE[9], CHART_PALETTE[3], CHART_PALETTE[4]] }]}
             height={240}
           />
         </div>
@@ -227,8 +228,8 @@ export default function DashFuncionarios() {
             type="bar"
             labels={monthLabels}
             datasets={[
-              { label: "Admissões", data: admData, backgroundColor: "#22C55E" },
-              { label: "Demissões", data: demData, backgroundColor: "#EF4444" },
+              { label: "Admissões", data: admData, backgroundColor: SEMANTIC_COLORS.positivo },
+              { label: "Demissões", data: demData, backgroundColor: SEMANTIC_COLORS.negativo },
             ]}
             height={280}
           />

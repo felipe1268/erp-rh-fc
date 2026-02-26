@@ -43,7 +43,6 @@ import CipaCompleta from "./pages/CipaCompleta";
 import ModuloPJ from "./pages/ModuloPJ";
 import ContratoPJView from "./pages/ContratoPJView";
 import Revisoes from "./pages/Revisoes";
-import DixiPonto from "./pages/DixiPonto";
 import SolicitacaoHE from "./pages/SolicitacaoHE";
 import Feriados from "./pages/Feriados";
 import Dissidio from "./pages/Dissidio";
@@ -86,7 +85,6 @@ function Router() {
       <Route path={"/modulo-pj"} component={ModuloPJ} />
       <Route path={"/contrato-pj/:id"} component={ContratoPJView} />
       <Route path={"/revisoes"} component={Revisoes} />
-      <Route path={"/dixi-ponto"} component={DixiPonto} />
       <Route path={"/solicitacao-he"} component={SolicitacaoHE} />
       <Route path={"/feriados"} component={Feriados} />
       <Route path={"/dissidio"} component={Dissidio} />

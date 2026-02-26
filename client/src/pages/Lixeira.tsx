@@ -236,7 +236,7 @@ function LixeiraContent() {
       {/* Items list */}
       {filteredItems.length > 0 && (
         <div className="border rounded-lg overflow-hidden">
-          <table className="w-full">
+          <div className="overflow-x-auto"><table className="w-full">
             <thead>
               <tr className="border-b bg-muted/30">
                 <th className="w-10 p-3">
@@ -319,7 +319,7 @@ function LixeiraContent() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 

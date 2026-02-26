@@ -1,3 +1,4 @@
+import { SEMANTIC_COLORS, CHART_PALETTE } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -13,7 +14,7 @@ function fmtBRL(v: number) {
 }
 
 const RISCO_COLORS: Record<string, string> = {
-  "alto": "#EF4444", "medio": "#F59E0B", "baixo": "#22C55E", "remoto": "#6B7280",
+  "alto": SEMANTIC_COLORS.riscoAlto, "medio": SEMANTIC_COLORS.riscoMedio, "baixo": SEMANTIC_COLORS.riscoBaixo, "remoto": SEMANTIC_COLORS.riscoRemoto,
 };
 
 export default function DashJuridico() {
@@ -67,14 +68,14 @@ export default function DashJuridico() {
                 title="Processos por Status"
                 type="doughnut"
                 labels={data.porStatus.map(s => s.label)}
-                datasets={[{ data: data.porStatus.map(s => s.value), backgroundColor: ["#3B82F6", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6", "#6B7280"] }]}
+                datasets={[{ data: data.porStatus.map(s => s.value), backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[1], CHART_PALETTE[2], CHART_PALETTE[3], CHART_PALETTE[4], CHART_PALETTE[5]] }]}
                 height={240}
               />
               <DashChart
                 title="Processos por Risco"
                 type="doughnut"
                 labels={data.porRisco.map(r => r.label)}
-                datasets={[{ data: data.porRisco.map(r => r.value), backgroundColor: data.porRisco.map(r => RISCO_COLORS[r.label] || "#6B7280") }]}
+                datasets={[{ data: data.porRisco.map(r => r.value), backgroundColor: data.porRisco.map(r => RISCO_COLORS[r.label] || SEMANTIC_COLORS.neutro) }]}
                 height={240}
               />
               <DashChart
@@ -92,7 +93,7 @@ export default function DashJuridico() {
                 title="Processos por Tipo de Ação"
                 type="horizontalBar"
                 labels={data.porTipo.map(t => t.label)}
-                datasets={[{ label: "Processos", data: data.porTipo.map(t => t.value), backgroundColor: "#3B82F6" }]}
+                datasets={[{ label: "Processos", data: data.porTipo.map(t => t.value), backgroundColor: CHART_PALETTE[0] }]}
                 height={Math.max(200, data.porTipo.length * 35)}
               />
             )}
@@ -103,7 +104,7 @@ export default function DashJuridico() {
                 title="Valor em Risco por Nível"
                 type="bar"
                 labels={data.valorPorRisco.map(r => r.risco)}
-                datasets={[{ label: "Valor (R$)", data: data.valorPorRisco.map(r => r.valor), backgroundColor: data.valorPorRisco.map(r => RISCO_COLORS[r.risco] || "#6B7280") }]}
+                datasets={[{ label: "Valor (R$)", data: data.valorPorRisco.map(r => r.valor), backgroundColor: data.valorPorRisco.map(r => RISCO_COLORS[r.risco] || SEMANTIC_COLORS.neutro) }]}
                 height={260}
               />
             )}
@@ -114,7 +115,7 @@ export default function DashJuridico() {
                 title="Novos Processos por Mês (data de distribuição)"
                 type="bar"
                 labels={data.evolucaoMensal.map(r => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
-                datasets={[{ label: "Processos", data: data.evolucaoMensal.map(r => r.count), backgroundColor: "#EF4444" }]}
+                datasets={[{ label: "Processos", data: data.evolucaoMensal.map(r => r.count), backgroundColor: SEMANTIC_COLORS.negativo }]}
                 height={260}
               />
             )}
@@ -125,7 +126,7 @@ export default function DashJuridico() {
                 title="Pedidos Mais Comuns nos Processos"
                 type="horizontalBar"
                 labels={data.topPedidos.map(p => p.pedido.length > 35 ? p.pedido.slice(0, 35) + "..." : p.pedido)}
-                datasets={[{ label: "Ocorrências", data: data.topPedidos.map(p => p.count), backgroundColor: "#8B5CF6" }]}
+                datasets={[{ label: "Ocorrências", data: data.topPedidos.map(p => p.count), backgroundColor: CHART_PALETTE[4] }]}
                 height={Math.max(200, data.topPedidos.length * 30)}
               />
             )}
