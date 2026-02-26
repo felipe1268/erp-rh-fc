@@ -2184,3 +2184,27 @@ export const fornecedoresEpi = mysqlTable("fornecedores_epi", {
 	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
+
+// ============================================================
+// CONFIGURAÇÃO DE BENEFÍCIOS DE ALIMENTAÇÃO POR OBRA
+// ============================================================
+export const mealBenefitConfigs = mysqlTable("meal_benefit_configs", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	obraId: int(), // NULL = padrão da empresa
+	nome: varchar({ length: 255 }).notNull().default('Padrão'),
+	cafeManhaDia: varchar({ length: 20 }).default('0'), // valor diário café da manhã
+	lancheTardeDia: varchar({ length: 20 }).default('0'), // valor diário lanche da tarde
+	valeAlimentacaoMes: varchar({ length: 20 }).default('0'), // valor mensal VA (iFood)
+	jantaDia: varchar({ length: 20 }).default('0'), // valor diário jantar (se necessário)
+	totalVA_iFood: varchar({ length: 20 }).default('0'), // total VA mensal calculado
+	diasUteisRef: int().default(22), // dias úteis referência para cálculo
+	observacoes: text(),
+	ativo: tinyint().default(1),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("mbc_company").on(table.companyId),
+	index("mbc_obra").on(table.obraId),
+]);

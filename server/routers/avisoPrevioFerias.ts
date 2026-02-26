@@ -7,70 +7,233 @@ import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
-// CÁLCULOS CLT
+// CÁLCULOS CLT - RESCISÃO TRABALHISTA
 // ============================================================
 
-/** Calcula dias de aviso prévio proporcional (Art. 1º Lei 12.506/2011) */
-function calcularDiasAviso(anosServico: number): number {
-  // 30 dias base + 3 dias por ano (máximo 90 dias)
-  return Math.min(30 + (anosServico * 3), 90);
-}
-
-/** Calcula anos de serviço */
-function calcularAnosServico(dataAdmissao: string): number {
-  const admissao = new Date(dataAdmissao);
-  const hoje = new Date();
-  let anos = hoje.getFullYear() - admissao.getFullYear();
-  const mesAtual = hoje.getMonth();
-  const mesAdmissao = admissao.getMonth();
-  if (mesAtual < mesAdmissao || (mesAtual === mesAdmissao && hoje.getDate() < admissao.getDate())) {
+/** Calcula anos completos de serviço entre admissão e data de referência */
+function calcularAnosServico(dataAdmissao: string, dataRef?: string): number {
+  const admissao = new Date(dataAdmissao + 'T00:00:00');
+  const ref = dataRef ? new Date(dataRef + 'T00:00:00') : new Date();
+  let anos = ref.getFullYear() - admissao.getFullYear();
+  const mesRef = ref.getMonth();
+  const mesAdm = admissao.getMonth();
+  if (mesRef < mesAdm || (mesRef === mesAdm && ref.getDate() < admissao.getDate())) {
     anos--;
   }
   return Math.max(0, anos);
 }
 
+/** Calcula meses completos de serviço (para férias proporcionais) */
+function calcularMesesServico(dataAdmissao: string, dataRef?: string): number {
+  const admissao = new Date(dataAdmissao + 'T00:00:00');
+  const ref = dataRef ? new Date(dataRef + 'T00:00:00') : new Date();
+  let meses = (ref.getFullYear() - admissao.getFullYear()) * 12 + (ref.getMonth() - admissao.getMonth());
+  // Se o dia de referência é menor que o dia de admissão, subtrai 1 mês
+  if (ref.getDate() < admissao.getDate()) {
+    meses--;
+  }
+  return Math.max(0, meses);
+}
+
+/** Calcula meses trabalhados no ano corrente (para 13º proporcional) */
+function calcularMeses13o(dataAdmissao: string, dataDesligamento: string): number {
+  const admissao = new Date(dataAdmissao + 'T00:00:00');
+  const deslig = new Date(dataDesligamento + 'T00:00:00');
+  const anoDeslig = deslig.getFullYear();
+  
+  // Mês inicial: janeiro do ano OU mês de admissão (se admitido no mesmo ano)
+  const mesInicio = admissao.getFullYear() === anoDeslig ? admissao.getMonth() : 0;
+  const mesFim = deslig.getMonth();
+  
+  let meses = mesFim - mesInicio + 1;
+  
+  // Se admitido no mesmo mês e trabalhou menos de 15 dias, não conta o primeiro mês
+  if (admissao.getFullYear() === anoDeslig && admissao.getMonth() === mesInicio) {
+    const diasNoMesAdmissao = new Date(anoDeslig, mesInicio + 1, 0).getDate() - admissao.getDate() + 1;
+    if (diasNoMesAdmissao < 15) {
+      meses--;
+    }
+  }
+  
+  // Se no mês do desligamento trabalhou menos de 15 dias, não conta
+  if (deslig.getDate() < 15) {
+    meses--;
+  }
+  
+  return Math.max(0, Math.min(12, meses));
+}
+
+/** Calcula dias de aviso prévio proporcional (Art. 1º Lei 12.506/2011) */
+function calcularDiasAviso(anosServico: number): number {
+  // 30 dias base + 3 dias por ano completo (máximo 90 dias total)
+  return Math.min(30 + (anosServico * 3), 90);
+}
+
+/** Calcula dias extras do aviso prévio (Lei 12.506 - apenas os 3 dias por ano) */
+function calcularDiasExtrasAviso(anosServico: number): number {
+  return Math.min(anosServico * 3, 60); // máximo 60 dias extras (90 - 30 base)
+}
+
 /** Calcula data fim do aviso prévio */
 function calcularDataFim(dataInicio: string, diasAviso: number): string {
-  const dt = new Date(dataInicio);
+  const dt = new Date(dataInicio + 'T00:00:00');
   dt.setDate(dt.getDate() + diasAviso);
   return dt.toISOString().split("T")[0];
 }
 
-/** Estima valor da rescisão */
-function estimarRescisao(salarioBase: number, anosServico: number, mesesTrabalhadosAno: number, diasTrabalhadosMes: number, tipo: string) {
+/** Calcula meses de férias proporcionais (desde admissão ou último período aquisitivo completo) */
+function calcularMesesFeriasProporcionais(dataAdmissao: string, dataDesligamento: string): number {
+  const admissao = new Date(dataAdmissao + 'T00:00:00');
+  const deslig = new Date(dataDesligamento + 'T00:00:00');
+  
+  // Calcular quantos períodos aquisitivos completos existem
+  const mesesTotais = calcularMesesServico(dataAdmissao, dataDesligamento);
+  
+  // Meses proporcionais = meses desde o início do período aquisitivo atual
+  const mesesProporcionais = mesesTotais % 12;
+  
+  // Se mesesTotais é múltiplo de 12, significa que completou exatamente N anos
+  // Nesse caso, férias proporcionais = 0 (mas tem férias vencidas a pagar)
+  return mesesProporcionais === 0 && mesesTotais > 0 ? 12 : mesesProporcionais;
+}
+
+/** Calcula períodos de férias vencidas (não gozadas) */
+function calcularFeriasVencidas(dataAdmissao: string, dataDesligamento: string): number {
+  const mesesTotais = calcularMesesServico(dataAdmissao, dataDesligamento);
+  // Períodos completos de 12 meses = férias vencidas
+  return Math.floor(mesesTotais / 12);
+}
+
+/**
+ * CÁLCULO COMPLETO DE RESCISÃO - CLT
+ * Segue exatamente as regras da CLT e Lei 12.506/2011
+ */
+function calcularRescisaoCompleta(params: {
+  salarioBase: number;
+  dataAdmissao: string;
+  dataDesligamento: string;
+  tipo: string;
+  vrDiario: number; // valor diário do VR/VA
+  diasTrabalhadosMes: number; // dias trabalhados no mês do desligamento
+}) {
+  const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
+  
   const salarioDia = salarioBase / 30;
+  const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
+  const diasAvisoTotal = calcularDiasAviso(anosServico);
+  const diasExtrasAviso = calcularDiasExtrasAviso(anosServico);
+  
+  // ============================================================
+  // 1. SALDO DE SALÁRIO
+  // Dias trabalhados no mês do desligamento
+  // ============================================================
   const saldoSalario = salarioDia * diasTrabalhadosMes;
-  const decimoTerceiroProp = (salarioBase / 12) * mesesTrabalhadosAno;
-  const feriasProp = (salarioBase / 12) * mesesTrabalhadosAno;
-  const tercoFerias = feriasProp / 3;
   
-  // FGTS: 8% do salário por mês trabalhado (estimativa)
-  const fgtsEstimado = salarioBase * 0.08 * (anosServico * 12 + mesesTrabalhadosAno);
+  // ============================================================
+  // 2. FÉRIAS PROPORCIONAIS + 1/3 CONSTITUCIONAL
+  // Meses desde o início do período aquisitivo atual
+  // ============================================================
+  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataDesligamento);
+  const feriasProporcional = (salarioBase * mesesFerias) / 12;
+  const tercoConstitucional = feriasProporcional / 3;
+  const totalFerias = feriasProporcional + tercoConstitucional;
   
-  // Multa 40% FGTS (apenas demissão sem justa causa pelo empregador)
-  const multaFGTS = tipo.includes('empregador') ? fgtsEstimado * 0.4 : 0;
+  // ============================================================
+  // 3. FÉRIAS VENCIDAS (se houver)
+  // Períodos aquisitivos completos não gozados
+  // ============================================================
+  const periodosVencidos = Math.max(0, calcularFeriasVencidas(dataAdmissao, dataDesligamento) - 1);
+  // -1 porque o primeiro período completo gera as férias proporcionais acima
+  const feriasVencidas = periodosVencidos > 0 ? (salarioBase + salarioBase / 3) * periodosVencidos : 0;
   
-  // Aviso prévio indenizado
-  const diasAviso = calcularDiasAviso(anosServico);
-  const avisoPrevioIndenizado = tipo.includes('indenizado') ? salarioDia * diasAviso : 0;
+  // ============================================================
+  // 4. 13º SALÁRIO PROPORCIONAL
+  // Meses trabalhados no ano do desligamento (>14 dias = conta o mês)
+  // ============================================================
+  const meses13o = calcularMeses13o(dataAdmissao, dataDesligamento);
+  const decimoTerceiroProporcional = (salarioBase * meses13o) / 12;
   
-  const total = saldoSalario + decimoTerceiroProp + feriasProp + tercoFerias + multaFGTS + avisoPrevioIndenizado;
+  // ============================================================
+  // 5. AVISO PRÉVIO INDENIZADO
+  // Lei 12.506/2011: 30 dias + 3 dias por ano de serviço
+  // Se indenizado pelo empregador: paga os dias extras (3 por ano)
+  // Se trabalhado: não há valor indenizado
+  // ============================================================
+  let avisoPrevioIndenizado = 0;
+  if (tipo === 'empregador_indenizado') {
+    // Empregador indeniza o aviso completo (30 + extras)
+    avisoPrevioIndenizado = salarioDia * diasAvisoTotal;
+  } else if (tipo === 'empregador_trabalhado') {
+    // Empregador: aviso trabalhado, mas os dias extras da Lei 12.506 são indenizados
+    avisoPrevioIndenizado = salarioDia * diasExtrasAviso;
+  }
+  // Se pedido pelo empregado, não há indenização
+  
+  // ============================================================
+  // 6. VR / VALE REFEIÇÃO PROPORCIONAL
+  // Dias trabalhados no mês * valor diário
+  // ============================================================
+  const vrProporcional = vrDiario * diasTrabalhadosMes;
+  
+  // ============================================================
+  // 7. FGTS (estimativa - 8% sobre remuneração)
+  // ============================================================
+  const mesesTotais = calcularMesesServico(dataAdmissao, dataDesligamento);
+  const fgtsEstimado = salarioBase * 0.08 * mesesTotais;
+  
+  // ============================================================
+  // 8. MULTA 40% FGTS (apenas demissão sem justa causa pelo empregador)
+  // ============================================================
+  const multaFGTS = (tipo.includes('empregador')) ? fgtsEstimado * 0.4 : 0;
+  
+  // ============================================================
+  // TOTAL
+  // ============================================================
+  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional;
+  // Nota: FGTS e multa 40% são depositados na conta do FGTS, não somam no total líquido
   
   return {
+    // Dados base
+    salarioBase: salarioBase.toFixed(2),
+    salarioDia: salarioDia.toFixed(2),
+    anosServico,
+    diasAvisoTotal,
+    diasExtrasAviso,
+    diasTrabalhadosMes,
+    mesesFerias,
+    meses13o,
+    
+    // Verbas rescisórias
     saldoSalario: saldoSalario.toFixed(2),
-    decimoTerceiroProporcional: decimoTerceiroProp.toFixed(2),
-    feriasProporcional: feriasProp.toFixed(2),
-    tercoConstitucional: tercoFerias.toFixed(2),
+    feriasProporcional: feriasProporcional.toFixed(2),
+    tercoConstitucional: tercoConstitucional.toFixed(2),
+    totalFerias: totalFerias.toFixed(2),
+    feriasVencidas: feriasVencidas.toFixed(2),
+    periodosVencidos,
+    decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
+    avisoPrevioIndenizado: avisoPrevioIndenizado.toFixed(2),
+    vrProporcional: vrProporcional.toFixed(2),
+    vrDiario: vrDiario.toFixed(2),
+    
+    // FGTS (informativo)
     fgtsEstimado: fgtsEstimado.toFixed(2),
     multaFGTS: multaFGTS.toFixed(2),
-    avisoPrevioIndenizado: avisoPrevioIndenizado.toFixed(2),
+    
+    // Total
     total: total.toFixed(2),
+    
+    // Data limite pagamento (Art. 477 §6º CLT: 10 dias corridos após desligamento)
+    dataLimitePagamento: (() => {
+      const dt = new Date(dataDesligamento + 'T00:00:00');
+      dt.setDate(dt.getDate() + 10);
+      return dt.toISOString().split("T")[0];
+    })(),
   };
 }
 
 /** Calcula período aquisitivo de férias */
 function calcularPeriodosFerias(dataAdmissao: string) {
-  const admissao = new Date(dataAdmissao);
+  const admissao = new Date(dataAdmissao + 'T00:00:00');
   const hoje = new Date();
   const periodos = [];
   
@@ -155,31 +318,179 @@ export const avisoPrevioFeriasRouter = router({
         return row || null;
       }),
 
+    /** Calcular previsão de rescisão - NOVO CÁLCULO CORRETO CLT */
     calcular: protectedProcedure
-      .input(z.object({ employeeId: z.number(), tipo: z.string() }))
+      .input(z.object({
+        employeeId: z.number(),
+        tipo: z.string(),
+        dataDesligamento: z.string().optional(), // data de desligamento (default: hoje)
+        vrDiarioOverride: z.number().optional(), // override manual do VR diário
+        diasTrabalhadosOverride: z.number().optional(), // override manual dos dias trabalhados
+      }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
         
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
-        const anosServico = calcularAnosServico(dataAdmissao);
-        const diasAviso = calcularDiasAviso(anosServico);
+        const dataDesligamento = input.dataDesligamento || new Date().toISOString().split("T")[0];
         const salarioBase = parseBRL(emp.salarioBase);
+        const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
+        const diasAviso = calcularDiasAviso(anosServico);
         
-        const hoje = new Date();
-        const mesesTrabalhadosAno = hoje.getMonth() + 1;
-        const diasTrabalhadosMes = hoje.getDate();
+        // Dias trabalhados no mês do desligamento
+        const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
+        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtDeslig.getDate();
         
-        const previsao = estimarRescisao(salarioBase, anosServico, mesesTrabalhadosAno, diasTrabalhadosMes, input.tipo);
+        // VR diário: usar override, ou buscar da config de benefícios
+        let vrDiario = input.vrDiarioOverride ?? 0;
+        if (!input.vrDiarioOverride) {
+          // Buscar configuração de benefícios da obra do funcionário ou padrão da empresa
+          try {
+            const obraId = (emp as any).obraAtualId;
+            // Tentar buscar config específica da obra
+            const [configObra] = await db.execute(
+              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId = ${obraId} AND ativo = 1 LIMIT 1`
+            ) as any[];
+            
+            if (configObra && configObra.length > 0) {
+              const cfg = configObra[0];
+              const cafe = parseBRL(cfg.cafeManhaDia);
+              const lanche = parseBRL(cfg.lancheTardeDia);
+              const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+              const diasUteis = cfg.diasUteisRef || 22;
+              vrDiario = cafe + lanche + (vaMes / diasUteis);
+            } else {
+              // Buscar config padrão da empresa (obraId IS NULL)
+              const [configPadrao] = await db.execute(
+                sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
+              ) as any[];
+              
+              if (configPadrao && configPadrao.length > 0) {
+                const cfg = configPadrao[0];
+                const cafe = parseBRL(cfg.cafeManhaDia);
+                const lanche = parseBRL(cfg.lancheTardeDia);
+                const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+                const diasUteis = cfg.diasUteisRef || 22;
+                vrDiario = cafe + lanche + (vaMes / diasUteis);
+              }
+            }
+          } catch (e) {
+            // Se não encontrar config, VR = 0
+            vrDiario = 0;
+          }
+        }
+        
+        const previsao = calcularRescisaoCompleta({
+          salarioBase,
+          dataAdmissao,
+          dataDesligamento,
+          tipo: input.tipo,
+          vrDiario,
+          diasTrabalhadosMes,
+        });
         
         return {
           anosServico,
           diasAviso,
           salarioBase: salarioBase.toFixed(2),
-          dataFimEstimada: calcularDataFim(new Date().toISOString().split("T")[0], diasAviso),
+          dataAdmissao,
+          dataDesligamento,
+          dataFimEstimada: calcularDataFim(dataDesligamento, diasAviso),
           previsaoRescisao: previsao,
+          funcionario: {
+            nome: emp.nomeCompleto,
+            cargo: emp.cargo || (emp as any).funcao || '',
+            cpf: emp.cpf,
+          },
         };
+      }),
+
+    /** Buscar configuração de benefícios de alimentação */
+    getMealBenefitConfig: protectedProcedure
+      .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        try {
+          if (input.obraId) {
+            const [rows] = await db.execute(
+              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND obraId = ${input.obraId} AND ativo = 1 LIMIT 1`
+            ) as any[];
+            if (rows && rows.length > 0) return rows[0];
+          }
+          // Fallback: config padrão da empresa
+          const [rows] = await db.execute(
+            sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
+          ) as any[];
+          return rows && rows.length > 0 ? rows[0] : null;
+        } catch {
+          return null;
+        }
+      }),
+
+    /** Listar todas as configurações de benefícios de alimentação */
+    listMealBenefitConfigs: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        try {
+          const [rows] = await db.execute(
+            sql`SELECT mbc.*, o.nome as obraNome FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc.obraId = o.id WHERE mbc.companyId = ${input.companyId} ORDER BY mbc.obraId IS NULL DESC, o.nome ASC`
+          ) as any[];
+          return rows || [];
+        } catch {
+          return [];
+        }
+      }),
+
+    /** Criar/atualizar configuração de benefícios de alimentação */
+    saveMealBenefitConfig: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        companyId: z.number(),
+        obraId: z.number().nullable().optional(),
+        nome: z.string(),
+        cafeManhaDia: z.string(),
+        lancheTardeDia: z.string(),
+        valeAlimentacaoMes: z.string(),
+        jantaDia: z.string(),
+        totalVA_iFood: z.string(),
+        diasUteisRef: z.number().default(22),
+        observacoes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        if (input.id) {
+          await db.execute(
+            sql`UPDATE meal_benefit_configs SET 
+              nome = ${input.nome},
+              obraId = ${input.obraId ?? null},
+              cafeManhaDia = ${input.cafeManhaDia},
+              lancheTardeDia = ${input.lancheTardeDia},
+              valeAlimentacaoMes = ${input.valeAlimentacaoMes},
+              jantaDia = ${input.jantaDia},
+              totalVA_iFood = ${input.totalVA_iFood},
+              diasUteisRef = ${input.diasUteisRef},
+              observacoes = ${input.observacoes || null}
+            WHERE id = ${input.id}`
+          );
+          return { success: true, id: input.id };
+        } else {
+          const [result] = await db.execute(
+            sql`INSERT INTO meal_benefit_configs (companyId, obraId, nome, cafeManhaDia, lancheTardeDia, valeAlimentacaoMes, jantaDia, totalVA_iFood, diasUteisRef, observacoes)
+            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${input.observacoes || null})`
+          ) as any;
+          return { success: true, id: result.insertId };
+        }
+      }),
+
+    /** Deletar configuração de benefícios de alimentação */
+    deleteMealBenefitConfig: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.execute(sql`DELETE FROM meal_benefit_configs WHERE id = ${input.id}`);
+        return { success: true };
       }),
 
     create: protectedProcedure
@@ -188,8 +499,11 @@ export const avisoPrevioFeriasRouter = router({
         employeeId: z.number(),
         tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']),
         dataInicio: z.string(),
+        dataDesligamento: z.string().optional(),
         reducaoJornada: z.enum(['2h_dia','7_dias_corridos','nenhuma']).default('nenhuma'),
         observacoes: z.string().optional(),
+        vrDiario: z.number().optional(),
+        diasTrabalhados: z.number().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
@@ -197,15 +511,23 @@ export const avisoPrevioFeriasRouter = router({
         if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
         
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
-        const anosServico = calcularAnosServico(dataAdmissao);
+        const dataDesligamento = input.dataDesligamento || input.dataInicio;
+        const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
         const diasAviso = calcularDiasAviso(anosServico);
         const salarioBase = parseBRL(emp.salarioBase);
         const dataFim = calcularDataFim(input.dataInicio, diasAviso);
         
-        const hoje = new Date();
-        const mesesTrabalhadosAno = hoje.getMonth() + 1;
-        const diasTrabalhadosMes = hoje.getDate();
-        const previsao = estimarRescisao(salarioBase, anosServico, mesesTrabalhadosAno, diasTrabalhadosMes, input.tipo);
+        const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
+        const diasTrabalhadosMes = input.diasTrabalhados ?? dtDeslig.getDate();
+        
+        const previsao = calcularRescisaoCompleta({
+          salarioBase,
+          dataAdmissao,
+          dataDesligamento,
+          tipo: input.tipo,
+          vrDiario: input.vrDiario ?? 0,
+          diasTrabalhadosMes,
+        });
         
         const [result] = await db.insert(terminationNotices).values({
           companyId: input.companyId,
@@ -272,7 +594,6 @@ export const avisoPrevioFeriasRouter = router({
 
         const [empresa] = await db.select().from(companies).where(eq(companies.id, aviso.companyId));
 
-        // Parse previsão rescisão
         let previsao: any = {};
         try { previsao = JSON.parse(aviso.previsaoRescisao || '{}'); } catch { }
 
@@ -290,7 +611,6 @@ export const avisoPrevioFeriasRouter = router({
         };
 
         return {
-          // Dados da empresa
           empresa: {
             nome: empresa?.razaoSocial || empresa?.nomeFantasia || '',
             cnpj: empresa?.cnpj || '',
@@ -298,16 +618,14 @@ export const avisoPrevioFeriasRouter = router({
             cidade: empresa?.cidade || '',
             estado: empresa?.estado || '',
           },
-          // Dados do funcionário
           funcionario: {
             nome: emp.nomeCompleto,
             cpf: emp.cpf,
-            cargo: emp.cargo || emp.funcao || '',
+            cargo: emp.cargo || (emp as any).funcao || '',
             dataAdmissao: emp.dataAdmissao || '',
-            ctps: emp.ctps || '',
-            serieCtps: emp.serieCtps || '',
+            ctps: (emp as any).ctps || '',
+            serieCtps: (emp as any).serieCtps || '',
           },
-          // Dados do aviso
           aviso: {
             tipo: aviso.tipo,
             tipoLabel: tipoLabels[aviso.tipo] || aviso.tipo,
@@ -321,7 +639,6 @@ export const avisoPrevioFeriasRouter = router({
             status: aviso.status,
             observacoes: aviso.observacoes,
           },
-          // Previsão financeira
           previsaoRescisao: previsao,
           valorEstimadoTotal: aviso.valorEstimadoTotal,
         };
@@ -338,7 +655,6 @@ export const avisoPrevioFeriasRouter = router({
         em80dias.setDate(em80dias.getDate() + 80);
         const em80diasStr = em80dias.toISOString().split('T')[0];
 
-        // Obras ativas com previsão de fim nos próximos 80 dias
         const obrasAtivas = await db.select().from(obras)
           .where(and(
             eq(obras.companyId, input.companyId),
@@ -348,7 +664,6 @@ export const avisoPrevioFeriasRouter = router({
             sql`${obras.dataPrevisaoFim} BETWEEN ${hojeStr} AND ${em80diasStr}`,
           ));
 
-        // Buscar funcionários ativos
         const allEmps = await db.select().from(employees)
           .where(and(
             eq(employees.companyId, input.companyId),
@@ -359,7 +674,7 @@ export const avisoPrevioFeriasRouter = router({
         const result = obrasAtivas.map(obra => {
           const fimPrevisto = new Date(obra.dataPrevisaoFim! + 'T00:00:00');
           const diasRestantes = Math.ceil((fimPrevisto.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-          const funcsAlocados = allEmps.filter(e => e.obraAtualId === obra.id);
+          const funcsAlocados = allEmps.filter(e => (e as any).obraAtualId === obra.id);
 
           return {
             obraId: obra.id,
@@ -372,7 +687,7 @@ export const avisoPrevioFeriasRouter = router({
             funcionarios: funcsAlocados.map(e => ({
               id: e.id,
               nome: e.nomeCompleto,
-              cargo: e.cargo || e.funcao || '',
+              cargo: e.cargo || (e as any).funcao || '',
               dataAdmissao: e.dataAdmissao,
               anosServico: e.dataAdmissao ? calcularAnosServico(e.dataAdmissao) : 0,
               diasAvisoPrevio: e.dataAdmissao ? calcularDiasAviso(calcularAnosServico(e.dataAdmissao)) : 30,
@@ -434,7 +749,6 @@ export const avisoPrevioFeriasRouter = router({
         return rows;
       }),
 
-    /** Calendário de férias - visão mensal para fluxo de caixa */
     calendario: protectedProcedure
       .input(z.object({ companyId: z.number(), ano: z.number() }))
       .query(async ({ input }) => {
@@ -466,20 +780,15 @@ export const avisoPrevioFeriasRouter = router({
         return rows;
       }),
 
-    /** Alertas de férias vencidas e prestes a vencer */
     alertas: protectedProcedure
       .input(z.object({ companyId: z.number() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const hoje = new Date().toISOString().split("T")[0];
-        const em30dias = new Date();
-        em30dias.setDate(em30dias.getDate() + 30);
-        const em30diasStr = em30dias.toISOString().split("T")[0];
         const em60dias = new Date();
         em60dias.setDate(em60dias.getDate() + 60);
         const em60diasStr = em60dias.toISOString().split("T")[0];
         
-        // Férias vencidas (período concessivo já passou e status pendente)
         const vencidas = await db.select({
           id: vacationPeriods.id,
           employeeId: vacationPeriods.employeeId,
@@ -497,7 +806,6 @@ export const avisoPrevioFeriasRouter = router({
           sql`${vacationPeriods.periodoConcessivoFim} < ${hoje}`,
         ));
         
-        // Prestes a vencer (próximos 60 dias)
         const prestesVencer = await db.select({
           id: vacationPeriods.id,
           employeeId: vacationPeriods.employeeId,
@@ -518,7 +826,6 @@ export const avisoPrevioFeriasRouter = router({
         return { vencidas, prestesVencer };
       }),
 
-    /** Gerar períodos de férias automaticamente para um funcionário */
     gerarPeriodos: protectedProcedure
       .input(z.object({ companyId: z.number(), employeeId: z.number() }))
       .mutation(async ({ input }) => {
@@ -528,7 +835,6 @@ export const avisoPrevioFeriasRouter = router({
         
         const periodos = calcularPeriodosFerias(emp.dataAdmissao);
         
-        // Verificar quais períodos já existem
         const existentes = await db.select({ periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio })
           .from(vacationPeriods)
           .where(and(
@@ -559,13 +865,11 @@ export const avisoPrevioFeriasRouter = router({
         return { success: true, periodosGerados: criados };
       }),
 
-    /** Fluxo de caixa prévio - previsão de gastos com férias por mês */
     fluxoCaixa: protectedProcedure
       .input(z.object({ companyId: z.number(), ano: z.number() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         
-        // Buscar todos os funcionários ativos com data de admissão
         const funcs = await db.select({
           id: employees.id,
           nome: employees.nomeCompleto,
@@ -581,7 +885,6 @@ export const avisoPrevioFeriasRouter = router({
           isNull(employees.deletedAt),
         ));
         
-        // Para cada mês do ano, calcular quem tem férias vencendo
         const meses: any[] = [];
         for (let mes = 0; mes < 12; mes++) {
           const inicioMes = new Date(input.ano, mes, 1);
@@ -596,10 +899,9 @@ export const avisoPrevioFeriasRouter = router({
             for (const p of periodos) {
               if (!p.adquirido) continue;
               const fimConcessivo = new Date(p.fimConcessivo);
-              // Se o período concessivo vence neste mês ou nos próximos 2 meses
               if (fimConcessivo >= inicioMes && fimConcessivo <= new Date(input.ano, mes + 3, 0)) {
                 const salario = parseBRL(func.salario);
-                const valorFerias = salario + (salario / 3); // salário + 1/3
+                const valorFerias = salario + (salario / 3);
                 totalMes += valorFerias;
                 funcionariosNoMes.push({
                   id: func.id,
@@ -610,7 +912,7 @@ export const avisoPrevioFeriasRouter = router({
                   fimConcessivo: p.fimConcessivo,
                   vencida: p.vencida,
                 });
-                break; // Apenas o período mais urgente
+                break;
               }
             }
           }
@@ -660,10 +962,9 @@ export const avisoPrevioFeriasRouter = router({
         const valorAbono = input.abonoPecuniario ? (salario / 30) * diasAbono + ((salario / 30) * diasAbono / 3) : 0;
         const total = valorFerias + terco + valorAbono;
         
-        // Pagamento deve ser 2 dias antes do início
         let dataPagamento: string | null = null;
         if (input.dataInicio) {
-          const dt = new Date(input.dataInicio);
+          const dt = new Date(input.dataInicio + 'T00:00:00');
           dt.setDate(dt.getDate() - 2);
           dataPagamento = dt.toISOString().split("T")[0];
         }

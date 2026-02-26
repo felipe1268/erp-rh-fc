@@ -2639,3 +2639,29 @@
 - [x] Criado utilitário parseBRL() compartilhado em server/utils/parseBRL.ts
 - [x] Corrigido em 5 arquivos: avisoPrevioFerias, dissidio, sindical, fechamentoPonto, folhaPagamento
 - [x] 13 testes unitários passando para parseBRL
+
+## Fase 93b: Estrutura de Benefícios de Alimentação por Obra
+- [x] Criar tabela meal_benefits no banco (companyId, obraId, cafeManha, lancheTarde, valeAlimentacao, janta, totalVA_iFood)
+- [x] Backend: CRUD de benefícios de alimentação por obra
+- [x] Frontend: Tela de configuração nas Configurações para definir valores por obra/localidade
+- [x] Integrar valores de VR/VA no cálculo de rescisão
+
+## Fase 94: Reescrita Completa do Cálculo de Rescisão + Benefícios de Alimentação + Lei 12.506/2011
+- [x] Criar tabela meal_benefit_configs no schema Drizzle (companyId, obraId, cafeManha, lancheTarde, valeAlimentacao, janta, ativo)
+- [x] Sincronizar tabela no banco de dados (db:push)
+- [x] Reescrever completamente a lógica de cálculo de rescisão no backend (avisoPrevioFerias.ts)
+- [x] Implementar Lei 12.506/2011: aviso prévio proporcional (30 dias + 3 dias por ano de serviço, máximo 90 dias)
+- [x] Calcular saldo de salário proporcional (dias trabalhados / 30 × salário)
+- [x] Calcular férias proporcionais + 1/3 constitucional (meses trabalhados / 12 × salário × 4/3)
+- [x] Calcular férias vencidas quando aplicável (períodos aquisitivos completos)
+- [x] Calcular 13º salário proporcional (meses trabalhados no ano / 12 × salário)
+- [x] Calcular VR proporcional (VR diário × dias trabalhados no mês)
+- [x] Calcular aviso prévio indenizado (dias extras Lei 12.506 × salário diário)
+- [x] Calcular FGTS estimado e multa 40% (informativo)
+- [x] Calcular data limite de pagamento (Art. 477 §6º CLT: 10 dias corridos)
+- [x] Criar componente BeneficiosAlimentacaoTab nas Configurações (CRUD de benefícios por obra)
+- [x] Adicionar aba "Benefícios Alimentação" na página de Configurações
+- [x] Atualizar frontend do Aviso Prévio com campos: Data Desligamento, Dias Trabalhados, VR Override
+- [x] Atualizar preview de rescisão com detalhamento completo (verbas rescisórias, FGTS informativo, total)
+- [x] Atualizar seção de detalhes do aviso prévio salvo com novo layout
+- [x] Criar 23 testes unitários para validar cálculos de rescisão (todos passando)

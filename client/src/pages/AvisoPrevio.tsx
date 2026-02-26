@@ -104,13 +104,11 @@ export default function AvisoPrevio() {
       const result = await (utils as any).avisoPrevio.avisoPrevio.calcular.fetch({
         employeeId: form.employeeId,
         tipo: form.tipo,
+        dataDesligamento: form.dataDesligamento || undefined,
+        vrDiarioOverride: form.vrDiarioOverride ? parseFloat(String(form.vrDiarioOverride).replace(/\./g, '').replace(',', '.')) : undefined,
+        diasTrabalhadosOverride: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
       });
-      // Calcular data limite de pagamento (CLT Art. 477 §6º: 10 dias corridos)
-      const dataFim = result.dataFimEstimada;
-      const dtFim = new Date(dataFim + "T00:00:00");
-      dtFim.setDate(dtFim.getDate() + 10);
-      const dataPagamento = dtFim.toISOString().split("T")[0];
-      setCalculoPreview({ ...result, dataPagamento });
+      setCalculoPreview(result);
       toast.success("Previsão calculada com sucesso!");
     } catch (e: any) {
       console.error("Erro ao calcular rescisão:", e);
@@ -156,8 +154,11 @@ export default function AvisoPrevio() {
       employeeId: form.employeeId,
       tipo: form.tipo,
       dataInicio: form.dataInicio,
+      dataDesligamento: form.dataDesligamento || form.dataInicio,
       reducaoJornada: form.reducaoJornada || "nenhuma",
       observacoes: form.observacoes,
+      vrDiario: form.vrDiarioOverride ? parseFloat(String(form.vrDiarioOverride).replace(/\./g, '').replace(',', '.')) : undefined,
+      diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
     });
   };
 
@@ -399,19 +400,28 @@ export default function AvisoPrevio() {
                     <p className="text-xs text-green-600 uppercase font-semibold mb-3 flex items-center gap-1">
                       <DollarSign className="h-4 w-4" /> Previsão de Rescisão
                     </p>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="flex justify-between"><span>Saldo de Salário:</span><span className="font-medium">{formatMoeda(prev.saldoSalario)}</span></div>
-                      <div className="flex justify-between"><span>13º Proporcional:</span><span className="font-medium">{formatMoeda(prev.decimoTerceiroProporcional)}</span></div>
-                      <div className="flex justify-between"><span>Férias Proporcionais:</span><span className="font-medium">{formatMoeda(prev.feriasProporcional)}</span></div>
-                      <div className="flex justify-between"><span>1/3 Constitucional:</span><span className="font-medium">{formatMoeda(prev.tercoConstitucional)}</span></div>
-                      <div className="flex justify-between"><span>FGTS Estimado:</span><span className="font-medium">{formatMoeda(prev.fgtsEstimado)}</span></div>
-                      <div className="flex justify-between"><span>Multa 40% FGTS:</span><span className="font-medium">{formatMoeda(prev.multaFGTS)}</span></div>
-                      <div className="flex justify-between"><span>Aviso Indenizado:</span><span className="font-medium">{formatMoeda(prev.avisoPrevioIndenizado)}</span></div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Saldo de Salário ({prev.diasTrabalhadosMes} dias):</span><span className="font-semibold">{formatMoeda(prev.saldoSalario)}</span></div>
+                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Férias Prop. + 1/3 ({prev.mesesFerias} meses):</span><span className="font-semibold">{formatMoeda(prev.totalFerias)}</span></div>
+                      {parseFloat(prev.feriasVencidas) > 0 && (
+                        <div className="flex justify-between py-1 border-b border-red-100 bg-red-50 px-1 rounded"><span className="text-red-600">Férias Vencidas ({prev.periodosVencidos} per.):</span><span className="font-semibold text-red-700">{formatMoeda(prev.feriasVencidas)}</span></div>
+                      )}
+                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">VR Proporcional (R$ {prev.vrDiario}/dia × {prev.diasTrabalhadosMes}):</span><span className="font-semibold">{formatMoeda(prev.vrProporcional)}</span></div>
+                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">13º Proporcional ({prev.meses13o}/12):</span><span className="font-semibold">{formatMoeda(prev.decimoTerceiroProporcional)}</span></div>
+                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Aviso Prévio Indenizado ({prev.diasExtrasAviso} dias extras):</span><span className="font-semibold">{formatMoeda(prev.avisoPrevioIndenizado)}</span></div>
+                      <div className="mt-2 pt-1">
+                        <p className="text-[10px] text-gray-400 uppercase font-bold">FGTS (informativo)</p>
+                        <div className="flex justify-between py-0.5"><span className="text-xs text-gray-400">FGTS Estimado:</span><span className="text-xs text-gray-500">{formatMoeda(prev.fgtsEstimado)}</span></div>
+                        <div className="flex justify-between py-0.5"><span className="text-xs text-gray-400">Multa 40%:</span><span className="text-xs text-gray-500">{formatMoeda(prev.multaFGTS)}</span></div>
+                      </div>
                     </div>
-                    <div className="border-t mt-3 pt-3 flex justify-between text-lg font-bold text-green-700">
-                      <span>TOTAL ESTIMADO:</span>
+                    <div className="border-t-2 border-green-300 mt-3 pt-3 flex justify-between text-lg font-bold text-green-700">
+                      <span>TOTAL RESCISÃO:</span>
                       <span>{formatMoeda(prev.total)}</span>
                     </div>
+                    {prev.dataLimitePagamento && (
+                      <p className="text-[10px] text-red-500 mt-1 text-right">Prazo pagamento: {formatDate(prev.dataLimitePagamento)} (Art. 477 §6º CLT)</p>
+                    )}
                   </div>
                 );
               })()}
@@ -527,8 +537,8 @@ export default function AvisoPrevio() {
                   </Popover>
                 </div>
 
-                {/* Seção 2: Tipo e Data - Grid 2 colunas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Seção 2: Tipo e Datas */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <FileText className="h-4 w-4 text-amber-600" />
@@ -552,14 +562,23 @@ export default function AvisoPrevio() {
                     </label>
                     <Input type="date" className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />
                   </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-red-600" />
+                      Data de Desligamento
+                    </label>
+                    <Input type="date" className="h-12 border-2 border-gray-200 hover:border-red-300 transition-colors" value={form.dataDesligamento || ""} onChange={e => setForm({ ...form, dataDesligamento: e.target.value })} />
+                    <p className="text-[10px] text-gray-400 mt-1">Se vazio, usa a data de início</p>
+                  </div>
                 </div>
 
-                {/* Seção 3: Redução e Botão Calcular */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Seção 3: Redução, Dias Trabalhados, VR Override */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <Clock className="h-4 w-4 text-amber-600" />
-                      Redução de Jornada (Art. 488 CLT)
+                      Redução de Jornada (Art. 488)
                     </label>
                     <Select value={form.reducaoJornada || "nenhuma"} onValueChange={v => setForm({ ...form, reducaoJornada: v })}>
                       <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"><SelectValue /></SelectTrigger>
@@ -571,20 +590,50 @@ export default function AvisoPrevio() {
                     </Select>
                   </div>
 
-                  <div className="flex items-end">
-                    <Button
-                      variant="outline"
-                      className="w-full h-12 border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 font-semibold"
-                      onClick={calcularPreview}
-                      disabled={!form.employeeId || !form.tipo || calculoLoading}
-                    >
-                      {calculoLoading ? (
-                        <><Clock className="h-4 w-4 mr-2 animate-spin" /> Calculando...</>
-                      ) : (
-                        <><DollarSign className="h-4 w-4 mr-2" /> Calcular Previsão de Rescisão</>
-                      )}
-                    </Button>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                      <Timer className="h-4 w-4 text-amber-600" />
+                      Dias Trabalhados no Mês
+                    </label>
+                    <Input
+                      type="number"
+                      className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"
+                      value={form.diasTrabalhadosOverride || ""}
+                      onChange={e => setForm({ ...form, diasTrabalhadosOverride: e.target.value })}
+                      placeholder="Auto (dia do mês)"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Se vazio, usa o dia da data de desligamento</p>
                   </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-amber-600" />
+                      VR Diário (override)
+                    </label>
+                    <Input
+                      className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors"
+                      value={form.vrDiarioOverride || ""}
+                      onChange={e => setForm({ ...form, vrDiarioOverride: e.target.value })}
+                      placeholder="Auto (config benefícios)"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Se vazio, usa a config de benefícios</p>
+                  </div>
+                </div>
+
+                {/* Botão Calcular */}
+                <div>
+                  <Button
+                    variant="outline"
+                    className="w-full h-12 border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 font-semibold"
+                    onClick={calcularPreview}
+                    disabled={!form.employeeId || !form.tipo || calculoLoading}
+                  >
+                    {calculoLoading ? (
+                      <><Clock className="h-4 w-4 mr-2 animate-spin" /> Calculando...</>
+                    ) : (
+                      <><DollarSign className="h-4 w-4 mr-2" /> Calcular Previsão de Rescisão</>
+                    )}
+                  </Button>
                 </div>
 
                 {/* Seção 4: Observações */}
@@ -606,42 +655,123 @@ export default function AvisoPrevio() {
               <div className="mt-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="bg-green-100 px-6 py-3 border-b border-green-200">
                   <p className="font-bold text-green-800 flex items-center gap-2">
-                    <DollarSign className="h-5 w-5" /> Previsão de Rescisão Calculada
+                    <DollarSign className="h-5 w-5" /> Previsão de Rescisão — {calculoPreview.funcionario?.nome || ''}
+                  </p>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    Salário Base: {formatMoeda(calculoPreview.salarioBase)} | Admissão: {formatDate(calculoPreview.dataAdmissao)} | Desligamento: {formatDate(calculoPreview.dataDesligamento)}
                   </p>
                 </div>
                 <div className="p-6">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-                    <div className="text-center bg-white rounded-lg p-4 border border-green-100">
-                      <p className="text-xs text-green-600 font-medium mb-1">Anos de Serviço</p>
-                      <p className="text-2xl font-bold text-green-800">{calculoPreview.anosServico}</p>
+                  {/* Cards resumo */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+                    <div className="text-center bg-white rounded-lg p-3 border border-green-100">
+                      <p className="text-[10px] text-green-600 font-medium mb-1">Anos de Serviço</p>
+                      <p className="text-xl font-bold text-green-800">{calculoPreview.anosServico}</p>
                     </div>
-                    <div className="text-center bg-white rounded-lg p-4 border border-green-100">
-                      <p className="text-xs text-green-600 font-medium mb-1">Dias de Aviso</p>
-                      <p className="text-2xl font-bold text-green-800">{calculoPreview.diasAviso}</p>
+                    <div className="text-center bg-white rounded-lg p-3 border border-green-100">
+                      <p className="text-[10px] text-green-600 font-medium mb-1">Dias Aviso (Lei 12.506)</p>
+                      <p className="text-xl font-bold text-green-800">{calculoPreview.diasAviso}</p>
+                      <p className="text-[9px] text-green-500">30 + {calculoPreview.previsaoRescisao?.diasExtrasAviso || 0} extras</p>
                     </div>
-                    <div className="text-center bg-white rounded-lg p-4 border border-green-100">
-                      <p className="text-xs text-green-600 font-medium mb-1">Data Fim Estimada</p>
-                      <p className="text-2xl font-bold text-green-800">{formatDate(calculoPreview.dataFimEstimada)}</p>
+                    <div className="text-center bg-white rounded-lg p-3 border border-green-100">
+                      <p className="text-[10px] text-green-600 font-medium mb-1">Meses Férias</p>
+                      <p className="text-xl font-bold text-green-800">{calculoPreview.previsaoRescisao?.mesesFerias || 0}/12</p>
                     </div>
-                    <div className="text-center bg-white rounded-lg p-4 border border-red-100">
-                      <p className="text-xs text-red-600 font-medium mb-1">Data Limite Pgto</p>
-                      <p className="text-lg font-bold text-red-700">{formatDate(calculoPreview.dataPagamento)}</p>
-                      <p className="text-[10px] text-red-500 mt-1">Art. 477 §6º CLT</p>
+                    <div className="text-center bg-white rounded-lg p-3 border border-green-100">
+                      <p className="text-[10px] text-green-600 font-medium mb-1">Meses 13º</p>
+                      <p className="text-xl font-bold text-green-800">{calculoPreview.previsaoRescisao?.meses13o || 0}/12</p>
+                    </div>
+                    <div className="text-center bg-white rounded-lg p-3 border border-red-100">
+                      <p className="text-[10px] text-red-600 font-medium mb-1">Limite Pgto</p>
+                      <p className="text-lg font-bold text-red-700">{formatDate(calculoPreview.previsaoRescisao?.dataLimitePagamento)}</p>
+                      <p className="text-[9px] text-red-500">Art. 477 §6º CLT</p>
                     </div>
                   </div>
+
+                  {/* Tabela detalhada de verbas */}
                   {calculoPreview.previsaoRescisao && (
                     <div className="bg-white rounded-lg border border-green-100 p-4">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Saldo Salário:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.saldoSalario)}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">13º Proporcional:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.decimoTerceiroProporcional)}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Férias Proporcionais:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.feriasProporcional)}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">1/3 Constitucional:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.tercoConstitucional)}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Aviso Prévio Indenizado:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.avisoPrevioIndenizado)}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">FGTS Estimado:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.fgtsEstimado)}</span></div>
-                        <div className="flex justify-between py-1.5 border-b border-gray-50"><span className="text-gray-600">Multa 40% FGTS:</span><span className="font-semibold">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span></div>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Verbas Rescisórias</p>
+                      <div className="space-y-0">
+                        {/* Saldo de Salário */}
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <div>
+                            <span className="text-sm text-gray-700">Saldo de Salário</span>
+                            <span className="text-[10px] text-gray-400 ml-2">({calculoPreview.previsaoRescisao.diasTrabalhadosMes} dias)</span>
+                          </div>
+                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.saldoSalario)}</span>
+                        </div>
+
+                        {/* Férias Proporcionais + 1/3 */}
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <div>
+                            <span className="text-sm text-gray-700">Férias Proporcionais + 1/3</span>
+                            <span className="text-[10px] text-gray-400 ml-2">({calculoPreview.previsaoRescisao.mesesFerias} meses)</span>
+                          </div>
+                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.totalFerias)}</span>
+                        </div>
+                        <div className="flex justify-between py-1 pl-6 border-b border-gray-50">
+                          <span className="text-xs text-gray-400">Férias: {formatMoeda(calculoPreview.previsaoRescisao.feriasProporcional)} + 1/3: {formatMoeda(calculoPreview.previsaoRescisao.tercoConstitucional)}</span>
+                        </div>
+
+                        {/* Férias Vencidas (se houver) */}
+                        {parseFloat(calculoPreview.previsaoRescisao.feriasVencidas) > 0 && (
+                          <div className="flex justify-between py-2 border-b border-gray-100 bg-red-50">
+                            <div>
+                              <span className="text-sm text-red-700 font-medium">Férias Vencidas</span>
+                              <span className="text-[10px] text-red-400 ml-2">({calculoPreview.previsaoRescisao.periodosVencidos} período(s))</span>
+                            </div>
+                            <span className="font-semibold text-sm text-red-700">{formatMoeda(calculoPreview.previsaoRescisao.feriasVencidas)}</span>
+                          </div>
+                        )}
+
+                        {/* VR Proporcional */}
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <div>
+                            <span className="text-sm text-gray-700">VR Proporcional</span>
+                            <span className="text-[10px] text-gray-400 ml-2">(R$ {calculoPreview.previsaoRescisao.vrDiario}/dia × {calculoPreview.previsaoRescisao.diasTrabalhadosMes} dias)</span>
+                          </div>
+                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.vrProporcional)}</span>
+                        </div>
+
+                        {/* 13º Proporcional */}
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <div>
+                            <span className="text-sm text-gray-700">13º Salário Proporcional</span>
+                            <span className="text-[10px] text-gray-400 ml-2">({calculoPreview.previsaoRescisao.meses13o}/12 meses)</span>
+                          </div>
+                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.decimoTerceiroProporcional)}</span>
+                        </div>
+
+                        {/* Aviso Prévio Indenizado */}
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <div>
+                            <span className="text-sm text-gray-700">Aviso Prévio Indenizado</span>
+                            <span className="text-[10px] text-gray-400 ml-2">(Lei 12.506/2011: {calculoPreview.previsaoRescisao.diasExtrasAviso} dias extras)</span>
+                          </div>
+                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.avisoPrevioIndenizado)}</span>
+                        </div>
+
+                        {/* Separador FGTS */}
+                        <div className="pt-3 mt-2">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">FGTS (Informativo — depositado na conta FGTS)</p>
+                        </div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50 bg-gray-50 px-2 rounded">
+                          <span className="text-xs text-gray-500">FGTS Estimado (8% × {calculoPreview.previsaoRescisao.mesesFerias + calculoPreview.previsaoRescisao.meses13o} meses)</span>
+                          <span className="text-xs font-medium text-gray-500">{formatMoeda(calculoPreview.previsaoRescisao.fgtsEstimado)}</span>
+                        </div>
+                        <div className="flex justify-between py-1.5 border-b border-gray-50 bg-gray-50 px-2 rounded mt-1">
+                          <span className="text-xs text-gray-500">Multa 40% FGTS</span>
+                          <span className="text-xs font-medium text-gray-500">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span>
+                        </div>
                       </div>
-                      <div className="mt-4 pt-3 border-t-2 border-green-200 flex justify-between items-center">
-                        <span className="text-lg font-bold text-green-800">TOTAL ESTIMADO:</span>
+
+                      {/* Total */}
+                      <div className="mt-4 pt-3 border-t-2 border-green-300 flex justify-between items-center">
+                        <div>
+                          <span className="text-lg font-bold text-green-800">TOTAL RESCISÃO</span>
+                          <p className="text-[10px] text-green-600">Saldo + Férias + VR + 13º + Aviso Prévio</p>
+                        </div>
                         <span className="text-2xl font-bold text-green-700">{formatMoeda(calculoPreview.previsaoRescisao.total)}</span>
                       </div>
                     </div>
