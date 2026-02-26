@@ -2385,3 +2385,11 @@
 
 ## Fase 59: Adicionar revisões no rodapé do Hub
 - [x] Adicionar rodapé no Hub de Módulos com número de revisão do sistema (Rev. 97)
+
+## Fase 60: Campo Cor do Capacete no Cadastro de EPI
+- [x] Pesquisar tabela padrão de cores de capacetes na construção civil (NR-6/NR-18)
+- [x] Adicionar campo corCapacete no schema do banco (coluna opcional na tabela epis)
+- [x] Exibir campo de cor condicionalmente quando EPI for tipo Capacete
+- [x] Criar legenda visual ao lado do campo com cores e suas funções
+- [x] Salvar cor do capacete no banco ao cadastrar/editar EPI
+- [x] Testes unitários (9 testes passando)

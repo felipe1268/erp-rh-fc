@@ -42,6 +42,67 @@ function getEpiIcon(nome: string, className: string = "h-4 w-4") {
   return <ShieldCheck className={`${className} text-emerald-600`} />;
 }
 
+// Cores de capacete padrão construção civil (NR-6 / NR-18)
+const CORES_CAPACETE = [
+  { value: "Branco", hex: "#FFFFFF", border: "#d1d5db", funcao: "Engenheiros, Mestres de Obras, Encarregados" },
+  { value: "Azul", hex: "#2563EB", border: "#2563EB", funcao: "Pedreiros (alvenaria e estruturas)" },
+  { value: "Verde", hex: "#16A34A", border: "#16A34A", funcao: "Serventes, Operários, Téc. Segurança, Armadores" },
+  { value: "Amarelo", hex: "#EAB308", border: "#EAB308", funcao: "Visitantes" },
+  { value: "Vermelho", hex: "#DC2626", border: "#DC2626", funcao: "Carpinteiros, Bombeiros" },
+  { value: "Laranja", hex: "#EA580C", border: "#EA580C", funcao: "Eletricistas" },
+  { value: "Cinza", hex: "#6B7280", border: "#6B7280", funcao: "Estagiários, Visitantes técnicos" },
+  { value: "Marrom", hex: "#78350F", border: "#78350F", funcao: "Soldadores" },
+  { value: "Preto", hex: "#1F2937", border: "#1F2937", funcao: "Operadores de máquinas pesadas" },
+] as const;
+
+function isCapacete(nome: string) {
+  const n = (nome || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return n.includes("capacete") || n.includes("helmet");
+}
+
+// Componente de seleção de cor do capacete com legenda
+function CorCapaceteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="border border-dashed border-amber-300 rounded-lg p-3 bg-amber-50/40 space-y-3">
+      <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-1.5">
+        <HardHat className="h-4 w-4" /> Cor do Capacete
+      </h4>
+      <div className="flex flex-wrap gap-2">
+        {CORES_CAPACETE.map(cor => (
+          <button
+            key={cor.value}
+            type="button"
+            onClick={() => onChange(value === cor.value ? "" : cor.value)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+              value === cor.value
+                ? "ring-2 ring-offset-1 ring-amber-500 shadow-md scale-105"
+                : "hover:scale-105 opacity-80 hover:opacity-100"
+            }`}
+            style={{
+              backgroundColor: cor.hex + (cor.value === "Branco" ? "" : "22"),
+              border: `2px solid ${cor.border}`,
+              color: ["Branco", "Amarelo"].includes(cor.value) ? "#374151" : cor.hex === "#FFFFFF" ? "#374151" : cor.hex,
+            }}
+          >
+            <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: cor.hex, border: cor.value === "Branco" ? "1px solid #d1d5db" : "none" }} />
+            {cor.value}
+          </button>
+        ))}
+      </div>
+      {/* Legenda de funções */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 pt-1">
+        {CORES_CAPACETE.map(cor => (
+          <div key={cor.value} className="flex items-center gap-1.5 text-[10px] text-gray-600">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cor.hex, border: cor.value === "Branco" ? "1px solid #d1d5db" : "none" }} />
+            <span><strong className="text-gray-700">{cor.value}:</strong> {cor.funcao}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-amber-600 italic">Referência: NR-6 / NR-18 — Padrão de cores na construção civil</p>
+    </div>
+  );
+}
+
 export default function Epis() {
   const { selectedCompanyId, selectedCompany } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
@@ -83,6 +144,7 @@ export default function Epis() {
     categoria: "EPI" as "EPI" | "Uniforme" | "Calcado",
     tamanho: "",
     quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "",
+    corCapacete: "",
   });
 
   // CNPJ fornecedor lookup
@@ -225,7 +287,7 @@ export default function Epis() {
   };
 
   function resetEpiForm() {
-    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "" }); setCnpjResult(null);
+    setEpiForm({ nome: "", ca: "", validadeCa: "", fabricante: "", fornecedor: "", fornecedorCnpj: "", fornecedorContato: "", fornecedorTelefone: "", fornecedorEmail: "", fornecedorEndereco: "", categoria: "EPI", tamanho: "", quantidadeEstoque: 0, valorProduto: "", tempoMinimoTroca: "", corCapacete: "" }); setCnpjResult(null);
     setAiSuggestion(null);
     setAiSuggestionLoading(false);
     setCaLookupResult(null);
@@ -381,6 +443,7 @@ export default function Epis() {
       quantidadeEstoque: epi.quantidadeEstoque ?? 0,
       valorProduto: epi.valorProduto ? String(parseFloat(String(epi.valorProduto))) : "",
       tempoMinimoTroca: epi.tempoMinimoTroca ? String(epi.tempoMinimoTroca) : "",
+      corCapacete: epi.corCapacete || "",
     });
     setCaLookupResult(null);
     setCnpjResult(null);
@@ -409,6 +472,9 @@ export default function Epis() {
                 <Input value={epiForm.nome} onChange={e => setEpiForm(f => ({ ...f, nome: e.target.value }))}
                   placeholder="Ex: Capacete de Segurança, Luva de Proteção..." />
               </div>
+              {isCapacete(epiForm.nome) && (
+                <CorCapaceteField value={epiForm.corCapacete} onChange={v => setEpiForm(f => ({ ...f, corCapacete: v }))} />
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label>Número do CA</Label>
@@ -614,6 +680,7 @@ export default function Epis() {
                     quantidadeEstoque: epiForm.quantidadeEstoque,
                     valorProduto: epiForm.valorProduto ? parseFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
+                    corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
                   });
                 }} disabled={updateEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {updateEpiMut.isPending ? "Salvando..." : "Salvar Alterações"}
@@ -648,6 +715,9 @@ export default function Epis() {
                 <Input value={epiForm.nome} onChange={e => setEpiForm(f => ({ ...f, nome: e.target.value }))}
                   placeholder="Ex: Capacete de Segurança, Luva de Proteção..." />
               </div>
+              {isCapacete(epiForm.nome) && (
+                <CorCapaceteField value={epiForm.corCapacete} onChange={v => setEpiForm(f => ({ ...f, corCapacete: v }))} />
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label>Número do CA</Label>
@@ -853,6 +923,7 @@ export default function Epis() {
                     quantidadeEstoque: epiForm.quantidadeEstoque,
                     valorProduto: epiForm.valorProduto ? parseFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
+                    corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
                   });
                 }} disabled={createEpiMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {createEpiMut.isPending ? "Salvando..." : "Cadastrar EPI"}
@@ -1401,6 +1472,12 @@ export default function Epis() {
                                 <div>
                                   <span className="font-medium hover:underline">{epi.nome}</span>
                                   {epi.fabricante && <span className="text-xs text-muted-foreground ml-1">({epi.fabricante})</span>}
+                                  {epi.corCapacete && isCapacete(epi.nome) && (
+                                    <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 border border-amber-200 text-amber-700">
+                                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CORES_CAPACETE.find(c => c.value === epi.corCapacete)?.hex || '#999' }} />
+                                      {epi.corCapacete}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </td>

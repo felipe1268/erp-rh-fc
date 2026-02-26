@@ -1,0 +1,1 @@
+ALTER TABLE `epis` ADD `cor_capacete` varchar(30);
