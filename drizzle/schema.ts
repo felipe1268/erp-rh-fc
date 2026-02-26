@@ -2150,6 +2150,25 @@ export const userCompanies = mysqlTable("user_companies", {
 	index("uc_company").on(table.companyId),
 ]);
 
+// ============================================================
+// PERMISSÕES GRANULARES POR MÓDULO E FUNCIONALIDADE
+// Define quais módulos e funcionalidades cada usuário pode acessar
+// Admin Master ignora essas restrições (acesso total)
+// ============================================================
+export const userPermissions = mysqlTable("user_permissions", {
+	id: int().autoincrement().notNull(),
+	userId: int().notNull(),
+	moduleId: varchar({ length: 50 }).notNull(), // 'rh-dp', 'sst', 'juridico'
+	featureKey: varchar({ length: 100 }).notNull(), // 'colaboradores', 'folha-pagamento', etc.
+	canAccess: tinyint().default(1).notNull(), // 1 = pode acessar, 0 = bloqueado
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("up_user").on(table.userId),
+	index("up_module").on(table.moduleId),
+	index("up_user_module").on(table.userId, table.moduleId),
+]);
+
 export const fornecedoresEpi = mysqlTable("fornecedores_epi", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),

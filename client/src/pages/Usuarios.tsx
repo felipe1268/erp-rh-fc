@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import { PROFILE_TYPES, ERP_MODULES, MODULE_KEYS, DEFAULT_PERMISSIONS } from "../../../shared/modules";
+import { PROFILE_TYPES, ERP_MODULES, MODULE_KEYS, DEFAULT_PERMISSIONS, MODULE_DEFINITIONS, type ActiveModuleId } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
 
 const profileLabels: Record<string, string> = {
@@ -68,6 +68,8 @@ export default function Usuarios() {
 
   // Empresas vinculadas (novo usuário)
   const [newCompanyIds, setNewCompanyIds] = useState<number[]>([]);
+  // Permissões granulares (novo usuário)
+  const [newModulePerms, setNewModulePerms] = useState<Record<string, Record<string, boolean>>>({});
 
   // Edit user states
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -77,6 +79,9 @@ export default function Usuarios() {
   const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState("user");
   const [editCompanyIds, setEditCompanyIds] = useState<number[]>([]);
+  // Permissões granulares (edição)
+  const [editModulePerms, setEditModulePerms] = useState<Record<string, Record<string, boolean>>>({});
+  const [editPermsLoaded, setEditPermsLoaded] = useState(false);
 
   // Profile states
   const [createProfileOpen, setCreateProfileOpen] = useState(false);
@@ -138,12 +143,34 @@ export default function Usuarios() {
     }
   }, [editingProfileType]);
 
+  // Carregar permissões do usuário ao abrir edição
+  const editUserPermsQuery = trpc.userManagement.getUserPermissions.useQuery(
+    { userId: editingUser?.id ?? 0 },
+    { enabled: !!editingUser && editingUser.role !== 'admin_master' && !editPermsLoaded }
+  );
+
+  useEffect(() => {
+    if (editUserPermsQuery.data && editingUser && !editPermsLoaded) {
+      const permsMap: Record<string, Record<string, boolean>> = {};
+      for (const p of editUserPermsQuery.data) {
+        if (!permsMap[p.moduleId]) permsMap[p.moduleId] = {};
+        permsMap[p.moduleId][p.featureKey] = p.canAccess;
+      }
+      setEditModulePerms(permsMap);
+      setEditPermsLoaded(true);
+    }
+  }, [editUserPermsQuery.data, editingUser, editPermsLoaded]);
+
   // Mutations - User CRUD
   const createUserMutation = trpc.userManagement.createLocalUser.useMutation({
     onSuccess: (data) => {
       toast.success(`Usuário ${data.username} criado! Senha padrão: ${data.defaultPassword}`);
+      // Salvar permissões de módulos se não for admin_master
+      if (newRole !== 'admin_master' && Object.keys(newModulePerms).length > 0) {
+        saveUserPermsFromState(data.id, newModulePerms);
+      }
       setShowCreateUser(false);
-      setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewProfileType(""); setNewCompanyIds([]);
+      setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewProfileType(""); setNewCompanyIds([]); setNewModulePerms({});
       usersQuery.refetch();
     },
     onError: (err) => toast.error(err.message),
@@ -208,6 +235,42 @@ export default function Usuarios() {
     onSuccess: () => { toast.success("Empresas do usuário atualizadas!"); usersQuery.refetch(); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
+
+  const setUserPermsMut = trpc.userManagement.setUserPermissions.useMutation({
+    onSuccess: () => { toast.success("Permissões de módulos atualizadas!"); },
+    onError: (e) => toast.error("Erro ao salvar permissões: " + e.message),
+  });
+
+  // Helper: toggle module perm
+  const toggleModulePerm = (perms: Record<string, Record<string, boolean>>, setPerms: (v: Record<string, Record<string, boolean>>) => void, moduleId: string, featureKey: string) => {
+    const current = perms[moduleId]?.[featureKey] ?? false;
+    setPerms({ ...perms, [moduleId]: { ...perms[moduleId], [featureKey]: !current } });
+  };
+
+  const toggleAllModuleFeatures = (perms: Record<string, Record<string, boolean>>, setPerms: (v: Record<string, Record<string, boolean>>) => void, moduleId: string, enable: boolean) => {
+    const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
+    if (!mod) return;
+    const updated = { ...perms };
+    updated[moduleId] = {};
+    for (const f of mod.features) {
+      updated[moduleId][f.key] = enable;
+    }
+    setPerms(updated);
+  };
+
+  const saveUserPermsFromState = (userId: number, permsState: Record<string, Record<string, boolean>>) => {
+    const permsList: { moduleId: string; featureKey: string; canAccess: boolean }[] = [];
+    for (const mod of MODULE_DEFINITIONS) {
+      for (const feat of mod.features) {
+        permsList.push({
+          moduleId: mod.id,
+          featureKey: feat.key,
+          canAccess: permsState[mod.id]?.[feat.key] ?? false,
+        });
+      }
+    }
+    setUserPermsMut.mutate({ userId, permissions: permsList });
+  };
 
   // Handlers
   const handleCreateUser = () => {
@@ -415,7 +478,7 @@ export default function Usuarios() {
                             <td className="py-3">
                               <div className="flex items-center gap-1 flex-wrap">
                                 <Button size="sm" variant="outline" className="text-xs h-7 px-2" title="Editar"
-                                  onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); setEditPassword(""); setEditRole(u.role || "user"); setEditCompanyIds(u.companyIds || []); }}>
+                                  onClick={() => { setEditingUser(u); setEditName(u.name || ""); setEditEmail(u.email || ""); setEditUsername(u.username || ""); setEditPassword(""); setEditRole(u.role || "user"); setEditCompanyIds(u.companyIds || []); setEditModulePerms({}); setEditPermsLoaded(false); }}>
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                                 {u.loginMethod === "local" && (
@@ -769,7 +832,56 @@ export default function Usuarios() {
               <div className="border-t pt-3">
                 <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
                   <Building2 className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm text-purple-700">Admin Master tem acesso automático a todas as empresas.</span>
+                  <span className="text-sm text-purple-700">Admin Master tem acesso automático a todas as empresas e módulos.</span>
+                </div>
+              </div>
+            )}
+            {/* Seletor de Módulos e Funcionalidades */}
+            {newRole !== 'admin_master' && (
+              <div className="border-t pt-3">
+                <label className="text-sm font-medium flex items-center gap-1 mb-1">
+                  <Shield className="h-3.5 w-3.5" /> Módulos e Funcionalidades
+                </label>
+                <p className="text-xs text-muted-foreground mb-3">Defina quais módulos e funcionalidades este usuário pode acessar no sistema.</p>
+                <div className="space-y-3">
+                  {MODULE_DEFINITIONS.map(mod => {
+                    const moduleColor = mod.color === 'blue' ? 'blue' : mod.color === 'green' ? 'green' : 'amber';
+                    const allEnabled = mod.features.every(f => newModulePerms[mod.id]?.[f.key]);
+                    const someEnabled = mod.features.some(f => newModulePerms[mod.id]?.[f.key]);
+                    return (
+                      <div key={mod.id} className={`rounded-lg border ${someEnabled ? `border-${moduleColor}-300 bg-${moduleColor}-50/50` : 'border-border bg-secondary/20'}`}>
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={allEnabled}
+                              onCheckedChange={(checked) => toggleAllModuleFeatures(newModulePerms, setNewModulePerms, mod.id, !!checked)}
+                            />
+                            <span className="text-sm font-semibold">{mod.label}</span>
+                            <span className="text-xs text-muted-foreground">({mod.description})</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {mod.features.filter(f => newModulePerms[mod.id]?.[f.key]).length}/{mod.features.length}
+                          </span>
+                        </div>
+                        {someEnabled && (
+                          <div className="px-3 pb-3 grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                            {mod.features.map(feat => (
+                              <label key={feat.key} className={`flex items-center gap-1.5 text-xs p-1.5 rounded cursor-pointer transition-colors ${
+                                newModulePerms[mod.id]?.[feat.key] ? 'bg-white/70 font-medium' : 'text-muted-foreground hover:bg-white/40'
+                              }`}>
+                                <Checkbox
+                                  checked={newModulePerms[mod.id]?.[feat.key] ?? false}
+                                  onCheckedChange={() => toggleModulePerm(newModulePerms, setNewModulePerms, mod.id, feat.key)}
+                                  className="h-3.5 w-3.5"
+                                />
+                                {feat.label}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -878,7 +990,56 @@ export default function Usuarios() {
               <div className="border-t pt-3">
                 <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
                   <Building2 className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm text-purple-700">Admin Master tem acesso automático a todas as empresas.</span>
+                  <span className="text-sm text-purple-700">Admin Master tem acesso automático a todas as empresas e módulos.</span>
+                </div>
+              </div>
+            )}
+            {/* Seletor de Módulos e Funcionalidades na Edição */}
+            {editRole !== 'admin_master' && editingUser?.role !== 'admin_master' && (
+              <div className="border-t pt-3">
+                <label className="text-sm font-medium flex items-center gap-1 mb-1">
+                  <Shield className="h-3.5 w-3.5" /> Módulos e Funcionalidades
+                </label>
+                <p className="text-xs text-muted-foreground mb-3">Defina quais módulos e funcionalidades este usuário pode acessar.</p>
+                <div className="space-y-3">
+                  {MODULE_DEFINITIONS.map(mod => {
+                    const moduleColor = mod.color === 'blue' ? 'blue' : mod.color === 'green' ? 'green' : 'amber';
+                    const allEnabled = mod.features.every(f => editModulePerms[mod.id]?.[f.key]);
+                    const someEnabled = mod.features.some(f => editModulePerms[mod.id]?.[f.key]);
+                    return (
+                      <div key={mod.id} className={`rounded-lg border ${someEnabled ? `border-${moduleColor}-300 bg-${moduleColor}-50/50` : 'border-border bg-secondary/20'}`}>
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={allEnabled}
+                              onCheckedChange={(checked) => toggleAllModuleFeatures(editModulePerms, setEditModulePerms, mod.id, !!checked)}
+                            />
+                            <span className="text-sm font-semibold">{mod.label}</span>
+                            <span className="text-xs text-muted-foreground">({mod.description})</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {mod.features.filter(f => editModulePerms[mod.id]?.[f.key]).length}/{mod.features.length}
+                          </span>
+                        </div>
+                        {someEnabled && (
+                          <div className="px-3 pb-3 grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                            {mod.features.map(feat => (
+                              <label key={feat.key} className={`flex items-center gap-1.5 text-xs p-1.5 rounded cursor-pointer transition-colors ${
+                                editModulePerms[mod.id]?.[feat.key] ? 'bg-white/70 font-medium' : 'text-muted-foreground hover:bg-white/40'
+                              }`}>
+                                <Checkbox
+                                  checked={editModulePerms[mod.id]?.[feat.key] ?? false}
+                                  onCheckedChange={() => toggleModulePerm(editModulePerms, setEditModulePerms, mod.id, feat.key)}
+                                  className="h-3.5 w-3.5"
+                                />
+                                {feat.label}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -905,6 +1066,10 @@ export default function Usuarios() {
               // Salvar empresas vinculadas
               if (isAdmin && editRole !== 'admin_master') {
                 setUserCompaniesMut.mutate({ userId: editingUser.id, companyIds: editCompanyIds });
+              }
+              // Salvar permissões de módulos
+              if (editRole !== 'admin_master' && Object.keys(editModulePerms).length > 0) {
+                saveUserPermsFromState(editingUser.id, editModulePerms);
               }
             }} disabled={updateUserMutation.isPending}>
               {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}

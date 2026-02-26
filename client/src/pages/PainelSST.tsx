@@ -1,0 +1,240 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
+import {
+  Shield, HardHat, HeartPulse, FileWarning, AlertTriangle,
+  ChevronRight, BarChart3, ShieldCheck, ClipboardList, Activity,
+  Clock, Users
+} from "lucide-react";
+import { formatDateTime } from "@/lib/dateUtils";
+import { useLocation } from "wouter";
+import { useCompany } from "@/contexts/CompanyContext";
+
+export default function PainelSST() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+
+  const { data: homeData, isLoading } = trpc.home.getData.useQuery(
+    { companyId: companyId! },
+    { enabled: !!companyId }
+  );
+  const { data: logs } = trpc.audit.list.useQuery(
+    { companyId, limit: 6 },
+    { enabled: !!companyId }
+  );
+
+  const s = homeData?.stats;
+  const totalAlertasSST = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0);
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <Shield className="h-4 w-4 text-emerald-600" />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">Painel SST</h1>
+            </div>
+            <p className="text-muted-foreground text-sm">
+              Saúde e Segurança do Trabalho
+            </p>
+          </div>
+          {totalAlertasSST > 0 ? (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <span className="text-sm font-semibold text-red-700">{totalAlertasSST} alerta{totalAlertasSST !== 1 ? "s" : ""} de SST</span>
+            </div>
+          ) : null}
+        </div>
+
+        {companyId ? (
+          isLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i} className="animate-pulse"><CardContent className="p-4 h-24" /></Card>
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* KPI Cards - SST */}
+              <div>
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Indicadores de Segurança</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} />
+                  <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} />
+                  <KpiCard title="Sem ASO" value={s?.semAso ?? 0} icon={AlertTriangle} color="yellow" onClick={() => navigate("/controle-documentos")} />
+                  <KpiCard title="Total Colaboradores" value={s?.totalFuncionarios ?? 0} icon={Users} color="blue" onClick={() => navigate("/colaboradores")} />
+                </div>
+              </div>
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* ASOs com Alerta */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <HeartPulse className="h-4 w-4 text-red-500" />
+                        ASOs - Atenção Necessária
+                        {(s?.asosVencidos ?? 0) > 0 ? <Badge variant="destructive" className="text-[10px]">{s!.asosVencidos} vencido{s!.asosVencidos !== 1 ? "s" : ""}</Badge> : null}
+                      </CardTitle>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/controle-documentos")}>
+                        Ver todos <ChevronRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {!homeData?.asosAlerta?.length && !homeData?.semAso?.length ? (
+                      <div className="flex flex-col items-center py-6">
+                        <ShieldCheck className="h-10 w-10 text-green-400 mb-2" />
+                        <p className="text-sm font-medium text-green-600">Todos os ASOs estão em dia!</p>
+                        <p className="text-xs text-muted-foreground">Nenhuma pendência encontrada</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {homeData?.asosAlerta?.slice(0, 10).map((a: any) => (
+                          <div key={a.employeeId} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${a.vencido ? "bg-red-50 border border-red-200" : a.diasRestantes <= 15 ? "bg-orange-50" : ""}`}>
+                            <span className="font-medium">{a.nome}</span>
+                            <span className={`font-mono text-[10px] ${a.vencido ? "text-red-600 font-bold" : a.diasRestantes <= 15 ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
+                              {a.vencido ? `Vencido há ${Math.abs(a.diasRestantes)}d` : `${a.diasRestantes}d restantes`}
+                            </span>
+                          </div>
+                        ))}
+                        {(homeData?.semAso?.length ?? 0) > 0 ? (
+                          <div className="mt-2 pt-2 border-t">
+                            <p className="text-[10px] text-red-600 font-semibold mb-1">{homeData!.semAso!.length} sem ASO cadastrado:</p>
+                            {homeData!.semAso!.slice(0, 5).map((e: any) => <div key={e.id} className="text-xs text-muted-foreground pl-2">{e.nome}</div>)}
+                            {homeData!.semAso!.length > 5 ? <div className="text-[10px] text-muted-foreground pl-2">e mais {homeData!.semAso!.length - 5}...</div> : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Advertências Recentes (disciplinar/segurança) */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-orange-500" />
+                      Ocorrências de Segurança
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {(homeData?.advertenciasRecentes?.length ?? 0) > 0 ? (
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {homeData!.advertenciasRecentes!.map((a: any) => (
+                          <div key={a.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded hover:bg-accent/50">
+                            <span className="font-medium">{a.nome}</span>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px]">{a.tipo}</Badge>
+                              <span className="text-muted-foreground text-[10px]">{a.data ? new Date(a.data + "T00:00:00").toLocaleDateString("pt-BR") : ""}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Nenhuma ocorrência recente</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Atividade Recente */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-emerald-500" />
+                      Atividade Recente - SST
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!logs || logs.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhuma atividade registrada</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {logs.map((log: any) => (
+                        <div key={log.id} className="flex items-start gap-2 text-xs">
+                          <div className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${log.action === "DELETE" ? "bg-red-500" : log.action === "CREATE" ? "bg-green-500" : "bg-blue-500"}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-foreground truncate">{log.details}</p>
+                            <p className="text-[10px] text-muted-foreground">{log.userName} · {formatDateTime(log.createdAt)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Acesso Rápido SST */}
+              <div>
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido - SST</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {[
+                    { label: "EPIs", icon: HardHat, path: "/epis", color: "text-emerald-600" },
+                    { label: "ASOs / Documentos", icon: HeartPulse, path: "/controle-documentos", color: "text-red-600" },
+                    { label: "CIPA", icon: ShieldCheck, path: "/cipa", color: "text-blue-600" },
+                    { label: "Dashboards", icon: BarChart3, path: "/dashboards/epis", color: "text-purple-600" },
+                  ].map(item => (
+                    <button key={item.path} onClick={() => navigate(item.path)} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border hover:bg-accent/50 hover:shadow-sm transition-all text-left">
+                      <item.icon className={`h-4 w-4 ${item.color} shrink-0`} />
+                      <span className="text-xs font-medium">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )
+        ) : (
+          <Card className="bg-card border-border">
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <Shield className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Selecione uma empresa</h3>
+              <p className="text-muted-foreground text-sm text-center max-w-md">Selecione uma empresa no seletor acima para visualizar o painel de SST.</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}
+
+// KPI Card
+const COLOR_MAP: Record<string, { bg: string; icon: string; border: string; text: string }> = {
+  blue: { bg: "bg-blue-50", icon: "text-blue-600", border: "border-l-blue-500", text: "text-blue-600" },
+  green: { bg: "bg-green-50", icon: "text-green-600", border: "border-l-green-500", text: "text-green-600" },
+  yellow: { bg: "bg-yellow-50", icon: "text-yellow-600", border: "border-l-yellow-500", text: "text-yellow-600" },
+  red: { bg: "bg-red-50", icon: "text-red-600", border: "border-l-red-500", text: "text-red-600" },
+  orange: { bg: "bg-orange-50", icon: "text-orange-600", border: "border-l-orange-500", text: "text-orange-600" },
+  emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", border: "border-l-emerald-500", text: "text-emerald-600" },
+};
+
+function KpiCard({ title, value, icon: Icon, color, onClick, alert }: {
+  title: string; value: number; icon: any; color: string; onClick?: () => void; alert?: boolean;
+}) {
+  const c = COLOR_MAP[color] || COLOR_MAP.blue;
+  return (
+    <Card className={`border-l-4 ${c.border} hover:shadow-md transition-shadow cursor-pointer ${alert ? "ring-2 ring-red-300 animate-pulse" : ""}`} onClick={onClick}>
+      <CardContent className="p-3 flex flex-col gap-2">
+        <div className={`h-8 w-8 rounded-lg ${c.bg} flex items-center justify-center shrink-0`}>
+          <Icon className={`h-4 w-4 ${c.icon}`} />
+        </div>
+        <div>
+          <p className={`text-2xl font-bold ${c.text}`}>{value}</p>
+          <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{title}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

@@ -62,3 +62,113 @@ export const EMPLOYEE_STATUS = [
 ] as const;
 
 export type EmployeeStatus = typeof EMPLOYEE_STATUS[number]["value"];
+
+// ============================================================
+// MAPA DE MÓDULOS E FUNCIONALIDADES GRANULARES
+// Usado para controle de acesso por usuário na sidebar e rotas
+// ============================================================
+
+export type ActiveModuleId = "rh-dp" | "sst" | "juridico";
+
+export interface ModuleFeature {
+  key: string;
+  label: string;
+  route: string;
+  icon?: string;
+}
+
+export interface ModuleDefinition {
+  id: ActiveModuleId;
+  label: string;
+  description: string;
+  color: string;
+  icon: string;
+  features: ModuleFeature[];
+}
+
+export const MODULE_DEFINITIONS: ModuleDefinition[] = [
+  {
+    id: "rh-dp",
+    label: "RH & DP",
+    description: "Recursos Humanos e Departamento Pessoal",
+    color: "blue",
+    icon: "Users",
+    features: [
+      { key: "colaboradores", label: "Colaboradores", route: "/colaboradores", icon: "Users" },
+      { key: "fechamento-ponto", label: "Fechamento de Ponto", route: "/fechamento-ponto", icon: "Clock" },
+      { key: "folha-pagamento", label: "Folha de Pagamento", route: "/folha-pagamento", icon: "FileText" },
+      { key: "controle-documentos", label: "Controle de Documentos", route: "/controle-documentos", icon: "FileCheck" },
+      { key: "vale-alimentacao", label: "Vale Alimentação", route: "/vale-alimentacao", icon: "UtensilsCrossed" },
+      { key: "ferias", label: "Férias", route: "/ferias", icon: "Palmtree" },
+      { key: "aviso-previo", label: "Aviso Prévio", route: "/aviso-previo", icon: "Bell" },
+      { key: "dissidio", label: "Dissídio", route: "/dissidio", icon: "TrendingUp" },
+      { key: "modulo-pj", label: "Módulo PJ", route: "/modulo-pj", icon: "Briefcase" },
+      { key: "solicitacao-he", label: "Solicitação de HE", route: "/solicitacao-he", icon: "ClipboardList" },
+      { key: "dixi-ponto", label: "Dixi Ponto", route: "/dixi-ponto", icon: "Wifi" },
+      { key: "contas-bancarias", label: "Contas Bancárias", route: "/contas-bancarias", icon: "Landmark" },
+      { key: "feriados", label: "Feriados", route: "/feriados", icon: "Calendar" },
+      { key: "relogios-ponto", label: "Relógios de Ponto", route: "/relogios-ponto", icon: "Wifi" },
+    ],
+  },
+  {
+    id: "sst",
+    label: "SST",
+    description: "Saúde e Segurança do Trabalho",
+    color: "green",
+    icon: "Shield",
+    features: [
+      { key: "epis", label: "EPIs", route: "/epis", icon: "HardHat" },
+      { key: "cipa", label: "CIPA", route: "/cipa", icon: "ShieldCheck" },
+      { key: "controle-documentos-sst", label: "ASOs / Documentos", route: "/controle-documentos", icon: "HeartPulse" },
+    ],
+  },
+  {
+    id: "juridico",
+    label: "Jurídico",
+    description: "Departamento Jurídico",
+    color: "amber",
+    icon: "Scale",
+    features: [
+      { key: "processos-trabalhistas", label: "Processos Trabalhistas", route: "/processos-trabalhistas", icon: "Gavel" },
+    ],
+  },
+];
+
+// Itens compartilhados (aparecem em todos os módulos)
+export const SHARED_FEATURES: ModuleFeature[] = [
+  { key: "empresas", label: "Empresas", route: "/empresas", icon: "Building2" },
+  { key: "obras", label: "Obras", route: "/obras", icon: "Landmark" },
+  { key: "setores", label: "Setores", route: "/setores", icon: "Layers" },
+  { key: "funcoes", label: "Funções", route: "/funcoes", icon: "Grid3X3" },
+];
+
+// Itens de administração (só admin/admin_master)
+export const ADMIN_FEATURES: ModuleFeature[] = [
+  { key: "usuarios", label: "Usuários", route: "/usuarios", icon: "UserCog" },
+  { key: "configuracoes", label: "Configurações", route: "/configuracoes", icon: "Settings" },
+  { key: "auditoria", label: "Auditoria", route: "/auditoria", icon: "Eye" },
+  { key: "lixeira", label: "Lixeira", route: "/lixeira", icon: "Trash2" },
+  { key: "revisoes", label: "Revisões", route: "/revisoes", icon: "History" },
+];
+
+// Helper: obter definição de um módulo
+export function getModuleDefinition(moduleId: ActiveModuleId): ModuleDefinition | undefined {
+  return MODULE_DEFINITIONS.find(m => m.id === moduleId);
+}
+
+// Helper: obter todas as feature keys de um módulo
+export function getModuleFeatureKeys(moduleId: ActiveModuleId): string[] {
+  const mod = getModuleDefinition(moduleId);
+  return mod ? mod.features.map(f => f.key) : [];
+}
+
+// Helper: obter todos os módulos e features como lista plana
+export function getAllModuleFeatures(): { moduleId: ActiveModuleId; featureKey: string; label: string }[] {
+  const result: { moduleId: ActiveModuleId; featureKey: string; label: string }[] = [];
+  for (const mod of MODULE_DEFINITIONS) {
+    for (const feat of mod.features) {
+      result.push({ moduleId: mod.id, featureKey: feat.key, label: `${mod.label} > ${feat.label}` });
+    }
+  }
+  return result;
+}

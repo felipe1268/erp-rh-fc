@@ -40,6 +40,8 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useModule, ModuleId, MODULE_LABELS } from "@/contexts/ModuleContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
+import { MODULE_DEFINITIONS, type ActiveModuleId } from "../../../shared/modules";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // ========== MENU DEFINITIONS PER MODULE ==========
@@ -63,7 +65,7 @@ const menuSectionsRHDP: MenuSection[] = [
   {
     title: "Principal",
     items: [
-      { icon: LayoutDashboard, label: "Painel", path: "/painel" },
+      { icon: LayoutDashboard, label: "Painel RH", path: "/painel/rh" },
     ],
   },
   {
@@ -133,15 +135,7 @@ const menuSectionsSST: MenuSection[] = [
   {
     title: "Principal",
     items: [
-      { icon: LayoutDashboard, label: "Painel", path: "/painel" },
-    ],
-  },
-  {
-    title: "Cadastro",
-    items: [
-      { icon: Building2, label: "Empresas", path: "/empresas" },
-      { icon: Users, label: "Colaboradores", path: "/colaboradores" },
-      { icon: Landmark, label: "Obras", path: "/obras" },
+      { icon: LayoutDashboard, label: "Painel SST", path: "/painel/sst" },
     ],
   },
   {
@@ -164,15 +158,7 @@ const menuSectionsJuridico: MenuSection[] = [
   {
     title: "Principal",
     items: [
-      { icon: LayoutDashboard, label: "Painel", path: "/painel" },
-    ],
-  },
-  {
-    title: "Cadastro",
-    items: [
-      { icon: Building2, label: "Empresas", path: "/empresas" },
-      { icon: Users, label: "Colaboradores", path: "/colaboradores" },
-      { icon: Landmark, label: "Obras", path: "/obras" },
+      { icon: LayoutDashboard, label: "Painel Jurídico", path: "/painel/juridico" },
     ],
   },
   {
@@ -349,11 +335,23 @@ function DashboardLayoutContent({
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'admin_master';
   const isMasterUser = user?.role === 'admin_master';
+  const { isAdminMaster: permIsAdminMaster, canAccessFeature, canAccessModule, accessibleModules } = usePermissions();
 
   // Paths restritos por nível de acesso
   const adminOnlyPaths = ['/usuarios', '/auditoria', '/configuracoes', '/lixeira'];
 
-  // Build the effective sections based on active module
+  // Mapear rotas para feature keys por módulo (para filtrar por permissão)
+  const routeToFeatureKey = useMemo(() => {
+    const map = new Map<string, { moduleId: ActiveModuleId; featureKey: string }>();
+    for (const mod of MODULE_DEFINITIONS) {
+      for (const feat of mod.features) {
+        map.set(feat.route, { moduleId: mod.id, featureKey: feat.key });
+      }
+    }
+    return map;
+  }, []);
+
+  // Build the effective sections based on active module + permissions
   const effectiveSections = useMemo(() => {
     const moduleSections = MODULE_SECTIONS[activeModule] || MODULE_SECTIONS["rh-dp"];
     // Combine module sections + admin sections
@@ -373,8 +371,32 @@ function DashboardLayoutContent({
         items: s.items.filter(item => !item.adminMasterOnly),
       }));
     }
+    // Filtrar por permissões granulares (se não for admin_master)
+    if (!permIsAdminMaster) {
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.filter(item => {
+          // Admin paths são controlados pelo role, não pelas permissões granulares
+          if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
+          // Painel sempre visível
+          if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
+          // Shared features (empresas, obras, setores, funcoes) - visíveis se tem acesso ao módulo
+          const sharedPaths = ['/empresas', '/obras', '/setores', '/funcoes'];
+          if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
+          // Dashboard paths - visíveis se tem acesso ao módulo
+          if (item.path.startsWith('/dashboards')) return true;
+          // Verificar permissão granular pela rota
+          const featureInfo = routeToFeatureKey.get(item.path);
+          if (featureInfo) {
+            return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
+          }
+          // Default: mostrar
+          return true;
+        }),
+      }));
+    }
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, isAdminUser, isMasterUser]);
+  }, [activeModule, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules]);
 
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => s.items));
@@ -489,30 +511,36 @@ function DashboardLayoutContent({
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="rh-dp">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-blue-500/20 flex items-center justify-center">
-                        <Users className="h-3 w-3 text-blue-400" />
+                  {(permIsAdminMaster || canAccessModule("rh-dp")) && (
+                    <SelectItem value="rh-dp">
+                      <div className="flex items-center gap-2">
+                        <div className="h-5 w-5 rounded bg-blue-500/20 flex items-center justify-center">
+                          <Users className="h-3 w-3 text-blue-400" />
+                        </div>
+                        RH & DP
                       </div>
-                      RH & DP
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="sst">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-emerald-500/20 flex items-center justify-center">
-                        <Shield className="h-3 w-3 text-emerald-400" />
+                    </SelectItem>
+                  )}
+                  {(permIsAdminMaster || canAccessModule("sst")) && (
+                    <SelectItem value="sst">
+                      <div className="flex items-center gap-2">
+                        <div className="h-5 w-5 rounded bg-emerald-500/20 flex items-center justify-center">
+                          <Shield className="h-3 w-3 text-emerald-400" />
+                        </div>
+                        SST
                       </div>
-                      SST
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="juridico">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded bg-slate-400/20 flex items-center justify-center">
-                        <Gavel className="h-3 w-3 text-slate-300" />
+                    </SelectItem>
+                  )}
+                  {(permIsAdminMaster || canAccessModule("juridico")) && (
+                    <SelectItem value="juridico">
+                      <div className="flex items-center gap-2">
+                        <div className="h-5 w-5 rounded bg-slate-400/20 flex items-center justify-center">
+                          <Gavel className="h-3 w-3 text-slate-300" />
+                        </div>
+                        Jurídico
                       </div>
-                      Jurídico
-                    </div>
-                  </SelectItem>
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -529,15 +557,21 @@ function DashboardLayoutContent({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="start">
-                  <DropdownMenuItem onClick={() => setActiveModule("rh-dp")} className="cursor-pointer">
-                    <Users className="mr-2 h-4 w-4 text-blue-400" /> RH & DP
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setActiveModule("sst")} className="cursor-pointer">
-                    <Shield className="mr-2 h-4 w-4 text-emerald-400" /> SST
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setActiveModule("juridico")} className="cursor-pointer">
-                    <Gavel className="mr-2 h-4 w-4 text-slate-300" /> Jurídico
-                  </DropdownMenuItem>
+                  {(permIsAdminMaster || canAccessModule("rh-dp")) && (
+                    <DropdownMenuItem onClick={() => setActiveModule("rh-dp")} className="cursor-pointer">
+                      <Users className="mr-2 h-4 w-4 text-blue-400" /> RH & DP
+                    </DropdownMenuItem>
+                  )}
+                  {(permIsAdminMaster || canAccessModule("sst")) && (
+                    <DropdownMenuItem onClick={() => setActiveModule("sst")} className="cursor-pointer">
+                      <Shield className="mr-2 h-4 w-4 text-emerald-400" /> SST
+                    </DropdownMenuItem>
+                  )}
+                  {(permIsAdminMaster || canAccessModule("juridico")) && (
+                    <DropdownMenuItem onClick={() => setActiveModule("juridico")} className="cursor-pointer">
+                      <Gavel className="mr-2 h-4 w-4 text-slate-300" /> Jurídico
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
 import { ModuleProvider } from "./contexts/ModuleContext";
+import { PermissionsProvider } from "./contexts/PermissionsContext";
 import ModuleHub from "./pages/ModuleHub";
 import Home from "./pages/Home";
 import Empresas from "./pages/Empresas";
@@ -47,6 +48,9 @@ import SolicitacaoHE from "./pages/SolicitacaoHE";
 import Feriados from "./pages/Feriados";
 import Dissidio from "./pages/Dissidio";
 import PJMedicoes from "./pages/PJMedicoes";
+import PainelRH from "./pages/PainelRH";
+import PainelSST from "./pages/PainelSST";
+import PainelJuridico from "./pages/PainelJuridico";
 
 function Router() {
   return (
@@ -54,8 +58,11 @@ function Router() {
       <Route path={"/login"} component={Login} />
       {/* Hub de Módulos - Tela Inicial */}
       <Route path={"/"} component={ModuleHub} />
-      {/* Painel Principal (antigo Home) */}
+      {/* Painéis por Módulo */}
       <Route path={"/painel"} component={Home} />
+      <Route path={"/painel/rh"} component={PainelRH} />
+      <Route path={"/painel/sst"} component={PainelSST} />
+      <Route path={"/painel/juridico"} component={PainelJuridico} />
       <Route path={"/empresas"} component={Empresas} />
       <Route path={"/colaboradores"} component={Colaboradores} />
       <Route path={"/obras"} component={Obras} />
@@ -107,9 +114,11 @@ function App() {
         <TooltipProvider>
           <Toaster position="bottom-left" />
           <CompanyProvider>
-            <ModuleProvider>
-              <Router />
-            </ModuleProvider>
+            <PermissionsProvider>
+              <ModuleProvider>
+                <Router />
+              </ModuleProvider>
+            </PermissionsProvider>
           </CompanyProvider>
         </TooltipProvider>
       </ThemeProvider>

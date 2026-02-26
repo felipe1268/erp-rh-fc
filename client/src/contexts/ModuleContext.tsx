@@ -19,6 +19,9 @@ const ModuleContext = createContext<ModuleContextType>({
 const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   // RH & DP routes
   "/painel": "rh-dp",
+  "/painel/rh": "rh-dp",
+  "/painel/sst": "sst",
+  "/painel/juridico": "juridico",
   "/colaboradores": "rh-dp",
   "/fechamento-ponto": "rh-dp",
   "/folha-pagamento": "rh-dp",

@@ -2401,3 +2401,37 @@
 - [x] Filtrar seletor de empresas no CompanyContext com base nas permissões
 - [x] Admin Master vê todas as empresas automaticamente (sem restrição)
 - [x] Testes unitários (12 testes, 329 total passando)
+
+## Fase 62: Reformulação Completa - Sidebar e Dashboards por Módulo
+- [x] Sidebar dinâmica: ao selecionar RH, mostrar APENAS itens de RH (Colaboradores, Obras, Setores, Funções, Ponto, Folha, etc.)
+- [x] Sidebar dinâmica: ao selecionar SST, mostrar APENAS itens de SST (EPIs, ASOs, Treinamentos, Acidentes, Riscos, CIPA, etc.)
+- [x] Sidebar dinâmica: ao selecionar Jurídico, mostrar APENAS itens de Jurídico (Processos Trabalhistas, Audiências, Provisões)
+- [x] Dashboard RH: painel com dados pertinentes a RH (headcount, turnover, folha, etc.)
+- [x] Dashboard SST: painel com dados pertinentes a SST (acidentes, treinamentos vencidos, EPIs, etc.)
+- [x] Dashboard Jurídico: painel com dados pertinentes ao Jurídico (processos, audiências, provisões)
+- [x] Admin Master vê tudo em todos os módulos (sem restrição)
+- [x] Remover itens não pertinentes de cada módulo (ex: colaboradores não aparece no Jurídico)
+- [x] Cada módulo com visual/identidade própria
+- [x] Testes e verificação visual (340 testes passando)
+
+## Fase 62b: Permissões Granulares por Módulo e Funcionalidade
+- [x] Criar tabela user_permissions no banco (userId, moduleId, featureKey, canAccess)
+- [x] Definir mapa de funcionalidades por módulo (RH: 14 features / SST: 3 features / Jurídico: 1 feature)
+- [x] Criar procedures backend para gerenciar permissões (getUserPermissions, setUserPermissions, getMyPermissions)
+- [x] Criar tela de configuração de permissões no cadastro de usuários (checkboxes por módulo e funcionalidade)
+- [x] Filtrar sidebar com base nas permissões do usuário logado (PermissionsContext)
+- [x] Bloquear módulos não permitidos no seletor da sidebar
+- [x] Admin Master vê tudo sem restrição
+- [x] Testes unitários (340 testes passando)
+
+## Fase 63: Dashboard de EPIs Aprimorado
+- [ ] Item mais utilizado
+- [ ] Item menos utilizado
+- [ ] Item mais caro
+- [ ] Item mais barato
+- [ ] Funcionário que mais recebe EPI
+- [ ] Funcionário que recebe menos EPI
+- [ ] Custo de EPI por funcionário
+- [ ] Obra que mais solicita EPI
+- [ ] EPI mais perdido/estragado
+- [ ] Sugestões adicionais (taxa de reposição, previsão de consumo, validade média, etc.)

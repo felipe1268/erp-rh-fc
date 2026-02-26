@@ -13,6 +13,7 @@ import {
   sectors, InsertSector, jobFunctions, InsertJobFunction,
   systemRevisions,
   userCompanies,
+  userPermissions,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -131,6 +132,40 @@ export async function setUserCompanies(userId: number, companyIds: number[]) {
   if (companyIds.length > 0) {
     await db.insert(userCompanies).values(
       companyIds.map(cid => ({ userId, companyId: cid }))
+    );
+  }
+}
+
+// ============================================================
+// PERMISSÕES GRANULARES POR MÓDULO E FUNCIONALIDADE
+// ============================================================
+
+// Listar todas as permissões de um usuário
+export async function getUserPermissions(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userPermissions).where(eq(userPermissions.userId, userId));
+}
+
+// Listar permissões de um usuário para um módulo específico
+export async function getUserModulePermissions(userId: number, moduleId: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userPermissions).where(
+    and(eq(userPermissions.userId, userId), eq(userPermissions.moduleId, moduleId))
+  );
+}
+
+// Definir permissões de um usuário (substitui todas)
+export async function setUserPermissions(userId: number, perms: { moduleId: string; featureKey: string; canAccess: boolean }[]) {
+  const db = await getDb();
+  if (!db) return;
+  // Remove permissões antigas
+  await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
+  // Insere novas permissões
+  if (perms.length > 0) {
+    await db.insert(userPermissions).values(
+      perms.map(p => ({ userId, moduleId: p.moduleId, featureKey: p.featureKey, canAccess: p.canAccess ? 1 : 0 }))
     );
   }
 }

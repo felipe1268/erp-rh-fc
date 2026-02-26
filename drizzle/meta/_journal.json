@@ -239,6 +239,13 @@
       "when": 1772096998950,
       "tag": "0033_material_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1772099811098,
+      "tag": "0034_fantastic_dazzler",
+      "breakpoints": true
     }
   ]
 }

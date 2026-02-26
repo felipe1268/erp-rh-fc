@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   createCompany, updateCompany, getCompanies, getCompanyById, deleteCompany, restoreCompany,
   getCompaniesForUser, getUserCompanyLinks, setUserCompanies,
+  getUserPermissions, setUserPermissions,
   createEmployee, updateEmployee, getEmployees, getEmployeeById, deleteEmployee, softDeleteEmployee, restoreEmployee, getDeletedEmployees, permanentDeleteEmployee, getEmployeeStats,
   createEmployeeHistory, getEmployeeHistory,
   createUserProfile, getUserProfiles, getUserProfilesByCompany, updateUserProfile, deleteUserProfile,
@@ -844,6 +845,39 @@ export const appRouter = router({
       await setUserCompanies(input.userId, input.companyIds);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_companies', entityId: input.userId, details: `Empresas do usuário atualizadas: [${input.companyIds.join(', ')}]` });
       return { success: true };
+    }),
+    // Listar permissões granulares de um usuário
+    getUserPermissions: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+      const perms = await getUserPermissions(input.userId);
+      return perms.map((p: any) => ({ moduleId: p.moduleId, featureKey: p.featureKey, canAccess: !!p.canAccess }));
+    }),
+    // Definir permissões granulares de um usuário
+    setUserPermissions: protectedProcedure.input(z.object({
+      userId: z.number(),
+      permissions: z.array(z.object({
+        moduleId: z.string(),
+        featureKey: z.string(),
+        canAccess: z.boolean(),
+      })),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar permissões' });
+      }
+      await setUserPermissions(input.userId, input.permissions);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_permissions', entityId: input.userId, details: `Permissões do usuário atualizadas: ${input.permissions.filter(p => p.canAccess).length} funcionalidades habilitadas` });
+      return { success: true };
+    }),
+    // Obter permissões do usuário logado (para sidebar/frontend)
+    getMyPermissions: protectedProcedure.query(async ({ ctx }) => {
+      // Admin Master tem acesso total
+      if (ctx.user.role === 'admin_master') {
+        return { isAdminMaster: true, permissions: [] };
+      }
+      const perms = await getUserPermissions(ctx.user.id);
+      return {
+        isAdminMaster: false,
+        permissions: perms.map((p: any) => ({ moduleId: p.moduleId, featureKey: p.featureKey, canAccess: !!p.canAccess })),
+      };
     }),
     createLocalUser: protectedProcedure.input(z.object({
       username: z.string().min(3),
