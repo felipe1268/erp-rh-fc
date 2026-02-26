@@ -1,0 +1,19 @@
+{
+  "query": "SELECT eda.id, eda.epiDeliveryId, eda.epi_nome, eda.valor_total, eda.status, eda.companyId,\n       ed.id as delivery_exists\nFROM epi_discount_alerts eda\nLEFT JOIN epi_deliveries ed ON eda.epiDeliveryId = ed.id\nWHERE eda.status = 'pendente'\nLIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT eda.id, eda.epiDeliveryId, eda.epi_nome, eda.valor_total, eda.status, eda.companyId,\n       ed.id as delivery_exists\nFROM epi_discount_alerts eda\nLEFT JOIN epi_deliveries ed ON eda.epiDeliveryId = ed.id\nWHERE eda.status = 'pendente'\nLIMIT 5;",
+  "rows": [
+    {
+      "id": "30001",
+      "epiDeliveryId": "540003",
+      "epi_nome": "LUVA PARA PROTEÇÃO CONTRA AGENTES MECÂNICOS, QUÍMICOS, BIOLÓGICOS E UMIDADE PROVENIENTE DE OPERAÇÕES COM O USO DE ÁGUA",
+      "valor_total": "14.00",
+      "status": "pendente",
+      "companyId": "60002",
+      "delivery_exists": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tepiDeliveryId\tepi_nome\tvalor_total\tstatus\tcompanyId\tdelivery_exists\n30001\t540003\tLUVA PARA PROTEÇÃO CONTRA AGENTES MECÂNICOS, QUÍMICOS, BIOLÓGICOS E UMIDADE PROVENIENTE DE OPERAÇÕES COM O USO DE ÁGUA\t14.00\tpendente\t60002\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

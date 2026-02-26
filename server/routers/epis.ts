@@ -266,6 +266,16 @@ export const episRouter = router({
       await db.update(epis)
         .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
         .where(eq(epis.id, input.epiId));
+      // Cancel any pending discount alerts linked to this delivery
+      await db.update(epiDiscountAlerts).set({
+        status: 'cancelado',
+        validadoPor: ctx.user.name ?? 'Sistema',
+        dataValidacao: sql`NOW()`,
+        justificativa: 'Entrega excluída - desconto cancelado automaticamente',
+      } as any).where(and(
+        eq(epiDiscountAlerts.epiDeliveryId, input.id),
+        eq(epiDiscountAlerts.status, 'pendente')
+      ));
       return { success: true };
     }),
 

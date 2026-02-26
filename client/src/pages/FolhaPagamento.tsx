@@ -8,7 +8,8 @@ import {
   AlertTriangle, CheckCircle, FileText, Users, Lock, Unlock, Search,
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp,
-  Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale
+  Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
+  HardHat, Ban, User, CheckCircle2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -18,6 +19,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { Textarea } from "@/components/ui/textarea";
 
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -43,7 +45,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(clean) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi";
 
 export default function FolhaPagamento() {
   const { selectedCompanyId } = useCompany();
@@ -1253,6 +1255,17 @@ export default function FolhaPagamento() {
     );
   }
 
+  // ===== DESCONTOS EPI VIEW =====
+  if (viewMode === "descontos_epi") {
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        {fileInputs}
+        <DescontosEPIView companyId={companyId} mesAno={mesAno} onBack={() => setViewMode("resumo")} />
+      </DashboardLayout>
+    );
+  }
+
   // ===== DESCONTOS CLT VIEW =====
   if (viewMode === "descontos_clt" && viewLancId) {
     return (
@@ -1290,6 +1303,9 @@ export default function FolhaPagamento() {
           <div className="flex gap-2 items-center">
             <Button size="sm" variant="outline" onClick={() => openView("horas_extras")}>
               <Clock className="h-4 w-4 mr-1" /> Horas Extras
+            </Button>
+            <Button size="sm" variant="outline" className="text-amber-700 border-amber-200" onClick={() => setViewMode("descontos_epi")}>
+              <HardHat className="h-4 w-4 mr-1" /> Descontos EPI
             </Button>
             <PrintActions title={`Folha de Pagamento - ${formatMesAno(mesAno)}`} />
           </div>
@@ -2208,6 +2224,233 @@ function CruzamentoHEView({ companyId, mesAno, lancamentoId, onBack }: { company
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ===== DESCONTOS EPI VIEW COMPONENT =====
+function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; mesAno: string; onBack: () => void }) {
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [validandoId, setValidandoId] = useState<number | null>(null);
+  const [acao, setAcao] = useState<"confirmado" | "cancelado">("confirmado");
+  const [justificativa, setJustificativa] = useState("");
+
+  const { data: alertas, isLoading, refetch } = trpc.epis.listDiscountAlerts.useQuery(
+    { companyId, status: statusFilter === "all" ? undefined : statusFilter as any },
+    { enabled: companyId > 0 }
+  );
+
+  const validateMut = trpc.epis.validateDiscount.useMutation({
+    onSuccess: () => {
+      toast.success(acao === "confirmado" ? "Desconto confirmado na folha" : "Desconto cancelado");
+      setValidandoId(null);
+      setJustificativa("");
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const handleValidar = (id: number, action: "confirmado" | "cancelado") => {
+    if (validandoId === id && acao === action) {
+      setValidandoId(null);
+    } else {
+      setValidandoId(id);
+      setAcao(action);
+      setJustificativa("");
+    }
+  };
+
+  const allAlertas = alertas || [];
+  const pendentes = allAlertas.filter((a: any) => a.status === "pendente");
+  const confirmados = allAlertas.filter((a: any) => a.status === "confirmado");
+  const cancelados = allAlertas.filter((a: any) => a.status === "cancelado");
+  const totalPendente = pendentes.reduce((s: number, a: any) => s + parseFloat(String(a.valorTotal || "0")), 0);
+  const totalConfirmado = confirmados.reduce((s: number, a: any) => s + parseFloat(String(a.valorTotal || "0")), 0);
+
+  const filteredAlertas = statusFilter === "all" ? allAlertas :
+    allAlertas.filter((a: any) => a.status === statusFilter);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+          </Button>
+          <div>
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+              <HardHat className="h-5 w-5 text-amber-600" /> Descontos de EPI
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Descontos gerados por perda, dano ou mau uso — Art. 462, §1º da CLT
+            </p>
+          </div>
+        </div>
+        <PrintActions title={`Descontos EPI - ${mesAno}`} />
+      </div>
+
+      {/* Resumo */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className={`border-l-4 border-l-amber-500 cursor-pointer ${statusFilter === "pendente" ? "ring-2 ring-amber-300" : ""}`} onClick={() => setStatusFilter(statusFilter === "pendente" ? "all" : "pendente")}>
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Pendentes</p>
+                <p className="text-xl font-bold text-amber-700">{pendentes.length}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Valor</p>
+                <p className="text-sm font-semibold text-amber-700">{formatBRL(totalPendente)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`border-l-4 border-l-green-500 cursor-pointer ${statusFilter === "confirmado" ? "ring-2 ring-green-300" : ""}`} onClick={() => setStatusFilter(statusFilter === "confirmado" ? "all" : "confirmado")}>
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Confirmados</p>
+                <p className="text-xl font-bold text-green-700">{confirmados.length}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Valor</p>
+                <p className="text-sm font-semibold text-green-700">{formatBRL(totalConfirmado)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`border-l-4 border-l-gray-400 cursor-pointer ${statusFilter === "cancelado" ? "ring-2 ring-gray-300" : ""}`} onClick={() => setStatusFilter(statusFilter === "cancelado" ? "all" : "cancelado")}>
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Cancelados</p>
+                <p className="text-xl font-bold text-gray-500">{cancelados.length}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Total geral</p>
+                <p className="text-sm font-semibold">{(alertas || []).length} registros</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Info box */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+        <p className="font-semibold mb-1 flex items-center gap-1"><FileText className="h-4 w-4" /> Como funciona:</p>
+        <ul className="list-disc list-inside space-y-0.5 text-xs">
+          <li>Motivo <strong>"Perda"</strong>, <strong>"Dano"</strong> ou <strong>"Mau Uso"</strong> gera alerta de desconto automaticamente ao registrar entrega de EPI.</li>
+          <li>Valor = preço unitário do EPI + BDI configurado.</li>
+          <li>O DP deve validar (confirmar ou cancelar) antes de fechar a folha.</li>
+          <li>Se a entrega de EPI for excluída, o desconto pendente é cancelado automaticamente.</li>
+          <li>Base legal: <strong>Art. 462, §1º da CLT</strong>.</li>
+        </ul>
+      </div>
+
+      {/* Lista */}
+      {isLoading ? (
+        <div className="flex justify-center py-12"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>
+      ) : !filteredAlertas.length ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>{statusFilter === "all" ? "Nenhum desconto de EPI registrado" : `Nenhum desconto ${statusFilter}`}</p>
+        </div>
+      ) : (
+        <div className="border border-border rounded-lg overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium">Funcionário</th>
+                <th className="text-left px-3 py-2 font-medium">EPI</th>
+                <th className="text-center px-3 py-2 font-medium">Motivo</th>
+                <th className="text-center px-3 py-2 font-medium">Qtd</th>
+                <th className="text-right px-3 py-2 font-medium">Unitário</th>
+                <th className="text-right px-3 py-2 font-medium">Total</th>
+                <th className="text-center px-3 py-2 font-medium">Ref.</th>
+                <th className="text-center px-3 py-2 font-medium">Status</th>
+                <th className="text-center px-3 py-2 font-medium">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAlertas.map((a: any) => (
+                <tr key={a.id} className={`border-t border-border ${a.status === "pendente" ? "bg-amber-50/30" : a.status === "cancelado" ? "bg-gray-50/50 opacity-60" : "hover:bg-muted/30"}`}>
+                  <td className="px-4 py-2">
+                    <div className="font-medium text-sm">{a.nomeFunc || "—"}</div>
+                    {a.funcaoFunc && <div className="text-xs text-muted-foreground">{a.funcaoFunc}</div>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="text-sm">{a.epiNome}</div>
+                    {a.ca && <div className="text-xs text-muted-foreground">CA {a.ca}</div>}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <Badge variant="outline" className={`text-xs ${a.motivoCobranca === "mau_uso" ? "border-amber-300 text-amber-700" : a.motivoCobranca === "perda" ? "border-red-300 text-red-700" : "border-orange-300 text-orange-700"}`}>
+                      {a.motivoCobranca}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2 text-center font-medium">{a.quantidade}</td>
+                  <td className="px-3 py-2 text-right">{formatBRL(a.valorUnitario)}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-red-700">{formatBRL(a.valorTotal)}</td>
+                  <td className="px-3 py-2 text-center text-xs">{a.mesReferencia}</td>
+                  <td className="px-3 py-2 text-center">
+                    {a.status === "pendente" && <Badge className="bg-amber-100 text-amber-800 text-xs">Pendente</Badge>}
+                    {a.status === "confirmado" && <Badge className="bg-green-100 text-green-800 text-xs">Confirmado</Badge>}
+                    {a.status === "cancelado" && <Badge className="bg-gray-100 text-gray-600 text-xs">Cancelado</Badge>}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {a.status === "pendente" ? (
+                      <div className="flex gap-1 justify-center">
+                        <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-green-300 text-green-700 hover:bg-green-50" onClick={() => handleValidar(a.id, "confirmado")}>
+                          <CheckCircle className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-red-300 text-red-700 hover:bg-red-50" onClick={() => handleValidar(a.id, "cancelado")}>
+                          <XCircle className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{a.validadoPor || "—"}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Dialog de confirmação */}
+      <Dialog open={validandoId !== null} onOpenChange={(v) => { if (!v) setValidandoId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {acao === "confirmado" ? "Confirmar Desconto na Folha" : "Cancelar Desconto"}
+            </DialogTitle>
+            <DialogDescription>
+              {acao === "confirmado"
+                ? "O valor será descontado na folha de pagamento do funcionário."
+                : "O desconto não será lançado na folha."}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Justificativa (opcional)"
+            value={justificativa}
+            onChange={(e) => setJustificativa(e.target.value)}
+            className="text-sm"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setValidandoId(null)}>Cancelar</Button>
+            <Button
+              className={acao === "confirmado" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+              onClick={() => {
+                if (validandoId) validateMut.mutate({ id: validandoId, acao, justificativa });
+              }}
+              disabled={validateMut.isPending}
+            >
+              {validateMut.isPending && <RefreshCw className="h-3 w-3 animate-spin mr-1" />}
+              {acao === "confirmado" ? "Confirmar Desconto" : "Cancelar Desconto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

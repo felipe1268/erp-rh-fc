@@ -10,11 +10,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+
 import {
   HardHat, Package, AlertTriangle, ShieldAlert, TrendingUp, Users,
   DollarSign, Calendar, Building2, ClipboardList, Loader2,
@@ -29,135 +25,7 @@ const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', cur
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '-';
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
 
-// ============================================================
-// COMPONENTE: Dialog de Descontos Pendentes de EPI
-// ============================================================
-function DescontosDialog({ open, onClose, companyId }: { open: boolean; onClose: () => void; companyId: number }) {
-  const utils = trpc.useUtils();
-  const { data: alertas, isLoading } = trpc.epis.listDiscountAlerts.useQuery(
-    { companyId, status: 'pendente' },
-    { enabled: open && companyId > 0 }
-  );
-  const [validandoId, setValidandoId] = useState<number | null>(null);
-  const [acao, setAcao] = useState<'confirmado' | 'cancelado'>('confirmado');
-  const [justificativa, setJustificativa] = useState('');
-
-  const validateMut = trpc.epis.validateDiscount.useMutation({
-    onSuccess: () => {
-      toast.success(acao === 'confirmado' ? 'Desconto confirmado!' : 'Desconto cancelado!');
-      utils.epis.listDiscountAlerts.invalidate();
-      utils.dashboards.epis.invalidate();
-      setValidandoId(null);
-      setJustificativa('');
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const handleValidar = (id: number, action: 'confirmado' | 'cancelado') => {
-    if (validandoId === id && acao === action) {
-      validateMut.mutate({ id, acao: action, justificativa });
-    } else {
-      setValidandoId(id);
-      setAcao(action);
-      setJustificativa('');
-    }
-  };
-
-  const totalPendente = (alertas || []).reduce((s, a) => s + parseFloat(String(a.valorTotal || '0')), 0);
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-amber-600" />
-            Alertas de Desconto de EPI Pendentes
-          </DialogTitle>
-          <DialogDescription>
-            Descontos gerados automaticamente por perda, dano ou mau uso. O DP deve validar ou cancelar antes de fechar a folha.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-          <p className="font-semibold mb-1 flex items-center gap-1"><FileText className="h-4 w-4" /> Como funciona:</p>
-          <ul className="list-disc list-inside space-y-0.5 text-xs">
-            <li>Motivo <strong>"Perda"</strong>, <strong>"Dano"</strong> ou <strong>"Mau Uso"</strong> gera alerta de desconto automaticamente.</li>
-            <li>Valor = preço unitário do EPI + BDI configurado.</li>
-            <li>Base legal: <strong>Art. 462, §1º da CLT</strong>.</li>
-          </ul>
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-        ) : !alertas?.length ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-green-400" />
-            <p>Nenhum desconto pendente!</p>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between bg-amber-50 rounded-lg p-3">
-              <span className="text-sm font-medium text-amber-800">{alertas.length} desconto(s) pendente(s)</span>
-              <span className="text-sm font-bold text-amber-900">{fmtBRL(totalPendente)}</span>
-            </div>
-
-            <div className="space-y-3">
-              {alertas.map((a) => (
-                <Card key={a.id} className={`border ${validandoId === a.id ? 'border-blue-300 bg-blue-50/30' : 'border-border'}`}>
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm">{a.epiNome}</span>
-                          {a.ca && <Badge variant="outline" className="text-xs">CA {a.ca}</Badge>}
-                          <Badge className="bg-amber-100 text-amber-800 text-xs">{a.motivoCobranca}</Badge>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <User className="h-3 w-3" />
-                          <span>{a.nomeFunc || 'Funcionário'}</span>
-                          {a.funcaoFunc && <span className="text-muted-foreground">({a.funcaoFunc})</span>}
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-                          <div className="text-xs"><span className="text-muted-foreground">Qtd:</span> <strong>{a.quantidade}</strong></div>
-                          <div className="text-xs"><span className="text-muted-foreground">Unitário:</span> <strong>{fmtBRL(parseFloat(String(a.valorUnitario || '0')))}</strong></div>
-                          <div className="text-xs"><span className="text-muted-foreground">Total:</span> <strong className="text-red-600">{fmtBRL(parseFloat(String(a.valorTotal || '0')))}</strong></div>
-                          <div className="text-xs"><span className="text-muted-foreground">Ref:</span> <strong>{a.mesReferencia}</strong></div>
-                        </div>
-                      </div>
-                      <div className="flex sm:flex-col gap-2 shrink-0">
-                        <Button size="sm" variant="outline" className="text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50" onClick={() => handleValidar(a.id, 'confirmado')} disabled={validateMut.isPending}>
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Confirmar
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => handleValidar(a.id, 'cancelado')} disabled={validateMut.isPending}>
-                          <XCircle className="h-3.5 w-3.5" /> Cancelar
-                        </Button>
-                      </div>
-                    </div>
-                    {validandoId === a.id && (
-                      <div className="mt-3 pt-3 border-t space-y-2">
-                        <p className="text-xs font-medium">
-                          {acao === 'confirmado' ? 'Confirmar desconto na folha?' : 'Cancelar desconto (não será lançado)?'}
-                        </p>
-                        <Textarea placeholder="Justificativa (opcional)" value={justificativa} onChange={(e) => setJustificativa(e.target.value)} className="text-xs h-16" />
-                        <div className="flex gap-2">
-                          <Button size="sm" className={acao === 'confirmado' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} onClick={() => validateMut.mutate({ id: a.id, acao, justificativa })} disabled={validateMut.isPending}>
-                            {validateMut.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                            {acao === 'confirmado' ? 'Confirmar Desconto' : 'Cancelar Desconto'}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setValidandoId(null)}>Voltar</Button>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
+// Descontos de EPI foram movidos para Folha de Pagamento > Descontos EPI
 
 // Gera lista de meses dos últimos 24 meses para o filtro de período
 function getMonthOptions() {
@@ -215,7 +83,7 @@ export default function DashEpis() {
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todos");
   const [obraFiltro, setObraFiltro] = useState<string>("todos");
   const [showFilters, setShowFilters] = useState(false);
-  const [showDescontosDialog, setShowDescontosDialog] = useState(false);
+
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
@@ -392,22 +260,7 @@ export default function DashEpis() {
               <DashKpi label="Func. Atendidos" value={data.resumo.funcUnicos || 0} icon={Users} color="slate" />
             </div>
 
-            {/* Descontos pendentes */}
-            {(data.resumo.alertasPendentes || 0) > 0 && (
-              <Card className="border-l-4 border-l-amber-500 bg-amber-50/50 cursor-pointer hover:bg-amber-50 transition-colors group" onClick={() => setShowDescontosDialog(true)}>
-                <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-                  <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-                    <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-amber-800 text-sm sm:text-base">{data.resumo.alertasPendentes} alerta(s) de desconto pendente(s)</p>
-                    <p className="text-xs sm:text-sm text-amber-700">Valor total: {fmtBRL(data.resumo.valorDescontosPendentes || 0)}</p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-amber-400 group-hover:text-amber-600 transition-colors shrink-0" />
-                </CardContent>
-              </Card>
-            )}
-            <DescontosDialog open={showDescontosDialog} onClose={() => setShowDescontosDialog(false)} companyId={companyId} />
+            {/* Descontos de EPI foram movidos para Folha de Pagamento > Descontos EPI */}
 
             {/* ============================================================ */}
             {/* INSIGHTS PRINCIPAIS - NOVAS ANÁLISES */}

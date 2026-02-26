@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE epi_discount_alerts eda\nJOIN epi_deliveries ed ON eda.epiDeliveryId = ed.id\nSET eda.status = 'cancelado',\n    eda.validado_por = 'Sistema',\n    eda.data_validacao = NOW(),\n    eda.justificativa = 'Entrega excluída - desconto cancelado automaticamente'\nWHERE ed.deletedAt IS NOT NULL\nAND eda.status = 'pendente';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute UPDATE epi_discount_alerts eda\nJOIN epi_deliveries ed ON eda.epiDeliveryId = ed.id\nSET eda.status = 'cancelado',\n    eda.validado_por = 'Sistema',\n    eda.data_validacao = NOW(),\n    eda.justificativa = 'Entrega excluída - desconto cancelado automaticamente'\nWHERE ed.deletedAt IS NOT NULL\nAND eda.status = 'pendente';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 58
+}

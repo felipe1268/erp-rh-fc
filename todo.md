@@ -2475,3 +2475,11 @@
 - [x] Implementar autocompletar CNPJ via BrasilAPI no cadastro de fornecedor
 - [x] Ao digitar CNPJ, preencher automaticamente nome, telefone, endereço, email
 - [x] Testar e validar todas as correções
+
+## Fase 65b: Mover Alerta de Desconto EPI para Folha de Pagamento
+- [x] Remover alerta de desconto de EPI do Dashboard de EPIs (componente DescontosDialog e card removidos)
+- [x] Criar view "Descontos EPI" na Folha de Pagamento com botão no header
+- [x] Componente DescontosEPIView com filtros (Todos/Pendentes/Confirmados/Cancelados), cards de resumo e listagem
+- [x] Corrigir backend: ao excluir entrega de EPI, cancelar desconto pendente associado automaticamente
+- [x] Limpar descontos órfãos que referenciam entregas já excluídas no banco
+- [x] Testar e validar (340 testes passando)
