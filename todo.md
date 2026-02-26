@@ -2367,3 +2367,18 @@
 - [x] Gerar robô de IA engenheiro com capacete branco FC + colete de segurança + tablet holografico
 - [x] Implementar layout: robô à esquerda + título "Gestão Integrada" + cards glass à direita
 - [x] Watermark "ERP" gigante, ondas decorativas animadas, sombra drop-shadow no robô
+
+## Fase 57: Ajustar Hub para ficar idêntico ao mockup aprovado
+- [ ] Cards de módulos com ícones coloridos arredondados (azul claro RH, verde SST, azul escuro Jurídico)
+- [ ] Texto dos módulos em negrito grande como no mockup
+- [ ] Cards "Em Breve" na parte inferior com ícone de cadeado e relógio
+- [ ] Ondas douradas decorativas no fundo
+- [ ] Watermark "ERP" gigante atrás do título
+- [ ] Header com foto do usuário, ícone globo e seletor Company
+- [ ] Título "Gestão Integrada" em negrito grande
+
+## Fase 58: Corrigir Hub no mobile
+- [x] Robô com fundo cinza feio no mobile - escondido no mobile
+- [x] Robô ocupando tela toda no mobile - resolvido
+- [x] Esconder robô no mobile (hidden lg:block) - robô só aparece em desktop
+- [x] Focar nos cards de módulos no mobile - cards aparecem direto

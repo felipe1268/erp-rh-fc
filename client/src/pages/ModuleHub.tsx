@@ -328,11 +328,11 @@ export default function ModuleHub() {
         <main className="relative max-w-[1440px] mx-auto px-6 lg:px-10">
 
           {/* ──── HERO ROW: Robot Left | Content Right ──── */}
-          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-0 pt-8 lg:pt-4">
+          <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-0 pt-6 lg:pt-4">
 
-            {/* LEFT: Robot Image */}
+            {/* LEFT: Robot Image - HIDDEN on mobile, visible on lg+ */}
             <div
-              className={`relative flex-shrink-0 w-[280px] sm:w-[340px] lg:w-[400px] ${mounted ? 'hub-animate-right' : 'opacity-0'}`}
+              className={`relative flex-shrink-0 hidden lg:block lg:w-[400px] ${mounted ? 'hub-animate-right' : 'opacity-0'}`}
               style={{ animationDelay: '0.1s' }}
             >
               <div className="hub-robot-float">
