@@ -1,0 +1,22 @@
+{
+  "query": "SELECT status, COUNT(*) as total FROM employees WHERE deletedAt IS NULL GROUP BY status ORDER BY total DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT status, COUNT(*) as total FROM employees WHERE deletedAt IS NULL GROUP BY status ORDER BY total DESC;",
+  "rows": [
+    {
+      "status": "Ativo",
+      "total": "129"
+    },
+    {
+      "status": "Desligado",
+      "total": "30"
+    },
+    {
+      "status": "Recluso",
+      "total": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\ttotal\nAtivo\t129\nDesligado\t30\nRecluso\t1\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

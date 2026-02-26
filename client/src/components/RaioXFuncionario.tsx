@@ -53,6 +53,17 @@ function calcTempoEmpresa(dataAdmissao: string | null | undefined): string {
   return "Menos de 1 mês";
 }
 
+function calcIdade(dataNascimento: string | null | undefined): string {
+  if (!dataNascimento) return "-";
+  const nasc = new Date(dataNascimento.split("T")[0] + "T00:00:00");
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - nasc.getFullYear();
+  const mesAtual = hoje.getMonth();
+  const mesNasc = nasc.getMonth();
+  if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nasc.getDate())) anos--;
+  return `${anos} anos`;
+}
+
 function calcDiasAniversario(dataNascimento: string | null | undefined): { aniversario: string; diasFaltando: number; texto: string } {
   if (!dataNascimento) return { aniversario: "-", diasFaltando: -1, texto: "-" };
   const nasc = new Date(dataNascimento.split("T")[0] + "T00:00:00");
@@ -178,6 +189,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
       ["Sal\u00E1rio Base", formatSalario(emp?.salarioBase)],
       ["Valor/Hora", formatSalario(emp?.valorHora)],
       ["Nascimento", formatDate(emp?.dataNascimento)],
+      ["Idade", calcIdade(emp?.dataNascimento)],
       ["Sexo", emp?.sexo === "M" ? "Masculino" : emp?.sexo === "F" ? "Feminino" : emp?.sexo || "-"],
       ["Estado Civil", emp?.estadoCivil?.replace(/_/g, " ") || "-"],
       ["RG", emp?.rg || "-"],
@@ -456,6 +468,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         emp.dataAdmissao ? { icon: Timer, label: "Tempo de Empresa", value: tempoEmp } : null,
                         emp.salarioBase ? { icon: DollarSign, label: "Salário", value: formatSalario(emp.salarioBase) } : null,
                         emp.valorHora ? { icon: Clock, label: "Valor/Hora", value: formatSalario(emp.valorHora) } : null,
+                        emp.dataNascimento ? { icon: User, label: "Idade", value: calcIdade(emp.dataNascimento) } : null,
                         emp.dataNascimento ? { icon: Gift, label: "Aniversário", value: `${anivInfo.aniversario} (${anivInfo.texto})` } : null,
                       ].filter(Boolean);
                     })().map((item: any, idx) => (

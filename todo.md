@@ -2587,3 +2587,12 @@
 - [x] Corrigido campo de busca nas Férias
 - [x] Corrigido campo de busca no Controle de Documentos
 - [x] Corrigido campo de busca no Módulo PJ
+
+## Fase 86: Reavaliação do cadastro de funcionários
+- [x] Colocar todos os funcionários como status "Ativo" (160 funcionários)
+- [x] Remover datas de desligamento futuro (dataDemissao, dataDesligamentoEfetiva)
+- [x] Limpar campo de observação que contenha referência a desligamento (69 limpos)
+- [x] Limpar campos de motivo/categoria de desligamento
+
+## Fase 87: Adicionar idade atual na ficha Raio X do funcionário
+- [x] Calcular e exibir idade atual baseada na data de nascimento (tela + impressão)
