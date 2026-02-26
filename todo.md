@@ -2671,3 +2671,62 @@
 - [x] Remover campo "VR Diário (override)" — VR é calculado automaticamente pela config de benefícios × dias
 - [x] Manter campo "Dias Trabalhados no Mês" como ajuste opcional
 - [x] Reorganizar layout do formulário (grid 2 colunas em vez de 3)
+
+## Fase 96: Reconstrução completa do fluxo de cálculo de rescisão
+- [ ] BUG: Cálculo não reage à mudança de data — valores ficam estáticos
+- [ ] Renomear campo "Data de Início" para "Último Dia Trabalhado" (data de desligamento efetiva)
+- [ ] Investigar tabelas de descontos disponíveis (adiantamentos, EPIs, vales pendentes)
+- [ ] Reescrever backend: calcular VR automático pela obra do funcionário
+- [ ] Reescrever backend: buscar e somar descontos pendentes (adiantamentos, EPIs, etc)
+- [ ] Reescrever backend: total = verbas rescisórias - descontos
+- [ ] Refazer frontend com seção de verbas e seção de descontos separadas
+- [ ] Testar com caso Isabela para validar valores
+
+## Fase 97: Corrigir VR na rescisão e config de benefícios
+- [ ] Atualizar config benefícios: checkbox ativar/desativar por item (café, lanche, VA, janta)
+- [ ] Escritório Central: café ✅, lanche ❌, VA ✅, janta ❌
+- [ ] Obra: café ✅, lanche ✅, VA ✅, janta ❌
+- [ ] Corrigir cálculo VR rescisão: Total VA iFood = café(22d) + lanche(22d) + VA(485-5%), proporcional por dias/30
+- [ ] Remover janta do cálculo de rescisão
+- [ ] Aviso prévio: só pagar 3 dias extras com 1 ano COMPLETO de serviço (já está correto)
+- [ ] Atualizar frontend da config de benefícios com checkboxes
+- [ ] Testar cálculo Isabela: deve dar ~R$ 542 de VR (escritório, sem lanche)
+
+## Fase 98: Alertas + Aviso Prévio no Dashboard + Gráficos Clicáveis
+- [ ] Botão "198 alertas" deve abrir painel com TODOS os alertas pendentes organizados por tipo
+- [ ] Cada alerta deve poder ser resolvido individualmente pelo usuário
+- [ ] Card de Aviso Prévio no Dashboard: quem está de aviso, dias restantes
+- [ ] Alerta grande no dia do vencimento do aviso prévio (não perder a data)
+- [ ] Corrigir cálculo VR na rescisão (Total VA mensal / 30 × dias, com checkboxes ativo/desativo)
+- [ ] Atualizar frontend BeneficiosAlimentacaoTab com checkboxes de ativação por item
+- [ ] Gráficos clicáveis: ao clicar em barra/ponto, abrir painel com detalhes (nomes, cargos, datas)
+- [ ] Aplicar gráficos clicáveis em Admissões x Demissões e todos os outros gráficos do Dashboard
+
+## Fase 99: Cores dos Gráficos
+- [x] Azul (#2563EB) para admitidos/ativos em TODOS os gráficos
+- [x] Vermelho (#DC2626) para desligados/demissões em TODOS os gráficos
+- [x] Cores criativas e vibrantes para os demais gráficos (laranja, roxo, âmbar, esmeralda, rosa, índigo)
+- [x] Aplicar em Dashboard de Funcionários, Home, e todos os dashboards
+
+## Fase 100: Correções Dashboard + Gráficos Clicáveis + Alertas + VR
+- [ ] Corrigir contagem de obras ativas (13 no banco vs 8 na tela)
+- [ ] Corrigir contagem de férias pendentes (78 no banco vs 42 na tela)
+- [ ] Alertar sobre 156 funcionários sem ASO cadastrado
+- [ ] Cores dos gráficos: azul=admissão, vermelho=demissão, paleta vibrante nos demais
+- [ ] Gráficos clicáveis: ao clicar em barra/ponto, abrir painel com detalhes (nomes, cargos, datas)
+- [ ] Card de Aviso Prévio no Dashboard (quem está de aviso, dias restantes, alerta no vencimento)
+- [ ] Botão de alertas funcional com lista completa para resolver um a um
+- [ ] Corrigir cálculo VR na rescisão (Total VA mensal / 30 × dias, sem janta, com checkboxes)
+- [ ] Atualizar frontend BeneficiosAlimentacaoTab com checkboxes de ativação por item
+
+## Fase 100: Correções Dashboard + Gráficos Clicáveis + VR + Banner Aviso Prévio
+- [x] Banner vermelho de aviso prévio no Raio-X do funcionário (canto superior direito)
+- [x] Só aparece quando status ativo/em_andamento/pendente (desaparece se cancelado/concluído)
+- [x] Mostra tipo, datas, dias restantes, pulsa se urgente (≤3 dias), destaque se vencido
+- [ ] Cores dos gráficos: azul=admissões, vermelho=demissões, paleta vibrante nos demais
+- [ ] Card de Aviso Prévio no Dashboard (quem está de aviso, dias restantes)
+- [ ] Alerta grande no dia do vencimento do aviso prévio
+- [ ] Gráficos clicáveis: ao clicar em barra/ponto, abrir painel com detalhes (nomes, cargos, datas)
+- [ ] Corrigir cálculo VR na rescisão (Total VA mensal / 30 × dias, sem janta, com checkboxes)
+- [ ] Atualizar frontend BeneficiosAlimentacaoTab com checkboxes de ativação por item
+- [ ] Aviso prévio: 3 dias extras só com 1 ano completo de serviço (Lei 12.506)

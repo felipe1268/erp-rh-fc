@@ -1084,10 +1084,138 @@ async function getDashJuridico(companyId: number) {
 }
 
 // ============================================================
+// DRILL-DOWN: buscar funcionários detalhados por filtro
+// ============================================================
+async function getDrillDown(companyId: number, filterType: string, filterValue: string) {
+  const db = await getDb();
+  if (!db) return [];
+
+  let whereClause = and(eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`);
+
+  switch (filterType) {
+    case 'status':
+      whereClause = and(whereClause, sql`${employees.status} = ${filterValue}`);
+      break;
+    case 'sexo':
+      if (filterValue === 'Não informado') {
+        whereClause = and(whereClause, sql`(${employees.sexo} IS NULL OR ${employees.sexo} = '')`);
+      } else {
+        whereClause = and(whereClause, sql`${employees.sexo} = ${filterValue}`);
+      }
+      break;
+    case 'setor':
+      if (filterValue === 'Não informado') {
+        whereClause = and(whereClause, sql`(${employees.setor} IS NULL OR ${employees.setor} = '')`);
+      } else {
+        whereClause = and(whereClause, sql`${employees.setor} = ${filterValue}`);
+      }
+      break;
+    case 'funcao':
+      if (filterValue === 'Não informado') {
+        whereClause = and(whereClause, sql`(${employees.funcao} IS NULL OR ${employees.funcao} = '')`);
+      } else {
+        whereClause = and(whereClause, sql`${employees.funcao} = ${filterValue}`);
+      }
+      break;
+    case 'tipoContrato':
+      if (filterValue === 'Não informado') {
+        whereClause = and(whereClause, sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} = '')`);
+      } else {
+        whereClause = and(whereClause, sql`${employees.tipoContrato} = ${filterValue}`);
+      }
+      break;
+    case 'estadoCivil':
+      if (filterValue === 'Não informado') {
+        whereClause = and(whereClause, sql`(${employees.estadoCivil} IS NULL OR ${employees.estadoCivil} = '')`);
+      } else {
+        whereClause = and(whereClause, sql`${employees.estadoCivil} = ${filterValue.replace(/ /g, '_')}`);
+      }
+      break;
+    case 'cidade':
+      if (filterValue === 'Não informado') {
+        whereClause = and(whereClause, sql`(${employees.cidade} IS NULL OR ${employees.cidade} = '')`);
+      } else {
+        whereClause = and(whereClause, sql`${employees.cidade} = ${filterValue}`);
+      }
+      break;
+    case 'faixaEtaria': {
+      const ranges: Record<string, [number, number]> = {
+        '14-20': [14, 20], '21-25': [21, 25], '26-30': [26, 30],
+        '31-40': [31, 40], '41-50': [41, 50], '51-60': [51, 60], '61+': [61, 120],
+      };
+      const [min, max] = ranges[filterValue] || [0, 120];
+      whereClause = and(whereClause, sql`dataNascimento IS NOT NULL`,
+        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) >= ${min}`,
+        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) <= ${max}`);
+      break;
+    }
+    case 'faixaEtariaSexo': {
+      // filterValue = "21-25|M"
+      const [faixa, sexo] = filterValue.split('|');
+      const ranges2: Record<string, [number, number]> = {
+        '14-20': [14, 20], '21-25': [21, 25], '26-30': [26, 30],
+        '31-40': [31, 40], '41-50': [41, 50], '51-60': [51, 60], '61+': [61, 120],
+      };
+      const [min2, max2] = ranges2[faixa] || [0, 120];
+      whereClause = and(whereClause, sql`dataNascimento IS NOT NULL`,
+        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) >= ${min2}`,
+        sql`TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) <= ${max2}`,
+        sql`${employees.sexo} = ${sexo}`);
+      break;
+    }
+    case 'tempoEmpresa': {
+      const tenureRanges: Record<string, string> = {
+        '< 3 meses': 'TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 3',
+        '3-6 meses': 'TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) >= 3 AND TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 6',
+        '6-12 meses': 'TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) >= 6 AND TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 12',
+        '1-2 anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 1 AND TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 2',
+        '2-5 anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 2 AND TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 5',
+        '5-10 anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 5 AND TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) < 10',
+        '10+ anos': 'TIMESTAMPDIFF(YEAR, dataAdmissao, CURDATE()) >= 10',
+      };
+      const tenureSql = tenureRanges[filterValue];
+      if (tenureSql) {
+        whereClause = and(whereClause, sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql.raw(tenureSql));
+      }
+      break;
+    }
+    case 'admissaoMes': {
+      // filterValue = "2025-03"
+      whereClause = and(whereClause, sql`DATE_FORMAT(dataAdmissao, '%Y-%m') = ${filterValue}`);
+      break;
+    }
+    case 'demissaoMes': {
+      // filterValue = "2025-03"
+      whereClause = and(whereClause, sql`DATE_FORMAT(dataDemissao, '%Y-%m') = ${filterValue}`);
+      break;
+    }
+    default:
+      return [];
+  }
+
+  const results = await db.select({
+    id: employees.id,
+    nome: employees.nomeCompleto,
+    funcao: employees.funcao,
+    setor: employees.setor,
+    status: employees.status,
+    dataAdmissao: employees.dataAdmissao,
+    dataDemissao: employees.dataDemissao,
+    dataNascimento: employees.dataNascimento,
+    sexo: employees.sexo,
+    cidade: employees.cidade,
+    tipoContrato: employees.tipoContrato,
+  }).from(employees).where(whereClause).orderBy(employees.nomeCompleto).limit(100);
+
+  return results;
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 export const dashboardsRouter = router({
   funcionarios: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashFuncionarios(input.companyId)),
+  drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue)),
   cartaoPonto: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional() })).query(({ input }) => getDashCartaoPonto(input.companyId, input.mesReferencia)),
   folhaPagamento: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional() })).query(({ input }) => getDashFolhaPagamento(input.companyId, input.mesReferencia)),
   horasExtras: protectedProcedure.input(z.object({

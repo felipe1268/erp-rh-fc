@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods } from "../../drizzle/schema";
+import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods, terminationNotices } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 
 export const homeDataRouter = router({
@@ -390,6 +390,34 @@ export const homeDataRouter = router({
       const experienciasAtencao = experiencias.filter((e: any) => e.urgencia === 'atencao').length;
 
       // ============================================================
+      // 10b. AVISOS PRÉVIOS EM ANDAMENTO
+      // ============================================================
+      const avisosAtivos = await db.select().from(terminationNotices)
+        .where(and(
+          eq(terminationNotices.companyId, input.companyId),
+          eq(terminationNotices.status, 'em_andamento'),
+          sql`${terminationNotices.deletedAt} IS NULL`,
+        ));
+
+      const avisosPrevios = avisosAtivos.map(a => {
+        const emp = allEmps.find(e => e.id === a.employeeId);
+        const dataFim = new Date(a.dataFim + 'T00:00:00');
+        const diasRestantes = Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          id: a.id,
+          employeeId: a.employeeId,
+          nome: emp?.nomeCompleto || 'Funcionário',
+          funcao: emp?.funcao || '-',
+          tipo: a.tipo,
+          dataInicio: a.dataInicio,
+          dataFim: a.dataFim,
+          diasRestantes,
+          valorEstimado: a.valorEstimadoTotal,
+          urgencia: diasRestantes <= 0 ? 'vencido' : diasRestantes <= 3 ? 'critico' : diasRestantes <= 7 ? 'urgente' : 'normal',
+        };
+      }).sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+      // ============================================================
       // 11. STATS CONSOLIDADOS
       // ============================================================
       const statsConsolidados = {
@@ -414,6 +442,8 @@ export const homeDataRouter = router({
         experienciasVencidas,
         experienciasUrgentes,
         experienciasAtencao,
+        avisosPreviosAtivos: avisosPrevios.length,
+        avisosPreviosVencendo: avisosPrevios.filter(a => a.urgencia === 'critico' || a.urgencia === 'vencido').length,
       };
 
       return {
@@ -428,6 +458,7 @@ export const homeDataRouter = router({
         advertenciasRecentes,
         experiencias,
         obrasProximasFim,
+        avisosPrevios,
       };
     }),
 });

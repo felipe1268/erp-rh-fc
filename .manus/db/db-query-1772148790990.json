@@ -1,0 +1,100 @@
+{
+  "query": "SELECT id, version, titulo, tipo, modulos, criadoPor, dataPublicacao FROM system_revisions ORDER BY version DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, tipo, modulos, criadoPor, dataPublicacao FROM system_revisions ORDER BY version DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "90003",
+      "version": "83",
+      "titulo": "Fase 36: Frontend Completo + Dissídio por Ano",
+      "tipo": "feature",
+      "modulos": "[\"Dissídio\",\"Feriados\",\"PJ Medições\",\"Documentos\",\"Cadastro\",\"Folha\"]",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-25 11:57:20"
+    },
+    {
+      "id": "90002",
+      "version": "82",
+      "titulo": "Gap Analysis Completo + Fornecedor CNPJ + Dissídio",
+      "tipo": "feature",
+      "modulos": "[\"EPIs\",\"Dissídio\",\"Folha\",\"Feriados\",\"PJ\",\"Documentos\",\"Aviso Prévio\",\"Cadastro\"]",
+      "criadoPor": "Manus AI",
+      "dataPublicacao": "2026-02-25 11:57:14"
+    },
+    {
+      "id": "90001",
+      "version": "81",
+      "titulo": "Gap Analysis Completo - Reunião Gerencial RH",
+      "tipo": "feature",
+      "modulos": "Aviso Prévio, Home, Cadastro, Folha, Feriados, PJ, Documentos, Ponto",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-25 11:17:07"
+    },
+    {
+      "id": "60006",
+      "version": "80",
+      "titulo": "HE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen",
+      "tipo": "feature",
+      "modulos": "Colaboradores,Horas Extras,Configurações,Central de Alertas,Revisões",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 19:00:00"
+    },
+    {
+      "id": "60005",
+      "version": "79",
+      "titulo": "Auditoria Completa de Campos + Persistência",
+      "tipo": "bugfix",
+      "modulos": "Colaboradores,Cadastro",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 14:00:00"
+    },
+    {
+      "id": "60004",
+      "version": "78",
+      "titulo": "Correção: Percentuais de HE não persistiam",
+      "tipo": "bugfix",
+      "modulos": "Colaboradores,Horas Extras",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 13:00:00"
+    },
+    {
+      "id": "60003",
+      "version": "77",
+      "titulo": "Ordenação Alfabética de Colaboradores",
+      "tipo": "melhoria",
+      "modulos": "Colaboradores",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 12:00:00"
+    },
+    {
+      "id": "60002",
+      "version": "76",
+      "titulo": "Correção: Cadastro de EPI com nome longo (CA)",
+      "tipo": "bugfix",
+      "modulos": "EPIs",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 11:00:00"
+    },
+    {
+      "id": "60001",
+      "version": "75",
+      "titulo": "Descontos EPI: Botões Confirmar/Cancelar + Banner de Custo",
+      "tipo": "feature",
+      "modulos": "EPIs,Raio-X,Descontos",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 10:00:00"
+    },
+    {
+      "id": "30001",
+      "version": "74",
+      "titulo": "Rev. 74 — Mega Atualização: EPI Custos, Rankings, Contratos, Perfis",
+      "tipo": "feature",
+      "modulos": "EPIs, Controle de Documentos, Fechamento de Ponto, Folha de Pagamento, Colaboradores, Usuários e Permissões",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 03:06:10"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\ttipo\tmodulos\tcriadoPor\tdataPublicacao\n90003\t83\tFase 36: Frontend Completo + Dissídio por Ano\tfeature\t[\"Dissídio\",\"Feriados\",\"PJ Medições\",\"Documentos\",\"Cadastro\",\"Folha\"]\tSistema\t2026-02-25 11:57:20\n90002\t82\tGap Analysis Completo + Fornecedor CNPJ + Dissídio\tfeature\t[\"EPIs\",\"Dissídio\",\"Folha\",\"Feriados\",\"PJ\",\"Documentos\",\"Aviso Prévio\",\"Cadastro\"]\tManus AI\t2026-02-25 11:57:14\n90001\t81\tGap Analysis Completo - Reunião Gerencial RH\tfeature\tAviso Prévio, Home, Cadastro, Folha, Feriados, PJ, Documentos, Ponto\tSistema\t2026-02-25 11:17:07\n60006\t80\tHE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen\tfeature\tColaboradores,Horas Extras,Configurações,Central de Alertas,Revisões\tSistema\t2026-02-24 19:00:00\n60005\t79\tAuditoria Completa de Campos + Persistência\tbugfix\tColaboradores,Cadastro\tSistema\t2026-02-24 14:00:00\n60004\t78\tCorreção: Percentuais de HE não persistiam\tbugfix\tColaboradores,Horas Extras\tSistema\t2026-02-24 13:00:00\n60003\t77\tOrdenação Alfabética de Colaboradores\tmelhoria\tColaboradores\tSistema\t2026-02-24 12:00:00\n60002\t76\tCorreção: Cadastro de EPI com nome longo (CA)\tbugfix\tEPIs\tSistema\t2026-02-24 11:00:00\n60001\t75\tDescontos EPI: Botões Confirmar/Cancelar + Banner de Custo\tfeature\tEPIs,Raio-X,Descontos\tSistema\t2026-02-24 10:00:00\n30001\t74\tRev. 74 — Mega Atualização: EPI Custos, Rankings, Contratos, Perfis\tfeature\tEPIs, Controle de Documentos, Fechamento de Ponto, Folha de Pagamento, Colaboradores, Usuários e Permissões\tSistema\t2026-02-24 03:06:10\n",
+  "stderr": "",
+  "execution_time_ms": 265
+}

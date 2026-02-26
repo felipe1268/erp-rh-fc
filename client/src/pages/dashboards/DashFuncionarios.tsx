@@ -1,6 +1,8 @@
+import { useState, useCallback } from "react";
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL, getChartColors } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
-import DashChart, { DashKpi } from "@/components/DashChart";
+import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
+import DrillDownModal from "@/components/DrillDownModal";
 import PrintActions from "@/components/PrintActions";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -35,6 +37,15 @@ export default function DashFuncionarios() {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const { data, isLoading } = trpc.dashboards.funcionarios.useQuery({ companyId }, { enabled: companyId > 0 });
+
+  // Drill-down state
+  const [drillDown, setDrillDown] = useState<{ open: boolean; title: string; filterType: string; filterValue: string }>({
+    open: false, title: "", filterType: "", filterValue: "",
+  });
+
+  const openDrillDown = useCallback((title: string, filterType: string, filterValue: string) => {
+    setDrillDown({ open: true, title, filterType, filterValue });
+  }, []);
 
   if (isLoading) return (
     <DashboardLayout>
@@ -138,6 +149,7 @@ export default function DashFuncionarios() {
             labels={data.statusDist.map(s => s.label)}
             datasets={[{ data: data.statusDist.map(s => s.value), backgroundColor: data.statusDist.map(s => STATUS_COLORS[s.label] || SEMANTIC_COLORS.neutro) }]}
             height={240}
+            onChartClick={(info) => openDrillDown(`Status: ${info.label}`, "status", info.label)}
           />
           <DashChart
             title="Distribuição por Gênero"
@@ -145,6 +157,7 @@ export default function DashFuncionarios() {
             labels={data.sexDist.map(s => s.label)}
             datasets={[{ data: data.sexDist.map(s => s.value), backgroundColor: data.sexDist.map(s => s.label === 'M' ? SEMANTIC_COLORS.masculino : s.label === 'F' ? SEMANTIC_COLORS.feminino : SEMANTIC_COLORS.neutro) }]}
             height={240}
+            onChartClick={(info) => openDrillDown(`Gênero: ${info.label === 'M' ? 'Masculino' : info.label === 'F' ? 'Feminino' : info.label}`, "sexo", info.label)}
           />
           <DashChart
             title="Tipo de Contrato"
@@ -152,6 +165,7 @@ export default function DashFuncionarios() {
             labels={data.contratoDist.map(s => s.label)}
             datasets={[{ data: data.contratoDist.map(s => s.value) }]}
             height={240}
+            onChartClick={(info) => openDrillDown(`Contrato: ${info.label}`, "tipoContrato", info.label)}
           />
         </div>
 
@@ -165,6 +179,10 @@ export default function DashFuncionarios() {
             { label: "Feminino", data: femData, backgroundColor: SEMANTIC_COLORS.feminino },
           ]}
           height={280}
+          onChartClick={(info) => {
+            const sexo = info.datasetLabel === "Masculino" ? "M" : "F";
+            openDrillDown(`${info.label} · ${info.datasetLabel}`, "faixaEtariaSexo", `${info.label}|${sexo}`);
+          }}
         />
 
         {/* Gráficos - Linha 2 */}
@@ -175,6 +193,7 @@ export default function DashFuncionarios() {
             labels={data.funcaoDist.map(s => s.label)}
             datasets={[{ label: "Funcionários", data: data.funcaoDist.map(s => s.value), backgroundColor: CHART_PALETTE[0] }]}
             height={280}
+            onChartClick={(info) => openDrillDown(`Função: ${info.label}`, "funcao", info.label)}
           />
           <DashChart
             title="Top 10 Setores"
@@ -182,6 +201,7 @@ export default function DashFuncionarios() {
             labels={data.setorDist.map(s => s.label)}
             datasets={[{ label: "Funcionários", data: data.setorDist.map(s => s.value), backgroundColor: CHART_PALETTE[1] }]}
             height={280}
+            onChartClick={(info) => openDrillDown(`Setor: ${info.label}`, "setor", info.label)}
           />
         </div>
 
@@ -193,6 +213,7 @@ export default function DashFuncionarios() {
             labels={data.tenureDist.map(s => s.label)}
             datasets={[{ label: "Funcionários", data: data.tenureDist.map(s => s.value), backgroundColor: CHART_PALETTE[4] }]}
             height={260}
+            onChartClick={(info) => openDrillDown(`Tempo: ${info.label}`, "tempoEmpresa", info.label)}
           />
           <DashChart
             title="Top 10 Cidades"
@@ -200,6 +221,7 @@ export default function DashFuncionarios() {
             labels={data.cidadeDist.map(s => s.label)}
             datasets={[{ label: "Funcionários", data: data.cidadeDist.map(s => s.value), backgroundColor: CHART_PALETTE[5] }]}
             height={260}
+            onChartClick={(info) => openDrillDown(`Cidade: ${info.label}`, "cidade", info.label)}
           />
         </div>
 
@@ -211,6 +233,7 @@ export default function DashFuncionarios() {
             labels={data.estadoCivilDist.map(s => s.label.replace(/_/g, " "))}
             datasets={[{ data: data.estadoCivilDist.map(s => s.value) }]}
             height={240}
+            onChartClick={(info) => openDrillDown(`Estado Civil: ${info.label}`, "estadoCivil", info.label)}
           />
           <DashChart
             title="Advertências por Tipo"
@@ -228,10 +251,19 @@ export default function DashFuncionarios() {
             type="bar"
             labels={monthLabels}
             datasets={[
-              { label: "Admissões", data: admData, backgroundColor: SEMANTIC_COLORS.positivo },
-              { label: "Demissões", data: demData, backgroundColor: SEMANTIC_COLORS.negativo },
+              { label: "Admissões", data: admData, backgroundColor: SEMANTIC_COLORS.admissao },
+              { label: "Demissões", data: demData, backgroundColor: SEMANTIC_COLORS.demissao },
             ]}
             height={280}
+            onChartClick={(info) => {
+              // Convert label "03/25" back to "2025-03"
+              const [mo, y] = info.label.split("/");
+              const fullYear = `20${y}`;
+              const mesRef = `${fullYear}-${mo}`;
+              const tipo = info.datasetLabel === "Admissões" ? "admissaoMes" : "demissaoMes";
+              const tipoLabel = info.datasetLabel === "Admissões" ? "Admissões" : "Demissões";
+              openDrillDown(`${tipoLabel} em ${mo}/${fullYear}`, tipo, mesRef);
+            }}
           />
         )}
 
@@ -301,6 +333,15 @@ export default function DashFuncionarios() {
           </Card>
         </div>
       </div>
+
+      {/* Drill-Down Modal */}
+      <DrillDownModal
+        open={drillDown.open}
+        onOpenChange={(open) => setDrillDown(prev => ({ ...prev, open }))}
+        title={drillDown.title}
+        filterType={drillDown.filterType}
+        filterValue={drillDown.filterValue}
+      />
     </DashboardLayout>
   );
 }

@@ -19,7 +19,7 @@ import {
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
   CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 function formatDate(d: string | null | undefined) {
@@ -92,30 +92,41 @@ export default function AvisoPrevio() {
   // tRPC utils for imperative queries
   const utils = trpc.useUtils();
 
-  // Calcular preview
+  // Cálculo automático via useEffect
   const [calculoLoading, setCalculoLoading] = useState(false);
-  const calcularPreview = async () => {
-    if (!form.employeeId || !form.tipo) {
-      toast.error("Selecione o funcionário e o tipo");
-      return;
-    }
+  const calcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const executarCalculo = useCallback(async (empId: number, tipo: string, dataDeslig: string, diasOverride?: string) => {
     setCalculoLoading(true);
     try {
       const result = await (utils as any).avisoPrevio.avisoPrevio.calcular.fetch({
-        employeeId: form.employeeId,
-        tipo: form.tipo,
-        dataDesligamento: form.dataInicio || undefined,
-        diasTrabalhadosOverride: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
+        employeeId: empId,
+        tipo,
+        dataDesligamento: dataDeslig,
+        diasTrabalhadosOverride: diasOverride ? Number(diasOverride) : undefined,
       });
       setCalculoPreview(result);
-      toast.success("Previsão calculada com sucesso!");
     } catch (e: any) {
       console.error("Erro ao calcular rescisão:", e);
-      toast.error(e.message || "Erro ao calcular previsão de rescisão");
+      setCalculoPreview(null);
     } finally {
       setCalculoLoading(false);
     }
-  };
+  }, [utils]);
+
+  // Disparar cálculo automaticamente quando os 3 campos obrigatórios estão preenchidos
+  useEffect(() => {
+    if (calcTimerRef.current) clearTimeout(calcTimerRef.current);
+    if (!form.employeeId || !form.tipo || !form.dataDesligamento) {
+      setCalculoPreview(null);
+      return;
+    }
+    // Debounce de 500ms para evitar chamadas excessivas
+    calcTimerRef.current = setTimeout(() => {
+      executarCalculo(form.employeeId, form.tipo, form.dataDesligamento, form.diasTrabalhadosOverride);
+    }, 500);
+    return () => { if (calcTimerRef.current) clearTimeout(calcTimerRef.current); };
+  }, [form.employeeId, form.tipo, form.dataDesligamento, form.diasTrabalhadosOverride, executarCalculo]);
 
   // Filtered list
   const filtered = useMemo(() => {
@@ -144,7 +155,7 @@ export default function AvisoPrevio() {
   const selectedEmp = activeEmployees.find((e: any) => e.id === form.employeeId);
 
   const handleSubmit = () => {
-    if (!form.employeeId || !form.tipo || !form.dataInicio) {
+    if (!form.employeeId || !form.tipo || !form.dataDesligamento) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
@@ -152,8 +163,8 @@ export default function AvisoPrevio() {
       companyId,
       employeeId: form.employeeId,
       tipo: form.tipo,
-      dataInicio: form.dataInicio,
-      dataDesligamento: form.dataInicio,
+      dataInicio: form.dataDesligamento,
+      dataDesligamento: form.dataDesligamento,
       reducaoJornada: form.reducaoJornada || "nenhuma",
       observacoes: form.observacoes,
       diasTrabalhados: form.diasTrabalhadosOverride ? Number(form.diasTrabalhadosOverride) : undefined,
@@ -556,9 +567,9 @@ export default function AvisoPrevio() {
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-amber-600" />
-                      Data de Desligamento <span className="text-red-500">*</span>
+                      Último Dia Trabalhado <span className="text-red-500">*</span>
                     </label>
-                    <Input type="date" className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors" value={form.dataInicio || ""} onChange={e => setForm({ ...form, dataInicio: e.target.value })} />
+                    <Input type="date" className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors" value={form.dataDesligamento || ""} onChange={e => setForm({ ...form, dataDesligamento: e.target.value })} />
                   </div>
                 </div>
 
@@ -595,21 +606,13 @@ export default function AvisoPrevio() {
                   </div>
                 </div>
 
-                {/* Botão Calcular */}
-                <div>
-                  <Button
-                    variant="outline"
-                    className="w-full h-12 border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 font-semibold"
-                    onClick={calcularPreview}
-                    disabled={!form.employeeId || !form.tipo || calculoLoading}
-                  >
-                    {calculoLoading ? (
-                      <><Clock className="h-4 w-4 mr-2 animate-spin" /> Calculando...</>
-                    ) : (
-                      <><DollarSign className="h-4 w-4 mr-2" /> Calcular Previsão de Rescisão</>
-                    )}
-                  </Button>
-                </div>
+                {/* Indicador de cálculo automático */}
+                {calculoLoading && (
+                  <div className="flex items-center gap-2 text-amber-600 text-sm">
+                    <Clock className="h-4 w-4 animate-spin" />
+                    <span>Calculando previsão de rescisão...</span>
+                  </div>
+                )}
 
                 {/* Seção 4: Observações */}
                 <div>
@@ -741,16 +744,49 @@ export default function AvisoPrevio() {
                         </div>
                       </div>
 
-                      {/* Total */}
+                      {/* Total Verbas */}
                       <div className="mt-4 pt-3 border-t-2 border-green-300 flex justify-between items-center">
                         <div>
-                          <span className="text-lg font-bold text-green-800">TOTAL RESCISÃO</span>
+                          <span className="text-lg font-bold text-green-800">TOTAL VERBAS</span>
                           <p className="text-[10px] text-green-600">Saldo + Férias + VR + 13º + Aviso Prévio</p>
                         </div>
                         <span className="text-2xl font-bold text-green-700">{formatMoeda(calculoPreview.previsaoRescisao.total)}</span>
                       </div>
                     </div>
                   )}
+
+                  {/* Seção de Descontos */}
+                  {calculoPreview.descontos && calculoPreview.descontos.length > 0 && (
+                    <div className="bg-white rounded-lg border border-red-200 p-4 mt-4">
+                      <p className="text-xs font-bold text-red-500 uppercase tracking-wide mb-3">Descontos</p>
+                      <div className="space-y-0">
+                        {calculoPreview.descontos.map((d: any, i: number) => (
+                          <div key={i} className="flex justify-between py-2 border-b border-red-50">
+                            <span className="text-sm text-red-700">{d.descricao}</span>
+                            <span className="font-semibold text-sm text-red-700">- {formatMoeda(d.valor)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between py-2 mt-1 border-t border-red-200">
+                          <span className="text-sm font-bold text-red-700">Total Descontos</span>
+                          <span className="font-bold text-sm text-red-700">- {formatMoeda(calculoPreview.totalDescontos)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Total Líquido */}
+                  <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg p-5 mt-4">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-lg font-bold text-white">TOTAL LÍQUIDO RESCISÃO</span>
+                        <p className="text-[10px] text-green-200">Verbas {calculoPreview.descontos?.length > 0 ? '- Descontos' : ''}</p>
+                      </div>
+                      <span className="text-3xl font-bold text-white">{formatMoeda(calculoPreview.totalLiquido || calculoPreview.previsaoRescisao.total)}</span>
+                    </div>
+                    {calculoPreview.previsaoRescisao?.dataLimitePagamento && (
+                      <p className="text-[10px] text-green-200 mt-2 text-right">Prazo pagamento: {formatDate(calculoPreview.previsaoRescisao.dataLimitePagamento)} (Art. 477 §6º CLT)</p>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

@@ -2196,9 +2196,12 @@ export const mealBenefitConfigs = mysqlTable("meal_benefit_configs", {
 	cafeManhaDia: varchar({ length: 20 }).default('0'), // valor diário café da manhã
 	lancheTardeDia: varchar({ length: 20 }).default('0'), // valor diário lanche da tarde
 	valeAlimentacaoMes: varchar({ length: 20 }).default('0'), // valor mensal VA (iFood)
-	jantaDia: varchar({ length: 20 }).default('0'), // valor diário jantar (se necessário)
-	totalVA_iFood: varchar({ length: 20 }).default('0'), // total VA mensal calculado
-	diasUteisRef: int().default(22), // dias úteis referência para cálculo
+jantaDia: varchar({ length: 20 }).default('0'), // valor diário jantar (se necessário)
+		totalVA_iFood: varchar({ length: 20 }).default('0'), // total VA mensal calculado
+		diasUteisRef: int().default(22), // dias úteis referência para cálculo
+		cafeAtivo: tinyint().default(1), // 1 = ativo, 0 = desativado
+		lancheAtivo: tinyint().default(1), // 1 = ativo, 0 = desativado
+		jantaAtivo: tinyint().default(0), // 1 = ativo, 0 = desativado
 	observacoes: text(),
 	ativo: tinyint().default(1),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),

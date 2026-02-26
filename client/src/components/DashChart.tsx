@@ -18,6 +18,14 @@ const loadChartJS = async () => {
 
 type ChartType = "bar" | "doughnut" | "pie" | "line" | "horizontalBar";
 
+export interface ChartClickInfo {
+  label: string;
+  datasetLabel?: string;
+  datasetIndex: number;
+  dataIndex: number;
+  value: number;
+}
+
 interface DashChartProps {
   title: string;
   type: ChartType;
@@ -34,17 +42,20 @@ interface DashChartProps {
   height?: number;
   className?: string;
   showPercentage?: boolean;
+  onChartClick?: (info: ChartClickInfo) => void;
 }
 
 const COLORS = [
-  "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
-  "#06B6D4", "#EC4899", "#14B8A6", "#F97316", "#6366F1",
-  "#84CC16", "#A855F7", "#22D3EE", "#FB923C", "#4ADE80",
+  "#2563EB", "#F59E0B", "#8B5CF6", "#DC2626", "#06B6D4",
+  "#EC4899", "#10B981", "#F97316", "#6366F1", "#14B8A6",
+  "#A855F7", "#EAB308", "#0EA5E9", "#E11D48", "#059669",
 ];
 
-export default function DashChart({ title, type, labels, datasets, height = 280, className, showPercentage = true }: DashChartProps) {
+export default function DashChart({ title, type, labels, datasets, height = 280, className, showPercentage = true, onChartClick }: DashChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
+  const onClickRef = useRef(onChartClick);
+  onClickRef.current = onChartClick;
 
   useEffect(() => {
     let mounted = true;
@@ -63,8 +74,6 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
         borderWidth: ds.borderWidth ?? (isPieOrDoughnut ? 2 : 1),
       }));
 
-      // For pie/doughnut: show % inside large slices only
-      // For bar/line/horizontalBar: NO datalabels (clean), % only in tooltip
       const datalabelsConfig = isPieOrDoughnut && showPercentage ? {
         display: function (context: any) {
           const value = context.dataset.data[context.dataIndex];
@@ -72,7 +81,7 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
           const total = dataArr.reduce((a: number, b: number) => a + b, 0);
           if (total === 0) return false;
           const pct = (value / total) * 100;
-          return pct >= 5; // Only show inside slices >= 5%
+          return pct >= 5;
         },
         formatter: function (value: number, context: any) {
           const dataArr = context.dataset.data as number[];
@@ -88,7 +97,6 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
         textAlign: "center" as const,
       } : { display: false as const };
 
-      // Enhanced tooltip with value + % for ALL chart types
       const tooltipConfig = {
         backgroundColor: "rgba(15, 23, 42, 0.92)",
         titleFont: { size: 12, weight: "bold" as const },
@@ -112,10 +120,12 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
             }
             return ` ${labelStr}: ${value} (${pct}%)`;
           },
+          ...(onChartClick ? {
+            afterLabel: () => "🔍 Clique para ver detalhes",
+          } : {}),
         },
       };
 
-      // For pie/doughnut: show % in legend labels
       const legendConfig = {
         display: datasets.length > 1 || isPieOrDoughnut,
         position: isPieOrDoughnut ? "right" as const : "top" as const,
@@ -153,6 +163,29 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
           responsive: true,
           maintainAspectRatio: false,
           indexAxis: isHorizontalBar ? "y" : "x",
+          ...(onChartClick ? { 
+            onHover: (event: any, elements: any[]) => {
+              const canvas = event.native?.target;
+              if (canvas) canvas.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+            },
+          } : {}),
+          onClick: (_event: any, elements: any[], chart: any) => {
+            console.log('[DashChart] onClick fired, elements:', elements.length, 'hasCallback:', !!onClickRef.current);
+            if (!onClickRef.current || elements.length === 0) return;
+            const el = elements[0];
+            const datasetIndex = el.datasetIndex;
+            const dataIndex = el.index;
+            const label = chart.data.labels[dataIndex];
+            const datasetLabel = chart.data.datasets[datasetIndex]?.label;
+            const value = chart.data.datasets[datasetIndex].data[dataIndex];
+            onClickRef.current({
+              label,
+              datasetLabel,
+              datasetIndex,
+              dataIndex,
+              value,
+            });
+          },
           plugins: {
             legend: legendConfig,
             tooltip: tooltipConfig,
@@ -170,9 +203,17 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
   }, [type, labels, datasets, height, showPercentage]);
 
   return (
-    <Card className={className}>
+    <Card className={`${className || ''} ${onChartClick ? 'ring-1 ring-transparent hover:ring-blue-200 transition-all' : ''}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{title}</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">{title}</CardTitle>
+          {onChartClick ? (
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
+              Clique para detalhes
+            </span>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent>
         <div style={{ height: `${height}px` }}>

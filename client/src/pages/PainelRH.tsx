@@ -12,8 +12,11 @@ import {
   BarChart3, Landmark, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, ExternalLink,
-  Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw
+  Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
+  Bell, FileText, CheckCircle2, XCircle
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -48,7 +51,41 @@ export default function PainelRH() {
   );
 
   const s = homeData?.stats;
-  const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0);
+  const [alertaTab, setAlertaTab] = useState('todos');
+  const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0) + (s?.avisosPreviosVencendo ?? 0);
+
+  // Montar lista de alertas para o Dialog
+  const alertasList: { id: string; tipo: string; titulo: string; descricao: string; urgencia: string; link: string }[] = [];
+  if (homeData) {
+    // ASOs vencidos
+    (homeData.asosAlerta ?? []).filter((a: any) => a.vencido).forEach((a: any) => {
+      alertasList.push({ id: `aso-v-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencido - ${a.nome}`, descricao: `Vencido há ${Math.abs(a.diasRestantes)} dias. Função: ${a.funcao || '-'}`, urgencia: 'critico', link: '/controle-documentos' });
+    });
+    // ASOs vencendo
+    (homeData.asosAlerta ?? []).filter((a: any) => !a.vencido).forEach((a: any) => {
+      alertasList.push({ id: `aso-e-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencendo - ${a.nome}`, descricao: `Vence em ${a.diasRestantes} dias. Função: ${a.funcao || '-'}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao', link: '/controle-documentos' });
+    });
+    // Sem ASO
+    (homeData.semAso ?? []).forEach((e: any) => {
+      alertasList.push({ id: `sem-aso-${e.id}`, tipo: 'aso', titulo: `Sem ASO - ${e.nome}`, descricao: `Funcionário sem ASO cadastrado. Função: ${e.funcao || '-'}`, urgencia: 'atencao', link: '/controle-documentos' });
+    });
+    // Férias vencendo
+    (homeData.feriasAlerta ?? []).forEach((f: any) => {
+      alertasList.push({ id: `ferias-${f.id}`, tipo: 'ferias', titulo: `Férias ${f.diasParaVencer <= 0 ? 'VENCIDAS' : 'Vencendo'} - ${f.nome}`, descricao: `${f.periodoAquisitivo}º período aquisitivo. ${f.diasParaVencer <= 0 ? 'Já venceu!' : `Vence em ${f.diasParaVencer} dias`}`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao', link: '/ferias' });
+    });
+    // Experiências vencidas/urgentes
+    (homeData.experiencias ?? []).filter((e: any) => e.urgencia === 'vencido' || e.urgencia === 'urgente').forEach((e: any) => {
+      alertasList.push({ id: `exp-${e.id}`, tipo: 'experiencia', titulo: `Contrato Experiência ${e.urgencia === 'vencido' ? 'VENCIDO' : 'Urgente'} - ${e.nome}`, descricao: `Tipo: ${e.tipo}. ${e.urgencia === 'vencido' ? 'Prazo expirado!' : `${e.diasRestantes} dias restantes`}`, urgencia: e.urgencia === 'vencido' ? 'critico' : 'urgente', link: '/colaboradores' });
+    });
+    // Avisos prévios vencendo
+    (homeData.avisosPrevios ?? []).filter((a: any) => a.urgencia === 'critico' || a.urgencia === 'vencido').forEach((a: any) => {
+      alertasList.push({ id: `aviso-${a.id}`, tipo: 'aviso', titulo: `Aviso Prévio ${a.urgencia === 'vencido' ? 'VENCIDO' : 'Crítico'} - ${a.nome}`, descricao: `Tipo: ${a.tipo.replace(/_/g, ' ')}. ${a.diasRestantes <= 0 ? 'Prazo expirado!' : `${a.diasRestantes} dias restantes`}`, urgencia: 'critico', link: '/aviso-previo' });
+    });
+  }
+  // Ordenar por urgência
+  const urgOrder: Record<string, number> = { critico: 0, urgente: 1, atencao: 2 };
+  alertasList.sort((a, b) => (urgOrder[a.urgencia] ?? 3) - (urgOrder[b.urgencia] ?? 3));
+  const filteredAlertas = alertaTab === 'todos' ? alertasList : alertasList.filter(a => a.tipo === alertaTab);
 
   return (
     <DashboardLayout>
@@ -204,6 +241,55 @@ export default function PainelRH() {
                   ) : null}
                 </DialogContent>
               </Dialog>
+
+              {/* Card de Avisos Prévios em Andamento */}
+              {(homeData?.avisosPrevios?.length ?? 0) > 0 && (
+                <Card className="border-2 border-red-300 bg-gradient-to-r from-red-50 to-orange-50">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-red-600" />
+                        Avisos Prévios em Andamento
+                        <Badge variant="destructive" className="text-[10px]">{homeData!.avisosPrevios.length} ativo{homeData!.avisosPrevios.length !== 1 ? 's' : ''}</Badge>
+                        {(s?.avisosPreviosVencendo ?? 0) > 0 && <Badge className="bg-red-600 text-white text-[10px] animate-pulse">{s!.avisosPreviosVencendo} vencendo!</Badge>}
+                      </CardTitle>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate('/aviso-previo')}>Ver todos <ChevronRight className="h-3 w-3 ml-1" /></Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {homeData!.avisosPrevios.map((a: any) => {
+                        const tipoLabel = a.tipo === 'empregador_trabalhado' ? 'Emp. Trabalhado' : a.tipo === 'empregador_indenizado' ? 'Emp. Indenizado' : a.tipo === 'empregado_trabalhado' ? 'Ped. Trabalhado' : 'Ped. Indenizado';
+                        return (
+                          <div key={a.id} className={`p-3 rounded-lg border ${
+                            a.urgencia === 'vencido' ? 'bg-red-100 border-red-300 animate-pulse' :
+                            a.urgencia === 'critico' ? 'bg-red-50 border-red-200' :
+                            a.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200' :
+                            'bg-white border-gray-200'
+                          }`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-foreground">{a.nome}</span>
+                              <Badge className={`text-[9px] ${
+                                a.urgencia === 'vencido' ? 'bg-red-600 text-white' :
+                                a.urgencia === 'critico' ? 'bg-red-500 text-white' :
+                                a.urgencia === 'urgente' ? 'bg-orange-500 text-white' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                {a.diasRestantes <= 0 ? 'VENCIDO!' : `${a.diasRestantes}d restantes`}
+                              </Badge>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">{a.funcao} · {tipoLabel}</p>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-[10px] text-muted-foreground">Término: {new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                              {a.valorEstimado && <span className="text-[10px] font-bold text-red-600">R$ {parseFloat(a.valorEstimado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Main Content Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -475,6 +561,75 @@ export default function PainelRH() {
           </Card>
         )}
       </div>
+
+      {/* ===== DIALOG DE ALERTAS ===== */}
+      <Dialog open={alertasOpen} onOpenChange={setAlertasOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-red-600" />
+              Central de Alertas
+              <Badge variant="destructive" className="text-xs">{alertasList.length}</Badge>
+            </DialogTitle>
+          </DialogHeader>
+          <Tabs value={alertaTab} onValueChange={setAlertaTab}>
+            <TabsList className="w-full">
+              <TabsTrigger value="todos" className="flex-1 text-xs">Todos ({alertasList.length})</TabsTrigger>
+              <TabsTrigger value="aso" className="flex-1 text-xs">ASOs ({alertasList.filter(a => a.tipo === 'aso').length})</TabsTrigger>
+              <TabsTrigger value="ferias" className="flex-1 text-xs">Férias ({alertasList.filter(a => a.tipo === 'ferias').length})</TabsTrigger>
+              <TabsTrigger value="experiencia" className="flex-1 text-xs">Experiência ({alertasList.filter(a => a.tipo === 'experiencia').length})</TabsTrigger>
+              <TabsTrigger value="aviso" className="flex-1 text-xs">Avisos ({alertasList.filter(a => a.tipo === 'aviso').length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value={alertaTab} className="mt-3">
+              <ScrollArea className="h-[55vh]">
+                {filteredAlertas.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <CheckCircle2 className="h-10 w-10 mb-3 text-green-500" />
+                    <p className="text-sm font-medium">Nenhum alerta nesta categoria</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 pr-3">
+                    {filteredAlertas.map(alerta => (
+                      <div
+                        key={alerta.id}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${
+                          alerta.urgencia === 'critico' ? 'bg-red-50 border-red-200 hover:border-red-300' :
+                          alerta.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200 hover:border-orange-300' :
+                          'bg-amber-50 border-amber-200 hover:border-amber-300'
+                        }`}
+                        onClick={() => { navigate(alerta.link); setAlertasOpen(false); }}
+                      >
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                          alerta.urgencia === 'critico' ? 'bg-red-100' :
+                          alerta.urgencia === 'urgente' ? 'bg-orange-100' :
+                          'bg-amber-100'
+                        }`}>
+                          {alerta.tipo === 'aso' ? <HeartPulse className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
+                           alerta.tipo === 'ferias' ? <CalendarClock className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
+                           alerta.tipo === 'experiencia' ? <ClipboardCheck className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
+                           <FileText className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground">{alerta.titulo}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{alerta.descricao}</p>
+                        </div>
+                        <Badge className={`text-[10px] shrink-0 ${
+                          alerta.urgencia === 'critico' ? 'bg-red-600 text-white' :
+                          alerta.urgencia === 'urgente' ? 'bg-orange-500 text-white' :
+                          'bg-amber-500 text-white'
+                        }`}>
+                          {alerta.urgencia === 'critico' ? 'CRÍTICO' : alerta.urgencia === 'urgente' ? 'URGENTE' : 'ATENÇÃO'}
+                        </Badge>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

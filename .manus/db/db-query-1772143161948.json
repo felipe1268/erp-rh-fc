@@ -1,0 +1,16 @@
+{
+  "query": "SELECT e.id, e.nomeCompleto, e.companyId, c.nomeFantasia FROM employees e LEFT JOIN companies c ON e.companyId = c.id WHERE e.nomeCompleto LIKE '%ISABELA%' OR e.nomeCompleto LIKE '%isabela%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT e.id, e.nomeCompleto, e.companyId, c.nomeFantasia FROM employees e LEFT JOIN companies c ON e.companyId = c.id WHERE e.nomeCompleto LIKE '%ISABELA%' OR e.nomeCompleto LIKE '%isabela%'",
+  "rows": [
+    {
+      "id": "420136",
+      "nomeCompleto": "ISABELA AUGUSTA DA SILVA VELLOSO",
+      "companyId": "60002",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tcompanyId\tnomeFantasia\n420136\tISABELA AUGUSTA DA SILVA VELLOSO\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

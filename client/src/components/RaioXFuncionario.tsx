@@ -431,7 +431,38 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         ) : (
           <div className="p-3 sm:p-6 max-w-[1600px] mx-auto space-y-3 sm:space-y-5">
             {/* DADOS PESSOAIS */}
-            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-xl p-3 sm:p-6 border border-blue-200 shadow-sm">
+            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-xl p-3 sm:p-6 border border-blue-200 shadow-sm relative">
+              {/* BANNER AVISO PRÉVIO - só aparece se status ativo/em_andamento */}
+              {(() => {
+                const avisoAtivo = avisosPrevios.find((a: any) => a.status === 'ativo' || a.status === 'em_andamento' || a.status === 'pendente');
+                if (!avisoAtivo) return null;
+                const tipoLabel: Record<string, string> = { empregador_trabalhado: 'Empregador (Trabalhado)', empregador_indenizado: 'Empregador (Indenizado)', empregado_trabalhado: 'Empregado (Trabalhado)', empregado_indenizado: 'Empregado (Indenizado)' };
+                const dataFim = avisoAtivo.dataFim ? new Date(avisoAtivo.dataFim) : null;
+                const hoje = new Date();
+                const diasRestantes = dataFim ? Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                const isUrgente = diasRestantes !== null && diasRestantes <= 3;
+                const isVencido = diasRestantes !== null && diasRestantes <= 0;
+                return (
+                  <div className={`absolute top-2 right-2 sm:top-3 sm:right-3 z-10 ${isUrgente ? 'animate-pulse' : ''}`}>
+                    <div className={`${isVencido ? 'bg-red-700' : isUrgente ? 'bg-red-600' : 'bg-red-500'} text-white rounded-lg px-3 py-2 sm:px-4 sm:py-3 shadow-lg border-2 ${isVencido ? 'border-red-900' : 'border-red-700'} max-w-[260px]`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
+                        <span className="font-bold text-xs sm:text-sm">{isVencido ? '⚠️ AVISO VENCIDO!' : 'EM AVISO PRÉVIO'}</span>
+                      </div>
+                      <div className="text-[10px] sm:text-xs space-y-0.5 opacity-95">
+                        <div><strong>Tipo:</strong> {tipoLabel[avisoAtivo.tipo] || avisoAtivo.tipo}</div>
+                        <div><strong>Início:</strong> {avisoAtivo.dataInicio ? new Date(avisoAtivo.dataInicio).toLocaleDateString('pt-BR') : '-'}</div>
+                        <div><strong>Fim:</strong> {dataFim ? dataFim.toLocaleDateString('pt-BR') : '-'}</div>
+                        {diasRestantes !== null && (
+                          <div className="font-bold text-xs sm:text-sm mt-1 pt-1 border-t border-white/30">
+                            {isVencido ? `Venceu há ${Math.abs(diasRestantes)} dia(s)` : `Faltam ${diasRestantes} dia(s)`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="flex items-start gap-3 sm:gap-4">
                 {/* FOTO DO COLABORADOR */}
                 <div className="shrink-0">

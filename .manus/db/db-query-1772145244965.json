@@ -1,0 +1,18 @@
+{
+  "query": "\nSELECT \n  COUNT(*) as total_colaboradores,\n  SUM(CASE WHEN status = 'Ativo' THEN 1 ELSE 0 END) as ativos,\n  SUM(CASE WHEN status = 'Ferias' THEN 1 ELSE 0 END) as ferias,\n  SUM(CASE WHEN status = 'Afastado' THEN 1 ELSE 0 END) as afastados,\n  SUM(CASE WHEN status = 'Licenca' THEN 1 ELSE 0 END) as licenca,\n  SUM(CASE WHEN status = 'Desligado' THEN 1 ELSE 0 END) as desligados\nFROM employees \nWHERE companyId = 60002\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \nSELECT \n  COUNT(*) as total_colaboradores,\n  SUM(CASE WHEN status = 'Ativo' THEN 1 ELSE 0 END) as ativos,\n  SUM(CASE WHEN status = 'Ferias' THEN 1 ELSE 0 END) as ferias,\n  SUM(CASE WHEN status = 'Afastado' THEN 1 ELSE 0 END) as afastados,\n  SUM(CASE WHEN status = 'Licenca' THEN 1 ELSE 0 END) as licenca,\n  SUM(CASE WHEN status = 'Desligado' THEN 1 ELSE 0 END) as desligados\nFROM employees \nWHERE companyId = 60002\n",
+  "rows": [
+    {
+      "total_colaboradores": "160",
+      "ativos": "156",
+      "ferias": "0",
+      "afastados": "0",
+      "licenca": "0",
+      "desligados": "4"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_colaboradores\tativos\tferias\tafastados\tlicenca\tdesligados\n160\t156\t0\t0\t0\t4\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

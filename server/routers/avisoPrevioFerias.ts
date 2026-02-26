@@ -318,14 +318,13 @@ export const avisoPrevioFeriasRouter = router({
         return row || null;
       }),
 
-    /** Calcular previsão de rescisão - NOVO CÁLCULO CORRETO CLT */
+    /** Calcular previsão de rescisão - CLT completa com descontos */
     calcular: protectedProcedure
       .input(z.object({
         employeeId: z.number(),
         tipo: z.string(),
-        dataDesligamento: z.string().optional(), // data de desligamento (default: hoje)
-        vrDiarioOverride: z.number().optional(), // override manual do VR diário
-        diasTrabalhadosOverride: z.number().optional(), // override manual dos dias trabalhados
+        dataDesligamento: z.string(), // último dia trabalhado (obrigatório)
+        diasTrabalhadosOverride: z.number().optional(),
       }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
@@ -333,7 +332,7 @@ export const avisoPrevioFeriasRouter = router({
         if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
         
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
-        const dataDesligamento = input.dataDesligamento || new Date().toISOString().split("T")[0];
+        const dataDesligamento = input.dataDesligamento;
         const salarioBase = parseBRL(emp.salarioBase);
         const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
         const diasAviso = calcularDiasAviso(anosServico);
@@ -342,45 +341,117 @@ export const avisoPrevioFeriasRouter = router({
         const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
         const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtDeslig.getDate();
         
-        // VR diário: usar override, ou buscar da config de benefícios
-        let vrDiario = input.vrDiarioOverride ?? 0;
-        if (!input.vrDiarioOverride) {
-          // Buscar configuração de benefícios da obra do funcionário ou padrão da empresa
-          try {
-            const obraId = (emp as any).obraAtualId;
-            // Tentar buscar config específica da obra
-            const [configObra] = await db.execute(
+        // ============================================================
+        // VR: buscar da config de benefícios da obra do funcionário
+        // ============================================================
+        let vrDiario = 0;
+        let vrConfigNome = '';
+        let vrExtra: any = {};
+        try {
+          const obraId = (emp as any).obraAtualId;
+          let cfgRows: any[] = [];
+          if (obraId) {
+            const [rows] = await db.execute(
               sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId = ${obraId} AND ativo = 1 LIMIT 1`
             ) as any[];
-            
-            if (configObra && configObra.length > 0) {
-              const cfg = configObra[0];
-              const cafe = parseBRL(cfg.cafeManhaDia);
-              const lanche = parseBRL(cfg.lancheTardeDia);
-              const vaMes = parseBRL(cfg.valeAlimentacaoMes);
-              const diasUteis = cfg.diasUteisRef || 22;
-              vrDiario = cafe + lanche + (vaMes / diasUteis);
-            } else {
-              // Buscar config padrão da empresa (obraId IS NULL)
-              const [configPadrao] = await db.execute(
-                sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
-              ) as any[];
-              
-              if (configPadrao && configPadrao.length > 0) {
-                const cfg = configPadrao[0];
-                const cafe = parseBRL(cfg.cafeManhaDia);
-                const lanche = parseBRL(cfg.lancheTardeDia);
-                const vaMes = parseBRL(cfg.valeAlimentacaoMes);
-                const diasUteis = cfg.diasUteisRef || 22;
-                vrDiario = cafe + lanche + (vaMes / diasUteis);
+            cfgRows = rows || [];
+          }
+          if (cfgRows.length === 0) {
+            const [rows] = await db.execute(
+              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
+            ) as any[];
+            cfgRows = rows || [];
+          }
+          if (cfgRows.length > 0) {
+            const cfg = cfgRows[0];
+            const cafe = parseBRL(cfg.cafeManhaDia);
+            const lanche = parseBRL(cfg.lancheTardeDia);
+            const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+            const diasUteis = cfg.diasUteisRef || 22;
+            const cafeAtivo = cfg.cafeAtivo === 1 || cfg.cafeAtivo === true;
+            const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
+            // Total VA iFood MENSAL = café(dia × diasUteis) + lanche(dia × diasUteis) + VA mensal
+            // Cada item só entra se estiver ativo na config
+            const totalVAMensal = (cafeAtivo ? cafe * diasUteis : 0) + (lancheAtivo ? lanche * diasUteis : 0) + vaMes;
+            // VR proporcional na rescisão = totalMensal / 30 × dias trabalhados
+            vrDiario = totalVAMensal / 30; // "diário" agora é o valor mensal dividido por 30
+            vrConfigNome = cfg.nome || 'Padrão';
+            // Guardar info extra para exibição
+            vrExtra = { totalVAMensal, cafeAtivo, lancheAtivo, cafeDia: cafe, lancheDia: lanche, vaMes, diasUteis };
+          }
+        } catch { vrDiario = 0; }
+        
+        // ============================================================
+        // DESCONTOS: buscar pendências do funcionário
+        // ============================================================
+        const descontos: Array<{ descricao: string; valor: number; tipo: string; referencia?: string }> = [];
+        
+        // 1. Adiantamentos pendentes (aprovados mas não descontados)
+        try {
+          const [advRows] = await db.execute(
+            sql`SELECT mesReferencia, valorAdiantamento FROM advances WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND aprovado = 'Aprovado' ORDER BY mesReferencia DESC`
+          ) as any[];
+          // Considerar o último adiantamento como pendente de desconto na rescisão
+          if (advRows && advRows.length > 0) {
+            const lastAdv = advRows[0];
+            const val = parseBRL(lastAdv.valorAdiantamento);
+            if (val > 0) {
+              descontos.push({
+                descricao: `Adiantamento (${lastAdv.mesReferencia})`,
+                valor: val,
+                tipo: 'adiantamento',
+                referencia: lastAdv.mesReferencia,
+              });
+            }
+          }
+        } catch {}
+        
+        // 2. EPIs com desconto pendente
+        try {
+          const [epiRows] = await db.execute(
+            sql`SELECT descricao, valorDesconto, createdAt FROM epi_discount_alerts WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND status = 'pendente' ORDER BY createdAt DESC`
+          ) as any[];
+          if (epiRows) {
+            for (const epi of epiRows) {
+              const val = parseBRL(epi.valorDesconto);
+              if (val > 0) {
+                descontos.push({
+                  descricao: `EPI: ${epi.descricao || 'Desconto EPI'}`,
+                  valor: val,
+                  tipo: 'epi',
+                });
               }
             }
-          } catch (e) {
-            // Se não encontrar config, VR = 0
-            vrDiario = 0;
           }
-        }
+        } catch {}
         
+        // 3. Descontos do ponto do mês atual (não fechados/abonados)
+        try {
+          const mesRef = dataDesligamento.substring(0, 7); // YYYY-MM
+          const [pontoRows] = await db.execute(
+            sql`SELECT tipo, valorTotal FROM ponto_descontos WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND mesReferencia = ${mesRef} AND status IN ('calculado','revisado') ORDER BY data ASC`
+          ) as any[];
+          if (pontoRows) {
+            let totalPonto = 0;
+            for (const p of pontoRows) {
+              totalPonto += parseBRL(p.valorTotal);
+            }
+            if (totalPonto > 0) {
+              descontos.push({
+                descricao: `Descontos do Ponto (${mesRef})`,
+                valor: totalPonto,
+                tipo: 'ponto',
+                referencia: mesRef,
+              });
+            }
+          }
+        } catch {}
+        
+        const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
+        
+        // ============================================================
+        // CÁLCULO DAS VERBAS RESCISÓRIAS
+        // ============================================================
         const previsao = calcularRescisaoCompleta({
           salarioBase,
           dataAdmissao,
@@ -390,6 +461,10 @@ export const avisoPrevioFeriasRouter = router({
           diasTrabalhadosMes,
         });
         
+        // Total líquido = verbas - descontos
+        const totalVerbas = parseFloat(previsao.total);
+        const totalLiquido = totalVerbas - totalDescontos;
+        
         return {
           anosServico,
           diasAviso,
@@ -398,10 +473,16 @@ export const avisoPrevioFeriasRouter = router({
           dataDesligamento,
           dataFimEstimada: calcularDataFim(dataDesligamento, diasAviso),
           previsaoRescisao: previsao,
+          vrConfigNome,
+          vrExtra,
+          descontos: descontos.map(d => ({ ...d, valor: d.valor.toFixed(2) })),
+          totalDescontos: totalDescontos.toFixed(2),
+          totalLiquido: totalLiquido.toFixed(2),
           funcionario: {
             nome: emp.nomeCompleto,
             cargo: emp.cargo || (emp as any).funcao || '',
             cpf: emp.cpf,
+            obraAtualId: (emp as any).obraAtualId,
           },
         };
       }),
@@ -456,10 +537,16 @@ export const avisoPrevioFeriasRouter = router({
         jantaDia: z.string(),
         totalVA_iFood: z.string(),
         diasUteisRef: z.number().default(22),
+        cafeAtivo: z.boolean().default(true),
+        lancheAtivo: z.boolean().default(true),
+        jantaAtivo: z.boolean().default(false),
         observacoes: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
+        const cafeAtivoInt = input.cafeAtivo ? 1 : 0;
+        const lancheAtivoInt = input.lancheAtivo ? 1 : 0;
+        const jantaAtivoInt = input.jantaAtivo ? 1 : 0;
         if (input.id) {
           await db.execute(
             sql`UPDATE meal_benefit_configs SET 
@@ -471,14 +558,17 @@ export const avisoPrevioFeriasRouter = router({
               jantaDia = ${input.jantaDia},
               totalVA_iFood = ${input.totalVA_iFood},
               diasUteisRef = ${input.diasUteisRef},
+              cafeAtivo = ${cafeAtivoInt},
+              lancheAtivo = ${lancheAtivoInt},
+              jantaAtivo = ${jantaAtivoInt},
               observacoes = ${input.observacoes || null}
             WHERE id = ${input.id}`
           );
           return { success: true, id: input.id };
         } else {
           const [result] = await db.execute(
-            sql`INSERT INTO meal_benefit_configs (companyId, obraId, nome, cafeManhaDia, lancheTardeDia, valeAlimentacaoMes, jantaDia, totalVA_iFood, diasUteisRef, observacoes)
-            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${input.observacoes || null})`
+            sql`INSERT INTO meal_benefit_configs (companyId, obraId, nome, cafeManhaDia, lancheTardeDia, valeAlimentacaoMes, jantaDia, totalVA_iFood, diasUteisRef, cafeAtivo, lancheAtivo, jantaAtivo, observacoes)
+            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.observacoes || null})`
           ) as any;
           return { success: true, id: result.insertId };
         }

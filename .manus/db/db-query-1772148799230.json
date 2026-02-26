@@ -1,0 +1,65 @@
+{
+  "query": "SELECT version, titulo, tipo, descricao FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo, descricao FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "rows": [
+    {
+      "version": "83",
+      "titulo": "Fase 36: Frontend Completo + Dissídio por Ano",
+      "tipo": "feature",
+      "descricao": "Frontend completo: Feriados, PJ Medições, Upload Documentos, Aba Benefícios (pensão, licença maternidade, seguro vida, sindicato, dissídio, CCT, DDS, VT), Aba Descontos CLT na Folha, Aba Cruzamento HE, Módulo Dissídio separado por ano com critérios CLT/MTE"
+    },
+    {
+      "version": "82",
+      "titulo": "Gap Analysis Completo + Fornecedor CNPJ + Dissídio",
+      "tipo": "feature",
+      "descricao": "Implementação completa do Gap Analysis (20 módulos): Template Aviso Prévio PDF, Alerta 80 dias obras, Campos VT/Pensão/Licença/Seguro/Sindicato/Dissídio, Tabela Feriados, PJ Medições, Upload Documentos S3, Comparativo Descontos Folha, Cruzamento HE, Regra vale dia 10, Recontratação CPF, JF Processos, Sugestão advertências. Módulo Dissídio por ano com critérios CLT/MTE. Campo Fornecedor com busca CNPJ via BrasilAPI no EPI."
+    },
+    {
+      "version": "81",
+      "titulo": "Gap Analysis Completo - Reunião Gerencial RH",
+      "tipo": "feature",
+      "descricao": "Implementação de todos os 20 módulos faltantes do Gap Analysis:"
+    },
+    {
+      "version": "80",
+      "titulo": "HE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen",
+      "tipo": "feature",
+      "descricao": "Atualização completa com 4 melhorias:"
+    },
+    {
+      "version": "79",
+      "titulo": "Auditoria Completa de Campos + Persistência",
+      "tipo": "bugfix",
+      "descricao": "Auditoria completa de todos os 89 campos do cadastro de funcionários."
+    }
+  ],
+  "messages": [
+    "• Template Aviso Prévio (gerar PDF)",
+    "• Alerta 80 dias fim de obra no Painel Principal",
+    "• Campos VT, Pensão Alimentícia, Licença Maternidade no cadastro",
+    "• Campos rateáveis por obra (seguro vida, sindicato, dissídio, CCT, DDS)",
+    "• Comparativo Descontos na Folha (sistema vs contabilidade)",
+    "• Cruzamento HE sistema x folha com auditoria",
+    "• Tabela de Feriados (CRUD + seed nacionais)",
+    "• Critério diferenças salariais (dissídio, reajuste retroativo)",
+    "• PJ Medições mensais (horas x valor hora)",
+    "• Upload documentos pessoais (S3)",
+    "• Regra vale dia 10 (critério configurável)",
+    "• Recontratação CPF com carência de 90 dias",
+    "• Campo Justiça Federal nos Processos Trabalhistas",
+    "• Sugestão automática de advertências por ponto",
+    "1. Campos de HE com digitação livre — sem mais spinner numérico nem limite de 100%, aceita 60%, 70%, 80% ou qualquer valor",
+    "2. Campos de horário da Jornada de Trabalho convertidos para combobox — opções pré-definidas + digitação manual livre (ex: 1h15 de intervalo)",
+    "3. Critérios globais de HE da empresa refletem no cadastro — campos mostram \"Empresa: 60% (CLT: 50%)\" e usam valores da empresa como padrão",
+    "4. Central de Alertas agora abre em tela cheia (fullscreen)",
+    "5. Página de Controle de Revisões agora é somente leitura (sem botão Nova Revisão)",
+    "1. 23 campos faltantes adicionados ao validFields (experiência, desligamento, HE feriado/interjornada, lista negra, etc.)",
+    "2. 5 campos do frontend que eram silenciosamente descartados: categoriaDesligamento, codigoInterno, dataDesligamentoEfetiva, motivoDesligamento, parentescoEmergencia",
+    "3. complementoObs renomeado para descricaoComplemento (nome correto no banco)",
+    "4. booleanFields corrigido: recebeComplemento e acordoHoraExtra são tinyint (boolean)",
+    "5. Sanitização automática de nomeCompleto no create e update"
+  ],
+  "stdout": "version\ttitulo\ttipo\tdescricao\n83\tFase 36: Frontend Completo + Dissídio por Ano\tfeature\tFrontend completo: Feriados, PJ Medições, Upload Documentos, Aba Benefícios (pensão, licença maternidade, seguro vida, sindicato, dissídio, CCT, DDS, VT), Aba Descontos CLT na Folha, Aba Cruzamento HE, Módulo Dissídio separado por ano com critérios CLT/MTE\n82\tGap Analysis Completo + Fornecedor CNPJ + Dissídio\tfeature\tImplementação completa do Gap Analysis (20 módulos): Template Aviso Prévio PDF, Alerta 80 dias obras, Campos VT/Pensão/Licença/Seguro/Sindicato/Dissídio, Tabela Feriados, PJ Medições, Upload Documentos S3, Comparativo Descontos Folha, Cruzamento HE, Regra vale dia 10, Recontratação CPF, JF Processos, Sugestão advertências. Módulo Dissídio por ano com critérios CLT/MTE. Campo Fornecedor com busca CNPJ via BrasilAPI no EPI.\n81\tGap Analysis Completo - Reunião Gerencial RH\tfeature\tImplementação de todos os 20 módulos faltantes do Gap Analysis:\n\n• Template Aviso Prévio (gerar PDF)\n• Alerta 80 dias fim de obra no Painel Principal\n• Campos VT, Pensão Alimentícia, Licença Maternidade no cadastro\n• Campos rateáveis por obra (seguro vida, sindicato, dissídio, CCT, DDS)\n• Comparativo Descontos na Folha (sistema vs contabilidade)\n• Cruzamento HE sistema x folha com auditoria\n• Tabela de Feriados (CRUD + seed nacionais)\n• Critério diferenças salariais (dissídio, reajuste retroativo)\n• PJ Medições mensais (horas x valor hora)\n• Upload documentos pessoais (S3)\n• Regra vale dia 10 (critério configurável)\n• Recontratação CPF com carência de 90 dias\n• Campo Justiça Federal nos Processos Trabalhistas\n• Sugestão automática de advertências por ponto\n80\tHE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen\tfeature\tAtualização completa com 4 melhorias:\n\n1. Campos de HE com digitação livre — sem mais spinner numérico nem limite de 100%, aceita 60%, 70%, 80% ou qualquer valor\n2. Campos de horário da Jornada de Trabalho convertidos para combobox — opções pré-definidas + digitação manual livre (ex: 1h15 de intervalo)\n3. Critérios globais de HE da empresa refletem no cadastro — campos mostram \"Empresa: 60% (CLT: 50%)\" e usam valores da empresa como padrão\n4. Central de Alertas agora abre em tela cheia (fullscreen)\n5. Página de Controle de Revisões agora é somente leitura (sem botão Nova Revisão)\n79\tAuditoria Completa de Campos + Persistência\tbugfix\tAuditoria completa de todos os 89 campos do cadastro de funcionários.\n\n1. 23 campos faltantes adicionados ao validFields (experiência, desligamento, HE feriado/interjornada, lista negra, etc.)\n2. 5 campos do frontend que eram silenciosamente descartados: categoriaDesligamento, codigoInterno, dataDesligamentoEfetiva, motivoDesligamento, parentescoEmergencia\n3. complementoObs renomeado para descricaoComplemento (nome correto no banco)\n4. booleanFields corrigido: recebeComplemento e acordoHoraExtra são tinyint (boolean)\n5. Sanitização automática de nomeCompleto no create e update\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}
