@@ -1195,15 +1195,41 @@ Gere um resumo executivo em português brasileiro com:
 
     // IA sugere perguntas baseadas no tema
     suggestQuestions: protectedProcedure
-      .input(z.object({ tema: z.string().min(3), tipo: z.enum(["setor", "cliente", "outro"]).default("outro") }))
+      .input(z.object({ tema: z.string().min(1), tipo: z.enum(["setor", "cliente", "outro"]).default("outro") }))
       .mutation(async ({ input }) => {
+        const isAvaliacao = input.tipo === "outro";
         const tipoLabel = input.tipo === "setor" ? "pesquisa interna de satisfação por setor" :
-          input.tipo === "cliente" ? "pesquisa de satisfação de clientes" : "pesquisa customizada";
+          input.tipo === "cliente" ? "pesquisa de satisfação de clientes" : "avaliação de desempenho de colaborador";
 
-        const response = await invokeLLM({
-          messages: [
-            { role: "system", content: `Você é um especialista em pesquisas organizacionais e de satisfação. Gere perguntas para uma ${tipoLabel}. Responda APENAS em JSON válido.` },
-            { role: "user", content: `Gere 8 perguntas para uma pesquisa sobre o tema: "${input.tema}".
+        const systemPrompt = isAvaliacao
+          ? `Você é um especialista em Recursos Humanos e Avaliação de Desempenho para empresas de construção civil e engenharia. Gere perguntas abrangentes para avaliar TODOS os aspectos de um colaborador. Responda APENAS em JSON válido.`
+          : `Você é um especialista em pesquisas organizacionais e de satisfação. Gere perguntas para uma ${tipoLabel}. Responda APENAS em JSON válido.`;
+
+        const userPrompt = isAvaliacao
+          ? `Gere 15 perguntas completas para uma avaliação de desempenho sobre o tema: "${input.tema}".
+
+As perguntas devem cobrir TODOS estes aspectos do colaborador:
+- Postura e Disciplina (comportamento, pontualidade, assiduidade)
+- Segurança do Trabalho (uso de EPIs, cumprimento de normas, atenção a riscos)
+- Competência Técnica (qualidade do trabalho, conhecimento técnico, produtividade)
+- Trabalho em Equipe (colaboração, comunicação, relacionamento interpessoal)
+- Proatividade e Iniciativa (disposição, resolução de problemas, sugestões de melhoria)
+- Liderança e Responsabilidade (comprometimento, organização, capacidade de liderar)
+- Adaptabilidade (flexibilidade, aprendizado, reação a mudanças)
+
+Retorne um JSON com a seguinte estrutura:
+{
+  "perguntas": [
+    { "texto": "...", "tipo": "nota", "obrigatoria": true },
+    { "texto": "...", "tipo": "texto", "obrigatoria": false },
+    { "texto": "...", "tipo": "sim_nao", "obrigatoria": true }
+  ]
+}
+
+Tipos disponíveis: "nota" (escala 1 a 5), "texto" (resposta livre), "sim_nao".
+Use majoritariamente tipo "nota" (pelo menos 12 perguntas), com 2 perguntas tipo "texto" para observações e 1 tipo "sim_nao".
+As perguntas devem ser claras, objetivas e específicas para o contexto de construção civil e engenharia.`
+          : `Gere 8 perguntas para uma pesquisa sobre o tema: "${input.tema}".
 
 Retorne um JSON com a seguinte estrutura:
 {
@@ -1215,7 +1241,12 @@ Retorne um JSON com a seguinte estrutura:
 }
 
 Tipos disponíveis: "nota" (1 a 5), "texto" (resposta livre), "sim_nao".
-Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para o contexto de construção civil e engenharia.` },
+Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para o contexto de construção civil e engenharia.`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
           ],
           response_format: {
             type: "json_schema",
@@ -1249,9 +1280,9 @@ Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para 
         try {
           const content = String(response.choices[0]?.message?.content || "{}");
           const parsed = JSON.parse(content);
-          return parsed.perguntas || [];
+          return { questions: parsed.perguntas || [] };
         } catch {
-          return [];
+          return { questions: [] };
         }
       }),
   }),
@@ -1458,9 +1489,9 @@ Gere 2-3 perguntas por categoria (total ~15 perguntas). Contexto: empresa de con
         try {
           const content = String(response.choices[0]?.message?.content || "{}");
           const parsed = JSON.parse(content);
-          return parsed.perguntas || [];
+          return { questions: parsed.perguntas || [] };
         } catch {
-          return [];
+          return { questions: [] };
         }
       }),
   }),

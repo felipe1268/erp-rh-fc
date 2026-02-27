@@ -2941,3 +2941,7 @@
 
 ## Bug: Módulo Avaliação faltando na sidebar
 - [x] Adicionar módulo Avaliação no dropdown de módulos da sidebar (DashboardLayout)
+
+## Bug: IA Sugerir Perguntas não funciona no módulo Avaliação
+- [x] Diagnosticar por que o botão "IA Sugerir Perguntas" não gera perguntas (retorno incompatível)
+- [x] Corrigir backend/frontend para gerar perguntas completas via IA (15 perguntas cobrindo 7 aspectos do colaborador)
