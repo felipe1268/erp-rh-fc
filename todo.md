@@ -3078,3 +3078,7 @@
 - [x] Backend: validar se colaborador já tem aviso em_andamento antes de criar novo (TRPCError CONFLICT)
 - [x] Frontend: mostrar alerta ao selecionar colaborador com aviso ativo + badge "Aviso ativo"
 - [ ] Limpar registros duplicados existentes no banco (a fazer manualmente pelo usuário)
+
+## Full Screen Aplicar Avaliação - 2026-02-27
+- [x] Tornar modal Aplicar Avaliação full screen com layout mais agradável (FullScreenDialog)
+- [x] Notas com cores sugestivas: 1=vermelho(Péssimo), 2=laranja(Ruim), 3=amarelo(Regular), 4=verde-claro(Bom), 5=verde(Excelente)

@@ -1103,36 +1103,57 @@ export default function AvaliacaoDesempenho() {
       {/* ============================================================ */}
       {/* DIALOG: APLICAR AVALIAÇÃO */}
       {/* ============================================================ */}
-      <Dialog open={!!showAplicar} onOpenChange={(open) => { if (!open) { setShowAplicar(null); resetFormAplicar(); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Play className="w-5 h-5 text-green-600" /> Aplicar Avaliação
-            </DialogTitle>
-            <DialogDescription>
-              {showAplicar?.titulo} · Avaliador: <strong>{user?.name || "—"}</strong> (automático)
-            </DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog
+        open={!!showAplicar}
+        onClose={() => { setShowAplicar(null); resetFormAplicar(); }}
+        title="Aplicar Avaliação"
+        icon={<Play className="w-5 h-5 text-green-600" />}
+      >
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header info */}
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <ClipboardList className="w-5 h-5 text-green-700" />
+              </div>
+              <div>
+                <h3 className="font-bold text-green-900 text-lg">{showAplicar?.titulo}</h3>
+                <p className="text-sm text-green-700">Avaliador: <strong>{user?.name || "—"}</strong> (automático)</p>
+              </div>
+            </div>
+          </div>
 
-          <div className="space-y-4">
-            {/* Selecionar Funcionário */}
-            <div>
-              <Label>Funcionário a ser avaliado *</Label>
+          {/* Selecionar Funcionário */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-600" /> Funcionário a ser avaliado
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               <Popover open={aplicarEmployeeOpen} onOpenChange={setAplicarEmployeeOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between mt-1">
+                  <Button variant="outline" className="w-full justify-between h-12 text-left">
                     {selectedEmployee ? (
-                      <span>{selectedEmployee.nomeCompleto} — {selectedEmployee.funcao || "Sem função"}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
+                          {(selectedEmployee.nomeCompleto || '').charAt(0)}
+                        </div>
+                        <div>
+                          <span className="font-semibold block text-sm">{selectedEmployee.nomeCompleto}</span>
+                          <span className="text-xs text-muted-foreground">{selectedEmployee.funcao || "Sem função"} · {selectedEmployee.setor || ""}</span>
+                        </div>
+                      </div>
                     ) : (
                       <span className="text-muted-foreground">Buscar funcionário por nome, CPF ou função...</span>
                     )}
-                    <ChevronDown className="w-4 h-4 ml-2 opacity-50" />
+                    <ChevronDown className="w-4 h-4 ml-2 opacity-50 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[500px] p-0" align="start">
+                <PopoverContent className="w-[600px] p-0" align="start">
                   <Command>
                     <CommandInput placeholder="Buscar funcionário..." value={aplicarEmployeeSearch} onValueChange={setAplicarEmployeeSearch} />
-                    <CommandList>
+                    <CommandList className="max-h-72">
                       <CommandEmpty>Nenhum funcionário encontrado</CommandEmpty>
                       <CommandGroup>
                         {filteredEmployees.map((emp: any) => (
@@ -1143,11 +1164,15 @@ export default function AvaliacaoDesempenho() {
                               setAplicarEmployeeId(emp.id);
                               setAplicarEmployeeOpen(false);
                             }}
+                            className="py-2.5"
                           >
-                            <div className="flex items-center gap-2 w-full">
-                              <Check className={`w-4 h-4 ${aplicarEmployeeId === emp.id ? "opacity-100" : "opacity-0"}`} />
+                            <div className="flex items-center gap-3 w-full">
+                              <Check className={`w-4 h-4 shrink-0 ${aplicarEmployeeId === emp.id ? "opacity-100 text-green-600" : "opacity-0"}`} />
+                              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-bold text-xs shrink-0">
+                                {(emp.nomeCompleto || '').charAt(0)}
+                              </div>
                               <div className="flex-1">
-                                <p className="font-medium text-sm">{emp.nomeCompleto}</p>
+                                <p className="font-semibold text-sm">{emp.nomeCompleto}</p>
                                 <p className="text-xs text-muted-foreground">{emp.funcao || "—"} · CPF: {emp.cpf}</p>
                               </div>
                             </div>
@@ -1158,77 +1183,127 @@ export default function AvaliacaoDesempenho() {
                   </Command>
                 </PopoverContent>
               </Popover>
+            </CardContent>
+          </Card>
+
+          {/* Perguntas */}
+          {avaliacaoDetalhe.isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-green-600" />
             </div>
-
-            <Separator />
-
-            {/* Perguntas */}
-            {avaliacaoDetalhe.isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin" />
-              </div>
-            ) : avaliacaoDetalhe.data?.questions ? (
-              <div className="space-y-4">
-                <Label className="text-base font-semibold">Perguntas</Label>
-                {avaliacaoDetalhe.data.questions.map((q: any, i: number) => (
-                  <div key={q.id} className="p-3 border rounded-lg space-y-2">
-                    <p className="font-medium text-sm">{i + 1}. {q.texto} {q.obrigatoria === 1 && <span className="text-destructive">*</span>}</p>
-                    {q.tipo === "nota" ? (
-                      <div className="flex gap-2">
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <Button
-                            key={n}
-                            variant={aplicarRespostas[q.id] === String(n) ? "default" : "outline"}
-                            size="sm"
-                            className="w-10 h-10"
-                            onClick={() => setAplicarRespostas({ ...aplicarRespostas, [q.id]: String(n) })}
+          ) : avaliacaoDetalhe.data?.questions ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-amber-600" /> Perguntas da Avaliação
+                  <Badge variant="outline" className="ml-auto">
+                    {Object.keys(aplicarRespostas).length} / {avaliacaoDetalhe.data.questions.length} respondidas
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {avaliacaoDetalhe.data.questions.map((q: any, i: number) => {
+                  const answered = aplicarRespostas[q.id] !== undefined;
+                  return (
+                    <div key={q.id} className={`p-4 rounded-xl border-2 transition-all ${
+                      answered ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-white'
+                    }`}>
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                          answered ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {i + 1}
+                        </div>
+                        <p className="font-medium text-sm pt-1.5 flex-1">
+                          {q.texto}
+                          {q.obrigatoria === 1 && <span className="text-red-500 ml-1">*</span>}
+                        </p>
+                      </div>
+                      {q.tipo === "nota" ? (
+                        <div className="flex gap-2 ml-11">
+                          {[1, 2, 3, 4, 5].map(n => {
+                            const selected = aplicarRespostas[q.id] === String(n);
+                            const colorMap: Record<number, { bg: string; bgSel: string; border: string; text: string; label: string }> = {
+                              1: { bg: 'bg-red-50 hover:bg-red-100', bgSel: 'bg-red-500', border: 'border-red-200', text: 'text-red-700', label: 'Péssimo' },
+                              2: { bg: 'bg-orange-50 hover:bg-orange-100', bgSel: 'bg-orange-500', border: 'border-orange-200', text: 'text-orange-700', label: 'Ruim' },
+                              3: { bg: 'bg-yellow-50 hover:bg-yellow-100', bgSel: 'bg-yellow-500', border: 'border-yellow-200', text: 'text-yellow-700', label: 'Regular' },
+                              4: { bg: 'bg-lime-50 hover:bg-lime-100', bgSel: 'bg-lime-500', border: 'border-lime-200', text: 'text-lime-700', label: 'Bom' },
+                              5: { bg: 'bg-green-50 hover:bg-green-100', bgSel: 'bg-green-500', border: 'border-green-200', text: 'text-green-700', label: 'Excelente' },
+                            };
+                            const c = colorMap[n];
+                            return (
+                              <button
+                                key={n}
+                                onClick={() => setAplicarRespostas({ ...aplicarRespostas, [q.id]: String(n) })}
+                                className={`flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border-2 transition-all font-bold ${
+                                  selected
+                                    ? `${c.bgSel} text-white border-transparent shadow-lg scale-110`
+                                    : `${c.bg} ${c.text} ${c.border}`
+                                }`}
+                              >
+                                <span className="text-lg">{n}</span>
+                                <span className={`text-[10px] font-medium ${selected ? 'text-white/90' : c.text}`}>{c.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : q.tipo === "sim_nao" ? (
+                        <div className="flex gap-3 ml-11">
+                          <button
+                            onClick={() => setAplicarRespostas({ ...aplicarRespostas, [q.id]: "Sim" })}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 transition-all font-semibold ${
+                              aplicarRespostas[q.id] === "Sim"
+                                ? 'bg-green-500 text-white border-transparent shadow-lg scale-105'
+                                : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                            }`}
                           >
-                            {n}
-                          </Button>
-                        ))}
-                      </div>
-                    ) : q.tipo === "sim_nao" ? (
-                      <div className="flex gap-2">
-                        <Button
-                          variant={aplicarRespostas[q.id] === "Sim" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setAplicarRespostas({ ...aplicarRespostas, [q.id]: "Sim" })}
-                        >
-                          <ThumbsUp className="w-4 h-4 mr-1" /> Sim
-                        </Button>
-                        <Button
-                          variant={aplicarRespostas[q.id] === "Não" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setAplicarRespostas({ ...aplicarRespostas, [q.id]: "Não" })}
-                        >
-                          <ThumbsDown className="w-4 h-4 mr-1" /> Não
-                        </Button>
-                      </div>
-                    ) : (
-                      <Textarea
-                        value={aplicarRespostas[q.id] || ""}
-                        onChange={(e) => setAplicarRespostas({ ...aplicarRespostas, [q.id]: e.target.value })}
-                        placeholder="Sua resposta..."
-                        rows={2}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
+                            <ThumbsUp className="w-4 h-4" /> Sim
+                          </button>
+                          <button
+                            onClick={() => setAplicarRespostas({ ...aplicarRespostas, [q.id]: "Não" })}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 transition-all font-semibold ${
+                              aplicarRespostas[q.id] === "Não"
+                                ? 'bg-red-500 text-white border-transparent shadow-lg scale-105'
+                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                            }`}
+                          >
+                            <ThumbsDown className="w-4 h-4" /> Não
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="ml-11">
+                          <Textarea
+                            value={aplicarRespostas[q.id] || ""}
+                            onChange={(e) => setAplicarRespostas({ ...aplicarRespostas, [q.id]: e.target.value })}
+                            placeholder="Sua resposta..."
+                            rows={3}
+                            className="resize-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ) : null}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowAplicar(null); resetFormAplicar(); }}>Cancelar</Button>
+          {/* Botões de ação */}
+          <div className="flex justify-end gap-3 pb-6">
+            <Button variant="outline" size="lg" onClick={() => { setShowAplicar(null); resetFormAplicar(); }}>
+              Cancelar
+            </Button>
             <Button
+              size="lg"
+              className="bg-green-600 hover:bg-green-700 text-white px-8"
               onClick={() => setShowConfirmAplicar(true)}
               disabled={!aplicarEmployeeId || !avaliacaoDetalhe.data?.questions?.length}
             >
-              Enviar Avaliação
+              <Check className="w-4 h-4 mr-2" /> Enviar Avaliação
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </FullScreenDialog>
 
       {/* Confirmação de envio */}
       <AlertDialog open={showConfirmAplicar} onOpenChange={setShowConfirmAplicar}>
