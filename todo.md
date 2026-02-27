@@ -3065,3 +3065,6 @@
 - [x] Fix: Data de início do aviso prévio deve ser último dia trabalhado + 1 dia (ex: último dia 12/02, início aviso 13/02)
 - [x] Atualizado registros existentes no banco (+1 dia em dataInicio e dataFim)
 - [x] Adicionada função calcularDataInicioAviso() no backend
+
+## Full Screen Modal Avaliação - 2026-02-27
+- [x] Tornar modal Nova Avaliação de Desempenho full screen (usando FullScreenDialog)

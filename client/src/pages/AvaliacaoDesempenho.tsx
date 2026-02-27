@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
@@ -838,19 +839,18 @@ export default function AvaliacaoDesempenho() {
       {/* ============================================================ */}
       {/* DIALOG: CRIAR NOVA AVALIAÇÃO (WIZARD) */}
       {/* ============================================================ */}
-      <Dialog open={showCriarAvaliacao} onOpenChange={(open) => { if (!open) { setShowCriarAvaliacao(false); resetFormAvaliacao(); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Star className="w-5 h-5 text-amber-500" /> Nova Avaliação de Desempenho
-            </DialogTitle>
-            <DialogDescription>
-              {avalStep === "info" && "Defina o título e descrição da avaliação"}
-              {avalStep === "perguntas" && "Adicione perguntas manualmente ou peça sugestões à IA"}
-              {avalStep === "avaliadores" && "Selecione quem poderá aplicar esta avaliação"}
-              {avalStep === "confirmar" && "Revise e confirme a criação da avaliação"}
-            </DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog
+        open={showCriarAvaliacao}
+        onClose={() => { setShowCriarAvaliacao(false); resetFormAvaliacao(); }}
+        title="Nova Avaliação de Desempenho"
+        subtitle={
+          avalStep === "info" ? "Defina o título e descrição da avaliação" :
+          avalStep === "perguntas" ? "Adicione perguntas manualmente ou peça sugestões à IA" :
+          avalStep === "avaliadores" ? "Selecione quem poderá aplicar esta avaliação" :
+          "Revise e confirme a criação da avaliação"
+        }
+        icon={<Star className="w-5 h-5 text-amber-300" />}
+      >
 
           {/* Progress Steps */}
           <div className="flex items-center gap-2 mb-4">
@@ -870,53 +870,54 @@ export default function AvaliacaoDesempenho() {
 
           {/* Step 1: Info */}
           {avalStep === "info" && (
-            <div className="space-y-4">
-              <div>
-                <Label>Título da Avaliação *</Label>
-                <Input value={avalTitulo} onChange={(e) => setAvalTitulo(e.target.value)} placeholder="Ex: Avaliação Mensal - Obra Centro, Avaliação Trimestral de Desempenho..." />
-              </div>
-              <div>
-                <Label>Descrição (opcional)</Label>
-                <Textarea value={avalDescricao} onChange={(e) => setAvalDescricao(e.target.value)} placeholder="Descreva o objetivo desta avaliação..." rows={3} />
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setShowCriarAvaliacao(false); resetFormAvaliacao(); }}>Cancelar</Button>
-                <Button onClick={() => {
-                  setAvalStep("perguntas");
-                  // Auto-gerar perguntas pela IA quando avança para step 2 e não tem perguntas
-                  if (avalPerguntas.length === 0 && avalTitulo.trim() && !iaSugerindo) {
-                    setTimeout(() => sugerirPerguntasAvaliacao(), 300);
-                  }
-                }} disabled={!avalTitulo.trim()}>
-                  Próximo <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </DialogFooter>
-            </div>
+            <Card>
+              <CardContent className="pt-6 space-y-6">
+                <div>
+                  <Label className="text-base font-semibold">Título da Avaliação *</Label>
+                  <Input className="mt-2 h-12" value={avalTitulo} onChange={(e) => setAvalTitulo(e.target.value)} placeholder="Ex: Avaliação Mensal - Obra Centro, Avaliação Trimestral de Desempenho..." />
+                </div>
+                <div>
+                  <Label className="text-base font-semibold">Descrição (opcional)</Label>
+                  <Textarea className="mt-2" value={avalDescricao} onChange={(e) => setAvalDescricao(e.target.value)} placeholder="Descreva o objetivo desta avaliação..." rows={4} />
+                </div>
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => { setShowCriarAvaliacao(false); resetFormAvaliacao(); }}>Cancelar</Button>
+                  <Button onClick={() => {
+                    setAvalStep("perguntas");
+                    if (avalPerguntas.length === 0 && avalTitulo.trim() && !iaSugerindo) {
+                      setTimeout(() => sugerirPerguntasAvaliacao(), 300);
+                    }
+                  }} disabled={!avalTitulo.trim()}>
+                    Próximo <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Step 2: Perguntas */}
           {avalStep === "perguntas" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold">Perguntas da Avaliação</Label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={sugerirPerguntasAvaliacao}
-                  disabled={iaSugerindo || !avalTitulo}
-                >
-                  {iaSugerindo ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Gerando...</> : <><Sparkles className="w-4 h-4 mr-2" /> IA Sugerir Perguntas</>}
-                </Button>
-              </div>
+            <Card>
+              <CardContent className="pt-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <Label className="text-lg font-semibold">Perguntas da Avaliação</Label>
+                  <Button
+                    variant="outline"
+                    onClick={sugerirPerguntasAvaliacao}
+                    disabled={iaSugerindo || !avalTitulo}
+                  >
+                    {iaSugerindo ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Gerando...</> : <><Sparkles className="w-4 h-4 mr-2" /> IA Sugerir Perguntas</>}
+                  </Button>
+                </div>
 
-              {avalPerguntas.length > 0 ? (
-                <ScrollArea className="max-h-[350px]">
-                  <div className="space-y-2 pr-4">
+                {avalPerguntas.length > 0 ? (
+                  <div className="space-y-3">
                     {avalPerguntas.map((p, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 border rounded-lg">
-                        <span className="text-xs font-bold text-muted-foreground mt-2">{i + 1}.</span>
-                        <div className="flex-1 space-y-2">
+                      <div key={i} className="flex items-start gap-3 p-4 border rounded-lg bg-muted/20">
+                        <span className="text-sm font-bold text-muted-foreground mt-2">{i + 1}.</span>
+                        <div className="flex-1 space-y-3">
                           <Input
+                            className="h-11"
                             value={p.texto}
                             onChange={(e) => {
                               const updated = [...avalPerguntas];
@@ -925,20 +926,20 @@ export default function AvaliacaoDesempenho() {
                             }}
                             placeholder="Texto da pergunta..."
                           />
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-4">
                             <Select value={p.tipo} onValueChange={(v) => {
                               const updated = [...avalPerguntas];
                               updated[i].tipo = v;
                               setAvalPerguntas(updated);
                             }}>
-                              <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="nota">Nota (1-5)</SelectItem>
                                 <SelectItem value="texto">Texto livre</SelectItem>
                                 <SelectItem value="sim_nao">Sim/Não</SelectItem>
                               </SelectContent>
                             </Select>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2">
                               <Switch
                                 checked={p.obrigatoria}
                                 onCheckedChange={(v) => {
@@ -947,7 +948,7 @@ export default function AvaliacaoDesempenho() {
                                   setAvalPerguntas(updated);
                                 }}
                               />
-                              <span className="text-xs text-muted-foreground">Obrigatória</span>
+                              <span className="text-sm text-muted-foreground">Obrigatória</span>
                             </div>
                           </div>
                         </div>
@@ -957,50 +958,51 @@ export default function AvaliacaoDesempenho() {
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm border rounded-lg border-dashed">
-                  <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>Clique em "IA Sugerir Perguntas" para gerar automaticamente</p>
-                  <p className="text-xs mt-1">ou adicione manualmente abaixo</p>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground text-sm border rounded-lg border-dashed">
+                    <Sparkles className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                    <p className="text-base">Clique em "IA Sugerir Perguntas" para gerar automaticamente</p>
+                    <p className="text-sm mt-1">ou adicione manualmente abaixo</p>
+                  </div>
+                )}
 
-              <Button variant="outline" size="sm" onClick={() => setAvalPerguntas([...avalPerguntas, { texto: "", tipo: "nota", obrigatoria: true }])}>
-                <Plus className="w-4 h-4 mr-2" /> Adicionar Pergunta
-              </Button>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setAvalStep("info")}>Voltar</Button>
-                <Button onClick={() => setAvalStep("avaliadores")} disabled={avalPerguntas.length === 0 || avalPerguntas.some(p => !p.texto.trim())}>
-                  Próximo <ArrowRight className="w-4 h-4 ml-2" />
+                <Button variant="outline" onClick={() => setAvalPerguntas([...avalPerguntas, { texto: "", tipo: "nota", obrigatoria: true }])}>
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar Pergunta
                 </Button>
-              </DialogFooter>
-            </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setAvalStep("info")}>Voltar</Button>
+                  <Button onClick={() => setAvalStep("avaliadores")} disabled={avalPerguntas.length === 0 || avalPerguntas.some(p => !p.texto.trim())}>
+                    Próximo <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Step 3: Avaliadores */}
           {avalStep === "avaliadores" && (
-            <div className="space-y-4">
-              <div>
-                <Label className="text-base font-semibold">Selecionar Avaliadores</Label>
-                <p className="text-sm text-muted-foreground">Escolha os usuários que poderão aplicar esta avaliação aos funcionários</p>
-              </div>
+            <Card>
+              <CardContent className="pt-6 space-y-6">
+                <div>
+                  <Label className="text-lg font-semibold">Selecionar Avaliadores</Label>
+                  <p className="text-sm text-muted-foreground mt-1">Escolha os usuários que poderão aplicar esta avaliação aos funcionários</p>
+                </div>
 
-              <Input
-                placeholder="Buscar usuário por nome ou email..."
-                value={addEvalSearch}
-                onChange={(e) => setAddEvalSearch(e.target.value)}
-              />
+                <Input
+                  className="h-11"
+                  placeholder="Buscar usuário por nome ou email..."
+                  value={addEvalSearch}
+                  onChange={(e) => setAddEvalSearch(e.target.value)}
+                />
 
-              <ScrollArea className="max-h-[300px]">
-                <div className="space-y-1 pr-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {filteredUsers.map((u: any) => {
                     const selected = avalSelectedEvaluators.includes(u.id);
                     return (
                       <div
                         key={u.id}
-                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted"}`}
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${selected ? "bg-primary/10 border-primary/30" : "hover:bg-muted border-transparent"}`}
                         onClick={() => {
                           if (selected) {
                             setAvalSelectedEvaluators(avalSelectedEvaluators.filter(id => id !== u.id));
@@ -1021,21 +1023,21 @@ export default function AvaliacaoDesempenho() {
                     );
                   })}
                 </div>
-              </ScrollArea>
 
-              {avalSelectedEvaluators.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {avalSelectedEvaluators.length} avaliador(es) selecionado(s)
-                </p>
-              )}
+                {avalSelectedEvaluators.length > 0 && (
+                  <p className="text-sm font-medium text-primary">
+                    {avalSelectedEvaluators.length} avaliador(es) selecionado(s)
+                  </p>
+                )}
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setAvalStep("perguntas")}>Voltar</Button>
-                <Button onClick={() => setAvalStep("confirmar")}>
-                  Próximo <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </DialogFooter>
-            </div>
+                <div className="flex items-center justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setAvalStep("perguntas")}>Voltar</Button>
+                  <Button onClick={() => setAvalStep("confirmar")}>
+                    Próximo <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Step 4: Confirmar */}
@@ -1076,7 +1078,7 @@ export default function AvaliacaoDesempenho() {
                 </CardContent>
               </Card>
 
-              <DialogFooter>
+              <div className="flex items-center justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setAvalStep("avaliadores")}>Voltar</Button>
                 <Button
                   onClick={() => criarAvaliacao.mutate({
@@ -1093,11 +1095,10 @@ export default function AvaliacaoDesempenho() {
                 >
                   {criarAvaliacao.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Criando...</> : <><Check className="w-4 h-4 mr-2" /> Criar Avaliação</>}
                 </Button>
-              </DialogFooter>
+              </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+      </FullScreenDialog>
 
       {/* ============================================================ */}
       {/* DIALOG: APLICAR AVALIAÇÃO */}
