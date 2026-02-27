@@ -2996,3 +2996,8 @@
 - [x] VR proporcional também corrigido para usar dias reais do mês
 - [x] Frontend atualizado para mostrar "X/Y dias do mês" (ex: 13/28 dias)
 - [x] 24 testes passando (rescisao.test.ts)
+
+## Bug: Campo Colaborador no ASO não permite digitar no mobile
+- [ ] Campo de busca do colaborador não funciona no mobile - não aceita digitação
+- [ ] Reescrever o EmployeeSelect para funcionar melhor em dispositivos móveis
+- [ ] Garantir que o teclado virtual não interfira com o dropdown

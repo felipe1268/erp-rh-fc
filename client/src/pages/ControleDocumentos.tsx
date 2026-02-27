@@ -14,9 +14,9 @@ import { formatCPF } from "@/lib/formatters";
 import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2
 } from "lucide-react";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -892,11 +892,11 @@ export default function ControleDocumentos() {
   // ============ EMPLOYEE SELECT COMPONENT (com busca por nome/CPF) ============
   const EmployeeSelect = ({ value, onChange }: { value: number | undefined; onChange: (id: number) => void }) => {
     const [empSearch, setEmpSearch] = useState("");
-    const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
-    const inputRef = useCallback((node: HTMLInputElement | null) => {
-      if (node) setTimeout(() => node.focus(), 50);
-    }, [empDropdownOpen]);
+    const [empFocused, setEmpFocused] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     const selectedEmp = activeEmployees.find((e: any) => e.id === value);
+    
     const filteredEmps = useMemo(() => {
       return activeEmployees.filter((e: any) => {
         if (!empSearch) return true;
@@ -908,76 +908,94 @@ export default function ControleDocumentos() {
         return nome.includes(s) || (searchClean && cpf.includes(searchClean));
       }).slice(0, 50);
     }, [activeEmployees, empSearch]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+      if (!empFocused) return;
+      const handler = (e: MouseEvent | TouchEvent) => {
+        if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+          setEmpFocused(false);
+          setEmpSearch("");
+        }
+      };
+      document.addEventListener("mousedown", handler);
+      document.addEventListener("touchstart", handler);
+      return () => {
+        document.removeEventListener("mousedown", handler);
+        document.removeEventListener("touchstart", handler);
+      };
+    }, [empFocused]);
+
     return (
-      <div className="relative" style={{ zIndex: 60 }}>
-        {!empDropdownOpen ? (
-          <div
-            className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 transition-colors"
-            onClick={() => setEmpDropdownOpen(true)}
-          >
-            <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
-            <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
-              {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Clique para buscar colaborador..."}
-            </span>
-            {value && (
-              <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); onChange(undefined as any); setEmpSearch(""); }}>
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center border-2 border-blue-500 rounded-md px-3 py-2 bg-background">
-            <Search className="h-4 w-4 text-blue-500 mr-2 shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              className="flex-1 bg-transparent outline-none text-sm text-foreground min-w-0"
-              placeholder="Digite nome ou CPF..."
-              value={empSearch}
-              onChange={e => setEmpSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }}
-            />
-            <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }}>
+      <div ref={wrapperRef} className="relative">
+        {/* Always show the input field - no toggling */}
+        <div className={`flex items-center border ${empFocused ? 'border-2 border-blue-500' : 'border-gray-300'} rounded-md px-3 py-2 bg-background`}>
+          <Search className={`h-4 w-4 ${empFocused ? 'text-blue-500' : 'text-muted-foreground'} mr-2 shrink-0`} />
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="search"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            enterKeyHint="search"
+            className="flex-1 bg-transparent outline-none text-sm text-foreground min-w-0 appearance-none"
+            style={{ fontSize: '16px', WebkitAppearance: 'none' }}
+            placeholder={selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Digite nome ou CPF..."}
+            value={empSearch}
+            onChange={e => {
+              setEmpSearch(e.target.value);
+              if (!empFocused) setEmpFocused(true);
+            }}
+            onFocus={() => setEmpFocused(true)}
+            onKeyDown={e => { if (e.key === 'Escape') { setEmpFocused(false); setEmpSearch(''); inputRef.current?.blur(); } }}
+          />
+          {(value || empSearch) && (
+            <button type="button" className="ml-2 text-muted-foreground hover:text-foreground p-1" onClick={e => { e.preventDefault(); e.stopPropagation(); onChange(undefined as any); setEmpSearch(""); setEmpFocused(false); }}>
               <X className="h-4 w-4" />
             </button>
+          )}
+        </div>
+        
+        {/* Selected employee badge */}
+        {selectedEmp && !empFocused && !empSearch && (
+          <div className="mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded inline-flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            {selectedEmp.nomeCompleto} - {formatCPF(selectedEmp.cpf)}
           </div>
         )}
-        {empDropdownOpen && (
-          <>
-            <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
-              {filteredEmps.length === 0 ? (
-                <div className="p-3 text-sm text-muted-foreground text-center">
-                  {activeEmployees.length === 0 
-                    ? "Nenhum colaborador ativo cadastrado nesta empresa" 
-                    : empSearch 
-                      ? `Nenhum resultado para "${empSearch}" (${activeEmployees.length} colaboradores ativos)`
-                      : "Nenhum colaborador encontrado"}
+
+        {/* Dropdown results - only when focused */}
+        {empFocused && (
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 9999 }}>
+            {filteredEmps.length === 0 ? (
+              <div className="p-3 text-sm text-muted-foreground text-center">
+                {activeEmployees.length === 0 
+                  ? "Nenhum colaborador ativo cadastrado nesta empresa" 
+                  : empSearch 
+                    ? `Nenhum resultado para "${empSearch}" (${activeEmployees.length} ativos)`
+                    : "Nenhum colaborador encontrado"}
+              </div>
+            ) : (
+              <>
+                <div className="px-3 py-1.5 text-xs text-muted-foreground border-b bg-gray-50 dark:bg-gray-800 sticky top-0">
+                  {empSearch ? `${filteredEmps.length} resultado(s)` : `${filteredEmps.length} colaborador(es) ativo(s) — digite para filtrar`}
                 </div>
-              ) : (
-                <>
-                  <div className="px-3 py-1.5 text-xs text-muted-foreground border-b bg-gray-50 dark:bg-gray-800">
-                    {empSearch ? `${filteredEmps.length} resultado(s)` : `${filteredEmps.length} colaborador(es) ativo(s)`}
+                {filteredEmps.map((e: any) => (
+                  <div
+                    key={e.id}
+                    className={`px-3 py-2.5 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 active:bg-blue-100 flex items-center justify-between ${value === e.id ? "bg-blue-100 dark:bg-blue-900/50 font-medium" : ""}`}
+                    onMouseDown={e2 => { e2.preventDefault(); }}
+                    onClick={() => { onChange(e.id); setEmpFocused(false); setEmpSearch(""); inputRef.current?.blur(); }}
+                  >
+                    <span className="text-gray-900 dark:text-gray-100">{e.nomeCompleto}</span>
+                    <span className="text-xs text-muted-foreground ml-2 shrink-0">{formatCPF(e.cpf)}</span>
                   </div>
-                  {filteredEmps.map((e: any) => (
-                    <div
-                      key={e.id}
-                      className={`px-3 py-2.5 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center justify-between ${value === e.id ? "bg-blue-100 dark:bg-blue-900/50 font-medium" : ""}`}
-                      onClick={() => { onChange(e.id); setEmpDropdownOpen(false); setEmpSearch(""); }}
-                    >
-                      <span className="text-gray-900 dark:text-gray-100">{e.nomeCompleto}</span>
-                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{formatCPF(e.cpf)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          </>
+                ))}
+              </>
+            )}
+          </div>
         )}
       </div>
     );
