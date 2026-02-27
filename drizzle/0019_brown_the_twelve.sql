@@ -1,1 +1,0 @@
-ALTER TABLE `epis` MODIFY COLUMN `nome` varchar(1000) NOT NULL;

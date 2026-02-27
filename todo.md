@@ -3001,3 +3001,10 @@
 - [ ] Campo de busca do colaborador não funciona no mobile - não aceita digitação
 - [ ] Reescrever o EmployeeSelect para funcionar melhor em dispositivos móveis
 - [ ] Garantir que o teclado virtual não interfira com o dropdown
+
+## Bug: Aba Benefícios não está salvando
+- [x] Campos de VT (Recebe VT, Valor VT Diário, Tipo VT, Operadora VT, Nº Cartão VT) - CORRIGIDO
+- [x] Campos de VA/VR (Recebe VA/VR, Valor VA/VR Mensal, Operadora VA/VR, Nº Cartão VA/VR) - CORRIGIDO
+- [x] Campos de Outros Benefícios (Auxílio Farmácia, Plano de Saúde) - CORRIGIDO
+- [x] Causa: campos não existiam no schema do banco + não estavam na lista validFields do updateEmployee
+- [x] 12 colunas adicionadas ao banco + 17 campos adicionados à lista validFields + campos de pensão/licença/rateáveis

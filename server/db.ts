@@ -344,9 +344,23 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "experienciaEfetivadoEm", "experienciaEfetivadoPor",
     // Conta bancária empresa
     "contaBancariaEmpresaId",
+    // Benefícios
+    "vtRecebe", "vtTipo", "vtValorDiario", "vtOperadora", "vtNumeroCartao", "vtLinhas", "vtDescontoFolha",
+    "vaRecebe", "vaValor", "vaOperadora", "vaNumeroCartao",
+    "auxFarmacia", "auxFarmaciaValor", "planoSaude", "planoSaudeOperadora", "planoSaudeValor",
+    "benefObs",
+    // Pensão Alimentícia
+    "pensaoAlimenticia", "pensaoValor", "pensaoTipo", "pensaoPercentual",
+    "pensaoBeneficiario", "pensaoBanco", "pensaoAgencia", "pensaoConta", "pensaoObservacoes",
+    // Licença Maternidade/Paternidade
+    "licencaMaternidade", "licencaTipo", "licencaDataInicio", "licencaDataFim", "licencaObservacoes",
+    // Campos rateáveis
+    "seguroVida", "contribuicaoSindical", "fgtsPercentual", "inssPercentual",
+    "dissidioData", "dissidioPercentual", "convencaoColetiva", "convencaoVigencia",
+    "ddsParticipacao",
   ]);
   // Campos booleanos (tinyint no schema)
-  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra"]);
+  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao"]);
   // Campos inteiros
   const intFields = new Set(["obraAtualId", "contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId"]);
   // Campos string de HE (são varchar no banco, não int)

@@ -1,1 +1,0 @@
-ALTER TABLE `fornecedores_epi` MODIFY COLUMN `createdAt` timestamp NOT NULL DEFAULT (now());

@@ -381,11 +381,25 @@ export const employees = mysqlTable("employees", {
 	experienciaEfetivadoPor: varchar({ length: 255 }), // Quem efetivou
 	experienciaObs: text(), // Observações sobre a experiência
 	// Vale Transporte (gestão completa)
+	vtRecebe: varchar({ length: 20 }), // sim, nao
 	vtTipo: mysqlEnum(['nenhum','onibus','van','misto']),
 	vtValorDiario: varchar({ length: 20 }), // Valor diário do VT
 	vtOperadora: varchar({ length: 100 }), // Operadora/empresa de transporte
+	vtNumeroCartao: varchar({ length: 50 }), // Número do cartão VT
 	vtLinhas: varchar({ length: 255 }), // Linhas utilizadas
 	vtDescontoFolha: varchar({ length: 20 }), // Valor descontado na folha (6% salário ou fixo)
+	// Vale Alimentação / Refeição
+	vaRecebe: varchar({ length: 20 }), // va, vr, ambos, nao
+	vaValor: varchar({ length: 20 }), // Valor mensal VA/VR
+	vaOperadora: varchar({ length: 100 }), // Operadora (Alelo, Sodexo, VR, etc.)
+	vaNumeroCartao: varchar({ length: 50 }), // Número do cartão VA/VR
+	// Outros Benefícios
+	auxFarmacia: varchar({ length: 20 }), // sim, nao
+	auxFarmaciaValor: varchar({ length: 20 }), // Valor do auxílio farmácia
+	planoSaude: varchar({ length: 20 }), // sim, nao
+	planoSaudeOperadora: varchar({ length: 100 }), // Operadora do plano
+	planoSaudeValor: varchar({ length: 20 }), // Valor do plano
+	benefObs: text(), // Observações de benefícios
 	// Pensão Alimentícia
 	pensaoAlimenticia: tinyint().default(0),
 	pensaoValor: varchar({ length: 20 }), // Valor fixo ou percentual
