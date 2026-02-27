@@ -20,7 +20,7 @@ export const accidents = mysqlTable("accidents", {
 	testemunhas: text(),
 	acaoCorretiva: text(),
 	documentoUrl: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -40,7 +40,7 @@ export const actionPlans = mysqlTable("action_plans", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataConclusao: date({ mode: 'string' }),
 	evidencia: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -59,7 +59,7 @@ export const advances = mysqlTable("advances", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataPagamento: date({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -79,7 +79,7 @@ export const asos = mysqlTable("asos", {
 	clinica: varchar({ length: 255 }),
 	observacoes: text(),
 	documentoUrl: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -101,7 +101,7 @@ export const atestados = mysqlTable("atestados", {
 	motivo: varchar({ length: 100 }),
 	motivoOutro: text(),
 	documentoUrl: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -118,7 +118,7 @@ export const auditLogs = mysqlTable("audit_logs", {
 	entityId: int(),
 	details: text(),
 	ipAddress: varchar({ length: 45 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
 export const audits = mysqlTable("audits", {
@@ -133,7 +133,7 @@ export const audits = mysqlTable("audits", {
 	resultadoAuditoria: mysqlEnum(['Conforme','Nao_Conforme','Observacao','Pendente']).default('Pendente').notNull(),
 	descricao: text(),
 	documentoUrl: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -148,7 +148,7 @@ export const chemicals = mysqlTable("chemicals", {
 	quantidadeEstoque: varchar({ length: 50 }),
 	fispqUrl: text(),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -171,7 +171,7 @@ export const cipaElections = mysqlTable("cipa_elections", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataPosse: date({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -187,7 +187,7 @@ export const cipaMembers = mysqlTable("cipa_members", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	fimEstabilidade: date({ mode: 'string' }),
 	statusMembro: mysqlEnum(['Ativo','Desligado','Substituido']).default('Ativo').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -208,7 +208,7 @@ export const companies = mysqlTable("companies", {
 	prefixoCodigo: varchar({ length: 10 }).default('EMP'),
 	nextCodigoInterno: int().default(1).notNull(),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 		updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -228,7 +228,7 @@ export const dds = mysqlTable("dds", {
 	descricao: text(),
 	documentoUrl: text(),
 	fotosUrls: json(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
 export const deviations = mysqlTable("deviations", {
@@ -246,7 +246,7 @@ export const deviations = mysqlTable("deviations", {
 	prazo: date({ mode: 'string' }),
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataConclusao: date({ mode: 'string' }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -257,7 +257,7 @@ export const dixiDevices = mysqlTable("dixi_devices", {
 	obraName: varchar({ length: 255 }).notNull(),
 	location: text(),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 		obraId: int(),
 	deletedAt: timestamp({ mode: 'string' }),
@@ -275,7 +275,7 @@ export const employeeHistory = mysqlTable("employee_history", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataEvento: date({ mode: 'string' }).notNull(),
 	registradoPor: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
 export const employees = mysqlTable("employees", {
@@ -340,7 +340,7 @@ export const employees = mysqlTable("employees", {
 	status: mysqlEnum(['Ativo','Ferias','Afastado','Licenca','Desligado','Recluso','Lista_Negra']).default('Ativo').notNull(),
 	fotoUrl: text(),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	listaNegra: tinyint().default(0).notNull(),
 	motivoListaNegra: text(),
@@ -458,7 +458,7 @@ export const epiDeliveries = mysqlTable("epi_deliveries", {
 	valorCobrado: decimal("valor_cobrado", { precision: 10, scale: 2 }),
 	fichaUrl: text("ficha_url"),
 	fotoEstadoUrl: text("foto_estado_url"),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
@@ -484,7 +484,7 @@ export const epis = mysqlTable("epis", {
 	tempoMinimoTroca: int("tempo_minimo_troca"),
 	corCapacete: varchar("cor_capacete", { length: 30 }),
 	condicao: mysqlEnum('condicao', ['Novo','Reutilizado']).default('Novo').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -505,7 +505,7 @@ export const equipment = mysqlTable("equipment", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	proximaManutencao: date({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -526,7 +526,7 @@ export const extinguishers = mysqlTable("extinguishers", {
 	validadeTesteHidrostatico: date({ mode: 'string' }),
 	statusExtintor: mysqlEnum(['OK','Vencido','Manutencao']).default('OK').notNull(),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -545,7 +545,7 @@ export const extraPayments = mysqlTable("extra_payments", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataPagamento: date({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -561,7 +561,7 @@ export const hydrants = mysqlTable("hydrants", {
 	proximaInspecao: date({ mode: 'string' }),
 	statusHidrante: mysqlEnum(['OK','Manutencao','Inativo']).default('OK').notNull(),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -573,7 +573,7 @@ export const jobFunctions = mysqlTable("job_functions", {
 	ordemServico: text(),
 	cbo: varchar({ length: 10 }),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 		updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -611,7 +611,7 @@ export const monthlyPayrollSummary = mysqlTable("monthly_payroll_summary", {
 	bancoAdiantamento: varchar({ length: 100 }),
 	bancoFolha: varchar({ length: 100 }),
 	custoTotalMes: varchar({ length: 20 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -626,7 +626,7 @@ export const obraFuncionarios = mysqlTable("obra_funcionarios", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataFim: date({ mode: 'string' }),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
 export const obraHorasRateio = mysqlTable("obra_horas_rateio", {
@@ -641,7 +641,7 @@ export const obraHorasRateio = mysqlTable("obra_horas_rateio", {
 	horasNoturnas: varchar({ length: 10 }),
 	totalHoras: varchar({ length: 10 }),
 	diasTrabalhados: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -666,7 +666,7 @@ export const obras = mysqlTable("obras", {
 	valorContrato: varchar({ length: 20 }),
 	observacoes: text(),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	numOrcamento: varchar({ length: 50 }),
 	snRelogioPonto: varchar({ length: 50 }),
@@ -695,7 +695,7 @@ export const payroll = mysqlTable("payroll", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataPagamento: date({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -713,7 +713,7 @@ export const payrollUploads = mysqlTable("payroll_uploads", {
 	recordsProcessed: int().default(0),
 	errorMessage: text(),
 	uploadedBy: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -725,7 +725,7 @@ export const permissions = mysqlTable("permissions", {
 	canCreate: tinyint().default(0).notNull(),
 	canEdit: tinyint().default(0).notNull(),
 	canDelete: tinyint().default(0).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
 export const risks = mysqlTable("risks", {
@@ -737,7 +737,7 @@ export const risks = mysqlTable("risks", {
 	fonteGeradora: varchar({ length: 255 }),
 	grauRisco: mysqlEnum(['Baixo','Medio','Alto','Critico']).notNull(),
 	medidasControle: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -747,7 +747,7 @@ export const sectors = mysqlTable("sectors", {
 	nome: varchar({ length: 100 }).notNull(),
 	descricao: varchar({ length: 255 }),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 		updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -777,7 +777,7 @@ export const timeRecords = mysqlTable("time_records", {
 	ajusteManual: tinyint().default(0),
 	ajustadoPor: varchar({ length: 255 }),
 	batidasBrutas: json(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("time_records_emp_date").on(table.employeeId, table.data),
@@ -800,7 +800,7 @@ export const timeInconsistencies = mysqlTable("time_inconsistencies", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	resolvidoEm: date({ mode: 'string' }),
 	warningId: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -818,7 +818,7 @@ export const trainingDocuments = mysqlTable("training_documents", {
 	fileSize: int(),
 	mimeType: varchar({ length: 100 }),
 	description: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
 export const trainings = mysqlTable("trainings", {
@@ -837,7 +837,7 @@ export const trainings = mysqlTable("trainings", {
 	certificadoUrl: text(),
 	statusTreinamento: mysqlEnum(['Valido','Vencido','A_Vencer']).default('Valido').notNull(),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -849,7 +849,7 @@ export const userProfiles = mysqlTable("user_profiles", {
 	companyId: int().notNull(),
 	profileType: mysqlEnum(['adm_master','adm','operacional','avaliador','consulta']).notNull(),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -860,9 +860,9 @@ export const users = mysqlTable("users", {
 	email: varchar({ length: 320 }),
 	loginMethod: varchar({ length: 64 }),
 	role: mysqlEnum(['user','admin','admin_master']).default('user').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-	lastSignedIn: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	lastSignedIn: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	username: varchar({ length: 100 }),
 	password: varchar({ length: 255 }),
 	mustChangePassword: tinyint().default(1),
@@ -891,7 +891,7 @@ export const vehicles = mysqlTable("vehicles", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	proximaManutencao: date({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -905,7 +905,7 @@ export const vrBenefits = mysqlTable("vr_benefits", {
 	valorTotal: varchar({ length: 20 }).notNull(),
 	operadora: varchar({ length: 100 }).default('iFood Benefícios'),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
@@ -924,7 +924,7 @@ export const warnings = mysqlTable("warnings", {
 	documentoUrl: text(),
 	origemModulo: varchar({ length: 50 }),
 		origemId: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -959,7 +959,7 @@ export const folhaLancamentos = mysqlTable("folha_lancamentos", {
 	consolidadoPor: varchar({ length: 255 }),
 	consolidadoEm: timestamp({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1002,7 +1002,7 @@ export const folhaItens = mysqlTable("folha_itens", {
 	// Validação cruzada
 	matchStatus: mysqlEnum(['matched','unmatched','divergente']).default('unmatched').notNull(),
 	divergencias: json(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("folha_itens_lanc").on(table.folhaLancamentoId),
@@ -1024,7 +1024,7 @@ export const pontoConsolidacao = mysqlTable("ponto_consolidacao", {
 	desconsolidadoPor: varchar({ length: 255 }),
 	desconsolidadoEm: timestamp({ mode: 'string' }),
 	observacoes: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1044,7 +1044,7 @@ export const obraSns = mysqlTable("obra_sns", {
 	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),
 	dataVinculo: date({ mode: 'string' }),
 	dataLiberacao: date({ mode: 'string' }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1071,7 +1071,7 @@ export const documentTemplates = mysqlTable("document_templates", {
 	ativo: tinyint().default(1).notNull(),
 	criadoPor: varchar({ length: 255 }),
 	atualizadoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1101,7 +1101,7 @@ export const systemCriteria = mysqlTable("system_criteria", {
 	valorPadraoClt: varchar({ length: 255 }), // valor padrão CLT para referência
 	unidade: varchar({ length: 50 }), // %, min, horas, dias, R$
 	atualizadoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1120,7 +1120,7 @@ export const manualObraAssignments = mysqlTable("manual_obra_assignments", {
 	justificativa: text().notNull(),
 	percentual: int().default(100).notNull(), // percentual de alocação (0-100)
 	atribuidoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1141,7 +1141,7 @@ export const companyBankAccounts = mysqlTable("company_bank_accounts", {
 	apelido: varchar({ length: 100 }), // Ex: "CEF Principal", "Santander Folha"
 	cnpjTitular: varchar({ length: 20 }),
 	ativo: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1195,7 +1195,7 @@ export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
 	observacoes: text(),
 	// Metadados
 	criadoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1222,7 +1222,7 @@ export const processosAndamentos = mysqlTable("processos_andamentos", {
 	documentoNome: varchar({ length: 255 }),
 	// Metadados
 	criadoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("pa_processo").on(table.processoId),
@@ -1236,7 +1236,7 @@ export const menuConfig = mysqlTable("menu_config", {
 	userId: int().notNull(),
 	// JSON com a configuração completa do menu: seções, itens, ordem
 	configJson: text().notNull(),
-	updatedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("mc_user").on(table.userId),
@@ -1250,7 +1250,7 @@ export const goldenRules = mysqlTable("golden_rules", {
 	categoria: mysqlEnum(['seguranca', 'qualidade', 'rh', 'operacional', 'juridico', 'financeiro', 'geral']).default('geral').notNull(),
 	prioridade: mysqlEnum(['critica', 'alta', 'media', 'baixa']).default('alta').notNull(),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1280,7 +1280,7 @@ export const insuranceAlertConfig = mysqlTable("insurance_alert_config", {
 	observacoes: text(),
 	criadoPor: varchar({ length: 255 }),
 	atualizadoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1302,7 +1302,7 @@ export const insuranceAlertRecipients = mysqlTable("insurance_alert_recipients",
 	recebeReclusao: tinyint().default(1).notNull(),
 	recebeDesligamento: tinyint().default(1).notNull(),
 	isActive: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1332,7 +1332,7 @@ export const insuranceAlertsLog = mysqlTable("insurance_alerts_log", {
 	// Status do envio
 	statusEnvio: mysqlEnum(['enviado', 'erro', 'pendente']).default('pendente').notNull(),
 	erroMensagem: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ial_company").on(table.companyId),
@@ -1355,7 +1355,7 @@ export const notificationRecipients = mysqlTable("notification_recipients", {
 	notificarTransferencia: boolean().default(false).notNull(),
 	notificarAfastamento: boolean().default(false).notNull(),
 	ativo: boolean().default(true).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1397,8 +1397,8 @@ export const notificationLogs = mysqlTable("notification_logs", {
 	disparadoPor: varchar({ length: 255 }),
 	disparadoPorId: int(),
 	// Timestamps
-	enviadoEm: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	enviadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("nl_company").on(table.companyId),
@@ -1450,7 +1450,7 @@ export const blacklistReactivationRequests = mysqlTable("blacklist_reactivation_
 	rejeitadoPorId: int(),
 	motivoRejeicao: text(),
 	// Timestamps
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1477,7 +1477,7 @@ export const emailTemplates = mysqlTable("email_templates", {
 	ativo: boolean().default(true).notNull(),
 	atualizadoPor: varchar({ length: 255 }),
 	atualizadoPorId: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1512,7 +1512,7 @@ export const terminationNotices = mysqlTable("termination_notices", {
 	observacoes: text(),
 	criadoPor: varchar({ length: 255 }),
 	criadoPorUserId: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1562,7 +1562,7 @@ export const vacationPeriods = mysqlTable("vacation_periods", {
 	observacoes: text(),
 	aprovadoPor: varchar({ length: 255 }),
 	aprovadoPorUserId: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1598,7 +1598,7 @@ export const cipaMeetings = mysqlTable("cipa_meetings", {
 	status: mysqlEnum(['agendada','realizada','cancelada']).default('agendada').notNull(),
 	observacoes: text(),
 	criadoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1641,7 +1641,7 @@ export const pjContracts = mysqlTable("pj_contracts", {
 	observacoes: text(),
 	criadoPor: varchar({ length: 255 }),
 	criadoPorUserId: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
@@ -1670,7 +1670,7 @@ export const pjPayments = mysqlTable("pj_payments", {
 	comprovanteUrl: text(),
 	observacoes: text(),
 	criadoPor: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -1691,8 +1691,8 @@ export const systemRevisions = mysqlTable("system_revisions", {
 	tipo: mysqlEnum(['feature','bugfix','melhoria','seguranca','performance']).notNull(),
 	modulos: text(), // Módulos afetados (JSON array)
 	criadoPor: varchar({ length: 255 }).notNull(),
-	dataPublicacao: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	dataPublicacao: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("sr_version").on(table.version),
 ]);
@@ -1720,7 +1720,7 @@ export const unmatchedDixiRecords = mysqlTable("unmatched_dixi_records", {
 	linkedEmployeeId: int(), // Funcionário vinculado pelo usuário
 	resolvidoPor: varchar({ length: 255 }),
 	resolvidoEm: timestamp({ mode: 'string' }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("udr_company_mes").on(table.companyId, table.mesReferencia),
 	index("udr_status").on(table.status),
@@ -1740,7 +1740,7 @@ export const dixiNameMappings = mysqlTable("dixi_name_mappings", {
 	employeeName: varchar({ length: 255 }).notNull(), // Nome do colaborador (cache para exibição)
 	source: mysqlEnum(['manual','import_link']).default('manual').notNull(), // Como foi criada
 	createdBy: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
 	index("dnm_company").on(table.companyId),
@@ -2218,7 +2218,7 @@ jantaDia: varchar({ length: 20 }).default('0'), // valor diário jantar (se nece
 		jantaAtivo: tinyint().default(0), // 1 = ativo, 0 = desativado
 	observacoes: text(),
 	ativo: tinyint().default(1),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -2246,7 +2246,7 @@ export const evalAvaliadores = mysqlTable("eval_avaliadores", {
 	obraId: int(), // obra vinculada
 	evaluationFrequency: mysqlEnum(['daily','weekly','monthly','quarterly','annual']).default('monthly').notNull(),
 	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	lastSignedIn: timestamp({ mode: 'string' }),
 },
@@ -2263,7 +2263,7 @@ export const evalCriteriaRevisions = mysqlTable("eval_criteria_revisions", {
 	descricao: varchar({ length: 255 }),
 	isActive: tinyint().default(0).notNull(),
 	createdBy: varchar({ length: 255 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ecr_company").on(table.companyId),
@@ -2275,7 +2275,7 @@ export const evalPillars = mysqlTable("eval_pillars", {
 	revisionId: int().notNull(),
 	nome: varchar({ length: 255 }).notNull(),
 	ordem: int().default(0).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ep_revision").on(table.revisionId),
@@ -2291,7 +2291,7 @@ export const evalCriteria = mysqlTable("eval_criteria", {
 	fieldKey: varchar({ length: 100 }), // chave técnica ex: "comportamento"
 	ordem: int().default(0).notNull(),
 	ativo: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ec_pillar").on(table.pillarId),
@@ -2334,7 +2334,7 @@ export const evalAvaliacoes = mysqlTable("eval_avaliacoes", {
 	durationSeconds: int(), // tempo para completar
 	deviceType: varchar({ length: 20 }),
 	revisionId: int(), // revisão de critérios vigente
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -2350,7 +2350,7 @@ export const evalScores = mysqlTable("eval_scores", {
 	evaluationId: int().notNull(),
 	criterionId: int().notNull(),
 	nota: int().notNull(), // 1-5
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("es_evaluation").on(table.evaluationId),
@@ -2371,7 +2371,7 @@ export const evalSurveys = mysqlTable("eval_surveys", {
 	obraId: int(),
 	publicToken: varchar('public_token', { length: 64 }), // token para link público
 	expiresAt: timestamp('expires_at', { mode: 'string' }), // data de expiração
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -2386,7 +2386,7 @@ export const evalSurveyQuestions = mysqlTable("eval_survey_questions", {
 	tipo: mysqlEnum(['nota','texto','sim_nao']).default('nota').notNull(),
 	ordem: int().default(0).notNull(),
 	obrigatoria: tinyint().default(1),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("esq_survey").on(table.surveyId),
@@ -2400,7 +2400,7 @@ export const evalSurveyResponses = mysqlTable("eval_survey_responses", {
 	respondentEmail: varchar({ length: 320 }),
 	employeeId: int('employee_id'), // funcionário avaliado (quando isEvaluation=1)
 	evaluatorUserId: int('evaluator_user_id'), // usuário que fez a avaliação
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("esr_survey").on(table.surveyId),
@@ -2413,7 +2413,7 @@ export const evalSurveyAnswers = mysqlTable("eval_survey_answers", {
 	questionId: int().notNull(),
 	valor: varchar({ length: 20 }),
 	textoLivre: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("esa_response").on(table.responseId),
@@ -2425,7 +2425,7 @@ export const evalSurveyEvaluators = mysqlTable("eval_survey_evaluators", {
 	id: int().autoincrement().notNull(),
 	surveyId: int().notNull(),
 	evaluatorId: int().notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ese_survey").on(table.surveyId),
@@ -2441,7 +2441,7 @@ export const evalClimateSurveys = mysqlTable("eval_climate_surveys", {
 	status: mysqlEnum(['ativa','encerrada','rascunho']).default('rascunho').notNull(),
 	publicToken: varchar('public_token', { length: 64 }), // token para link público
 	expiresAt: timestamp('expires_at', { mode: 'string' }), // data de expiração
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -2456,7 +2456,7 @@ export const evalClimateQuestions = mysqlTable("eval_climate_questions", {
 	categoria: mysqlEnum(['empresa','gestor','ambiente','seguranca','crescimento','recomendacao']).default('empresa').notNull(),
 	tipo: mysqlEnum(['nota','texto','sim_nao']).default('nota').notNull(),
 	ordem: int().default(0).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ecq_survey").on(table.surveyId),
@@ -2467,7 +2467,7 @@ export const evalClimateResponses = mysqlTable("eval_climate_responses", {
 	id: int().autoincrement().notNull(),
 	surveyId: int().notNull(),
 	cpfHash: varchar({ length: 64 }), // SHA-256 do CPF
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("eclr_survey").on(table.surveyId),
@@ -2480,7 +2480,7 @@ export const evalClimateAnswers = mysqlTable("eval_climate_answers", {
 	questionId: int().notNull(),
 	valor: varchar({ length: 20 }),
 	textoLivre: text(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ecla_response").on(table.responseId),
@@ -2497,7 +2497,7 @@ export const evalExternalParticipants = mysqlTable("eval_external_participants",
 	email: varchar({ length: 320 }),
 	telefone: varchar({ length: 20 }),
 	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
@@ -2512,7 +2512,7 @@ export const evalClimateExternalTokens = mysqlTable("eval_climate_external_token
 	token: varchar({ length: 64 }).notNull(),
 	used: tinyint().default(0),
 	usedAt: timestamp({ mode: 'string' }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("ecet_survey").on(table.surveyId),
@@ -2531,7 +2531,7 @@ export const evalAuditLog = mysqlTable("eval_audit_log", {
 	targetId: int(),
 	details: text(), // JSON
 	ipAddress: varchar({ length: 45 }),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
 	index("eal_company").on(table.companyId),

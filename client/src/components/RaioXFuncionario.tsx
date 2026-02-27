@@ -119,6 +119,13 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     if (open) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
   }, [open]);
 
+  // Avaliações de desempenho - MUST be called before any conditional return to avoid hooks order violation
+  const avaliacoesQuery = trpc.avaliacao.avaliacoes.getByEmployee.useQuery(
+    { employeeId: employeeId!, companyId: selectedCompany?.id || 0 },
+    { enabled: !!employeeId && open && !!selectedCompany?.id }
+  );
+  const avaliacoesList = avaliacoesQuery.data || [];
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -152,13 +159,6 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const cipa = (raioX as any)?.cipa || [];
   const pjContratos = (raioX as any)?.pjContratos || [];
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
-
-  // Avaliações de desempenho
-  const avaliacoesQuery = trpc.avaliacao.avaliacoes.getByEmployee.useQuery(
-    { employeeId: employeeId!, companyId: selectedCompany?.id || 0 },
-    { enabled: !!employeeId && open && !!selectedCompany?.id }
-  );
-  const avaliacoesList = avaliacoesQuery.data || [];
 
   const asosVencidos = asos.filter((a: any) => a.status === "VENCIDO").length;
   const asosAVencer = asos.filter((a: any) => a.status?.includes("DIAS PARA VENCER")).length;

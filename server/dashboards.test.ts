@@ -24,7 +24,7 @@ describe("Dashboards Router", () => {
   it("should have 6 dashboard procedures total", async () => {
     const { dashboardsRouter } = await import("./routers/dashboards");
     const procedures = Object.keys(dashboardsRouter._def.procedures);
-    expect(procedures.length).toBe(6);
+    expect(procedures.length).toBe(7);
   });
 });
 

@@ -275,6 +275,11 @@
 - [x] Corrigir Menubar Portal para usar container fixo
 - [x] Build de produção compilando sem erros
 
+## Bug Fixes - 2026-02-27
+- [x] Fix RaioXFuncionario crash: "Rendered more hooks than during the previous render" - moved avaliacoesQuery hook before conditional return
+- [x] Fix drizzle schema: replaced default('CURRENT_TIMESTAMP') with defaultNow() for proper SQL generation
+- [x] Fix dashboard test: updated expected procedure count from 6 to 7
+
 ## Fase 19: Solução Definitiva removeChild - Abordagem Diferente
 - [x] Investigar causa raiz real nos logs do browser (erro só em produção, não no dev)
 - [x] Implementar patch no React DOM (dom-patch.ts) para ignorar removeChild/insertBefore em nós órfãos
@@ -3022,3 +3027,7 @@
 - [x] Bundle reduzido de 20MB/404 arquivos para 6.9MB/9 arquivos
 - [x] Lazy wrapper criado em LazyStreamdown.tsx
 - [x] react-markdown + remark-gfm instalados como alternativa leve
+
+## Bug: Erro ao clicar em funcionário na aba Vale Alimentação
+- [ ] Erro "Ocorreu um erro inesperado" ao clicar em um funcionário na lista de Vale Alimentação
+- [ ] Stack trace aponta para vendor bundle - possível problema com dados undefined/null
