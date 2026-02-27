@@ -445,7 +445,7 @@ export default function AvisoPrevio() {
                       <DollarSign className="h-4 w-4" /> Previsão de Rescisão
                     </p>
                     <div className="space-y-1 text-sm">
-                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Saldo de Salário ({prev.diasTrabalhadosMes} dias):</span><span className="font-semibold">{formatMoeda(prev.saldoSalario)}</span></div>
+                      <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Saldo de Salário ({prev.diasTrabalhadosMes}/{prev.diasReaisMes || 30} dias):</span><span className="font-semibold">{formatMoeda(prev.saldoSalario)}</span></div>
                       <div className="flex justify-between py-1 border-b border-green-100"><span className="text-gray-600">Férias Prop. + 1/3 ({prev.mesesFerias} meses):</span><span className="font-semibold">{formatMoeda(prev.totalFerias)}</span></div>
                       {parseFloat(prev.feriasVencidas) > 0 && (
                         <div className="flex justify-between py-1 border-b border-red-100 bg-red-50 px-1 rounded"><span className="text-red-600">Férias Vencidas ({prev.periodosVencidos} per.):</span><span className="font-semibold text-red-700">{formatMoeda(prev.feriasVencidas)}</span></div>
@@ -710,7 +710,7 @@ export default function AvisoPrevio() {
                         <div className="flex justify-between py-2 border-b border-gray-100">
                           <div>
                             <span className="text-sm text-gray-700">Saldo de Salário</span>
-                            <span className="text-[10px] text-gray-400 ml-2">({calculoPreview.previsaoRescisao.diasTrabalhadosMes} dias)</span>
+                            <span className="text-[10px] text-gray-400 ml-2">({calculoPreview.previsaoRescisao.diasTrabalhadosMes}/{calculoPreview.previsaoRescisao.diasReaisMes || 30} dias do mês)</span>
                           </div>
                           <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.saldoSalario)}</span>
                         </div>

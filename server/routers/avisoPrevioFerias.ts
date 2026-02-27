@@ -118,7 +118,11 @@ function calcularRescisaoCompleta(params: {
 }) {
   const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
   
-  const salarioDia = salarioBase / 30;
+  // Usar dias reais do mês para cálculo do saldo de salário (CLT)
+  // Fevereiro = 28 ou 29, meses com 31 dias, etc.
+  const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
+  const diasReaisMes = new Date(dtDeslig.getFullYear(), dtDeslig.getMonth() + 1, 0).getDate();
+  const salarioDia = salarioBase / diasReaisMes;
   const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
   const diasAvisoTotal = calcularDiasAviso(anosServico);
   const diasExtrasAviso = calcularDiasExtrasAviso(anosServico);
@@ -196,6 +200,7 @@ function calcularRescisaoCompleta(params: {
     // Dados base
     salarioBase: salarioBase.toFixed(2),
     salarioDia: salarioDia.toFixed(2),
+    diasReaisMes,
     anosServico,
     diasAvisoTotal,
     diasExtrasAviso,
@@ -373,8 +378,9 @@ export const avisoPrevioFeriasRouter = router({
             // Total VA iFood MENSAL = café(dia × diasUteis) + lanche(dia × diasUteis) + VA mensal
             // Cada item só entra se estiver ativo na config
             const totalVAMensal = (cafeAtivo ? cafe * diasUteis : 0) + (lancheAtivo ? lanche * diasUteis : 0) + vaMes;
-            // VR proporcional na rescisão = totalMensal / 30 × dias trabalhados
-            vrDiario = totalVAMensal / 30; // "diário" agora é o valor mensal dividido por 30
+            // VR proporcional na rescisão = totalMensal / dias reais do mês × dias trabalhados
+            const diasReaisMesVR = new Date(dtDeslig.getFullYear(), dtDeslig.getMonth() + 1, 0).getDate();
+            vrDiario = totalVAMensal / diasReaisMesVR; // usar dias reais do mês (28 para fev, 30/31 para outros)
             vrConfigNome = cfg.nome || 'Padrão';
             // Guardar info extra para exibição
             vrExtra = { totalVAMensal, cafeAtivo, lancheAtivo, cafeDia: cafe, lancheDia: lanche, vaMes, diasUteis };

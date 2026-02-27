@@ -99,11 +99,26 @@ describe("Cálculo de Rescisão CLT", () => {
       expect(decimo).toBeCloseTo(410.75, 2);
     });
     
-    it("deve calcular saldo de salário (28 dias)", () => {
+    it("deve calcular saldo de salário (28 dias em março = 31 dias no mês)", () => {
       const diasTrabalhados = 28;
-      const saldo = (salario / 30) * diasTrabalhados;
-      // User disse R$ 1.532,77 - diferença de arredondamento
-      expect(saldo).toBeCloseTo(1533.47, 0);
+      // Março tem 31 dias, então salarioDia = salario / 31
+      const diasReaisMes = 31; // março
+      const saldo = (salario / diasReaisMes) * diasTrabalhados;
+      expect(saldo).toBeCloseTo(1484.00, 0);
+    });
+    
+    it("deve calcular saldo de salário corretamente para fevereiro (28 dias no mês)", () => {
+      // Exemplo: desligamento em 13/02/2026 (fevereiro tem 28 dias)
+      const diasTrabalhados = 13;
+      const diasReaisMes = 28; // fevereiro 2026
+      const saldoCorreto = (salario / diasReaisMes) * diasTrabalhados;
+      const saldoErrado = (salario / 30) * diasTrabalhados;
+      // Com 28 dias: 1643/28 * 13 = 762.96
+      // Com 30 dias: 1643/30 * 13 = 711.97 (ERRADO)
+      expect(saldoCorreto).toBeCloseTo(762.96, 0);
+      expect(saldoErrado).toBeCloseTo(711.97, 0);
+      // O correto deve ser MAIOR que o errado (mais dias proporcionais)
+      expect(saldoCorreto).toBeGreaterThan(saldoErrado);
     });
     
     it("deve calcular aviso prévio proporcional (Lei 12.506)", () => {

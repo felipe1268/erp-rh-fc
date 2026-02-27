@@ -2989,3 +2989,10 @@
 ## Bug: Busca de nome do colaborador no ASO (campo Colaborador)
 - [x] Corrigir busca automática conforme digita no campo Colaborador do ASO
 - [x] Melhorar UX mobile: input com ref callback para foco, inputMode text, border azul quando ativo
+
+## Bug: Cálculo de saldo de salário na rescisão usa 30 dias fixo
+- [x] Corrigir cálculo do saldo de salário na rescisão para usar dias reais do mês (28 para fevereiro, 31 para janeiro, etc.)
+- [x] Fevereiro/2026 tem 28 dias, sistema calcula como 30 → saldo de 13 dias em vez de 15 dias
+- [x] VR proporcional também corrigido para usar dias reais do mês
+- [x] Frontend atualizado para mostrar "X/Y dias do mês" (ex: 13/28 dias)
+- [x] 24 testes passando (rescisao.test.ts)
