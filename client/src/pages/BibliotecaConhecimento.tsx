@@ -18,7 +18,7 @@ import {
   CATEGORIAS, ARTIGOS, getArtigosByCategoria, getArtigoById, buscarArtigos,
   type ArtigoCategoria, type Artigo,
 } from "@/data/bibliotecaConteudo";
-import { Streamdown } from "streamdown";
+import { Streamdown } from "@/components/LazyStreamdown";
 
 // Mapa de ícones por nome
 const ICON_MAP: Record<string, any> = {

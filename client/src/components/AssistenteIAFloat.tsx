@@ -8,7 +8,7 @@ import {
   Minimize2, Maximize2, RotateCcw,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { Streamdown } from "streamdown";
+import { Streamdown } from "@/components/LazyStreamdown";
 
 type ChatMessage = {
   role: "user" | "assistant";

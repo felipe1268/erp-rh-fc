@@ -3016,3 +3016,9 @@
 - [x] Backend: calcularDiasAviso agora recebe o tipo e retorna 30 para trabalhado
 - [x] Frontend: card mostra "30 dias" + nota "+ X dias indenizados" quando aplicável
 - [x] 24 testes passando
+
+## Fix: Deploy timeout - bundle size reduction
+- [x] Substituir streamdown (shiki 9.2MB + mermaid 1.1MB) por react-markdown (leve)
+- [x] Bundle reduzido de 20MB/404 arquivos para 6.9MB/9 arquivos
+- [x] Lazy wrapper criado em LazyStreamdown.tsx
+- [x] react-markdown + remark-gfm instalados como alternativa leve
