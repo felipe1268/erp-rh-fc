@@ -36,6 +36,7 @@ import DashFolhaPagamento from "./pages/dashboards/DashFolhaPagamento";
 import DashHorasExtras from "./pages/dashboards/DashHorasExtras";
 import DashEpis from "./pages/dashboards/DashEpis";
 import DashJuridico from "./pages/dashboards/DashJuridico";
+import DashAvisoPrevio from "./pages/dashboards/DashAvisoPrevio";
 import Lixeira from "./pages/Lixeira";
 import AvisoPrevio from "./pages/AvisoPrevio";
 import Ferias from "./pages/Ferias";
@@ -107,6 +108,7 @@ function Router() {
       <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
       <Route path={"/dashboards/epis"} component={DashEpis} />
       <Route path={"/dashboards/juridico"} component={DashJuridico} />
+      <Route path={"/dashboards/aviso-previo"} component={DashAvisoPrevio} />
       <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
       <Route path={"404"} component={NotFound} />

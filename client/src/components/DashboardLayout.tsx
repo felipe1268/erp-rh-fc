@@ -119,6 +119,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Clock, label: "Cartão de Ponto", path: "/dashboards/cartao-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/dashboards/folha-pagamento" },
       { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
+      { icon: AlertTriangle, label: "Aviso Prévio", path: "/dashboards/aviso-previo" },
     ],
   },
   {

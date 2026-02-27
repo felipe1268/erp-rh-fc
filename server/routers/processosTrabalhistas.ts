@@ -111,9 +111,34 @@ export const processosTrabRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+      // Sanitize: convert empty strings to null/undefined for date and optional fields
+      const emptyToNull = (v: string | undefined) => (v && v.trim() !== '' ? v : null);
       const result = await db.insert(processosTrabalhistas).values({
-        ...input,
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        numeroProcesso: input.numeroProcesso,
+        vara: emptyToNull(input.vara),
+        comarca: emptyToNull(input.comarca),
+        tribunal: emptyToNull(input.tribunal),
+        justica: input.justica,
+        tipoAcao: input.tipoAcao,
+        reclamante: input.reclamante,
+        advogadoReclamante: emptyToNull(input.advogadoReclamante),
+        advogadoEmpresa: emptyToNull(input.advogadoEmpresa),
+        valorCausa: emptyToNull(input.valorCausa),
+        dataDistribuicao: emptyToNull(input.dataDistribuicao),
+        dataDesligamento: emptyToNull(input.dataDesligamento),
+        dataCitacao: emptyToNull(input.dataCitacao),
+        dataAudiencia: emptyToNull(input.dataAudiencia),
+        status: input.status,
+        fase: input.fase,
+        risco: input.risco,
         pedidos: input.pedidos ? JSON.stringify(input.pedidos) : null,
+        clienteCnpj: emptyToNull(input.clienteCnpj),
+        clienteRazaoSocial: emptyToNull(input.clienteRazaoSocial),
+        clienteNomeFantasia: emptyToNull(input.clienteNomeFantasia),
+        observacoes: emptyToNull(input.observacoes),
+        criadoPor: emptyToNull(input.criadoPor),
       });
       return { id: result[0].insertId };
     }),

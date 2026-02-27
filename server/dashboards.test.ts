@@ -19,12 +19,13 @@ describe("Dashboards Router", () => {
     expect(procedures).toContain("horasExtras");
     expect(procedures).toContain("epis");
     expect(procedures).toContain("juridico");
+    expect(procedures).toContain("avisoPrevio");
   });
 
-  it("should have 6 dashboard procedures total", async () => {
+  it("should have 8 dashboard procedures total", async () => {
     const { dashboardsRouter } = await import("./routers/dashboards");
     const procedures = Object.keys(dashboardsRouter._def.procedures);
-    expect(procedures.length).toBe(7);
+    expect(procedures.length).toBe(8);
   });
 });
 

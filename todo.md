@@ -3031,3 +3031,22 @@
 ## Bug: Erro ao clicar em funcionário na aba Vale Alimentação
 - [ ] Erro "Ocorreu um erro inesperado" ao clicar em um funcionário na lista de Vale Alimentação
 - [ ] Stack trace aponta para vendor bundle - possível problema com dados undefined/null
+
+## Melhoria Vale Alimentação - 2026-02-27
+- [ ] Adicionar card de valor total no topo da página de Vale Alimentação
+
+## Dashboard Aviso Prévio - 2026-02-27
+- [ ] Criar rota tRPC de dados agregados para dashboard de aviso prévio
+- [x] Criar página DashAvisoPrevio com gráficos responsivos
+- [ ] Cards resumo: total avisos, em andamento, concluídos, indenizados vs trabalhados
+- [ ] Gráfico: distribuição por tipo (Trabalhado/Indenizado)
+- [ ] Gráfico: avisos por mês (evolução temporal)
+- [ ] Gráfico: avisos por motivo de desligamento
+- [ ] Gráfico: dias de aviso prévio proporcional (30 + 3/ano)
+- [ ] Gráfico: avisos por setor/obra
+- [x] Tabela detalhada com status e prazos
+- [x] Registrar rota e navegação no menu lateral
+- [x] Todos os gráficos responsivos
+
+## Bug Fix - Jurídico Insert Error - 2026-02-27
+- [x] Fix: Erro ao cadastrar processo trabalhista - Failed query insert into processos_trabalhistas (empty strings -> null for DATE fields)

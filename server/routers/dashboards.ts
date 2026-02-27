@@ -5,7 +5,7 @@ import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
-  epiDiscountAlerts,
+  epiDiscountAlerts, terminationNotices,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
 
@@ -1211,6 +1211,134 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
 }
 
 // ============================================================
+// 8. DASHBOARD AVISO PRÉVIO
+// ============================================================
+async function getDashAvisoPrevio(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const allNotices = await db.select({
+    id: terminationNotices.id,
+    employeeId: terminationNotices.employeeId,
+    tipo: terminationNotices.tipo,
+    dataInicio: terminationNotices.dataInicio,
+    dataFim: terminationNotices.dataFim,
+    diasAviso: terminationNotices.diasAviso,
+    anosServico: terminationNotices.anosServico,
+    reducaoJornada: terminationNotices.reducaoJornada,
+    salarioBase: terminationNotices.salarioBase,
+    valorEstimadoTotal: terminationNotices.valorEstimadoTotal,
+    status: terminationNotices.status,
+    dataConclusao: terminationNotices.dataConclusao,
+    previsaoRescisao: terminationNotices.previsaoRescisao,
+    observacoes: terminationNotices.observacoes,
+    criadoPor: terminationNotices.criadoPor,
+    createdAt: terminationNotices.createdAt,
+    nomeCompleto: employees.nomeCompleto,
+    setor: employees.setor,
+    funcao: employees.funcao,
+    cargo: employees.cargo,
+    dataAdmissao: employees.dataAdmissao,
+    empSalarioBase: employees.salarioBase,
+  }).from(terminationNotices)
+    .leftJoin(employees, eq(terminationNotices.employeeId, employees.id))
+    .where(and(eq(terminationNotices.companyId, companyId), isNull(terminationNotices.deletedAt)))
+    .orderBy(desc(terminationNotices.createdAt));
+
+  const total = allNotices.length;
+  const emAndamento = allNotices.filter(n => n.status === 'em_andamento').length;
+  const concluidos = allNotices.filter(n => n.status === 'concluido').length;
+  const cancelados = allNotices.filter(n => n.status === 'cancelado').length;
+  const empregadorTrabalhado = allNotices.filter(n => n.tipo === 'empregador_trabalhado').length;
+  const empregadorIndenizado = allNotices.filter(n => n.tipo === 'empregador_indenizado').length;
+  const empregadoTrabalhado = allNotices.filter(n => n.tipo === 'empregado_trabalhado').length;
+  const empregadoIndenizado = allNotices.filter(n => n.tipo === 'empregado_indenizado').length;
+
+  const parseVal = (v: string | null) => { const n = parseFloat((v || '0').replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+  const valorTotalEstimado = allNotices.reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
+  const valorEmAndamento = allNotices.filter(n => n.status === 'em_andamento').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
+
+  const reducao2h = allNotices.filter(n => n.reducaoJornada === '2h_dia').length;
+  const reducao7dias = allNotices.filter(n => n.reducaoJornada === '7_dias_corridos').length;
+  const semReducao = allNotices.filter(n => n.reducaoJornada === 'nenhuma' || !n.reducaoJornada).length;
+
+  const porSetor: Record<string, number> = {};
+  allNotices.forEach(n => { const s = n.setor || 'Não informado'; porSetor[s] = (porSetor[s] || 0) + 1; });
+  const setorDist = Object.entries(porSetor).map(([setor, c]) => ({ setor, count: c })).sort((a, b) => b.count - a.count);
+
+  const porFuncao: Record<string, number> = {};
+  allNotices.forEach(n => { const f = n.funcao || n.cargo || 'Não informado'; porFuncao[f] = (porFuncao[f] || 0) + 1; });
+  const funcaoDist = Object.entries(porFuncao).map(([funcao, c]) => ({ funcao, count: c })).sort((a, b) => b.count - a.count).slice(0, 10);
+
+  const porMes: Record<string, { trabalhado: number; indenizado: number }> = {};
+  allNotices.forEach(n => {
+    const d = n.dataInicio ? new Date(n.dataInicio) : new Date(n.createdAt);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!porMes[key]) porMes[key] = { trabalhado: 0, indenizado: 0 };
+    if (n.tipo?.includes('indenizado')) porMes[key].indenizado++; else porMes[key].trabalhado++;
+  });
+  const evolucaoMensal = Object.entries(porMes).map(([mes, v]) => ({ mes, ...v, total: v.trabalhado + v.indenizado })).sort((a, b) => a.mes.localeCompare(b.mes));
+
+  const diasDist: Record<number, number> = {};
+  allNotices.forEach(n => { const d = n.diasAviso || 30; diasDist[d] = (diasDist[d] || 0) + 1; });
+  const diasAvisoDist = Object.entries(diasDist).map(([dias, c]) => ({ dias: Number(dias), count: c })).sort((a, b) => a.dias - b.dias);
+
+  const anosDist: Record<number, number> = {};
+  allNotices.forEach(n => { const a = n.anosServico || 0; anosDist[a] = (anosDist[a] || 0) + 1; });
+  const anosServicoDist = Object.entries(anosDist).map(([anos, c]) => ({ anos: Number(anos), count: c })).sort((a, b) => a.anos - b.anos);
+
+  const custoSetor: Record<string, number> = {};
+  allNotices.forEach(n => { const s = n.setor || 'Não informado'; custoSetor[s] = (custoSetor[s] || 0) + parseVal(n.valorEstimadoTotal); });
+  const custoPorSetor = Object.entries(custoSetor).map(([setor, valor]) => ({ setor, valor })).sort((a, b) => b.valor - a.valor);
+
+  const hoje = new Date();
+  const em7dias = new Date(hoje); em7dias.setDate(em7dias.getDate() + 7);
+  const em30dias = new Date(hoje); em30dias.setDate(em30dias.getDate() + 30);
+  const vencendo7dias = allNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em7dias; }).length;
+  const vencendo30dias = allNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em30dias; }).length;
+
+  let totalSaldoSalario = 0, totalFerias = 0, total13o = 0, totalFGTS = 0, totalMultaFGTS = 0, totalAvisoIndenizado = 0;
+  allNotices.forEach(n => {
+    if (n.previsaoRescisao) {
+      try {
+        const p = JSON.parse(n.previsaoRescisao);
+        totalSaldoSalario += parseFloat(p.saldoSalario || '0');
+        totalFerias += parseFloat(p.totalFerias || '0');
+        total13o += parseFloat(p.decimoTerceiroProporcional || '0');
+        totalFGTS += parseFloat(p.fgtsEstimado || '0');
+        totalMultaFGTS += parseFloat(p.multaFGTS || '0');
+        totalAvisoIndenizado += parseFloat(p.avisoPrevioIndenizado || '0');
+      } catch {}
+    }
+  });
+  const breakdownRescisao = [
+    { componente: 'Saldo Salário', valor: totalSaldoSalario },
+    { componente: 'Férias + 1/3', valor: totalFerias },
+    { componente: '13º Proporcional', valor: total13o },
+    { componente: 'FGTS', valor: totalFGTS },
+    { componente: 'Multa 40% FGTS', valor: totalMultaFGTS },
+    { componente: 'Aviso Indenizado', valor: totalAvisoIndenizado },
+  ];
+
+  return {
+    total, emAndamento, concluidos, cancelados,
+    empregadorTrabalhado, empregadorIndenizado, empregadoTrabalhado, empregadoIndenizado,
+    valorTotalEstimado, valorEmAndamento,
+    reducao2h, reducao7dias, semReducao,
+    setorDist, funcaoDist, evolucaoMensal, diasAvisoDist, anosServicoDist,
+    custoPorSetor, breakdownRescisao, vencendo7dias, vencendo30dias,
+    avisos: allNotices.map(n => ({
+      id: n.id, nomeCompleto: n.nomeCompleto || 'Funcionário não encontrado',
+      tipo: n.tipo, dataInicio: n.dataInicio, dataFim: n.dataFim,
+      diasAviso: n.diasAviso, anosServico: n.anosServico,
+      reducaoJornada: n.reducaoJornada, salarioBase: n.salarioBase || n.empSalarioBase,
+      valorEstimadoTotal: n.valorEstimadoTotal, status: n.status,
+      setor: n.setor, funcao: n.funcao || n.cargo, criadoPor: n.criadoPor,
+    })),
+  };
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 export const dashboardsRouter = router({
@@ -1229,4 +1357,5 @@ export const dashboardsRouter = router({
   })).query(({ input }) => getDashHorasExtras(input.companyId, input.year, input)),
   epis: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashEpis(input.companyId)),
   juridico: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashJuridico(input.companyId)),
+  avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashAvisoPrevio(input.companyId)),
 });
