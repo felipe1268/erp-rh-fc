@@ -43,6 +43,7 @@ interface DashChartProps {
   className?: string;
   showPercentage?: boolean;
   onChartClick?: (info: ChartClickInfo) => void;
+  valueFormatter?: (value: number) => string;
 }
 
 const COLORS = [
@@ -51,7 +52,7 @@ const COLORS = [
   "#A855F7", "#EAB308", "#0EA5E9", "#E11D48", "#059669",
 ];
 
-export default function DashChart({ title, type, labels, datasets, height = 280, className, showPercentage = true, onChartClick }: DashChartProps) {
+export default function DashChart({ title, type, labels, datasets, height = 280, className, showPercentage = true, onChartClick, valueFormatter }: DashChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const onClickRef = useRef(onChartClick);
@@ -115,10 +116,11 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
             const total = dataArr.reduce((a: number, b: number) => a + b, 0);
             const pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
             const labelStr = dataset.label || context.label || "";
+            const fmtVal = valueFormatter ? valueFormatter(value) : String(value);
             if (isPieOrDoughnut) {
-              return ` ${context.label}: ${value} (${pct}%)`;
+              return ` ${context.label}: ${fmtVal} (${pct}%)`;
             }
-            return ` ${labelStr}: ${value} (${pct}%)`;
+            return ` ${labelStr}: ${fmtVal} (${pct}%)`;
           },
           ...(onChartClick ? {
             afterLabel: () => "🔍 Clique para ver detalhes",
@@ -192,15 +194,15 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
             datalabels: datalabelsConfig,
           },
           scales: isPieOrDoughnut ? {} : {
-            y: { beginAtZero: true, ticks: { font: { size: 11 } } },
-            x: { ticks: { font: { size: 11 }, maxRotation: 45 } },
+            y: { beginAtZero: true, ticks: { font: { size: 11 }, ...(valueFormatter && !isHorizontalBar ? { callback: (v: any) => valueFormatter(v) } : {}) } },
+            x: { ticks: { font: { size: 11 }, maxRotation: 45, ...(valueFormatter && isHorizontalBar ? { callback: (v: any) => valueFormatter(v) } : {}) } },
           },
         },
       });
     });
 
     return () => { mounted = false; if (chartRef.current) chartRef.current.destroy(); };
-  }, [type, labels, datasets, height, showPercentage]);
+  }, [type, labels, datasets, height, showPercentage, valueFormatter]);
 
   return (
     <Card className={`${className || ''} ${onChartClick ? 'ring-1 ring-transparent hover:ring-blue-200 transition-all' : ''}`}>

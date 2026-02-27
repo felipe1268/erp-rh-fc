@@ -12,8 +12,24 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 
+/** Formata número para moeda brasileira: R$ 3.561,47 */
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Formata número curto para eixos dos gráficos: R$ 3,5 mil / R$ 1,2 mi */
+function fmtBRLShort(v: number) {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  return fmtBRL(v);
+}
+
+/** Formata valor de string do DB para exibição: "3561.47" -> "R$ 3.561,47" */
+function fmtValorStr(v: string | null | undefined) {
+  if (!v) return "-";
+  const n = parseFloat(v);
+  if (isNaN(n)) return "-";
+  return fmtBRL(n);
 }
 
 function fmtTipoLabel(tipo: string) {
@@ -192,7 +208,7 @@ export default function DashAvisoPrevio() {
               )}
             </div>
 
-            {/* Custo por Setor */}
+            {/* Custo por Setor - com formatação BRL */}
             {data.custoPorSetor.length > 0 && (
               <DashChart
                 title="Custo Estimado de Rescisão por Setor"
@@ -204,10 +220,11 @@ export default function DashAvisoPrevio() {
                   backgroundColor: data.custoPorSetor.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
                 }]}
                 height={280}
+                valueFormatter={fmtBRLShort}
               />
             )}
 
-            {/* Breakdown da Rescisão */}
+            {/* Breakdown da Rescisão - com formatação BRL */}
             {data.breakdownRescisao.some(b => b.valor > 0) && (
               <DashChart
                 title="Composição Total das Rescisões"
@@ -222,6 +239,7 @@ export default function DashAvisoPrevio() {
                   ],
                 }]}
                 height={280}
+                valueFormatter={fmtBRLShort}
               />
             )}
 
@@ -278,7 +296,7 @@ export default function DashAvisoPrevio() {
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Dias</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Redução</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Setor</th>
-                          <th className="py-2 pr-3 font-medium text-muted-foreground">Valor Est.</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Valor Est.</th>
                           <th className="py-2 font-medium text-muted-foreground">Status</th>
                         </tr>
                       </thead>
@@ -292,8 +310,8 @@ export default function DashAvisoPrevio() {
                             <td className="py-2 pr-3 text-center font-mono">{a.diasAviso}</td>
                             <td className="py-2 pr-3 text-xs">{fmtReducaoLabel(a.reducaoJornada || "nenhuma")}</td>
                             <td className="py-2 pr-3 text-xs text-muted-foreground">{a.setor || "-"}</td>
-                            <td className="py-2 pr-3 text-xs font-semibold">
-                              {a.valorEstimadoTotal ? `R$ ${a.valorEstimadoTotal}` : "-"}
+                            <td className="py-2 pr-3 text-xs font-semibold text-right tabular-nums">
+                              {fmtValorStr(a.valorEstimadoTotal)}
                             </td>
                             <td className="py-2">
                               <span className={`text-xs font-bold px-2 py-0.5 rounded ${statusColor(a.status)}`}>

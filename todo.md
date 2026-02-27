@@ -3053,3 +3053,10 @@
 
 ## Bug Fix - Dashboard Aviso Prévio Cálculos Errados - 2026-02-27
 - [x] Fix: Custo Total Estimado mostrando R$ 17.499.687,00 - parseVal removia ponto decimal pensando ser separador de milhar. Valor correto: R$ 178.558,34
+
+## Fix Dashboard Aviso Prévio - Formatação e Responsividade - 2026-02-27
+- [x] Formatar todos os valores monetários no padrão brasileiro (R$ 3.561,47)
+- [x] Formatar valores nos tooltips dos gráficos (R$ 43.147,20 em vez de 43147.2)
+- [x] Formatar valores na tabela detalhada (R$ 3.561,47 em vez de R$ 3561.47)
+- [x] Garantir gráficos responsivos com valueFormatter no DashChart
+- [x] Padronizar formatação em KPIs, gráficos e tabela
