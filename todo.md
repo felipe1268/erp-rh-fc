@@ -3085,3 +3085,6 @@
 ## BUG FIX: Card Aviso Prévio sem nome + Perfil Usuário não altera para ADM - 2026-02-27
 - [x] FIX: Card de aviso prévio com 4d restantes mostra nome do funcionário vazio (apenas "-")
 - [x] FIX: Não consegue alterar perfil do usuário para ADM na tela Configurar Usuário
+## BUG FIX: Data de término do aviso prévio incorreta - 2026-02-27
+- [x] FIX: Data de término do aviso prévio está 1 dia a mais (ex: início 12/02, 30 dias, mostra 14/03 em vez de 13/03)
+- [x] FIX: Atualizar 40 registros existentes no banco com dataFim correta

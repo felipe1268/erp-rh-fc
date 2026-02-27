@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE termination_notices \nSET dataFim = DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY),\n    updatedAt = NOW()\nWHERE deletedAt IS NULL \n  AND dataInicio IS NOT NULL \n  AND dataFim IS NOT NULL\n  AND dataFim != DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute UPDATE termination_notices \nSET dataFim = DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY),\n    updatedAt = NOW()\nWHERE deletedAt IS NULL \n  AND dataInicio IS NOT NULL \n  AND dataFim IS NOT NULL\n  AND dataFim != DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 72
+}

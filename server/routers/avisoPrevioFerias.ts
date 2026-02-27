@@ -90,10 +90,10 @@ function calcularDiasExtrasAviso(anosServico: number): number {
   return Math.min(anosServico * 3, 60); // máximo 60 dias extras (90 - 30 base)
 }
 
-/** Calcula data fim do aviso prévio */
+/** Calcula data fim do aviso prévio (dia de início conta como dia 1) */
 function calcularDataFim(dataInicio: string, diasAviso: number): string {
   const dt = new Date(dataInicio + 'T00:00:00');
-  dt.setDate(dt.getDate() + diasAviso);
+  dt.setDate(dt.getDate() + diasAviso - 1);
   return dt.toISOString().split("T")[0];
 }
 
