@@ -2802,3 +2802,22 @@
 
 - [x] Adicionar card de Avaliação de Desempenho na página inicial (Hub) como módulo adicional
 - [x] Corrigir página Avaliação de Desempenho para usar empresa selecionada do cabeçalho (useCompany)
+
+## Rev. 107 - Fusão Módulo Avaliação de Desempenho (fc-engenharia-avaliacao → ERP)
+
+- [x] Criar tabelas no banco: evaluators, evaluations (12 critérios), criteria_revisions, evaluation_pillars, evaluation_criteria, evaluation_scores
+- [x] Criar tabelas no banco: surveys, survey_questions, survey_responses, survey_answers, survey_evaluators
+- [x] Criar tabelas no banco: climate_surveys, climate_questions, climate_responses, climate_answers
+- [x] Criar tabelas no banco: external_participants, climate_external_tokens, audit_log
+- [x] Backend: Router avaliadores (CRUD com login/senha, toggle status, reset senha)
+- [x] Backend: Router avaliações (criar 12 critérios, listar, detalhe, ranking, IA summary, getByEmployee)
+- [x] Backend: Router pesquisas customizadas (CRUD)
+- [x] Backend: Router clima organizacional (CRUD)
+- [x] Backend: Router dashboard stats (globalStats, employeeRanking, evaluatorStats)
+- [x] Frontend: Dashboard admin com estatísticas globais
+- [x] Frontend: Gestão de avaliadores (CRUD)
+- [x] Frontend: Lista de avaliações + detalhe com 12 critérios
+- [x] Frontend: Formulário de avaliação com 3 pilares e notas 1-5
+- [x] Frontend: Pesquisas e Clima (abas)
+- [x] Frontend: Ranking de funcionários
+- [x] Integrar avaliação no Raio-X do funcionário (aba Avaliações com histórico, resumo, detalhes)

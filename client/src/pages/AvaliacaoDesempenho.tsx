@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -14,10 +14,86 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Star, Plus, Trash2, Edit, Eye, CheckCircle, Clock, Users, Trophy,
-  FileText, BarChart3, Play, Lock, ChevronRight, AlertTriangle, ArrowUp, ArrowDown,
-  ClipboardList, Settings, UserCheck, Calendar, Timer, TrendingUp, TrendingDown
+  FileText, BarChart3, Lock, AlertTriangle, ArrowUp, ArrowDown,
+  ClipboardList, UserCheck, Timer, TrendingUp, TrendingDown,
+  Brain, Search, ChevronDown, ChevronUp, Sparkles, Shield, Wrench, Heart
 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
+
+// ============================================================
+// CONSTANTES DO SISTEMA ORIGINAL
+// ============================================================
+const PILARES = [
+  {
+    nome: "Postura e Disciplina",
+    icon: Shield,
+    cor: "blue",
+    criterios: [
+      { key: "comportamento", label: "Comportamento", desc: "Postura profissional, respeito às normas e aos colegas" },
+      { key: "pontualidade", label: "Pontualidade", desc: "Cumprimento de horários de entrada, saída e intervalos" },
+      { key: "assiduidade", label: "Assiduidade", desc: "Frequência e comprometimento com a presença no trabalho" },
+      { key: "segurancaEpis", label: "Segurança e EPIs", desc: "Uso correto de EPIs e cumprimento das normas de segurança" },
+    ],
+  },
+  {
+    nome: "Desempenho Técnico",
+    icon: Wrench,
+    cor: "amber",
+    criterios: [
+      { key: "qualidadeAcabamento", label: "Qualidade e Acabamento", desc: "Nível de qualidade e acabamento dos serviços executados" },
+      { key: "produtividadeRitmo", label: "Produtividade e Ritmo", desc: "Volume de trabalho entregue dentro do prazo esperado" },
+      { key: "cuidadoFerramentas", label: "Cuidado com Ferramentas", desc: "Zelo e manutenção dos equipamentos e ferramentas" },
+      { key: "economiaMateriais", label: "Economia de Materiais", desc: "Uso consciente e econômico dos materiais de trabalho" },
+    ],
+  },
+  {
+    nome: "Atitude e Crescimento",
+    icon: Heart,
+    cor: "green",
+    criterios: [
+      { key: "trabalhoEquipe", label: "Trabalho em Equipe", desc: "Colaboração e relacionamento com colegas de trabalho" },
+      { key: "iniciativaProatividade", label: "Iniciativa e Proatividade", desc: "Capacidade de antecipar problemas e propor soluções" },
+      { key: "disponibilidadeFlexibilidade", label: "Disponibilidade e Flexibilidade", desc: "Adaptação a mudanças e disponibilidade para novas tarefas" },
+      { key: "organizacaoLimpeza", label: "Organização e Limpeza", desc: "Manutenção da organização e limpeza do ambiente de trabalho" },
+    ],
+  },
+];
+
+const NOTAS_LABELS: Record<number, { label: string; cor: string; bg: string }> = {
+  1: { label: "Péssimo", cor: "text-red-600", bg: "bg-red-100 border-red-300" },
+  2: { label: "Ruim", cor: "text-orange-600", bg: "bg-orange-100 border-orange-300" },
+  3: { label: "Regular", cor: "text-yellow-600", bg: "bg-yellow-100 border-yellow-300" },
+  4: { label: "Bom", cor: "text-blue-600", bg: "bg-blue-100 border-blue-300" },
+  5: { label: "Ótimo", cor: "text-green-600", bg: "bg-green-100 border-green-300" },
+};
+
+function getRecomendacao(media: number) {
+  if (media < 2.0) return { texto: "SUGERIR DEMISSÃO", cor: "bg-red-100 text-red-700 border-red-300" };
+  if (media < 3.0) return { texto: "ATENÇÃO - ACOMPANHAR", cor: "bg-amber-100 text-amber-700 border-amber-300" };
+  if (media < 4.0) return { texto: "TREINAMENTO", cor: "bg-blue-100 text-blue-700 border-blue-300" };
+  return { texto: "PROMOÇÃO / PREMIAÇÃO", cor: "bg-green-100 text-green-700 border-green-300" };
+}
+
+function NotaSelector({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          className={`w-10 h-10 rounded-lg border-2 font-bold text-sm transition-all ${
+            value === n
+              ? NOTAS_LABELS[n].bg + " " + NOTAS_LABELS[n].cor + " scale-110 shadow-md"
+              : "border-gray-200 text-gray-400 hover:border-gray-400"
+          }`}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function AvaliacaoDesempenho() {
   const { user } = useAuth();
@@ -28,19 +104,37 @@ export default function AvaliacaoDesempenho() {
   // ============================================================
   // QUERIES
   // ============================================================
-  const questionarios = trpc.avaliacao.questionarios.list.useQuery(
+  const dashboardStats = trpc.avaliacao.dashboard.globalStats.useQuery(
     { companyId },
     { enabled: companyId > 0 }
   );
-  const ciclos = trpc.avaliacao.ciclos.list.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
-  );
-  const ranking = trpc.avaliacao.ranking.useQuery(
+  const employeeRanking = trpc.avaliacao.dashboard.employeeRanking.useQuery(
     { companyId, limit: 10 },
     { enabled: companyId > 0 }
   );
-  const statsAvaliador = trpc.avaliacao.statsAvaliador.useQuery(
+  const evaluatorStats = trpc.avaliacao.dashboard.evaluatorStats.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const avaliadores = trpc.avaliacao.avaliadores.list.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const avaliacoes = trpc.avaliacao.avaliacoes.list.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const pesquisas = trpc.avaliacao.pesquisas.list.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const climaSurveys = trpc.avaliacao.clima.listSurveys.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+
+  // Buscar funcionários da empresa para o formulário
+  const employeesList = trpc.employees.list.useQuery(
     { companyId },
     { enabled: companyId > 0 }
   );
@@ -48,245 +142,142 @@ export default function AvaliacaoDesempenho() {
   // ============================================================
   // STATES
   // ============================================================
-  const [showQuestionarioDialog, setShowQuestionarioDialog] = useState(false);
-  const [showCicloDialog, setShowCicloDialog] = useState(false);
-  const [showAvaliacaoDialog, setShowAvaliacaoDialog] = useState(false);
-  const [showCicloDetalhe, setShowCicloDetalhe] = useState<number | null>(null);
-  const [editingQuestionario, setEditingQuestionario] = useState<any>(null);
+  const [showNovaAvaliacao, setShowNovaAvaliacao] = useState(false);
+  const [showNovoAvaliador, setShowNovoAvaliador] = useState(false);
+  const [showDetalheAvaliacao, setShowDetalheAvaliacao] = useState<number | null>(null);
+  const [showAiSummary, setShowAiSummary] = useState(false);
+  const [aiSummary, setAiSummary] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // Form questionário
-  const [qTitulo, setQTitulo] = useState("");
-  const [qDescricao, setQDescricao] = useState("");
-  const [qFrequencia, setQFrequencia] = useState("mensal");
-  const [qPerguntas, setQPerguntas] = useState<{ texto: string; tipo: string; peso: number }[]>([
-    { texto: "", tipo: "nota_1_5", peso: 1 },
-  ]);
-
-  // Form ciclo
-  const [cTitulo, setCTitulo] = useState("");
-  const [cQuestionarioId, setCQuestionarioId] = useState<number>(0);
-  const [cDataInicio, setCDataInicio] = useState("");
-  const [cDataFim, setCDataFim] = useState("");
-
-  // Avaliação em andamento
-  const [avaliacaoAtual, setAvaliacaoAtual] = useState<any>(null);
-  const [respostas, setRespostas] = useState<Record<number, { valor: string; textoLivre: string }>>({});
-  const [obsAvaliacao, setObsAvaliacao] = useState("");
+  // Form nova avaliação - 12 critérios
+  const [avEmployeeId, setAvEmployeeId] = useState<number>(0);
+  const [avEvaluatorId, setAvEvaluatorId] = useState<number>(0);
+  const [avMesRef, setAvMesRef] = useState(new Date().toISOString().slice(0, 7));
+  const [avObs, setAvObs] = useState("");
+  const [notas, setNotas] = useState<Record<string, number>>({
+    comportamento: 0, pontualidade: 0, assiduidade: 0, segurancaEpis: 0,
+    qualidadeAcabamento: 0, produtividadeRitmo: 0, cuidadoFerramentas: 0, economiaMateriais: 0,
+    trabalhoEquipe: 0, iniciativaProatividade: 0, disponibilidadeFlexibilidade: 0, organizacaoLimpeza: 0,
+  });
   const avaliacaoStartTime = useRef<number>(0);
+
+  // Form novo avaliador
+  const [avdNome, setAvdNome] = useState("");
+  const [avdEmail, setAvdEmail] = useState("");
+  const [avdFrequencia, setAvdFrequencia] = useState("monthly");
 
   // ============================================================
   // MUTATIONS
   // ============================================================
   const utils = trpc.useUtils();
 
-  const createQuestionario = trpc.avaliacao.questionarios.create.useMutation({
-    onSuccess: () => {
-      toast.success("Questionário criado com sucesso!");
-      utils.avaliacao.questionarios.list.invalidate();
-      setShowQuestionarioDialog(false);
-      resetQuestionarioForm();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const updateQuestionario = trpc.avaliacao.questionarios.update.useMutation({
-    onSuccess: () => {
-      toast.success("Questionário atualizado!");
-      utils.avaliacao.questionarios.list.invalidate();
-      setShowQuestionarioDialog(false);
-      resetQuestionarioForm();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const deleteQuestionario = trpc.avaliacao.questionarios.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Questionário excluído!");
-      utils.avaliacao.questionarios.list.invalidate();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const createCiclo = trpc.avaliacao.ciclos.create.useMutation({
-    onSuccess: () => {
-      toast.success("Ciclo criado com sucesso!");
-      utils.avaliacao.ciclos.list.invalidate();
-      setShowCicloDialog(false);
-      resetCicloForm();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const updateCicloStatus = trpc.avaliacao.ciclos.updateStatus.useMutation({
-    onSuccess: () => {
-      toast.success("Status do ciclo atualizado!");
-      utils.avaliacao.ciclos.list.invalidate();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const deleteCiclo = trpc.avaliacao.ciclos.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Ciclo excluído!");
-      utils.avaliacao.ciclos.list.invalidate();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const salvarRespostas = trpc.avaliacao.avaliacoes.salvarRespostas.useMutation({
-    onSuccess: () => {
-      toast.success("Respostas salvas!");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const finalizarAvaliacao = trpc.avaliacao.avaliacoes.finalizar.useMutation({
+  const criarAvaliacao = trpc.avaliacao.avaliacoes.create.useMutation({
     onSuccess: (data) => {
-      toast.success(`Avaliação finalizada! Nota: ${data.notaFinal}`);
-      setShowAvaliacaoDialog(false);
-      setAvaliacaoAtual(null);
-      utils.avaliacao.ciclos.list.invalidate();
-      utils.avaliacao.ranking.invalidate();
-      utils.avaliacao.statsAvaliador.invalidate();
+      toast.success(`Avaliação criada! Média: ${data.mediaGeral} - ${data.recomendacao}`);
+      utils.avaliacao.avaliacoes.list.invalidate();
+      utils.avaliacao.dashboard.globalStats.invalidate();
+      utils.avaliacao.dashboard.employeeRanking.invalidate();
+      setShowNovaAvaliacao(false);
+      resetFormAvaliacao();
     },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const criarAvaliador = trpc.avaliacao.avaliadores.create.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Avaliador criado! Senha temporária: ${data.tempPassword}`);
+      utils.avaliacao.avaliadores.list.invalidate();
+      setShowNovoAvaliador(false);
+      setAvdNome(""); setAvdEmail(""); setAvdFrequencia("monthly");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const toggleAvaliador = trpc.avaliacao.avaliadores.toggleStatus.useMutation({
+    onSuccess: () => { toast.success("Status atualizado"); utils.avaliacao.avaliadores.list.invalidate(); },
+  });
+
+  const resetSenha = trpc.avaliacao.avaliadores.resetPassword.useMutation({
+    onSuccess: (data) => toast.success(`Nova senha temporária: ${data.tempPassword}`),
+  });
+
+  const deleteAvaliador = trpc.avaliacao.avaliadores.delete.useMutation({
+    onSuccess: () => { toast.success("Avaliador excluído"); utils.avaliacao.avaliadores.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteAvaliacao = trpc.avaliacao.avaliacoes.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Avaliação excluída");
+      utils.avaliacao.avaliacoes.list.invalidate();
+      utils.avaliacao.dashboard.globalStats.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const gerarResumoIA = trpc.avaliacao.avaliacoes.generateAiSummary.useMutation({
+    onSuccess: (data) => { setAiSummary(String(data.summary || '')); setShowAiSummary(true); },
     onError: (e) => toast.error(e.message),
   });
 
   // ============================================================
   // HELPERS
   // ============================================================
-  function resetQuestionarioForm() {
-    setQTitulo("");
-    setQDescricao("");
-    setQFrequencia("mensal");
-    setQPerguntas([{ texto: "", tipo: "nota_1_5", peso: 1 }]);
-    setEditingQuestionario(null);
+  function resetFormAvaliacao() {
+    setAvEmployeeId(0); setAvEvaluatorId(0); setAvObs("");
+    setAvMesRef(new Date().toISOString().slice(0, 7));
+    setNotas({
+      comportamento: 0, pontualidade: 0, assiduidade: 0, segurancaEpis: 0,
+      qualidadeAcabamento: 0, produtividadeRitmo: 0, cuidadoFerramentas: 0, economiaMateriais: 0,
+      trabalhoEquipe: 0, iniciativaProatividade: 0, disponibilidadeFlexibilidade: 0, organizacaoLimpeza: 0,
+    });
   }
 
-  function resetCicloForm() {
-    setCTitulo("");
-    setCQuestionarioId(0);
-    setCDataInicio("");
-    setCDataFim("");
-  }
-
-  function handleSaveQuestionario() {
-    const perguntasValidas = qPerguntas.filter(p => p.texto.trim());
-    if (!qTitulo.trim()) return toast.error("Informe o título");
-    if (perguntasValidas.length === 0) return toast.error("Adicione pelo menos 1 pergunta");
-
-    if (editingQuestionario) {
-      updateQuestionario.mutate({
-        id: editingQuestionario.id,
-        titulo: qTitulo,
-        descricao: qDescricao,
-        frequencia: qFrequencia as any,
-        perguntas: perguntasValidas.map(p => ({
-          texto: p.texto,
-          tipo: p.tipo as any,
-          peso: p.peso,
-        })),
-      });
-    } else {
-      createQuestionario.mutate({
-        companyId,
-        titulo: qTitulo,
-        descricao: qDescricao,
-        frequencia: qFrequencia as any,
-        perguntas: perguntasValidas.map(p => ({
-          texto: p.texto,
-          tipo: p.tipo as any,
-          peso: p.peso,
-        })),
-      });
+  function handleSubmitAvaliacao() {
+    if (!avEmployeeId || !avEvaluatorId) {
+      toast.error("Selecione o funcionário e o avaliador");
+      return;
     }
-  }
-
-  function handleSaveCiclo() {
-    if (!cTitulo.trim()) return toast.error("Informe o título");
-    if (!cQuestionarioId) return toast.error("Selecione um questionário");
-    if (!cDataInicio || !cDataFim) return toast.error("Informe as datas");
-
-    createCiclo.mutate({
+    const todasPreenchidas = Object.values(notas).every(n => n >= 1 && n <= 5);
+    if (!todasPreenchidas) {
+      toast.error("Preencha todas as 12 notas (1 a 5)");
+      return;
+    }
+    const duration = avaliacaoStartTime.current > 0 ? Math.round((Date.now() - avaliacaoStartTime.current) / 1000) : undefined;
+    criarAvaliacao.mutate({
       companyId,
-      questionarioId: cQuestionarioId,
-      titulo: cTitulo,
-      dataInicio: cDataInicio,
-      dataFim: cDataFim,
+      employeeId: avEmployeeId,
+      evaluatorId: avEvaluatorId,
+      ...notas as any,
+      observacoes: avObs || undefined,
+      mesReferencia: avMesRef,
+      durationSeconds: duration,
+      deviceType: /Mobi/.test(navigator.userAgent) ? "mobile" : "desktop",
     });
   }
 
-  function abrirAvaliacao(avaliacao: any) {
-    setAvaliacaoAtual(avaliacao);
-    setRespostas({});
-    setObsAvaliacao("");
-    avaliacaoStartTime.current = Date.now();
-    setShowAvaliacaoDialog(true);
-  }
+  const avaliacoesFiltradas = useMemo(() => {
+    if (!avaliacoes.data) return [];
+    if (!searchTerm) return avaliacoes.data;
+    const term = searchTerm.toLowerCase();
+    return avaliacoes.data.filter((a: any) =>
+      a.employeeName?.toLowerCase().includes(term) ||
+      a.evaluatorName?.toLowerCase().includes(term) ||
+      a.recomendacao?.toLowerCase().includes(term)
+    );
+  }, [avaliacoes.data, searchTerm]);
 
-  function handleFinalizarAvaliacao() {
-    if (!avaliacaoAtual) return;
-    const tempoSeg = Math.round((Date.now() - avaliacaoStartTime.current) / 1000);
-    const respostasArr = Object.entries(respostas).map(([perguntaId, r]) => ({
-      perguntaId: parseInt(perguntaId),
-      valor: r.valor,
-      textoLivre: r.textoLivre,
-    }));
-
-    finalizarAvaliacao.mutate({
-      avaliacaoId: avaliacaoAtual.id,
-      respostas: respostasArr,
-      observacoes: obsAvaliacao,
-      tempoAvaliacao: tempoSeg,
-    });
-  }
-
-  function handleSalvarRascunho() {
-    if (!avaliacaoAtual) return;
-    const respostasArr = Object.entries(respostas).map(([perguntaId, r]) => ({
-      perguntaId: parseInt(perguntaId),
-      valor: r.valor,
-      textoLivre: r.textoLivre,
-    }));
-    salvarRespostas.mutate({
-      avaliacaoId: avaliacaoAtual.id,
-      respostas: respostasArr,
-      observacoes: obsAvaliacao,
-    });
-  }
-
-  const frequenciaLabels: Record<string, string> = {
-    diaria: "Diária",
-    semanal: "Semanal",
-    mensal: "Mensal",
-    trimestral: "Trimestral",
-    semestral: "Semestral",
-    anual: "Anual",
-  };
-
-  const statusColors: Record<string, string> = {
-    rascunho: "bg-gray-500",
-    aberto: "bg-green-500",
-    fechado: "bg-red-500",
-    pendente: "bg-yellow-500",
-    em_andamento: "bg-blue-500",
-    finalizada: "bg-green-600",
-  };
-
-  const statusLabels: Record<string, string> = {
-    rascunho: "Rascunho",
-    aberto: "Aberto",
-    fechado: "Fechado",
-    pendente: "Pendente",
-    em_andamento: "Em Andamento",
-    finalizada: "Finalizada",
-  };
+  // Detalhe da avaliação selecionada
+  const avaliacaoDetalhe = trpc.avaliacao.avaliacoes.getById.useQuery(
+    { id: showDetalheAvaliacao! },
+    { enabled: !!showDetalheAvaliacao }
+  );
 
   if (!companyId) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Selecione uma empresa no cabeçalho para acessar as avaliações.</p>
+          <p className="text-muted-foreground">Selecione uma empresa para acessar as avaliações.</p>
         </div>
       </DashboardLayout>
     );
@@ -297,848 +288,633 @@ export default function AvaliacaoDesempenho() {
   // ============================================================
   return (
     <DashboardLayout>
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Star className="h-6 w-6 text-yellow-500" />
-            Avaliação de Desempenho
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie questionários, ciclos de avaliação e acompanhe o ranking dos colaboradores
-          </p>
+      <div className="space-y-6 p-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Avaliação de Desempenho</h1>
+            <p className="text-muted-foreground">12 Critérios | 3 Pilares | Sistema FC Engenharia</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowNovoAvaliador(true)}>
+              <UserCheck className="w-4 h-4 mr-2" /> Novo Avaliador
+            </Button>
+            <Button onClick={() => { setShowNovaAvaliacao(true); avaliacaoStartTime.current = Date.now(); }}>
+              <Plus className="w-4 h-4 mr-2" /> Nova Avaliação
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full max-w-xl">
-          <TabsTrigger value="painel" className="flex items-center gap-1">
-            <BarChart3 className="h-4 w-4" /> Painel
-          </TabsTrigger>
-          <TabsTrigger value="questionarios" className="flex items-center gap-1">
-            <ClipboardList className="h-4 w-4" /> Questionários
-          </TabsTrigger>
-          <TabsTrigger value="ciclos" className="flex items-center gap-1">
-            <Calendar className="h-4 w-4" /> Ciclos
-          </TabsTrigger>
-          <TabsTrigger value="ranking" className="flex items-center gap-1">
-            <Trophy className="h-4 w-4" /> Ranking
-          </TabsTrigger>
-        </TabsList>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+            <TabsTrigger value="painel"><BarChart3 className="w-4 h-4 mr-1" /> Painel</TabsTrigger>
+            <TabsTrigger value="avaliacoes"><ClipboardList className="w-4 h-4 mr-1" /> Avaliações</TabsTrigger>
+            <TabsTrigger value="ranking"><Trophy className="w-4 h-4 mr-1" /> Ranking</TabsTrigger>
+            <TabsTrigger value="avaliadores"><Users className="w-4 h-4 mr-1" /> Avaliadores</TabsTrigger>
+            <TabsTrigger value="pesquisas"><FileText className="w-4 h-4 mr-1" /> Pesquisas</TabsTrigger>
+          </TabsList>
 
-        {/* ============================================================ */}
-        {/* TAB: PAINEL */}
-        {/* ============================================================ */}
-        <TabsContent value="painel" className="space-y-6">
-          {/* KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10">
-                    <ClipboardList className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Questionários</p>
-                    <p className="text-2xl font-bold">{questionarios.data?.length || 0}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <Calendar className="h-5 w-5 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Ciclos Ativos</p>
-                    <p className="text-2xl font-bold">
-                      {ciclos.data?.filter(c => c.status === "aberto").length || 0}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-yellow-500/10">
-                    <UserCheck className="h-5 w-5 text-yellow-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Suas Pendentes</p>
-                    <p className="text-2xl font-bold">{statsAvaliador.data?.pendentes || 0}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-purple-500/10">
-                    <Timer className="h-5 w-5 text-purple-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Tempo Médio</p>
-                    <p className="text-2xl font-bold">
-                      {statsAvaliador.data?.tempoMedio
-                        ? `${Math.floor(statsAvaliador.data.tempoMedio / 60)}min`
-                        : "—"}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Ciclos abertos */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Play className="h-5 w-5 text-green-500" />
-                Ciclos Abertos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {ciclos.data?.filter(c => c.status === "aberto").length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Nenhum ciclo de avaliação aberto no momento.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {ciclos.data?.filter(c => c.status === "aberto").map(ciclo => (
-                    <div key={ciclo.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                      <div>
-                        <p className="font-medium">{ciclo.titulo}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {ciclo.questionarioTitulo} | {ciclo.dataInicio} a {ciclo.dataFim}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-sm font-medium">
-                            {ciclo.stats.finalizadas}/{ciclo.stats.total} avaliações
-                          </p>
-                          <div className="w-32 h-2 bg-muted rounded-full mt-1">
-                            <div
-                              className="h-2 bg-green-500 rounded-full transition-all"
-                              style={{ width: `${ciclo.stats.total > 0 ? (ciclo.stats.finalizadas / ciclo.stats.total) * 100 : 0}%` }}
-                            />
-                          </div>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={() => { setShowCicloDetalhe(ciclo.id); setActiveTab("ciclos"); }}>
-                          <Eye className="h-4 w-4 mr-1" /> Ver
-                        </Button>
-                      </div>
+          {/* ============ TAB PAINEL ============ */}
+          <TabsContent value="painel" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-blue-100 rounded-lg"><ClipboardList className="w-6 h-6 text-blue-600" /></div>
+                    <div>
+                      <p className="text-2xl font-bold">{dashboardStats.data?.totalAvaliacoes || 0}</p>
+                      <p className="text-sm text-muted-foreground">Total Avaliações</p>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Top 5 Ranking rápido */}
-          {ranking.data && (ranking.data.melhores.length > 0 || ranking.data.piores.length > 0) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-green-500" />
-                    Top 5 — Melhores Notas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {ranking.data.melhores.slice(0, 5).map((r, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${idx === 0 ? "bg-yellow-500 text-white" : idx === 1 ? "bg-gray-300 text-gray-700" : idx === 2 ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}>
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="font-medium text-sm">{r.nome}</p>
-                            <p className="text-xs text-muted-foreground">{r.funcao}</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="text-green-600 border-green-600">
-                          {Number(r.notaFinal).toFixed(1)}
-                        </Badge>
-                      </div>
-                    ))}
                   </div>
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <TrendingDown className="h-5 w-5 text-red-500" />
-                    Top 5 — Menores Notas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {ranking.data.piores.slice(0, 5).map((r, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
-                        <div className="flex items-center gap-3">
-                          <span className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold bg-muted text-muted-foreground">
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="font-medium text-sm">{r.nome}</p>
-                            <p className="text-xs text-muted-foreground">{r.funcao}</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="text-red-600 border-red-600">
-                          {Number(r.notaFinal).toFixed(1)}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ============================================================ */}
-        {/* TAB: QUESTIONÁRIOS */}
-        {/* ============================================================ */}
-        <TabsContent value="questionarios" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Questionários de Avaliação</h2>
-            <Button onClick={() => { resetQuestionarioForm(); setShowQuestionarioDialog(true); }}>
-              <Plus className="h-4 w-4 mr-1" /> Novo Questionário
-            </Button>
-          </div>
-
-          {questionarios.isLoading ? (
-            <p className="text-center text-muted-foreground py-8">Carregando...</p>
-          ) : questionarios.data?.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Nenhum questionário criado ainda.</p>
-                <p className="text-sm text-muted-foreground mt-1">Crie um questionário para iniciar as avaliações.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {questionarios.data?.map(q => (
-                <Card key={q.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-lg">{q.titulo}</h3>
-                          <Badge variant={q.ativo ? "default" : "secondary"}>
-                            {q.ativo ? "Ativo" : "Inativo"}
-                          </Badge>
-                          <Badge variant="outline">{frequenciaLabels[q.frequencia]}</Badge>
-                        </div>
-                        {q.descricao && <p className="text-sm text-muted-foreground mt-1">{q.descricao}</p>}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={async () => {
-                          // Carregar detalhes para editar
-                          setEditingQuestionario(q);
-                          setQTitulo(q.titulo);
-                          setQDescricao(q.descricao || "");
-                          setQFrequencia(q.frequencia);
-                          // Perguntas serão carregadas via getById
-                          setShowQuestionarioDialog(true);
-                        }}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => {
-                          if (confirm("Excluir este questionário?")) deleteQuestionario.mutate({ id: q.id });
-                        }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-green-100 rounded-lg"><Users className="w-6 h-6 text-green-600" /></div>
+                    <div>
+                      <p className="text-2xl font-bold">{dashboardStats.data?.totalAvaliadores || 0}</p>
+                      <p className="text-sm text-muted-foreground">Avaliadores</p>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ============================================================ */}
-        {/* TAB: CICLOS */}
-        {/* ============================================================ */}
-        <TabsContent value="ciclos" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Ciclos de Avaliação</h2>
-            <Button onClick={() => { resetCicloForm(); setShowCicloDialog(true); }}>
-              <Plus className="h-4 w-4 mr-1" /> Novo Ciclo
-            </Button>
-          </div>
-
-          {ciclos.isLoading ? (
-            <p className="text-center text-muted-foreground py-8">Carregando...</p>
-          ) : ciclos.data?.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Nenhum ciclo criado ainda.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {ciclos.data?.map(ciclo => (
-                <Card key={ciclo.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold">{ciclo.titulo}</h3>
-                          <Badge className={`${statusColors[ciclo.status]} text-white`}>
-                            {statusLabels[ciclo.status]}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Questionário: {ciclo.questionarioTitulo} | Período: {ciclo.dataInicio} a {ciclo.dataFim}
-                        </p>
-                        <div className="flex items-center gap-4 mt-2 text-sm">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-4 w-4" /> {ciclo.stats.total} total
-                          </span>
-                          <span className="flex items-center gap-1 text-green-600">
-                            <CheckCircle className="h-4 w-4" /> {ciclo.stats.finalizadas} finalizadas
-                          </span>
-                          <span className="flex items-center gap-1 text-yellow-600">
-                            <Clock className="h-4 w-4" /> {ciclo.stats.pendentes} pendentes
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {ciclo.status === "rascunho" && (
-                          <Button size="sm" variant="default" onClick={() => updateCicloStatus.mutate({ id: ciclo.id, status: "aberto" })}>
-                            <Play className="h-4 w-4 mr-1" /> Abrir
-                          </Button>
-                        )}
-                        {ciclo.status === "aberto" && (
-                          <Button size="sm" variant="outline" onClick={() => updateCicloStatus.mutate({ id: ciclo.id, status: "fechado" })}>
-                            <Lock className="h-4 w-4 mr-1" /> Fechar
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => setShowCicloDetalhe(showCicloDetalhe === ciclo.id ? null : ciclo.id)}>
-                          <Eye className="h-4 w-4 mr-1" /> {showCicloDetalhe === ciclo.id ? "Ocultar" : "Detalhes"}
-                        </Button>
-                        {ciclo.status === "rascunho" && (
-                          <Button size="sm" variant="destructive" onClick={() => {
-                            if (confirm("Excluir este ciclo e todas as avaliações vinculadas?")) deleteCiclo.mutate({ id: ciclo.id });
-                          }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-amber-100 rounded-lg"><Star className="w-6 h-6 text-amber-600" /></div>
+                    <div>
+                      <p className="text-2xl font-bold">{dashboardStats.data?.mediaGeral?.toFixed(1) || "0.0"}</p>
+                      <p className="text-sm text-muted-foreground">Média Geral</p>
                     </div>
-
-                    {/* Detalhe do ciclo: lista de avaliações */}
-                    {showCicloDetalhe === ciclo.id && (
-                      <CicloDetalhe cicloId={ciclo.id} onAvaliar={abrirAvaliacao} />
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ============================================================ */}
-        {/* TAB: RANKING */}
-        {/* ============================================================ */}
-        <TabsContent value="ranking" className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-yellow-500" /> Ranking de Desempenho
-          </h2>
-
-          {!ranking.data || (ranking.data.melhores.length === 0 && ranking.data.piores.length === 0) ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Nenhuma avaliação finalizada ainda.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Melhores */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-green-600">
-                    <ArrowUp className="h-5 w-5" /> Melhores Avaliações
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {ranking.data.melhores.map((r, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${idx === 0 ? "bg-yellow-500 text-white" : idx === 1 ? "bg-gray-300 text-gray-800" : idx === 2 ? "bg-amber-600 text-white" : "bg-muted"}`}>
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="font-medium">{r.nome}</p>
-                            <p className="text-xs text-muted-foreground">{r.funcao} | {r.setor}</p>
-                            {r.avaliadorNome && <p className="text-xs text-muted-foreground">Avaliador: {r.avaliadorNome}</p>}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-green-600">{Number(r.notaFinal).toFixed(1)}</p>
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map(s => (
-                              <Star key={s} className={`h-3 w-3 ${s <= Math.round(Number(r.notaFinal)) ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`} />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Piores */}
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-red-600">
-                    <ArrowDown className="h-5 w-5" /> Menores Avaliações
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {ranking.data.piores.map((r, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <span className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-red-100 text-red-600">
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="font-medium">{r.nome}</p>
-                            <p className="text-xs text-muted-foreground">{r.funcao} | {r.setor}</p>
-                            {r.avaliadorNome && <p className="text-xs text-muted-foreground">Avaliador: {r.avaliadorNome}</p>}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-red-600">{Number(r.notaFinal).toFixed(1)}</p>
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map(s => (
-                              <Star key={s} className={`h-3 w-3 ${s <= Math.round(Number(r.notaFinal)) ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`} />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-purple-100 rounded-lg"><TrendingUp className="w-6 h-6 text-purple-600" /></div>
+                    <div>
+                      <p className="text-2xl font-bold">{dashboardStats.data?.porMes?.length || 0}</p>
+                      <p className="text-sm text-muted-foreground">Meses Avaliados</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
-          )}
-        </TabsContent>
-      </Tabs>
 
-      {/* ============================================================ */}
-      {/* DIALOG: NOVO/EDITAR QUESTIONÁRIO */}
-      {/* ============================================================ */}
-      <Dialog open={showQuestionarioDialog} onOpenChange={setShowQuestionarioDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingQuestionario ? "Editar Questionário" : "Novo Questionário"}</DialogTitle>
-            <DialogDescription>Configure o questionário de avaliação com as perguntas desejadas.</DialogDescription>
-          </DialogHeader>
+            {/* Distribuição por Recomendação */}
+            {dashboardStats.data?.porRecomendacao && dashboardStats.data.porRecomendacao.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle className="text-lg">Distribuição por Recomendação</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {dashboardStats.data.porRecomendacao.map((r: any) => {
+                      const rec = getRecomendacao(r.recomendacao?.includes("DEMISSÃO") ? 1 : r.recomendacao?.includes("ATENÇÃO") ? 2.5 : r.recomendacao?.includes("TREINAMENTO") ? 3.5 : 4.5);
+                      return (
+                        <div key={r.recomendacao} className={`p-3 rounded-lg border ${rec.cor}`}>
+                          <p className="text-xl font-bold">{r.count}</p>
+                          <p className="text-xs">{r.recomendacao}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
-          <div className="space-y-4">
-            <div>
-              <Label>Título *</Label>
-              <Input value={qTitulo} onChange={e => setQTitulo(e.target.value)} placeholder="Ex: Avaliação Mensal de Desempenho" />
-            </div>
-            <div>
-              <Label>Descrição</Label>
-              <Textarea value={qDescricao} onChange={e => setQDescricao(e.target.value)} placeholder="Descrição opcional..." />
-            </div>
-            <div>
-              <Label>Frequência</Label>
-              <Select value={qFrequencia} onValueChange={setQFrequencia}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="diaria">Diária</SelectItem>
-                  <SelectItem value="semanal">Semanal</SelectItem>
-                  <SelectItem value="mensal">Mensal</SelectItem>
-                  <SelectItem value="trimestral">Trimestral</SelectItem>
-                  <SelectItem value="semestral">Semestral</SelectItem>
-                  <SelectItem value="anual">Anual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-base font-semibold">Perguntas</Label>
-                <Button size="sm" variant="outline" onClick={() => setQPerguntas([...qPerguntas, { texto: "", tipo: "nota_1_5", peso: 1 }])}>
-                  <Plus className="h-4 w-4 mr-1" /> Adicionar
-                </Button>
+          {/* ============ TAB AVALIAÇÕES ============ */}
+          <TabsContent value="avaliacoes" className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Buscar por funcionário, avaliador ou recomendação..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
               </div>
+              <Badge variant="outline">{avaliacoesFiltradas.length} avaliações</Badge>
+            </div>
+
+            {avaliacoes.isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Carregando avaliações...</div>
+            ) : avaliacoesFiltradas.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <ClipboardList className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium">Nenhuma avaliação encontrada</p>
+                  <p className="text-muted-foreground">Clique em "Nova Avaliação" para começar</p>
+                </CardContent>
+              </Card>
+            ) : (
               <div className="space-y-3">
-                {qPerguntas.map((p, idx) => (
-                  <div key={idx} className="border rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-muted-foreground w-6">{idx + 1}.</span>
-                      <Input
-                        value={p.texto}
-                        onChange={e => {
-                          const novo = [...qPerguntas];
-                          novo[idx].texto = e.target.value;
-                          setQPerguntas(novo);
-                        }}
-                        placeholder="Texto da pergunta..."
-                        className="flex-1"
-                      />
-                      {qPerguntas.length > 1 && (
-                        <Button size="sm" variant="ghost" onClick={() => setQPerguntas(qPerguntas.filter((_, i) => i !== idx))}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      )}
-                    </div>
-                    <div className="flex gap-4 ml-8">
-                      <div className="flex-1">
-                        <Label className="text-xs">Tipo de Resposta</Label>
-                        <Select
-                          value={p.tipo}
-                          onValueChange={v => {
-                            const novo = [...qPerguntas];
-                            novo[idx].tipo = v;
-                            setQPerguntas(novo);
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="nota_1_5">Nota 1 a 5</SelectItem>
-                            <SelectItem value="nota_1_10">Nota 1 a 10</SelectItem>
-                            <SelectItem value="sim_nao">Sim / Não</SelectItem>
-                            <SelectItem value="texto_livre">Texto Livre</SelectItem>
-                          </SelectContent>
-                        </Select>
+                {avaliacoesFiltradas.map((av: any) => {
+                  const media = parseFloat(av.mediaGeral || "0");
+                  const rec = getRecomendacao(media);
+                  return (
+                    <Card key={av.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="py-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-center">
+                              <span className="text-2xl font-bold">{media.toFixed(1)}</span>
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <Star key={s} className={`w-3 h-3 ${s <= Math.round(media) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="font-semibold">{av.employeeName}</p>
+                              <p className="text-sm text-muted-foreground">{av.employeeFuncao} {av.employeeSetor ? `• ${av.employeeSetor}` : ""}</p>
+                              <p className="text-xs text-muted-foreground">Avaliador: {av.evaluatorName} • {av.mesReferencia}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className={rec.cor + " border"}>{rec.texto}</Badge>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => setShowDetalheAvaliacao(av.id)}>
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => gerarResumoIA.mutate({ id: av.id })} disabled={gerarResumoIA.isPending}>
+                                <Brain className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => { if (confirm("Excluir esta avaliação?")) deleteAvaliacao.mutate({ id: av.id }); }}>
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Mini barras dos 3 pilares */}
+                        <div className="flex gap-4 mt-3">
+                          {[
+                            { label: "Postura", valor: av.mediaPilar1, cor: "bg-blue-500" },
+                            { label: "Técnico", valor: av.mediaPilar2, cor: "bg-amber-500" },
+                            { label: "Atitude", valor: av.mediaPilar3, cor: "bg-green-500" },
+                          ].map((p) => (
+                            <div key={p.label} className="flex-1">
+                              <div className="flex justify-between text-xs mb-1">
+                                <span className="text-muted-foreground">{p.label}</span>
+                                <span className="font-medium">{parseFloat(p.valor || "0").toFixed(1)}</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className={`h-full ${p.cor} rounded-full`} style={{ width: `${(parseFloat(p.valor || "0") / 5) * 100}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ============ TAB RANKING ============ */}
+          <TabsContent value="ranking" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Ranking de Funcionários</CardTitle>
+                <CardDescription>Classificação por média geral de todas as avaliações</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {employeeRanking.isLoading ? (
+                  <p className="text-center py-8 text-muted-foreground">Carregando ranking...</p>
+                ) : !employeeRanking.data?.length ? (
+                  <p className="text-center py-8 text-muted-foreground">Nenhuma avaliação finalizada ainda</p>
+                ) : (
+                  <div className="space-y-2">
+                    {employeeRanking.data.map((r: any, i: number) => (
+                      <div key={r.employeeId} className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/50">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                          i === 0 ? "bg-amber-100 text-amber-700" : i === 1 ? "bg-gray-100 text-gray-700" : i === 2 ? "bg-orange-100 text-orange-700" : "bg-muted text-muted-foreground"
+                        }`}>
+                          {i + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium">{r.employeeName}</p>
+                          <p className="text-sm text-muted-foreground">{r.employeeFuncao} {r.employeeSetor ? `• ${r.employeeSetor}` : ""}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold">{r.mediaGeral.toFixed(1)}</p>
+                          <Badge className={r.corRecomendacao ? "" : ""} style={{ backgroundColor: r.corRecomendacao + "20", color: r.corRecomendacao, borderColor: r.corRecomendacao }} variant="outline">
+                            {r.recomendacao}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{r.totalAvaliacoes} aval.</div>
                       </div>
-                      <div className="w-20">
-                        <Label className="text-xs">Peso</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={10}
-                          value={p.peso}
-                          onChange={e => {
-                            const novo = [...qPerguntas];
-                            novo[idx].peso = parseInt(e.target.value) || 1;
-                            setQPerguntas(novo);
-                          }}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                    </div>
+                    ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Ranking de Avaliadores */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Timer className="w-5 h-5 text-blue-500" /> Desempenho dos Avaliadores</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {evaluatorStats.isLoading ? (
+                  <p className="text-center py-4 text-muted-foreground">Carregando...</p>
+                ) : !evaluatorStats.data?.length ? (
+                  <p className="text-center py-4 text-muted-foreground">Nenhum dado disponível</p>
+                ) : (
+                  <div className="space-y-2">
+                    {evaluatorStats.data.map((e: any) => (
+                      <div key={e.evaluatorId} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
+                        <div>
+                          <p className="font-medium">{e.evaluatorName}</p>
+                          <p className="text-sm text-muted-foreground">{e.totalAvaliacoes} avaliações realizadas</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">Tempo médio: <span className="font-bold">{e.avgDuration > 0 ? `${Math.floor(e.avgDuration / 60)}min ${e.avgDuration % 60}s` : "N/A"}</span></p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ============ TAB AVALIADORES ============ */}
+          <TabsContent value="avaliadores" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold">Avaliadores Cadastrados</h3>
+              <Button onClick={() => setShowNovoAvaliador(true)}><Plus className="w-4 h-4 mr-2" /> Novo Avaliador</Button>
+            </div>
+            {avaliadores.isLoading ? (
+              <p className="text-center py-8 text-muted-foreground">Carregando...</p>
+            ) : !avaliadores.data?.length ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <UserCheck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium">Nenhum avaliador cadastrado</p>
+                  <p className="text-muted-foreground">Cadastre avaliadores para iniciar as avaliações</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {avaliadores.data.map((a: any) => (
+                  <Card key={a.id}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold">{a.nome}</p>
+                          <p className="text-sm text-muted-foreground">{a.email}</p>
+                          <div className="flex gap-2 mt-2">
+                            <Badge variant={a.status === "ativo" ? "default" : "secondary"}>{a.status}</Badge>
+                            <Badge variant="outline">{a.evaluationFrequency}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">{a.totalAvaliacoes} avaliações realizadas</p>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => toggleAvaliador.mutate({ id: a.id })}>
+                            {a.status === "ativo" ? <Lock className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => resetSenha.mutate({ id: a.id })}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => { if (confirm("Excluir avaliador?")) deleteAvaliador.mutate({ id: a.id }); }}>
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
-            </div>
-          </div>
+            )}
+          </TabsContent>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowQuestionarioDialog(false)}>Cancelar</Button>
-            <Button onClick={handleSaveQuestionario} disabled={createQuestionario.isPending || updateQuestionario.isPending}>
-              {editingQuestionario ? "Salvar Alterações" : "Criar Questionário"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {/* ============ TAB PESQUISAS ============ */}
+          <TabsContent value="pesquisas" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Pesquisas Customizadas */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5" /> Pesquisas Customizadas</CardTitle>
+                  <CardDescription>Pesquisas de satisfação por setor, cliente ou outro</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {pesquisas.isLoading ? (
+                    <p className="text-muted-foreground">Carregando...</p>
+                  ) : !pesquisas.data?.length ? (
+                    <p className="text-muted-foreground text-center py-4">Nenhuma pesquisa criada</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {pesquisas.data.map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{p.titulo}</p>
+                            <p className="text-xs text-muted-foreground">{p.tipo} • {p.totalRespostas} respostas</p>
+                          </div>
+                          <Badge variant={p.status === "ativa" ? "default" : "secondary"}>{p.status}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Pesquisa de Clima */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><Heart className="w-5 h-5 text-red-500" /> Pesquisa de Clima</CardTitle>
+                  <CardDescription>Pesquisa de clima organizacional anônima</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {climaSurveys.isLoading ? (
+                    <p className="text-muted-foreground">Carregando...</p>
+                  ) : !climaSurveys.data?.length ? (
+                    <p className="text-muted-foreground text-center py-4">Nenhuma pesquisa de clima criada</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {climaSurveys.data.map((c: any) => (
+                        <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{c.titulo}</p>
+                            <p className="text-xs text-muted-foreground">{c.totalRespostas} respostas</p>
+                          </div>
+                          <Badge variant={c.status === "ativa" ? "default" : "secondary"}>{c.status}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
 
       {/* ============================================================ */}
-      {/* DIALOG: NOVO CICLO */}
+      {/* DIALOG: NOVA AVALIAÇÃO (12 critérios / 3 pilares) */}
       {/* ============================================================ */}
-      <Dialog open={showCicloDialog} onOpenChange={setShowCicloDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Novo Ciclo de Avaliação</DialogTitle>
-            <DialogDescription>Defina o período e o questionário para este ciclo.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label>Título *</Label>
-              <Input value={cTitulo} onChange={e => setCTitulo(e.target.value)} placeholder="Ex: Avaliação Mensal - Fevereiro 2026" />
-            </div>
-            <div>
-              <Label>Questionário *</Label>
-              <Select value={cQuestionarioId ? String(cQuestionarioId) : ""} onValueChange={v => setCQuestionarioId(parseInt(v))}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  {questionarios.data?.filter(q => q.ativo).map(q => (
-                    <SelectItem key={q.id} value={String(q.id)}>{q.titulo}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Data Início *</Label>
-                <Input type="date" value={cDataInicio} onChange={e => setCDataInicio(e.target.value)} />
-              </div>
-              <div>
-                <Label>Data Fim *</Label>
-                <Input type="date" value={cDataFim} onChange={e => setCDataFim(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCicloDialog(false)}>Cancelar</Button>
-            <Button onClick={handleSaveCiclo} disabled={createCiclo.isPending}>Criar Ciclo</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ============================================================ */}
-      {/* DIALOG: REALIZAR AVALIAÇÃO */}
-      {/* ============================================================ */}
-      <Dialog open={showAvaliacaoDialog} onOpenChange={setShowAvaliacaoDialog}>
+      <Dialog open={showNovaAvaliacao} onOpenChange={setShowNovaAvaliacao}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-yellow-500" />
-              Avaliar: {avaliacaoAtual?.nome}
+              <ClipboardList className="w-5 h-5" /> Nova Avaliação de Desempenho
             </DialogTitle>
-            <DialogDescription>
-              {avaliacaoAtual?.funcao} | {avaliacaoAtual?.setor}
-            </DialogDescription>
+            <DialogDescription>Avalie o funcionário nos 12 critérios (notas de 1 a 5)</DialogDescription>
           </DialogHeader>
 
-          {avaliacaoAtual?.status === "finalizada" ? (
-            <div className="text-center py-8">
-              <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-lg font-medium">Avaliação Finalizada</p>
-              <p className="text-muted-foreground">Esta avaliação já foi finalizada e não pode ser alterada.</p>
-              <p className="text-2xl font-bold mt-4">Nota: {Number(avaliacaoAtual.notaFinal).toFixed(1)}</p>
-            </div>
-          ) : (
-            <AvaliacaoFormulario
-              avaliacaoId={avaliacaoAtual?.id}
-              respostas={respostas}
-              setRespostas={setRespostas}
-              obsAvaliacao={obsAvaliacao}
-              setObsAvaliacao={setObsAvaliacao}
-            />
-          )}
-
-          {avaliacaoAtual?.status !== "finalizada" && (
-            <DialogFooter className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowAvaliacaoDialog(false)}>Cancelar</Button>
-              <Button variant="secondary" onClick={handleSalvarRascunho} disabled={salvarRespostas.isPending}>
-                Salvar Rascunho
-              </Button>
-              <Button onClick={handleFinalizarAvaliacao} disabled={finalizarAvaliacao.isPending} className="bg-green-600 hover:bg-green-700">
-                <CheckCircle className="h-4 w-4 mr-1" /> Finalizar Avaliação
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-    </DashboardLayout>
-  );
-}
-
-// ============================================================
-// COMPONENTE: DETALHE DO CICLO (lista de avaliações)
-// ============================================================
-function CicloDetalhe({ cicloId, onAvaliar }: { cicloId: number; onAvaliar: (av: any) => void }) {
-  const avaliacoes = trpc.avaliacao.avaliacoes.listByCiclo.useQuery({ cicloId });
-
-  if (avaliacoes.isLoading) return <p className="text-center py-4 text-muted-foreground">Carregando avaliações...</p>;
-
-  return (
-    <div className="mt-4 border-t pt-4">
-      <h4 className="font-medium mb-3">Avaliações ({avaliacoes.data?.length || 0})</h4>
-      {avaliacoes.data?.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhuma avaliação neste ciclo. Abra o ciclo para gerar as avaliações automaticamente.</p>
-      ) : (
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {avaliacoes.data?.map(av => (
-            <div key={av.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30">
-              <div className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${av.status === "finalizada" ? "bg-green-500" : av.status === "em_andamento" ? "bg-blue-500" : "bg-yellow-500"}`} />
-                <div>
-                  <p className="font-medium text-sm">{av.nome}</p>
-                  <p className="text-xs text-muted-foreground">{av.funcao} | {av.setor}</p>
-                </div>
+          <div className="space-y-6">
+            {/* Seleção de funcionário e avaliador */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label>Funcionário *</Label>
+                <Select value={avEmployeeId ? String(avEmployeeId) : undefined} onValueChange={(v) => setAvEmployeeId(Number(v))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {(employeesList.data || []).map((e: any) => (
+                      <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex items-center gap-3">
-                {av.status === "finalizada" ? (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-green-600">
-                      Nota: {Number(av.notaFinal).toFixed(1)}
-                    </Badge>
-                    {av.avaliadorNome && <span className="text-xs text-muted-foreground">por {av.avaliadorNome}</span>}
-                    <Lock className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                ) : (
-                  <Button size="sm" onClick={() => onAvaliar(av)}>
-                    <Star className="h-4 w-4 mr-1" /> Avaliar
-                  </Button>
-                )}
+              <div>
+                <Label>Avaliador *</Label>
+                <Select value={avEvaluatorId ? String(avEvaluatorId) : undefined} onValueChange={(v) => setAvEvaluatorId(Number(v))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {(avaliadores.data || []).filter((a: any) => a.status === "ativo").map((a: any) => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Mês Referência</Label>
+                <Input type="month" value={avMesRef} onChange={(e) => setAvMesRef(e.target.value)} />
               </div>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
-// ============================================================
-// COMPONENTE: FORMULÁRIO DE AVALIAÇÃO
-// ============================================================
-function AvaliacaoFormulario({
-  avaliacaoId,
-  respostas,
-  setRespostas,
-  obsAvaliacao,
-  setObsAvaliacao,
-}: {
-  avaliacaoId: number;
-  respostas: Record<number, { valor: string; textoLivre: string }>;
-  setRespostas: (r: Record<number, { valor: string; textoLivre: string }>) => void;
-  obsAvaliacao: string;
-  setObsAvaliacao: (v: string) => void;
-}) {
-  const avaliacao = trpc.avaliacao.avaliacoes.getById.useQuery(
-    { id: avaliacaoId },
-    { enabled: !!avaliacaoId }
-  );
+            {/* 3 Pilares com 4 critérios cada */}
+            {PILARES.map((pilar) => {
+              const PilarIcon = pilar.icon;
+              const mediaPilar = pilar.criterios.reduce((acc, c) => acc + (notas[c.key] || 0), 0) / 4;
+              return (
+                <Card key={pilar.nome} className={`border-l-4 ${pilar.cor === "blue" ? "border-l-blue-500" : pilar.cor === "amber" ? "border-l-amber-500" : "border-l-green-500"}`}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-base">
+                      <span className="flex items-center gap-2">
+                        <PilarIcon className="w-5 h-5" /> {pilar.nome}
+                      </span>
+                      {mediaPilar > 0 && (
+                        <Badge variant="outline" className="text-sm">
+                          Média: {mediaPilar.toFixed(1)}
+                        </Badge>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {pilar.criterios.map((criterio) => (
+                      <div key={criterio.key} className="flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{criterio.label}</p>
+                          <p className="text-xs text-muted-foreground">{criterio.desc}</p>
+                        </div>
+                        <NotaSelector value={notas[criterio.key] || 0} onChange={(v) => setNotas(prev => ({ ...prev, [criterio.key]: v }))} />
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
 
-  // Preencher respostas existentes
-  useEffect(() => {
-    if (avaliacao.data?.respostas) {
-      const map: Record<number, { valor: string; textoLivre: string }> = {};
-      for (const r of avaliacao.data.respostas) {
-        map[r.perguntaId] = { valor: r.valor || "", textoLivre: r.textoLivre || "" };
-      }
-      setRespostas(map);
-      if (avaliacao.data.observacoes) setObsAvaliacao(avaliacao.data.observacoes);
-    }
-  }, [avaliacao.data?.respostas]);
+            {/* Resumo */}
+            {Object.values(notas).some(n => n > 0) && (() => {
+              const p1 = (notas.comportamento + notas.pontualidade + notas.assiduidade + notas.segurancaEpis) / 4;
+              const p2 = (notas.qualidadeAcabamento + notas.produtividadeRitmo + notas.cuidadoFerramentas + notas.economiaMateriais) / 4;
+              const p3 = (notas.trabalhoEquipe + notas.iniciativaProatividade + notas.disponibilidadeFlexibilidade + notas.organizacaoLimpeza) / 4;
+              const mg = (p1 + p2 + p3) / 3;
+              const allFilled = Object.values(notas).every(n => n >= 1);
+              const rec = allFilled ? getRecomendacao(mg) : null;
+              return (
+                <Card className="bg-muted/50">
+                  <CardContent className="pt-6">
+                    <div className="grid grid-cols-4 gap-4 text-center">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Postura</p>
+                        <p className="text-xl font-bold text-blue-600">{p1 > 0 ? p1.toFixed(1) : "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Técnico</p>
+                        <p className="text-xl font-bold text-amber-600">{p2 > 0 ? p2.toFixed(1) : "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Atitude</p>
+                        <p className="text-xl font-bold text-green-600">{p3 > 0 ? p3.toFixed(1) : "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Média Geral</p>
+                        <p className="text-2xl font-bold">{allFilled ? mg.toFixed(1) : "-"}</p>
+                      </div>
+                    </div>
+                    {rec && (
+                      <div className={`mt-4 p-3 rounded-lg text-center font-bold border ${rec.cor}`}>
+                        {rec.texto}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
-  if (avaliacao.isLoading) return <p className="text-center py-4">Carregando formulário...</p>;
-  if (!avaliacao.data) return null;
-
-  const perguntas = avaliacao.data.perguntas || [];
-
-  function setResposta(perguntaId: number, field: "valor" | "textoLivre", value: string) {
-    setRespostas({
-      ...respostas,
-      [perguntaId]: {
-        ...respostas[perguntaId],
-        [field]: value,
-      },
-    });
-  }
-
-  return (
-    <div className="space-y-6">
-      {perguntas.map((p, idx) => (
-        <div key={p.id} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-muted-foreground">{idx + 1}.</span>
-            <p className="font-medium">{p.texto}</p>
-            {p.peso > 1 && <Badge variant="outline" className="text-xs">Peso {p.peso}</Badge>}
+            {/* Observações */}
+            <div>
+              <Label>Observações (opcional)</Label>
+              <Textarea value={avObs} onChange={(e) => setAvObs(e.target.value)} placeholder="Observações adicionais sobre o funcionário..." rows={3} />
+            </div>
           </div>
 
-          {p.tipo === "nota_1_5" && (
-            <div className="flex gap-2 ml-6">
-              {[1, 2, 3, 4, 5].map(n => (
-                <button
-                  key={n}
-                  onClick={() => setResposta(p.id, "valor", String(n))}
-                  className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center font-bold transition-all ${
-                    respostas[p.id]?.valor === String(n)
-                      ? "border-yellow-500 bg-yellow-500 text-white"
-                      : "border-muted hover:border-yellow-300"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-              <span className="text-xs text-muted-foreground self-center ml-2">
-                (1 = Péssimo, 5 = Excelente)
-              </span>
-            </div>
-          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowNovaAvaliacao(false); resetFormAvaliacao(); }}>Cancelar</Button>
+            <Button onClick={handleSubmitAvaliacao} disabled={criarAvaliacao.isPending}>
+              {criarAvaliacao.isPending ? "Salvando..." : "Finalizar Avaliação"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          {p.tipo === "nota_1_10" && (
-            <div className="flex gap-1.5 ml-6 flex-wrap">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                <button
-                  key={n}
-                  onClick={() => setResposta(p.id, "valor", String(n))}
-                  className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center text-sm font-bold transition-all ${
-                    respostas[p.id]?.valor === String(n)
-                      ? "border-blue-500 bg-blue-500 text-white"
-                      : "border-muted hover:border-blue-300"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
+      {/* ============================================================ */}
+      {/* DIALOG: NOVO AVALIADOR */}
+      {/* ============================================================ */}
+      <Dialog open={showNovoAvaliador} onOpenChange={setShowNovoAvaliador}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Avaliador</DialogTitle>
+            <DialogDescription>Cadastre um novo avaliador para realizar avaliações</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome *</Label>
+              <Input value={avdNome} onChange={(e) => setAvdNome(e.target.value)} placeholder="Nome completo do avaliador" />
             </div>
-          )}
-
-          {p.tipo === "sim_nao" && (
-            <div className="flex gap-3 ml-6">
-              <button
-                onClick={() => setResposta(p.id, "valor", "sim")}
-                className={`px-6 py-2 rounded-lg border-2 font-medium transition-all ${
-                  respostas[p.id]?.valor === "sim"
-                    ? "border-green-500 bg-green-500 text-white"
-                    : "border-muted hover:border-green-300"
-                }`}
-              >
-                Sim
-              </button>
-              <button
-                onClick={() => setResposta(p.id, "valor", "nao")}
-                className={`px-6 py-2 rounded-lg border-2 font-medium transition-all ${
-                  respostas[p.id]?.valor === "nao"
-                    ? "border-red-500 bg-red-500 text-white"
-                    : "border-muted hover:border-red-300"
-                }`}
-              >
-                Não
-              </button>
+            <div>
+              <Label>E-mail *</Label>
+              <Input type="email" value={avdEmail} onChange={(e) => setAvdEmail(e.target.value)} placeholder="email@exemplo.com" />
             </div>
-          )}
-
-          {p.tipo === "texto_livre" && (
-            <div className="ml-6">
-              <Textarea
-                value={respostas[p.id]?.textoLivre || ""}
-                onChange={e => setResposta(p.id, "textoLivre", e.target.value)}
-                placeholder="Digite sua resposta..."
-                rows={3}
-              />
+            <div>
+              <Label>Frequência de Avaliação</Label>
+              <Select value={avdFrequencia} onValueChange={setAvdFrequencia}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Diária</SelectItem>
+                  <SelectItem value="weekly">Semanal</SelectItem>
+                  <SelectItem value="monthly">Mensal</SelectItem>
+                  <SelectItem value="quarterly">Trimestral</SelectItem>
+                  <SelectItem value="annual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </div>
-      ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNovoAvaliador(false)}>Cancelar</Button>
+            <Button onClick={() => criarAvaliador.mutate({ companyId, nome: avdNome, email: avdEmail, evaluationFrequency: avdFrequencia as any })} disabled={criarAvaliador.isPending || !avdNome || !avdEmail}>
+              {criarAvaliador.isPending ? "Salvando..." : "Cadastrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <div>
-        <Label className="font-medium">Observações Gerais</Label>
-        <Textarea
-          value={obsAvaliacao}
-          onChange={e => setObsAvaliacao(e.target.value)}
-          placeholder="Observações adicionais sobre o colaborador..."
-          rows={3}
-        />
-      </div>
-    </div>
+      {/* ============================================================ */}
+      {/* DIALOG: DETALHE DA AVALIAÇÃO */}
+      {/* ============================================================ */}
+      <Dialog open={!!showDetalheAvaliacao} onOpenChange={() => setShowDetalheAvaliacao(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" /> Detalhe da Avaliação
+            </DialogTitle>
+          </DialogHeader>
+          {avaliacaoDetalhe.isLoading ? (
+            <p className="text-center py-8 text-muted-foreground">Carregando...</p>
+          ) : avaliacaoDetalhe.data ? (() => {
+            const av = avaliacaoDetalhe.data;
+            const media = parseFloat(av.mediaGeral || "0");
+            const rec = getRecomendacao(media);
+            return (
+              <div className="space-y-4">
+                {/* Cabeçalho */}
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-bold text-lg">{av.employee?.nomeCompleto || "N/A"}</p>
+                    <p className="text-sm text-muted-foreground">{av.employee?.funcao} • {av.employee?.setor}</p>
+                    <p className="text-xs text-muted-foreground">Avaliador: {av.evaluator?.nome || "N/A"} • Ref: {av.mesReferencia}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold">{media.toFixed(1)}</p>
+                    <Badge className={rec.cor + " border"}>{rec.texto}</Badge>
+                  </div>
+                </div>
+
+                {/* Notas por pilar */}
+                {PILARES.map((pilar) => (
+                  <Card key={pilar.nome}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <pilar.icon className="w-4 h-4" /> {pilar.nome}
+                        <Badge variant="outline" className="ml-auto">
+                          {pilar.nome === "Postura e Disciplina" ? parseFloat(av.mediaPilar1 || "0").toFixed(1) :
+                           pilar.nome === "Desempenho Técnico" ? parseFloat(av.mediaPilar2 || "0").toFixed(1) :
+                           parseFloat(av.mediaPilar3 || "0").toFixed(1)}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-2">
+                        {pilar.criterios.map((c) => {
+                          const nota = Number((av as any)[c.key] || 0);
+                          const nl = NOTAS_LABELS[nota] || NOTAS_LABELS[1];
+                          return (
+                            <div key={c.key} className="flex items-center justify-between p-2 rounded border">
+                              <span className="text-sm">{c.label}</span>
+                              <span className={`font-bold ${nl.cor}`}>{nota} - {nl.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {/* Observações */}
+                {av.observacoes && (
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Observações</CardTitle></CardHeader>
+                    <CardContent><p className="text-sm">{av.observacoes}</p></CardContent>
+                  </Card>
+                )}
+
+                {/* Tempo e dispositivo */}
+                <div className="flex gap-4 text-xs text-muted-foreground">
+                  {av.durationSeconds && <span>Tempo: {Math.floor(av.durationSeconds / 60)}min {av.durationSeconds % 60}s</span>}
+                  {av.deviceType && <span>Dispositivo: {av.deviceType}</span>}
+                  <span>Criada em: {new Date(av.createdAt).toLocaleDateString("pt-BR")}</span>
+                </div>
+              </div>
+            );
+          })() : <p className="text-center py-4 text-muted-foreground">Avaliação não encontrada</p>}
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================ */}
+      {/* DIALOG: RESUMO IA */}
+      {/* ============================================================ */}
+      <Dialog open={showAiSummary} onOpenChange={setShowAiSummary}>
+        <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-500" /> Resumo IA da Avaliação
+            </DialogTitle>
+          </DialogHeader>
+          <div className="prose prose-sm max-w-none whitespace-pre-wrap">{aiSummary}</div>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
   );
 }

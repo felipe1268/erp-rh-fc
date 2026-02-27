@@ -2216,119 +2216,302 @@ jantaDia: varchar({ length: 20 }).default('0'), // valor diário jantar (se nece
 // AVALIAÇÃO DE DESEMPENHO
 // ============================================================
 
-// Questionários (templates de avaliação)
-export const avaliacaoQuestionarios = mysqlTable("avaliacao_questionarios", {
+// ============================================================
+// MÓDULO AVALIAÇÃO DE DESEMPENHO (Fusão fc-engenharia-avaliacao)
+// ============================================================
+
+// Avaliadores com login próprio (email + senha)
+export const evalAvaliadores = mysqlTable("eval_avaliadores", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
-	titulo: varchar({ length: 255 }).notNull(),
-	descricao: text(),
-	frequencia: mysqlEnum(['diaria', 'semanal', 'mensal', 'trimestral', 'semestral', 'anual']).default('mensal').notNull(),
-	ativo: tinyint().default(1).notNull(),
-	criadoPor: int().notNull(), // userId
+	nome: varchar({ length: 255 }).notNull(),
+	email: varchar({ length: 320 }).notNull(),
+	passwordHash: varchar({ length: 255 }).notNull(),
+	emailVerified: tinyint().default(0),
+	mustChangePassword: tinyint().default(1),
+	obraId: int(), // obra vinculada
+	evaluationFrequency: mysqlEnum(['daily','weekly','monthly','quarterly','annual']).default('monthly').notNull(),
+	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	lastSignedIn: timestamp({ mode: 'string' }),
 },
 (table) => [
-	index("aq_company").on(table.companyId),
+	index("eva_company").on(table.companyId),
+	index("eva_email").on(table.email),
 ]);
 
-// Perguntas do questionário
-export const avaliacaoPerguntas = mysqlTable("avaliacao_perguntas", {
+// Revisões de critérios de avaliação
+export const evalCriteriaRevisions = mysqlTable("eval_criteria_revisions", {
 	id: int().autoincrement().notNull(),
-	questionarioId: int().notNull(),
-	texto: text().notNull(),
-	tipo: mysqlEnum(['nota_1_5', 'nota_1_10', 'sim_nao', 'texto_livre']).default('nota_1_5').notNull(),
-	peso: int().default(1).notNull(), // peso da pergunta no cálculo
+	companyId: int().notNull(),
+	version: int().default(1).notNull(),
+	descricao: varchar({ length: 255 }),
+	isActive: tinyint().default(0).notNull(),
+	createdBy: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ecr_company").on(table.companyId),
+]);
+
+// Pilares de avaliação (vinculados a uma revisão)
+export const evalPillars = mysqlTable("eval_pillars", {
+	id: int().autoincrement().notNull(),
+	revisionId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	ordem: int().default(0).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ep_revision").on(table.revisionId),
+]);
+
+// Critérios individuais (vinculados a um pilar)
+export const evalCriteria = mysqlTable("eval_criteria", {
+	id: int().autoincrement().notNull(),
+	pillarId: int().notNull(),
+	revisionId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	descricao: text(),
+	fieldKey: varchar({ length: 100 }), // chave técnica ex: "comportamento"
 	ordem: int().default(0).notNull(),
 	ativo: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 },
 (table) => [
-	index("ap_questionario").on(table.questionarioId),
+	index("ec_pillar").on(table.pillarId),
+	index("ec_revision").on(table.revisionId),
 ]);
 
-// Ciclos de avaliação (períodos)
-export const avaliacaoCiclos = mysqlTable("avaliacao_ciclos", {
+// Avaliações de desempenho (12 critérios fixos + dinâmicos)
+export const evalAvaliacoes = mysqlTable("eval_avaliacoes", {
 	id: int().autoincrement().notNull(),
-	companyId: int().notNull(),
-	questionarioId: int().notNull(),
-	titulo: varchar({ length: 255 }).notNull(), // ex: "Avaliação Mensal - Janeiro 2026"
-	dataInicio: date({ mode: 'string' }).notNull(),
-	dataFim: date({ mode: 'string' }).notNull(),
-	status: mysqlEnum(['rascunho', 'aberto', 'fechado']).default('rascunho').notNull(),
-	criadoPor: int().notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-},
-(table) => [
-	index("ac_company").on(table.companyId),
-	index("ac_questionario").on(table.questionarioId),
-]);
-
-// Avaliações individuais (1 por funcionário por ciclo)
-export const avaliacoes = mysqlTable("avaliacoes", {
-	id: int().autoincrement().notNull(),
-	cicloId: int().notNull(),
 	companyId: int().notNull(),
 	employeeId: int().notNull(),
-	avaliadorId: int().notNull(), // userId que avaliou
-	avaliadorNome: varchar({ length: 255 }), // nome do avaliador
-	status: mysqlEnum(['pendente', 'em_andamento', 'finalizada']).default('pendente').notNull(),
-	notaFinal: decimal({ precision: 5, scale: 2 }), // nota calculada
+	evaluatorId: int().notNull(), // eval_avaliadores.id
+	// Pilar 1 - Postura e Disciplina
+	comportamento: int(), // 1-5
+	pontualidade: int(), // 1-5
+	assiduidade: int(), // 1-5
+	segurancaEpis: int(), // 1-5
+	// Pilar 2 - Desempenho Técnico
+	qualidadeAcabamento: int(), // 1-5
+	produtividadeRitmo: int(), // 1-5
+	cuidadoFerramentas: int(), // 1-5
+	economiaMateriais: int(), // 1-5
+	// Pilar 3 - Atitude e Crescimento
+	trabalhoEquipe: int(), // 1-5
+	iniciativaProatividade: int(), // 1-5
+	disponibilidadeFlexibilidade: int(), // 1-5
+	organizacaoLimpeza: int(), // 1-5
+	// Médias calculadas
+	mediaPilar1: decimal({ precision: 3, scale: 1 }),
+	mediaPilar2: decimal({ precision: 3, scale: 1 }),
+	mediaPilar3: decimal({ precision: 3, scale: 1 }),
+	mediaGeral: decimal({ precision: 3, scale: 1 }),
+	recomendacao: varchar({ length: 100 }), // recomendação automática
 	observacoes: text(),
-	tempoAvaliacao: int(), // tempo em segundos que levou para avaliar
-	finalizadaEm: timestamp({ mode: 'string' }),
+	mesReferencia: varchar({ length: 7 }), // "2026-02"
+	locked: tinyint().default(1).notNull(), // imutável após criação
+	startedAt: timestamp({ mode: 'string' }),
+	durationSeconds: int(), // tempo para completar
+	deviceType: varchar({ length: 20 }),
+	revisionId: int(), // revisão de critérios vigente
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
-	index("av_ciclo").on(table.cicloId),
-	index("av_company").on(table.companyId),
-	index("av_employee").on(table.employeeId),
-	index("av_avaliador").on(table.avaliadorId),
+	index("ea_company").on(table.companyId),
+	index("ea_employee").on(table.employeeId),
+	index("ea_evaluator").on(table.evaluatorId),
+	index("ea_mes").on(table.mesReferencia),
 ]);
 
-// Respostas individuais (1 por pergunta por avaliação)
-export const avaliacaoRespostas = mysqlTable("avaliacao_respostas", {
+// Notas dinâmicas por critério (quando usa critérios configuráveis)
+export const evalScores = mysqlTable("eval_scores", {
 	id: int().autoincrement().notNull(),
-	avaliacaoId: int().notNull(),
-	perguntaId: int().notNull(),
-	valor: varchar({ length: 20 }), // nota numérica ou "sim"/"nao"
-	textoLivre: text(), // resposta texto livre
+	evaluationId: int().notNull(),
+	criterionId: int().notNull(),
+	nota: int().notNull(), // 1-5
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 },
 (table) => [
-	index("ar_avaliacao").on(table.avaliacaoId),
-	index("ar_pergunta").on(table.perguntaId),
+	index("es_evaluation").on(table.evaluationId),
+	index("es_criterion").on(table.criterionId),
 ]);
 
-// Vinculação avaliador -> funcionários que ele avalia
-export const avaliacaoAvaliadores = mysqlTable("avaliacao_avaliadores", {
+// Pesquisas customizadas
+export const evalSurveys = mysqlTable("eval_surveys", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
-	avaliadorUserId: int().notNull(), // userId do avaliador
-	employeeId: int().notNull(), // funcionário que ele avalia
-	ativo: tinyint().default(1).notNull(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-},
-(table) => [
-	index("aa_company").on(table.companyId),
-	index("aa_avaliador").on(table.avaliadorUserId),
-	index("aa_employee").on(table.employeeId),
-]);
-
-// Configuração do módulo de avaliação por empresa
-export const avaliacaoConfig = mysqlTable("avaliacao_config", {
-	id: int().autoincrement().notNull(),
-	companyId: int().notNull(),
-	notaMinima: decimal({ precision: 5, scale: 2 }).default('0'),
-	notaMaxima: decimal({ precision: 5, scale: 2 }).default('5'),
-	permitirAutoAvaliacao: tinyint().default(0),
-	exibirRankingParaAvaliadores: tinyint().default(0),
+	titulo: varchar({ length: 255 }).notNull(),
+	descricao: text(),
+	tipo: mysqlEnum(['setor','cliente','outro']).default('outro').notNull(),
+	anonimo: tinyint().default(0),
+	status: mysqlEnum(['ativa','encerrada','rascunho']).default('rascunho').notNull(),
+	obraId: int(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
-	index("acfg_company").on(table.companyId),
+	index("esu_company").on(table.companyId),
+]);
+
+// Perguntas da pesquisa
+export const evalSurveyQuestions = mysqlTable("eval_survey_questions", {
+	id: int().autoincrement().notNull(),
+	surveyId: int().notNull(),
+	texto: text().notNull(),
+	tipo: mysqlEnum(['nota','texto','sim_nao']).default('nota').notNull(),
+	ordem: int().default(0).notNull(),
+	obrigatoria: tinyint().default(1),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("esq_survey").on(table.surveyId),
+]);
+
+// Respostas da pesquisa
+export const evalSurveyResponses = mysqlTable("eval_survey_responses", {
+	id: int().autoincrement().notNull(),
+	surveyId: int().notNull(),
+	respondentName: varchar({ length: 255 }),
+	respondentEmail: varchar({ length: 320 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("esr_survey").on(table.surveyId),
+]);
+
+// Respostas individuais por pergunta
+export const evalSurveyAnswers = mysqlTable("eval_survey_answers", {
+	id: int().autoincrement().notNull(),
+	responseId: int().notNull(),
+	questionId: int().notNull(),
+	valor: varchar({ length: 20 }),
+	textoLivre: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("esa_response").on(table.responseId),
+	index("esa_question").on(table.questionId),
+]);
+
+// Vínculo pesquisa-avaliador
+export const evalSurveyEvaluators = mysqlTable("eval_survey_evaluators", {
+	id: int().autoincrement().notNull(),
+	surveyId: int().notNull(),
+	evaluatorId: int().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ese_survey").on(table.surveyId),
+	index("ese_evaluator").on(table.evaluatorId),
+]);
+
+// Pesquisas de clima organizacional
+export const evalClimateSurveys = mysqlTable("eval_climate_surveys", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	titulo: varchar({ length: 255 }).notNull(),
+	descricao: text(),
+	status: mysqlEnum(['ativa','encerrada','rascunho']).default('rascunho').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("ecs_company").on(table.companyId),
+]);
+
+// Perguntas de clima (com categorias)
+export const evalClimateQuestions = mysqlTable("eval_climate_questions", {
+	id: int().autoincrement().notNull(),
+	surveyId: int().notNull(),
+	texto: text().notNull(),
+	categoria: mysqlEnum(['empresa','gestor','ambiente','seguranca','crescimento','recomendacao']).default('empresa').notNull(),
+	tipo: mysqlEnum(['nota','texto','sim_nao']).default('nota').notNull(),
+	ordem: int().default(0).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ecq_survey").on(table.surveyId),
+]);
+
+// Respostas de clima (com cpfHash SHA-256 para dedup anônima)
+export const evalClimateResponses = mysqlTable("eval_climate_responses", {
+	id: int().autoincrement().notNull(),
+	surveyId: int().notNull(),
+	cpfHash: varchar({ length: 64 }), // SHA-256 do CPF
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("eclr_survey").on(table.surveyId),
+]);
+
+// Respostas individuais de clima
+export const evalClimateAnswers = mysqlTable("eval_climate_answers", {
+	id: int().autoincrement().notNull(),
+	responseId: int().notNull(),
+	questionId: int().notNull(),
+	valor: varchar({ length: 20 }),
+	textoLivre: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ecla_response").on(table.responseId),
+	index("ecla_question").on(table.questionId),
+]);
+
+// Participantes externos (clientes, fornecedores)
+export const evalExternalParticipants = mysqlTable("eval_external_participants", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	empresa: varchar({ length: 255 }),
+	tipo: mysqlEnum(['cliente','fornecedor']).default('cliente').notNull(),
+	email: varchar({ length: 320 }),
+	telefone: varchar({ length: 20 }),
+	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("eep_company").on(table.companyId),
+]);
+
+// Tokens únicos para pesquisa de clima via link (participantes externos)
+export const evalClimateExternalTokens = mysqlTable("eval_climate_external_tokens", {
+	id: int().autoincrement().notNull(),
+	surveyId: int().notNull(),
+	participantId: int().notNull(),
+	token: varchar({ length: 64 }).notNull(),
+	used: tinyint().default(0),
+	usedAt: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ecet_survey").on(table.surveyId),
+	index("ecet_token").on(table.token),
+]);
+
+// Log de auditoria do módulo de avaliação
+export const evalAuditLog = mysqlTable("eval_audit_log", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	action: varchar({ length: 100 }).notNull(),
+	actorType: mysqlEnum(['admin','evaluator','system','anonymous']).default('system').notNull(),
+	actorId: int(),
+	actorName: varchar({ length: 255 }),
+	targetType: varchar({ length: 50 }),
+	targetId: int(),
+	details: text(), // JSON
+	ipAddress: varchar({ length: 45 }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("eal_company").on(table.companyId),
+	index("eal_action").on(table.action),
+	index("eal_actor").on(table.actorType, table.actorId),
 ]);
 

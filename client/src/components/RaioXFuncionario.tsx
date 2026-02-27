@@ -12,7 +12,7 @@ import {
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
-  Palmtree, Shield, FileSignature, Ban
+  Palmtree, Shield, FileSignature, Ban, Star, Eye
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -152,6 +152,13 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const cipa = (raioX as any)?.cipa || [];
   const pjContratos = (raioX as any)?.pjContratos || [];
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
+
+  // Avaliações de desempenho
+  const avaliacoesQuery = trpc.avaliacao.avaliacoes.getByEmployee.useQuery(
+    { employeeId: employeeId!, companyId: selectedCompany?.id || 0 },
+    { enabled: !!employeeId && open && !!selectedCompany?.id }
+  );
+  const avaliacoesList = avaliacoesQuery.data || [];
 
   const asosVencidos = asos.filter((a: any) => a.status === "VENCIDO").length;
   const asosAVencer = asos.filter((a: any) => a.status?.includes("DIAS PARA VENCER")).length;
@@ -688,6 +695,13 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     ],
                   },
                   {
+                    label: "Avaliação",
+                    color: "amber",
+                    tabs: [
+                      { value: "avaliacoes", label: "Avaliações", icon: Star, count: avaliacoesList.length },
+                    ],
+                  },
+                  {
                     label: "Disciplinar / Saída",
                     color: "red",
                     tabs: [
@@ -705,12 +719,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   blue: "bg-blue-600 text-white shadow-sm",
                   emerald: "bg-emerald-600 text-white shadow-sm",
                   red: "bg-red-600 text-white shadow-sm",
+                  amber: "bg-amber-600 text-white shadow-sm",
                 };
                 const labelColorMap: Record<string, string> = {
                   indigo: "text-indigo-700 border-indigo-300",
                   blue: "text-blue-700 border-blue-300",
                   emerald: "text-emerald-700 border-emerald-300",
                   red: "text-red-700 border-red-300",
+                  amber: "text-amber-700 border-amber-300",
                 };
 
                 return (
@@ -1688,6 +1704,149 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </TabsContent>
+              {/* ============ AVALIAÇÕES DE DESEMPENHO ============ */}
+              <TabsContent value="avaliacoes" className="mt-4">
+                {avaliacoesList.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">Nenhuma avaliação de desempenho registrada</div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-xl border p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                          <Star className="h-5 w-5 text-amber-500" /> Avaliações de Desempenho — {avaliacoesList.length}
+                        </h3>
+                      </div>
+                      {/* Resumo geral */}
+                      {(() => {
+                        const medias = avaliacoesList.map((a: any) => parseFloat(a.mediaGeral || '0'));
+                        const mediaGeral = medias.length > 0 ? (medias.reduce((s: number, v: number) => s + v, 0) / medias.length) : 0;
+                        const ultimaAv = avaliacoesList[0] as any;
+                        return (
+                          <div className="grid grid-cols-4 gap-3 mb-4">
+                            <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
+                              <div className="text-2xl font-bold text-amber-700">{mediaGeral.toFixed(1)}</div>
+                              <div className="text-[10px] text-amber-600 font-medium">Média Geral</div>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                              <div className="text-2xl font-bold text-blue-700">{avaliacoesList.length}</div>
+                              <div className="text-[10px] text-blue-600 font-medium">Total Avaliações</div>
+                            </div>
+                            <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                              <div className="text-2xl font-bold text-green-700">{ultimaAv?.mediaGeral || '-'}</div>
+                              <div className="text-[10px] text-green-600 font-medium">Última Nota</div>
+                            </div>
+                            <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
+                              <div className="text-xs font-bold text-purple-700 truncate">{ultimaAv?.recomendacao || '-'}</div>
+                              <div className="text-[10px] text-purple-600 font-medium">Última Recomendação</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {/* Tabela de avaliações */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/30">
+                              <th className="p-2 text-left">Data</th>
+                              <th className="p-2 text-left">Mês Ref.</th>
+                              <th className="p-2 text-left">Avaliador</th>
+                              <th className="p-2 text-center">P1</th>
+                              <th className="p-2 text-center">P2</th>
+                              <th className="p-2 text-center">P3</th>
+                              <th className="p-2 text-center">Média</th>
+                              <th className="p-2 text-center">Recomendação</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {avaliacoesList.map((av: any) => {
+                              const media = parseFloat(av.mediaGeral || '0');
+                              const corMedia = media >= 4 ? 'text-green-700 bg-green-50' : media >= 3 ? 'text-blue-700 bg-blue-50' : media >= 2 ? 'text-amber-700 bg-amber-50' : 'text-red-700 bg-red-50';
+                              const corRec = av.recomendacao?.includes('DEMISS') ? 'destructive' : av.recomendacao?.includes('ATEN') ? 'secondary' : av.recomendacao?.includes('TREIN') ? 'outline' : 'default';
+                              return (
+                                <tr key={av.id} className="border-b last:border-0 hover:bg-gray-50">
+                                  <td className="p-2 text-xs">{formatDate(av.createdAt?.split?.('T')?.[0] || av.createdAt)}</td>
+                                  <td className="p-2 font-medium">{av.mesReferencia || '-'}</td>
+                                  <td className="p-2 text-xs">{av.evaluatorName || '-'}</td>
+                                  <td className="p-2 text-center font-bold">{av.mediaPilar1 || '-'}</td>
+                                  <td className="p-2 text-center font-bold">{av.mediaPilar2 || '-'}</td>
+                                  <td className="p-2 text-center font-bold">{av.mediaPilar3 || '-'}</td>
+                                  <td className="p-2 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${corMedia}`}>{av.mediaGeral}</span></td>
+                                  <td className="p-2 text-center"><Badge variant={corRec as any} className="text-[10px]">{av.recomendacao || '-'}</Badge></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    {/* Detalhes da última avaliação */}
+                    {(() => {
+                      const ultima = avaliacoesList[0] as any;
+                      if (!ultima) return null;
+                      const pilares = [
+                        { nome: "Postura e Disciplina", media: ultima.mediaPilar1, criterios: [
+                          { label: "Comportamento", nota: ultima.comportamento },
+                          { label: "Pontualidade", nota: ultima.pontualidade },
+                          { label: "Assiduidade", nota: ultima.assiduidade },
+                          { label: "Segurança/EPIs", nota: ultima.segurancaEpis },
+                        ]},
+                        { nome: "Desempenho Técnico", media: ultima.mediaPilar2, criterios: [
+                          { label: "Qualidade", nota: ultima.qualidadeAcabamento },
+                          { label: "Produtividade", nota: ultima.produtividadeRitmo },
+                          { label: "Ferramentas", nota: ultima.cuidadoFerramentas },
+                          { label: "Economia", nota: ultima.economiaMateriais },
+                        ]},
+                        { nome: "Atitude e Crescimento", media: ultima.mediaPilar3, criterios: [
+                          { label: "Equipe", nota: ultima.trabalhoEquipe },
+                          { label: "Iniciativa", nota: ultima.iniciativaProatividade },
+                          { label: "Flexibilidade", nota: ultima.disponibilidadeFlexibilidade },
+                          { label: "Organização", nota: ultima.organizacaoLimpeza },
+                        ]},
+                      ];
+                      return (
+                        <div className="bg-white rounded-xl border p-6">
+                          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <Eye className="h-5 w-5 text-amber-500" /> Detalhes da Última Avaliação ({ultima.mesReferencia})
+                          </h3>
+                          <div className="grid grid-cols-3 gap-4">
+                            {pilares.map((p) => (
+                              <div key={p.nome} className="border rounded-lg p-3">
+                                <div className="font-semibold text-sm mb-2 flex items-center justify-between">
+                                  <span>{p.nome}</span>
+                                  <span className="text-lg font-bold text-amber-600">{p.media}</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {p.criterios.map((c) => {
+                                    const nota = parseInt(c.nota || '0');
+                                    const cor = nota >= 4 ? 'bg-green-500' : nota >= 3 ? 'bg-blue-500' : nota >= 2 ? 'bg-amber-500' : 'bg-red-500';
+                                    return (
+                                      <div key={c.label} className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-600">{c.label}</span>
+                                        <div className="flex items-center gap-1">
+                                          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                            <div className={`h-full rounded-full ${cor}`} style={{ width: `${(nota / 5) * 100}%` }} />
+                                          </div>
+                                          <span className="font-bold w-4 text-right">{nota}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {ultima.observacoes && (
+                            <div className="mt-3 bg-gray-50 rounded-lg p-3">
+                              <span className="text-xs font-semibold text-gray-500">Observações:</span>
+                              <p className="text-sm text-gray-700 mt-1">{ultima.observacoes}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </TabsContent>

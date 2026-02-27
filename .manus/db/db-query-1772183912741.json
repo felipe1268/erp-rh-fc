@@ -1,0 +1,28 @@
+{
+  "query": "SHOW TABLES LIKE 'avaliacao%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW TABLES LIKE 'avaliacao%';",
+  "rows": [
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (avaliacao%)": "avaliacao_avaliadores"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (avaliacao%)": "avaliacao_ciclos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (avaliacao%)": "avaliacao_config"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (avaliacao%)": "avaliacao_perguntas"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (avaliacao%)": "avaliacao_questionarios"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (avaliacao%)": "avaliacao_respostas"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_W4MM458SKqYRWRGGQrfw8A (avaliacao%)\navaliacao_avaliadores\navaliacao_ciclos\navaliacao_config\navaliacao_perguntas\navaliacao_questionarios\navaliacao_respostas\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}
