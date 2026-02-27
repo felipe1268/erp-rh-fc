@@ -2964,3 +2964,28 @@
 - [x] Backend: endpoint painelValidade com dados consolidados e estatísticas
 - [x] Backend: resumo atualizado com treinVencidos e treinAVencer
 - [x] 10 testes unitários passando (controleDocumentos.test.ts)
+
+## Bug: IA Sugerir Perguntas não funciona no módulo Avaliação (v2)
+- [ ] Diagnosticar por que o botão "IA Sugerir Perguntas" não gera perguntas automaticamente
+- [ ] Verificar backend: endpoint de geração de perguntas via LLM
+- [ ] Verificar frontend: handler do botão e chamada da mutation
+- [ ] Corrigir e testar a geração automática de perguntas baseada no título da avaliação
+
+## Bug: Nome do funcionário não aparece no autocomplete do ASO
+- [ ] Corrigir campo Colaborador no formulário Novo ASO — nome digitado não filtra corretamente
+- [ ] Verificar EmployeeSelect component e como o filtro de busca funciona
+
+## Melhoria: Controle de Documentos amplo (não apenas ASO)
+- [x] Expandir Controle de Documentos para cobrir TODOS os documentos do funcionário
+- [x] Aba "Documentos" adicionada com 15 tipos: RG, CNH, CTPS, Comprovante Residência, Certidão, Título, Reservista, PIS, Foto, Contrato, Rescisão, Atestado, Diploma, Certificado, Outros
+- [x] Mesmo padrão de processo que advertência: seleciona funcionário, preenche dados, anexa documento
+
+## Exames Realizados - Checkboxes com Upload Individual
+- [x] Substituir textarea por checkboxes clicáveis com todos os exames possíveis (21 exames padrão)
+- [x] Adicionar campo para inserir exames extras personalizados
+- [ ] Upload individual por exame habilitado (próxima iteração)
+- [x] Exames: Audiometria, Acuidade Visual, Hemograma, Glicemia, EAS, ECG, Espirometria, Raio-X Tórax, etc.
+
+## Bug: Busca de nome do colaborador no ASO (campo Colaborador)
+- [x] Corrigir busca automática conforme digita no campo Colaborador do ASO
+- [x] Melhorar UX mobile: input com ref callback para foco, inputMode text, border azul quando ativo

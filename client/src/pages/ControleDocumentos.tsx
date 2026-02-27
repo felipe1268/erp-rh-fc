@@ -245,6 +245,288 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
   );
 }
 
+// ============ LISTA DE EXAMES PADRÃO ============
+const EXAMES_PADRAO = [
+  "Audiometria", "Acuidade Visual", "Hemograma Completo", "Glicemia de Jejum",
+  "EAS (Urina)", "ECG (Eletrocardiograma)", "Espirometria", "Raio-X de Tórax",
+  "Raio-X de Coluna", "Hemoglobina Glicosilada", "Colesterol Total e Frações",
+  "Triglicérides", "TGO/TGP (Hepático)", "Creatinina", "PSA",
+  "Toxicológico", "Colinesterase", "Plumbemia (Chumbo)", "Reticulocitos",
+  "Eletroencefalograma", "Exame Clínico"
+];
+
+// ============ COMPONENTE: EXAMES REALIZADOS (Checkboxes + Upload) ============
+function ExamesRealizadosField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  // Parse existing value: comma-separated string
+  const selected = useMemo(() => {
+    if (!value) return new Set<string>();
+    return new Set(value.split(",").map(s => s.trim()).filter(Boolean));
+  }, [value]);
+
+  const [customExame, setCustomExame] = useState("");
+  const [customExames, setCustomExames] = useState<string[]>([]);
+
+  // Initialize custom exames from value that aren't in EXAMES_PADRAO
+  useEffect(() => {
+    if (value) {
+      const extras = value.split(",").map(s => s.trim()).filter(s => s && !EXAMES_PADRAO.includes(s));
+      if (extras.length > 0 && customExames.length === 0) setCustomExames(extras);
+    }
+  }, []);
+
+  const toggleExame = (exame: string) => {
+    const newSet = new Set(selected);
+    if (newSet.has(exame)) newSet.delete(exame);
+    else newSet.add(exame);
+    onChange(Array.from(newSet).join(", "));
+  };
+
+  const addCustom = () => {
+    const trimmed = customExame.trim();
+    if (!trimmed) return;
+    if (!customExames.includes(trimmed)) setCustomExames(prev => [...prev, trimmed]);
+    const newSet = new Set(selected);
+    newSet.add(trimmed);
+    onChange(Array.from(newSet).join(", "));
+    setCustomExame("");
+  };
+
+  const allExames = [...EXAMES_PADRAO, ...customExames.filter(c => !EXAMES_PADRAO.includes(c))];
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {allExames.map(exame => (
+          <label key={exame} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-sm ${
+            selected.has(exame) 
+              ? "bg-blue-50 border-blue-300 text-blue-800 font-medium" 
+              : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+          }`}>
+            <input type="checkbox" checked={selected.has(exame)} onChange={() => toggleExame(exame)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            <span className="truncate">{exame}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          placeholder="Adicionar outro exame..."
+          value={customExame}
+          onChange={e => setCustomExame(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
+          className="flex-1"
+        />
+        <Button type="button" variant="outline" size="sm" onClick={addCustom} disabled={!customExame.trim()}>
+          <Plus className="h-4 w-4 mr-1" /> Adicionar
+        </Button>
+      </div>
+      {selected.size > 0 && (
+        <p className="text-xs text-muted-foreground">{selected.size} exame(s) selecionado(s)</p>
+      )}
+    </div>
+  );
+}
+
+// ============ COMPONENTE: DOCUMENTOS DO FUNCIONÁRIO ============
+const TIPOS_DOC_LABELS: Record<string, string> = {
+  rg: "RG", cnh: "CNH", ctps: "CTPS", comprovante_residencia: "Comprovante de Residência",
+  certidao_nascimento: "Certidão de Nascimento", titulo_eleitor: "Título de Eleitor",
+  reservista: "Reservista", pis: "PIS/PASEP", foto_3x4: "Foto 3x4",
+  contrato_trabalho: "Contrato de Trabalho", termo_rescisao: "Termo de Rescisão",
+  atestado_medico: "Atestado Médico", diploma: "Diploma", certificado: "Certificado", outros: "Outros"
+};
+
+function DocumentosPanel({ companyId, employees, onClickEmployee }: { companyId: number; employees: any[]; onClickEmployee: (id: number) => void }) {
+  const { data: docs = [], refetch } = trpc.employeeDocuments.listar.useQuery({ companyId }, { enabled: !!companyId });
+  const uploadDoc = trpc.employeeDocuments.upload.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
+  const deleteDoc = trpc.employeeDocuments.excluir.useMutation({ onSuccess: () => { refetch(); toast.success("Documento excluído!"); } });
+
+  const [showUpload, setShowUpload] = useState(false);
+  const [docForm, setDocForm] = useState<any>({});
+  const [searchDoc, setSearchDoc] = useState("");
+  const [filterTipo, setFilterTipo] = useState("todos");
+
+  const filtered = useMemo(() => {
+    let list = docs as any[];
+    if (searchDoc) {
+      const s = searchDoc.toLowerCase();
+      const emp = employees.find((e: any) => list.some(d => d.employeeId === e.id));
+      list = list.filter(d => {
+        const empName = employees.find((e: any) => e.id === d.employeeId)?.nomeCompleto || "";
+        return empName.toLowerCase().includes(s) || d.nome?.toLowerCase().includes(s) || (TIPOS_DOC_LABELS[d.tipo] || d.tipo).toLowerCase().includes(s);
+      });
+    }
+    if (filterTipo !== "todos") list = list.filter(d => d.tipo === filterTipo);
+    return list;
+  }, [docs, searchDoc, filterTipo, employees]);
+
+  const handleUploadSubmit = async () => {
+    if (!docForm.employeeId || !docForm.tipo || !docForm._file) { toast.error("Preencha funcionário, tipo e selecione um arquivo"); return; }
+    const file = docForm._file as File;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(",")[1];
+      try {
+        await uploadDoc.mutateAsync({
+          companyId,
+          employeeId: docForm.employeeId,
+          tipo: docForm.tipo,
+          nome: file.name,
+          descricao: docForm.descricao || undefined,
+          fileBase64: base64,
+          mimeType: file.type || "application/pdf",
+          fileSize: file.size,
+          dataValidade: docForm.dataValidade || undefined,
+        });
+        setShowUpload(false);
+        setDocForm({});
+      } catch { toast.error("Erro ao enviar documento"); }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Group by employee
+  const groupedByEmployee = useMemo(() => {
+    const map = new Map<number, any[]>();
+    for (const d of filtered) {
+      const arr = map.get(d.employeeId) || [];
+      arr.push(d);
+      map.set(d.employeeId, arr);
+    }
+    return map;
+  }, [filtered]);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-base">Documentos dos Colaboradores</CardTitle>
+        <Button size="sm" onClick={() => { setDocForm({}); setShowUpload(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Documento</Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por nome ou documento..." value={searchDoc} onChange={e => setSearchDoc(e.target.value)} className="pl-9" />
+          </div>
+          <Select value={filterTipo} onValueChange={setFilterTipo}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os tipos</SelectItem>
+              {Object.entries(TIPOS_DOC_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
+            <p>Nenhum documento encontrado</p>
+            <p className="text-xs">Clique em "Novo Documento" para adicionar</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/30">
+                  <th className="text-left p-2 font-medium">Colaborador</th>
+                  <th className="text-left p-2 font-medium">Tipo</th>
+                  <th className="text-left p-2 font-medium">Arquivo</th>
+                  <th className="text-left p-2 font-medium">Validade</th>
+                  <th className="text-left p-2 font-medium">Enviado em</th>
+                  <th className="text-center p-2 font-medium">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((d: any) => {
+                  const emp = employees.find((e: any) => e.id === d.employeeId);
+                  const vencido = d.dataValidade && d.dataValidade < new Date().toISOString().split("T")[0];
+                  return (
+                    <tr key={d.id} className="border-b hover:bg-muted/20">
+                      <td className="p-2">
+                        <button className="text-blue-600 hover:underline text-left" onClick={() => onClickEmployee(d.employeeId)}>
+                          {emp?.nomeCompleto || "Desconhecido"}
+                        </button>
+                      </td>
+                      <td className="p-2"><Badge variant="outline">{TIPOS_DOC_LABELS[d.tipo] || d.tipo}</Badge></td>
+                      <td className="p-2">
+                        <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+                          <FileText className="h-3 w-3" /> {d.nome}
+                        </a>
+                      </td>
+                      <td className="p-2">
+                        {d.dataValidade ? (
+                          <span className={vencido ? "text-red-600 font-medium" : ""}>{formatDate(d.dataValidade)} {vencido && <Badge variant="destructive" className="ml-1 text-xs">Vencido</Badge>}</span>
+                        ) : <span className="text-muted-foreground">-</span>}
+                      </td>
+                      <td className="p-2 text-muted-foreground">{formatDate(d.createdAt?.split("T")[0] || d.createdAt?.split(" ")[0])}</td>
+                      <td className="p-2 text-center">
+                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => { if (confirm("Excluir este documento?")) deleteDoc.mutate({ id: d.id }); }}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+
+      {/* Dialog de Upload */}
+      <Dialog open={showUpload} onOpenChange={setShowUpload}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Novo Documento do Colaborador</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Colaborador *</label>
+              <Select value={docForm.employeeId?.toString() || ""} onValueChange={v => setDocForm({ ...docForm, employeeId: parseInt(v) })}>
+                <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nomeCompleto}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Tipo de Documento *</label>
+              <Select value={docForm.tipo || ""} onValueChange={v => setDocForm({ ...docForm, tipo: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TIPOS_DOC_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Descrição</label>
+              <Input value={docForm.descricao || ""} onChange={e => setDocForm({ ...docForm, descricao: e.target.value })} placeholder="Descrição opcional" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Data de Validade</label>
+              <Input type="date" value={docForm.dataValidade || ""} onChange={e => setDocForm({ ...docForm, dataValidade: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Arquivo * (PDF/Imagem, máx 10MB)</label>
+              <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                  setDocForm({ ...docForm, _file: file });
+                }
+              }} />
+              {docForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {docForm._file.name}</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUpload(false)}>Cancelar</Button>
+            <Button onClick={handleUploadSubmit} disabled={uploadDoc.isPending}>
+              {uploadDoc.isPending ? "Enviando..." : "Enviar Documento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 export default function ControleDocumentos() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
@@ -611,57 +893,89 @@ export default function ControleDocumentos() {
   const EmployeeSelect = ({ value, onChange }: { value: number | undefined; onChange: (id: number) => void }) => {
     const [empSearch, setEmpSearch] = useState("");
     const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
+    const inputRef = useCallback((node: HTMLInputElement | null) => {
+      if (node) setTimeout(() => node.focus(), 50);
+    }, [empDropdownOpen]);
     const selectedEmp = activeEmployees.find((e: any) => e.id === value);
-    const filteredEmps = activeEmployees.filter((e: any) => {
-      if (!empSearch) return true;
-      const s = empSearch.toLowerCase();
-      return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""));
-    });
+    const filteredEmps = useMemo(() => {
+      return activeEmployees.filter((e: any) => {
+        if (!empSearch) return true;
+        const s = empSearch.toLowerCase().trim();
+        if (!s) return true;
+        const nome = (e.nomeCompleto || "").toLowerCase();
+        const cpf = (e.cpf || "").replace(/\D/g, "");
+        const searchClean = s.replace(/\D/g, "");
+        return nome.includes(s) || (searchClean && cpf.includes(searchClean));
+      }).slice(0, 50);
+    }, [activeEmployees, empSearch]);
     return (
       <div className="relative" style={{ zIndex: 60 }}>
-        <div
-          className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 transition-colors relative"
-          style={{ zIndex: 61 }}
-          onClick={() => { if (!empDropdownOpen) setEmpDropdownOpen(true); }}
-        >
-          <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
-          {empDropdownOpen ? (
+        {!empDropdownOpen ? (
+          <div
+            className="flex items-center border rounded-md px-3 py-2 bg-background cursor-pointer hover:bg-muted/30 transition-colors"
+            onClick={() => setEmpDropdownOpen(true)}
+          >
+            <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
+            <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
+              {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Clique para buscar colaborador..."}
+            </span>
+            {value && (
+              <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); onChange(undefined as any); setEmpSearch(""); }}>
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center border-2 border-blue-500 rounded-md px-3 py-2 bg-background">
+            <Search className="h-4 w-4 text-blue-500 mr-2 shrink-0" />
             <input
-              autoFocus
-              className="flex-1 bg-transparent outline-none text-sm"
-              placeholder="Digite nome ou CPF para buscar..."
+              ref={inputRef}
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              className="flex-1 bg-transparent outline-none text-sm text-foreground min-w-0"
+              placeholder="Digite nome ou CPF..."
               value={empSearch}
               onChange={e => setEmpSearch(e.target.value)}
               onKeyDown={e => { if (e.key === 'Escape') { setEmpDropdownOpen(false); setEmpSearch(''); } }}
-              onClick={e => e.stopPropagation()}
             />
-          ) : (
-            <span className={`flex-1 text-sm ${selectedEmp ? "text-foreground" : "text-muted-foreground"}`}>
-              {selectedEmp ? `${selectedEmp.nomeCompleto} - ${formatCPF(selectedEmp.cpf)}` : "Digite nome ou CPF para buscar..."}
-            </span>
-          )}
-          {value && (
-            <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); onChange(undefined as any); setEmpSearch(""); setEmpDropdownOpen(false); }}>
+            <button type="button" className="ml-2 text-muted-foreground hover:text-foreground" onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }}>
               <X className="h-4 w-4" />
             </button>
-          )}
-        </div>
+          </div>
+        )}
         {empDropdownOpen && (
           <>
             <div className="fixed inset-0" style={{ zIndex: 55 }} onClick={() => { setEmpDropdownOpen(false); setEmpSearch(""); }} />
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
               {filteredEmps.length === 0 ? (
-                <div className="p-3 text-sm text-muted-foreground text-center">{activeEmployees.length === 0 ? "Nenhum colaborador ativo cadastrado" : `Nenhum resultado para "${empSearch}"`}</div>
-              ) : filteredEmps.map((e: any) => (
-                <div
-                  key={e.id}
-                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 flex items-center justify-between ${value === e.id ? "bg-blue-100 font-medium" : ""}`}
-                  onClick={() => { onChange(e.id); setEmpDropdownOpen(false); setEmpSearch(""); }}
-                >
-                  <span>{e.nomeCompleto}</span>
-                  <span className="text-xs text-muted-foreground">{formatCPF(e.cpf)}</span>
+                <div className="p-3 text-sm text-muted-foreground text-center">
+                  {activeEmployees.length === 0 
+                    ? "Nenhum colaborador ativo cadastrado nesta empresa" 
+                    : empSearch 
+                      ? `Nenhum resultado para "${empSearch}" (${activeEmployees.length} colaboradores ativos)`
+                      : "Nenhum colaborador encontrado"}
                 </div>
-              ))}
+              ) : (
+                <>
+                  <div className="px-3 py-1.5 text-xs text-muted-foreground border-b bg-gray-50 dark:bg-gray-800">
+                    {empSearch ? `${filteredEmps.length} resultado(s)` : `${filteredEmps.length} colaborador(es) ativo(s)`}
+                  </div>
+                  {filteredEmps.map((e: any) => (
+                    <div
+                      key={e.id}
+                      className={`px-3 py-2.5 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center justify-between ${value === e.id ? "bg-blue-100 dark:bg-blue-900/50 font-medium" : ""}`}
+                      onClick={() => { onChange(e.id); setEmpDropdownOpen(false); setEmpSearch(""); }}
+                    >
+                      <span className="text-gray-900 dark:text-gray-100">{e.nomeCompleto}</span>
+                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{formatCPF(e.cpf)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </>
         )}
@@ -772,9 +1086,12 @@ export default function ControleDocumentos() {
 
         {/* TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5 h-12 gap-1 bg-transparent p-0">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto sm:h-12 gap-1 bg-transparent p-0">
             <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
               <AlertTriangle className="h-4 w-4" /> Validade
+            </TabsTrigger>
+            <TabsTrigger value="documentos" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "documentos" ? "border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-indigo-50/50 hover:text-indigo-600"}`}>
+              <FileText className="h-4 w-4" /> Documentos
             </TabsTrigger>
             <TabsTrigger value="aso" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "aso" ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-blue-50/50 hover:text-blue-600"}`}>
               <Stethoscope className="h-4 w-4" /> ASO
@@ -793,6 +1110,11 @@ export default function ControleDocumentos() {
           {/* ===================== ABA PAINEL DE VALIDADE ===================== */}
           <TabsContent value="validade">
             <ValidadePanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} />
+          </TabsContent>
+
+          {/* ===================== ABA DOCUMENTOS DO FUNCIONÁRIO ===================== */}
+          <TabsContent value="documentos">
+            <DocumentosPanel companyId={companyId} employees={activeEmployees} onClickEmployee={setRaioXEmployeeId} />
           </TabsContent>
 
           {/* ===================== ABA ASO ===================== */}
@@ -1298,7 +1620,7 @@ export default function ControleDocumentos() {
             </div>
             <div className="col-span-2">
               <label className="text-sm font-medium">Exames Realizados</label>
-              <Textarea value={asoForm.examesRealizados || ""} onChange={e => setAsoForm({ ...asoForm, examesRealizados: e.target.value })} placeholder="Ex: Acuidade Visual, Audiometria, Hemograma..." rows={2} />
+              <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} />
             </div>
             <div className="col-span-2">
               <label className="text-sm font-medium">Observações</label>

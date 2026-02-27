@@ -881,7 +881,13 @@ export default function AvaliacaoDesempenho() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setShowCriarAvaliacao(false); resetFormAvaliacao(); }}>Cancelar</Button>
-                <Button onClick={() => setAvalStep("perguntas")} disabled={!avalTitulo.trim()}>
+                <Button onClick={() => {
+                  setAvalStep("perguntas");
+                  // Auto-gerar perguntas pela IA quando avança para step 2 e não tem perguntas
+                  if (avalPerguntas.length === 0 && avalTitulo.trim() && !iaSugerindo) {
+                    setTimeout(() => sugerirPerguntasAvaliacao(), 300);
+                  }
+                }} disabled={!avalTitulo.trim()}>
                   Próximo <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </DialogFooter>
