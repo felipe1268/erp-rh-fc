@@ -3050,3 +3050,6 @@
 
 ## Bug Fix - Jurídico Insert Error - 2026-02-27
 - [x] Fix: Erro ao cadastrar processo trabalhista - Failed query insert into processos_trabalhistas (empty strings -> null for DATE fields)
+
+## Bug Fix - Dashboard Aviso Prévio Cálculos Errados - 2026-02-27
+- [x] Fix: Custo Total Estimado mostrando R$ 17.499.687,00 - parseVal removia ponto decimal pensando ser separador de milhar. Valor correto: R$ 178.558,34

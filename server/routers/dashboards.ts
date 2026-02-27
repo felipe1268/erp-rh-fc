@@ -1254,7 +1254,7 @@ async function getDashAvisoPrevio(companyId: number) {
   const empregadoTrabalhado = allNotices.filter(n => n.tipo === 'empregado_trabalhado').length;
   const empregadoIndenizado = allNotices.filter(n => n.tipo === 'empregado_indenizado').length;
 
-  const parseVal = (v: string | null) => { const n = parseFloat((v || '0').replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+  const parseVal = (v: string | null) => { const n = parseFloat(v || '0'); return isNaN(n) ? 0 : n; };
   const valorTotalEstimado = allNotices.reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
   const valorEmAndamento = allNotices.filter(n => n.status === 'em_andamento').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
 
