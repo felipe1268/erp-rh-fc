@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE eval_surveys \n  ADD COLUMN is_evaluation TINYINT DEFAULT 0 AFTER status,\n  ADD COLUMN allow_employee_selection TINYINT DEFAULT 1 AFTER is_evaluation;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE eval_surveys \n  ADD COLUMN is_evaluation TINYINT DEFAULT 0 AFTER status,\n  ADD COLUMN allow_employee_selection TINYINT DEFAULT 1 AFTER is_evaluation;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'is_evaluation' in 'eval_surveys'"
+  ]
+}

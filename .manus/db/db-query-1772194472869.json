@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE eval_surveys ADD COLUMN allow_employee_selection TINYINT DEFAULT 1;\nALTER TABLE eval_survey_responses ADD COLUMN employee_id INT NULL;\nALTER TABLE eval_survey_responses ADD COLUMN evaluator_user_id INT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE eval_surveys ADD COLUMN allow_employee_selection TINYINT DEFAULT 1;\nALTER TABLE eval_survey_responses ADD COLUMN employee_id INT NULL;\nALTER TABLE eval_survey_responses ADD COLUMN evaluator_user_id INT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 638
+}

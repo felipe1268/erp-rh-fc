@@ -2352,6 +2352,8 @@ export const evalSurveys = mysqlTable("eval_surveys", {
 	tipo: mysqlEnum(['setor','cliente','outro']).default('outro').notNull(),
 	anonimo: tinyint().default(0),
 	status: mysqlEnum(['ativa','encerrada','rascunho']).default('rascunho').notNull(),
+	isEvaluation: tinyint('is_evaluation').default(0), // 1 = avaliação de desempenho (avaliador seleciona funcionário)
+	allowEmployeeSelection: tinyint('allow_employee_selection').default(1), // avaliador pode selecionar funcionário
 	obraId: int(),
 	publicToken: varchar('public_token', { length: 64 }), // token para link público
 	expiresAt: timestamp('expires_at', { mode: 'string' }), // data de expiração
@@ -2382,6 +2384,8 @@ export const evalSurveyResponses = mysqlTable("eval_survey_responses", {
 	surveyId: int().notNull(),
 	respondentName: varchar({ length: 255 }),
 	respondentEmail: varchar({ length: 320 }),
+	employeeId: int('employee_id'), // funcionário avaliado (quando isEvaluation=1)
+	evaluatorUserId: int('evaluator_user_id'), // usuário que fez a avaliação
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 },
 (table) => [

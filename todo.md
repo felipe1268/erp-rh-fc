@@ -2903,3 +2903,41 @@
 ### Testes
 - [x] 29 testes unitários passando (incluindo controle de acesso por role)
 - [x] Controle de acesso: gráficos restritos a RH/ADM/ADM Master
+
+## Fase Avaliação - Redesign Completo: Sistema Flexível de Avaliações
+
+### Conceito Novo
+- [x] Templates de avaliação customizáveis (título + perguntas definidas pelo usuário)
+- [x] IA sugere perguntas baseadas no título da avaliação
+- [x] Perguntas manuais: usuário cria suas próprias perguntas (escala 1-5)
+- [x] Atribuir avaliadores: selecionar colaboradores que farão a avaliação
+- [x] Avaliadores acessam base de funcionários para avaliar cada um
+- [x] Múltiplas avaliações: ativar/desativar quando quiser
+- [x] Dashboard com gráficos comparativos por avaliação
+
+### Schema
+- [x] Reutilizado eval_surveys com flags isEvaluation + allowEmployeeSelection
+- [x] eval_survey_questions (perguntas customizáveis por avaliação)
+- [x] eval_survey_evaluators (avaliadores atribuídos)
+- [x] eval_survey_responses com employeeId + evaluatorUserId
+- [x] eval_survey_response_answers (respostas por pergunta)
+
+### Backend
+- [x] CRUD de templates de avaliação (pesquisas.create com isEvaluation)
+- [x] IA sugere perguntas via LLM baseado no título
+- [x] CRUD de perguntas por template
+- [x] Atribuir/remover avaliadores (addEvaluators/removeEvaluator/getEvaluators)
+- [x] Ativar/desativar template (updateStatus)
+- [x] Aplicar avaliação (submitResponse com employeeId + evaluatorUserId)
+- [x] Resultados por template, por funcionário (getResults + getEvaluationByEmployee)
+
+### Frontend
+- [x] Tela de listagem de avaliações (cards com status ativo/inativo, toggle)
+- [x] Wizard criar avaliação: título → IA sugere perguntas → avaliadores → confirmar
+- [x] Tela de gerenciar avaliadores (adicionar/remover da base de usuários)
+- [x] Tela de aplicar avaliação (avaliador escolhe funcionário → responde perguntas)
+- [x] Dashboard com 10 gráficos Chart.js interativos
+- [x] 29 testes unitários passando
+
+## Bug: Módulo Avaliação faltando na sidebar
+- [x] Adicionar módulo Avaliação no dropdown de módulos da sidebar (DashboardLayout)

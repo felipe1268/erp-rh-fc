@@ -197,9 +197,17 @@ const adminSections: MenuSection[] = [
 
 const menuSectionsAvaliacao: MenuSection[] = [
   {
-    title: "Avaliação de Desempenho",
+    title: "Avaliação",
     items: [
-      { icon: Star, label: "Painel de Avaliação", path: "/avaliacao-desempenho" },
+      { icon: LayoutDashboard, label: "Painel de Avaliação", path: "/avaliacao-desempenho" },
+      { icon: ClipboardList, label: "Minhas Avaliações", path: "/avaliacao-desempenho?tab=avaliacoes" },
+    ],
+  },
+  {
+    title: "Pesquisas",
+    items: [
+      { icon: FileText, label: "Pesquisas Customizadas", path: "/avaliacao-desempenho?tab=pesquisas" },
+      { icon: TrendingUp, label: "Clima Organizacional", path: "/avaliacao-desempenho?tab=clima" },
     ],
   },
   {
@@ -567,6 +575,14 @@ function DashboardLayoutContent({
                       </div>
                     </SelectItem>
                   )}
+                  <SelectItem value="avaliacao">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-amber-500/20 flex items-center justify-center">
+                        <Star className="h-3 w-3 text-amber-400" />
+                      </div>
+                      Avaliação
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -598,6 +614,9 @@ function DashboardLayoutContent({
                       <Gavel className="mr-2 h-4 w-4 text-slate-300" /> Jurídico
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuItem onClick={() => setActiveModule("avaliacao")} className="cursor-pointer">
+                    <Star className="mr-2 h-4 w-4 text-amber-400" /> Avaliação
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

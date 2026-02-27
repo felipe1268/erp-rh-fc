@@ -924,6 +924,8 @@ Gere um resumo executivo em português brasileiro com:
         descricao: z.string().optional(),
         tipo: z.enum(["setor", "cliente", "outro"]).default("outro"),
         anonimo: z.boolean().default(false),
+        isEvaluation: z.boolean().default(false),
+        allowEmployeeSelection: z.boolean().default(true),
         obraId: z.number().optional(),
         questions: z.array(z.object({
           texto: z.string(),
@@ -931,14 +933,17 @@ Gere um resumo executivo em português brasileiro com:
           ordem: z.number(),
           obrigatoria: z.boolean().default(true),
         })),
+        evaluatorIds: z.array(z.number()).optional(), // IDs dos usuários avaliadores
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
-        const { questions, ...surveyData } = input;
+        const { questions, evaluatorIds, ...surveyData } = input;
         const publicToken = generateToken();
         const [survey] = await db.insert(evalSurveys).values({
           ...surveyData,
           anonimo: input.anonimo ? 1 : 0,
+          isEvaluation: input.isEvaluation ? 1 : 0,
+          allowEmployeeSelection: input.allowEmployeeSelection ? 1 : 0,
           publicToken,
         });
         for (const q of questions) {
@@ -950,21 +955,43 @@ Gere um resumo executivo em português brasileiro com:
             obrigatoria: q.obrigatoria ? 1 : 0,
           });
         }
+        // Vincular avaliadores se fornecidos
+        if (evaluatorIds && evaluatorIds.length > 0) {
+          for (const evId of evaluatorIds) {
+            await db.insert(evalSurveyEvaluators).values({
+              surveyId: survey.insertId,
+              evaluatorId: evId,
+            });
+          }
+        }
         return { id: survey.insertId, publicToken };
       }),
 
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), isEvaluation: z.boolean().optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
+        const conditions = [eq(evalSurveys.companyId, input.companyId)];
+        if (input.isEvaluation !== undefined) {
+          conditions.push(eq(evalSurveys.isEvaluation, input.isEvaluation ? 1 : 0));
+        }
         const surveys = await db.select().from(evalSurveys)
-          .where(eq(evalSurveys.companyId, input.companyId))
+          .where(and(...conditions))
           .orderBy(desc(evalSurveys.createdAt));
         const enriched = [];
         for (const s of surveys) {
           const [respCount] = await db.select({ count: count() }).from(evalSurveyResponses).where(eq(evalSurveyResponses.surveyId, s.id));
           const [qCount] = await db.select({ count: count() }).from(evalSurveyQuestions).where(eq(evalSurveyQuestions.surveyId, s.id));
-          enriched.push({ ...s, totalRespostas: respCount?.count || 0, totalPerguntas: qCount?.count || 0 });
+          // Buscar avaliadores vinculados
+          const evaluators = await db.select({
+            id: evalSurveyEvaluators.evaluatorId,
+          }).from(evalSurveyEvaluators).where(eq(evalSurveyEvaluators.surveyId, s.id));
+          const evaluatorNames: string[] = [];
+          for (const ev of evaluators) {
+            const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, ev.id));
+            if (u && u.name) evaluatorNames.push(u.name);
+          }
+          enriched.push({ ...s, totalRespostas: respCount?.count || 0, totalPerguntas: qCount?.count || 0, evaluatorIds: evaluators.map(e => e.id), evaluatorNames });
         }
         return enriched;
       }),
@@ -1011,6 +1038,8 @@ Gere um resumo executivo em português brasileiro com:
         surveyId: z.number(),
         respondentName: z.string().optional(),
         respondentEmail: z.string().optional(),
+        employeeId: z.number().optional(), // funcionário avaliado (quando isEvaluation)
+        evaluatorUserId: z.number().optional(), // usuário avaliador
         answers: z.array(z.object({
           questionId: z.number(),
           valor: z.string().optional(),
@@ -1023,6 +1052,8 @@ Gere um resumo executivo em português brasileiro com:
           surveyId: input.surveyId,
           respondentName: input.respondentName || null,
           respondentEmail: input.respondentEmail || null,
+          employeeId: input.employeeId || null,
+          evaluatorUserId: input.evaluatorUserId || null,
         });
         for (const a of input.answers) {
           await db.insert(evalSurveyAnswers).values({
@@ -1044,11 +1075,25 @@ Gere um resumo executivo em português brasileiro com:
           .orderBy(evalSurveyQuestions.ordem);
         const responses = await db.select().from(evalSurveyResponses)
           .where(eq(evalSurveyResponses.surveyId, input.surveyId));
+        // Enriquecer respostas com nome do funcionário e avaliador
+        const enrichedResponses = [];
+        for (const r of responses) {
+          let employeeName = null;
+          let evaluatorName = r.respondentName;
+          if (r.employeeId) {
+            const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, r.employeeId));
+            employeeName = emp?.nome || null;
+          }
+          if (r.evaluatorUserId) {
+            const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, r.evaluatorUserId));
+            evaluatorName = u?.name || evaluatorName;
+          }
+          enrichedResponses.push({ ...r, employeeName, evaluatorName });
+        }
         const results = [];
         for (const q of questions) {
           const answers = await db.select().from(evalSurveyAnswers)
             .where(eq(evalSurveyAnswers.questionId, q.id));
-          // Calcular média para perguntas tipo nota
           let avgNota = 0;
           if (q.tipo === "nota" && answers.length > 0) {
             const nums = answers.map(a => parseFloat(a.valor || "0")).filter(n => n > 0);
@@ -1056,7 +1101,72 @@ Gere um resumo executivo em português brasileiro com:
           }
           results.push({ question: q, answers, totalRespostas: answers.length, avgNota });
         }
-        return { totalRespondentes: responses.length, results };
+        return { totalRespondentes: responses.length, responses: enrichedResponses, results };
+      }),
+
+    // Gerenciar avaliadores de uma pesquisa/avaliação
+    addEvaluators: protectedProcedure
+      .input(z.object({ surveyId: z.number(), userIds: z.array(z.number()) }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        for (const userId of input.userIds) {
+          // Verificar se já existe
+          const [existing] = await db.select().from(evalSurveyEvaluators)
+            .where(and(eq(evalSurveyEvaluators.surveyId, input.surveyId), eq(evalSurveyEvaluators.evaluatorId, userId)));
+          if (!existing) {
+            await db.insert(evalSurveyEvaluators).values({ surveyId: input.surveyId, evaluatorId: userId });
+          }
+        }
+        return { success: true };
+      }),
+
+    removeEvaluator: protectedProcedure
+      .input(z.object({ surveyId: z.number(), userId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        await db.delete(evalSurveyEvaluators)
+          .where(and(eq(evalSurveyEvaluators.surveyId, input.surveyId), eq(evalSurveyEvaluators.evaluatorId, input.userId)));
+        return { success: true };
+      }),
+
+    // Listar avaliadores de uma pesquisa
+    getEvaluators: protectedProcedure
+      .input(z.object({ surveyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const evaluators = await db.select().from(evalSurveyEvaluators)
+          .where(eq(evalSurveyEvaluators.surveyId, input.surveyId));
+        const enriched = [];
+        for (const ev of evaluators) {
+          const [u] = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.id, ev.evaluatorId));
+          if (u) enriched.push(u);
+        }
+        return enriched;
+      }),
+
+    // Respostas de avaliação por funcionário (para dashboard)
+    getEvaluationByEmployee: protectedProcedure
+      .input(z.object({ surveyId: z.number(), employeeId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const responses = await db.select().from(evalSurveyResponses)
+          .where(and(
+            eq(evalSurveyResponses.surveyId, input.surveyId),
+            eq(evalSurveyResponses.employeeId, input.employeeId)
+          ));
+        if (responses.length === 0) return null;
+        const allAnswers = [];
+        for (const r of responses) {
+          const answers = await db.select().from(evalSurveyAnswers)
+            .where(eq(evalSurveyAnswers.responseId, r.id));
+          let evaluatorName = r.respondentName;
+          if (r.evaluatorUserId) {
+            const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, r.evaluatorUserId));
+            evaluatorName = u?.name || evaluatorName;
+          }
+          allAnswers.push({ response: { ...r, evaluatorName }, answers });
+        }
+        return allAnswers;
       }),
 
     updateStatus: protectedProcedure
