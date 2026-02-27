@@ -2945,3 +2945,7 @@
 ## Bug: IA Sugerir Perguntas não funciona no módulo Avaliação
 - [x] Diagnosticar por que o botão "IA Sugerir Perguntas" não gera perguntas (retorno incompatível)
 - [x] Corrigir backend/frontend para gerar perguntas completas via IA (15 perguntas cobrindo 7 aspectos do colaborador)
+
+## Melhoria: Perguntas da IA mais específicas e profissionais
+- [ ] Melhorar prompt da IA para evitar perguntas vagas (ex: "sempre à disposição da empresa")
+- [ ] Perguntas devem ser específicas, mensuráveis e práticas para construção civil

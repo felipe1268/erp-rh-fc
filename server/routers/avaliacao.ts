@@ -1206,29 +1206,40 @@ Gere um resumo executivo em português brasileiro com:
           : `Você é um especialista em pesquisas organizacionais e de satisfação. Gere perguntas para uma ${tipoLabel}. Responda APENAS em JSON válido.`;
 
         const userPrompt = isAvaliacao
-          ? `Gere 15 perguntas completas para uma avaliação de desempenho sobre o tema: "${input.tema}".
+          ? `Gere 15 perguntas para uma avaliação de desempenho sobre o tema: "${input.tema}".
 
-As perguntas devem cobrir TODOS estes aspectos do colaborador:
-- Postura e Disciplina (comportamento, pontualidade, assiduidade)
-- Segurança do Trabalho (uso de EPIs, cumprimento de normas, atenção a riscos)
-- Competência Técnica (qualidade do trabalho, conhecimento técnico, produtividade)
-- Trabalho em Equipe (colaboração, comunicação, relacionamento interpessoal)
-- Proatividade e Iniciativa (disposição, resolução de problemas, sugestões de melhoria)
-- Liderança e Responsabilidade (comprometimento, organização, capacidade de liderar)
-- Adaptabilidade (flexibilidade, aprendizado, reação a mudanças)
+REGRAS OBRIGATÓRIAS:
+1. Cada pergunta DEVE descrever um comportamento OBSERVÁVEL e MENSURÁVEL no dia a dia do trabalho.
+2. NUNCA use perguntas vagas como "Está sempre à disposição da empresa", "Demonstra comprometimento", "É proativo". Essas são genéricas demais.
+3. Cada pergunta deve começar com "O colaborador..." seguido de uma ação específica.
+4. Use verbos de ação concretos: cumpre, utiliza, mantém, comunica, executa, organiza, resolve, identifica, reporta, auxilia.
+
+EXEMPLOS DE PERGUNTAS BOAS:
+- "O colaborador cumpre os horários de entrada e saída estabelecidos?" (nota)
+- "O colaborador utiliza corretamente todos os EPIs exigidos para sua função?" (nota)
+- "O colaborador mantém a área de trabalho organizada e limpa ao final do expediente?" (nota)
+- "O colaborador comunica imediatamente ao encarregado quando identifica um risco de segurança?" (nota)
+- "O colaborador executa suas tarefas dentro do prazo e padrão de qualidade esperado?" (nota)
+
+As perguntas devem cobrir TODOS estes aspectos:
+- POSTURA E DISCIPLINA: pontualidade, assiduidade, respeito às normas internas, uso de uniforme
+- SEGURANÇA DO TRABALHO: uso de EPIs, cumprimento de procedimentos de segurança, relato de incidentes, participação em DDS
+- COMPETÊNCIA TÉCNICA: qualidade da execução, conhecimento das técnicas, produtividade, cuidado com ferramentas e materiais
+- TRABALHO EM EQUIPE: colaboração com colegas, compartilhamento de informações, respeito entre a equipe
+- PROATIVIDADE: identificação de problemas antes que aconteçam, sugestões de melhoria, disposição para aprender novas tarefas
+- LIDERANÇA: organização do próprio trabalho, capacidade de orientar colegas, responsabilidade com prazos
+- ADAPTABILIDADE: reação a mudanças de plano, flexibilidade para atuar em diferentes frentes, aprendizado de novos procedimentos
 
 Retorne um JSON com a seguinte estrutura:
 {
   "perguntas": [
-    { "texto": "...", "tipo": "nota", "obrigatoria": true },
-    { "texto": "...", "tipo": "texto", "obrigatoria": false },
-    { "texto": "...", "tipo": "sim_nao", "obrigatoria": true }
+    { "texto": "O colaborador ...", "tipo": "nota", "obrigatoria": true }
   ]
 }
 
 Tipos disponíveis: "nota" (escala 1 a 5), "texto" (resposta livre), "sim_nao".
-Use majoritariamente tipo "nota" (pelo menos 12 perguntas), com 2 perguntas tipo "texto" para observações e 1 tipo "sim_nao".
-As perguntas devem ser claras, objetivas e específicas para o contexto de construção civil e engenharia.`
+Use 12 perguntas tipo "nota", 2 tipo "texto" (para o avaliador descrever pontos fortes e pontos a melhorar), e 1 tipo "sim_nao" (ex: "Você recomendaria este colaborador para promoção?").
+Contexto: empresa de construção civil e engenharia.`
           : `Gere 8 perguntas para uma pesquisa sobre o tema: "${input.tema}".
 
 Retorne um JSON com a seguinte estrutura:
