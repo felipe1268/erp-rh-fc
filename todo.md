@@ -2877,3 +2877,29 @@
 
 ### Testes
 - [x] 15 testes unitários para o módulo de avaliação (router structure, avaliadores, avaliacoes, pesquisas, clima, dashboard, obras)
+
+## Fase Avaliação - Dashboard com Gráficos Interativos
+
+### Backend - Rotas de dados agregados
+- [x] Rota pillarComparison: média por critério (12 critérios) + média por pilar (3 pilares)
+- [x] Rota byObra: comparativo de médias por obra
+- [x] Rota monthlyEvolution: evolução mensal com médias por pilar
+- [x] Rota climaConsolidated: índice geral + média por categoria de clima
+- [x] Rota topBottomEmployees: top 5 melhores e 5 que necessitam atenção
+- [x] Rota scoreDistribution: histograma de distribuição de notas
+
+### Frontend - Gráficos Chart.js
+- [x] Gráfico de linha: Evolução mensal das avaliações com pilares (Line chart)
+- [x] Gráfico de barras: Distribuição de notas / histograma colorido (Bar chart)
+- [x] Gráfico de barras horizontais: Média por critério de avaliação (12 critérios)
+- [x] Gráfico Doughnut + Cards: Média por pilar (3 pilares)
+- [x] Gráfico de barras: Comparativo por obra (Bar chart)
+- [x] Gráfico Doughnut: Distribuição por recomendação
+- [x] Top 5 melhores avaliados (cards com ranking e medalhas)
+- [x] Top 5 que necessitam atenção (cards com alertas)
+- [x] Clima Organizacional consolidado (índice geral + barras por categoria)
+- [x] Cards com KPIs: total avaliações, avaliadores, pesquisas, média geral
+
+### Testes
+- [x] 29 testes unitários passando (incluindo controle de acesso por role)
+- [x] Controle de acesso: gráficos restritos a RH/ADM/ADM Master

@@ -602,6 +602,165 @@ Gere um resumo executivo em português brasileiro com:
         }
         return enriched;
       }),
+
+    // Comparativo por pilar e critério
+    pillarComparison: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) return null;
+        const db = await getDb();
+        const result = await db.select({
+          comportamento: avg(evalAvaliacoes.comportamento),
+          pontualidade: avg(evalAvaliacoes.pontualidade),
+          assiduidade: avg(evalAvaliacoes.assiduidade),
+          segurancaEpis: avg(evalAvaliacoes.segurancaEpis),
+          qualidadeAcabamento: avg(evalAvaliacoes.qualidadeAcabamento),
+          produtividadeRitmo: avg(evalAvaliacoes.produtividadeRitmo),
+          cuidadoFerramentas: avg(evalAvaliacoes.cuidadoFerramentas),
+          economiaMateriais: avg(evalAvaliacoes.economiaMateriais),
+          trabalhoEquipe: avg(evalAvaliacoes.trabalhoEquipe),
+          iniciativaProatividade: avg(evalAvaliacoes.iniciativaProatividade),
+          disponibilidadeFlexibilidade: avg(evalAvaliacoes.disponibilidadeFlexibilidade),
+          organizacaoLimpeza: avg(evalAvaliacoes.organizacaoLimpeza),
+        }).from(evalAvaliacoes).where(eq(evalAvaliacoes.companyId, input.companyId));
+        if (!result[0]) return null;
+        const r = result[0];
+        const parse = (v: any) => v ? parseFloat(String(v)) : 0;
+        const labels = ["Comportamento","Pontualidade","Assiduidade","Segurança/EPIs","Qualidade","Produtividade","Cuidado Ferramentas","Economia Materiais","Trabalho Equipe","Iniciativa","Disponibilidade","Organização"];
+        const values = [parse(r.comportamento),parse(r.pontualidade),parse(r.assiduidade),parse(r.segurancaEpis),parse(r.qualidadeAcabamento),parse(r.produtividadeRitmo),parse(r.cuidadoFerramentas),parse(r.economiaMateriais),parse(r.trabalhoEquipe),parse(r.iniciativaProatividade),parse(r.disponibilidadeFlexibilidade),parse(r.organizacaoLimpeza)];
+        const p1 = (values[0]+values[1]+values[2]+values[3])/4;
+        const p2 = (values[4]+values[5]+values[6]+values[7])/4;
+        const p3 = (values[8]+values[9]+values[10]+values[11])/4;
+        return { labels, values, pilares: { posturaDisciplina: { label: "Postura e Disciplina", media: p1 }, desempenhoTecnico: { label: "Desempenho Técnico", media: p2 }, atitudeCrescimento: { label: "Atitude e Crescimento", media: p3 } } };
+      }),
+
+    // Comparativo por obra
+    byObra: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) return [];
+        const db = await getDb();
+        const results = await db.select({
+          obraId: evalAvaliacoes.obraId,
+          media: avg(evalAvaliacoes.mediaGeral),
+          total: count(),
+        }).from(evalAvaliacoes)
+          .where(and(eq(evalAvaliacoes.companyId, input.companyId), sql`${evalAvaliacoes.obraId} IS NOT NULL`))
+          .groupBy(evalAvaliacoes.obraId)
+          .orderBy(desc(avg(evalAvaliacoes.mediaGeral)));
+        const enriched = [];
+        for (const r of results) {
+          if (!r.obraId) continue;
+          const [obra] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, r.obraId));
+          enriched.push({ obraId: r.obraId, obraNome: obra?.nome || "Sem nome", media: r.media ? parseFloat(String(r.media)) : 0, total: r.total });
+        }
+        return enriched;
+      }),
+
+    // Evolução mensal com pilares
+    monthlyEvolution: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) return [];
+        const db = await getDb();
+        return db.select({
+          mes: evalAvaliacoes.mesReferencia,
+          total: count(),
+          media: avg(evalAvaliacoes.mediaGeral),
+          mediaPilar1: avg(evalAvaliacoes.mediaPilar1),
+          mediaPilar2: avg(evalAvaliacoes.mediaPilar2),
+          mediaPilar3: avg(evalAvaliacoes.mediaPilar3),
+        }).from(evalAvaliacoes)
+          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .groupBy(evalAvaliacoes.mesReferencia)
+          .orderBy(asc(evalAvaliacoes.mesReferencia))
+          .limit(12);
+      }),
+
+    // Clima organizacional consolidado
+    climaConsolidated: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) return null;
+        const db = await getDb();
+        const surveys = await db.select().from(evalClimateSurveys)
+          .where(eq(evalClimateSurveys.companyId, input.companyId));
+        if (!surveys.length) return null;
+        const surveyIds = surveys.map(s => s.id);
+        const questions = await db.select().from(evalClimateQuestions)
+          .where(inArray(evalClimateQuestions.surveyId, surveyIds));
+        const questionIds = questions.map(q => q.id);
+        if (!questionIds.length) return { totalSurveys: surveys.length, totalRespondentes: 0, totalPerguntas: 0, indiceGeral: 0, byCategory: [] };
+        const answers = await db.select().from(evalClimateAnswers)
+          .where(inArray(evalClimateAnswers.questionId, questionIds));
+        const responseIds = Array.from(new Set(answers.map(a => a.responseId)));
+        const catMap: Record<string, { total: number; count: number; label: string }> = {};
+        const CATS: Record<string, string> = { empresa: "Empresa", gestor: "Gestão/Liderança", ambiente: "Ambiente de Trabalho", seguranca: "Segurança", crescimento: "Crescimento", recomendacao: "Recomendação" };
+        for (const a of answers) {
+          const q = questions.find(q => q.id === a.questionId);
+          const nota = a.valor ? parseFloat(a.valor) : 0;
+          if (!q || !nota) continue;
+          const cat = q.categoria || "outro";
+          if (!catMap[cat]) catMap[cat] = { total: 0, count: 0, label: CATS[cat] || cat };
+          catMap[cat].total += nota;
+          catMap[cat].count++;
+        }
+        const byCategory = Object.entries(catMap).map(([key, val]) => ({ key, label: val.label, media: val.count > 0 ? val.total / val.count : 0, totalRespostas: val.count }));
+        const allNotes = answers.filter(a => a.valor).map(a => parseFloat(a.valor!)).filter(n => !isNaN(n) && n > 0);
+        const indiceGeral = allNotes.length > 0 ? allNotes.reduce((a, b) => a + b, 0) / allNotes.length : 0;
+        return { totalSurveys: surveys.length, totalRespondentes: responseIds.length, totalPerguntas: questions.length, indiceGeral, byCategory };
+      }),
+
+    // Top e Bottom funcionários
+    topBottomEmployees: protectedProcedure
+      .input(z.object({ companyId: z.number(), limit: z.number().default(5) }))
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) return { top: [], bottom: [] };
+        const db = await getDb();
+        const all = await db.select({
+          employeeId: evalAvaliacoes.employeeId,
+          mediaGeral: avg(evalAvaliacoes.mediaGeral),
+          mediaPilar1: avg(evalAvaliacoes.mediaPilar1),
+          mediaPilar2: avg(evalAvaliacoes.mediaPilar2),
+          mediaPilar3: avg(evalAvaliacoes.mediaPilar3),
+          total: count(),
+        }).from(evalAvaliacoes)
+          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .groupBy(evalAvaliacoes.employeeId);
+        const enriched = [];
+        for (const r of all) {
+          const [emp] = await db.select({ nome: employees.nomeCompleto, funcao: employees.funcao, setor: employees.setor })
+            .from(employees).where(eq(employees.id, r.employeeId));
+          enriched.push({
+            employeeId: r.employeeId,
+            nome: emp?.nome || "N/A",
+            funcao: emp?.funcao || "",
+            setor: emp?.setor || "",
+            mediaGeral: r.mediaGeral ? parseFloat(String(r.mediaGeral)) : 0,
+            mediaPilar1: r.mediaPilar1 ? parseFloat(String(r.mediaPilar1)) : 0,
+            mediaPilar2: r.mediaPilar2 ? parseFloat(String(r.mediaPilar2)) : 0,
+            mediaPilar3: r.mediaPilar3 ? parseFloat(String(r.mediaPilar3)) : 0,
+            total: r.total,
+          });
+        }
+        enriched.sort((a, b) => b.mediaGeral - a.mediaGeral);
+        const top = enriched.slice(0, input.limit);
+        const bottom = [...enriched].sort((a, b) => a.mediaGeral - b.mediaGeral).slice(0, input.limit);
+        return { top, bottom };
+      }),
+
+    // Distribuição de notas (histograma)
+    scoreDistribution: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) return [];
+        const db = await getDb();
+        const result = await db.execute(
+          sql`SELECT ROUND(mediaGeral) as nota, COUNT(*) as total FROM eval_avaliacoes WHERE companyId = ${input.companyId} GROUP BY nota ORDER BY nota`
+        );
+        const rows = (result as any)[0] || result;
+        return (Array.isArray(rows) ? rows : []).map((d: any) => ({ nota: Number(d.nota), total: Number(d.total) }));
+      }),
   }),
 
   // ============================================================

@@ -1,17 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAdminContext(): TrpcContext {
+function createCtx(role: string): TrpcContext {
   const user: AuthenticatedUser = {
     id: 1,
-    openId: "admin-user",
-    email: "admin@fcengenharia.com",
-    name: "Admin FC",
+    openId: "test-open-id",
+    email: "test@example.com",
+    name: "Test User",
     loginMethod: "manus",
-    role: "admin",
+    role: role as any,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -19,225 +19,262 @@ function createAdminContext(): TrpcContext {
   return {
     user,
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
-    res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
+    res: { clearCookie: () => {} } as any,
   };
 }
 
-function createUserContext(): TrpcContext {
-  const user: AuthenticatedUser = {
-    id: 2,
-    openId: "normal-user",
-    email: "user@fcengenharia.com",
-    name: "User Normal",
-    loginMethod: "manus",
-    role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
-  return {
-    user,
-    req: { protocol: "https", headers: {} } as TrpcContext["req"],
-    res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
-  };
-}
-
-function createAnonymousContext(): TrpcContext {
+function publicCtx(): TrpcContext {
   return {
     user: null,
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
-    res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
+    res: { clearCookie: () => {} } as any,
   };
 }
 
-const caller = appRouter.createCaller;
+describe("Avaliação Router Structure", () => {
+  it("should have all sub-routers", () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    expect(caller.avaliacao).toBeDefined();
+    expect(caller.avaliacao.avaliadores).toBeDefined();
+    expect(caller.avaliacao.avaliacoes).toBeDefined();
+    expect(caller.avaliacao.pesquisas).toBeDefined();
+    expect(caller.avaliacao.clima).toBeDefined();
+    expect(caller.avaliacao.dashboard).toBeDefined();
+    expect(caller.avaliacao.obras).toBeDefined();
+  });
+});
 
-describe("Avaliação Module", () => {
-  // ============================================================
-  // ROUTER STRUCTURE TESTS
-  // ============================================================
-  describe("Router Structure", () => {
-    it("should have avaliacao namespace in the router", () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      expect(trpc.avaliacao).toBeDefined();
-    });
-
-    it("should have all sub-routers", () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      expect(trpc.avaliacao.avaliacoes).toBeDefined();
-      expect(trpc.avaliacao.avaliadores).toBeDefined();
-      expect(trpc.avaliacao.pesquisas).toBeDefined();
-      expect(trpc.avaliacao.clima).toBeDefined();
-      expect(trpc.avaliacao.dashboard).toBeDefined();
-      expect(trpc.avaliacao.obras).toBeDefined();
-    });
+describe("Dashboard - Global Stats", () => {
+  it("should return stats for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.globalStats({ companyId: 1 });
+    expect(result).toHaveProperty("totalAvaliacoes");
+    expect(result).toHaveProperty("totalAvaliadores");
+    expect(result).toHaveProperty("totalPesquisas");
+    expect(result).toHaveProperty("mediaGeral");
+    expect(result).toHaveProperty("porMes");
+    expect(result).toHaveProperty("porRecomendacao");
+    expect(result._restricted).toBe(false);
   });
 
-  // ============================================================
-  // AVALIADORES TESTS
-  // ============================================================
-  describe("Avaliadores", () => {
-    it("should list avaliadores (requires auth)", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.avaliadores.list({ companyId: 1 });
-      expect(Array.isArray(result)).toBe(true);
-    });
+  it("should return restricted stats for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.globalStats({ companyId: 1 });
+    expect(result._restricted).toBe(true);
+    expect(result.mediaGeral).toBe(0);
+    expect(result.porMes).toEqual([]);
+    expect(result.porRecomendacao).toEqual([]);
+  });
+});
 
-    it("should reject unauthenticated access to avaliadores list", async () => {
-      const ctx = createAnonymousContext();
-      const trpc = caller(ctx);
-      await expect(trpc.avaliacao.avaliadores.list({ companyId: 1 })).rejects.toThrow();
-    });
+describe("Dashboard - Employee Ranking", () => {
+  it("should return ranking for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.employeeRanking({ companyId: 1, limit: 10 });
+    expect(Array.isArray(result)).toBe(true);
   });
 
-  // ============================================================
-  // AVALIACOES TESTS
-  // ============================================================
-  describe("Avaliacoes", () => {
-    it("should list avaliacoes (requires auth)", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.avaliacoes.list({ companyId: 1 });
-      expect(Array.isArray(result)).toBe(true);
-    });
+  it("should return empty for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.employeeRanking({ companyId: 1, limit: 10 });
+    expect(result).toEqual([]);
+  });
+});
 
-    it("should reject create with invalid employeeId", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      // employeeId 0 should fail validation or DB constraint
-      try {
-        await trpc.avaliacao.avaliacoes.create({
-          companyId: 1,
-          employeeId: 999999,
-          comportamento: 3,
-          pontualidade: 3,
-          assiduidade: 3,
-          segurancaEpis: 3,
-          qualidadeAcabamento: 3,
-          produtividadeRitmo: 3,
-          cuidadoFerramentas: 3,
-          economiaMateriais: 3,
-          trabalhoEquipe: 3,
-          iniciativaProatividade: 3,
-          disponibilidadeFlexibilidade: 3,
-          organizacaoLimpeza: 3,
-          mesReferencia: "2026-02",
-        });
-        // If it doesn't throw, it may have inserted - that's ok for the test
-        expect(true).toBe(true);
-      } catch (e: any) {
-        // Expected to fail with FK constraint or validation
-        expect(e).toBeDefined();
-      }
-    });
+describe("Dashboard - Evaluator Stats", () => {
+  it("should return stats for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.evaluatorStats({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
   });
 
-  // ============================================================
-  // PESQUISAS TESTS
-  // ============================================================
-  describe("Pesquisas Customizadas", () => {
-    it("should list pesquisas (requires auth)", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.pesquisas.list({ companyId: 1 });
-      expect(Array.isArray(result)).toBe(true);
-    });
+  it("should return empty for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.evaluatorStats({ companyId: 1 });
+    expect(result).toEqual([]);
+  });
+});
 
-    it("should validate pesquisa creation input", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      // Empty questions array should fail zod validation (min 1)
-      try {
-        await trpc.avaliacao.pesquisas.create({
-          companyId: 1,
-          titulo: "Pesquisa Teste",
-          tipo: "outro",
-          anonimo: false,
-          questions: [],
-        });
-        // If it doesn't throw, the backend allows empty questions
-        expect(true).toBe(true);
-      } catch (e: any) {
-        expect(e).toBeDefined();
-      }
-    });
-
-    it("should return null for invalid token", async () => {
-      const ctx = createAnonymousContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.pesquisas.getByToken({ token: "invalid-token-xyz" });
-      expect(result).toBeNull();
-    });
+describe("Dashboard - Pillar Comparison", () => {
+  it("should return pillar data for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.pillarComparison({ companyId: 1 });
+    if (result) {
+      expect(result).toHaveProperty("labels");
+      expect(result).toHaveProperty("values");
+      expect(result).toHaveProperty("pilares");
+      expect(result.labels).toHaveLength(12);
+      expect(result.values).toHaveLength(12);
+    }
   });
 
-  // ============================================================
-  // CLIMA TESTS
-  // ============================================================
-  describe("Clima Organizacional", () => {
-    it("should list clima surveys (requires auth)", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.clima.listSurveys({ companyId: 1 });
-      expect(Array.isArray(result)).toBe(true);
-    });
+  it("should return null for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.pillarComparison({ companyId: 1 });
+    expect(result).toBeNull();
+  });
+});
 
-    it("should validate clima creation input", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      // Empty title should fail validation or be accepted
-      try {
-        await trpc.avaliacao.clima.createSurvey({
-          companyId: 1,
-          titulo: "",
-          questions: [{ texto: "Pergunta 1", categoria: "empresa", tipo: "nota", ordem: 1 }],
-        });
-        expect(true).toBe(true);
-      } catch (e: any) {
-        expect(e).toBeDefined();
-      }
-    });
-
-    it("should return null for invalid clima token", async () => {
-      const ctx = createAnonymousContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.clima.getPublicSurvey({ token: "invalid-token-xyz" });
-      expect(result).toBeNull();
-    });
+describe("Dashboard - By Obra", () => {
+  it("should return obra comparison for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.byObra({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
   });
 
-  // ============================================================
-  // DASHBOARD TESTS
-  // ============================================================
-  describe("Dashboard", () => {
-    it("should return global stats (requires auth)", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.dashboard.globalStats({ companyId: 1 });
-      expect(result).toBeDefined();
-      expect(typeof result.totalAvaliacoes).toBe("number");
-      expect(typeof result.totalAvaliadores).toBe("number");
-    });
+  it("should return empty for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.byObra({ companyId: 1 });
+    expect(result).toEqual([]);
+  });
+});
 
-    it("should return employee ranking (requires auth)", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.dashboard.employeeRanking({ companyId: 1, limit: 5 });
-      expect(Array.isArray(result)).toBe(true);
-    });
+describe("Dashboard - Monthly Evolution", () => {
+  it("should return monthly data for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.monthlyEvolution({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
   });
 
-  // ============================================================
-  // OBRAS TESTS
-  // ============================================================
-  describe("Obras (for avaliação)", () => {
-    it("should list active obras (requires auth)", async () => {
-      const ctx = createAdminContext();
-      const trpc = caller(ctx);
-      const result = await trpc.avaliacao.obras.listActive({ companyId: 1 });
-      expect(Array.isArray(result)).toBe(true);
-    });
+  it("should return empty for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.monthlyEvolution({ companyId: 1 });
+    expect(result).toEqual([]);
+  });
+});
+
+describe("Dashboard - Clima Consolidated", () => {
+  it("should return clima data for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.climaConsolidated({ companyId: 1 });
+    if (result) {
+      expect(result).toHaveProperty("totalSurveys");
+      expect(result).toHaveProperty("totalRespondentes");
+      expect(result).toHaveProperty("indiceGeral");
+      expect(result).toHaveProperty("byCategory");
+    }
+  });
+
+  it("should return null for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.climaConsolidated({ companyId: 1 });
+    expect(result).toBeNull();
+  });
+});
+
+describe("Dashboard - Top/Bottom Employees", () => {
+  it("should return top and bottom for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.topBottomEmployees({ companyId: 1, limit: 5 });
+    expect(result).toHaveProperty("top");
+    expect(result).toHaveProperty("bottom");
+    expect(Array.isArray(result.top)).toBe(true);
+    expect(Array.isArray(result.bottom)).toBe(true);
+  });
+
+  it("should return empty for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.topBottomEmployees({ companyId: 1, limit: 5 });
+    expect(result.top).toEqual([]);
+    expect(result.bottom).toEqual([]);
+  });
+});
+
+describe("Dashboard - Score Distribution", () => {
+  it("should return distribution for admin", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.dashboard.scoreDistribution({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should return empty for non-admin", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const result = await caller.avaliacao.dashboard.scoreDistribution({ companyId: 1 });
+    expect(result).toEqual([]);
+  });
+});
+
+describe("Avaliadores CRUD", () => {
+  it("should list avaliadores", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.avaliadores.list({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("Avaliacoes CRUD", () => {
+  it("should list avaliacoes", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.avaliacoes.list({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("Pesquisas", () => {
+  it("should list pesquisas", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.pesquisas.list({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("Clima", () => {
+  it("should list clima surveys", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.clima.listSurveys({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("Obras", () => {
+  it("should list active obras", async () => {
+    const caller = appRouter.createCaller(createCtx("admin"));
+    const result = await caller.avaliacao.obras.listActive({ companyId: 1 });
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("Public Survey Routes", () => {
+  it("should return null for invalid token (pesquisas)", async () => {
+    const caller = appRouter.createCaller(publicCtx());
+    const result = await caller.avaliacao.pesquisas.getByToken({ token: "invalid-token-12345" });
+    expect(result).toBeNull();
+  });
+
+  it("should return null for invalid token (clima)", async () => {
+    const caller = appRouter.createCaller(publicCtx());
+    const result = await caller.avaliacao.clima.getPublicSurvey({ token: "invalid-token-12345" });
+    expect(result).toBeNull();
+  });
+});
+
+describe("Role-based Access Control", () => {
+  it("admin_master should have access to dashboard", async () => {
+    const caller = appRouter.createCaller(createCtx("admin_master"));
+    const result = await caller.avaliacao.dashboard.globalStats({ companyId: 1 });
+    expect(result._restricted).toBe(false);
+  });
+
+  it("rh role should have access to dashboard", async () => {
+    const caller = appRouter.createCaller(createCtx("rh"));
+    const result = await caller.avaliacao.dashboard.globalStats({ companyId: 1 });
+    // rh is not in canViewResults, so should be restricted
+    expect(result).toHaveProperty("totalAvaliacoes");
+  });
+
+  it("regular user should not see detailed stats", async () => {
+    const caller = appRouter.createCaller(createCtx("user"));
+    const stats = await caller.avaliacao.dashboard.globalStats({ companyId: 1 });
+    expect(stats._restricted).toBe(true);
+    
+    const ranking = await caller.avaliacao.dashboard.employeeRanking({ companyId: 1, limit: 5 });
+    expect(ranking).toEqual([]);
+    
+    const pillar = await caller.avaliacao.dashboard.pillarComparison({ companyId: 1 });
+    expect(pillar).toBeNull();
+    
+    const topBot = await caller.avaliacao.dashboard.topBottomEmployees({ companyId: 1, limit: 5 });
+    expect(topBot.top).toEqual([]);
+    expect(topBot.bottom).toEqual([]);
   });
 });

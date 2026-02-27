@@ -2,6 +2,8 @@ import { useState, useRef, useMemo, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title as ChartTitle, Tooltip as ChartTooltip, Legend, Filler } from "chart.js";
+import { Bar, Line, Doughnut } from "react-chartjs-2";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,6 +30,9 @@ import {
   MessageSquare, ThumbsUp, ThumbsDown, HelpCircle, Send, Link2
 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
+
+// Register Chart.js components
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, ChartTitle, ChartTooltip, Legend, Filler);
 
 // ============================================================
 // CONSTANTES
@@ -164,6 +169,32 @@ export default function AvaliacaoDesempenho() {
   const obrasList = trpc.avaliacao.obras.listActive.useQuery(
     { companyId },
     { enabled: companyId > 0 }
+  );
+
+  // Dashboard Chart Queries
+  const pillarComparison = trpc.avaliacao.dashboard.pillarComparison.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && canViewResults }
+  );
+  const byObra = trpc.avaliacao.dashboard.byObra.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && canViewResults }
+  );
+  const monthlyEvolution = trpc.avaliacao.dashboard.monthlyEvolution.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && canViewResults }
+  );
+  const climaConsolidated = trpc.avaliacao.dashboard.climaConsolidated.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && canViewResults }
+  );
+  const topBottom = trpc.avaliacao.dashboard.topBottomEmployees.useQuery(
+    { companyId, limit: 5 },
+    { enabled: companyId > 0 && canViewResults }
+  );
+  const scoreDist = trpc.avaliacao.dashboard.scoreDistribution.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && canViewResults }
   );
 
   // ============================================================
@@ -457,8 +488,9 @@ export default function AvaliacaoDesempenho() {
             <TabsTrigger value="clima"><Heart className="w-4 h-4 mr-1" /> Clima</TabsTrigger>
           </TabsList>
 
-          {/* ============ TAB PAINEL ============ */}
+          {/* ============ TAB PAINEL - DASHBOARD COMPLETO ============ */}
           <TabsContent value="painel" className="space-y-6">
+            {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Card>
                 <CardContent className="pt-6 text-center">
@@ -493,53 +525,318 @@ export default function AvaliacaoDesempenho() {
               </Card>
             </div>
 
-            {/* Gráfico por mês */}
-            {canViewResults && dashboardStats.data?.porMes && dashboardStats.data.porMes.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Evolução por Mês</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-end gap-2 h-32">
-                    {dashboardStats.data.porMes.map((m: any, i: number) => {
-                      const media = m.media ? parseFloat(String(m.media)) : 0;
-                      const height = Math.max(10, (media / 5) * 100);
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <span className="text-xs font-bold">{media.toFixed(1)}</span>
-                          <div className="w-full bg-primary/80 rounded-t" style={{ height: `${height}%` }} />
-                          <span className="text-xs text-muted-foreground">{m.mes?.slice(5)}</span>
+            {canViewResults && (
+              <>
+                {/* Row 1: Evolução Mensal + Distribuição de Notas */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Evolução Mensal com Pilares */}
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Evolução Mensal</CardTitle></CardHeader>
+                    <CardContent>
+                      {monthlyEvolution.data && monthlyEvolution.data.length > 0 ? (
+                        <div style={{ height: "280px" }}>
+                          <Line
+                            data={{
+                              labels: monthlyEvolution.data.map((m: any) => m.mes || ""),
+                              datasets: [
+                                {
+                                  label: "Média Geral",
+                                  data: monthlyEvolution.data.map((m: any) => m.media ? parseFloat(String(m.media)) : 0),
+                                  borderColor: "#3B82F6",
+                                  backgroundColor: "rgba(59,130,246,0.1)",
+                                  fill: true,
+                                  tension: 0.4,
+                                  borderWidth: 3,
+                                },
+                                {
+                                  label: "Postura/Disciplina",
+                                  data: monthlyEvolution.data.map((m: any) => m.mediaPilar1 ? parseFloat(String(m.mediaPilar1)) : 0),
+                                  borderColor: "#8B5CF6",
+                                  borderWidth: 1.5,
+                                  borderDash: [5, 5],
+                                  pointRadius: 2,
+                                },
+                                {
+                                  label: "Desempenho Técnico",
+                                  data: monthlyEvolution.data.map((m: any) => m.mediaPilar2 ? parseFloat(String(m.mediaPilar2)) : 0),
+                                  borderColor: "#F59E0B",
+                                  borderWidth: 1.5,
+                                  borderDash: [5, 5],
+                                  pointRadius: 2,
+                                },
+                                {
+                                  label: "Atitude/Crescimento",
+                                  data: monthlyEvolution.data.map((m: any) => m.mediaPilar3 ? parseFloat(String(m.mediaPilar3)) : 0),
+                                  borderColor: "#10B981",
+                                  borderWidth: 1.5,
+                                  borderDash: [5, 5],
+                                  pointRadius: 2,
+                                },
+                              ],
+                            }}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 10 } } } }, scales: { y: { min: 0, max: 5, ticks: { stepSize: 1 } } } }}
+                          />
                         </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+                      ) : <p className="text-center py-8 text-muted-foreground">Sem dados de evolução mensal</p>}
+                    </CardContent>
+                  </Card>
+
+                  {/* Distribuição de Notas (Histograma) */}
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Distribuição de Notas</CardTitle></CardHeader>
+                    <CardContent>
+                      {scoreDist.data && scoreDist.data.length > 0 ? (
+                        <div style={{ height: "280px" }}>
+                          <Bar
+                            data={{
+                              labels: scoreDist.data.map((d: any) => `Nota ${d.nota}`),
+                              datasets: [{
+                                label: "Quantidade",
+                                data: scoreDist.data.map((d: any) => d.total),
+                                backgroundColor: scoreDist.data.map((d: any) => {
+                                  if (d.nota <= 1) return "#EF4444";
+                                  if (d.nota <= 2) return "#F97316";
+                                  if (d.nota <= 3) return "#EAB308";
+                                  if (d.nota <= 4) return "#3B82F6";
+                                  return "#22C55E";
+                                }),
+                                borderRadius: 6,
+                              }],
+                            }}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }}
+                          />
+                        </div>
+                      ) : <p className="text-center py-8 text-muted-foreground">Sem dados de distribuição</p>}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Row 2: Média por Critério + Média por Pilar */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {/* Média por Critério (barras horizontais) */}
+                  <Card className="lg:col-span-2">
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Média por Critério de Avaliação</CardTitle></CardHeader>
+                    <CardContent>
+                      {pillarComparison.data ? (
+                        <div style={{ height: "320px" }}>
+                          <Bar
+                            data={{
+                              labels: pillarComparison.data.labels,
+                              datasets: [{
+                                label: "Média",
+                                data: pillarComparison.data.values,
+                                backgroundColor: [
+                                  "#3B82F6","#3B82F6","#3B82F6","#3B82F6",
+                                  "#F59E0B","#F59E0B","#F59E0B","#F59E0B",
+                                  "#10B981","#10B981","#10B981","#10B981",
+                                ],
+                                borderRadius: 4,
+                              }],
+                            }}
+                            options={{ indexAxis: "y" as const, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 5, ticks: { stepSize: 1 } } } }}
+                          />
+                        </div>
+                      ) : <p className="text-center py-8 text-muted-foreground">Sem dados de critérios</p>}
+                    </CardContent>
+                  </Card>
+
+                  {/* Média por Pilar (Doughnut) */}
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Shield className="w-4 h-4" /> Média por Pilar</CardTitle></CardHeader>
+                    <CardContent>
+                      {pillarComparison.data?.pilares ? (
+                        <>
+                          <div style={{ height: "180px" }}>
+                            <Doughnut
+                              data={{
+                                labels: ["Postura", "Técnico", "Atitude"],
+                                datasets: [{
+                                  data: [
+                                    pillarComparison.data.pilares.posturaDisciplina.media,
+                                    pillarComparison.data.pilares.desempenhoTecnico.media,
+                                    pillarComparison.data.pilares.atitudeCrescimento.media,
+                                  ],
+                                  backgroundColor: ["#3B82F6", "#F59E0B", "#10B981"],
+                                  borderWidth: 0,
+                                }],
+                              }}
+                              options={{ responsive: true, maintainAspectRatio: false, cutout: "65%", plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 10 } } } } }}
+                            />
+                          </div>
+                          <div className="space-y-2 mt-3">
+                            {Object.entries(pillarComparison.data.pilares).map(([key, p]: any) => (
+                              <div key={key} className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">{p.label}</span>
+                                <span className="font-bold">{p.media.toFixed(1)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : <p className="text-center py-8 text-muted-foreground">Sem dados</p>}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Row 3: Comparativo por Obra + Distribuição por Recomendação */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Comparativo por Obra */}
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Building2 className="w-4 h-4" /> Comparativo por Obra</CardTitle></CardHeader>
+                    <CardContent>
+                      {byObra.data && byObra.data.length > 0 ? (
+                        <div style={{ height: "260px" }}>
+                          <Bar
+                            data={{
+                              labels: byObra.data.map((o: any) => o.obraNome?.length > 15 ? o.obraNome.slice(0, 15) + "..." : o.obraNome),
+                              datasets: [{
+                                label: "Média Geral",
+                                data: byObra.data.map((o: any) => o.media),
+                                backgroundColor: byObra.data.map((_: any, i: number) => [
+                                  "#3B82F6", "#8B5CF6", "#F59E0B", "#10B981", "#EF4444", "#EC4899", "#06B6D4"
+                                ][i % 7]),
+                                borderRadius: 6,
+                              }],
+                            }}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 5, ticks: { stepSize: 1 } } } }}
+                          />
+                        </div>
+                      ) : <p className="text-center py-8 text-muted-foreground">Nenhuma avaliação vinculada a obras</p>}
+                    </CardContent>
+                  </Card>
+
+                  {/* Distribuição por Recomendação */}
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Distribuição por Recomendação</CardTitle></CardHeader>
+                    <CardContent>
+                      {dashboardStats.data?.porRecomendacao && dashboardStats.data.porRecomendacao.length > 0 ? (
+                        <div style={{ height: "260px" }}>
+                          <Doughnut
+                            data={{
+                              labels: dashboardStats.data.porRecomendacao.map((r: any) => r.recomendacao),
+                              datasets: [{
+                                data: dashboardStats.data.porRecomendacao.map((r: any) => r.count),
+                                backgroundColor: dashboardStats.data.porRecomendacao.map((r: any) => {
+                                  if (r.recomendacao?.includes("DEMISSÃO")) return "#EF4444";
+                                  if (r.recomendacao?.includes("ATENÇÃO")) return "#F59E0B";
+                                  if (r.recomendacao?.includes("TREINAMENTO")) return "#3B82F6";
+                                  return "#22C55E";
+                                }),
+                                borderWidth: 2,
+                                borderColor: "#fff",
+                              }],
+                            }}
+                            options={{ responsive: true, maintainAspectRatio: false, cutout: "55%", plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 10 } } } } }}
+                          />
+                        </div>
+                      ) : <p className="text-center py-8 text-muted-foreground">Sem dados de recomendação</p>}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Row 4: Top 5 Melhores + Top 5 Atenção */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Top 5 Melhores */}
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Trophy className="w-4 h-4 text-amber-500" /> Top 5 Melhores Avaliados</CardTitle></CardHeader>
+                    <CardContent>
+                      {topBottom.data?.top && topBottom.data.top.length > 0 ? (
+                        <div className="space-y-2">
+                          {topBottom.data.top.map((e: any, i: number) => (
+                            <div key={e.employeeId} className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50">
+                              <span className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
+                                i === 0 ? "bg-amber-100 text-amber-700" : i === 1 ? "bg-gray-100 text-gray-600" : i === 2 ? "bg-orange-100 text-orange-700" : "bg-muted text-muted-foreground"
+                              }`}>{i + 1}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{e.nome}</p>
+                                <p className="text-xs text-muted-foreground">{e.funcao}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-bold text-green-600">{e.mediaGeral.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">{e.total} aval.</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className="text-center py-4 text-muted-foreground">Sem dados</p>}
+                    </CardContent>
+                  </Card>
+
+                  {/* Top 5 Necessitam Atenção */}
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" /> Top 5 Necessitam Atenção</CardTitle></CardHeader>
+                    <CardContent>
+                      {topBottom.data?.bottom && topBottom.data.bottom.length > 0 ? (
+                        <div className="space-y-2">
+                          {topBottom.data.bottom.map((e: any, i: number) => (
+                            <div key={e.employeeId} className="flex items-center gap-3 p-2 rounded-lg border border-red-100 hover:bg-red-50/50">
+                              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{e.nome}</p>
+                                <p className="text-xs text-muted-foreground">{e.funcao}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-bold text-red-600">{e.mediaGeral.toFixed(1)}</p>
+                                <Badge className={getRecomendacao(e.mediaGeral).cor + " border text-xs"}>{getRecomendacao(e.mediaGeral).texto}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className="text-center py-4 text-muted-foreground">Sem dados</p>}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Row 5: Clima Organizacional Consolidado */}
+                {climaConsolidated.data && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Heart className="w-4 h-4 text-pink-500" /> Clima Organizacional - Consolidado</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <p className="text-3xl font-bold text-primary">{climaConsolidated.data.indiceGeral.toFixed(1)}</p>
+                          <p className="text-xs text-muted-foreground">Índice Geral (1-5)</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <p className="text-2xl font-bold">{climaConsolidated.data.totalSurveys}</p>
+                          <p className="text-xs text-muted-foreground">Pesquisas Realizadas</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <p className="text-2xl font-bold">{climaConsolidated.data.totalRespondentes}</p>
+                          <p className="text-xs text-muted-foreground">Respondentes</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <p className="text-2xl font-bold">{climaConsolidated.data.totalPerguntas}</p>
+                          <p className="text-xs text-muted-foreground">Total de Perguntas</p>
+                        </div>
+                      </div>
+                      {climaConsolidated.data.byCategory.length > 0 && (
+                        <div style={{ height: "250px" }}>
+                          <Bar
+                            data={{
+                              labels: climaConsolidated.data.byCategory.map((c: any) => c.label),
+                              datasets: [{
+                                label: "Média por Categoria",
+                                data: climaConsolidated.data.byCategory.map((c: any) => c.media),
+                                backgroundColor: ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#06B6D4", "#EC4899"],
+                                borderRadius: 6,
+                              }],
+                            }}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 5, ticks: { stepSize: 1 } } } }}
+                          />
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
 
-            {/* Distribuição por recomendação */}
-            {canViewResults && dashboardStats.data?.porRecomendacao && dashboardStats.data.porRecomendacao.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Distribuição por Recomendação</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {dashboardStats.data.porRecomendacao.map((r: any, i: number) => {
-                      const total = dashboardStats.data!.totalAvaliacoes || 1;
-                      const pct = ((r.count / total) * 100);
-                      const rec = getRecomendacao(r.recomendacao?.includes("DEMISSÃO") ? 1 : r.recomendacao?.includes("ATENÇÃO") ? 2.5 : r.recomendacao?.includes("TREINAMENTO") ? 3.5 : 4.5);
-                      return (
-                        <div key={i} className="flex items-center gap-3">
-                          <Badge className={rec.cor + " border text-xs min-w-[180px] justify-center"}>{r.recomendacao}</Badge>
-                          <Progress value={pct} className="flex-1 h-2" />
-                          <span className="text-sm font-mono w-12 text-right">{r.count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+            {!canViewResults && (
+              <Card><CardContent className="py-12 text-center">
+                <Lock className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg font-semibold">Gráficos Restritos</p>
+                <p className="text-muted-foreground">Apenas RH, ADM e ADM Master podem visualizar os gráficos detalhados.</p>
+              </CardContent></Card>
             )}
           </TabsContent>
 
