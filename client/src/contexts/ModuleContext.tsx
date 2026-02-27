@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -41,6 +41,8 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/cipa": "sst",
   // Jurídico routes
   "/processos-trabalhistas": "juridico",
+  // Avaliação routes
+  "/avaliacao-desempenho": "avaliacao" as ModuleId,
   // Shared routes (appear in all modules)
   "/empresas": "all",
   "/obras": "all",
@@ -57,6 +59,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "rh-dp": "RH & DP",
   "sst": "SST",
   "juridico": "Jurídico",
+  "avaliacao": "Avaliação",
   "all": "Todos os Módulos",
 };
 
@@ -66,7 +69,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp"; // Default to RH & DP

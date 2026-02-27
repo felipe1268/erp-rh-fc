@@ -7,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 import {
   Users, Shield, Gavel, CalendarRange, DollarSign, ShoppingCart, Calculator,
   ArrowRight, Lock, Building2, LogOut, ChevronDown, LayoutGrid,
-  Bell, Clock, Zap, Layers, ArrowUpRight,
+  Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -81,6 +81,20 @@ const MODULES: Module[] = [
     path: "/painel/juridico",
     active: true,
     features: ["Processos Trabalhistas", "Audiências", "Provisões", "Análise de Risco"],
+  },
+  {
+    id: "avaliacao",
+    title: "Avaliação",
+    subtitle: "Avaliação de Desempenho",
+    description: "Questionários personalizáveis, ciclos de avaliação, ranking de desempenho e análise de competências.",
+    icon: ClipboardCheck,
+    accentFrom: "#F59E0B",
+    accentTo: "#D97706",
+    accentGlow: "rgba(245,158,11,0.35)",
+    iconBg: "rgba(245,158,11,0.12)",
+    path: "/avaliacao-desempenho",
+    active: true,
+    features: ["Questionários", "Ciclos de Avaliação", "Ranking", "Relatórios", "Competências"],
   },
   {
     id: "planejamento", title: "Planejamento", subtitle: "Controle de Obras",
