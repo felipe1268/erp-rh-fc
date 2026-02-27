@@ -21,8 +21,10 @@ import {
   evalClimateExternalTokens,
   evalAuditLog,
   employees,
+  obras,
+  users,
 } from "../../drizzle/schema";
-import { eq, and, desc, asc, sql, count, avg, inArray, gte } from "drizzle-orm";
+import { eq, and, desc, asc, sql, count, avg, inArray, gte, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
 
@@ -47,6 +49,23 @@ function getCorRecomendacao(rec: string): string {
   return "#22C55E";
 }
 
+// Roles que podem ver resultados de avaliações
+const ROLES_RESULTADOS = ["admin", "admin_master"];
+
+function canViewResults(userRole: string | null | undefined): boolean {
+  if (!userRole) return false;
+  return ROLES_RESULTADOS.includes(userRole);
+}
+
+function generateToken(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < 32; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export const avaliacaoRouter = router({
   // ============================================================
   // AVALIADORES (gestão de avaliadores com login próprio)
@@ -59,7 +78,6 @@ export const avaliacaoRouter = router({
         const avaliadores = await db.select().from(evalAvaliadores)
           .where(eq(evalAvaliadores.companyId, input.companyId))
           .orderBy(desc(evalAvaliadores.createdAt));
-        // Contar avaliações por avaliador
         const enriched = [];
         for (const a of avaliadores) {
           const [stats] = await db.select({ count: count() }).from(evalAvaliacoes)
@@ -80,12 +98,11 @@ export const avaliacaoRouter = router({
       .mutation(async ({ input }) => {
         const db = await getDb();
         const tempPassword = Math.random().toString(36).slice(-8);
-        // Armazenar hash simples (em produção usar bcrypt)
         const [result] = await db.insert(evalAvaliadores).values({
           companyId: input.companyId,
           nome: input.nome,
           email: input.email,
-          passwordHash: tempPassword, // simplificado
+          passwordHash: tempPassword,
           obraId: input.obraId || null,
           evaluationFrequency: input.evaluationFrequency,
           mustChangePassword: 1,
@@ -137,7 +154,6 @@ export const avaliacaoRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const db = await getDb();
-        // Verificar se tem avaliações vinculadas
         const [stats] = await db.select({ count: count() }).from(evalAvaliacoes).where(eq(evalAvaliacoes.evaluatorId, input.id));
         if ((stats?.count || 0) > 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível excluir: existem avaliações vinculadas a este avaliador. Inative-o em vez disso." });
@@ -149,13 +165,14 @@ export const avaliacaoRouter = router({
 
   // ============================================================
   // AVALIAÇÕES (12 critérios fixos, 3 pilares)
+  // Avaliador = usuário logado (ctx.user)
   // ============================================================
   avaliacoes: router({
     create: protectedProcedure
       .input(z.object({
         companyId: z.number(),
         employeeId: z.number(),
-        evaluatorId: z.number(),
+        obraId: z.number().optional(),
         // Pilar 1 - Postura e Disciplina
         comportamento: z.number().min(1).max(5),
         pontualidade: z.number().min(1).max(5),
@@ -176,8 +193,12 @@ export const avaliacaoRouter = router({
         durationSeconds: z.number().optional(),
         deviceType: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = await getDb();
+
+        // Avaliador = usuário logado automaticamente
+        const evaluatorId = ctx.user?.id || 0;
+        const evaluatorName = ctx.user?.name || "Sistema";
 
         // Calcular médias dos 3 pilares
         const mediaPilar1 = (input.comportamento + input.pontualidade + input.assiduidade + input.segurancaEpis) / 4;
@@ -191,7 +212,9 @@ export const avaliacaoRouter = router({
         const [result] = await db.insert(evalAvaliacoes).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
-          evaluatorId: input.evaluatorId,
+          evaluatorId,
+          obraId: input.obraId || null,
+          evaluatorName,
           comportamento: input.comportamento,
           pontualidade: input.pontualidade,
           assiduidade: input.assiduidade,
@@ -216,9 +239,24 @@ export const avaliacaoRouter = router({
           deviceType: input.deviceType || null,
         });
 
+        // Log de auditoria
+        await db.insert(evalAuditLog).values({
+          companyId: input.companyId,
+          action: "AVALIACAO_CRIADA",
+          actorType: "admin",
+          actorId: evaluatorId,
+          actorName: evaluatorName,
+          targetType: "avaliacao",
+          targetId: result.insertId,
+          details: JSON.stringify({ employeeId: input.employeeId, mediaGeral: mediaGeral.toFixed(1), recomendacao }),
+        });
+
         return { id: result.insertId, mediaGeral: parseFloat(mediaGeral.toFixed(1)), recomendacao };
       }),
 
+    // Lista avaliações - com controle de visibilidade
+    // Gestor que avaliou NÃO vê as notas (apenas que avaliou)
+    // Apenas RH/ADM/ADM Master veem resultados completos
     list: protectedProcedure
       .input(z.object({
         companyId: z.number(),
@@ -228,7 +266,7 @@ export const avaliacaoRouter = router({
         limit: z.number().default(50),
         offset: z.number().default(0),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = await getDb();
         const conditions: any[] = [eq(evalAvaliacoes.companyId, input.companyId)];
         if (input.employeeId) conditions.push(eq(evalAvaliacoes.employeeId, input.employeeId));
@@ -241,54 +279,143 @@ export const avaliacaoRouter = router({
           .limit(input.limit)
           .offset(input.offset);
 
-        // Enriquecer com dados do funcionário e avaliador
+        const userRole = ctx.user?.role;
+        const userId = ctx.user?.id;
+        const canView = canViewResults(userRole);
+
         const enriched = [];
         for (const av of avaliacoes) {
           const [emp] = await db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, setor: employees.setor })
             .from(employees).where(eq(employees.id, av.employeeId));
-          const [evaluator] = await db.select({ id: evalAvaliadores.id, nome: evalAvaliadores.nome })
-            .from(evalAvaliadores).where(eq(evalAvaliadores.id, av.evaluatorId));
-          enriched.push({
-            ...av,
-            employeeName: emp?.nome || "N/A",
-            employeeFuncao: emp?.funcao || "",
-            employeeSetor: emp?.setor || "",
-            evaluatorName: evaluator?.nome || "N/A",
-          });
+
+          // Buscar nome do avaliador: primeiro do campo snapshot, depois da tabela eval_avaliadores
+          let evaluatorDisplayName = av.evaluatorName || "N/A";
+          if (!av.evaluatorName) {
+            const [evaluator] = await db.select({ nome: evalAvaliadores.nome })
+              .from(evalAvaliadores).where(eq(evalAvaliadores.id, av.evaluatorId));
+            evaluatorDisplayName = evaluator?.nome || "N/A";
+          }
+
+          // Buscar nome da obra
+          let obraNome = "";
+          if (av.obraId) {
+            const [obra] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, av.obraId));
+            obraNome = obra?.nome || "";
+          }
+
+          // Se o usuário NÃO pode ver resultados E é o avaliador, ocultar notas
+          const isEvaluator = av.evaluatorId === userId;
+          const hideScores = !canView && isEvaluator;
+
+          if (hideScores) {
+            enriched.push({
+              id: av.id,
+              companyId: av.companyId,
+              employeeId: av.employeeId,
+              evaluatorId: av.evaluatorId,
+              obraId: av.obraId,
+              mesReferencia: av.mesReferencia,
+              createdAt: av.createdAt,
+              locked: av.locked,
+              employeeName: emp?.nome || "N/A",
+              employeeFuncao: emp?.funcao || "",
+              employeeSetor: emp?.setor || "",
+              evaluatorName: evaluatorDisplayName,
+              obraNome,
+              // Notas ocultas
+              mediaGeral: null,
+              mediaPilar1: null,
+              mediaPilar2: null,
+              mediaPilar3: null,
+              recomendacao: "AVALIAÇÃO REGISTRADA",
+              _hidden: true,
+            });
+          } else if (!canView) {
+            // Usuário comum que NÃO é o avaliador: não mostrar nada
+            continue;
+          } else {
+            enriched.push({
+              ...av,
+              employeeName: emp?.nome || "N/A",
+              employeeFuncao: emp?.funcao || "",
+              employeeSetor: emp?.setor || "",
+              evaluatorName: evaluatorDisplayName,
+              obraNome,
+              _hidden: false,
+            });
+          }
         }
         return enriched;
       }),
 
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = await getDb();
         const [av] = await db.select().from(evalAvaliacoes).where(eq(evalAvaliacoes.id, input.id));
         if (!av) return null;
+
+        // Verificar permissão
+        const canView = canViewResults(ctx.user?.role);
+        if (!canView) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas RH, ADM e ADM Master podem visualizar detalhes das avaliações." });
+        }
+
         const [emp] = await db.select().from(employees).where(eq(employees.id, av.employeeId));
-        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, av.evaluatorId));
-        return { ...av, employee: emp || null, evaluator: evaluator || null };
+        let evaluatorDisplayName = av.evaluatorName || "N/A";
+        if (!av.evaluatorName) {
+          const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, av.evaluatorId));
+          evaluatorDisplayName = evaluator?.nome || "N/A";
+        }
+        let obraNome = "";
+        if (av.obraId) {
+          const [obra] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, av.obraId));
+          obraNome = obra?.nome || "";
+        }
+        return { ...av, employee: emp || null, evaluatorDisplayName, obraNome };
       }),
 
     getByEmployee: protectedProcedure
       .input(z.object({ employeeId: z.number(), companyId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = await getDb();
+        const canView = canViewResults(ctx.user?.role);
+
         const avaliacoes = await db.select().from(evalAvaliacoes)
           .where(and(eq(evalAvaliacoes.employeeId, input.employeeId), eq(evalAvaliacoes.companyId, input.companyId)))
           .orderBy(desc(evalAvaliacoes.createdAt));
+
         const enriched = [];
         for (const av of avaliacoes) {
-          const [evaluator] = await db.select({ nome: evalAvaliadores.nome }).from(evalAvaliadores).where(eq(evalAvaliadores.id, av.evaluatorId));
-          enriched.push({ ...av, evaluatorName: evaluator?.nome || "N/A" });
+          let evaluatorDisplayName = av.evaluatorName || "N/A";
+          if (!av.evaluatorName) {
+            const [evaluator] = await db.select({ nome: evalAvaliadores.nome }).from(evalAvaliadores).where(eq(evalAvaliadores.id, av.evaluatorId));
+            evaluatorDisplayName = evaluator?.nome || "N/A";
+          }
+
+          if (canView) {
+            enriched.push({ ...av, evaluatorName: evaluatorDisplayName });
+          } else {
+            // Ocultar notas para quem não tem permissão
+            enriched.push({
+              id: av.id, companyId: av.companyId, employeeId: av.employeeId,
+              mesReferencia: av.mesReferencia, createdAt: av.createdAt,
+              evaluatorName: evaluatorDisplayName,
+              mediaGeral: null, mediaPilar1: null, mediaPilar2: null, mediaPilar3: null,
+              recomendacao: "AVALIAÇÃO REGISTRADA", _hidden: true,
+            });
+          }
         }
         return enriched;
       }),
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = await getDb();
+        if (!canViewResults(ctx.user?.role)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas RH/ADM podem excluir avaliações." });
+        }
         await db.delete(evalScores).where(eq(evalScores.evaluationId, input.id));
         await db.delete(evalAvaliacoes).where(eq(evalAvaliacoes.id, input.id));
         return { success: true };
@@ -296,7 +423,10 @@ export const avaliacaoRouter = router({
 
     generateAiSummary: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas RH/ADM podem gerar resumos." });
+        }
         const db = await getDb();
         const [av] = await db.select().from(evalAvaliacoes).where(eq(evalAvaliacoes.id, input.id));
         if (!av) throw new TRPCError({ code: "NOT_FOUND", message: "Avaliação não encontrada" });
@@ -348,18 +478,36 @@ Gere um resumo executivo em português brasileiro com:
   }),
 
   // ============================================================
-  // DASHBOARD & RANKING
+  // DASHBOARD & RANKING (apenas para roles com permissão)
   // ============================================================
   dashboard: router({
     globalStats: protectedProcedure
       .input(z.object({ companyId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = await getDb();
         const [totalAvaliacoes] = await db.select({ count: count() }).from(evalAvaliacoes).where(eq(evalAvaliacoes.companyId, input.companyId));
         const [totalAvaliadores] = await db.select({ count: count() }).from(evalAvaliadores).where(eq(evalAvaliadores.companyId, input.companyId));
+
+        // Contar pesquisas ativas
+        const [totalPesquisas] = await db.select({ count: count() }).from(evalSurveys).where(eq(evalSurveys.companyId, input.companyId));
+        const [totalClima] = await db.select({ count: count() }).from(evalClimateSurveys).where(eq(evalClimateSurveys.companyId, input.companyId));
+
+        const canView = canViewResults(ctx.user?.role);
+
+        if (!canView) {
+          return {
+            totalAvaliacoes: totalAvaliacoes?.count || 0,
+            totalAvaliadores: totalAvaliadores?.count || 0,
+            totalPesquisas: (totalPesquisas?.count || 0) + (totalClima?.count || 0),
+            mediaGeral: 0,
+            porMes: [],
+            porRecomendacao: [],
+            _restricted: true,
+          };
+        }
+
         const [mediaGeralResult] = await db.select({ avg: avg(evalAvaliacoes.mediaGeral) }).from(evalAvaliacoes).where(eq(evalAvaliacoes.companyId, input.companyId));
 
-        // Avaliações por mês (últimos 6 meses)
         const porMes = await db.select({
           mes: evalAvaliacoes.mesReferencia,
           count: count(),
@@ -370,7 +518,6 @@ Gere um resumo executivo em português brasileiro com:
           .orderBy(desc(evalAvaliacoes.mesReferencia))
           .limit(6);
 
-        // Distribuição por recomendação
         const porRecomendacao = await db.select({
           recomendacao: evalAvaliacoes.recomendacao,
           count: count(),
@@ -381,15 +528,20 @@ Gere um resumo executivo em português brasileiro com:
         return {
           totalAvaliacoes: totalAvaliacoes?.count || 0,
           totalAvaliadores: totalAvaliadores?.count || 0,
+          totalPesquisas: (totalPesquisas?.count || 0) + (totalClima?.count || 0),
           mediaGeral: mediaGeralResult?.avg ? parseFloat(String(mediaGeralResult.avg)) : 0,
           porMes: porMes.reverse(),
           porRecomendacao,
+          _restricted: false,
         };
       }),
 
     employeeRanking: protectedProcedure
       .input(z.object({ companyId: z.number(), limit: z.number().default(20) }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) {
+          return [];
+        }
         const db = await getDb();
         const ranking = await db.select({
           employeeId: evalAvaliacoes.employeeId,
@@ -421,7 +573,8 @@ Gere um resumo executivo em português brasileiro com:
 
     evaluatorStats: protectedProcedure
       .input(z.object({ companyId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        if (!canViewResults(ctx.user?.role)) return [];
         const db = await getDb();
         const ranking = await db.select({
           evaluatorId: evalAvaliacoes.evaluatorId,
@@ -434,10 +587,16 @@ Gere um resumo executivo em português brasileiro com:
 
         const enriched = [];
         for (const r of ranking) {
+          // Tentar buscar nome do avaliador de eval_avaliadores ou de users
           const [ev] = await db.select({ nome: evalAvaliadores.nome }).from(evalAvaliadores).where(eq(evalAvaliadores.id, r.evaluatorId));
+          let name = ev?.nome;
+          if (!name) {
+            const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, r.evaluatorId));
+            name = u?.name || "N/A";
+          }
           enriched.push({
             ...r,
-            evaluatorName: ev?.nome || "N/A",
+            evaluatorName: name || "N/A",
             avgDuration: r.avgDuration ? Math.round(parseFloat(String(r.avgDuration))) : 0,
           });
         }
@@ -540,7 +699,6 @@ Gere um resumo executivo em português brasileiro com:
           .orderBy(desc(evalCriteriaRevisions.version));
       }),
 
-    // Criar revisão padrão com os 12 critérios / 3 pilares
     createDefaultRevision: protectedProcedure
       .input(z.object({ companyId: z.number() }))
       .mutation(async ({ input, ctx }) => {
@@ -597,7 +755,7 @@ Gere um resumo executivo em português brasileiro com:
   }),
 
   // ============================================================
-  // PESQUISAS CUSTOMIZADAS
+  // PESQUISAS CUSTOMIZADAS (internas/externas com IA)
   // ============================================================
   pesquisas: router({
     create: protectedProcedure
@@ -618,9 +776,11 @@ Gere um resumo executivo em português brasileiro com:
       .mutation(async ({ input }) => {
         const db = await getDb();
         const { questions, ...surveyData } = input;
+        const publicToken = generateToken();
         const [survey] = await db.insert(evalSurveys).values({
           ...surveyData,
           anonimo: input.anonimo ? 1 : 0,
+          publicToken,
         });
         for (const q of questions) {
           await db.insert(evalSurveyQuestions).values({
@@ -631,7 +791,7 @@ Gere um resumo executivo em português brasileiro com:
             obrigatoria: q.obrigatoria ? 1 : 0,
           });
         }
-        return { id: survey.insertId };
+        return { id: survey.insertId, publicToken };
       }),
 
     list: protectedProcedure
@@ -644,7 +804,8 @@ Gere um resumo executivo em português brasileiro com:
         const enriched = [];
         for (const s of surveys) {
           const [respCount] = await db.select({ count: count() }).from(evalSurveyResponses).where(eq(evalSurveyResponses.surveyId, s.id));
-          enriched.push({ ...s, totalRespostas: respCount?.count || 0 });
+          const [qCount] = await db.select({ count: count() }).from(evalSurveyQuestions).where(eq(evalSurveyQuestions.surveyId, s.id));
+          enriched.push({ ...s, totalRespostas: respCount?.count || 0, totalPerguntas: qCount?.count || 0 });
         }
         return enriched;
       }),
@@ -657,6 +818,19 @@ Gere um resumo executivo em português brasileiro com:
         if (!survey) return null;
         const questions = await db.select().from(evalSurveyQuestions)
           .where(eq(evalSurveyQuestions.surveyId, input.id))
+          .orderBy(evalSurveyQuestions.ordem);
+        return { ...survey, questions };
+      }),
+
+    // Acesso público via token
+    getByToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const [survey] = await db.select().from(evalSurveys).where(eq(evalSurveys.publicToken, input.token));
+        if (!survey || survey.status !== "ativa") return null;
+        const questions = await db.select().from(evalSurveyQuestions)
+          .where(eq(evalSurveyQuestions.surveyId, survey.id))
           .orderBy(evalSurveyQuestions.ordem);
         return { ...survey, questions };
       }),
@@ -715,7 +889,13 @@ Gere um resumo executivo em português brasileiro com:
         for (const q of questions) {
           const answers = await db.select().from(evalSurveyAnswers)
             .where(eq(evalSurveyAnswers.questionId, q.id));
-          results.push({ question: q, answers, totalRespostas: answers.length });
+          // Calcular média para perguntas tipo nota
+          let avgNota = 0;
+          if (q.tipo === "nota" && answers.length > 0) {
+            const nums = answers.map(a => parseFloat(a.valor || "0")).filter(n => n > 0);
+            avgNota = nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+          }
+          results.push({ question: q, answers, totalRespostas: answers.length, avgNota });
         }
         return { totalRespondentes: responses.length, results };
       }),
@@ -732,7 +912,6 @@ Gere um resumo executivo em português brasileiro com:
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const db = await getDb();
-        // Deletar respostas e perguntas vinculadas
         const responses = await db.select({ id: evalSurveyResponses.id }).from(evalSurveyResponses).where(eq(evalSurveyResponses.surveyId, input.id));
         if (responses.length > 0) {
           const respIds = responses.map(r => r.id);
@@ -743,6 +922,68 @@ Gere um resumo executivo em português brasileiro com:
         await db.delete(evalSurveyEvaluators).where(eq(evalSurveyEvaluators.surveyId, input.id));
         await db.delete(evalSurveys).where(eq(evalSurveys.id, input.id));
         return { success: true };
+      }),
+
+    // IA sugere perguntas baseadas no tema
+    suggestQuestions: protectedProcedure
+      .input(z.object({ tema: z.string().min(3), tipo: z.enum(["setor", "cliente", "outro"]).default("outro") }))
+      .mutation(async ({ input }) => {
+        const tipoLabel = input.tipo === "setor" ? "pesquisa interna de satisfação por setor" :
+          input.tipo === "cliente" ? "pesquisa de satisfação de clientes" : "pesquisa customizada";
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: `Você é um especialista em pesquisas organizacionais e de satisfação. Gere perguntas para uma ${tipoLabel}. Responda APENAS em JSON válido.` },
+            { role: "user", content: `Gere 8 perguntas para uma pesquisa sobre o tema: "${input.tema}".
+
+Retorne um JSON com a seguinte estrutura:
+{
+  "perguntas": [
+    { "texto": "...", "tipo": "nota", "obrigatoria": true },
+    { "texto": "...", "tipo": "texto", "obrigatoria": false },
+    { "texto": "...", "tipo": "sim_nao", "obrigatoria": true }
+  ]
+}
+
+Tipos disponíveis: "nota" (1 a 5), "texto" (resposta livre), "sim_nao".
+Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para o contexto de construção civil e engenharia.` },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "survey_questions",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  perguntas: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        texto: { type: "string" },
+                        tipo: { type: "string", enum: ["nota", "texto", "sim_nao"] },
+                        obrigatoria: { type: "boolean" },
+                      },
+                      required: ["texto", "tipo", "obrigatoria"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["perguntas"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        try {
+          const content = String(response.choices[0]?.message?.content || "{}");
+          const parsed = JSON.parse(content);
+          return parsed.perguntas || [];
+        } catch {
+          return [];
+        }
       }),
   }),
 
@@ -765,11 +1006,12 @@ Gere um resumo executivo em português brasileiro com:
       .mutation(async ({ input }) => {
         const db = await getDb();
         const { questions, ...data } = input;
-        const [survey] = await db.insert(evalClimateSurveys).values(data);
+        const publicToken = generateToken();
+        const [survey] = await db.insert(evalClimateSurveys).values({ ...data, publicToken });
         for (const q of questions) {
           await db.insert(evalClimateQuestions).values({ surveyId: survey.insertId, ...q });
         }
-        return { id: survey.insertId };
+        return { id: survey.insertId, publicToken };
       }),
 
     listSurveys: protectedProcedure
@@ -782,19 +1024,37 @@ Gere um resumo executivo em português brasileiro com:
         const enriched = [];
         for (const s of surveys) {
           const [respCount] = await db.select({ count: count() }).from(evalClimateResponses).where(eq(evalClimateResponses.surveyId, s.id));
-          enriched.push({ ...s, totalRespostas: respCount?.count || 0 });
+          const [qCount] = await db.select({ count: count() }).from(evalClimateQuestions).where(eq(evalClimateQuestions.surveyId, s.id));
+          enriched.push({ ...s, totalRespostas: respCount?.count || 0, totalPerguntas: qCount?.count || 0 });
         }
         return enriched;
       }),
 
-    getPublicSurvey: publicProcedure
+    getById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         const db = await getDb();
         const [survey] = await db.select().from(evalClimateSurveys).where(eq(evalClimateSurveys.id, input.id));
-        if (!survey || survey.status !== "ativa") return null;
+        if (!survey) return null;
         const questions = await db.select().from(evalClimateQuestions)
           .where(eq(evalClimateQuestions.surveyId, input.id))
+          .orderBy(evalClimateQuestions.ordem);
+        return { ...survey, questions };
+      }),
+
+    getPublicSurvey: publicProcedure
+      .input(z.object({ id: z.number().optional(), token: z.string().optional() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        let survey;
+        if (input.token) {
+          [survey] = await db.select().from(evalClimateSurveys).where(eq(evalClimateSurveys.publicToken, input.token));
+        } else if (input.id) {
+          [survey] = await db.select().from(evalClimateSurveys).where(eq(evalClimateSurveys.id, input.id));
+        }
+        if (!survey || survey.status !== "ativa") return null;
+        const questions = await db.select().from(evalClimateQuestions)
+          .where(eq(evalClimateQuestions.surveyId, survey.id))
           .orderBy(evalClimateQuestions.ordem);
         return { ...survey, questions };
       }),
@@ -838,8 +1098,13 @@ Gere um resumo executivo em português brasileiro com:
         const byCategory: Record<string, any[]> = {};
         for (const q of questions) {
           const answers = await db.select().from(evalClimateAnswers).where(eq(evalClimateAnswers.questionId, q.id));
+          let avgNota = 0;
+          if (q.tipo === "nota" && answers.length > 0) {
+            const nums = answers.map(a => parseFloat(a.valor || "0")).filter(n => n > 0);
+            avgNota = nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+          }
           if (!byCategory[q.categoria]) byCategory[q.categoria] = [];
-          byCategory[q.categoria].push({ question: q, answers, totalRespostas: answers.length });
+          byCategory[q.categoria].push({ question: q, answers, totalRespostas: answers.length, avgNota });
         }
         return { totalRespondentes: responses.length, byCategory };
       }),
@@ -850,6 +1115,84 @@ Gere um resumo executivo em português brasileiro com:
         const db = await getDb();
         await db.update(evalClimateSurveys).set({ status: input.status }).where(eq(evalClimateSurveys.id, input.id));
         return { success: true };
+      }),
+
+    deleteSurvey: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        const responses = await db.select({ id: evalClimateResponses.id }).from(evalClimateResponses).where(eq(evalClimateResponses.surveyId, input.id));
+        if (responses.length > 0) {
+          const respIds = responses.map(r => r.id);
+          await db.delete(evalClimateAnswers).where(inArray(evalClimateAnswers.responseId, respIds));
+        }
+        await db.delete(evalClimateResponses).where(eq(evalClimateResponses.surveyId, input.id));
+        await db.delete(evalClimateQuestions).where(eq(evalClimateQuestions.surveyId, input.id));
+        await db.delete(evalClimateSurveys).where(eq(evalClimateSurveys.id, input.id));
+        return { success: true };
+      }),
+
+    // IA sugere perguntas de clima
+    suggestClimateQuestions: protectedProcedure
+      .input(z.object({ tema: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "Você é um especialista em pesquisas de clima organizacional para empresas de construção civil. Gere perguntas distribuídas em 6 categorias. Responda APENAS em JSON válido." },
+            { role: "user", content: `Gere perguntas para uma pesquisa de clima organizacional${input.tema ? ` com foco em: "${input.tema}"` : ""}.
+
+Retorne um JSON com a seguinte estrutura:
+{
+  "perguntas": [
+    { "texto": "...", "categoria": "empresa", "tipo": "nota" },
+    { "texto": "...", "categoria": "gestor", "tipo": "nota" },
+    { "texto": "...", "categoria": "ambiente", "tipo": "nota" },
+    { "texto": "...", "categoria": "seguranca", "tipo": "nota" },
+    { "texto": "...", "categoria": "crescimento", "tipo": "nota" },
+    { "texto": "...", "categoria": "recomendacao", "tipo": "sim_nao" }
+  ]
+}
+
+Categorias: empresa, gestor, ambiente, seguranca, crescimento, recomendacao.
+Tipos: "nota" (1 a 5), "texto" (resposta livre), "sim_nao".
+Gere 2-3 perguntas por categoria (total ~15 perguntas). Contexto: empresa de construção civil e engenharia.` },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "climate_questions",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  perguntas: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        texto: { type: "string" },
+                        categoria: { type: "string", enum: ["empresa", "gestor", "ambiente", "seguranca", "crescimento", "recomendacao"] },
+                        tipo: { type: "string", enum: ["nota", "texto", "sim_nao"] },
+                      },
+                      required: ["texto", "categoria", "tipo"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["perguntas"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        try {
+          const content = String(response.choices[0]?.message?.content || "{}");
+          const parsed = JSON.parse(content);
+          return parsed.perguntas || [];
+        } catch {
+          return [];
+        }
       }),
   }),
 
@@ -911,15 +1254,34 @@ Gere um resumo executivo em português brasileiro com:
         const db = await getDb();
         const tokens = [];
         for (const pid of input.participantIds) {
-          const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          const token = generateToken();
           await db.insert(evalClimateExternalTokens).values({
             surveyId: input.surveyId,
             participantId: pid,
-            token: token.slice(0, 32),
+            token,
           });
-          tokens.push({ participantId: pid, token: token.slice(0, 32) });
+          tokens.push({ participantId: pid, token });
         }
         return tokens;
+      }),
+  }),
+
+  // ============================================================
+  // OBRAS (para o campo de seleção de obra na avaliação)
+  // ============================================================
+  obras: router({
+    listActive: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        return db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, status: obras.status })
+          .from(obras)
+          .where(and(
+            eq(obras.companyId, input.companyId),
+            eq(obras.isActive, 1),
+            isNull(obras.deletedAt),
+          ))
+          .orderBy(obras.nome);
       }),
   }),
 

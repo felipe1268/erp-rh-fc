@@ -2821,3 +2821,59 @@
 - [x] Frontend: Pesquisas e Clima (abas)
 - [x] Frontend: Ranking de funcionários
 - [x] Integrar avaliação no Raio-X do funcionário (aba Avaliações com histórico, resumo, detalhes)
+
+## Rev. 108 - Melhorias Formulário Avaliação
+
+- [ ] Busca de funcionário por nome com autocomplete (digitar e já aparecer)
+- [ ] Remover campo Avaliador - avaliador é o usuário logado automaticamente
+- [ ] Adicionar campo Obra - mostrar apenas obras que o usuário é gestor/responsável + opção "Todas as Obras"
+- [ ] Filtrar funcionários pela obra selecionada
+- [ ] Remover resumo de notas/médias durante preenchimento (gestor não vê resultado)
+- [ ] Adicionar tela de confirmação antes de enviar (resumo: funcionário, obra, mês)
+- [ ] Visibilidade das avaliações: só RH, ADM e ADM Master veem resultados/notas
+- [ ] Gestor que avaliou NÃO vê as notas depois de enviar
+
+## Rev. 109 - Reformulação Módulo Avaliação
+
+- [ ] Backend: avaliador automático (ctx.user.id/name) em vez de evaluatorId manual
+- [ ] Backend: adicionar campo evaluatorName na tabela eval_avaliacoes
+- [ ] Backend: pesquisas customizáveis com IA sugerindo perguntas por tema
+- [ ] Backend: visibilidade de resultados só para RH/ADM/ADM Master
+- [ ] Frontend: busca por nome com autocomplete no campo funcionário
+- [ ] Frontend: remover campo avaliador (automático = usuário logado)
+- [ ] Frontend: adicionar campo Obra (só obras do gestor + Todas as Obras)
+- [ ] Frontend: remover resumo de notas durante preenchimento
+- [ ] Frontend: tela de confirmação antes de enviar (resumo sem notas)
+- [ ] Frontend: pesquisas customizáveis com criação/edição de perguntas + IA
+- [ ] Frontend: visibilidade - gestor não vê notas após enviar
+
+## Fase Avaliação: Reformulação Completa do Módulo de Avaliação
+### Backend - Router Reescrito
+- [x] Adicionar campo obraId e evaluatorName na tabela eval_avaliacoes
+- [x] Adicionar campo publicToken nas tabelas eval_surveys e eval_climate_surveys
+- [x] Reescrever router avaliacao.ts com sub-routers: avaliacoes, avaliadores, pesquisas, clima, dashboard, obras
+- [x] Avaliador automático (ctx.user.name) no create de avaliação
+- [x] Campo Obra (obraId) vinculado à avaliação
+- [x] Dashboard com stats globais e ranking de funcionários
+- [x] Pesquisas Customizadas: CRUD completo com token público
+- [x] Clima Organizacional: CRUD completo com categorias (empresa, gestor, ambiente, segurança, crescimento, recomendação)
+- [x] IA sugere perguntas para pesquisas customizadas e clima (via invokeLLM)
+- [x] Visibilidade: apenas RH/ADM/ADM Master veem resultados
+
+### Frontend - AvaliacaoDesempenho.tsx Reescrito
+- [x] Autocomplete de funcionário com Command/Popover (busca por nome)
+- [x] Avaliador automático (nome do usuário logado)
+- [x] Campo Obra (select de obras ativas da empresa)
+- [x] Sem resumo de notas durante preenchimento
+- [x] Tela de confirmação antes de enviar
+- [x] Aba Clima Organizacional (criar pesquisa, perguntas por categoria, link público, resultados)
+- [x] Aba Pesquisas Customizadas (criar pesquisa, IA sugere perguntas, link público, respostas)
+- [x] Aba Dashboard com estatísticas e ranking
+
+### Páginas Públicas
+- [x] PesquisaPublica.tsx: página pública para responder pesquisas customizadas via token
+- [x] ClimaPublicoPage: página pública para responder pesquisa de clima via token
+- [x] Rotas /pesquisa-publica/pesquisa/:token e /pesquisa-publica/clima/:token no App.tsx
+
+### Testes
+- [x] 15 testes unitários para o módulo de avaliação (router structure, avaliadores, avaliacoes, pesquisas, clima, dashboard, obras)

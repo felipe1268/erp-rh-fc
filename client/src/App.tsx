@@ -52,6 +52,7 @@ import PainelSST from "./pages/PainelSST";
 import PainelJuridico from "./pages/PainelJuridico";
 import BibliotecaConhecimento from "./pages/BibliotecaConhecimento";
 import AvaliacaoDesempenho from "./pages/AvaliacaoDesempenho";
+import { PesquisaPublicaPage, ClimaPublicoPage } from "./pages/PesquisaPublica";
 import AssistenteIAFloat from "./components/AssistenteIAFloat";
 
 function Router() {
@@ -106,7 +107,9 @@ function Router() {
       <Route path={"/dashboards/horas-extras"} component={DashHorasExtras} />
       <Route path={"/dashboards/epis"} component={DashEpis} />
       <Route path={"/dashboards/juridico"} component={DashJuridico} />
-      <Route path={"/404"} component={NotFound} />
+      <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
+      <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
+      <Route path={"404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );

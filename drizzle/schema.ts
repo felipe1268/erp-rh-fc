@@ -2289,7 +2289,9 @@ export const evalAvaliacoes = mysqlTable("eval_avaliacoes", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
 	employeeId: int().notNull(),
-	evaluatorId: int().notNull(), // eval_avaliadores.id
+	evaluatorId: int().notNull(), // eval_avaliadores.id ou users.id
+	obraId: int('obra_id'), // obra onde o funcionário foi avaliado
+	evaluatorName: varchar('evaluator_name', { length: 255 }), // nome do avaliador (snapshot)
 	// Pilar 1 - Postura e Disciplina
 	comportamento: int(), // 1-5
 	pontualidade: int(), // 1-5
@@ -2351,6 +2353,8 @@ export const evalSurveys = mysqlTable("eval_surveys", {
 	anonimo: tinyint().default(0),
 	status: mysqlEnum(['ativa','encerrada','rascunho']).default('rascunho').notNull(),
 	obraId: int(),
+	publicToken: varchar('public_token', { length: 64 }), // token para link público
+	expiresAt: timestamp('expires_at', { mode: 'string' }), // data de expiração
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
@@ -2417,6 +2421,8 @@ export const evalClimateSurveys = mysqlTable("eval_climate_surveys", {
 	titulo: varchar({ length: 255 }).notNull(),
 	descricao: text(),
 	status: mysqlEnum(['ativa','encerrada','rascunho']).default('rascunho').notNull(),
+	publicToken: varchar('public_token', { length: 64 }), // token para link público
+	expiresAt: timestamp('expires_at', { mode: 'string' }), // data de expiração
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
