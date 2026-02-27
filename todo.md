@@ -3073,3 +3073,8 @@
 - [x] Implementar auto-conclusão: se dataFim < hoje e status = em_andamento, marcar como concluído automaticamente
 - [x] Atualizar registros existentes no banco que já passaram da data de término
 - [x] Lógica aplicada tanto na listagem quanto no dashboard
+
+## Bloqueio Duplicidade Aviso Prévio - 2026-02-27
+- [x] Backend: validar se colaborador já tem aviso em_andamento antes de criar novo (TRPCError CONFLICT)
+- [x] Frontend: mostrar alerta ao selecionar colaborador com aviso ativo + badge "Aviso ativo"
+- [ ] Limpar registros duplicados existentes no banco (a fazer manualmente pelo usuário)

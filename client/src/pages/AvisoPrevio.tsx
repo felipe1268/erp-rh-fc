@@ -556,6 +556,11 @@ export default function AvisoPrevio() {
                                 key={e.id}
                                 value={`${e.nomeCompleto || ''} ${e.cpf || ''} ${e.funcao || ''} ${e.setor || ''}`}
                                 onSelect={() => {
+                                  const avisoAtivo = (avisosList as any[]).find((a: any) => a.employeeId === e.id && a.status === 'em_andamento');
+                                  if (avisoAtivo && !editingItem) {
+                                    toast.error(`${e.nomeCompleto} já possui aviso prévio em andamento (término: ${formatDate(avisoAtivo.dataFim)}). Conclua ou cancele o aviso existente antes de criar um novo.`);
+                                    return;
+                                  }
                                   setForm({ ...form, employeeId: e.id });
                                   setCalculoPreview(null);
                                   setEmpPopoverOpen(false);
@@ -573,6 +578,9 @@ export default function AvisoPrevio() {
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <span className="text-xs text-gray-400 font-mono">{formatCPF(e.cpf)}</span>
+                                  {(avisosList as any[]).some((a: any) => a.employeeId === e.id && a.status === 'em_andamento') && !editingItem && (
+                                    <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 bg-orange-50">Aviso ativo</Badge>
+                                  )}
                                   {form.employeeId === e.id && <Check className="h-4 w-4 text-amber-600" />}
                                 </div>
                               </CommandItem>

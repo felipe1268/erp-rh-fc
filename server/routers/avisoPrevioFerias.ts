@@ -643,6 +643,20 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+        // Bloquear duplicidade: verificar se já existe aviso em andamento para este colaborador
+        const [existente] = await db.select({ id: terminationNotices.id })
+          .from(terminationNotices)
+          .where(and(
+            eq(terminationNotices.companyId, input.companyId),
+            eq(terminationNotices.employeeId, input.employeeId),
+            eq(terminationNotices.status, 'em_andamento'),
+            isNull(terminationNotices.deletedAt),
+          ))
+          .limit(1);
+        if (existente) {
+          throw new TRPCError({ code: "CONFLICT", message: "Este colaborador já possui um aviso prévio em andamento. Conclua ou cancele o aviso existente antes de criar um novo." });
+        }
         
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
         const dataDesligamento = input.dataDesligamento || input.dataInicio;
