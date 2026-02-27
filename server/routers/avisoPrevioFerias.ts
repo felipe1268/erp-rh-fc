@@ -97,6 +97,13 @@ function calcularDataFim(dataInicio: string, diasAviso: number): string {
   return dt.toISOString().split("T")[0];
 }
 
+/** Calcula data de início do aviso = último dia trabalhado + 1 dia */
+function calcularDataInicioAviso(ultimoDiaTrabalhado: string): string {
+  const dt = new Date(ultimoDiaTrabalhado + 'T00:00:00');
+  dt.setDate(dt.getDate() + 1);
+  return dt.toISOString().split("T")[0];
+}
+
 /** Calcula meses de férias proporcionais (desde admissão ou último período aquisitivo completo) */
 function calcularMesesFeriasProporcionais(dataAdmissao: string, dataDesligamento: string): number {
   const admissao = new Date(dataAdmissao + 'T00:00:00');
@@ -495,7 +502,8 @@ export const avisoPrevioFeriasRouter = router({
           salarioBase: salarioBase.toFixed(2),
           dataAdmissao,
           dataDesligamento,
-          dataFimEstimada: calcularDataFim(dataDesligamento, diasAviso),
+          dataInicioAviso: calcularDataInicioAviso(dataDesligamento),
+          dataFimEstimada: calcularDataFim(calcularDataInicioAviso(dataDesligamento), diasAviso),
           previsaoRescisao: previsao,
           vrConfigNome,
           vrExtra,
@@ -626,10 +634,12 @@ export const avisoPrevioFeriasRouter = router({
         
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
         const dataDesligamento = input.dataDesligamento || input.dataInicio;
+        // dataInicio do aviso = último dia trabalhado + 1
+        const dataInicioAviso = calcularDataInicioAviso(input.dataInicio);
         const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
         const diasAviso = calcularDiasAviso(anosServico, input.tipo);
         const salarioBase = parseBRL(emp.salarioBase);
-        const dataFim = calcularDataFim(input.dataInicio, diasAviso);
+        const dataFim = calcularDataFim(dataInicioAviso, diasAviso);
         
         const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
         const diasTrabalhadosMes = input.diasTrabalhados ?? dtDeslig.getDate();
@@ -647,7 +657,7 @@ export const avisoPrevioFeriasRouter = router({
           companyId: input.companyId,
           employeeId: input.employeeId,
           tipo: input.tipo,
-          dataInicio: input.dataInicio,
+          dataInicio: dataInicioAviso,
           dataFim,
           diasAviso,
           anosServico,
@@ -692,8 +702,9 @@ export const avisoPrevioFeriasRouter = router({
           if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Funcionário não encontrado' });
 
           const tipo = input.tipo || aviso.tipo;
-          const dataInicioFinal = input.dataInicio || aviso.dataInicio;
-          const dataDesligFinal = dataDesligamento || dataInicioFinal;
+          // Se dataInicio é passado, é o último dia trabalhado, precisa +1
+          const dataInicioFinal = input.dataInicio ? calcularDataInicioAviso(input.dataInicio) : aviso.dataInicio;
+          const dataDesligFinal = dataDesligamento || (input.dataInicio || aviso.dataInicio);
           const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
           const anosServico = calcularAnosServico(dataAdmissao, dataDesligFinal);
           const diasAviso = calcularDiasAviso(anosServico, tipo);

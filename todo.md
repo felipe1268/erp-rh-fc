@@ -3060,3 +3060,8 @@
 - [x] Formatar valores na tabela detalhada (R$ 3.561,47 em vez de R$ 3561.47)
 - [x] Garantir gráficos responsivos com valueFormatter no DashChart
 - [x] Padronizar formatação em KPIs, gráficos e tabela
+
+## Bug Fix - Data Início Aviso Prévio - 2026-02-27
+- [x] Fix: Data de início do aviso prévio deve ser último dia trabalhado + 1 dia (ex: último dia 12/02, início aviso 13/02)
+- [x] Atualizado registros existentes no banco (+1 dia em dataInicio e dataFim)
+- [x] Adicionada função calcularDataInicioAviso() no backend
