@@ -341,11 +341,17 @@ export const avisoPrevioFeriasRouter = router({
           employeeCargo: employees.cargo,
         })
         .from(terminationNotices)
-        .innerJoin(employees, eq(terminationNotices.employeeId, employees.id))
+        .leftJoin(employees, eq(terminationNotices.employeeId, employees.id))
         .where(and(...conditions))
         .orderBy(desc(terminationNotices.createdAt));
         
-        return rows;
+        // Fallback for deleted employees
+        return rows.map(r => ({
+          ...r,
+          employeeName: r.employeeName || 'Funcionário excluído',
+          employeeCpf: r.employeeCpf || '-',
+          employeeCargo: r.employeeCargo || '-',
+        }));
       }),
 
     getById: protectedProcedure

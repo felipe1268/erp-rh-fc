@@ -1010,8 +1010,15 @@ export const appRouter = router({
       if (input.email) updateData.email = input.email;
       if (input.username) updateData.username = input.username;
       if (input.role) {
-        if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar perfil" });
-        updateData.role = input.role;
+        // Admin Master pode definir qualquer perfil; Admin pode definir user ou admin (não admin_master)
+        if (ctx.user.role === "admin_master") {
+          updateData.role = input.role;
+        } else if (ctx.user.role === "admin") {
+          if (input.role === "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode promover para Admin Master" });
+          updateData.role = input.role;
+        } else {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para alterar perfil" });
+        }
       }
       if (input.newPassword) {
         if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar senhas" });

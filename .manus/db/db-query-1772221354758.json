@@ -1,0 +1,349 @@
+{
+  "query": "SHOW TABLES",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW TABLES",
+  "rows": [
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "accidents"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "action_plans"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "advances"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "asos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "atestados"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "audit_logs"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "audits"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "avaliacao_avaliadores"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "avaliacao_ciclos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "avaliacao_config"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "avaliacao_perguntas"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "avaliacao_questionarios"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "avaliacao_respostas"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "avaliacoes"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "blacklist_reactivation_requests"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "caepi_database"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "chemicals"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "cipa_elections"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "cipa_meetings"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "cipa_members"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "companies"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "company_bank_accounts"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "dds"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "deviations"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "dissidio_funcionarios"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "dissidios"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "dixi_afd_importacoes"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "dixi_afd_marcacoes"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "dixi_devices"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "dixi_name_mappings"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "document_templates"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "email_templates"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "employee_documents"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "employee_history"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "employees"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "epi_deliveries"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "epi_discount_alerts"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "epis"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "equipment"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_audit_log"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_avaliacoes"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_avaliadores"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_climate_answers"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_climate_external_tokens"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_climate_questions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_climate_responses"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_climate_surveys"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_criteria"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_criteria_revisions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_external_participants"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_pillars"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_scores"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_survey_answers"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_survey_evaluators"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_survey_questions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_survey_responses"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "eval_surveys"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "extinguishers"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "extra_payments"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "feriados"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "folha_itens"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "folha_lancamentos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "fornecedores_epi"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "golden_rules"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "he_solicitacao_funcionarios"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "he_solicitacoes"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "hydrants"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "insurance_alert_config"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "insurance_alert_recipients"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "insurance_alerts_log"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "job_functions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "manual_obra_assignments"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "meal_benefit_configs"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "menu_config"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "menu_labels"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "monthly_payroll_summary"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "notification_logs"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "notification_recipients"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "obra_funcionarios"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "obra_horas_rateio"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "obra_sns"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "obras"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "payroll"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "payroll_uploads"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "permissions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "pj_contracts"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "pj_medicoes"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "pj_payments"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "ponto_consolidacao"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "ponto_descontos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "ponto_descontos_resumo"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "processos_andamentos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "processos_trabalhistas"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "risks"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "sectors"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "system_criteria"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "system_revisions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "termination_notices"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "time_inconsistencies"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "time_records"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "training_documents"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "trainings"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "unmatched_dixi_records"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "user_companies"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "user_permissions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "user_profiles"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "users"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "vacation_periods"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "vehicles"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "vr_benefits"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "warning_templates"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A": "warnings"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_W4MM458SKqYRWRGGQrfw8A\n__drizzle_migrations\naccidents\naction_plans\nadvances\nasos\natestados\naudit_logs\naudits\navaliacao_avaliadores\navaliacao_ciclos\navaliacao_config\navaliacao_perguntas\navaliacao_questionarios\navaliacao_respostas\navaliacoes\nblacklist_reactivation_requests\ncaepi_database\nchemicals\ncipa_elections\ncipa_meetings\ncipa_members\ncompanies\ncompany_bank_accounts\ndds\ndeviations\ndissidio_funcionarios\ndissidios\ndixi_afd_importacoes\ndixi_afd_marcacoes\ndixi_devices\ndixi_name_mappings\ndocument_templates\nemail_templates\nemployee_documents\nemployee_history\nemployees\nepi_deliveries\nepi_discount_alerts\nepis\nequipment\neval_audit_log\neval_avaliacoes\neval_avaliadores\neval_climate_answers\neval_climate_external_tokens\neval_climate_questions\neval_climate_responses\neval_climate_surveys\neval_criteria\neval_criteria_revisions\neval_external_participants\neval_pillars\neval_scores\neval_survey_answers\neval_survey_evaluators\neval_survey_questions\neval_survey_responses\neval_surveys\nextinguishers\nextra_payments\nferiados\nfolha_itens\nfolha_lancamentos\nfornecedores_epi\ngolden_rules\nhe_solicitacao_funcionarios\nhe_solicitacoes\nhydrants\ninsurance_alert_config\ninsurance_alert_recipients\ninsurance_alerts_log\njob_functions\nmanual_obra_assignments\nmeal_benefit_configs\nmenu_config\nmenu_labels\nmonthly_payroll_summary\nnotification_logs\nnotification_recipients\nobra_funcionarios\nobra_horas_rateio\nobra_sns\nobras\npayroll\npayroll_uploads\npermissions\npj_contracts\npj_medicoes\npj_payments\nponto_consolidacao\nponto_descontos\nponto_descontos_resumo\nprocessos_andamentos\nprocessos_trabalhistas\nrisks\nsectors\nsystem_criteria\nsystem_revisions\ntermination_notices\ntime_inconsistencies\ntime_records\ntraining_documents\ntrainings\nunmatched_dixi_records\nuser_companies\nuser_permissions\nuser_profiles\nusers\nvacation_periods\nvehicles\nvr_benefits\nwarning_templates\nwarnings\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

@@ -217,7 +217,7 @@ export default function Usuarios() {
       email: editEmail.trim() || undefined,
       username: editUsername.trim() || undefined,
       newPassword: editPassword.trim() || undefined,
-      role: (isMaster && selectedUser?.id !== user?.id) ? editRole as "user" | "admin" | "admin_master" : undefined,
+      role: ((isMaster || isAdmin) && selectedUser?.id !== user?.id) ? editRole as "user" | "admin" | "admin_master" : undefined,
     });
 
     if (isAdmin && editRole !== 'admin_master') {
@@ -534,7 +534,7 @@ export default function Usuarios() {
                 <SelectContent>
                   <SelectItem value="user">Usuário — Acesso básico ao sistema</SelectItem>
                   <SelectItem value="admin">Admin — Gerencia módulos e configurações</SelectItem>
-                  <SelectItem value="admin_master">Admin Master — Acesso total ao sistema</SelectItem>
+                  {isMaster && <SelectItem value="admin_master">Admin Master — Acesso total ao sistema</SelectItem>}
                 </SelectContent>
               </Select>
             </CardContent>
@@ -691,7 +691,7 @@ export default function Usuarios() {
                 <CardDescription>Define o nível de acesso geral do usuário no sistema</CardDescription>
               </CardHeader>
               <CardContent>
-                {isMaster && selectedUser.id !== user?.id ? (
+                {(isMaster || isAdmin) && selectedUser.id !== user?.id ? (
                   <Select value={editRole} onValueChange={setEditRole}>
                     <SelectTrigger>
                       <SelectValue />
@@ -699,7 +699,7 @@ export default function Usuarios() {
                     <SelectContent>
                       <SelectItem value="user">Usuário — Acesso básico ao sistema</SelectItem>
                       <SelectItem value="admin">Admin — Gerencia módulos e configurações</SelectItem>
-                      <SelectItem value="admin_master">Admin Master — Acesso total ao sistema</SelectItem>
+                      {isMaster && <SelectItem value="admin_master">Admin Master — Acesso total ao sistema</SelectItem>}
                     </SelectContent>
                   </Select>
                 ) : (

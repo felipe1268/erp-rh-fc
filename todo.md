@@ -3082,3 +3082,6 @@
 ## Full Screen Aplicar Avaliação - 2026-02-27
 - [x] Tornar modal Aplicar Avaliação full screen com layout mais agradável (FullScreenDialog)
 - [x] Notas com cores sugestivas: 1=vermelho(Péssimo), 2=laranja(Ruim), 3=amarelo(Regular), 4=verde-claro(Bom), 5=verde(Excelente)
+## BUG FIX: Card Aviso Prévio sem nome + Perfil Usuário não altera para ADM - 2026-02-27
+- [x] FIX: Card de aviso prévio com 4d restantes mostra nome do funcionário vazio (apenas "-")
+- [x] FIX: Não consegue alterar perfil do usuário para ADM na tela Configurar Usuário
