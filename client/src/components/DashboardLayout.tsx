@@ -195,10 +195,26 @@ const adminSections: MenuSection[] = [
   },
 ];
 
+const menuSectionsAvaliacao: MenuSection[] = [
+  {
+    title: "Avaliação de Desempenho",
+    items: [
+      { icon: Star, label: "Painel de Avaliação", path: "/avaliacao-desempenho" },
+    ],
+  },
+  {
+    title: "Ajuda",
+    items: [
+      { icon: BookOpen, label: "Biblioteca de Conhecimento", path: "/ajuda" },
+    ],
+  },
+];
+
 const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
   "juridico": menuSectionsJuridico,
+  "avaliacao": menuSectionsAvaliacao,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 
@@ -247,6 +263,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "rh-dp": { icon: Users, color: "text-blue-400", bg: "bg-blue-500/20" },
   "sst": { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/20" },
   "juridico": { icon: Gavel, color: "text-slate-300", bg: "bg-slate-400/20" },
+  "avaliacao": { icon: Star, color: "text-amber-400", bg: "bg-amber-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,19 +17,12 @@ import {
   FileText, BarChart3, Play, Lock, ChevronRight, AlertTriangle, ArrowUp, ArrowDown,
   ClipboardList, Settings, UserCheck, Calendar, Timer, TrendingUp, TrendingDown
 } from "lucide-react";
-
-// Empresa selecionada do localStorage
-function getSelectedCompanyId(): number {
-  try {
-    const v = localStorage.getItem("selectedCompanyId");
-    return v ? parseInt(v) : 0;
-  } catch { return 0; }
-}
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function AvaliacaoDesempenho() {
   const { user } = useAuth();
-  // toast importado de sonner
-  const companyId = getSelectedCompanyId();
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [activeTab, setActiveTab] = useState("painel");
 
   // ============================================================
@@ -290,9 +284,11 @@ export default function AvaliacaoDesempenho() {
 
   if (!companyId) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Selecione uma empresa para acessar as avaliações.</p>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Selecione uma empresa no cabeçalho para acessar as avaliações.</p>
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -300,6 +296,7 @@ export default function AvaliacaoDesempenho() {
   // RENDER
   // ============================================================
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -947,6 +944,7 @@ export default function AvaliacaoDesempenho() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }
 

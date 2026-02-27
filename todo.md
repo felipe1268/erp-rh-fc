@@ -2801,3 +2801,4 @@
 ## Rev. 106 - Módulo Avaliação no Hub
 
 - [x] Adicionar card de Avaliação de Desempenho na página inicial (Hub) como módulo adicional
+- [x] Corrigir página Avaliação de Desempenho para usar empresa selecionada do cabeçalho (useCompany)
