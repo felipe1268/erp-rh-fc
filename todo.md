@@ -3105,3 +3105,5 @@
 - [x] FIX: Card de funcionário excluído (4d restantes) sem nome no Painel RH — ocultar cards de funcionários excluídos
 ## Painel RH - Card de Aviso Prévio clicável - 2026-02-27
 - [x] Tornar cards de aviso prévio clicáveis no Painel RH, abrindo dialog com cálculos detalhados da rescisão
+## Dashboard Aviso Prévio - Gráfico responsivo - 2026-02-27
+- [x] FIX: Gráfico de Redução de Jornada (Art. 488 CLT) não responsivo — legenda agora fica embaixo no mobile

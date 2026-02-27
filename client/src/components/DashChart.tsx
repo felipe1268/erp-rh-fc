@@ -128,12 +128,14 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
         },
       };
 
+      const isMobile = window.innerWidth < 768;
       const legendConfig = {
         display: datasets.length > 1 || isPieOrDoughnut,
-        position: isPieOrDoughnut ? "right" as const : "top" as const,
+        position: isPieOrDoughnut ? (isMobile ? "bottom" as const : "right" as const) : "top" as const,
         labels: {
-          font: { size: 11 },
-          padding: 8,
+          font: { size: isMobile ? 10 : 11 },
+          padding: isMobile ? 6 : 8,
+          boxWidth: isMobile ? 10 : 40,
           ...(isPieOrDoughnut && showPercentage ? {
             generateLabels: function (chart: any) {
               const data = chart.data;
