@@ -2211,3 +2211,124 @@ jantaDia: varchar({ length: 20 }).default('0'), // valor diário jantar (se nece
 	index("mbc_company").on(table.companyId),
 	index("mbc_obra").on(table.obraId),
 ]);
+
+// ============================================================
+// AVALIAÇÃO DE DESEMPENHO
+// ============================================================
+
+// Questionários (templates de avaliação)
+export const avaliacaoQuestionarios = mysqlTable("avaliacao_questionarios", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	titulo: varchar({ length: 255 }).notNull(),
+	descricao: text(),
+	frequencia: mysqlEnum(['diaria', 'semanal', 'mensal', 'trimestral', 'semestral', 'anual']).default('mensal').notNull(),
+	ativo: tinyint().default(1).notNull(),
+	criadoPor: int().notNull(), // userId
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("aq_company").on(table.companyId),
+]);
+
+// Perguntas do questionário
+export const avaliacaoPerguntas = mysqlTable("avaliacao_perguntas", {
+	id: int().autoincrement().notNull(),
+	questionarioId: int().notNull(),
+	texto: text().notNull(),
+	tipo: mysqlEnum(['nota_1_5', 'nota_1_10', 'sim_nao', 'texto_livre']).default('nota_1_5').notNull(),
+	peso: int().default(1).notNull(), // peso da pergunta no cálculo
+	ordem: int().default(0).notNull(),
+	ativo: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ap_questionario").on(table.questionarioId),
+]);
+
+// Ciclos de avaliação (períodos)
+export const avaliacaoCiclos = mysqlTable("avaliacao_ciclos", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	questionarioId: int().notNull(),
+	titulo: varchar({ length: 255 }).notNull(), // ex: "Avaliação Mensal - Janeiro 2026"
+	dataInicio: date({ mode: 'string' }).notNull(),
+	dataFim: date({ mode: 'string' }).notNull(),
+	status: mysqlEnum(['rascunho', 'aberto', 'fechado']).default('rascunho').notNull(),
+	criadoPor: int().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("ac_company").on(table.companyId),
+	index("ac_questionario").on(table.questionarioId),
+]);
+
+// Avaliações individuais (1 por funcionário por ciclo)
+export const avaliacoes = mysqlTable("avaliacoes", {
+	id: int().autoincrement().notNull(),
+	cicloId: int().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	avaliadorId: int().notNull(), // userId que avaliou
+	avaliadorNome: varchar({ length: 255 }), // nome do avaliador
+	status: mysqlEnum(['pendente', 'em_andamento', 'finalizada']).default('pendente').notNull(),
+	notaFinal: decimal({ precision: 5, scale: 2 }), // nota calculada
+	observacoes: text(),
+	tempoAvaliacao: int(), // tempo em segundos que levou para avaliar
+	finalizadaEm: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("av_ciclo").on(table.cicloId),
+	index("av_company").on(table.companyId),
+	index("av_employee").on(table.employeeId),
+	index("av_avaliador").on(table.avaliadorId),
+]);
+
+// Respostas individuais (1 por pergunta por avaliação)
+export const avaliacaoRespostas = mysqlTable("avaliacao_respostas", {
+	id: int().autoincrement().notNull(),
+	avaliacaoId: int().notNull(),
+	perguntaId: int().notNull(),
+	valor: varchar({ length: 20 }), // nota numérica ou "sim"/"nao"
+	textoLivre: text(), // resposta texto livre
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("ar_avaliacao").on(table.avaliacaoId),
+	index("ar_pergunta").on(table.perguntaId),
+]);
+
+// Vinculação avaliador -> funcionários que ele avalia
+export const avaliacaoAvaliadores = mysqlTable("avaliacao_avaliadores", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	avaliadorUserId: int().notNull(), // userId do avaliador
+	employeeId: int().notNull(), // funcionário que ele avalia
+	ativo: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("aa_company").on(table.companyId),
+	index("aa_avaliador").on(table.avaliadorUserId),
+	index("aa_employee").on(table.employeeId),
+]);
+
+// Configuração do módulo de avaliação por empresa
+export const avaliacaoConfig = mysqlTable("avaliacao_config", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	notaMinima: decimal({ precision: 5, scale: 2 }).default('0'),
+	notaMaxima: decimal({ precision: 5, scale: 2 }).default('5'),
+	permitirAutoAvaliacao: tinyint().default(0),
+	exibirRankingParaAvaliadores: tinyint().default(0),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("acfg_company").on(table.companyId),
+]);
+

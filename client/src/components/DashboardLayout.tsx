@@ -30,7 +30,7 @@ import {
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
   ClipboardList, UserSearch, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
-  CalendarDays, TrendingUp, FileSpreadsheet,
+  CalendarDays, TrendingUp, FileSpreadsheet, BookOpen,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -102,6 +102,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
       { icon: FileSpreadsheet, label: "PJ Medições", path: "/pj-medicoes" },
+      { icon: Star, label: "Avaliação de Desempenho", path: "/avaliacao-desempenho" },
     ],
   },
   {
@@ -186,6 +187,12 @@ const adminSections: MenuSection[] = [
       { icon: Trash2, label: "Lixeira", path: "/lixeira" },
     ],
   },
+  {
+    title: "Ajuda",
+    items: [
+      { icon: BookOpen, label: "Biblioteca de Conhecimento", path: "/ajuda" },
+    ],
+  },
 ];
 
 const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
@@ -229,6 +236,7 @@ const ICON_MAP: Record<string, any> = {
   "Contratos PJ": FileSignature,
   "Solicitação de Hora Extra": Clock,
   "Revisões do Sistema": GitBranch,
+  "Biblioteca de Conhecimento": BookOpen,
   "Feriados": CalendarDays,
   "Dissídio": TrendingUp,
   "PJ Medições": FileSpreadsheet,

@@ -1,0 +1,19 @@
+{
+  "query": "SELECT id, nomeCompleto, cpf, funcao, setor, status, companyId FROM employees WHERE nomeCompleto LIKE '%MARIANA%CASTILHO%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, cpf, funcao, setor, status, companyId FROM employees WHERE nomeCompleto LIKE '%MARIANA%CASTILHO%';",
+  "rows": [
+    {
+      "id": "420109",
+      "nomeCompleto": "MARIANA CASTILHO DE LIMA",
+      "cpf": "401.827.378-96",
+      "funcao": "COORDENADOR(A) DE PLANEJAMENTO",
+      "setor": "ESCRITORIO CENTRAL",
+      "status": "Ativo",
+      "companyId": "60002"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tcpf\tfuncao\tsetor\tstatus\tcompanyId\n420109\tMARIANA CASTILHO DE LIMA\t401.827.378-96\tCOORDENADOR(A) DE PLANEJAMENTO\tESCRITORIO CENTRAL\tAtivo\t60002\n",
+  "stderr": "",
+  "execution_time_ms": 65
+}

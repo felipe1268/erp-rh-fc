@@ -1256,12 +1256,12 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           </tr></thead>
                           <tbody>
                             {alerts.map((a: any) => (
-                              <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.status === 'pendente' ? 'bg-amber-50/50' : ''}`}>
+                              <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.status === 'pendente' ? 'bg-amber-50/50' : a.status === 'cancelado' ? 'bg-gray-50/50 opacity-60' : ''}`}>
                                 <td className="p-3 font-medium text-xs">{a.epiNome || "-"}{a.ca ? ` (CA: ${a.ca})` : ''}</td>
                                 <td className="p-3 text-xs">{motivoLabel(a.motivoCobranca)}</td>
                                 <td className="p-3 text-right font-mono text-xs">{a.quantidade}</td>
                                 <td className="p-3 text-right font-mono text-xs">{parseFloat(a.valorUnitario || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                <td className="p-3 text-right font-mono font-bold text-red-600">{parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                <td className={`p-3 text-right font-mono font-bold ${a.status === 'cancelado' ? 'text-gray-400 line-through' : 'text-red-600'}`}>{parseFloat(a.valorTotal || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                 <td className="p-3 text-xs">{a.mesReferencia || "-"}</td>
                                 <td className="p-3 text-center">
                                   <Badge variant={a.status === 'pendente' ? 'secondary' : a.status === 'confirmado' ? 'destructive' : 'outline'}

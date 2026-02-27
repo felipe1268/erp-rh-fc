@@ -50,6 +50,9 @@ import PJMedicoes from "./pages/PJMedicoes";
 import PainelRH from "./pages/PainelRH";
 import PainelSST from "./pages/PainelSST";
 import PainelJuridico from "./pages/PainelJuridico";
+import BibliotecaConhecimento from "./pages/BibliotecaConhecimento";
+import AvaliacaoDesempenho from "./pages/AvaliacaoDesempenho";
+import AssistenteIAFloat from "./components/AssistenteIAFloat";
 
 function Router() {
   return (
@@ -89,6 +92,10 @@ function Router() {
       <Route path={"/feriados"} component={Feriados} />
       <Route path={"/dissidio"} component={Dissidio} />
       <Route path={"/pj-medicoes"} component={PJMedicoes} />
+      {/* Avaliação de Desempenho */}
+      <Route path={"/avaliacao-desempenho"} component={AvaliacaoDesempenho} />
+      {/* Biblioteca de Conhecimento */}
+      <Route path={"/ajuda"} component={BibliotecaConhecimento} />
       {/* Relatórios */}
       <Route path={"/relatorios/raio-x"} component={RaioXPage} />
       {/* Dashboards */}
@@ -115,6 +122,7 @@ function App() {
             <PermissionsProvider>
               <ModuleProvider>
                 <Router />
+                <AssistenteIAFloat />
               </ModuleProvider>
             </PermissionsProvider>
           </CompanyProvider>

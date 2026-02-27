@@ -2744,3 +2744,56 @@
 ## Fase 104-C: Correções visuais
 - [x] Corrigir paleta de cores dos gráficos do dashboard - cores mais suaves e harmoniosas
 - [x] Tornar drill-down modal full screen em vez de popup pequeno
+
+## Fase 105: Responsividade Dashboard EPIs + Catálogo EPI
+- [ ] Tornar cards KPI do Dashboard de EPIs responsivos (grid adaptável)
+- [ ] Tornar tabela Resumo por Categoria responsiva
+- [ ] Tornar gráficos e demais seções responsivas
+- [ ] Tornar cards KPI da tela de Catálogo EPI responsivos
+- [ ] Tornar tabela e filtros do Catálogo EPI responsivos
+- [ ] Adicionar filtro por categoria (EPI, Uniforme, Calçados) na tela de Catálogo EPI
+- [ ] Desconto EPI cancelado NÃO pode ser descontado do funcionário na folha
+- [ ] Adicionar filtro por categoria (EPI, Uniforme, Calçados) na tela de Catálogo EPI
+
+## Fase 106: Módulo de Avaliação de Funcionários integrado ao ERP
+- [ ] Criar schema de avaliações no banco (questionários, avaliações, respostas, rankings)
+- [ ] Criar rotas backend para CRUD de avaliações vinculadas à base de funcionários
+- [ ] Criar frontend do módulo de Avaliação integrado ao ERP (multi-avaliação, questionários personalizáveis)
+- [ ] Vincular avaliações à base de funcionários existente (autocompletar, link direto)
+- [ ] Implementar ranking de funcionários (melhor/pior por mês, trimestre, ano)
+- [ ] Travar avaliação após finalização (não pode ser alterada)
+- [ ] Permitir ADM gerar PDF de cada avaliação
+
+## Fase 105-D: Melhorias na Solicitação de Hora Extra
+- [ ] Opção de filtrar funcionários por "Funcionários da Obra" ou "Todos da Empresa"
+- [ ] Alerta ao selecionar funcionário em Aviso Prévio (sugerir escolher outro)
+- [ ] Análise de faltas do funcionário selecionado para HE
+- [ ] Integração futura com Avaliação de Desempenho para aptidão de HE
+- [ ] No fechamento do ponto, avaliar batidas em outras obras
+
+## Fase 106: Módulo de Avaliação de Funcionários integrado ao ERP
+- [ ] Criar schema de avaliações no banco (questionários, avaliações, respostas, rankings)
+- [ ] Criar rotas backend para CRUD de avaliações vinculadas à base de funcionários
+- [ ] Criar frontend do módulo de Avaliação integrado ao ERP
+- [ ] Vincular avaliações à base de funcionários existente
+- [ ] Implementar ranking de funcionários (melhor/pior por mês, trimestre, ano)
+- [ ] Travar avaliação após finalização
+- [ ] Permitir ADM gerar PDF de cada avaliação
+- [ ] BUG: Drill-down do gráfico redireciona para /raio-x/ID que dá 404 - corrigir rota
+- [x] Eliminar todas as datas de demissão futuras (a partir de hoje 26/02/2026) no banco de dados
+- [ ] Formatar exibição da Jornada no Ponto - JSON bruto para tabela organizada por dia da semana
+
+## Rev. 105 - Biblioteca de Conhecimento + Melhorias
+
+- [x] Fase 1: Estrutura base, rotas, layout da Biblioteca de Conhecimento (/ajuda)
+- [x] Fase 2: Unificar sistema de avaliação de desempenho como módulo adicional do ERP
+- [x] Fase 3: Conteúdo dos módulos principais + complementares + memoriais adicionais
+- [x] Fase 4: Artigos de Avaliação de Desempenho + FAQ + Dissídio + Feriados + Auditoria
+- [x] Fase 5: Conteúdo dos módulos principais (Hub, Painel, Colaboradores, Ponto, Rescisão)
+- [x] Fase 6: Conteúdo dos módulos complementares (EPI, HE, Férias, CIPA, PJ, etc.)
+- [x] Fase 7: Memoriais de cálculo com fórmulas e exemplos práticos
+- [x] Fase 8: Assistente IA com chatbot flutuante para tirar dúvidas
+- [x] Fase 9: Busca global, favoritos, glossário e FAQ
+- [x] Fase 10: Testar todo o sistema (gráficos, dados, páginas, erros)
+- [x] Fase 11: Filtro no catálogo EPI para separar EPI/Uniforme/Calçados + filtro por tamanho
+- [x] Fase 12: Testes finais e publicação

@@ -114,6 +114,8 @@ export default function Epis() {
   const [viewMode, setViewMode] = useState<ViewMode>("catalogo");
   const [search, setSearch] = useState("");
   const [filterCondicao, setFilterCondicao] = useState<"Todos" | "Novo" | "Reutilizado">("Todos");
+  const [filterCategoria, setFilterCategoria] = useState<"Todos" | "EPI" | "Uniforme" | "Calçado">("Todos");
+  const [filterTamanho, setFilterTamanho] = useState<string>("Todos");
   const [editingEpi, setEditingEpi] = useState<any>(null);
   const [selectedEpis, setSelectedEpis] = useState<Set<number>>(new Set());
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
@@ -408,6 +410,12 @@ export default function Epis() {
     if (filterCondicao !== "Todos") {
       list = list.filter((e: any) => (e.condicao || "Novo") === filterCondicao);
     }
+    if (filterCategoria !== "Todos") {
+      list = list.filter((e: any) => (e.categoria || "EPI") === filterCategoria);
+    }
+    if (filterTamanho !== "Todos") {
+      list = list.filter((e: any) => (e.tamanho || "") === filterTamanho);
+    }
     if (!search) return list;
     const s = search.toLowerCase();
     return list.filter((e: any) =>
@@ -415,7 +423,18 @@ export default function Epis() {
       (e.ca || "").toLowerCase().includes(s) ||
       (e.fabricante || "").toLowerCase().includes(s)
     );
-  }, [episList, search, filterCondicao]);
+  }, [episList, search, filterCondicao, filterCategoria, filterTamanho]);
+
+  // Tamanhos disponíveis baseados na categoria selecionada
+  const tamanhosFiltro = useMemo(() => {
+    const TAMANHOS_ROUPA_LIST = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
+    const TAMANHOS_CALCADO_LIST = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
+    if (filterCategoria === "Uniforme") return TAMANHOS_ROUPA_LIST;
+    if (filterCategoria === "Calçado") return TAMANHOS_CALCADO_LIST;
+    // Para "Todos" ou "EPI", mostrar tamanhos que existem nos dados
+    const tamanhos = new Set(episList.map((e: any) => e.tamanho).filter(Boolean));
+    return Array.from(tamanhos).sort() as string[];
+  }, [filterCategoria, episList]);
 
   const filteredDeliveries = useMemo(() => {
     if (!search) return deliveriesList;
@@ -1340,44 +1359,44 @@ export default function Epis() {
 
         {/* Stats Cards */}
         {stats && (
-          <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-            <Card className="border-l-4 border-l-blue-500 min-w-[130px] shrink-0">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
+            <Card className="border-l-4 border-l-blue-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">Total EPIs</p>
                 <p className="text-lg font-bold">{stats.totalItens}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-green-500 min-w-[130px] shrink-0">
+            <Card className="border-l-4 border-l-green-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Total</p>
                 <p className="text-lg font-bold">{stats.estoqueTotal}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-amber-500 min-w-[130px] shrink-0">
+            <Card className="border-l-4 border-l-amber-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Baixo</p>
                 <p className="text-lg font-bold text-amber-600">{stats.estoqueBaixo}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-red-500 min-w-[130px] shrink-0">
+            <Card className="border-l-4 border-l-red-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">CA Vencido</p>
                 <p className="text-lg font-bold text-red-600">{stats.caVencido}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-purple-500 min-w-[130px] shrink-0">
+            <Card className="border-l-4 border-l-purple-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">Total Entregas</p>
                 <p className="text-lg font-bold">{stats.totalEntregas}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-cyan-500 min-w-[130px] shrink-0">
+            <Card className="border-l-4 border-l-cyan-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">Entregas/Mês</p>
                 <p className="text-lg font-bold">{stats.entregasMes}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-emerald-500 min-w-[140px] shrink-0">
+            <Card className="border-l-4 border-l-emerald-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">Valor Inventário</p>
                 <p className="text-lg font-bold text-emerald-700">
@@ -1404,6 +1423,17 @@ export default function Epis() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
           </div>
+          <Select value={filterCategoria} onValueChange={(v: any) => setFilterCategoria(v)}>
+            <SelectTrigger className="w-[150px] sm:w-[160px] shrink-0">
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todos">Todas Categorias</SelectItem>
+              <SelectItem value="EPI">EPI</SelectItem>
+              <SelectItem value="Uniforme">Uniforme</SelectItem>
+              <SelectItem value="Calçado">Calçado</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={filterCondicao} onValueChange={(v: any) => setFilterCondicao(v)}>
             <SelectTrigger className="w-[150px] sm:w-[160px] shrink-0">
               <SelectValue placeholder="Condição" />
@@ -1414,6 +1444,19 @@ export default function Epis() {
               <SelectItem value="Reutilizado">Reutilizado</SelectItem>
             </SelectContent>
           </Select>
+          {tamanhosFiltro.length > 0 && (
+            <Select value={filterTamanho} onValueChange={(v: any) => setFilterTamanho(v)}>
+              <SelectTrigger className="w-[150px] sm:w-[160px] shrink-0">
+                <SelectValue placeholder="Tamanho" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Todos">Todos Tamanhos</SelectItem>
+                {tamanhosFiltro.map(t => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* ============================================================ */}

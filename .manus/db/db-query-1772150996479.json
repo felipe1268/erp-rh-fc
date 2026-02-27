@@ -1,0 +1,21 @@
+{
+  "query": "SELECT id, nomeCompleto, cpf, funcao, setor, status, dataAdmissao, dataDemissao, companyId \nFROM employees \nWHERE dataDemissao IS NOT NULL \nAND dataDemissao >= '2026-02-26' \nORDER BY dataDemissao ASC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, cpf, funcao, setor, status, dataAdmissao, dataDemissao, companyId \nFROM employees \nWHERE dataDemissao IS NOT NULL \nAND dataDemissao >= '2026-02-26' \nORDER BY dataDemissao ASC;",
+  "rows": [
+    {
+      "id": "420124",
+      "nomeCompleto": "RAFAEL ALEXANDRE MONTEIRO FERREIRA",
+      "cpf": "244.877.888-46",
+      "funcao": "SERVENTE",
+      "setor": "OBRA",
+      "status": "Ativo",
+      "dataAdmissao": "2025-03-06",
+      "dataDemissao": "2026-03-15",
+      "companyId": "60002"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tcpf\tfuncao\tsetor\tstatus\tdataAdmissao\tdataDemissao\tcompanyId\n420124\tRAFAEL ALEXANDRE MONTEIRO FERREIRA\t244.877.888-46\tSERVENTE\tOBRA\tAtivo\t2025-03-06\t2026-03-15\t60002\n",
+  "stderr": "",
+  "execution_time_ms": 132
+}

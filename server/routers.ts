@@ -60,6 +60,8 @@ import { employeeDocumentsRouter } from "./routers/employeeDocuments";
 import { pjMedicoesRouter } from "./routers/pjMedicoes";
 import { dissidioRouter } from "./routers/dissidio";
 import { sindicalRouter } from "./routers/sindical";
+import { avaliacaoRouter } from "./routers/avaliacao";
+import { assistenteIARouter } from "./routers/assistenteIA";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -88,6 +90,8 @@ export const appRouter = router({
   menuConfig: menuConfigRouter,
   goldenRules: goldenRulesRouter,
   notifications: notificationsRouter,
+  avaliacao: avaliacaoRouter,
+  assistenteIA: assistenteIARouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;
