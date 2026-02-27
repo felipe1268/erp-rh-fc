@@ -2949,3 +2949,18 @@
 ## Melhoria: Perguntas da IA mais específicas e profissionais
 - [ ] Melhorar prompt da IA para evitar perguntas vagas (ex: "sempre à disposição da empresa")
 - [ ] Perguntas devem ser específicas, mensuráveis e práticas para construção civil
+
+## Controle de Documentos (padrão advertência) + ASO
+- [x] Remover tela de importação TSV de ASOs
+- [x] Adicionar campo de anexo no ASO existente (documentUrl)
+- [x] Upload de documento integrado no formulário de criação/edição de ASO
+- [x] Backend: ASO create retorna ID para upload subsequente
+- [x] Adicionar aba "Painel de Validade" no Controle de Documentos
+- [x] Painel consolidado: ASOs + Treinamentos com status de validade (válido/vencendo/vencido)
+- [x] Alertas visuais de documentos próximos ao vencimento (banner vermelho/amarelo no topo)
+- [x] Filtros por status, tipo de documento e funcionário
+- [x] Cards KPI: Vencidos, Vence em 30d, Vence em 60d, Válidos (clicáveis como filtro)
+- [x] Cards resumo expandidos: 8 cards (ASOs, ASOs Vencidos, ASOs A Vencer, Treinamentos, Trein. Vencidos, Trein. A Vencer, Atestados, Advertências)
+- [x] Backend: endpoint painelValidade com dados consolidados e estatísticas
+- [x] Backend: resumo atualizado com treinVencidos e treinAVencer
+- [x] 10 testes unitários passando (controleDocumentos.test.ts)

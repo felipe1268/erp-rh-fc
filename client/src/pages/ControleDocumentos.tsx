@@ -14,7 +14,7 @@ import { formatCPF } from "@/lib/formatters";
 import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
@@ -48,6 +48,201 @@ function formatDate(d: string | null | undefined) {
   const parts = d.split("-");
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return d;
+}
+
+// ============ PAINEL DE VALIDADE (Componente) ============
+function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onClickEmployee: (id: number) => void }) {
+  const { data, isLoading } = trpc.docs.painelValidade.useQuery({ companyId }, { enabled: !!companyId });
+  const [filterStatus, setFilterStatus] = useState("todos");
+  const [filterTipo, setFilterTipo] = useState("todos");
+  const [searchVal, setSearchVal] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!data?.documentos) return [];
+    let list = data.documentos as any[];
+    if (filterStatus === "vencido") list = list.filter(d => d.status === "VENCIDO");
+    else if (filterStatus === "vencer30") list = list.filter(d => d.diasRestantes >= 0 && d.diasRestantes <= 30);
+    else if (filterStatus === "vencer60") list = list.filter(d => d.diasRestantes > 30 && d.diasRestantes <= 60);
+    else if (filterStatus === "valido") list = list.filter(d => d.diasRestantes > 60);
+    if (filterTipo === "ASO") list = list.filter(d => d.tipoDoc === "ASO");
+    else if (filterTipo === "Treinamento") list = list.filter(d => d.tipoDoc === "Treinamento");
+    if (searchVal) {
+      const s = searchVal.toLowerCase();
+      list = list.filter(d => d.nomeCompleto?.toLowerCase().includes(s) || d.descricao?.toLowerCase().includes(s));
+    }
+    return list;
+  }, [data, filterStatus, filterTipo, searchVal]);
+
+  if (isLoading) return <div className="py-12 text-center text-muted-foreground">Carregando painel de validade...</div>;
+  if (!data) return <div className="py-12 text-center text-muted-foreground">Nenhum dado disponível</div>;
+
+  const { stats } = data;
+
+  return (
+    <div className="space-y-4">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className={`cursor-pointer transition-all ${filterStatus === "vencido" ? "ring-2 ring-red-500" : ""}`} onClick={() => setFilterStatus(filterStatus === "vencido" ? "todos" : "vencido")}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-600">{stats.vencidos}</p>
+                <p className="text-xs text-muted-foreground">Vencidos</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`cursor-pointer transition-all ${filterStatus === "vencer30" ? "ring-2 ring-yellow-500" : ""}`} onClick={() => setFilterStatus(filterStatus === "vencer30" ? "todos" : "vencer30")}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+                <Clock className="h-5 w-5 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-yellow-600">{stats.aVencer30}</p>
+                <p className="text-xs text-muted-foreground">Vence em 30 dias</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`cursor-pointer transition-all ${filterStatus === "vencer60" ? "ring-2 ring-orange-500" : ""}`} onClick={() => setFilterStatus(filterStatus === "vencer60" ? "todos" : "vencer60")}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-orange-600">{stats.aVencer60}</p>
+                <p className="text-xs text-muted-foreground">Vence em 60 dias</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`cursor-pointer transition-all ${filterStatus === "valido" ? "ring-2 ring-green-500" : ""}`} onClick={() => setFilterStatus(filterStatus === "valido" ? "todos" : "valido")}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-green-600">{stats.validos}</p>
+                <p className="text-xs text-muted-foreground">Válidos</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar por nome ou documento..." value={searchVal} onChange={e => setSearchVal(e.target.value)} className="pl-10" />
+        </div>
+        <Select value={filterTipo} onValueChange={setFilterTipo}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os Tipos</SelectItem>
+            <SelectItem value="ASO">ASO</SelectItem>
+            <SelectItem value="Treinamento">Treinamento</SelectItem>
+          </SelectContent>
+        </Select>
+        {(filterStatus !== "todos" || filterTipo !== "todos" || searchVal) && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilterStatus("todos"); setFilterTipo("todos"); setSearchVal(""); }}>
+            <X className="h-4 w-4 mr-1" /> Limpar filtros
+          </Button>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            Painel de Validade de Documentos
+            <Badge variant="secondary" className="ml-2">{filtered.length} de {stats.total}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filtered.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhum documento encontrado com os filtros selecionados.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left p-2 font-medium">Status</th>
+                    <th className="text-left p-2 font-medium">Tipo</th>
+                    <th className="text-left p-2 font-medium">Colaborador</th>
+                    <th className="text-left p-2 font-medium">Descrição</th>
+                    <th className="text-left p-2 font-medium">Validade</th>
+                    <th className="text-left p-2 font-medium">Dias</th>
+                    <th className="text-left p-2 font-medium">Doc</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((doc: any, i: number) => {
+                    const rowBg = doc.status === "VENCIDO" ? "bg-red-50/60" : doc.diasRestantes <= 30 ? "bg-yellow-50/60" : doc.diasRestantes <= 60 ? "bg-orange-50/30" : "";
+                    return (
+                      <tr key={`${doc.tipoDoc}-${doc.id}`} className={`border-b hover:bg-muted/20 ${rowBg}`}>
+                        <td className="p-2">
+                          {doc.status === "VENCIDO" ? (
+                            <Badge variant="destructive" className="text-[10px]">VENCIDO</Badge>
+                          ) : doc.diasRestantes <= 7 ? (
+                            <Badge className="bg-red-100 text-red-800 hover:bg-red-100 text-[10px]">{doc.diasRestantes}d</Badge>
+                          ) : doc.diasRestantes <= 30 ? (
+                            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-[10px]">{doc.diasRestantes}d</Badge>
+                          ) : doc.diasRestantes <= 60 ? (
+                            <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 text-[10px]">{doc.diasRestantes}d</Badge>
+                          ) : (
+                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-[10px]">OK</Badge>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${doc.tipoDoc === "ASO" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                            {doc.tipoDoc === "ASO" ? <Stethoscope className="h-3 w-3" /> : <GraduationCap className="h-3 w-3" />}
+                            {doc.tipoDoc}
+                          </span>
+                        </td>
+                        <td className="p-2">
+                          <button className="text-blue-600 hover:underline font-medium text-left" onClick={() => onClickEmployee(doc.employeeId)}>
+                            {doc.nomeCompleto}
+                          </button>
+                          <div className="text-[10px] text-muted-foreground">{doc.funcao || "-"}</div>
+                        </td>
+                        <td className="p-2 text-xs">{doc.tipoDoc === "ASO" ? formatTipoASO(doc.descricao) : doc.descricao}</td>
+                        <td className="p-2 text-xs font-mono">{formatDate(doc.dataValidade)}</td>
+                        <td className="p-2">
+                          <span className={`text-xs font-bold ${doc.status === "VENCIDO" ? "text-red-600" : doc.diasRestantes <= 30 ? "text-yellow-600" : doc.diasRestantes <= 60 ? "text-orange-600" : "text-green-600"}`}>
+                            {doc.status === "VENCIDO" ? `${Math.abs(doc.diasRestantes)}d atrás` : `${doc.diasRestantes}d`}
+                          </span>
+                        </td>
+                        <td className="p-2">
+                          {(doc.documentoUrl || doc.certificadoUrl) ? (
+                            <a href={doc.documentoUrl || doc.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export default function ControleDocumentos() {
@@ -174,6 +369,7 @@ export default function ControleDocumentos() {
       else if (filter === "vencido") { setActiveTab("aso"); setStatusFilter("vencido"); }
       else if (filter === "vencer") { setActiveTab("aso"); setStatusFilter("vencer"); }
       else if (filter === "treinamentos") { setActiveTab("treinamentos"); setStatusFilter("todos"); }
+      else if (filter === "treinVencido" || filter === "treinVencer") { setActiveTab("validade"); setStatusFilter("todos"); }
       else if (filter === "atestados") { setActiveTab("atestados"); setStatusFilter("todos"); }
       else if (filter === "advertencias") { setActiveTab("advertencias"); setStatusFilter("todos"); }
     }
@@ -272,13 +468,29 @@ export default function ControleDocumentos() {
   };
 
   // ============ SUBMIT HANDLERS ============
-  const handleSubmitAso = () => {
+  const handleSubmitAso = async () => {
     if (!asoForm.employeeId || !asoForm.tipo || !asoForm.dataExame) { toast.error("Preencha os campos obrigatórios"); return; }
-    if (editingAsoId) {
-      updateAso.mutate({ id: editingAsoId, ...asoForm, validadeDias: asoForm.validadeDias || 365 });
-    } else {
-      createAso.mutate({ companyId, ...asoForm, validadeDias: asoForm.validadeDias || 365 });
-    }
+    const { _file, ...formData } = asoForm;
+    try {
+      let asoId = editingAsoId;
+      if (editingAsoId) {
+        await updateAso.mutateAsync({ id: editingAsoId, ...formData, validadeDias: formData.validadeDias || 365 });
+      } else {
+        const result = await createAso.mutateAsync({ companyId, ...formData, validadeDias: formData.validadeDias || 365 });
+        asoId = (result as any)?.id || null;
+      }
+      if (_file && asoId) {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
+          try {
+            await uploadAsoDoc.mutateAsync({ id: asoId!, fileBase64: base64, fileName: _file.name });
+            toast.success("Documento anexado com sucesso!");
+          } catch { toast.error("ASO salvo, mas erro ao anexar documento"); }
+        };
+        reader.readAsDataURL(_file);
+      }
+    } catch { toast.error("Erro ao salvar ASO"); }
     setShowAsoDialog(false); setAsoForm({}); setEditingAsoId(null);
   };
 
@@ -471,24 +683,56 @@ export default function ControleDocumentos() {
         </div>
 
         {/* CARDS RESUMO */}
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        {/* ALERTA DE DOCUMENTOS VENCIDOS */}
+        {((resumo?.asosVencidos || 0) > 0 || (resumo?.treinVencidos || 0) > 0) && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-red-100 transition-colors" onClick={() => setActiveTab("validade")}>
+            <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800">
+                Atenção: {((resumo?.asosVencidos || 0) + (resumo?.treinVencidos || 0))} documento(s) vencido(s)
+                {(resumo?.asosVencidos || 0) > 0 && <span className="ml-1">({resumo?.asosVencidos} ASO{(resumo?.asosVencidos || 0) > 1 ? "s" : ""})</span>}
+                {(resumo?.treinVencidos || 0) > 0 && <span className="ml-1">({resumo?.treinVencidos} Treinamento{(resumo?.treinVencidos || 0) > 1 ? "s" : ""})</span>}
+              </p>
+              <p className="text-xs text-red-600">Clique para ver o Painel de Validade</p>
+            </div>
+            <ExternalLink className="h-4 w-4 text-red-400" />
+          </div>
+        )}
+
+        {/* ALERTA DE DOCUMENTOS A VENCER */}
+        {((resumo?.asosAVencer || 0) > 0 || (resumo?.treinAVencer || 0) > 0) && !((resumo?.asosVencidos || 0) > 0 || (resumo?.treinVencidos || 0) > 0) && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-yellow-100 transition-colors" onClick={() => setActiveTab("validade")}>
+            <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-yellow-800">
+                {((resumo?.asosAVencer || 0) + (resumo?.treinAVencer || 0))} documento(s) vencem nos próximos 30 dias
+              </p>
+              <p className="text-xs text-yellow-600">Clique para ver o Painel de Validade</p>
+            </div>
+            <ExternalLink className="h-4 w-4 text-yellow-400" />
+          </div>
+        )}
+
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
           {[
             { key: "asos", label: "ASOs", value: resumo?.totalASOs || 0, icon: Stethoscope, color: "blue" },
-            { key: "vencido", label: "Vencidos", value: resumo?.asosVencidos || 0, icon: AlertTriangle, color: "red" },
-            { key: "vencer", label: "A Vencer", value: resumo?.asosAVencer || 0, icon: Calendar, color: "yellow" },
+            { key: "vencido", label: "ASOs Vencidos", value: resumo?.asosVencidos || 0, icon: AlertTriangle, color: "red" },
+            { key: "vencer", label: "ASOs A Vencer", value: resumo?.asosAVencer || 0, icon: Calendar, color: "yellow" },
             { key: "treinamentos", label: "Treinamentos", value: resumo?.totalTreinamentos || 0, icon: GraduationCap, color: "green" },
+            { key: "treinVencido", label: "Trein. Vencidos", value: (resumo as any)?.treinVencidos || 0, icon: AlertTriangle, color: "red" },
+            { key: "treinVencer", label: "Trein. A Vencer", value: (resumo as any)?.treinAVencer || 0, icon: Clock, color: "yellow" },
             { key: "atestados", label: "Atestados", value: resumo?.totalAtestados || 0, icon: ClipboardList, color: "purple" },
             { key: "advertencias", label: "Advertências", value: resumo?.totalAdvertencias || 0, icon: ShieldAlert, color: "orange" },
           ].map(c => (
             <Card key={c.key} className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${cardFilter === c.key ? `ring-2 ring-${c.color}-500 shadow-lg bg-${c.color}-50/50` : ""}`} onClick={() => handleCardClick(c.key)}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-lg bg-${c.color}-100 flex items-center justify-center`}>
-                    <c.icon className={`h-5 w-5 text-${c.color}-600`} />
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className={`h-9 w-9 rounded-lg bg-${c.color}-100 flex items-center justify-center shrink-0`}>
+                    <c.icon className={`h-4 w-4 text-${c.color}-600`} />
                   </div>
-                  <div>
-                    <p className={`text-2xl font-bold ${c.color === "red" || c.color === "yellow" ? `text-${c.color}-600` : ""}`}>{c.value}</p>
-                    <p className="text-xs text-muted-foreground">{c.label}</p>
+                  <div className="min-w-0">
+                    <p className={`text-xl font-bold ${c.color === "red" || c.color === "yellow" ? `text-${c.color}-600` : ""}`}>{c.value}</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight truncate">{c.label}</p>
                   </div>
                 </div>
               </CardContent>
@@ -501,7 +745,7 @@ export default function ControleDocumentos() {
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Filtro ativo:</span>
             <Badge variant="secondary" className="gap-1">
-              {cardFilter === "asos" ? "Todos os ASOs" : cardFilter === "vencido" ? "ASOs Vencidos" : cardFilter === "vencer" ? "ASOs A Vencer" : cardFilter === "treinamentos" ? "Treinamentos" : cardFilter === "atestados" ? "Atestados" : "Advertências"}
+              {cardFilter === "asos" ? "Todos os ASOs" : cardFilter === "vencido" ? "ASOs Vencidos" : cardFilter === "vencer" ? "ASOs A Vencer" : cardFilter === "treinamentos" ? "Treinamentos" : cardFilter === "treinVencido" ? "Trein. Vencidos" : cardFilter === "treinVencer" ? "Trein. A Vencer" : cardFilter === "atestados" ? "Atestados" : "Advertências"}
               <button onClick={() => { setCardFilter(null); setStatusFilter("todos"); }} className="ml-1 hover:text-foreground">✕</button>
             </Badge>
           </div>
@@ -528,7 +772,10 @@ export default function ControleDocumentos() {
 
         {/* TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 h-12 gap-1 bg-transparent p-0">
+          <TabsList className="grid w-full grid-cols-5 h-12 gap-1 bg-transparent p-0">
+            <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
+              <AlertTriangle className="h-4 w-4" /> Validade
+            </TabsTrigger>
             <TabsTrigger value="aso" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "aso" ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-blue-50/50 hover:text-blue-600"}`}>
               <Stethoscope className="h-4 w-4" /> ASO
             </TabsTrigger>
@@ -543,13 +790,18 @@ export default function ControleDocumentos() {
             </TabsTrigger>
           </TabsList>
 
+          {/* ===================== ABA PAINEL DE VALIDADE ===================== */}
+          <TabsContent value="validade">
+            <ValidadePanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} />
+          </TabsContent>
+
           {/* ===================== ABA ASO ===================== */}
           <TabsContent value="aso">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">Atestados de Saúde Ocupacional</CardTitle>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setShowImportAso(true)}><Upload className="h-4 w-4 mr-1" /> Importar</Button>
+
                   <Button size="sm" onClick={openNewAso}><Plus className="h-4 w-4 mr-1" /> Novo ASO</Button>
                 </div>
               </CardHeader>
@@ -1052,6 +1304,20 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">Observações</label>
               <Textarea value={asoForm.observacoes || ""} onChange={e => setAsoForm({ ...asoForm, observacoes: e.target.value })} rows={2} />
             </div>
+            <div className="col-span-2">
+              <label className="text-sm font-medium">Anexar Documento ASO (PDF/Imagem)</label>
+              <div className="mt-1">
+                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                    setAsoForm({ ...asoForm, _file: file });
+                  }
+                }} />
+                {asoForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {asoForm._file.name}</p>}
+                {editingAsoId && (() => { const aso = asoList.find((a: any) => a.id === editingAsoId); return aso?.documentoUrl ? <a href={aso.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver documento atual</a> : null; })()}
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => { setShowAsoDialog(false); setEditingAsoId(null); }}>Cancelar</Button>
@@ -1308,36 +1574,7 @@ export default function ControleDocumentos() {
       </FullScreenDialog>
 
       {/* ===================== DIALOG: IMPORTAR ASO ===================== */}
-      <FullScreenDialog open={showImportAso} onClose={() => setShowImportAso(false)} title="Importar ASOs" icon={<Upload className="h-5 w-5 text-white" />}>
-        <div className="w-full">
-          <div className="space-y-4">
-            <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
-              <p className="font-medium">Como funciona:</p>
-              <p>Cole os dados da planilha de ASO (formato TSV/texto tabulado) em um arquivo .txt e faça o upload.</p>
-              <p className="mt-1">Colunas esperadas: Nº, Nome, Tipo, Data, Validade(dias), Status, Vencimento, Resultado, Médico, CRM, Já Atualizou, Exames</p>
-            </div>
-            <Input type="file" accept=".txt,.csv,.tsv" onChange={e => setImportFile(e.target.files?.[0] || null)} />
-            {importAso.data && (
-              <div className="bg-green-50 p-3 rounded-lg text-sm">
-                <p>Importados: <strong>{importAso.data.imported}</strong></p>
-                <p>Não encontrados: <strong>{importAso.data.notFound}</strong></p>
-                {importAso.data.errors.length > 0 && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-red-600">Ver erros ({importAso.data.errors.length})</summary>
-                    <ul className="mt-1 text-xs">{importAso.data.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
-                  </details>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => setShowImportAso(false)}>Fechar</Button>
-            <Button onClick={handleImportAso} disabled={importAso.isPending || !importFile}>
-              {importAso.isPending ? "Importando..." : "Importar"}
-            </Button>
-          </div>
-        </div>
-      </FullScreenDialog>
+
       {/* ===================== DIALOG: VISUALIZAR DOCUMENTO CLT ===================== */}
       {/* ===================== VISUALIZAÇÃO FULL SCREEN DO DOCUMENTO ===================== */}
       {showAdvPreview && previewAdvData && (() => {

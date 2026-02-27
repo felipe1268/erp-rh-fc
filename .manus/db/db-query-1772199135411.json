@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, razaoSocial FROM companies LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, razaoSocial FROM companies LIMIT 10;",
+  "rows": [
+    {
+      "id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA"
+    },
+    {
+      "id": "60004",
+      "razaoSocial": "CF HOTELARIA LTDA"
+    },
+    {
+      "id": "60005",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "90001",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA"
+    },
+    {
+      "id": "450042",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450043",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450044",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450045",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450046",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450047",
+      "razaoSocial": "Empresa Teste CRUD"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\n60004\tCF HOTELARIA LTDA\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n90001\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\n450042\tEmpresa Teste CRUD\n450043\tEmpresa Teste CRUD\n450044\tEmpresa Teste CRUD\n450045\tEmpresa Teste CRUD\n450046\tEmpresa Teste CRUD\n450047\tEmpresa Teste CRUD\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

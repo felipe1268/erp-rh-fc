@@ -248,7 +248,7 @@ export const controleDocumentosRouter = router({
         dataValidade.setDate(dataValidade.getDate() + input.validadeDias);
         const dataValidadeStr = dataValidade.toISOString().split("T")[0];
 
-        await db.insert(asos).values({
+        const [result] = await db.insert(asos).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
           tipo: input.tipo,
@@ -262,7 +262,7 @@ export const controleDocumentosRouter = router({
           clinica: input.clinica || null,
           observacoes: input.observacoes || null,
         });
-        return { success: true };
+        return { success: true, id: Number(result.insertId) };
       }),
 
     update: protectedProcedure
@@ -849,6 +849,25 @@ export const controleDocumentosRouter = router({
           )
         );
 
+      // Treinamentos vencidos
+      const [treinVencidos] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(trainings)
+        .innerJoin(employees, eq(trainings.employeeId, employees.id))
+        .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${hoje}`));
+
+      // Treinamentos a vencer em 30 dias
+      const [treinAVencer] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(trainings)
+        .innerJoin(employees, eq(trainings.employeeId, employees.id))
+        .where(and(
+          eq(trainings.companyId, input.companyId),
+          isNull(employees.deletedAt),
+          isNull(trainings.deletedAt),
+          sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} >= ${hoje} AND ${trainings.dataValidade} <= ${em30diasStr}`
+        ));
+
       return {
         totalASOs: Number(asoCount.count),
         totalTreinamentos: Number(treinamentoCount.count),
@@ -856,6 +875,8 @@ export const controleDocumentosRouter = router({
         totalAdvertencias: Number(advertenciaCount.count),
         asosVencidos: Number(asosVencidos.count),
         asosAVencer: Number(asosAVencer.count),
+        treinVencidos: Number(treinVencidos.count),
+        treinAVencer: Number(treinAVencer.count),
       };
     }),
 
@@ -1279,5 +1300,81 @@ export const controleDocumentosRouter = router({
         await db.update(atestados).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(eq(atestados.id, id));
       }
       return { success: true, deletados: input.ids.length };
+    }),
+
+  // ===================== PAINEL DE VALIDADE =====================
+  painelValidade: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const hoje = new Date().toISOString().split("T")[0];
+
+      // ASOs com validade
+      const asoRows = await db
+        .select({
+          id: asos.id,
+          employeeId: asos.employeeId,
+          nomeCompleto: employees.nomeCompleto,
+          cpf: employees.cpf,
+          funcao: employees.funcao,
+          tipo: asos.tipo,
+          dataExame: asos.dataExame,
+          dataValidade: asos.dataValidade,
+          resultado: asos.resultado,
+          documentoUrl: asos.documentoUrl,
+        })
+        .from(asos)
+        .innerJoin(employees, eq(asos.employeeId, employees.id))
+        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt)))
+        .orderBy(asos.dataValidade);
+
+      // Treinamentos com validade
+      const treinRows = await db
+        .select({
+          id: trainings.id,
+          employeeId: trainings.employeeId,
+          nomeCompleto: employees.nomeCompleto,
+          cpf: employees.cpf,
+          funcao: employees.funcao,
+          nome: trainings.nome,
+          norma: trainings.norma,
+          dataRealizacao: trainings.dataRealizacao,
+          dataValidade: trainings.dataValidade,
+          certificadoUrl: trainings.certificadoUrl,
+        })
+        .from(trainings)
+        .innerJoin(employees, eq(trainings.employeeId, employees.id))
+        .where(and(
+          eq(trainings.companyId, input.companyId),
+          isNull(employees.deletedAt),
+          isNull(trainings.deletedAt),
+          sql`${trainings.dataValidade} IS NOT NULL`
+        ))
+        .orderBy(trainings.dataValidade);
+
+      // Calcular status para cada item
+      const asosComStatus = asoRows.map((r: any) => {
+        const { status, diasRestantes } = calcularStatusASO(r.dataValidade);
+        return { ...r, tipoDoc: "ASO" as const, descricao: r.tipo, status, diasRestantes };
+      });
+
+      const treinsComStatus = treinRows.map((r: any) => {
+        const { status, diasRestantes } = calcularStatusASO(r.dataValidade!);
+        return { ...r, tipoDoc: "Treinamento" as const, descricao: r.nome + (r.norma ? ` (${r.norma})` : ""), status, diasRestantes };
+      });
+
+      // Unificar e ordenar por urgência (vencidos primeiro, depois por dias restantes)
+      const todos = [...asosComStatus, ...treinsComStatus].sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+      // Estatísticas
+      const vencidos = todos.filter(d => d.status === "VENCIDO").length;
+      const aVencer30 = todos.filter(d => d.diasRestantes >= 0 && d.diasRestantes <= 30).length;
+      const aVencer60 = todos.filter(d => d.diasRestantes > 30 && d.diasRestantes <= 60).length;
+      const validos = todos.filter(d => d.diasRestantes > 60).length;
+
+      return {
+        documentos: todos,
+        stats: { vencidos, aVencer30, aVencer60, validos, total: todos.length },
+      };
     }),
 });
