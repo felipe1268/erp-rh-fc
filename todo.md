@@ -3103,3 +3103,5 @@
 ## Painel RH - Avisos Prévios melhorias - 2026-02-27
 - [x] Adicionar total em dinheiro (valor estimado) no topo da seção Avisos Prévios em Andamento
 - [x] FIX: Card de funcionário excluído (4d restantes) sem nome no Painel RH — ocultar cards de funcionários excluídos
+## Painel RH - Card de Aviso Prévio clicável - 2026-02-27
+- [x] Tornar cards de aviso prévio clicáveis no Painel RH, abrindo dialog com cálculos detalhados da rescisão
