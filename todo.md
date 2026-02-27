@@ -3008,3 +3008,11 @@
 - [x] Campos de Outros Benefícios (Auxílio Farmácia, Plano de Saúde) - CORRIGIDO
 - [x] Causa: campos não existiam no schema do banco + não estavam na lista validFields do updateEmployee
 - [x] 12 colunas adicionadas ao banco + 17 campos adicionados à lista validFields + campos de pensão/licença/rateáveis
+
+## Bug: Dias indenizados somando no aviso prévio trabalhado
+- [x] Os 3 dias extras por ano de serviço não somam mais nos dias de aviso trabalhado
+- [x] Aviso prévio TRABALHADO = sempre 30 dias fixos
+- [x] Aviso prévio INDENIZADO = 30 + 3*anos (total pago)
+- [x] Backend: calcularDiasAviso agora recebe o tipo e retorna 30 para trabalhado
+- [x] Frontend: card mostra "30 dias" + nota "+ X dias indenizados" quando aplicável
+- [x] 24 testes passando

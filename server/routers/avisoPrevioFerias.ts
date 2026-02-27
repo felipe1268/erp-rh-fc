@@ -63,10 +63,26 @@ function calcularMeses13o(dataAdmissao: string, dataDesligamento: string): numbe
   return Math.max(0, Math.min(12, meses));
 }
 
-/** Calcula dias de aviso prévio proporcional (Art. 1º Lei 12.506/2011) */
-function calcularDiasAviso(anosServico: number): number {
+/** Calcula dias TOTAIS de aviso prévio proporcional (Art. 1º Lei 12.506/2011) */
+function calcularDiasAvisoTotal(anosServico: number): number {
   // 30 dias base + 3 dias por ano completo (máximo 90 dias total)
   return Math.min(30 + (anosServico * 3), 90);
+}
+
+/** Calcula dias de aviso prévio TRABALHADO (sempre 30 dias fixos) */
+function calcularDiasAvisoTrabalhado(): number {
+  return 30;
+}
+
+/** Calcula dias de aviso prévio conforme o tipo:
+ *  - Trabalhado: 30 dias fixos (extras são indenizados separadamente)
+ *  - Indenizado: 30 + 3*anos (tudo é pago, não trabalha)
+ */
+function calcularDiasAviso(anosServico: number, tipo?: string): number {
+  if (tipo && tipo.includes('trabalhado')) {
+    return 30; // Aviso trabalhado = sempre 30 dias
+  }
+  return calcularDiasAvisoTotal(anosServico); // Indenizado = total
 }
 
 /** Calcula dias extras do aviso prévio (Lei 12.506 - apenas os 3 dias por ano) */
@@ -124,7 +140,7 @@ function calcularRescisaoCompleta(params: {
   const diasReaisMes = new Date(dtDeslig.getFullYear(), dtDeslig.getMonth() + 1, 0).getDate();
   const salarioDia = salarioBase / diasReaisMes;
   const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
-  const diasAvisoTotal = calcularDiasAviso(anosServico);
+  const diasAvisoTotal = calcularDiasAvisoTotal(anosServico);
   const diasExtrasAviso = calcularDiasExtrasAviso(anosServico);
   
   // ============================================================
@@ -340,7 +356,8 @@ export const avisoPrevioFeriasRouter = router({
         const dataDesligamento = input.dataDesligamento;
         const salarioBase = parseBRL(emp.salarioBase);
         const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
-        const diasAviso = calcularDiasAviso(anosServico);
+        const diasAviso = calcularDiasAviso(anosServico, input.tipo);
+        const diasExtras = calcularDiasExtrasAviso(anosServico);
         
         // Dias trabalhados no mês do desligamento
         const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
@@ -474,6 +491,7 @@ export const avisoPrevioFeriasRouter = router({
         return {
           anosServico,
           diasAviso,
+          diasExtras,
           salarioBase: salarioBase.toFixed(2),
           dataAdmissao,
           dataDesligamento,
@@ -609,7 +627,7 @@ export const avisoPrevioFeriasRouter = router({
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
         const dataDesligamento = input.dataDesligamento || input.dataInicio;
         const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
-        const diasAviso = calcularDiasAviso(anosServico);
+        const diasAviso = calcularDiasAviso(anosServico, input.tipo);
         const salarioBase = parseBRL(emp.salarioBase);
         const dataFim = calcularDataFim(input.dataInicio, diasAviso);
         
@@ -678,7 +696,7 @@ export const avisoPrevioFeriasRouter = router({
           const dataDesligFinal = dataDesligamento || dataInicioFinal;
           const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
           const anosServico = calcularAnosServico(dataAdmissao, dataDesligFinal);
-          const diasAviso = calcularDiasAviso(anosServico);
+          const diasAviso = calcularDiasAviso(anosServico, tipo);
           const salarioBase = parseBRL(emp.salarioBase);
           const dataFim = calcularDataFim(dataInicioFinal, diasAviso);
           const dtDeslig = new Date(dataDesligFinal + 'T00:00:00');
@@ -829,7 +847,7 @@ export const avisoPrevioFeriasRouter = router({
               cargo: e.cargo || (e as any).funcao || '',
               dataAdmissao: e.dataAdmissao,
               anosServico: e.dataAdmissao ? calcularAnosServico(e.dataAdmissao) : 0,
-              diasAvisoPrevio: e.dataAdmissao ? calcularDiasAviso(calcularAnosServico(e.dataAdmissao)) : 30,
+              diasAvisoPrevio: e.dataAdmissao ? calcularDiasAvisoTotal(calcularAnosServico(e.dataAdmissao)) : 30,
             })),
             totalFuncionarios: funcsAlocados.length,
           };

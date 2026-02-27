@@ -424,6 +424,9 @@ export default function AvisoPrevio() {
                   <p className="text-xs text-amber-600 uppercase">Dias de Aviso</p>
                   <p className="font-bold text-lg">{selectedItem.diasAviso} dias</p>
                   <p className="text-xs text-amber-500">{selectedItem.anosServico} anos de serviço</p>
+                  {selectedItem.anosServico > 0 && selectedItem.tipo?.includes('trabalhado') && (
+                    <p className="text-[10px] text-amber-600 mt-1">+ {Math.min(selectedItem.anosServico * 3, 60)} dias indenizados</p>
+                  )}
                 </div>
                 <div className="bg-green-50 rounded-lg p-4 text-center">
                   <Calendar className="h-5 w-5 mx-auto text-green-600 mb-1" />
@@ -682,9 +685,11 @@ export default function AvisoPrevio() {
                       <p className="text-xl font-bold text-green-800">{calculoPreview.anosServico}</p>
                     </div>
                     <div className="text-center bg-white rounded-lg p-3 border border-green-100">
-                      <p className="text-[10px] text-green-600 font-medium mb-1">Dias Aviso (Lei 12.506)</p>
-                      <p className="text-xl font-bold text-green-800">{calculoPreview.diasAviso}</p>
-                      <p className="text-[9px] text-green-500">30 + {calculoPreview.previsaoRescisao?.diasExtrasAviso || 0} extras</p>
+                      <p className="text-[10px] text-green-600 font-medium mb-1">Dias Aviso</p>
+                      <p className="text-xl font-bold text-green-800">{calculoPreview.diasAviso} dias</p>
+                      {(calculoPreview.diasExtras || 0) > 0 && (
+                        <p className="text-[9px] text-amber-600">+ {calculoPreview.diasExtras} dias indenizados</p>
+                      )}
                     </div>
                     <div className="text-center bg-white rounded-lg p-3 border border-green-100">
                       <p className="text-[10px] text-green-600 font-medium mb-1">Meses Férias</p>
