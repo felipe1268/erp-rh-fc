@@ -3088,3 +3088,15 @@
 ## BUG FIX: Data de término do aviso prévio incorreta - 2026-02-27
 - [x] FIX: Data de término do aviso prévio está 1 dia a mais (ex: início 12/02, 30 dias, mostra 14/03 em vez de 13/03)
 - [x] FIX: Atualizar 40 registros existentes no banco com dataFim correta
+## Novos Módulos Em Desenvolvimento - Home Page - 2026-02-27
+- [x] Adicionar card CRM na seção Em Desenvolvimento
+- [x] Adicionar card Comercial na seção Em Desenvolvimento
+- [x] Adicionar card Pós-Obras na seção Em Desenvolvimento
+- [x] Adicionar card Medição de Obras na seção Em Desenvolvimento
+- [x] Adicionar card Diário de Obras na seção Em Desenvolvimento
+- [x] Adicionar card Gestão de Contratos na seção Em Desenvolvimento
+- [x] Adicionar card Gestão de Subempreiteiros na seção Em Desenvolvimento
+- [x] Adicionar card Almoxarifado / Estoque de Obra na seção Em Desenvolvimento
+- [x] Adicionar card Assistência Técnica na seção Em Desenvolvimento
+- [x] Adicionar card Documentação de Obra na seção Em Desenvolvimento
+- [x] Adicionar card Indicadores / BI na seção Em Desenvolvimento
