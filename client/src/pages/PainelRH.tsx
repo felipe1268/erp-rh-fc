@@ -243,22 +243,32 @@ export default function PainelRH() {
               </Dialog>
 
               {/* Card de Avisos Prévios em Andamento */}
-              {(homeData?.avisosPrevios?.length ?? 0) > 0 && (
+              {(homeData?.avisosPrevios?.length ?? 0) > 0 && (() => {
+                const avisosValidos = homeData!.avisosPrevios.filter((a: any) => a.nome && a.nome !== 'Funcionário' && a.nome !== 'Funcionário excluído');
+                const totalValorEstimado = homeData!.avisosPrevios.reduce((acc: number, a: any) => acc + (parseFloat(a.valorEstimado) || 0), 0);
+                return avisosValidos.length > 0 && (
                 <Card className="border-2 border-red-300 bg-gradient-to-r from-red-50 to-orange-50">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm flex items-center gap-2">
                         <FileText className="h-4 w-4 text-red-600" />
                         Avisos Prévios em Andamento
-                        <Badge variant="destructive" className="text-[10px]">{homeData!.avisosPrevios.length} ativo{homeData!.avisosPrevios.length !== 1 ? 's' : ''}</Badge>
+                        <Badge variant="destructive" className="text-[10px]">{avisosValidos.length} ativo{avisosValidos.length !== 1 ? 's' : ''}</Badge>
                         {(s?.avisosPreviosVencendo ?? 0) > 0 && <Badge className="bg-red-600 text-white text-[10px] animate-pulse">{s!.avisosPreviosVencendo} vencendo!</Badge>}
                       </CardTitle>
                       <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate('/aviso-previo')}>Ver todos <ChevronRight className="h-3 w-3 ml-1" /></Button>
                     </div>
+                    {totalValorEstimado > 0 && (
+                      <div className="mt-2 flex items-center gap-2 bg-red-100/60 rounded-lg px-3 py-2">
+                        <DollarSign className="h-4 w-4 text-red-600" />
+                        <span className="text-xs text-red-700">Valor total estimado:</span>
+                        <span className="text-sm font-bold text-red-700">R$ {totalValorEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {homeData!.avisosPrevios.map((a: any) => {
+                      {avisosValidos.map((a: any) => {
                         const tipoLabel = a.tipo === 'empregador_trabalhado' ? 'Emp. Trabalhado' : a.tipo === 'empregador_indenizado' ? 'Emp. Indenizado' : a.tipo === 'empregado_trabalhado' ? 'Ped. Trabalhado' : 'Ped. Indenizado';
                         return (
                           <div key={a.id} className={`p-3 rounded-lg border ${
@@ -289,7 +299,7 @@ export default function PainelRH() {
                     </div>
                   </CardContent>
                 </Card>
-              )}
+              );})()}
 
               {/* Main Content Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

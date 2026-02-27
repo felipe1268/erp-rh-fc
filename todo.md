@@ -3100,3 +3100,6 @@
 - [x] Adicionar card Assistência Técnica na seção Em Desenvolvimento
 - [x] Adicionar card Documentação de Obra na seção Em Desenvolvimento
 - [x] Adicionar card Indicadores / BI na seção Em Desenvolvimento
+## Painel RH - Avisos Prévios melhorias - 2026-02-27
+- [x] Adicionar total em dinheiro (valor estimado) no topo da seção Avisos Prévios em Andamento
+- [x] FIX: Card de funcionário excluído (4d restantes) sem nome no Painel RH — ocultar cards de funcionários excluídos
