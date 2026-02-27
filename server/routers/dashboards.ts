@@ -1217,6 +1217,17 @@ async function getDashAvisoPrevio(companyId: number) {
   const db = await getDb();
   if (!db) return null;
 
+  // Auto-conclude: mark as 'concluido' any aviso where dataFim < today and status is still 'em_andamento'
+  const today = new Date().toISOString().split('T')[0];
+  await db.update(terminationNotices)
+    .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
+    .where(and(
+      eq(terminationNotices.companyId, companyId),
+      eq(terminationNotices.status, 'em_andamento'),
+      isNull(terminationNotices.deletedAt),
+      sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`
+    ));
+
   const allNotices = await db.select({
     id: terminationNotices.id,
     employeeId: terminationNotices.employeeId,

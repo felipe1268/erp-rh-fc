@@ -300,6 +300,18 @@ export const avisoPrevioFeriasRouter = router({
       .input(z.object({ companyId: z.number(), status: z.string().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
+
+        // Auto-conclude: mark as 'concluido' any aviso where dataFim < today and status is still 'em_andamento'
+        const today = new Date().toISOString().split('T')[0];
+        await db.update(terminationNotices)
+          .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
+          .where(and(
+            eq(terminationNotices.companyId, input.companyId),
+            eq(terminationNotices.status, 'em_andamento'),
+            isNull(terminationNotices.deletedAt),
+            sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`
+          ));
+
         const conditions = [
           eq(terminationNotices.companyId, input.companyId),
           isNull(terminationNotices.deletedAt),

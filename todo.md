@@ -3068,3 +3068,8 @@
 
 ## Full Screen Modal Avaliação - 2026-02-27
 - [x] Tornar modal Nova Avaliação de Desempenho full screen (usando FullScreenDialog)
+
+## Auto-Conclusão Aviso Prévio - 2026-02-27
+- [x] Implementar auto-conclusão: se dataFim < hoje e status = em_andamento, marcar como concluído automaticamente
+- [x] Atualizar registros existentes no banco que já passaram da data de término
+- [x] Lógica aplicada tanto na listagem quanto no dashboard
