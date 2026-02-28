@@ -32,6 +32,7 @@ export const valeAlimentacaoRouter = router({
             LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
             LEFT JOIN obras o ON of2.obraId = o.id
             WHERE vr.companyId = ${input.companyId} AND vr.mesReferencia = ${input.mesReferencia}
+            AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)
             ORDER BY e.nomeCompleto ASC`
       ) as any[];
       return rows || [];
@@ -58,13 +59,15 @@ export const valeAlimentacaoRouter = router({
       const [vrRows] = await db.execute(
         sql`SELECT 
           COUNT(*) as total,
-          SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
-          SUM(CASE WHEN status = 'aprovado' THEN 1 ELSE 0 END) as aprovados,
-          SUM(CASE WHEN status = 'pago' THEN 1 ELSE 0 END) as pagos,
-          SUM(CASE WHEN status = 'cancelado' THEN 1 ELSE 0 END) as cancelados,
-          SUM(CASE WHEN status != 'cancelado' THEN CAST(REPLACE(REPLACE(valorTotal, '.', ''), ',', '.') AS DECIMAL(10,2)) ELSE 0 END) as totalValor
-        FROM vr_benefits 
-        WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}`
+          SUM(CASE WHEN vr.status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
+          SUM(CASE WHEN vr.status = 'aprovado' THEN 1 ELSE 0 END) as aprovados,
+          SUM(CASE WHEN vr.status = 'pago' THEN 1 ELSE 0 END) as pagos,
+          SUM(CASE WHEN vr.status = 'cancelado' THEN 1 ELSE 0 END) as cancelados,
+          SUM(CASE WHEN vr.status != 'cancelado' THEN CAST(REPLACE(REPLACE(vr.valorTotal, '.', ''), ',', '.') AS DECIMAL(10,2)) ELSE 0 END) as totalValor
+        FROM vr_benefits vr
+        LEFT JOIN employees e ON vr.employeeId = e.id
+        WHERE vr.companyId = ${input.companyId} AND vr.mesReferencia = ${input.mesReferencia}
+        AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)`
       ) as any[];
       
       const stats = vrRows?.[0] || {};

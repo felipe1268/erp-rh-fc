@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO system_revisions (revisao, data, descricao, detalhes, tipo, modulo, createdAt) VALUES ('117', '2026-02-28', 'Excluir Desligados de Todos os Cálculos Ativos', 'Colaboradores com status Desligado ou Lista_Negra agora são automaticamente excluídos de todos os cálculos ativos do sistema: férias (listagem, vencidas, calendário, alertas, férias do mês), vale alimentação (listagem e estatísticas), dashboards de férias e horas extras. A folha de pagamento já alertava status não-ativo. Teste prático confirmou que ao desligar um funcionário, ele desaparece imediatamente de férias e VA.', 'melhoria', 'Sistema', NOW())",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (revisao, data, descricao, detalhes, tipo, modulo, createdAt) VALUES ('117', '2026-02-28', 'Excluir Desligados de Todos os Cálculos Ativos', 'Colaboradores com status Desligado ou Lista_Negra agora são automaticamente excluídos de todos os cálculos ativos do sistema: férias (listagem, vencidas, calendário, alertas, férias do mês), vale alimentação (listagem e estatísticas), dashboards de férias e horas extras. A folha de pagamento já alertava status não-ativo. Teste prático confirmou que ao desligar um funcionário, ele desaparece imediatamente de férias e VA.', 'melhoria', 'Sistema', NOW())",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'revisao' in 'field list'"
+  ]
+}

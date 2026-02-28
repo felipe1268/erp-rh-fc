@@ -538,7 +538,7 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
     setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao,
     obraAtualId: employees.obraAtualId,
-  }).from(employees).where(and(eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`));
+  }).from(employees).where(and(eq(employees.companyId, companyId), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`, sql`${employees.deletedAt} IS NULL`));
   const empMap = new Map(allEmps.map(e => [e.id, e]));
 
   // Obras
@@ -1572,7 +1572,12 @@ async function getDashFerias(companyId: number, ano?: number) {
     empStatus: employees.status,
   }).from(vacationPeriods)
     .leftJoin(employees, eq(vacationPeriods.employeeId, employees.id))
-    .where(and(eq(vacationPeriods.companyId, companyId), isNull(vacationPeriods.deletedAt)))
+    .where(and(
+      eq(vacationPeriods.companyId, companyId),
+      isNull(vacationPeriods.deletedAt),
+      sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+      isNull(employees.deletedAt),
+    ))
     .orderBy(desc(vacationPeriods.createdAt));
 
   // Recalcular valores de férias em tempo real usando salário atual

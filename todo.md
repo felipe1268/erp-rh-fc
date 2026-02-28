@@ -3520,3 +3520,21 @@
 - [x] Zerar flag pagamentoEmDobro nos registros de férias concluídas/liquidadas
 - [x] Remover lógica automática que marcava pagamentoEmDobro=1 em períodos vencidos
 - [x] Atualizar textos de alerta: "Pagamento em Dobro" → "Período Concessivo Expirado"
+
+## Rev. 117 - Excluir Desligados de Todos os Cálculos Ativos
+
+### Investigação e Mapeamento
+- [x] Mapear todos os módulos que contabilizam colaboradores desligados indevidamente
+- [x] Verificar filtros de VR, VA, VT, férias, folha, horas extras, dashboards
+### Correções Backend
+- [x] Filtrar desligados nos cálculos de VR/VA/VT (stats e listagem)
+- [x] Folha de pagamento já alertava status não-ativo (OK)
+- [x] Filtrar desligados nos cálculos de horas extras (dashboard)
+- [x] Filtrar desligados nos cálculos de férias (listagem, vencidas, calendário, alertas, feriasDoMes)
+- [x] Filtrar desligados nos dashboards de férias e horas extras
+### Teste Prático
+- [x] Desligar ODAIR JOSE PEREIRA (id=420058) e verificar que sumiu de férias e VA
+- [x] Reverter desligamento após teste
+### Correções de Dados
+- [x] Férias de desligados já estavam zeradas (nenhum desligado tinha férias pendentes/vencidas)
+- [x] Benefícios de desligados agora são filtrados nas queries

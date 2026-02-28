@@ -1055,9 +1055,11 @@ export const avisoPrevioFeriasRouter = router({
       .input(z.object({ companyId: z.number(), status: z.string().optional(), employeeId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions = [
+        const conditions: any[] = [
           eq(vacationPeriods.companyId, input.companyId),
           isNull(vacationPeriods.deletedAt),
+          sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+          isNull(employees.deletedAt),
         ];
         if (input.status) conditions.push(eq(vacationPeriods.status, input.status as any));
         if (input.employeeId) conditions.push(eq(vacationPeriods.employeeId, input.employeeId));
@@ -1145,6 +1147,8 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(
           eq(vacationPeriods.companyId, input.companyId),
           isNull(vacationPeriods.deletedAt),
+          sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+          isNull(employees.deletedAt),
           sql`(${vacationPeriods.dataInicio} BETWEEN ${inicioAno} AND ${fimAno} OR ${vacationPeriods.periodoConcessivoFim} BETWEEN ${inicioAno} AND ${fimAno})`,
         ))
         .orderBy(asc(vacationPeriods.dataInicio));
@@ -1174,6 +1178,8 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(
           eq(vacationPeriods.companyId, input.companyId),
           isNull(vacationPeriods.deletedAt),
+          sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+          isNull(employees.deletedAt),
           eq(vacationPeriods.status, 'pendente'),
           sql`${vacationPeriods.periodoConcessivoFim} < ${hoje}`,
         ));
@@ -1191,6 +1197,8 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(
           eq(vacationPeriods.companyId, input.companyId),
           isNull(vacationPeriods.deletedAt),
+          sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+          isNull(employees.deletedAt),
           eq(vacationPeriods.status, 'pendente'),
           sql`${vacationPeriods.periodoConcessivoFim} BETWEEN ${hoje} AND ${em60diasStr}`,
         ));
@@ -1661,6 +1669,8 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(
           eq(vacationPeriods.companyId, input.companyId),
           isNull(vacationPeriods.deletedAt),
+          sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+          isNull(employees.deletedAt),
           sql`(
             (${vacationPeriods.dataInicio} BETWEEN ${inicioAno} AND ${fimAno})
             OR (${vacationPeriods.dataSugeridaInicio} BETWEEN ${inicioAno} AND ${fimAno})
@@ -1699,6 +1709,8 @@ export const avisoPrevioFeriasRouter = router({
           eq(vacationPeriods.companyId, input.companyId),
           eq(vacationPeriods.status, 'vencida'),
           isNull(vacationPeriods.deletedAt),
+          sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+          isNull(employees.deletedAt),
         ))
         .orderBy(asc(employees.nomeCompleto), asc(vacationPeriods.periodoAquisitivoInicio));
 

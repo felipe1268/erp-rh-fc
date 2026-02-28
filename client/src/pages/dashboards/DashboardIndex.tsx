@@ -268,7 +268,7 @@ export default function DashboardIndex() {
             <span className="hidden sm:block text-[11px] text-gray-500">{dateStr}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-400 font-mono">v.116</span>
+            <span className="text-[11px] text-gray-400 font-mono">v.117</span>
             <div className="h-3 w-px bg-gray-300" />
             <span className="text-[11px] text-gray-500 font-mono">{timeStr}</span>
           </div>
