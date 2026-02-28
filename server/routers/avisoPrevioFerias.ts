@@ -152,17 +152,32 @@ function calcularRescisaoCompleta(params: {
   
   // ============================================================
   // DATA DE REFERÊNCIA PARA CÁLCULOS
-  // A "data de saída" = dia seguinte ao término do aviso
-  // CLT: o período do aviso integra o tempo de serviço
+  // CLT Art. 487 §1º: O período do aviso prévio integra o tempo
+  // de serviço para TODOS os efeitos legais.
+  // 
+  // REGRA: O aviso prévio projeta o tempo de serviço até o
+  // ÚLTIMO DIA DO MÊS de término. Isso significa que:
+  // - Se o aviso termina em 13/03, projeta até 31/03
+  // - Se o aviso termina em 15/03, projeta até 31/03
+  // Isso garante que o mês do término seja contado inteiro
+  // para férias, 13º e FGTS.
+  //
+  // Para SALDO DE SALÁRIO: usa a dataSaida real (dia seguinte
+  // ao término), pois paga apenas os dias efetivamente devidos.
   // ============================================================
   const dataFimAviso = params.dataFimAviso || dataDesligamento;
   const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
   
-  // Data de saída = dia seguinte ao término do aviso
-  // É a data usada para cálculo de férias, 13º e FGTS
+  // Data de saída real = dia seguinte ao término do aviso
+  // Usada para saldo de salário (dias efetivos no mês)
   const dtDataSaida = new Date(dtFimAviso);
   dtDataSaida.setDate(dtDataSaida.getDate() + 1);
   const dataSaida = dtDataSaida.toISOString().split('T')[0];
+  
+  // Data de referência projetada = último dia do mês de término
+  // Usada para férias, 13º e FGTS (aviso projeta tempo de serviço)
+  const dtProjecao = new Date(dtFimAviso.getFullYear(), dtFimAviso.getMonth() + 1, 0);
+  const dataProjecao = dtProjecao.toISOString().split('T')[0];
   
   // ============================================================
   // DIVISOR DO SALDO DE SALÁRIO = 30 (padrão CLT)
@@ -186,9 +201,9 @@ function calcularRescisaoCompleta(params: {
   // ============================================================
   // 2. FÉRIAS PROPORCIONAIS + 1/3 CONSTITUCIONAL
   // CLT Art. 487 §1º: O período do aviso integra o tempo de serviço
-  // Calcula da admissão até a DATA DE SAÍDA
+  // Calcula da admissão até a DATA PROJETADA (último dia do mês)
   // ============================================================
-  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataSaida);
+  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataProjecao);
   const feriasProporcional = (salarioBase * mesesFerias) / 12;
   const tercoConstitucional = feriasProporcional / 3;
   const totalFerias = feriasProporcional + tercoConstitucional;
@@ -196,17 +211,18 @@ function calcularRescisaoCompleta(params: {
   // ============================================================
   // 3. FÉRIAS VENCIDAS (se houver)
   // Períodos aquisitivos completos não gozados
+  // Usa data projetada para contar períodos completos
   // ============================================================
-  const periodosVencidos = Math.max(0, calcularFeriasVencidas(dataAdmissao, dataSaida) - 1);
+  const periodosVencidos = Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
   const feriasVencidas = periodosVencidos > 0 ? (salarioBase + salarioBase / 3) * periodosVencidos : 0;
   
   // ============================================================
   // 4. 13º SALÁRIO PROPORCIONAL
-  // Conta de JANEIRO do ano vigente até a DATA DE SAÍDA
-  // (>=15 dias no mês = conta o mês inteiro)
+  // Conta de JANEIRO do ano vigente até a DATA PROJETADA
+  // O aviso prévio projeta o mês inteiro de término
   // CLT: o aviso prévio integra o tempo de serviço
   // ============================================================
-  const meses13o = calcularMeses13o(dataAdmissao, dataSaida);
+  const meses13o = calcularMeses13o(dataAdmissao, dataProjecao);
   const decimoTerceiroProporcional = (salarioBase * meses13o) / 12;
   
   // ============================================================
@@ -227,9 +243,9 @@ function calcularRescisaoCompleta(params: {
   
   // ============================================================
   // 7. FGTS (estimativa - 8% sobre remuneração)
-  // Calcula até a DATA DE SAÍDA (aviso integra tempo de serviço)
+  // Calcula até a DATA PROJETADA (aviso integra tempo de serviço)
   // ============================================================
-  const mesesTotais = calcularMesesServico(dataAdmissao, dataSaida);
+  const mesesTotais = calcularMesesServico(dataAdmissao, dataProjecao);
   const fgtsEstimado = salarioBase * 0.08 * mesesTotais;
   
   // ============================================================
@@ -238,9 +254,11 @@ function calcularRescisaoCompleta(params: {
   const multaFGTS = (tipo.includes('empregador')) ? fgtsEstimado * 0.4 : 0;
   
   // ============================================================
-  // TOTAL (FGTS e multa não somam - são depositados na conta FGTS)
+  // TOTAL DA RESCISÃO
+  // Inclui multa FGTS 40% pois é custo direto para a empresa
+  // FGTS estimado é apenas informativo (depositado na conta FGTS)
   // ============================================================
-  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional;
+  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional + multaFGTS;
   
   return {
     // Dados base
@@ -276,6 +294,7 @@ function calcularRescisaoCompleta(params: {
     
     mesesTotais,
     dataRefCalculo: dataSaida,
+    dataProjecao,
     
     // Data limite pagamento (Art. 477 §6º CLT: 10 dias corridos após término do aviso)
     dataLimitePagamento: (() => {

@@ -3401,3 +3401,13 @@
 - [x] BUG: FGTS/Multa 40% - corrigido para calcular até dataSaida
 - [x] Testes unitários para validar todos os cálculos corrigidos (31 testes de rescisão, 477 total)
 - [x] Tela de detalhes recalcula em tempo real via getById (não usa JSON armazenado antigo)
+
+## Correção Cálculos Rescisão - Caso IVAN DOS SANTOS (Referência: R$ 5.320,65)
+- [x] BUG: Saldo salário - CORRIGIDO: 14/30 = R$ 1.021,53 (ref R$ 1.021,07)
+- [x] BUG: Férias - CORRIGIDO: 12 meses com projeção CLT = R$ 2.918,67 EXATO
+- [x] BUG: 13º - CORRIGIDO: 3/12 = R$ 547,25 EXATO
+- [x] BUG: Multa FGTS - CORRIGIDO: R$ 840,58 (diff R$ 6,91 por estimativa)
+- [x] Investigar dados do IVAN no banco (admissão 17/03/2025, salário R$ 2.189)
+- [x] Corrigir cálculo de férias - usa projeção até último dia do mês de término
+- [x] Garantir que TODAS as telas usem o mesmo cálculo corrigido (getById recalcula)
+- [x] Incluir Multa FGTS 40% no total da rescisão (é custo para empresa)
