@@ -3701,3 +3701,5 @@
 - [x] BUG: Alocação de funcionário não atualiza a lista em tempo real (precisa recarregar página)
 - [x] Clicar no card da obra deve abrir FullScreenDialog com equipe e opção de alocar
 - [x] Adicionar linha de TOTAL no final da tabela Detalhamento por Obra no DashEfetivoObra
+- [x] BUG: Discrepância no "Sem Obra" - KPIs mostram 24 mas dialog de alocação mostra 22 (correto é 22)
+- [x] Equipe da Obra: separar funcionários por status (Ativo, Aviso Prévio, Férias, Afastado, Recluso)

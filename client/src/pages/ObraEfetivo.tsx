@@ -120,7 +120,7 @@ export default function ObraEfetivo() {
   // Totais
   const totalAlocados = efetivo.reduce((sum, e) => sum + ((e as any).efetivo || 0), 0);
   const totalObrasComEfetivo = efetivo.length;
-  const totalSemObra = semObra.length;
+  const totalSemObra = allEmps.filter((e: any) => !e.obraAtualId || e.obraAtualId === 0).length;
 
   // Helper: remove acentos para busca
   const removeAccents = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -133,10 +133,11 @@ export default function ObraEfetivo() {
   }, [efetivo, search]);
 
   const filteredSemObra = useMemo(() => {
-    if (!search) return semObra;
+    const base = allEmps.filter((e: any) => !e.obraAtualId || e.obraAtualId === 0);
+    if (!search) return base;
     const s = removeAccents(search);
-    return semObra.filter((e: any) => removeAccents(e.nomeCompleto || '').includes(s) || removeAccents(e.funcao || '').includes(s));
-  }, [semObra, search]);
+    return base.filter((e: any) => removeAccents(e.nomeCompleto || '').includes(s) || removeAccents(e.funcao || '').includes(s));
+  }, [allEmps, search]);
 
   // Filtered employees for search in dialog
   const filteredAllEmps = useMemo(() => {
@@ -971,108 +972,133 @@ export default function ObraEfetivo() {
             />
           </div>
 
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-blue-50 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-blue-700">{funcObra.length}</p>
-              <p className="text-xs text-blue-600">Total Alocados</p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-green-700">
-                {Array.from(new Set(funcObra.map((f: any) => f.funcaoNaObra || f.employee?.funcao || "Outros"))).length}
-              </p>
-              <p className="text-xs text-green-600">Funções</p>
-            </div>
-            <div className="bg-purple-50 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-purple-700">
-                {funcObra.filter((f: any) => {
-                  if (!f.dataInicio) return false;
-                  const d = new Date(f.dataInicio + "T12:00:00");
-                  const now = new Date();
-                  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                }).length}
-              </p>
-              <p className="text-xs text-purple-600">Novos este mês</p>
-            </div>
-            <div className="bg-amber-50 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-amber-700">
-                {efetivo.find((e: any) => e.obraId === selectedObraId)?.obraStatus?.replace("_", " ") || "—"}
-              </p>
-              <p className="text-xs text-amber-600">Status da Obra</p>
-            </div>
-          </div>
+          {/* Summary cards by status */}
+          {(() => {
+            const statusGroups: Record<string, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
+              Ativo: { label: "Ativos", color: "text-green-700", bgColor: "bg-green-50", borderColor: "border-green-200", icon: "🟢" },
+              Aviso: { label: "Aviso Prévio", color: "text-amber-700", bgColor: "bg-amber-50", borderColor: "border-amber-200", icon: "🟡" },
+              Ferias: { label: "Férias", color: "text-blue-700", bgColor: "bg-blue-50", borderColor: "border-blue-200", icon: "🔵" },
+              Afastado: { label: "Afastados", color: "text-purple-700", bgColor: "bg-purple-50", borderColor: "border-purple-200", icon: "🟣" },
+              Recluso: { label: "Reclusos", color: "text-red-700", bgColor: "bg-red-50", borderColor: "border-red-200", icon: "🔴" },
+              Licenca: { label: "Licença", color: "text-cyan-700", bgColor: "bg-cyan-50", borderColor: "border-cyan-200", icon: "🩵" },
+            };
+            const filteredFuncObra = funcObra.filter((f: any) => {
+              if (!equipeSearch) return true;
+              const s = equipeSearch.toLowerCase();
+              return (f.employee?.nomeCompleto || "").toLowerCase().includes(s) ||
+                (f.funcaoNaObra || "").toLowerCase().includes(s) ||
+                (f.employee?.funcao || "").toLowerCase().includes(s);
+            });
+            const grouped: Record<string, any[]> = {};
+            filteredFuncObra.forEach((f: any) => {
+              const st = f.employee?.status || "Ativo";
+              if (!grouped[st]) grouped[st] = [];
+              grouped[st].push(f);
+            });
+            const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
+            const sortedKeys = Object.keys(grouped).sort((a, b) => {
+              const ia = statusOrder.indexOf(a); const ib = statusOrder.indexOf(b);
+              return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+            });
+            return (
+              <>
+                {/* Status summary badges */}
+                <div className="flex flex-wrap gap-2">
+                  {sortedKeys.map(st => {
+                    const cfg = statusGroups[st] || { label: st, color: "text-gray-700", bgColor: "bg-gray-50", borderColor: "border-gray-200", icon: "⚪" };
+                    return (
+                      <div key={st} className={`${cfg.bgColor} ${cfg.borderColor} border rounded-lg px-4 py-2 flex items-center gap-2`}>
+                        <span className="text-sm">{cfg.icon}</span>
+                        <span className={`font-bold text-lg ${cfg.color}`}>{grouped[st].length}</span>
+                        <span className={`text-xs ${cfg.color}`}>{cfg.label}</span>
+                      </div>
+                    );
+                  })}
+                  <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 py-2 flex items-center gap-2">
+                    <span className="font-bold text-lg text-slate-800">{filteredFuncObra.length}</span>
+                    <span className="text-xs text-slate-600">Total</span>
+                  </div>
+                </div>
 
-          {/* Employee list */}
-          {funcObraQ.isLoading ? (
-            <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
-          ) : funcObra.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <h3 className="font-semibold text-lg">Nenhum funcionário alocado</h3>
-              <p className="text-muted-foreground text-sm mt-1">Clique em "Alocar Funcionários" para adicionar a equipe.</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50 border-b">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Funcionário</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 hidden md:table-cell">Função na Obra</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 hidden md:table-cell">Desde</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {funcObra
-                    .filter((f: any) => {
-                      if (!equipeSearch) return true;
-                      const s = equipeSearch.toLowerCase();
-                      return (f.employee?.nomeCompleto || "").toLowerCase().includes(s) ||
-                        (f.funcaoNaObra || "").toLowerCase().includes(s) ||
-                        (f.employee?.funcao || "").toLowerCase().includes(s);
-                    })
-                    .map((f: any) => (
-                    <tr key={f.id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a] flex items-center justify-center shrink-0">
-                            <span className="text-white text-xs font-bold">{(f.employee?.nomeCompleto || '?')[0]}</span>
+                {/* Employee list grouped by status */}
+                {funcObraQ.isLoading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : funcObra.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
+                    <h3 className="font-semibold text-lg">Nenhum funcionário alocado</h3>
+                    <p className="text-muted-foreground text-sm mt-1">Clique em "Alocar Funcionários" para adicionar a equipe.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {sortedKeys.map(st => {
+                      const cfg = statusGroups[st] || { label: st, color: "text-gray-700", bgColor: "bg-gray-50", borderColor: "border-gray-200", icon: "⚪" };
+                      const items = grouped[st];
+                      return (
+                        <div key={st} className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                          <div className={`${cfg.bgColor} ${cfg.borderColor} border-b px-4 py-2.5 flex items-center gap-2`}>
+                            <span>{cfg.icon}</span>
+                            <span className={`font-semibold text-sm ${cfg.color}`}>{cfg.label}</span>
+                            <span className={`text-xs ${cfg.color} ml-1`}>({items.length})</span>
                           </div>
-                          <div>
-                            <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(f.employeeId)}>
-                              {f.employee?.nomeCompleto || "—"}
-                            </p>
-                            <p className="text-[11px] text-muted-foreground md:hidden">
-                              {f.funcaoNaObra || f.employee?.funcao || "—"}
-                            </p>
-                          </div>
+                          <table className="w-full">
+                            <thead>
+                              <tr className="bg-slate-50/50 border-b">
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Funcionário</th>
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Função na Obra</th>
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Desde</th>
+                                <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {items.map((f: any) => (
+                                <tr key={f.id} className="hover:bg-slate-50/50">
+                                  <td className="px-4 py-2.5">
+                                    <div className="flex items-center gap-3">
+                                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a] flex items-center justify-center shrink-0">
+                                        <span className="text-white text-[11px] font-bold">{(f.employee?.nomeCompleto || '?')[0]}</span>
+                                      </div>
+                                      <div>
+                                        <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(f.employeeId)}>
+                                          {f.employee?.nomeCompleto || "—"}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground md:hidden">
+                                          {f.funcaoNaObra || f.employee?.funcao || "—"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-sm text-muted-foreground hidden md:table-cell">
+                                    {f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—"}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-sm text-muted-foreground hidden md:table-cell">
+                                    {f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openHistory(f.employeeId)}>
+                                        <History className="h-3.5 w-3.5 mr-1" /> Histórico
+                                      </Button>
+                                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setSelectedEmployees([f.employeeId]); setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "Transferência" }); setAllocDialogOpen(true); }}>
+                                        <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir
+                                      </Button>
+                                      <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600 hover:text-red-700" onClick={() => handleRemove(f.employeeId, f.employee?.nomeCompleto || "")}>
+                                        <UserMinus className="h-3.5 w-3.5 mr-1" /> Remover
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
-                        {f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
-                        {f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openHistory(f.employeeId)}>
-                            <History className="h-3.5 w-3.5 mr-1" /> Histórico
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setSelectedEmployees([f.employeeId]); setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "Transferência" }); setAllocDialogOpen(true); }}>
-                            <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600 hover:text-red-700" onClick={() => handleRemove(f.employeeId, f.employee?.nomeCompleto || "")}>
-                            <UserMinus className="h-3.5 w-3.5 mr-1" /> Remover
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </FullScreenDialog>
 
