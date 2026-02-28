@@ -7,7 +7,7 @@ import PrintActions from "@/components/PrintActions";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCheck, UserX, Trophy, AlertTriangle, Calendar, MapPin, Briefcase, Heart, TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { Users, UserCheck, UserX, Trophy, AlertTriangle, Calendar, MapPin, Briefcase, Heart, TrendingUp, TrendingDown, Clock, ArrowLeft } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -84,8 +84,7 @@ export default function DashFuncionarios() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Link href="/dashboards" className="text-sm text-muted-foreground hover:text-foreground">Dashboards</Link>
-              <span className="text-muted-foreground">/</span>
+              <Link href="/dashboards" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar aos Dashboards</Link>
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Dashboard de Funcionários</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise completa do quadro de pessoal</p>

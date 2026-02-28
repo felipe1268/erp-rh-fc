@@ -18,8 +18,7 @@ import {
   Shirt, Footprints, Shield, Filter, X, SlidersHorizontal,
   ChevronRight, CheckCircle2, XCircle, FileText, User,
   ArrowUp, ArrowDown, TrendingDown, BarChart3, Target,
-  Zap, Repeat, Activity, Award, Flame
-} from "lucide-react";
+  Zap, Repeat, Activity, Award, Flame, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 
 const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -150,8 +149,7 @@ export default function DashEpis() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Link href="/dashboards" className="text-sm text-muted-foreground hover:text-foreground">Dashboards</Link>
-              <span className="text-muted-foreground">/</span>
+              <Link href="/dashboards" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar aos Dashboards</Link>
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Dashboard de EPIs</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise completa de equipamentos de proteção individual</p>

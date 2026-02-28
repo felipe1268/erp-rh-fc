@@ -3210,3 +3210,22 @@
 - [x] Cruzamento automático reclamante x base de colaboradores
 - [x] Blacklist automática para ex-funcionários com processo trabalhista
 - [x] Alerta automático ao RH quando novo processo é detectado
+
+## Correções Globais - Dashboards - 2026-02-28
+- [x] Botão de volta à tela principal em TODOS os dashboards
+- [x] Gráficos responsivos em TODOS os dashboards (mobile-friendly)
+- [x] Atualizar número de revisão (Rev. 112)
+- [x] DashFerias: botão voltar + DashboardLayout wrapper + gráficos responsivos
+- [x] DashAvisoPrevio: botão voltar + gráficos responsivos
+- [x] DashFuncionarios: botão voltar + gráficos responsivos
+- [x] DashCartaoPonto: botão voltar + gráficos responsivos
+- [x] DashFolhaPagamento: botão voltar + gráficos responsivos
+- [x] DashHorasExtras: botão voltar + gráficos responsivos
+- [x] DashEpis: botão voltar + gráficos responsivos
+- [x] DashJuridico: botão voltar + gráficos responsivos
+- [x] Todos os dashboards: botão voltar + gráficos responsivos confirmados
+
+## Bug Fix URGENTE - 2026-02-28
+- [x] Processos Trabalhistas: lista não carrega (loading infinito) - CORRIGIDO: colunas DataJud faltando no DB
+- [x] Processos Trabalhistas: valores sumiram (R$ 0,00) - NÃO ERA BUG: empresa errada selecionada
+- [x] Painel Jurídico: valor provisionado zerado - NÃO ERA BUG: empresa errada selecionada

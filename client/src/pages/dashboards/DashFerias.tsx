@@ -12,7 +12,7 @@ import {
   CheckCircle2, Loader2, X, Sun, Palmtree, TrendingUp,
   Building2, ArrowRight, Timer, ShieldAlert, Wallet,
   BarChart3, PieChart, CalendarClock, CalendarCheck, Ban,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ArrowLeft
 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -111,18 +111,22 @@ export default function DashFerias() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-[#1e3a5f]" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="w-8 h-8 animate-spin text-[#1e3a5f]" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!data) {
     return (
-      <div className="text-center py-12 text-[#94A3B8]">
-        <Palmtree className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p>Nenhum dado de férias encontrado.</p>
-      </div>
+      <DashboardLayout>
+        <div className="text-center py-12 text-[#94A3B8]">
+          <Palmtree className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>Nenhum dado de férias encontrado.</p>
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -131,10 +135,12 @@ export default function DashFerias() {
     topFuncionariosVencidos } = data;
 
   return (
+    <DashboardLayout>
     <div className="space-y-6 print:space-y-4" id="dash-ferias">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
+          <Link href="/dashboards" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1"><ArrowLeft className="w-4 h-4" /> Voltar aos Dashboards</Link>
           <h1 className="text-2xl font-bold text-[#0F172A] flex items-center gap-2">
             <Palmtree className="w-7 h-7 text-[#10B981]" />
             Dashboard de Férias
@@ -590,5 +596,6 @@ export default function DashFerias() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }

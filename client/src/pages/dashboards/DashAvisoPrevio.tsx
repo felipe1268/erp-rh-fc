@@ -10,8 +10,7 @@ import {
   AlertTriangle, Clock, DollarSign, Users, CalendarDays,
   TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
-  Wallet, Receipt, BarChart3
-} from "lucide-react";
+  Wallet, Receipt, BarChart3, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -138,8 +137,7 @@ export default function DashAvisoPrevio() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Link href="/dashboards" className="text-sm text-muted-foreground hover:text-foreground">Dashboards</Link>
-              <span className="text-muted-foreground">/</span>
+              <Link href="/dashboards" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar aos Dashboards</Link>
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Dashboard Aviso Prévio</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise completa de avisos prévios, custos e prazos</p>
