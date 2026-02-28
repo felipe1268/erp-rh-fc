@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO system_revisions (company_id, versao, data, descricao, tipo, autor, created_at) VALUES (1, 'Rev. 113', '2026-02-28', 'IA Jurídica: Análise inteligente de processos com LLM, estimativa de valores, pontos fortes/fracos, jurisprudência, caminhos estratégicos. Links diretos para tribunais (PJe/TST). Gráfico de assuntos DataJud no Dashboard Jurídico. Banco de aprendizado para IA.', 'feature', 'Sistema', NOW())",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (company_id, versao, data, descricao, tipo, autor, created_at) VALUES (1, 'Rev. 113', '2026-02-28', 'IA Jurídica: Análise inteligente de processos com LLM, estimativa de valores, pontos fortes/fracos, jurisprudência, caminhos estratégicos. Links diretos para tribunais (PJe/TST). Gráfico de assuntos DataJud no Dashboard Jurídico. Banco de aprendizado para IA.', 'feature', 'Sistema', NOW())",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'company_id' in 'field list'"
+  ]
+}

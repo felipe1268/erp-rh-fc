@@ -52,6 +52,10 @@ export default function Ferias() {
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [form, setForm] = useState<any>({});
 
+  // Dialog para detalhamento do mês no Fluxo de Caixa
+  const [showFluxoMesDialog, setShowFluxoMesDialog] = useState(false);
+  const [fluxoMesSelecionado, setFluxoMesSelecionado] = useState<any>(null);
+
   // Dialog para definir data de férias (RH override)
   const [showDefinirDialog, setShowDefinirDialog] = useState(false);
   const [definirItem, setDefinirItem] = useState<any>(null);
@@ -731,8 +735,15 @@ export default function Ferias() {
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {(fluxoCaixa as any[]).map((m: any) => (
-                    <div key={m.mes} className={`rounded-lg border p-4 ${m.totalFuncionarios > 0 ? "bg-green-50 border-green-200" : "bg-muted/20"}`}>
-                      <p className="font-semibold text-sm">{m.nomeMes}</p>
+                    <div
+                      key={m.mes}
+                      className={`rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] ${m.totalFuncionarios > 0 ? "bg-green-50 border-green-200 hover:border-green-400" : "bg-muted/20 hover:border-muted-foreground/30"}`}
+                      onClick={() => { setFluxoMesSelecionado(m); setShowFluxoMesDialog(true); }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-sm">{m.nomeMes}</p>
+                        <Eye className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                      </div>
                       <p className="text-2xl font-bold mt-1">{formatMoeda(m.valorTotal)}</p>
                       <p className="text-xs text-muted-foreground">{m.totalFuncionarios} funcionário(s)</p>
                       {m.funcionarios?.slice(0, 3).map((f: any) => (
@@ -742,6 +753,7 @@ export default function Ferias() {
                           {f.vencida && <Badge variant="destructive" className="ml-1 text-[9px]">VENCIDA</Badge>}
                         </div>
                       ))}
+                      <p className="text-[10px] text-muted-foreground mt-2 text-center opacity-60">Clique para detalhes</p>
                     </div>
                   ))}
                 </div>
@@ -768,7 +780,7 @@ export default function Ferias() {
                             const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
                             const hasValue = val > 0;
                             return (
-                              <div key={m.mes} className="flex-1 flex flex-col items-center gap-1 group relative">
+                              <div key={m.mes} className="flex-1 flex flex-col items-center gap-1 group relative cursor-pointer" onClick={() => { setFluxoMesSelecionado(m); setShowFluxoMesDialog(true); }}>
                                 {hasValue && (
                                   <span className="text-[9px] font-semibold text-green-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                                     {formatMoeda(val)}
@@ -793,12 +805,196 @@ export default function Ferias() {
                       </div>
                     );
                   })()}
+
+                  {/* ===== GRÁFICO DE GANTT - TIMELINE DE FÉRIAS ===== */}
+                  {(() => {
+                    const dados = fluxoCaixa as any[];
+                    // Collect all employees across all months (unique by id)
+                    const allFuncs: Record<number, { id: number; nome: string; cargo: string; meses: { mes: number; valor: number; vencida: boolean }[] }> = {};
+                    for (const m of dados) {
+                      for (const f of (m.funcionarios || [])) {
+                        if (!allFuncs[f.id]) {
+                          allFuncs[f.id] = { id: f.id, nome: f.nome, cargo: f.cargo || "", meses: [] };
+                        }
+                        allFuncs[f.id].meses.push({ mes: m.mes, valor: parseFloat(f.valorEstimado || "0"), vencida: f.vencida });
+                      }
+                    }
+                    const funcList = Object.values(allFuncs).sort((a, b) => a.nome.localeCompare(b.nome));
+                    if (funcList.length === 0) return null;
+
+                    const GANTT_COLORS = [
+                      "bg-blue-400", "bg-green-400", "bg-purple-400", "bg-orange-400",
+                      "bg-teal-400", "bg-pink-400", "bg-indigo-400", "bg-amber-400",
+                      "bg-cyan-400", "bg-rose-400",
+                    ];
+
+                    return (
+                      <div className="mt-6">
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                          <Calendar className="h-4 w-4" /> Gantt — Timeline de Férias {anoCalendario}
+                        </h4>
+                        <div className="overflow-x-auto">
+                          <div className="min-w-[700px]">
+                            {/* Header meses */}
+                            <div className="grid grid-cols-[200px_repeat(12,1fr)] border-b border-gray-300 pb-1 mb-1">
+                              <div className="text-xs font-semibold text-muted-foreground px-1">Funcionário</div>
+                              {MESES.map((m, i) => (
+                                <div key={i} className="text-[10px] font-semibold text-center text-muted-foreground">{m}</div>
+                              ))}
+                            </div>
+                            {/* Rows */}
+                            {funcList.map((func, idx) => (
+                              <div key={func.id} className={`grid grid-cols-[200px_repeat(12,1fr)] items-center ${idx % 2 === 0 ? "bg-muted/20" : ""} py-0.5`}>
+                                <div className="text-xs font-medium truncate px-1" title={`${func.nome} - ${func.cargo}`}>
+                                  {func.nome.split(" ").slice(0, 2).join(" ")}
+                                </div>
+                                {Array.from({ length: 12 }, (_, mesIdx) => {
+                                  const mesNum = mesIdx + 1;
+                                  const entry = func.meses.find(m => m.mes === mesNum);
+                                  const colorClass = GANTT_COLORS[idx % GANTT_COLORS.length];
+                                  return (
+                                    <div key={mesIdx} className="px-0.5 h-6 flex items-center">
+                                      {entry ? (
+                                        <div
+                                          className={`w-full h-4 rounded-sm ${entry.vencida ? "bg-red-400" : colorClass} opacity-80 hover:opacity-100 transition-opacity cursor-pointer relative group`}
+                                          title={`${func.nome} — ${dados[mesIdx]?.nomeMes}: ${formatMoeda(entry.valor)}${entry.vencida ? " (VENCIDA)" : ""}`}
+                                          onClick={() => { setFluxoMesSelecionado(dados[mesIdx]); setShowFluxoMesDialog(true); }}
+                                        >
+                                          <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white opacity-0 group-hover:opacity-100">
+                                            {formatMoeda(entry.valor)}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div className="w-full h-4" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                            {/* Legend */}
+                            <div className="flex items-center gap-4 mt-3 pt-2 border-t border-gray-200">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-3 h-3 rounded-sm bg-blue-400" />
+                                <span className="text-[10px] text-muted-foreground">Férias previstas</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-3 h-3 rounded-sm bg-red-400" />
+                                <span className="text-[10px] text-muted-foreground">Férias vencidas</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground ml-auto">Passe o mouse sobre as barras para ver valores</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   </>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* ===== DIALOG: DETALHAMENTO DO MÊS - FLUXO DE CAIXA ===== */}
+        <Dialog open={showFluxoMesDialog} onOpenChange={(open) => { if (!open) { setShowFluxoMesDialog(false); setFluxoMesSelecionado(null); } }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-green-600" />
+                Detalhamento — {fluxoMesSelecionado?.nomeMes} {anoCalendario}
+              </DialogTitle>
+            </DialogHeader>
+            {fluxoMesSelecionado && (
+              <div className="space-y-4">
+                {/* Resumo do mês */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                    <p className="text-xs text-green-600 font-semibold uppercase">Total do Mês</p>
+                    <p className="text-xl font-bold text-green-700 mt-1">{formatMoeda(fluxoMesSelecionado.valorTotal)}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold uppercase">Funcionários</p>
+                    <p className="text-xl font-bold text-blue-700 mt-1">{fluxoMesSelecionado.totalFuncionarios}</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
+                    <p className="text-xs text-amber-600 font-semibold uppercase">Média por Func.</p>
+                    <p className="text-xl font-bold text-amber-700 mt-1">
+                      {fluxoMesSelecionado.totalFuncionarios > 0
+                        ? formatMoeda(parseFloat(fluxoMesSelecionado.valorTotal) / fluxoMesSelecionado.totalFuncionarios)
+                        : "R$ 0,00"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tabela detalhada */}
+                {fluxoMesSelecionado.funcionarios?.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left bg-muted/30">
+                          <th className="py-2 px-3 font-medium text-muted-foreground">#</th>
+                          <th className="py-2 px-3 font-medium text-muted-foreground">Funcionário</th>
+                          <th className="py-2 px-3 font-medium text-muted-foreground">Cargo</th>
+                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">Salário Base</th>
+                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">Férias (30d)</th>
+                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">1/3 Const.</th>
+                          <th className="py-2 px-3 font-medium text-muted-foreground text-right">Total</th>
+                          <th className="py-2 px-3 font-medium text-muted-foreground text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fluxoMesSelecionado.funcionarios.map((f: any, i: number) => {
+                          const salario = typeof f.salario === 'string' ? parseFloat(f.salario.replace(/[^\d.,]/g, '').replace(',', '.')) || 0 : (f.salario || 0);
+                          const valorFerias = salario;
+                          const terco = salario / 3;
+                          const total = parseFloat(f.valorEstimado || "0");
+                          return (
+                            <tr key={f.id} className="border-b hover:bg-muted/20">
+                              <td className="py-2 px-3 text-muted-foreground">{i + 1}</td>
+                              <td className="py-2 px-3 font-medium">{f.nome}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{f.cargo || "-"}</td>
+                              <td className="py-2 px-3 text-right">{formatMoeda(salario)}</td>
+                              <td className="py-2 px-3 text-right">{formatMoeda(valorFerias)}</td>
+                              <td className="py-2 px-3 text-right">{formatMoeda(terco)}</td>
+                              <td className="py-2 px-3 text-right font-bold text-green-700">{formatMoeda(total)}</td>
+                              <td className="py-2 px-3 text-center">
+                                {f.vencida ? (
+                                  <Badge variant="destructive" className="text-[10px]">VENCIDA</Badge>
+                                ) : (
+                                  <Badge className="bg-green-100 text-green-700 text-[10px]">Prevista</Badge>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-green-300 bg-green-50">
+                          <td colSpan={6} className="py-2 px-3 font-bold text-green-800">TOTAL DO MÊS</td>
+                          <td className="py-2 px-3 text-right font-bold text-green-800 text-lg">{formatMoeda(fluxoMesSelecionado.valorTotal)}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Calendar className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                    <p>Nenhum funcionário com férias previstas neste mês.</p>
+                  </div>
+                )}
+
+                {/* Observação sobre cálculo */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-700">
+                    <strong>Nota:</strong> Os valores são estimativas baseadas no salário base atual. O valor final pode variar conforme fracionamento, abono pecuniário, médias de horas extras e outros adicionais.
+                  </p>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* ===== DIALOG: DEFINIR DATA DE FÉRIAS (RH Override) ===== */}
         <Dialog open={showDefinirDialog} onOpenChange={(open) => { if (!open) { setShowDefinirDialog(false); setDefinirItem(null); } }}>

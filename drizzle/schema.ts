@@ -2560,3 +2560,103 @@ export const evalAuditLog = mysqlTable("eval_audit_log", {
 	index("eal_actor").on(table.actorType, table.actorId),
 ]);
 
+
+
+// ============================================================
+// IA JURÍDICA - Análises inteligentes de processos trabalhistas
+// ============================================================
+
+/** Análises geradas pela IA para cada processo */
+export const processoAnalises = mysqlTable("processo_analises", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	processoId: int().notNull(), // FK para processos_trabalhistas
+	// Dados da análise
+	resumoExecutivo: text(), // Resumo do caso
+	valorEstimadoRisco: decimal({ precision: 15, scale: 2 }), // Valor estimado de condenação
+	valorEstimadoAcordo: decimal({ precision: 15, scale: 2 }), // Valor sugerido para acordo
+	probabilidadeCondenacao: int(), // 0-100%
+	probabilidadeAcordo: int(), // 0-100%
+	probabilidadeArquivamento: int(), // 0-100%
+	// Análise detalhada (JSON)
+	pontosFortes: json(), // [{titulo, descricao}]
+	pontosFracos: json(), // [{titulo, descricao}]
+	caminhosPositivos: json(), // [{caminho, descricao, probabilidade, impactoFinanceiro}]
+	jurisprudenciaRelevante: json(), // [{tribunal, numero, ementa, relevancia}]
+	recomendacaoEstrategica: text(), // Recomendação final do advogado
+	insightsAdicionais: json(), // [{titulo, descricao, prioridade}]
+	// Extração de valores via IA
+	valorCausaExtraido: decimal({ precision: 15, scale: 2 }),
+	pedidosExtraidos: json(), // [{pedido, valorEstimado}]
+	// Metadados da análise
+	modeloIA: varchar({ length: 100 }), // Modelo usado
+	promptUsado: text(), // Prompt completo enviado
+	respostaCompleta: text(), // Resposta completa da IA
+	tempoAnaliseMs: int(), // Tempo de processamento
+	versaoAnalise: int().default(1), // Versão (incrementa a cada re-análise)
+	// Controle
+	criadoPor: varchar({ length: 255 }),
+	criadoPorUserId: int(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("pa_company").on(table.companyId),
+	index("pa_processo").on(table.processoId),
+]);
+
+/** Banco de aprendizado - histórico de análises para melhorar sugestões */
+export const processoAprendizado = mysqlTable("processo_aprendizado", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	// Dados do caso (anonimizados para aprendizado)
+	tipoProcesso: varchar({ length: 100 }), // Reclamatória, etc
+	assuntos: json(), // Assuntos do processo
+	pedidos: json(), // Pedidos do reclamante
+	riscoInicial: varchar({ length: 20 }),
+	valorCausa: decimal({ precision: 15, scale: 2 }),
+	// Resultado real (preenchido quando processo encerra)
+	resultadoFinal: mysqlEnum(['condenacao_total', 'condenacao_parcial', 'acordo', 'improcedente', 'arquivado', 'desistencia']),
+	valorFinalCondenacao: decimal({ precision: 15, scale: 2 }),
+	valorFinalAcordo: decimal({ precision: 15, scale: 2 }),
+	duracaoMeses: int(), // Duração total do processo
+	// Estratégia utilizada
+	estrategiaAdotada: text(),
+	resultadoEstrategia: text(), // Se a estratégia funcionou
+	licaoAprendida: text(), // Lição para casos futuros
+	// Metadados
+	processoId: int(), // Referência ao processo original
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("papr_company").on(table.companyId),
+	index("papr_tipo").on(table.tipoProcesso),
+	index("papr_resultado").on(table.resultadoFinal),
+]);
+
+
+/** Documentos anexados ao processo trabalhista */
+export const processoDocumentos = mysqlTable("processo_documentos", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	processoId: int().notNull(), // FK para processos_trabalhistas
+	// Dados do documento
+	nome: varchar({ length: 255 }).notNull(), // Nome do arquivo
+	tipo: mysqlEnum(['peticao_inicial', 'contestacao', 'sentenca', 'recurso', 'acordo', 'pericia', 'audiencia', 'despacho', 'mandado', 'outros']).default('outros').notNull(),
+	descricao: text(), // Descrição opcional
+	// Armazenamento S3
+	fileKey: varchar({ length: 500 }).notNull(),
+	fileUrl: varchar({ length: 1000 }).notNull(),
+	mimeType: varchar({ length: 100 }),
+	tamanhoBytes: int(),
+	// Metadados
+	criadoPor: varchar({ length: 255 }),
+	criadoPorUserId: int(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+},
+(table) => [
+	index("pd_company").on(table.companyId),
+	index("pd_processo").on(table.processoId),
+]);

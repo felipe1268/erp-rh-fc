@@ -144,6 +144,8 @@ export default function ProcessosTrabalhistas() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showDatajudPanel, setShowDatajudPanel] = useState(false);
   const [consultandoDatajud, setConsultandoDatajud] = useState(false);
+  const [showIAPanel, setShowIAPanel] = useState(false);
+  const [analisandoIA, setAnalisandoIA] = useState(false);
 
   // Andamento form
   const [andamentoForm, setAndamentoForm] = useState({
@@ -252,6 +254,26 @@ export default function ProcessosTrabalhistas() {
   const datajudMovimentacoes = trpc.processos.datajudMovimentacoes.useQuery(
     { processoId: selectedProcessoId! },
     { enabled: !!selectedProcessoId && viewMode === "detalhe" && showDatajudPanel }
+  );
+
+  // IA Jurídica
+  const analiseIA = trpc.processos.getAnaliseIA.useQuery(
+    { processoId: selectedProcessoId! },
+    { enabled: !!selectedProcessoId && viewMode === "detalhe" }
+  );
+  const analisarIAMut = trpc.processos.analisarIA.useMutation({
+    onSuccess: () => {
+      toast.success("Análise IA concluída com sucesso!");
+      analiseIA.refetch();
+      detalhe.refetch();
+      processos.refetch();
+      setAnalisandoIA(false);
+    },
+    onError: (err) => { toast.error(`Erro na análise IA: ${err.message}`); setAnalisandoIA(false); },
+  });
+  const linkTribunal = trpc.processos.getLinkTribunal.useQuery(
+    { processoId: selectedProcessoId! },
+    { enabled: !!selectedProcessoId && viewMode === "detalhe" }
   );
 
   const excluirLoteMut = trpc.processos.excluirLote.useMutation({
@@ -399,6 +421,17 @@ export default function ProcessosTrabalhistas() {
                     className={showDatajudPanel ? "bg-blue-50 border-blue-300" : ""}>
                     <Activity className="h-3.5 w-3.5 mr-1" /> Movimentações
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowIAPanel(!showIAPanel)}
+                    className={`border-purple-200 text-purple-700 hover:bg-purple-50 ${showIAPanel ? 'bg-purple-50 border-purple-300' : ''}`}>
+                    <Zap className="h-3.5 w-3.5 mr-1" /> Análise IA
+                  </Button>
+                  {linkTribunal.data?.links && (
+                    <a href={linkTribunal.data.links[0]?.url} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="border-green-200 text-green-700 hover:bg-green-50">
+                        <Globe className="h-3.5 w-3.5 mr-1" /> Ver no Tribunal
+                      </Button>
+                    </a>
+                  )}
                   {p.employeeId && p.employee?.status === 'Desligado' && !(p.employee as any)?.listaNegra && (
                     <Button size="sm" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50"
                       onClick={() => datajudBlacklistMut.mutate({ processoId: p.id, employeeId: p.employeeId })}
@@ -489,6 +522,198 @@ export default function ProcessosTrabalhistas() {
                     )}
                   </CardContent>
                 </Card>
+              )}
+
+              {/* IA Analysis Panel */}
+              {showIAPanel && (
+                <Card className="border-purple-200 bg-gradient-to-br from-purple-50/50 to-white">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-purple-600" /> Análise Inteligente (IA Jurídica)
+                        {analiseIA.data && <span className="text-xs font-normal text-muted-foreground">v{analiseIA.data.versaoAnalise} • {analiseIA.data.totalAnalises} análise(s)</span>}
+                      </CardTitle>
+                      <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-100"
+                        onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId }); }}
+                        disabled={analisandoIA}>
+                        {analisandoIA ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Analisando...</> : <><Zap className="h-3.5 w-3.5 mr-1" /> {analiseIA.data ? 'Re-analisar' : 'Analisar Processo'}</>}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {analisandoIA ? (
+                      <div className="text-center py-12">
+                        <Loader2 className="h-10 w-10 animate-spin mx-auto text-purple-500 mb-3" />
+                        <p className="text-sm font-medium text-purple-700">Analisando processo com IA...</p>
+                        <p className="text-xs text-muted-foreground mt-1">Isso pode levar até 30 segundos. A IA está lendo todas as movimentações, assuntos e dados do processo.</p>
+                      </div>
+                    ) : analiseIA.data ? (
+                      <div className="space-y-4">
+                        {/* Probabilidades */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center p-3 bg-red-50 rounded-lg">
+                            <div className="text-2xl font-bold text-red-600">{analiseIA.data.probabilidadeCondenacao}%</div>
+                            <div className="text-xs text-red-500">Condenação</div>
+                          </div>
+                          <div className="text-center p-3 bg-amber-50 rounded-lg">
+                            <div className="text-2xl font-bold text-amber-600">{analiseIA.data.probabilidadeAcordo}%</div>
+                            <div className="text-xs text-amber-500">Acordo</div>
+                          </div>
+                          <div className="text-center p-3 bg-green-50 rounded-lg">
+                            <div className="text-2xl font-bold text-green-600">{analiseIA.data.probabilidadeArquivamento}%</div>
+                            <div className="text-xs text-green-500">Arquivamento</div>
+                          </div>
+                        </div>
+
+                        {/* Valores estimados */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-red-50/50 rounded-lg border border-red-100">
+                            <div className="text-xs text-red-500 mb-1">Risco Estimado (Condenação)</div>
+                            <div className="text-lg font-bold text-red-700">{Number(analiseIA.data.valorEstimadoRisco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                          </div>
+                          <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100">
+                            <div className="text-xs text-amber-500 mb-1">Valor Sugerido (Acordo)</div>
+                            <div className="text-lg font-bold text-amber-700">{Number(analiseIA.data.valorEstimadoAcordo || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                          </div>
+                        </div>
+
+                        {/* Resumo Executivo */}
+                        <div>
+                          <h4 className="text-xs font-semibold text-purple-700 mb-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Resumo Executivo</h4>
+                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{analiseIA.data.resumoExecutivo}</p>
+                        </div>
+
+                        {/* Pontos Fortes e Fracos */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <h4 className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Pontos Fortes da Defesa</h4>
+                            <div className="space-y-1.5">
+                              {(analiseIA.data.pontosFortes as any[])?.map((pf: any, i: number) => (
+                                <div key={i} className="p-2 bg-green-50 rounded text-xs">
+                                  <div className="font-semibold text-green-800">{pf.titulo}</div>
+                                  <div className="text-green-600 mt-0.5">{pf.descricao}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Pontos Fracos / Riscos</h4>
+                            <div className="space-y-1.5">
+                              {(analiseIA.data.pontosFracos as any[])?.map((pf: any, i: number) => (
+                                <div key={i} className="p-2 bg-red-50 rounded text-xs">
+                                  <div className="font-semibold text-red-800">{pf.titulo}</div>
+                                  <div className="text-red-600 mt-0.5">{pf.descricao}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Caminhos Estratégicos */}
+                        <div>
+                          <h4 className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1"><Scale className="h-3 w-3" /> Caminhos Estratégicos</h4>
+                          <div className="space-y-2">
+                            {(analiseIA.data.caminhosPositivos as any[])?.map((c: any, i: number) => (
+                              <div key={i} className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-semibold text-sm text-blue-800">{c.caminho}</span>
+                                  <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">{c.probabilidade}%</span>
+                                </div>
+                                <p className="text-xs text-blue-600">{c.descricao}</p>
+                                <p className="text-xs text-blue-500 mt-1">Impacto financeiro: {c.impactoFinanceiro}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Pedidos Analisados */}
+                        {(analiseIA.data.pedidosExtraidos as any[])?.length > 0 && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-purple-700 mb-2 flex items-center gap-1"><DollarSign className="h-3 w-3" /> Pedidos Analisados</h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead><tr className="border-b"><th className="text-left p-2">Pedido</th><th className="text-right p-2">Valor Estimado</th><th className="text-left p-2">Fundamentação</th></tr></thead>
+                                <tbody>
+                                  {(analiseIA.data.pedidosExtraidos as any[]).map((pe: any, i: number) => (
+                                    <tr key={i} className="border-b border-muted">
+                                      <td className="p-2 font-medium">{pe.pedido}</td>
+                                      <td className="p-2 text-right">{Number(pe.valorEstimado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                      <td className="p-2 text-muted-foreground">{pe.fundamentacao}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Jurisprudência */}
+                        <div>
+                          <h4 className="text-xs font-semibold text-indigo-700 mb-2 flex items-center gap-1"><BookOpen className="h-3 w-3" /> Jurisprudência Relevante</h4>
+                          <div className="space-y-2">
+                            {(analiseIA.data.jurisprudenciaRelevante as any[])?.map((j: any, i: number) => (
+                              <div key={i} className="p-2 bg-indigo-50 rounded text-xs border border-indigo-100">
+                                <div className="font-semibold text-indigo-800">{j.referencia}</div>
+                                <p className="text-indigo-600 mt-0.5">{j.ementa}</p>
+                                <p className="text-indigo-400 mt-0.5 italic">Relevância: {j.relevancia}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Recomendação Estratégica */}
+                        <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                          <h4 className="text-xs font-semibold text-purple-700 mb-2 flex items-center gap-1"><Shield className="h-3 w-3" /> Recomendação Estratégica</h4>
+                          <p className="text-sm text-purple-800 leading-relaxed whitespace-pre-line">{analiseIA.data.recomendacaoEstrategica}</p>
+                        </div>
+
+                        {/* Insights */}
+                        {(analiseIA.data.insightsAdicionais as any[])?.length > 0 && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1"><Info className="h-3 w-3" /> Insights Adicionais</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {(analiseIA.data.insightsAdicionais as any[]).map((ins: any, i: number) => (
+                                <div key={i} className={`p-2 rounded text-xs border ${ins.prioridade === 'alta' ? 'bg-amber-50 border-amber-200' : ins.prioridade === 'critica' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                                  <div className="font-semibold">{ins.titulo}</div>
+                                  <div className="text-muted-foreground mt-0.5">{ins.descricao}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Metadata */}
+                        <div className="text-xs text-muted-foreground border-t pt-2 flex items-center justify-between">
+                          <span>Análise v{analiseIA.data.versaoAnalise} • {analiseIA.data.criadoPor} • {analiseIA.data.createdAt ? new Date(analiseIA.data.createdAt).toLocaleString('pt-BR') : ''}</span>
+                          <span>{analiseIA.data.tempoAnaliseMs ? `${(analiseIA.data.tempoAnaliseMs / 1000).toFixed(1)}s` : ''}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Zap className="h-12 w-12 mx-auto text-purple-300 mb-3" />
+                        <p className="text-sm font-medium text-purple-700">Nenhuma análise realizada ainda</p>
+                        <p className="text-xs text-muted-foreground mt-1 mb-4">Clique em "Analisar Processo" para que a IA analise todos os dados e gere insights estratégicos</p>
+                        <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white"
+                          onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId }); }}
+                          disabled={analisandoIA}>
+                          <Zap className="h-3.5 w-3.5 mr-1" /> Analisar Processo com IA
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Links para o Tribunal */}
+              {linkTribunal.data?.links && linkTribunal.data.links.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {linkTribunal.data.links.map((link: any, i: number) => (
+                    <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition-colors">
+                      <Globe className="h-3 w-3" /> {link.nome}
+                    </a>
+                  ))}
+                </div>
               )}
 
               {/* Info cards */}

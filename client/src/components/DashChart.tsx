@@ -250,6 +250,12 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub }: {
   const c = colorMap[color] || colorMap.blue;
   const [textColor, bgColor, borderColor] = c.split(" ");
   const isMonetary = typeof value === 'string' && value.startsWith('R$');
+  // Format numeric values with Brazilian locale (dot as thousand separator)
+  const displayValue = (() => {
+    if (typeof value === 'number') return value.toLocaleString('pt-BR');
+    if (typeof value === 'string' && !isMonetary && /^\d+$/.test(value.trim())) return Number(value).toLocaleString('pt-BR');
+    return value;
+  })();
   return (
     <Card className={`border-l-4 ${borderColor}`}>
       <CardContent className="p-3 sm:p-4">
@@ -260,7 +266,7 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub }: {
             </div>
           )}
           <div className="min-w-0">
-            <p className={`${isMonetary ? 'text-base sm:text-lg md:text-2xl' : 'text-xl sm:text-2xl'} font-bold ${textColor} truncate`}>{value}</p>
+            <p className={`${isMonetary ? 'text-base sm:text-lg md:text-2xl' : 'text-xl sm:text-2xl'} font-bold ${textColor} truncate`}>{displayValue}</p>
             <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
             {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
           </div>

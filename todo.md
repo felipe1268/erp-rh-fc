@@ -3229,3 +3229,46 @@
 - [x] Processos Trabalhistas: lista não carrega (loading infinito) - CORRIGIDO: colunas DataJud faltando no DB
 - [x] Processos Trabalhistas: valores sumiram (R$ 0,00) - NÃO ERA BUG: empresa errada selecionada
 - [x] Painel Jurídico: valor provisionado zerado - NÃO ERA BUG: empresa errada selecionada
+
+## Fluxo de Caixa Prévio - Melhorias - 2026-02-28
+- [x] Clique no card do mês abre modal com detalhamento completo dos valores de férias
+- [x] Gráfico de Gantt mostrando timeline de férias dos funcionários ao longo do ano
+- [x] Atualizar versão para Rev. 113
+
+## Dashboard Jurídico - Correções - 2026-02-28
+- [x] Corrigir labels do gráfico - agora mostra "Assuntos Mais Comuns" do DataJud com dados reais
+- [ ] Corrigir erro do DataJud em 1 dos 7 processos
+- [x] Garantir que gráficos do Dashboard Jurídico sejam interativos/responsivos
+
+## Processos Trabalhistas - Melhorias - 2026-02-28
+- [x] Corrigir labels do gráfico - agora usa assuntos DataJud
+- [x] Ícone "olhinho" já existia na lista de processos
+- [x] Botão "Gerar PDF" já existia (via Print/PDF do navegador)
+- [x] DashAvisoPrevio.tsx sem erros de import
+
+## IA Jurídica - Sistema de Análise Inteligente - 2026-02-28
+- [x] Criar tabela no banco para armazenar análises da IA (processo_analises)
+- [x] Criar tabela banco de aprendizado (processo_aprendizado)
+- [x] Integrar LLM para análise completa do processo trabalhista
+- [x] Extrair valor da causa automaticamente via IA
+- [x] Gerar resumo executivo, pontos fortes/fracos, caminhos possíveis
+- [x] Gerar jurisprudência relevante baseada nos assuntos
+- [x] Criar painel de análise IA no detalhe do processo
+- [x] Banco de dados de aprendizado - IA aprende com análises anteriores
+- [ ] Gerar PDF profissional do processo com análise IA
+
+## Visualizador Completo do Processo - 2026-02-28
+- [x] Painel de movimentações completo com timeline cronológica (já existia)
+- [x] Link direto para o processo no tribunal (PJe/TST)
+- [x] Área de upload removida (módulo consultivo, não operacional)
+- [x] Tabela no banco para documentos do processo (criada)
+- [x] Tabela no banco para análises IA e banco de aprendizado (criadas)
+- [x] Endpoint de análise IA com LLM (implementado)
+- [x] Painel de análise IA no detalhe do processo (implementado)
+- [ ] Geração de PDF profissional do processo
+
+## Formatação e Interatividade - 2026-02-28
+- [x] Números formatados com ponto separador de milhar (ex: 1.255 em vez de 1255)
+- [x] Jornada de trabalho: formatar JSON em tabela legível (não mostrar JSON bruto)
+- [x] Faltas e atrasos clicáveis: ao clicar na data, abre cartão de ponto do dia
+- [x] Layout responsivo e dados de fácil consulta

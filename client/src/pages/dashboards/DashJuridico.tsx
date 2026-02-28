@@ -119,13 +119,24 @@ export default function DashJuridico() {
               />
             )}
 
-            {/* Top Pedidos */}
+            {/* Top Assuntos (DataJud) */}
+            {(data as any).topAssuntos?.length > 0 && (
+              <DashChart
+                title="Assuntos Mais Comuns nos Processos (DataJud)"
+                type="horizontalBar"
+                labels={(data as any).topAssuntos.map((a: any) => a.assunto.length > 40 ? a.assunto.slice(0, 40) + "..." : a.assunto)}
+                datasets={[{ label: "Ocorrências", data: (data as any).topAssuntos.map((a: any) => a.count), backgroundColor: CHART_PALETTE[4] }]}
+                height={Math.max(200, (data as any).topAssuntos.length * 35)}
+              />
+            )}
+
+            {/* Top Pedidos (se houver) */}
             {data.topPedidos.length > 0 && (
               <DashChart
                 title="Pedidos Mais Comuns nos Processos"
                 type="horizontalBar"
                 labels={data.topPedidos.map(p => p.pedido.length > 35 ? p.pedido.slice(0, 35) + "..." : p.pedido)}
-                datasets={[{ label: "Ocorrências", data: data.topPedidos.map(p => p.count), backgroundColor: CHART_PALETTE[4] }]}
+                datasets={[{ label: "Ocorrências", data: data.topPedidos.map(p => p.count), backgroundColor: CHART_PALETTE[3] }]}
                 height={Math.max(200, data.topPedidos.length * 30)}
               />
             )}

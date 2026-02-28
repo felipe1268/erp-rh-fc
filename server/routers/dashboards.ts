@@ -1053,12 +1053,44 @@ async function getDashJuridico(companyId: number) {
   // Pedidos mais comuns
   const pedidosCount: Record<string, number> = {};
   for (const p of allProcessos) {
-    const pedidos = (p.pedidos as string[] | null) || [];
+    let pedidos: string[] = [];
+    try {
+      if (typeof p.pedidos === "string") {
+        pedidos = JSON.parse(p.pedidos);
+      } else if (Array.isArray(p.pedidos)) {
+        pedidos = p.pedidos as string[];
+      }
+    } catch { pedidos = []; }
+    if (!Array.isArray(pedidos)) pedidos = [];
     for (const ped of pedidos) {
-      pedidosCount[ped] = (pedidosCount[ped] || 0) + 1;
+      if (typeof ped === "string" && ped.trim()) {
+        pedidosCount[ped.trim()] = (pedidosCount[ped.trim()] || 0) + 1;
+      }
     }
   }
   const topPedidos = Object.entries(pedidosCount).map(([pedido, count]) => ({ pedido, count }))
+    .sort((a, b) => b.count - a.count).slice(0, 10);
+
+  // Contar assuntos do DataJud
+  const assuntosCount: Record<string, number> = {};
+  for (const p of allProcessos) {
+    let assuntos: any[] = [];
+    try {
+      if (typeof p.datajudAssuntos === "string" && p.datajudAssuntos) {
+        assuntos = JSON.parse(p.datajudAssuntos);
+      } else if (Array.isArray(p.datajudAssuntos)) {
+        assuntos = p.datajudAssuntos as any[];
+      }
+    } catch { assuntos = []; }
+    if (!Array.isArray(assuntos)) assuntos = [];
+    for (const a of assuntos) {
+      const nome = typeof a === 'string' ? a : (a?.nome || '');
+      if (nome.trim()) {
+        assuntosCount[nome.trim()] = (assuntosCount[nome.trim()] || 0) + 1;
+      }
+    }
+  }
+  const topAssuntos = Object.entries(assuntosCount).map(([assunto, count]) => ({ assunto, count }))
     .sort((a, b) => b.count - a.count).slice(0, 10);
 
   return {
@@ -1080,6 +1112,7 @@ async function getDashJuridico(companyId: number) {
     valorPorRisco: Object.entries(valorPorRisco).map(([risco, valor]) => ({ risco, valor: Math.round(valor * 100) / 100 })),
     proximasAudiencias,
     topPedidos,
+    topAssuntos,
   };
 }
 

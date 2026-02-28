@@ -1,0 +1,22 @@
+{
+  "query": "SELECT id, pedidos FROM processos_trabalhistas LIMIT 3",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, pedidos FROM processos_trabalhistas LIMIT 3",
+  "rows": [
+    {
+      "id": "30002",
+      "pedidos": "\"[]\""
+    },
+    {
+      "id": "30003",
+      "pedidos": "\"[]\""
+    },
+    {
+      "id": "30004",
+      "pedidos": "\"[]\""
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tpedidos\n30002\t\"[]\"\n30003\t\"[]\"\n30004\t\"[]\"\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

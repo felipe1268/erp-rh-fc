@@ -15,6 +15,7 @@ import {
   Palmtree, Shield, FileSignature, Ban, Star, Eye
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -107,6 +108,7 @@ interface RaioXProps {
 }
 
 export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXProps) {
+  const [, navigate] = useLocation();
   const { user } = useAuth();
   const { selectedCompany } = useCompany();
   const [activeTab, setActiveTab] = useState("timeline");
@@ -991,13 +993,30 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           <th className="p-3 text-left font-semibold">Atraso</th>
                         </tr></thead>
                         <tbody>
-                          {atrasosDetalhados.map((a: any, idx: number) => (
-                            <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="p-3">{formatDate(a.data)}</td>
-                              <td className="p-3 font-mono">{a.entrada1 || "-"}</td>
-                              <td className="p-3 font-mono text-amber-600 font-semibold">{a.atraso}</td>
-                            </tr>
-                          ))}
+                          {atrasosDetalhados.map((a: any, idx: number) => {
+                            const atrasoDate = a.data ? new Date(a.data + 'T12:00:00') : null;
+                            const mesParam = atrasoDate ? `${atrasoDate.getFullYear()}-${String(atrasoDate.getMonth() + 1).padStart(2, '0')}` : '';
+                            return (
+                              <tr key={idx} className="border-b last:border-0 hover:bg-amber-50/50 cursor-pointer transition-colors"
+                                onClick={() => {
+                                  if (employeeId && mesParam) {
+                                    onClose();
+                                    navigate(`/fechamento-ponto?funcionario=${employeeId}&mes=${mesParam}`);
+                                  }
+                                }}
+                                title="Clique para abrir o cartão de ponto deste mês"
+                              >
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                    <span className="text-blue-600 underline underline-offset-2">{formatDate(a.data)}</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 font-mono">{a.entrada1 || "-"}</td>
+                                <td className="p-3 font-mono text-amber-600 font-semibold">{a.atraso}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1012,12 +1031,30 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           <th className="p-3 text-center font-semibold">Faltas</th>
                         </tr></thead>
                         <tbody>
-                          {faltasDetalhadas.map((f: any, idx: number) => (
-                            <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="p-3">{formatDate(f.data)}</td>
-                              <td className="p-3 text-center font-semibold text-red-600">{f.faltas}</td>
-                            </tr>
-                          ))}
+                          {faltasDetalhadas.map((f: any, idx: number) => {
+                            // Build URL to navigate to cartão de ponto for this date
+                            const faltaDate = f.data ? new Date(f.data + 'T12:00:00') : null;
+                            const mesParam = faltaDate ? `${faltaDate.getFullYear()}-${String(faltaDate.getMonth() + 1).padStart(2, '0')}` : '';
+                            return (
+                              <tr key={idx} className="border-b last:border-0 hover:bg-red-50/50 cursor-pointer transition-colors"
+                                onClick={() => {
+                                  if (employeeId && mesParam) {
+                                    onClose();
+                                    navigate(`/fechamento-ponto?funcionario=${employeeId}&mes=${mesParam}`);
+                                  }
+                                }}
+                                title="Clique para abrir o cartão de ponto deste mês"
+                              >
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    <Eye className="h-3.5 w-3.5 text-red-400" />
+                                    <span className="text-blue-600 underline underline-offset-2">{formatDate(f.data)}</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center font-semibold text-red-600">{f.faltas}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

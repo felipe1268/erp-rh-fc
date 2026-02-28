@@ -2334,14 +2334,52 @@ export default function FechamentoPonto() {
                           </div>
                         </div>
                         {/* Jornada e competência */}
-                        <div className="flex items-center gap-4 mt-3 pt-3 border-t text-xs text-muted-foreground">
-                          <span><strong>Competência:</strong> {formatMesAno(mesAno)}</span>
-                          {employeeDetail.data?.employee?.jornadaTrabalho && (
-                            <span><strong>Jornada:</strong> {employeeDetail.data.employee.jornadaTrabalho}</span>
-                          )}
-                          {empSummary?.multiplasObras && (
-                            <Badge variant="destructive" className="text-xs"><MapPin className="h-3 w-3 mr-1" /> Múltiplas Obras</Badge>
-                          )}
+                        <div className="flex flex-col gap-2 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <span><strong>Competência:</strong> {formatMesAno(mesAno)}</span>
+                            {empSummary?.multiplasObras && (
+                              <Badge variant="destructive" className="text-xs"><MapPin className="h-3 w-3 mr-1" /> Múltiplas Obras</Badge>
+                            )}
+                          </div>
+                          {employeeDetail.data?.employee?.jornadaTrabalho && (() => {
+                            const jt = employeeDetail.data.employee.jornadaTrabalho;
+                            const diasMap: Record<string, string> = { seg: 'Seg', ter: 'Ter', qua: 'Qua', qui: 'Qui', sex: 'Sex', sab: 'Sáb', dom: 'Dom' };
+                            const diasOrdem = ['seg','ter','qua','qui','sex','sab','dom'];
+                            try {
+                              const jornada = JSON.parse(jt);
+                              if (typeof jornada === 'object' && jornada !== null) {
+                                const diasAtivos = diasOrdem.filter(d => jornada[d]);
+                                if (diasAtivos.length === 0) return null;
+                                return (
+                                  <div className="overflow-x-auto">
+                                    <table className="text-xs border-collapse">
+                                      <thead>
+                                        <tr className="bg-muted/50">
+                                          <th className="px-2 py-1 text-left font-semibold border">Dia</th>
+                                          {diasAtivos.map(d => <th key={d} className="px-2 py-1 text-center font-semibold border">{diasMap[d]}</th>)}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        <tr>
+                                          <td className="px-2 py-1 font-semibold border">Entrada</td>
+                                          {diasAtivos.map(d => <td key={d} className="px-2 py-1 text-center border font-mono">{jornada[d].entrada || '-'}</td>)}
+                                        </tr>
+                                        <tr>
+                                          <td className="px-2 py-1 font-semibold border">Intervalo</td>
+                                          {diasAtivos.map(d => <td key={d} className="px-2 py-1 text-center border font-mono">{jornada[d].intervalo || '-'}</td>)}
+                                        </tr>
+                                        <tr>
+                                          <td className="px-2 py-1 font-semibold border">Saída</td>
+                                          {diasAtivos.map(d => <td key={d} className="px-2 py-1 text-center border font-mono">{jornada[d].saida || '-'}</td>)}
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              }
+                            } catch { /* not JSON */ }
+                            return <span><strong>Jornada:</strong> {jt}</span>;
+                          })()}
                         </div>
                       </CardContent>
                     </Card>
