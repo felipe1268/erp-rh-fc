@@ -3711,3 +3711,14 @@
 - [x] Detalhamento por Obra: adicionar colunas Aviso Prévio (cruzando termination_notices em_andamento), Afastados, Férias + Total Geral por obra
 - [x] Aviso Prévio na tabela deve atualizar automaticamente quando aviso é criado/concluído/cancelado (invalidar query)
 - [x] Férias na tabela deve atualizar automaticamente cruzando vacation_periods em gozo com alocações (invalidar query)
+
+## Rev. 133 - Botões Imprimir e PDF na Equipe da Obra
+- [x] Adicionar botão Imprimir na tela FullScreenDialog de Equipe da Obra
+- [x] Adicionar botão Gerar PDF na tela FullScreenDialog de Equipe da Obra
+- [x] Gráfico Distribuição por Função: barras empilhadas por status (Ativo=verde, Aviso=vermelho, Férias=azul, Afastado=amarelo)
+- [x] Botões Imprimir e PDF no header do FullScreenDialog de Equipe da Obra
+- [x] Layout de impressão A4 profissional com logo da empresa no cabeçalho
+- [x] Rodapé LGPD na impressão com nome do usuário que solicitou, data/hora
+- [x] Sem folhas em branco no final da impressão
+- [x] BUG: Gráfico de distribuição por função não aparece na impressão (CSS background não imprime)
+- [x] Botão fechar no Assistente IA (floating chat) para usuário desabilitar quando quiser

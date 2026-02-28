@@ -27,10 +27,37 @@ const SUGESTOES = [
 export default function AssistenteIAFloat() {
   const [aberto, setAberto] = useState(false);
   const [maximizado, setMaximizado] = useState(false);
+  const [desabilitado, setDesabilitado] = useState(() => {
+    return localStorage.getItem('assistente-ia-desabilitado') === 'true';
+  });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const desabilitar = () => {
+    setAberto(false);
+    setDesabilitado(true);
+    localStorage.setItem('assistente-ia-desabilitado', 'true');
+  };
+
+  const habilitar = () => {
+    setDesabilitado(false);
+    localStorage.removeItem('assistente-ia-desabilitado');
+  };
+
+  // Se desabilitado, mostra apenas um botão discreto para reativar
+  if (desabilitado) {
+    return (
+      <button
+        onClick={habilitar}
+        className="fixed bottom-4 right-4 z-[9999] h-8 w-8 rounded-full bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground shadow-sm transition-all flex items-center justify-center opacity-40 hover:opacity-100"
+        title="Reativar Assistente IA"
+      >
+        <Bot className="h-4 w-4" />
+      </button>
+    );
+  }
 
   const chatMutation = trpc.assistenteIA.chat.useMutation();
 
@@ -91,14 +118,24 @@ export default function AssistenteIAFloat() {
     <>
       {/* Botão flutuante */}
       {!aberto && (
-        <button
-          onClick={() => setAberto(true)}
-          className="fixed bottom-20 right-4 z-[9999] h-12 w-12 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center group"
-          title="Assistente IA — Tire suas dúvidas"
-        >
-          <Bot className="h-6 w-6 group-hover:scale-110 transition-transform" />
-          <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-green-500 border-2 border-white animate-pulse" />
-        </button>
+        <div className="fixed bottom-20 right-4 z-[9999] group">
+          <button
+            onClick={() => setAberto(true)}
+            className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+            title="Assistente IA — Tire suas dúvidas"
+          >
+            <Bot className="h-6 w-6" />
+            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-green-500 border-2 border-white animate-pulse" />
+          </button>
+          {/* Botão X para desabilitar */}
+          <button
+            onClick={desabilitar}
+            className="absolute -top-2 -left-2 h-5 w-5 rounded-full bg-red-500 text-white shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+            title="Desabilitar Assistente IA"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
       )}
 
       {/* Chat Window */}

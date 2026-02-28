@@ -2109,12 +2109,44 @@ export async function getEquipeObra(obraId: number, companyId: number) {
     dataAdmissao: employees.dataAdmissao,
     cpf: employees.cpf,
   }).from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
-  const empMap = Object.fromEntries(emps.map(e => [e.id, e]));
+
+  // Cross-reference termination_notices for Aviso Prévio
+  const today = new Date().toISOString().split('T')[0];
+  const avisoRows = await db.select({
+    employeeId: terminationNotices.employeeId,
+  }).from(terminationNotices).where(and(
+    eq(terminationNotices.companyId, companyId),
+    eq(terminationNotices.status, 'em_andamento'),
+    sql`${terminationNotices.dataInicio} <= ${today}`,
+    sql`${terminationNotices.dataFim} >= ${today}`,
+    sql`${terminationNotices.employeeId} IN (${sql.raw(empIds.join(","))})`
+  ));
+  const avisoSet = new Set(avisoRows.map(r => r.employeeId));
+
+  // Cross-reference vacation_periods for Férias em gozo
+  const feriasRows = await db.select({
+    employeeId: vacationPeriods.employeeId,
+  }).from(vacationPeriods).where(and(
+    eq(vacationPeriods.companyId, companyId),
+    eq(vacationPeriods.status, 'em_gozo'),
+    sql`${vacationPeriods.dataInicio} <= ${today}`,
+    sql`${vacationPeriods.dataFim} >= ${today}`,
+    sql`${vacationPeriods.employeeId} IN (${sql.raw(empIds.join(","))})`
+  ));
+  const feriasSet = new Set(feriasRows.map(r => r.employeeId));
+
   const allocMap = Object.fromEntries(allocs.map(a => [a.employeeId, a]));
-  return emps.map(e => ({
-    ...e,
-    dataInicioObra: allocMap[e.id]?.dataInicio || null,
-  })).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || ''));
+  return emps.map(e => {
+    // Determine effective status: Aviso > Ferias > original status
+    let effectiveStatus: string = e.status || 'Ativo';
+    if (avisoSet.has(e.id)) effectiveStatus = 'Aviso';
+    else if (feriasSet.has(e.id)) effectiveStatus = 'Ferias';
+    return {
+      ...e,
+      status: effectiveStatus,
+      dataInicioObra: allocMap[e.id]?.dataInicio || null,
+    };
+  }).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || ''));
 }
 
 /** Get efetivo dashboard data with ponto cross-reference for a specific month */

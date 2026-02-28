@@ -11,6 +11,7 @@ interface FullScreenDialogProps {
   headerColor?: string;
   children: ReactNode;
   footer?: ReactNode;
+  headerActions?: ReactNode;
 }
 
 export default function FullScreenDialog({
@@ -22,6 +23,7 @@ export default function FullScreenDialog({
   headerColor = "bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a]",
   children,
   footer,
+  headerActions,
 }: FullScreenDialogProps) {
   // Block body scroll when open
   useEffect(() => {
@@ -56,6 +58,7 @@ export default function FullScreenDialog({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {headerActions}
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
             <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>

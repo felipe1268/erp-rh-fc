@@ -16,8 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   HardHat, Users, Building2, AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight,
   UserX, TrendingUp, TrendingDown, ArrowRightLeft, Eye, Calendar, ClipboardList,
-  Loader2, User,
+  Loader2, User, Printer, FileDown,
 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { nowBrasilia } from "@/lib/dateUtils";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -639,21 +641,32 @@ export default function DashEfetivoObra() {
 }
 
 /* ─── Componente: FullScreen Equipe da Obra ─── */
+const STATUS_BAR_COLORS: Record<string, string> = {
+  Ativo: '#16a34a',    // verde
+  Ferias: '#2563eb',   // azul
+  Afastado: '#d97706', // amarelo/âmbar
+  Aviso: '#dc2626',    // vermelho
+  Recluso: '#7c3aed',  // roxo
+  Licenca: '#0891b2',  // ciano
+};
 const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   Ativo: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
   Ferias: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
   Afastado: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
   Aviso: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
   Recluso: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  Licenca: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
 };
 const STATUS_LABELS: Record<string, string> = {
-  Ativo: 'Ativos', Ferias: 'Férias', Afastado: 'Afastados', Aviso: 'Aviso Prévio', Recluso: 'Reclusos',
+  Ativo: 'Ativos', Ferias: 'Férias', Afastado: 'Afastados', Aviso: 'Aviso Prévio', Recluso: 'Reclusos', Licenca: 'Licença',
 };
 
 function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }: {
   open: boolean; onClose: () => void; obraNome: string; equipeData: any[]; loading: boolean;
 }) {
   const [busca, setBusca] = useState('');
+  const { user } = useAuth();
+  const { selectedCompany } = useCompany();
   const removeAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   // Filtrar por busca
@@ -667,14 +680,35 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
     );
   }, [equipeData, busca]);
 
-  // Histograma por função
-  const funcaoHist = useMemo(() => {
-    const map: Record<string, number> = {};
+  // Histograma por função COM breakdown por status
+  const funcaoHistStacked = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {};
     for (const e of equipeData) {
       const f = e.funcao || 'Sem Função';
-      map[f] = (map[f] || 0) + 1;
+      const s = e.status || 'Outro';
+      if (!map[f]) map[f] = {};
+      map[f][s] = (map[f][s] || 0) + 1;
     }
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+    // Ordenar por total decrescente
+    return Object.entries(map)
+      .map(([funcao, statuses]) => ({
+        funcao,
+        statuses,
+        total: Object.values(statuses).reduce((a, b) => a + b, 0),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [equipeData]);
+
+  // Todos os status presentes
+  const allStatuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of equipeData) set.add(e.status || 'Outro');
+    // Ordenar: Ativo primeiro, depois os demais
+    const order = ['Ativo', 'Aviso', 'Ferias', 'Afastado', 'Licenca', 'Recluso'];
+    return Array.from(set).sort((a, b) => {
+      const ia = order.indexOf(a); const ib = order.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
   }, [equipeData]);
 
   // Agrupar por função para tabela
@@ -698,7 +732,20 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [equipeData]);
 
-  const maxBar = funcaoHist.length > 0 ? funcaoHist[0][1] : 1;
+  const maxBar = funcaoHistStacked.length > 0 ? funcaoHistStacked[0].total : 1;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handlePDF = () => {
+    setTimeout(() => window.print(), 300);
+  };
+
+  const logoUrl = selectedCompany?.logoUrl || 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png';
+  const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || 'FC Engenharia';
+  const cnpj = selectedCompany?.cnpj || '';
+  const userName = user?.name || user?.username || 'Usuário não identificado';
 
   return (
     <FullScreenDialog
@@ -707,6 +754,26 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
       title={`Equipe — ${obraNome}`}
       subtitle={`${equipeData.length} funcionário(s) alocado(s) nesta obra`}
       icon={<HardHat className="h-6 w-6" />}
+      headerActions={
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handlePrint}
+            className="text-white hover:bg-white/20 gap-1 border border-white/30 text-xs h-8"
+          >
+            <Printer className="h-3.5 w-3.5" /> Imprimir
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handlePDF}
+            className="text-white hover:bg-white/20 gap-1 border border-white/30 text-xs h-8"
+          >
+            <FileDown className="h-3.5 w-3.5" /> PDF
+          </Button>
+        </div>
+      }
     >
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -719,13 +786,31 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
           <p className="text-sm">Aloque funcionários nesta obra para visualizar a equipe.</p>
         </div>
       ) : (
-        <div className="space-y-6 p-4">
+        <div className="space-y-6 p-4 equipe-print-area">
+          {/* Print Header - só aparece na impressão */}
+          <div className="hidden print:block equipe-print-header">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '8px' }}>
+              <img src={logoUrl} alt="Logo" style={{ height: '48px', objectFit: 'contain' }} />
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1B2A4A' }}>{nomeEmpresa}</div>
+                {cnpj && <div style={{ fontSize: '11px', color: '#666' }}>CNPJ: {cnpj}</div>}
+              </div>
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#1B2A4A', textAlign: 'center', marginTop: '4px' }}>
+              Relatório de Equipe — {obraNome}
+            </div>
+            <div style={{ fontSize: '10px', color: '#999', textAlign: 'center', marginTop: '4px', paddingBottom: '8px', borderBottom: '2px solid #1B2A4A' }}>
+              Impresso em: {nowBrasilia()}
+            </div>
+          </div>
+
           {/* Status badges */}
           <div className="flex flex-wrap gap-3">
             {statusSummary.map(([status, count]) => {
               const c = STATUS_COLORS[status] || { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
               return (
-                <div key={status} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${c.bg} ${c.border}`}>
+                <div key={status} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${c.bg} ${c.border}`}
+                  style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                   <span className={`text-sm font-semibold ${c.text}`}>{count}</span>
                   <span className={`text-xs ${c.text}`}>{STATUS_LABELS[status] || status}</span>
                 </div>
@@ -737,7 +822,20 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
             </div>
           </div>
 
-          {/* Histograma por Função */}
+          {/* Legenda de cores */}
+          <div className="flex flex-wrap gap-3 text-xs print:gap-2">
+            {allStatuses.map(status => (
+              <div key={status} className="flex items-center gap-1.5">
+                <div
+                  className="h-3 w-3 rounded-sm"
+                  style={{ backgroundColor: STATUS_BAR_COLORS[status] || '#9ca3af', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
+                />
+                <span className="text-muted-foreground">{STATUS_LABELS[status] || status}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Histograma por Função - Barras empilhadas por status */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -747,25 +845,40 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {funcaoHist.map(([funcao, count]) => (
+                {funcaoHistStacked.map(({ funcao, statuses, total }) => (
                   <div key={funcao} className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground w-44 truncate text-right" title={funcao}>{funcao}</span>
-                    <div className="flex-1 h-6 bg-muted/30 rounded overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded flex items-center justify-end pr-2"
-                        style={{ width: `${Math.max((count / maxBar) * 100, 8)}%` }}
-                      >
-                        <span className="text-[10px] font-bold text-white">{count}</span>
-                      </div>
+                    <div className="flex-1 h-6 bg-muted/30 rounded overflow-hidden flex" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                      {allStatuses.map(status => {
+                        const count = statuses[status] || 0;
+                        if (count === 0) return null;
+                        const pct = (count / maxBar) * 100;
+                        return (
+                          <div
+                            key={status}
+                            className="h-full flex items-center justify-center"
+                            style={{
+                              width: `${Math.max(pct, 3)}%`,
+                              backgroundColor: STATUS_BAR_COLORS[status] || '#9ca3af',
+                              WebkitPrintColorAdjust: 'exact',
+                              printColorAdjust: 'exact' as any,
+                            }}
+                            title={`${STATUS_LABELS[status] || status}: ${count}`}
+                          >
+                            {count >= 2 && <span className="text-[9px] font-bold text-white">{count}</span>}
+                          </div>
+                        );
+                      })}
                     </div>
+                    <span className="text-xs font-semibold text-foreground w-8 text-right">{total}</span>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* Busca */}
-          <div className="flex items-center gap-3">
+          {/* Busca - ocultar na impressão */}
+          <div className="flex items-center gap-3 print:hidden">
             <Input
               placeholder="Buscar por nome, função ou setor..."
               value={busca}
@@ -781,7 +894,7 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
           {groupedByFuncao.map(([funcao, emps]) => (
             <div key={funcao}>
               <div className="flex items-center gap-2 mb-2 mt-4">
-                <div className="h-2 w-2 rounded-full bg-blue-500" />
+                <div className="h-2 w-2 rounded-full bg-blue-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }} />
                 <h3 className="text-sm font-semibold text-foreground">{funcao}</h3>
                 <Badge variant="secondary" className="text-[10px]">{emps.length}</Badge>
               </div>
@@ -803,7 +916,8 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
                         <TableCell className="font-medium text-sm">{emp.nomeCompleto}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{emp.setor || '—'}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`text-[10px] ${sc.bg} ${sc.text} ${sc.border}`}>
+                          <Badge variant="outline" className={`text-[10px] ${sc.bg} ${sc.text} ${sc.border}`}
+                            style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                             {emp.status}
                           </Badge>
                         </TableCell>
@@ -825,6 +939,23 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
           <div className="border-t pt-3 mt-4 flex items-center justify-between">
             <span className="text-sm font-semibold">TOTAL GERAL</span>
             <span className="text-lg font-bold">{equipeData.length} funcionários</span>
+          </div>
+
+          {/* Rodapé LGPD - só aparece na impressão */}
+          <div className="hidden print:block equipe-print-footer-lgpd">
+            <div style={{
+              marginTop: '20px', paddingTop: '8px', borderTop: '1px solid #ccc',
+              fontSize: '8px', color: '#888', textAlign: 'center', lineHeight: '1.6',
+            }}>
+              <p style={{ margin: 0 }}>
+                <strong>Documento gerado por:</strong> {userName} | <strong>Data/Hora:</strong> {nowBrasilia()} | <strong>Sistema:</strong> FC Gestão Integrada
+              </p>
+              <p style={{ margin: '2px 0 0 0', fontSize: '7px', color: '#aaa' }}>
+                Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD).
+                É proibida a reprodução, distribuição ou compartilhamento sem autorização.
+                O uso indevido está sujeito às sanções previstas na legislação vigente.
+              </p>
+            </div>
           </div>
         </div>
       )}

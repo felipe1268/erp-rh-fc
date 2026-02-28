@@ -196,6 +196,11 @@
 /* REGRAS DE IMPRESSÃO GLOBAIS                                  */
 /* ============================================================ */
 @media print {
+  @page {
+    size: A4;
+    margin: 10mm 8mm 18mm 8mm;
+  }
+
   /* Ocultar sidebar, header, botões de ação e elementos de UI */
   [data-sidebar],
   .sidebar-wrapper,
@@ -250,10 +255,10 @@
     box-shadow: none !important;
   }
 
-  /* Preservar cores de fundo em cards de resumo */
-  .bg-blue-50, .bg-green-50, .bg-purple-50, .bg-amber-50, .bg-red-50, .bg-gray-50 {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  /* PRESERVAR TODAS AS CORES DE FUNDO NA IMPRESSÃO */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Cabeçalho de impressão */
@@ -266,8 +271,14 @@
   }
   .print-header img {
     display: inline-block !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  }
+
+  /* Cabeçalho de impressão da equipe */
+  .equipe-print-header {
+    display: block !important;
+  }
+  .equipe-print-header img {
+    display: inline-block !important;
   }
 
   /* Quebra de página */
@@ -290,5 +301,46 @@
     background: white;
     padding: 4px 10px;
     z-index: 9999;
+  }
+
+  /* Rodapé LGPD da equipe */
+  .equipe-print-footer-lgpd {
+    display: block !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 4px 10px;
+    z-index: 9999;
+  }
+
+  /* FullScreenDialog: quando imprimindo, remover overlay e posicionamento fixo */
+  .fixed.inset-0 {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Ocultar header do FullScreenDialog na impressão (temos o print-header) */
+  .fixed.inset-0 > div:first-child {
+    display: none !important;
+  }
+
+  /* Conteúdo do FullScreenDialog: sem overflow, sem scroll */
+  .fixed.inset-0 > .flex-1 {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Evitar páginas em branco no final */
+  .equipe-print-area {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Barras do gráfico - garantir visibilidade */
+  .equipe-print-area .h-6 {
+    min-height: 18px !important;
   }
 }
