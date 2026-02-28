@@ -56,7 +56,118 @@ function calcularMesesFeriasProporcionais(dataAdmissao: string, dataDesligamento
   return mesesProporcionais === 0 && mesesTotais > 0 ? 12 : mesesProporcionais;
 }
 
+// Replicate the corrected calcularRescisaoCompleta
+function calcularRescisaoCompleta(params: {
+  salarioBase: number;
+  dataAdmissao: string;
+  dataDesligamento: string;
+  dataFimAviso?: string;
+  tipo: string;
+  vrDiario: number;
+  diasTrabalhadosMes: number;
+}) {
+  const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
+  const dataFimAviso = params.dataFimAviso || dataDesligamento;
+  const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
+  const dtDataSaida = new Date(dtFimAviso);
+  dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+  const dataSaida = dtDataSaida.toISOString().split('T')[0];
+  const DIVISOR_CLT = 30;
+  const salarioDia = salarioBase / DIVISOR_CLT;
+  const anosServico = calcularAnosServico(dataAdmissao, dataSaida);
+  const diasAvisoTotal = calcularDiasAviso(anosServico);
+  const diasExtrasAviso = calcularDiasExtrasAviso(anosServico);
+  const saldoSalario = salarioDia * diasTrabalhadosMes;
+  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataSaida);
+  const feriasProporcional = (salarioBase * mesesFerias) / 12;
+  const tercoConstitucional = feriasProporcional / 3;
+  const totalFerias = feriasProporcional + tercoConstitucional;
+  const meses13o = calcularMeses13o(dataAdmissao, dataSaida);
+  const decimoTerceiroProporcional = (salarioBase * meses13o) / 12;
+  let avisoPrevioIndenizado = 0;
+  if (tipo === 'empregador_indenizado') avisoPrevioIndenizado = salarioDia * diasAvisoTotal;
+  else if (tipo === 'empregador_trabalhado') avisoPrevioIndenizado = salarioDia * diasExtrasAviso;
+  const vrProporcional = vrDiario * diasTrabalhadosMes;
+  const mesesTotais = calcularMesesServico(dataAdmissao, dataSaida);
+  const fgtsEstimado = salarioBase * 0.08 * mesesTotais;
+  const multaFGTS = (tipo.includes('empregador')) ? fgtsEstimado * 0.4 : 0;
+  const total = saldoSalario + totalFerias + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional;
+  return {
+    salarioBase: salarioBase.toFixed(2), salarioDia: salarioDia.toFixed(2),
+    diasReaisMes: DIVISOR_CLT, anosServico, diasAvisoTotal, diasExtrasAviso,
+    diasTrabalhadosMes, mesesFerias, meses13o, dataSaida,
+    saldoSalario: saldoSalario.toFixed(2), feriasProporcional: feriasProporcional.toFixed(2),
+    tercoConstitucional: tercoConstitucional.toFixed(2), totalFerias: totalFerias.toFixed(2),
+    decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
+    avisoPrevioIndenizado: avisoPrevioIndenizado.toFixed(2),
+    vrProporcional: vrProporcional.toFixed(2), vrDiario: vrDiario.toFixed(2),
+    fgtsEstimado: fgtsEstimado.toFixed(2), multaFGTS: multaFGTS.toFixed(2),
+    total: total.toFixed(2), mesesTotais,
+  };
+}
+
 describe("Cálculo de Rescisão CLT", () => {
+  // ============================================================
+  // CASO ANTONIO RENATO DE SANTANA - Correção de bugs
+  // Admissão: 2025-05-12 | Salário: R$ 6.199,60 | Tipo: empregador_trabalhado
+  // Início aviso: 14/02/2026 | Término: 15/03/2026 | Data saída: 16/03/2026
+  // ============================================================
+  
+  describe("Caso ANTONIO RENATO - Cálculo corrigido", () => {
+    const resultado = calcularRescisaoCompleta({
+      salarioBase: 6199.60,
+      dataAdmissao: '2025-05-12',
+      dataDesligamento: '2026-02-14',
+      dataFimAviso: '2026-03-15',
+      tipo: 'empregador_trabalhado',
+      vrDiario: 0,
+      diasTrabalhadosMes: 16, // Mar 1-16 (data saída = 16/03)
+    });
+    
+    it('data de saída = 16/03/2026 (dia seguinte ao término)', () => {
+      expect(resultado.dataSaida).toBe('2026-03-16');
+    });
+    
+    it('saldo de salário: 16 dias, divisor 30 (CLT)', () => {
+      expect(resultado.diasTrabalhadosMes).toBe(16);
+      expect(resultado.diasReaisMes).toBe(30);
+      // 6199.60 / 30 * 16 = 3306.45
+      expect(resultado.saldoSalario).toBe('3306.45');
+    });
+    
+    it('férias proporcionais: 10 meses (admissão até data saída)', () => {
+      expect(resultado.mesesFerias).toBe(10);
+      // 6199.60 * 10 / 12 = 5166.33
+      expect(resultado.feriasProporcional).toBe('5166.33');
+    });
+    
+    it('1/3 constitucional correto', () => {
+      // 5166.33 / 3 = 1722.11
+      expect(resultado.tercoConstitucional).toBe('1722.11');
+    });
+    
+    it('13º proporcional: 3 meses (jan, fev, mar 2026)', () => {
+      expect(resultado.meses13o).toBe(3);
+      // 6199.60 * 3 / 12 = 1549.90
+      expect(resultado.decimoTerceiroProporcional).toBe('1549.90');
+    });
+    
+    it('FGTS: 10 meses de serviço até data saída', () => {
+      expect(resultado.mesesTotais).toBe(10);
+      // 6199.60 * 0.08 * 10 = 4959.68
+      expect(resultado.fgtsEstimado).toBe('4959.68');
+    });
+    
+    it('multa 40% FGTS correta', () => {
+      // 4959.68 * 0.4 = 1983.872 → 1983.87
+      expect(resultado.multaFGTS).toBe('1983.87');
+    });
+    
+    it('aviso prévio indenizado = 0 (trabalhado, 0 anos)', () => {
+      expect(resultado.avisoPrevioIndenizado).toBe('0.00');
+    });
+  });
+  
   // ============================================================
   // CASO ISABELA - Referência do usuário
   // Salário: R$ 1.643,00 | Admissão: 02/04/2025 | Desligamento: ~28/03/2026
@@ -99,26 +210,11 @@ describe("Cálculo de Rescisão CLT", () => {
       expect(decimo).toBeCloseTo(410.75, 2);
     });
     
-    it("deve calcular saldo de salário (28 dias em março = 31 dias no mês)", () => {
+    it("deve calcular saldo de salário com divisor CLT = 30", () => {
       const diasTrabalhados = 28;
-      // Março tem 31 dias, então salarioDia = salario / 31
-      const diasReaisMes = 31; // março
-      const saldo = (salario / diasReaisMes) * diasTrabalhados;
-      expect(saldo).toBeCloseTo(1484.00, 0);
-    });
-    
-    it("deve calcular saldo de salário corretamente para fevereiro (28 dias no mês)", () => {
-      // Exemplo: desligamento em 13/02/2026 (fevereiro tem 28 dias)
-      const diasTrabalhados = 13;
-      const diasReaisMes = 28; // fevereiro 2026
-      const saldoCorreto = (salario / diasReaisMes) * diasTrabalhados;
-      const saldoErrado = (salario / 30) * diasTrabalhados;
-      // Com 28 dias: 1643/28 * 13 = 762.96
-      // Com 30 dias: 1643/30 * 13 = 711.97 (ERRADO)
-      expect(saldoCorreto).toBeCloseTo(762.96, 0);
-      expect(saldoErrado).toBeCloseTo(711.97, 0);
-      // O correto deve ser MAIOR que o errado (mais dias proporcionais)
-      expect(saldoCorreto).toBeGreaterThan(saldoErrado);
+      // CLT Art. 64: divisor = 30 (padrão para mensalistas)
+      const saldo = (salario / 30) * diasTrabalhados;
+      expect(saldo).toBeCloseTo(1533.47, 0);
     });
     
     it("deve calcular aviso prévio proporcional (Lei 12.506)", () => {

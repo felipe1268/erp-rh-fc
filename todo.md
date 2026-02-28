@@ -3393,3 +3393,11 @@
 - [x] Armazenar histórico de mudanças por processo (campo antigo vs novo)
 - [x] Exibir relatório de mudanças após "Atualizar Todos via DataJud"
 - [x] Mostrar quais campos mudaram em cada processo (status, fase, valor, audiência, etc.)
+
+## Correção de Cálculos de Rescisão - Aviso Prévio
+- [x] BUG: Saldo de Salário - corrigido para usar dataSaida (dia seguinte ao término) com divisor CLT 30
+- [x] BUG: Férias Proporcionais - corrigido para calcular até dataSaida (dia seguinte ao término)
+- [x] BUG: 13º Proporcional - corrigido para contar de janeiro até dataSaida (3/12 no caso ANTONIO RENATO)
+- [x] BUG: FGTS/Multa 40% - corrigido para calcular até dataSaida
+- [x] Testes unitários para validar todos os cálculos corrigidos (31 testes de rescisão, 477 total)
+- [x] Tela de detalhes recalcula em tempo real via getById (não usa JSON armazenado antigo)

@@ -130,44 +130,65 @@ function calcularFeriasVencidas(dataAdmissao: string, dataDesligamento: string):
 /**
  * CÁLCULO COMPLETO DE RESCISÃO - CLT
  * Segue exatamente as regras da CLT e Lei 12.506/2011
+ * 
+ * REGRAS IMPORTANTES:
+ * - O aviso prévio integra o tempo de serviço para TODOS os efeitos legais (Art. 487 §1º CLT)
+ * - A "data de saída" = dia seguinte ao término do aviso (para saldo de salário)
+ * - Férias proporcionais: da admissão até a data de saída
+ * - 13º proporcional: de janeiro do ano vigente até a data de saída
+ * - FGTS: calculado até a data de saída
+ * - Saldo de salário: divisor = 30 (padrão CLT)
  */
 function calcularRescisaoCompleta(params: {
   salarioBase: number;
   dataAdmissao: string;
   dataDesligamento: string;
-  dataFimAviso?: string; // data de término do aviso prévio (para férias, 13º, FGTS)
+  dataFimAviso?: string; // data de término do aviso prévio
   tipo: string;
   vrDiario: number; // valor diário do VR/VA
-  diasTrabalhadosMes: number; // dias trabalhados no mês do término do aviso
+  diasTrabalhadosMes: number; // dias trabalhados no mês do término (calculado externamente)
 }) {
   const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
   
-  // Data de referência para cálculos de férias, 13º e FGTS:
-  // Deve ser a data de TÉRMINO do aviso (não o início)
-  // CLT: o período do aviso prévio integra o tempo de serviço para todos os efeitos legais
-  const dataRefCalculo = params.dataFimAviso || dataDesligamento;
+  // ============================================================
+  // DATA DE REFERÊNCIA PARA CÁLCULOS
+  // A "data de saída" = dia seguinte ao término do aviso
+  // CLT: o período do aviso integra o tempo de serviço
+  // ============================================================
+  const dataFimAviso = params.dataFimAviso || dataDesligamento;
+  const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
   
-  // Usar dias reais do mês do TÉRMINO do aviso para cálculo do saldo de salário
-  const dtRef = new Date(dataRefCalculo + 'T00:00:00');
-  const diasReaisMes = new Date(dtRef.getFullYear(), dtRef.getMonth() + 1, 0).getDate();
-  const salarioDia = salarioBase / diasReaisMes;
-  const anosServico = calcularAnosServico(dataAdmissao, dataRefCalculo);
+  // Data de saída = dia seguinte ao término do aviso
+  // É a data usada para cálculo de férias, 13º e FGTS
+  const dtDataSaida = new Date(dtFimAviso);
+  dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+  const dataSaida = dtDataSaida.toISOString().split('T')[0];
+  
+  // ============================================================
+  // DIVISOR DO SALDO DE SALÁRIO = 30 (padrão CLT)
+  // CLT Art. 64: "O salário-hora normal, no caso de empregado mensalista,
+  // será obtido dividindo-se o salário mensal correspondente à duração
+  // do trabalho, a que se refere o art. 58, por 30 (trinta)"
+  // ============================================================
+  const DIVISOR_CLT = 30;
+  const salarioDia = salarioBase / DIVISOR_CLT;
+  const anosServico = calcularAnosServico(dataAdmissao, dataSaida);
   const diasAvisoTotal = calcularDiasAvisoTotal(anosServico);
   const diasExtrasAviso = calcularDiasExtrasAviso(anosServico);
   
   // ============================================================
   // 1. SALDO DE SALÁRIO
-  // Dias trabalhados no mês do TÉRMINO do aviso
-  // Usa dias reais do mês (28 para fev, 30/31 para outros)
+  // Dias trabalhados no mês da saída (dia 1 até dia da saída)
+  // Divisor = 30 (padrão CLT)
   // ============================================================
   const saldoSalario = salarioDia * diasTrabalhadosMes;
   
   // ============================================================
   // 2. FÉRIAS PROPORCIONAIS + 1/3 CONSTITUCIONAL
   // CLT Art. 487 §1º: O período do aviso integra o tempo de serviço
-  // Calcula da admissão até o TÉRMINO do aviso
+  // Calcula da admissão até a DATA DE SAÍDA
   // ============================================================
-  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataRefCalculo);
+  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataSaida);
   const feriasProporcional = (salarioBase * mesesFerias) / 12;
   const tercoConstitucional = feriasProporcional / 3;
   const totalFerias = feriasProporcional + tercoConstitucional;
@@ -176,46 +197,39 @@ function calcularRescisaoCompleta(params: {
   // 3. FÉRIAS VENCIDAS (se houver)
   // Períodos aquisitivos completos não gozados
   // ============================================================
-  const periodosVencidos = Math.max(0, calcularFeriasVencidas(dataAdmissao, dataRefCalculo) - 1);
-  // -1 porque o primeiro período completo gera as férias proporcionais acima
+  const periodosVencidos = Math.max(0, calcularFeriasVencidas(dataAdmissao, dataSaida) - 1);
   const feriasVencidas = periodosVencidos > 0 ? (salarioBase + salarioBase / 3) * periodosVencidos : 0;
   
   // ============================================================
   // 4. 13º SALÁRIO PROPORCIONAL
-  // Conta de JANEIRO do ano vigente até o TÉRMINO do aviso
-  // (>14 dias no mês = conta o mês)
+  // Conta de JANEIRO do ano vigente até a DATA DE SAÍDA
+  // (>=15 dias no mês = conta o mês inteiro)
   // CLT: o aviso prévio integra o tempo de serviço
   // ============================================================
-  const meses13o = calcularMeses13o(dataAdmissao, dataRefCalculo);
+  const meses13o = calcularMeses13o(dataAdmissao, dataSaida);
   const decimoTerceiroProporcional = (salarioBase * meses13o) / 12;
   
   // ============================================================
   // 5. AVISO PRÉVIO INDENIZADO
   // Lei 12.506/2011: 30 dias + 3 dias por ano de serviço
-  // Se indenizado pelo empregador: paga os dias extras (3 por ano)
-  // Se trabalhado: não há valor indenizado
   // ============================================================
   let avisoPrevioIndenizado = 0;
   if (tipo === 'empregador_indenizado') {
-    // Empregador indeniza o aviso completo (30 + extras)
     avisoPrevioIndenizado = salarioDia * diasAvisoTotal;
   } else if (tipo === 'empregador_trabalhado') {
-    // Empregador: aviso trabalhado, mas os dias extras da Lei 12.506 são indenizados
     avisoPrevioIndenizado = salarioDia * diasExtrasAviso;
   }
-  // Se pedido pelo empregado, não há indenização
   
   // ============================================================
   // 6. VR / VALE REFEIÇÃO PROPORCIONAL
-  // Dias trabalhados no mês * valor diário
   // ============================================================
   const vrProporcional = vrDiario * diasTrabalhadosMes;
   
   // ============================================================
   // 7. FGTS (estimativa - 8% sobre remuneração)
-  // Calcula até o TÉRMINO do aviso (aviso integra tempo de serviço)
+  // Calcula até a DATA DE SAÍDA (aviso integra tempo de serviço)
   // ============================================================
-  const mesesTotais = calcularMesesServico(dataAdmissao, dataRefCalculo);
+  const mesesTotais = calcularMesesServico(dataAdmissao, dataSaida);
   const fgtsEstimado = salarioBase * 0.08 * mesesTotais;
   
   // ============================================================
@@ -224,22 +238,22 @@ function calcularRescisaoCompleta(params: {
   const multaFGTS = (tipo.includes('empregador')) ? fgtsEstimado * 0.4 : 0;
   
   // ============================================================
-  // TOTAL
+  // TOTAL (FGTS e multa não somam - são depositados na conta FGTS)
   // ============================================================
   const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional;
-  // Nota: FGTS e multa 40% são depositados na conta do FGTS, não somam no total líquido
   
   return {
     // Dados base
     salarioBase: salarioBase.toFixed(2),
     salarioDia: salarioDia.toFixed(2),
-    diasReaisMes,
+    diasReaisMes: DIVISOR_CLT,
     anosServico,
     diasAvisoTotal,
     diasExtrasAviso,
     diasTrabalhadosMes,
     mesesFerias,
     meses13o,
+    dataSaida,
     
     // Verbas rescisórias
     saldoSalario: saldoSalario.toFixed(2),
@@ -261,11 +275,11 @@ function calcularRescisaoCompleta(params: {
     total: total.toFixed(2),
     
     mesesTotais,
-    dataRefCalculo,
+    dataRefCalculo: dataSaida,
     
     // Data limite pagamento (Art. 477 §6º CLT: 10 dias corridos após término do aviso)
     dataLimitePagamento: (() => {
-      const dt = new Date(dataRefCalculo + 'T00:00:00');
+      const dt = new Date(dataFimAviso + 'T00:00:00');
       dt.setDate(dt.getDate() + 10);
       return dt.toISOString().split("T")[0];
     })(),
@@ -374,7 +388,44 @@ export const avisoPrevioFeriasRouter = router({
         const [row] = await db.select()
           .from(terminationNotices)
           .where(eq(terminationNotices.id, input.id));
-        return row || null;
+        if (!row) return null;
+        
+        // Recalcular previsão em tempo real (não usar JSON armazenado que pode estar desatualizado)
+        try {
+          const [emp] = await db.select().from(employees).where(eq(employees.id, row.employeeId));
+          if (emp) {
+            const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
+            const salarioBase = parseBRL(emp.salarioBase);
+            const dataFim = row.dataFim;
+            
+            // Data de saída = dia seguinte ao término do aviso
+            const dtFimAviso = new Date(dataFim + 'T00:00:00');
+            const dtDataSaida = new Date(dtFimAviso);
+            dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+            const diasTrabalhadosMes = dtDataSaida.getDate();
+            
+            const previsao = calcularRescisaoCompleta({
+              salarioBase,
+              dataAdmissao,
+              dataDesligamento: row.dataInicio, // data de início do aviso
+              dataFimAviso: dataFim,
+              tipo: row.tipo,
+              vrDiario: 0,
+              diasTrabalhadosMes,
+            });
+            
+            // Retornar com previsão recalculada
+            return {
+              ...row,
+              previsaoRescisao: JSON.stringify(previsao),
+            };
+          }
+        } catch (e) {
+          // Se falhar o recálculo, retorna o valor armazenado
+          console.error('Erro ao recalcular previsão:', e);
+        }
+        
+        return row;
       }),
 
     /** Calcular previsão de rescisão - CLT completa com descontos */
@@ -401,9 +452,13 @@ export const avisoPrevioFeriasRouter = router({
         const dataInicioAviso = calcularDataInicioAviso(dataDesligamento);
         const dataFimAviso = calcularDataFim(dataInicioAviso, diasAviso);
         
-        // Dias trabalhados no mês do TÉRMINO do aviso
+        // Dias trabalhados no mês da SAÍDA (dia seguinte ao término do aviso)
+        // CLT: a data de saída = dia após o término do aviso
+        // Saldo de salário = dia 1 até dia da saída no mês de saída
         const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
-        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtFimAviso.getDate();
+        const dtDataSaida = new Date(dtFimAviso);
+        dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtDataSaida.getDate();
         
         // ============================================================
         // VR: buscar da config de benefícios da obra do funcionário
@@ -692,9 +747,12 @@ export const avisoPrevioFeriasRouter = router({
         const salarioBase = parseBRL(emp.salarioBase);
         const dataFim = calcularDataFim(dataInicioAviso, diasAviso);
         
-        // Dias trabalhados no mês do TÉRMINO do aviso
+        // Dias trabalhados no mês da SAÍDA (dia seguinte ao término do aviso)
+        // CLT: data de saída = dia após o término do aviso
         const dtFimAviso = new Date(dataFim + 'T00:00:00');
-        const diasTrabalhadosMes = input.diasTrabalhados ?? dtFimAviso.getDate();
+        const dtDataSaida = new Date(dtFimAviso);
+        dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+        const diasTrabalhadosMes = input.diasTrabalhados ?? dtDataSaida.getDate();
         
         const previsao = calcularRescisaoCompleta({
           salarioBase,
@@ -763,9 +821,11 @@ export const avisoPrevioFeriasRouter = router({
           const diasAviso = calcularDiasAviso(anosServico, tipo);
           const salarioBase = parseBRL(emp.salarioBase);
           const dataFim = calcularDataFim(dataInicioFinal, diasAviso);
-          // Dias trabalhados no mês do TÉRMINO do aviso
+          // Dias trabalhados no mês da SAÍDA (dia seguinte ao término do aviso)
           const dtFimAviso = new Date(dataFim + 'T00:00:00');
-          const diasTrabalhadosMes = diasTrabalhados ?? dtFimAviso.getDate();
+          const dtDataSaida = new Date(dtFimAviso);
+          dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+          const diasTrabalhadosMes = diasTrabalhados ?? dtDataSaida.getDate();
 
           const previsao = calcularRescisaoCompleta({
             salarioBase,

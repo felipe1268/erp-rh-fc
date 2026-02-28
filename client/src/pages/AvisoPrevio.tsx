@@ -367,7 +367,7 @@ export default function AvisoPrevio() {
                         </td>
                         <td className="p-3">
                           <div className="flex items-center justify-center gap-1">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={() => { setSelectedItem(a); setShowDetailDialog(true); }}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={async () => { setSelectedItem(a); setShowDetailDialog(true); try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) setSelectedItem(detail); } catch(e) { console.error('Erro ao buscar detalhes:', e); } }}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                             {a.status === "em_andamento" && (
