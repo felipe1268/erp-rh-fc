@@ -120,6 +120,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Wallet, label: "Folha de Pagamento", path: "/dashboards/folha-pagamento" },
       { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
       { icon: AlertTriangle, label: "Aviso Prévio", path: "/dashboards/aviso-previo" },
+      { icon: Palmtree, label: "Férias", path: "/dashboards/ferias" },
     ],
   },
   {

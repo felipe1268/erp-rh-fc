@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
-  Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle,
+  Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
 } from "lucide-react";
 
 const dashboards = [
@@ -12,6 +12,7 @@ const dashboards = [
   { path: "/dashboards/epis", title: "EPIs", desc: "Estoque, entregas mensais, CAs vencidos, top EPIs e funcionários com mais entregas", icon: HardHat, color: "text-teal-500 bg-teal-50" },
   { path: "/dashboards/juridico", title: "Jurídico", desc: "Processos trabalhistas: status, risco, valores, audiências e pedidos mais comuns", icon: Gavel, color: "text-red-500 bg-red-50" },
   { path: "/dashboards/aviso-previo", title: "Aviso Prévio", desc: "Avisos prévios: tipos, custos, prazos, vencimentos, setores e composição de rescisão", icon: AlertTriangle, color: "text-amber-500 bg-amber-50" },
+  { path: "/dashboards/ferias", title: "Férias", desc: "Períodos aquisitivos, concessivos, custos, vencidas, timeline mensal e fracionamento", icon: Palmtree, color: "text-green-500 bg-green-50" },
 ];
 
 export default function DashboardIndex() {

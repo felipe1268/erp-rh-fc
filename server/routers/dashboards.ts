@@ -5,7 +5,7 @@ import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
-  epiDiscountAlerts, terminationNotices,
+  epiDiscountAlerts, terminationNotices, vacationPeriods,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
 
@@ -1352,6 +1352,221 @@ async function getDashAvisoPrevio(companyId: number) {
 }
 
 // ============================================================
+// 9. DASHBOARD FÉRIAS (análise completa)
+// ============================================================
+async function getDashFerias(companyId: number, ano?: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const anoRef = ano || new Date().getFullYear();
+
+  // Todos os períodos de férias da empresa
+  const allPeriods = await db.select({
+    id: vacationPeriods.id,
+    employeeId: vacationPeriods.employeeId,
+    periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio,
+    periodoAquisitivoFim: vacationPeriods.periodoAquisitivoFim,
+    periodoConcessivoFim: vacationPeriods.periodoConcessivoFim,
+    dataInicio: vacationPeriods.dataInicio,
+    dataFim: vacationPeriods.dataFim,
+    diasGozo: vacationPeriods.diasGozo,
+    abonoPecuniario: vacationPeriods.abonoPecuniario,
+    valorFerias: vacationPeriods.valorFerias,
+    valorTercoConstitucional: vacationPeriods.valorTercoConstitucional,
+    valorAbono: vacationPeriods.valorAbono,
+    valorTotal: vacationPeriods.valorTotal,
+    dataPagamento: vacationPeriods.dataPagamento,
+    status: vacationPeriods.status,
+    vencida: vacationPeriods.vencida,
+    pagamentoEmDobro: vacationPeriods.pagamentoEmDobro,
+    dataSugeridaInicio: vacationPeriods.dataSugeridaInicio,
+    dataSugeridaFim: vacationPeriods.dataSugeridaFim,
+    dataAlteradaPeloRH: vacationPeriods.dataAlteradaPeloRH,
+    numeroPeriodo: vacationPeriods.numeroPeriodo,
+    fracionamento: vacationPeriods.fracionamento,
+    nomeCompleto: employees.nomeCompleto,
+    funcao: employees.funcao,
+    setor: employees.setor,
+    obraAtualId: employees.obraAtualId,
+    salarioBase: employees.salarioBase,
+    empStatus: employees.status,
+  }).from(vacationPeriods)
+    .leftJoin(employees, eq(vacationPeriods.employeeId, employees.id))
+    .where(and(eq(vacationPeriods.companyId, companyId), isNull(vacationPeriods.deletedAt)))
+    .orderBy(desc(vacationPeriods.createdAt));
+
+  const parseVal = (v: string | null) => { const n = parseFloat(v || '0'); return isNaN(n) ? 0 : n; };
+
+  // KPIs por status
+  const total = allPeriods.length;
+  const pendentes = allPeriods.filter(p => p.status === 'pendente').length;
+  const agendadas = allPeriods.filter(p => p.status === 'agendada').length;
+  const vencidas = allPeriods.filter(p => p.status === 'vencida' || p.vencida === 1).length;
+  const emGozo = allPeriods.filter(p => p.status === 'em_gozo').length;
+  const concluidas = allPeriods.filter(p => p.status === 'concluida').length;
+  const canceladas = allPeriods.filter(p => p.status === 'cancelada').length;
+
+  // KPIs financeiros
+  const custoTotalEstimado = allPeriods.reduce((s, p) => s + parseVal(p.valorTotal), 0);
+  const custoPendente = allPeriods.filter(p => p.status === 'pendente' || p.status === 'agendada').reduce((s, p) => s + parseVal(p.valorTotal), 0);
+  const custoVencidas = allPeriods.filter(p => p.status === 'vencida' || p.vencida === 1).reduce((s, p) => s + parseVal(p.valorTotal), 0);
+  const custoConcluido = allPeriods.filter(p => p.status === 'concluida').reduce((s, p) => s + parseVal(p.valorTotal), 0);
+  const custoEmGozo = allPeriods.filter(p => p.status === 'em_gozo').reduce((s, p) => s + parseVal(p.valorTotal), 0);
+  const pagamentosEmDobro = allPeriods.filter(p => p.pagamentoEmDobro === 1).length;
+  const totalAbonoPecuniario = allPeriods.filter(p => p.abonoPecuniario === 1).length;
+
+  // Distribuição por status (donut)
+  const statusDist = [
+    { label: 'Pendentes', value: pendentes, color: '#F59E0B' },
+    { label: 'Agendadas', value: agendadas, color: '#3B82F6' },
+    { label: 'Vencidas', value: vencidas, color: '#EF4444' },
+    { label: 'Em Gozo', value: emGozo, color: '#10B981' },
+    { label: 'Concluídas', value: concluidas, color: '#6B7280' },
+  ].filter(s => s.value > 0);
+
+  // Timeline mensal: quantos colaboradores em férias por mês no ano
+  const timelineMensal: { mes: string; emFerias: number; iniciando: number; finalizando: number }[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const mesKey = `${anoRef}-${String(m).padStart(2, '0')}`;
+    const mesInicio = new Date(anoRef, m - 1, 1);
+    const mesFim = new Date(anoRef, m, 0);
+    let emFeriasMes = 0, iniciandoMes = 0, finalizandoMes = 0;
+    allPeriods.forEach(p => {
+      if (!p.dataInicio || !p.dataFim) return;
+      const di = new Date(p.dataInicio);
+      const df = new Date(p.dataFim);
+      if (di <= mesFim && df >= mesInicio) emFeriasMes++;
+      if (di >= mesInicio && di <= mesFim) iniciandoMes++;
+      if (df >= mesInicio && df <= mesFim) finalizandoMes++;
+    });
+    timelineMensal.push({ mes: mesKey, emFerias: emFeriasMes, iniciando: iniciandoMes, finalizando: finalizandoMes });
+  }
+
+  // Top setores com férias vencidas
+  const setorVencidas: Record<string, number> = {};
+  allPeriods.filter(p => p.status === 'vencida' || p.vencida === 1).forEach(p => {
+    const s = p.setor || 'Não informado';
+    setorVencidas[s] = (setorVencidas[s] || 0) + 1;
+  });
+  const topSetoresVencidas = Object.entries(setorVencidas).map(([setor, c]) => ({ setor, count: c })).sort((a, b) => b.count - a.count).slice(0, 10);
+
+  // Custo mensal projetado (por mês de pagamento ou data de início)
+  const custoMensal: Record<string, number> = {};
+  allPeriods.forEach(p => {
+    const d = p.dataPagamento || p.dataInicio;
+    if (!d) return;
+    const dt = new Date(d);
+    if (dt.getFullYear() !== anoRef) return;
+    const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+    custoMensal[key] = (custoMensal[key] || 0) + parseVal(p.valorTotal);
+  });
+  const custoMensalDist = [];
+  for (let m = 1; m <= 12; m++) {
+    const key = `${anoRef}-${String(m).padStart(2, '0')}`;
+    custoMensalDist.push({ mes: key, valor: custoMensal[key] || 0 });
+  }
+
+  // Férias por obra
+  const obraIds = new Set(allPeriods.map(p => p.obraAtualId).filter(Boolean));
+  let obraNames: Record<number, string> = {};
+  if (obraIds.size > 0) {
+    const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
+      .where(and(eq(obras.companyId, companyId), isNull(obras.deletedAt)));
+    obraList.forEach(o => { obraNames[o.id] = o.nome; });
+  }
+  const porObra: Record<string, { total: number; vencidas: number; pendentes: number; agendadas: number }> = {};
+  allPeriods.forEach(p => {
+    const obraNome = p.obraAtualId ? (obraNames[p.obraAtualId] || `Obra ${p.obraAtualId}`) : 'Sem Obra';
+    if (!porObra[obraNome]) porObra[obraNome] = { total: 0, vencidas: 0, pendentes: 0, agendadas: 0 };
+    porObra[obraNome].total++;
+    if (p.status === 'vencida' || p.vencida === 1) porObra[obraNome].vencidas++;
+    if (p.status === 'pendente') porObra[obraNome].pendentes++;
+    if (p.status === 'agendada') porObra[obraNome].agendadas++;
+  });
+  const feriasObra = Object.entries(porObra).map(([obra, v]) => ({ obra, ...v })).sort((a, b) => b.total - a.total).slice(0, 10);
+
+  // Proporção 1º vs 2º+ período
+  const primeiroPeriodo = allPeriods.filter(p => (p.numeroPeriodo || 1) === 1).length;
+  const segundoPeriodo = allPeriods.filter(p => (p.numeroPeriodo || 1) >= 2).length;
+
+  // Fracionamento
+  const fracionamento1 = allPeriods.filter(p => (p.fracionamento || 1) === 1).length;
+  const fracionamento2 = allPeriods.filter(p => (p.fracionamento || 1) === 2).length;
+  const fracionamento3 = allPeriods.filter(p => (p.fracionamento || 1) === 3).length;
+
+  // Alterações pelo RH
+  const totalAlteradoRH = allPeriods.filter(p => p.dataAlteradaPeloRH === 1).length;
+  const totalSugerido = allPeriods.filter(p => p.dataSugeridaInicio).length;
+
+  // Férias por setor (geral)
+  const porSetor: Record<string, { total: number; vencidas: number; pendentes: number }> = {};
+  allPeriods.forEach(p => {
+    const s = p.setor || 'Não informado';
+    if (!porSetor[s]) porSetor[s] = { total: 0, vencidas: 0, pendentes: 0 };
+    porSetor[s].total++;
+    if (p.status === 'vencida' || p.vencida === 1) porSetor[s].vencidas++;
+    if (p.status === 'pendente') porSetor[s].pendentes++;
+  });
+  const setorDist = Object.entries(porSetor).map(([setor, v]) => ({ setor, ...v })).sort((a, b) => b.total - a.total).slice(0, 10);
+
+  // Alertas: vencendo em 30 e 60 dias
+  const hoje = new Date();
+  const em30dias = new Date(hoje); em30dias.setDate(em30dias.getDate() + 30);
+  const em60dias = new Date(hoje); em60dias.setDate(em60dias.getDate() + 60);
+  const vencendo30dias = allPeriods.filter(p => {
+    if (p.status !== 'pendente' && p.status !== 'agendada') return false;
+    const fim = new Date(p.periodoConcessivoFim);
+    return fim >= hoje && fim <= em30dias;
+  }).length;
+  const vencendo60dias = allPeriods.filter(p => {
+    if (p.status !== 'pendente' && p.status !== 'agendada') return false;
+    const fim = new Date(p.periodoConcessivoFim);
+    return fim >= hoje && fim <= em60dias;
+  }).length;
+
+  // Custo por setor
+  const custoSetor: Record<string, number> = {};
+  allPeriods.forEach(p => {
+    const s = p.setor || 'Não informado';
+    custoSetor[s] = (custoSetor[s] || 0) + parseVal(p.valorTotal);
+  });
+  const custoPorSetor = Object.entries(custoSetor).map(([setor, valor]) => ({ setor, valor })).sort((a, b) => b.valor - a.valor).slice(0, 10);
+
+  // Funcionários com mais períodos vencidos
+  const empVencidos: Record<number, { nome: string; funcao: string; setor: string; count: number }> = {};
+  allPeriods.filter(p => p.status === 'vencida' || p.vencida === 1).forEach(p => {
+    if (!empVencidos[p.employeeId]) empVencidos[p.employeeId] = { nome: p.nomeCompleto || 'N/A', funcao: p.funcao || '', setor: p.setor || '', count: 0 };
+    empVencidos[p.employeeId].count++;
+  });
+  const topFuncionariosVencidos = Object.entries(empVencidos).map(([id, v]) => ({ employeeId: Number(id), ...v })).sort((a, b) => b.count - a.count).slice(0, 10);
+
+  // Drill-down data: lista de férias para cada status
+  const feriasLista = allPeriods.map(p => ({
+    id: p.id, employeeId: p.employeeId, nomeCompleto: p.nomeCompleto || 'N/A',
+    funcao: p.funcao || '', setor: p.setor || '',
+    periodoAquisitivoInicio: p.periodoAquisitivoInicio, periodoAquisitivoFim: p.periodoAquisitivoFim,
+    periodoConcessivoFim: p.periodoConcessivoFim,
+    dataInicio: p.dataInicio, dataFim: p.dataFim, diasGozo: p.diasGozo,
+    valorTotal: p.valorTotal, status: p.status, vencida: p.vencida,
+    pagamentoEmDobro: p.pagamentoEmDobro, numeroPeriodo: p.numeroPeriodo,
+    dataAlteradaPeloRH: p.dataAlteradaPeloRH,
+  }));
+
+  return {
+    anoRef,
+    kpis: { total, pendentes, agendadas, vencidas, emGozo, concluidas, canceladas },
+    financeiro: { custoTotalEstimado, custoPendente, custoVencidas, custoConcluido, custoEmGozo, pagamentosEmDobro, totalAbonoPecuniario },
+    statusDist, timelineMensal, topSetoresVencidas, custoMensalDist,
+    feriasObra, setorDist, custoPorSetor,
+    periodos: { primeiroPeriodo, segundoPeriodo },
+    fracionamento: { periodo1: fracionamento1, periodo2: fracionamento2, periodo3: fracionamento3 },
+    rhOverride: { totalAlteradoRH, totalSugerido },
+    alertas: { vencendo30dias, vencendo60dias },
+    topFuncionariosVencidos,
+    feriasLista,
+  };
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 export const dashboardsRouter = router({
@@ -1371,4 +1586,5 @@ export const dashboardsRouter = router({
   epis: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashEpis(input.companyId)),
   juridico: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashJuridico(input.companyId)),
   avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashAvisoPrevio(input.companyId)),
+  ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano)),
 });

@@ -3177,3 +3177,15 @@
 - [ ] Frontend: IA para sugerir perguntas na criação de pesquisas baseado no título digitado
 - [ ] FIX: Clicar no nome do funcionário no drill-down de Avisos Prévios deve abrir o aviso prévio dele
 - [ ] FIX: Revisar TODOS os gráficos de todas as páginas - garantir drill-down ao clicar em todos
+
+## Dashboard de Férias - 2026-02-28
+- [x] Backend: endpoint de dados agregados para dashboard de férias
+- [x] Frontend: DashFerias com KPIs (total, pendentes, agendadas, vencidas, em gozo, concluídas)
+- [x] Frontend: Gráfico timeline mensal (colaboradores em férias por mês)
+- [x] Frontend: Gráfico distribuição por status (donut)
+- [x] Frontend: Gráfico top setores com férias vencidas
+- [x] Frontend: Gráfico custo mensal projetado
+- [x] Frontend: Gráfico férias por obra
+- [x] Frontend: Proporção 1º vs 2º período
+- [x] Adicionar DashFerias no menu lateral (Dashboards)
+- [x] Drill-down em todos os gráficos
