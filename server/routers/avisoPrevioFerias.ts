@@ -927,6 +927,70 @@ export const avisoPrevioFeriasRouter = router({
         return { success: true };
       }),
 
+    /** Recalcular TODOS os avisos prévios em andamento de uma empresa */
+    recalcularTodos: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // Buscar todos os avisos em andamento da empresa
+        const avisos = await db.select().from(terminationNotices)
+          .where(and(
+            eq(terminationNotices.companyId, input.companyId),
+            eq(terminationNotices.status, 'em_andamento'),
+            isNull(terminationNotices.deletedAt),
+          ));
+
+        let recalculados = 0;
+        let erros = 0;
+        for (const aviso of avisos) {
+          try {
+            const [emp] = await db.select().from(employees).where(eq(employees.id, aviso.employeeId));
+            if (!emp) { erros++; continue; }
+
+            const tipo = aviso.tipo;
+            const dataInicioFinal = aviso.dataInicio;
+            const dataDesligFinal = aviso.dataInicio; // dataInicio é o dia após o último dia trabalhado
+            const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
+            const anosServico = calcularAnosServico(dataAdmissao, dataDesligFinal);
+            const diasAviso = calcularDiasAviso(anosServico, tipo);
+            const salarioBase = parseBRL(emp.salarioBase);
+            const dataFim = calcularDataFim(dataInicioFinal, diasAviso);
+
+            // Dias trabalhados no mês da SAÍDA
+            const dtFimAviso = new Date(dataFim + 'T00:00:00');
+            const dtDataSaida = new Date(dtFimAviso);
+            dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+            const diasTrabalhadosMes = dtDataSaida.getDate();
+
+            const previsao = calcularRescisaoCompleta({
+              salarioBase,
+              dataAdmissao,
+              dataDesligamento: dataDesligFinal,
+              dataFimAviso: dataFim,
+              tipo,
+              vrDiario: 0,
+              diasTrabalhadosMes,
+            });
+
+            await db.update(terminationNotices).set({
+              diasAviso,
+              anosServico,
+              salarioBase: salarioBase.toFixed(2),
+              dataFim,
+              previsaoRescisao: JSON.stringify(previsao),
+              valorEstimadoTotal: previsao.total,
+            }).where(eq(terminationNotices.id, aviso.id));
+
+            recalculados++;
+          } catch (e) {
+            console.error(`Erro ao recalcular aviso ${aviso.id}:`, e);
+            erros++;
+          }
+        }
+
+        return { recalculados, erros, total: avisos.length };
+      }),
+
     /** Gerar dados para PDF do Aviso Prévio */
     gerarPdf: protectedProcedure
       .input(z.object({ id: z.number() }))

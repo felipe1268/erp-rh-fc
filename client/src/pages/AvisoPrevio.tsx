@@ -17,7 +17,7 @@ import { formatCPF, formatMoeda } from "@/lib/formatters";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
-  CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer,
+  CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
@@ -140,14 +140,29 @@ export default function AvisoPrevio() {
     });
   }, [avisosList, search]);
 
+  // Recalcular mutation
+  const recalcularTodos = trpc.avisoPrevio.avisoPrevio.recalcularTodos.useMutation({
+    onSuccess: (data: any) => {
+      refetch();
+      toast.success(`${data.recalculados} avisos recalculados com sucesso!${data.erros > 0 ? ` (${data.erros} erros)` : ''}`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Stats
   const stats = useMemo(() => {
     const list = avisosList as any[];
+    const emAndamentoList = list.filter(a => a.status === "em_andamento");
+    const concluidosList = list.filter(a => a.status === "concluido");
+    const canceladosList = list.filter(a => a.status === "cancelado");
     return {
       total: list.length,
-      emAndamento: list.filter(a => a.status === "em_andamento").length,
-      concluidos: list.filter(a => a.status === "concluido").length,
-      cancelados: list.filter(a => a.status === "cancelado").length,
+      emAndamento: emAndamentoList.length,
+      concluidos: concluidosList.length,
+      cancelados: canceladosList.length,
+      valorTotal: list.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
+      valorEmAndamento: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
+      valorConcluidos: concluidosList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
     };
   }, [avisosList]);
 
@@ -233,9 +248,19 @@ export default function AvisoPrevio() {
               Gestão de avisos prévios conforme CLT Art. 487-491 e Lei 12.506/2011
             </p>
           </div>
-          <Button onClick={() => { setForm({}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Novo Aviso Prévio
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => recalcularTodos.mutate({ companyId })}
+              disabled={recalcularTodos.isPending || stats.emAndamento === 0}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${recalcularTodos.isPending ? 'animate-spin' : ''}`} />
+              {recalcularTodos.isPending ? 'Recalculando...' : 'Recalcular Todos'}
+            </Button>
+            <Button onClick={() => { setForm({}); setCalculoPreview(null); setEditingItem(null); setShowDialog(true); }}>
+              <Plus className="h-4 w-4 mr-2" /> Novo Aviso Prévio
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -246,6 +271,7 @@ export default function AvisoPrevio() {
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Total</p>
                   <p className="text-2xl font-bold">{stats.total}</p>
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">{formatMoeda(stats.valorTotal)}</p>
                 </div>
                 <FileText className="h-8 w-8 text-gray-400" />
               </div>
@@ -257,6 +283,7 @@ export default function AvisoPrevio() {
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Em Andamento</p>
                   <p className="text-2xl font-bold text-blue-600">{stats.emAndamento}</p>
+                  <p className="text-xs text-blue-600/70 mt-1 font-medium">{formatMoeda(stats.valorEmAndamento)}</p>
                 </div>
                 <Timer className="h-8 w-8 text-blue-400" />
               </div>
@@ -268,6 +295,7 @@ export default function AvisoPrevio() {
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Concluídos</p>
                   <p className="text-2xl font-bold text-green-600">{stats.concluidos}</p>
+                  <p className="text-xs text-green-600/70 mt-1 font-medium">{formatMoeda(stats.valorConcluidos)}</p>
                 </div>
                 <CheckCircle2 className="h-8 w-8 text-green-400" />
               </div>

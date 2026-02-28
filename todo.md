@@ -3547,3 +3547,8 @@
 - [x] Adicionar filtro "Aviso Prévio" na barra de filtros do Raio-X do Funcionário
 - [x] Tornar badge "Crítico 35/100" clicável na Visão Panorâmica
 - [x] Abrir dialog com detalhamento da pontuação ao clicar (quais indicadores contribuem)
+
+## Rev. 119 - Botão Recalcular + Valor Total Aviso Prévio
+- [x] Adicionar botão "Recalcular Todos" na tela de Aviso Prévio
+- [x] Criar endpoint backend para recalcular todos os avisos prévios em andamento
+- [x] Mostrar valor total estimado nos cards de resumo quantitativo
