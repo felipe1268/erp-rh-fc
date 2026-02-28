@@ -8,6 +8,7 @@ import {
   epiDiscountAlerts, terminationNotices, vacationPeriods,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
+import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
 // 1. DASHBOARD FUNCIONÁRIOS (análise completa)
@@ -1357,11 +1358,92 @@ async function getDashAvisoPrevio(companyId: number) {
   const empregadoTrabalhado = allNotices.filter(n => n.tipo === 'empregado_trabalhado').length;
   const empregadoIndenizado = allNotices.filter(n => n.tipo === 'empregado_indenizado').length;
 
-  const parseVal = (v: string | null) => { const n = parseFloat(v || '0'); return isNaN(n) ? 0 : n; };
-  const valorTotalEstimado = allNotices.reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
-  const valorEmAndamento = allNotices.filter(n => n.status === 'em_andamento').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
-  const valorConcluido = allNotices.filter(n => n.status === 'concluido').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
-  const valorCancelado = allNotices.filter(n => n.status === 'cancelado').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
+  // Recalcular valores em tempo real para cada aviso (importar função inline)
+  const { calcularRescisaoCompletaDash } = (() => {
+    function calcAnosServico(admStr: string, fimStr: string) {
+      const adm = new Date(admStr + 'T00:00:00');
+      const fim = new Date(fimStr + 'T00:00:00');
+      let anos = fim.getFullYear() - adm.getFullYear();
+      if (fim.getMonth() < adm.getMonth() || (fim.getMonth() === adm.getMonth() && fim.getDate() < adm.getDate())) anos--;
+      return Math.max(0, anos);
+    }
+    function calcDiasAvisoTotal(anos: number) { return Math.min(30 + anos * 3, 90); }
+    function calcDiasExtras(anos: number) { return Math.min(anos * 3, 60); }
+    function calcMesesFerias(admStr: string, refStr: string) {
+      const adm = new Date(admStr + 'T00:00:00');
+      const ref = new Date(refStr + 'T00:00:00');
+      let lastAniv = new Date(ref.getFullYear(), adm.getMonth(), adm.getDate());
+      if (lastAniv > ref) lastAniv.setFullYear(lastAniv.getFullYear() - 1);
+      let m = (ref.getFullYear() - lastAniv.getFullYear()) * 12 + ref.getMonth() - lastAniv.getMonth();
+      if (ref.getDate() < lastAniv.getDate()) m--;
+      return Math.min(Math.max(0, m), 12);
+    }
+    function calcMeses13o(admStr: string, refStr: string) {
+      const adm = new Date(admStr + 'T00:00:00');
+      const ref = new Date(refStr + 'T00:00:00');
+      const anoRef = ref.getFullYear();
+      const inicioAno = new Date(anoRef, 0, 1);
+      const start = adm > inicioAno ? adm : inicioAno;
+      if (start > ref) return 0;
+      let m = (ref.getFullYear() - start.getFullYear()) * 12 + ref.getMonth() - start.getMonth();
+      if (ref.getDate() >= start.getDate()) m++;
+      return Math.min(Math.max(0, m), 12);
+    }
+    function calcMesesServico(admStr: string, refStr: string) {
+      const adm = new Date(admStr + 'T00:00:00');
+      const ref = new Date(refStr + 'T00:00:00');
+      return Math.max(0, (ref.getFullYear() - adm.getFullYear()) * 12 + ref.getMonth() - adm.getMonth());
+    }
+    function calcularRescisaoCompletaDash(p: { salarioBase: number; dataAdmissao: string; dataInicio: string; dataFim: string; tipo: string }) {
+      const { salarioBase, dataAdmissao, dataInicio, dataFim, tipo } = p;
+      const DIVISOR = 30;
+      const salarioDia = salarioBase / DIVISOR;
+      const dtFim = new Date(dataFim + 'T00:00:00');
+      const dtSaida = new Date(dtFim); dtSaida.setDate(dtSaida.getDate() + 1);
+      const dataSaida = dtSaida.toISOString().split('T')[0];
+      const dtProj = new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 0);
+      const dataProj = dtProj.toISOString().split('T')[0];
+      const diasTrab = dtSaida.getDate();
+      const anos = calcAnosServico(dataAdmissao, dataSaida);
+      const diasExtras = calcDiasExtras(anos);
+      const diasTotal = calcDiasAvisoTotal(anos);
+      const saldoSalario = salarioDia * diasTrab;
+      const mF = calcMesesFerias(dataAdmissao, dataProj);
+      const feriasProp = (salarioBase * mF) / 12;
+      const terco = feriasProp / 3;
+      const totalFerias = feriasProp + terco;
+      const m13 = calcMeses13o(dataAdmissao, dataProj);
+      const dec13 = (salarioBase * m13) / 12;
+      let avisoInd = 0;
+      if (tipo === 'empregador_indenizado') avisoInd = salarioDia * diasTotal;
+      else if (tipo === 'empregador_trabalhado') avisoInd = salarioDia * diasExtras;
+      const mServ = calcMesesServico(dataAdmissao, dataProj);
+      const fgts = salarioBase * 0.08 * mServ;
+      const multa = tipo.includes('empregador') ? fgts * 0.4 : 0;
+      const total = saldoSalario + totalFerias + dec13 + avisoInd + multa;
+      return { total, saldoSalario, totalFerias, dec13, fgts, multa, avisoInd };
+    }
+    return { calcularRescisaoCompletaDash };
+  })();
+
+  // Recalcular valor de cada aviso em tempo real
+  const recalculated = allNotices.map(n => {
+    try {
+      const salBase = parseBRL(n.empSalarioBase || n.salarioBase || '0');
+      const admissao = n.dataAdmissao || new Date().toISOString().split('T')[0];
+      if (salBase > 0 && n.dataInicio && n.dataFim && n.tipo) {
+        const r = calcularRescisaoCompletaDash({ salarioBase: salBase, dataAdmissao: admissao, dataInicio: n.dataInicio, dataFim: n.dataFim, tipo: n.tipo });
+        return { ...n, valorRecalculado: r.total, rescisao: r };
+      }
+    } catch {}
+    const parseVal = (v: string | null) => { const x = parseFloat(v || '0'); return isNaN(x) ? 0 : x; };
+    return { ...n, valorRecalculado: parseVal(n.valorEstimadoTotal), rescisao: null };
+  });
+
+  const valorTotalEstimado = recalculated.reduce((s, n) => s + n.valorRecalculado, 0);
+  const valorEmAndamento = recalculated.filter(n => n.status === 'em_andamento').reduce((s, n) => s + n.valorRecalculado, 0);
+  const valorConcluido = recalculated.filter(n => n.status === 'concluido').reduce((s, n) => s + n.valorRecalculado, 0);
+  const valorCancelado = recalculated.filter(n => n.status === 'cancelado').reduce((s, n) => s + n.valorRecalculado, 0);
 
   const reducao2h = allNotices.filter(n => n.reducaoJornada === '2h_dia').length;
   const reducao7dias = allNotices.filter(n => n.reducaoJornada === '7_dias_corridos').length;
@@ -1393,7 +1475,7 @@ async function getDashAvisoPrevio(companyId: number) {
   const anosServicoDist = Object.entries(anosDist).map(([anos, c]) => ({ anos: Number(anos), count: c })).sort((a, b) => a.anos - b.anos);
 
   const custoSetor: Record<string, number> = {};
-  allNotices.forEach(n => { const s = n.setor || 'Não informado'; custoSetor[s] = (custoSetor[s] || 0) + parseVal(n.valorEstimadoTotal); });
+  recalculated.forEach(n => { const s = n.setor || 'Não informado'; custoSetor[s] = (custoSetor[s] || 0) + n.valorRecalculado; });
   const custoPorSetor = Object.entries(custoSetor).map(([setor, valor]) => ({ setor, valor })).sort((a, b) => b.valor - a.valor);
 
   const hoje = new Date();
@@ -1403,8 +1485,15 @@ async function getDashAvisoPrevio(companyId: number) {
   const vencendo30dias = allNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em30dias; }).length;
 
   let totalSaldoSalario = 0, totalFerias = 0, total13o = 0, totalFGTS = 0, totalMultaFGTS = 0, totalAvisoIndenizado = 0;
-  allNotices.forEach(n => {
-    if (n.previsaoRescisao) {
+  recalculated.forEach(n => {
+    if (n.rescisao) {
+      totalSaldoSalario += n.rescisao.saldoSalario;
+      totalFerias += n.rescisao.totalFerias;
+      total13o += n.rescisao.dec13;
+      totalFGTS += n.rescisao.fgts;
+      totalMultaFGTS += n.rescisao.multa;
+      totalAvisoIndenizado += n.rescisao.avisoInd;
+    } else if (n.previsaoRescisao) {
       try {
         const p = JSON.parse(n.previsaoRescisao);
         totalSaldoSalario += parseFloat(p.saldoSalario || '0');
@@ -1432,12 +1521,12 @@ async function getDashAvisoPrevio(companyId: number) {
     reducao2h, reducao7dias, semReducao,
     setorDist, funcaoDist, evolucaoMensal, diasAvisoDist, anosServicoDist,
     custoPorSetor, breakdownRescisao, vencendo7dias, vencendo30dias,
-    avisos: allNotices.map(n => ({
+    avisos: recalculated.map(n => ({
       id: n.id, nomeCompleto: n.nomeCompleto || 'Funcionário não encontrado',
       tipo: n.tipo, dataInicio: n.dataInicio, dataFim: n.dataFim,
       diasAviso: n.diasAviso, anosServico: n.anosServico,
       reducaoJornada: n.reducaoJornada, salarioBase: n.salarioBase || n.empSalarioBase,
-      valorEstimadoTotal: n.valorEstimadoTotal, status: n.status,
+      valorEstimadoTotal: n.valorRecalculado.toFixed(2), status: n.status,
       setor: n.setor, funcao: n.funcao || n.cargo, criadoPor: n.criadoPor,
     })),
   };

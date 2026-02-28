@@ -3427,3 +3427,8 @@
 - [x] Mostrar anos, meses e dias de serviço no card "DIAS DE AVISO" - FEITO (ex: "11 meses, 24 dias de serviço")
 - [x] Incluir dataAdmissao no JSON previsaoRescisao do getById para cálculo no frontend
 - [x] BUG: Nome do colaborador aparecia como "—" no card de detalhes - CORRIGIDO (getById agora inclui employeeName, employeeCpf, employeeCargo)
+
+## Dashboard Aviso Prévio - Recálculo em Tempo Real
+- [x] Atualizar getDashAvisoPrevio para recalcular valores de rescisão em tempo real (não usar valorEstimadoTotal armazenado)
+- [x] Recalcular breakdownRescisao com valores atualizados
+- [x] Recalcular custoPorSetor com valores atualizados
