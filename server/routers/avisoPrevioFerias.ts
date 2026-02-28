@@ -1295,7 +1295,8 @@ export const avisoPrevioFeriasRouter = router({
               const fimConcessivo = new Date(p.fimConcessivo);
               if (fimConcessivo >= inicioMes && fimConcessivo <= new Date(input.ano, mes + 3, 0)) {
                 const salario = parseBRL(func.salario);
-                const valorFerias = salario + (salario / 3);
+                const tercoConstitucional = salario / 3;
+                const valorFerias = salario + tercoConstitucional;
                 totalMes += valorFerias;
                 // Determine status: check DB first, then fallback to calculated
                 const periodoKey = `${p.inicio}_${p.fim}`;
@@ -1312,6 +1313,8 @@ export const avisoPrevioFeriasRouter = router({
                   nome: func.nome,
                   cargo: func.cargo,
                   salario: func.salario,
+                  salarioBase: salario.toFixed(2),
+                  tercoConstitucional: tercoConstitucional.toFixed(2),
                   valorEstimado: valorFerias.toFixed(2),
                   fimConcessivo: p.fimConcessivo,
                   vencida: p.vencida,
@@ -1322,11 +1325,15 @@ export const avisoPrevioFeriasRouter = router({
             }
           }
           
+          const totalSalarioBase = funcionariosNoMes.reduce((s, f) => s + parseFloat(f.salarioBase), 0);
+          const totalTerco = funcionariosNoMes.reduce((s, f) => s + parseFloat(f.tercoConstitucional), 0);
           meses.push({
             mes: mes + 1,
             nomeMes: ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes],
             totalFuncionarios: funcionariosNoMes.length,
             valorTotal: totalMes.toFixed(2),
+            totalSalarioBase: totalSalarioBase.toFixed(2),
+            totalTercoConstitucional: totalTerco.toFixed(2),
             funcionarios: funcionariosNoMes,
           });
         }

@@ -996,6 +996,11 @@ export default function Ferias() {
                         <Eye className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
                       </div>
                       <p className="text-2xl font-bold mt-1">{formatMoeda(m.valorTotal)}</p>
+                      {m.totalFuncionarios > 0 && (
+                        <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0">
+                          <p>Salário: {formatMoeda(m.totalSalarioBase)} | 1/3: {formatMoeda(m.totalTercoConstitucional)}</p>
+                        </div>
+                      )}
                       <p className="text-xs text-muted-foreground">{m.totalFuncionarios} funcionário(s)</p>
                       {m.funcionarios?.slice(0, 3).map((f: any) => (
                         <div key={f.id} className="mt-2 text-xs border-t pt-1">
@@ -1010,11 +1015,25 @@ export default function Ferias() {
                 </div>
                 {(fluxoCaixa as any[]).length > 0 && (
                   <>
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 flex justify-between items-center">
-                    <span className="font-semibold text-blue-800">Total Estimado Anual:</span>
-                    <span className="text-xl font-bold text-blue-800">
-                      {formatMoeda((fluxoCaixa as any[]).reduce((sum: number, m: any) => sum + parseFloat(m.valorTotal || "0"), 0))}
-                    </span>
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-blue-700">Salário Base (antecipado):</span>
+                      <span className="text-base font-semibold text-blue-700">
+                        {formatMoeda((fluxoCaixa as any[]).reduce((sum: number, m: any) => sum + parseFloat(m.totalSalarioBase || "0"), 0))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-orange-600">1/3 Constitucional (custo adicional):</span>
+                      <span className="text-base font-semibold text-orange-600">
+                        {formatMoeda((fluxoCaixa as any[]).reduce((sum: number, m: any) => sum + parseFloat(m.totalTercoConstitucional || "0"), 0))}
+                      </span>
+                    </div>
+                    <div className="border-t border-blue-200 pt-2 flex justify-between items-center">
+                      <span className="font-semibold text-blue-800">Total Geral Estimado Anual:</span>
+                      <span className="text-xl font-bold text-blue-800">
+                        {formatMoeda((fluxoCaixa as any[]).reduce((sum: number, m: any) => sum + parseFloat(m.valorTotal || "0"), 0))}
+                      </span>
+                    </div>
                   </div>
 
                   {(() => {
@@ -1243,8 +1262,22 @@ export default function Ferias() {
                         })}
                       </tbody>
                       <tfoot>
+                        <tr className="border-t-2 border-blue-200 bg-blue-50/50">
+                          <td colSpan={4} className="py-1.5 px-3 text-sm text-blue-700">Salário Base (antecipado)</td>
+                          <td className="py-1.5 px-3 text-right font-semibold text-blue-700">{formatMoeda(fluxoMesSelecionado.totalSalarioBase)}</td>
+                          <td></td>
+                          <td></td>
+                          <td></td>
+                        </tr>
+                        <tr className="bg-orange-50/50">
+                          <td colSpan={4} className="py-1.5 px-3 text-sm text-orange-600">1/3 Constitucional (custo adicional)</td>
+                          <td></td>
+                          <td className="py-1.5 px-3 text-right font-semibold text-orange-600">{formatMoeda(fluxoMesSelecionado.totalTercoConstitucional)}</td>
+                          <td></td>
+                          <td></td>
+                        </tr>
                         <tr className="border-t-2 border-green-300 bg-green-50">
-                          <td colSpan={6} className="py-2 px-3 font-bold text-green-800">TOTAL DO MÊS</td>
+                          <td colSpan={6} className="py-2 px-3 font-bold text-green-800">TOTAL GERAL DO MÊS</td>
                           <td className="py-2 px-3 text-right font-bold text-green-800 text-lg">{formatMoeda(fluxoMesSelecionado.valorTotal)}</td>
                           <td></td>
                         </tr>

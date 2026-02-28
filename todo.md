@@ -3471,3 +3471,9 @@
 - [x] Barras coloridas por status no Gantt (azul=prevista, vermelho=vencida, laranja=agendada, verde=em gozo, cinza=concluída)
 - [x] Backend feriasDoFuncionario com todos os períodos aquisitivos, status e valores
 - [x] Dialog mostra: dados do colaborador, total períodos, vencidas, valor estimado, tabela detalhada
+
+## Separação de Valores de Férias no Fluxo de Caixa
+- [x] Separar Total Estimado Anual em: Salário Base, 1/3 Adicional e Total Geral
+- [x] Aplicar mesma separação nos cards mensais do fluxo de caixa
+- [x] Atualizar backend para retornar valores separados (salário e 1/3)
+- [x] Separar totais no dialog mensal detalhado (tabela com tfoot)
