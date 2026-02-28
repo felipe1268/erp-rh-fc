@@ -3272,3 +3272,6 @@
 - [x] Jornada de trabalho: formatar JSON em tabela legível (não mostrar JSON bruto)
 - [x] Faltas e atrasos clicáveis: ao clicar na data, abre cartão de ponto do dia
 - [x] Layout responsivo e dados de fácil consulta
+
+## Bug: Troca de Módulo não navega para tela inicial - 2026-02-28
+- [x] Ao trocar módulo no dropdown da sidebar, navega para a tela inicial do módulo selecionado

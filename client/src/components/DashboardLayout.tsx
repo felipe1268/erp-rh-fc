@@ -278,6 +278,15 @@ const ICON_MAP: Record<string, any> = {
   "PJ Medições": FileSpreadsheet,
 };
 
+// Map each module to its initial/home route
+const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
+  "rh-dp": "/painel/rh",
+  "sst": "/painel/sst",
+  "juridico": "/painel/juridico",
+  "avaliacao": "/avaliacao-desempenho",
+  "all": "/painel",
+};
+
 // Module color/icon config for the selector
 const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> = {
   "rh-dp": { icon: Users, color: "text-blue-400", bg: "bg-blue-500/20" },
@@ -547,7 +556,7 @@ function DashboardLayoutContent({
           {/* Module Selector */}
           {!isCollapsed && (
             <div className="px-3 pb-2">
-              <Select value={activeModule} onValueChange={(v) => setActiveModule(v as ModuleId)}>
+              <Select value={activeModule} onValueChange={(v) => { const mod = v as ModuleId; setActiveModule(mod); setLocation(MODULE_HOME_ROUTES[mod] || "/painel"); }}>
                 <SelectTrigger className="w-full h-10 bg-sidebar-accent/50 border-sidebar-border text-sm font-semibold">
                   <div className="flex items-center gap-2">
                     <div className={`h-6 w-6 rounded-md ${currentTheme.bg} flex items-center justify-center`}>
@@ -612,21 +621,21 @@ function DashboardLayoutContent({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="start">
                   {(permIsAdminMaster || canAccessModule("rh-dp")) && (
-                    <DropdownMenuItem onClick={() => setActiveModule("rh-dp")} className="cursor-pointer">
+                    <DropdownMenuItem onClick={() => { setActiveModule("rh-dp"); setLocation("/painel/rh"); }} className="cursor-pointer">
                       <Users className="mr-2 h-4 w-4 text-blue-400" /> RH & DP
                     </DropdownMenuItem>
                   )}
                   {(permIsAdminMaster || canAccessModule("sst")) && (
-                    <DropdownMenuItem onClick={() => setActiveModule("sst")} className="cursor-pointer">
+                    <DropdownMenuItem onClick={() => { setActiveModule("sst"); setLocation("/painel/sst"); }} className="cursor-pointer">
                       <Shield className="mr-2 h-4 w-4 text-emerald-400" /> SST
                     </DropdownMenuItem>
                   )}
                   {(permIsAdminMaster || canAccessModule("juridico")) && (
-                    <DropdownMenuItem onClick={() => setActiveModule("juridico")} className="cursor-pointer">
+                    <DropdownMenuItem onClick={() => { setActiveModule("juridico"); setLocation("/painel/juridico"); }} className="cursor-pointer">
                       <Gavel className="mr-2 h-4 w-4 text-slate-300" /> Jurídico
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={() => setActiveModule("avaliacao")} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => { setActiveModule("avaliacao"); setLocation("/avaliacao-desempenho"); }} className="cursor-pointer">
                     <Star className="mr-2 h-4 w-4 text-amber-400" /> Avaliação
                   </DropdownMenuItem>
                 </DropdownMenuContent>
