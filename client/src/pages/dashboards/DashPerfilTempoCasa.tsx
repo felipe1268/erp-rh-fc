@@ -4,6 +4,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -631,6 +632,7 @@ export default function DashPerfilTempoCasa() {
           </Card>
         )}
       </div>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

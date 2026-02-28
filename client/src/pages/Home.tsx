@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 
 const RISCO_COLORS: Record<string, string> = {
   baixo: "bg-green-100 text-green-700",
@@ -690,6 +691,7 @@ export default function Home() {
           </Card>
         )}
       </div>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

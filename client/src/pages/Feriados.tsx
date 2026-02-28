@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Calendar, Plus, Trash2, Download, Upload, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { removeAccents } from "@/lib/searchUtils";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -48,8 +49,8 @@ export default function Feriados() {
   const filtered = useMemo(() => {
     if (!feriados) return [];
     if (!search) return feriados;
-    const s = search.toLowerCase();
-    return feriados.filter(f => f.nome.toLowerCase().includes(s) || f.tipo?.toLowerCase().includes(s));
+    const s = removeAccents(search);
+    return feriados.filter(f => removeAccents(f.nome || '').includes(s) || removeAccents(f.tipo || '').includes(s));
   }, [feriados, search]);
 
   const abrirNovo = () => {

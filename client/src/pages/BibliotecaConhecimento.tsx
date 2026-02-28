@@ -19,6 +19,7 @@ import {
   type ArtigoCategoria, type Artigo,
 } from "@/data/bibliotecaConteudo";
 import { Streamdown } from "@/components/LazyStreamdown";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 
 // Mapa de ícones por nome
 const ICON_MAP: Record<string, any> = {
@@ -95,6 +96,7 @@ export default function BibliotecaConhecimento() {
   return (
     <DashboardLayout>
       <BibliotecaContent />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

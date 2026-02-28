@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +15,7 @@ import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { MODULE_DEFINITIONS, type ActiveModuleId } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
+import { removeAccents } from "@/lib/searchUtils";
 
 const roleLabels: Record<string, string> = {
   admin_master: "Admin Master",
@@ -759,6 +761,7 @@ export default function Usuarios() {
           </div>
         )}
       </FullScreenDialog>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

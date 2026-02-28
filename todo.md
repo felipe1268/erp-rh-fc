@@ -3674,3 +3674,22 @@
 - [x] Funcionários já alocados aparecem no relatório de efetivo por obra (já funcionava)
 - [x] Melhorar UX do dialog de alocação: filtros Todos/Sem Obra/Com Obra + busca por obra
 - [x] Limpar todas as alocações de obra dos funcionários (usuário fará manualmente) - 392 funcionários ativos agora sem obra
+
+## Rev. 129 - Busca sem acentos + LGPD + Assistente
+- [ ] Busca ignorando acentos/caracteres especiais no dialog de alocação de funcionários
+- [ ] Aplicar busca sem acentos em outras telas de pesquisa do sistema
+
+## Rev. 129b - Regra de alocação única por obra
+- [ ] Backend: validar que funcionário só pode ter 1 obra ativa por vez
+- [ ] Frontend: alerta de confirmação quando funcionário já está alocado em outra obra (transferir?)
+- [ ] Impedir alocação dupla simultânea
+## Rev. 130 - Dashboard Efetivo por Obra + Regra Alocação
+- [x] Backend: validar que funcionário só pode ter 1 obra ativa por vez (dialog de transferência implementado)
+- [x] Frontend: dialog de confirmação de transferência quando funcionário já alocado
+- [x] PrintFooterLGPD adicionado em TODAS as páginas com DashboardLayout (11 páginas corrigidas)
+- [x] Dashboard Efetivo por Obra: cruzar dados de alocação com cartão de ponto mensal
+- [x] Dashboard Efetivo por Obra: adicionar filtro por mês além do ano
+- [x] Dashboard Efetivo por Obra: mostrar efetivo real baseado em ponto + alocação
+- [ ] REGRA GLOBAL: Todos os gráficos devem ser responsivos e clicáveis com drill-down de dados
+- [x] Dashboard Efetivo: "Ver equipe" deve abrir dialog com funcionários da obra específica
+- [x] Dashboard Efetivo: testar todos os vínculos e links corretamente

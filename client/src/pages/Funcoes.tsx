@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { removeAccents } from "@/lib/searchUtils";
 
 type FuncaoForm = { nome: string; descricao: string; ordemServico: string; cbo: string };
 const emptyForm: FuncaoForm = { nome: "", descricao: "", ordemServico: "", cbo: "" };
@@ -40,7 +42,7 @@ function CboAutocomplete({ value, onChange, onSelect }: { value: string; onChang
     const s = (search || value).toLowerCase().trim();
     if (!s || s.length < 2) return [];
     return cboList.filter(c =>
-      c.desc.toLowerCase().includes(s) || c.cod.includes(s)
+      removeAccents(c.desc || '').includes(s) || c.cod.includes(s)
     ).slice(0, 15);
   }, [cboList, search, value]);
 
@@ -165,8 +167,8 @@ export default function Funcoes() {
     
     // Filtro por busca
     if (search) {
-      const s = search.toLowerCase();
-      list = list.filter((f: any) => f.nome?.toLowerCase().includes(s) || (f.descricao || "").toLowerCase().includes(s) || (f.cbo || "").includes(s));
+      const s = removeAccents(search);
+      list = list.filter((f: any) => removeAccents(f.nome || '').includes(s) || (f.descricao || "").toLowerCase().includes(s) || (f.cbo || "").includes(s));
     }
     
     return list;
@@ -700,6 +702,7 @@ export default function Funcoes() {
           </div>
         )}
       </FullScreenDialog>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

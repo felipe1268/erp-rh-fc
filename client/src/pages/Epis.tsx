@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
@@ -419,9 +421,9 @@ export default function Epis() {
       list = list.filter((e: any) => (e.tamanho || "") === filterTamanho);
     }
     if (!search) return list;
-    const s = search.toLowerCase();
+    const s = removeAccents(search);
     return list.filter((e: any) =>
-      e.nome?.toLowerCase().includes(s) ||
+      removeAccents(e.nome || '').includes(s) ||
       (e.ca || "").toLowerCase().includes(s) ||
       (e.fabricante || "").toLowerCase().includes(s)
     );
@@ -440,7 +442,7 @@ export default function Epis() {
 
   const filteredDeliveries = useMemo(() => {
     if (!search) return deliveriesList;
-    const s = search.toLowerCase();
+    const s = removeAccents(search);
     return deliveriesList.filter((d: any) =>
       (d.nomeEpi || "").toLowerCase().includes(s) ||
       (d.nomeFunc || "").toLowerCase().includes(s)
@@ -1784,6 +1786,7 @@ export default function Epis() {
         </div>
       )}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

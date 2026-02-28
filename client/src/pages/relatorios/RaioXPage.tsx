@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -6,6 +7,7 @@ import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { formatCPF } from "@/lib/formatters";
 import { Search, UserSearch, Users, UserCheck, UserX, Clock, Shield, Ban, AlertTriangle, Palmtree, FileWarning } from "lucide-react";
+import { removeAccents } from "@/lib/searchUtils";
 
 const STATUS_OPTIONS = [
   { value: "Todos", label: "Todos", icon: Users, color: "bg-gray-100 text-gray-700 border-gray-300", activeColor: "bg-gray-700 text-white border-gray-700" },
@@ -92,13 +94,13 @@ export default function RaioXPage() {
   // Filtrar por busca
   const filtered = useMemo(() => {
     if (!search) return statusFiltered;
-    const s = search.toLowerCase();
+    const s = removeAccents(search);
     return statusFiltered.filter(
       (e: any) =>
-        e.nomeCompleto?.toLowerCase().includes(s) ||
+        removeAccents(e.nomeCompleto || '').includes(s) ||
         e.cpf?.includes(s) ||
-        e.funcao?.toLowerCase().includes(s) ||
-        e.codigoInterno?.toLowerCase().includes(s)
+        removeAccents(e.funcao || '').includes(s) ||
+        removeAccents(e.codigoInterno || '').includes(s)
     );
   }, [statusFiltered, search]);
 
@@ -232,6 +234,7 @@ export default function RaioXPage() {
         open={!!selectedEmployeeId}
         onClose={() => setSelectedEmployeeId(null)}
       />
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

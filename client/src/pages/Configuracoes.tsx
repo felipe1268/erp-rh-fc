@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { removeAccents } from "@/lib/searchUtils";
 
 const MODULES_LIST = [
   { key: "colaboradores", label: "Colaboradores" },
@@ -783,6 +785,7 @@ export default function Configuracoes() {
           </div>
         </FullScreenDialog>
       </div>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }
@@ -1075,9 +1078,9 @@ function SyncHETab({ companyId }: { companyId: number }) {
   const criterios = heQuery.data?.criterios;
   const funcionarios = heQuery.data?.funcionarios || [];
   const filtered = funcionarios.filter(f =>
-    !searchTerm || f.nomeCompleto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    f.funcao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    f.setor?.toLowerCase().includes(searchTerm.toLowerCase())
+    !searchTerm || f.nomeCompleto?.toLowerCase().includes(removeAccents(searchTerm)) ||
+    f.funcao?.toLowerCase().includes(removeAccents(searchTerm)) ||
+    f.setor?.toLowerCase().includes(removeAccents(searchTerm))
   );
 
   const allSelected = filtered.length > 0 && filtered.every(f => selectedIds.includes(f.id));

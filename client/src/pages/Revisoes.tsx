@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, Bug, Sparkles, Shield, Zap, Wrench, Calendar, User, Tag, Printer, ArrowLeft, ListFilter } from "lucide-react";
 import { useLocation } from "wouter";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 
 const TIPO_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode; cardBorder: string }> = {
   feature: { label: "Nova Funcionalidade", color: "bg-blue-100 text-blue-800 border-blue-200", icon: <Sparkles className="h-3.5 w-3.5" />, cardBorder: "ring-blue-500" },
@@ -182,6 +183,7 @@ export default function Revisoes() {
           );
         })}
       </div>
+      <PrintFooterLGPD />
     </div>
   );
 }

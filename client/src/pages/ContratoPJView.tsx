@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Loader2 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "___/___/______";
@@ -329,6 +330,7 @@ export default function ContratoPJView() {
           }
         }
       `}</style>
+          <PrintFooterLGPD />
     </>
   );
 }

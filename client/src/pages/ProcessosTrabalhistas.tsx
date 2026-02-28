@@ -12,6 +12,7 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { toast } from "sonner";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { formatDate as formatDateBR, formatDateTime as formatDateTimeBR } from "@/lib/dateUtils";
 import {
   Plus, Search, Gavel, ArrowLeft, Calendar, AlertTriangle,
@@ -1626,6 +1627,7 @@ export default function ProcessosTrabalhistas() {
         </FullScreenDialog>
       </div>
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

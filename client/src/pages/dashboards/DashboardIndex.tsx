@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { useEffect, useState } from "react";
 import {
   Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
@@ -286,6 +287,7 @@ export default function DashboardIndex() {
           </div>
         </div>
       </div>
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

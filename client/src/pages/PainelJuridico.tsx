@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -968,6 +969,7 @@ export default function PainelJuridico() {
           </div>
         </DialogContent>
       </Dialog>
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

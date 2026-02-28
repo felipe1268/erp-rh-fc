@@ -2,6 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import React from "react";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -13,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
@@ -678,8 +680,8 @@ export default function FechamentoPonto() {
     if (!summary.data) return [];
     let data = summary.data;
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      data = data.filter((e: any) => e.employeeName?.toLowerCase().includes(term) || e.employeeCpf?.includes(term));
+      const term = removeAccents(searchTerm);
+      data = data.filter((e: any) => removeAccents(e.employeeName || '').includes(term) || e.employeeCpf?.includes(term));
     }
     if (filterObra && filterObra !== "all") {
       data = data.filter((e: any) => {
@@ -2879,7 +2881,7 @@ export default function FechamentoPonto() {
                             {(employeesList.data || []).filter((emp: any) => {
                               if (!linkSearchTerm) return true;
                               const t = linkSearchTerm.toLowerCase();
-                              return emp.nomeCompleto?.toLowerCase().includes(t) || emp.cpf?.includes(t);
+                              return removeAccents(emp.nomeCompleto || '').includes(t) || emp.cpf?.includes(t);
                             }).slice(0, 20).map((emp: any) => (
                               <div key={emp.id}
                                 className={`p-2 flex items-center justify-between cursor-pointer hover:bg-purple-50 border-b last:border-0 ${linkSelectedEmpId === emp.id ? 'bg-purple-100 ring-1 ring-purple-400' : ''}`}
@@ -2894,7 +2896,7 @@ export default function FechamentoPonto() {
                             {(employeesList.data || []).filter((emp: any) => {
                               if (!linkSearchTerm) return true;
                               const t = linkSearchTerm.toLowerCase();
-                              return emp.nomeCompleto?.toLowerCase().includes(t) || emp.cpf?.includes(t);
+                              return removeAccents(emp.nomeCompleto || '').includes(t) || emp.cpf?.includes(t);
                             }).length === 0 && (
                               <div className="p-4 text-center text-sm text-muted-foreground">Nenhum colaborador encontrado</div>
                             )}
@@ -3002,7 +3004,7 @@ export default function FechamentoPonto() {
                         {(dixiMappings.data || []).filter((m: any) => {
                           if (!memSearchTerm) return true;
                           const t = memSearchTerm.toLowerCase();
-                          return m.dixiName?.toLowerCase().includes(t) || m.employeeName?.toLowerCase().includes(t);
+                          return removeAccents(m.dixiName || '').includes(t) || removeAccents(m.employeeName || '').includes(t);
                         }).map((m: any) => (
                           <tr key={m.id} className="border-b hover:bg-muted/30">
                             <td className="p-2.5 font-medium">{m.dixiName}</td>
@@ -3708,6 +3710,7 @@ export default function FechamentoPonto() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   HardHat, Building2, Users, ClipboardCheck, ChevronRight, ChevronLeft,
   Search, Check, Clock, UserCheck, UserX, CheckCircle2, AlertTriangle
@@ -208,8 +209,8 @@ export default function EvaluatorPanel() {
     let list = pendingQuery.data;
     if (showPendingOnly) list = list.filter((e: any) => !e.jaAvaliado);
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      list = list.filter((e: any) => e.nome?.toLowerCase().includes(term) || e.cpf?.includes(term) || e.funcao?.toLowerCase().includes(term));
+      const term = removeAccents(searchTerm);
+      list = list.filter((e: any) => removeAccents(e.nome || '').includes(term) || e.cpf?.includes(term) || removeAccents(e.funcao || '').includes(term));
     }
     return list;
   }, [pendingQuery.data, showPendingOnly, searchTerm]);

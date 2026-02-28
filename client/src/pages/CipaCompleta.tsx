@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -644,6 +645,7 @@ export default function CipaCompleta() {
       </div>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

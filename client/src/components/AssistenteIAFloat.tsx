@@ -85,7 +85,7 @@ export default function AssistenteIAFloat() {
   // Tamanho do chat
   const chatSize = maximizado
     ? "fixed inset-4 z-[9999]"
-    : "fixed bottom-20 right-4 w-[min(400px,calc(100vw-2rem))] h-[min(560px,calc(100vh-6rem))] z-[9999]";
+    : "fixed bottom-24 right-4 w-[min(400px,calc(100vw-2rem))] h-[min(520px,calc(100vh-8rem))] z-[9999]";
 
   return (
     <>
@@ -93,7 +93,7 @@ export default function AssistenteIAFloat() {
       {!aberto && (
         <button
           onClick={() => setAberto(true)}
-          className="fixed bottom-5 right-5 z-[9999] h-14 w-14 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center group"
+          className="fixed bottom-20 right-4 z-[9999] h-12 w-12 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center group"
           title="Assistente IA — Tire suas dúvidas"
         >
           <Bot className="h-6 w-6 group-hover:scale-110 transition-transform" />

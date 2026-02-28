@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { formatCPF, formatMoeda } from "@/lib/formatters";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
   Users, Trash2, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
@@ -393,7 +395,7 @@ export default function Ferias() {
   const selectedEmp = activeEmployees.find((e: any) => e.id === form.employeeId);
   const filteredEmps = activeEmployees.filter((e: any) => {
     if (!empSearch) return true;
-    const s = empSearch.toLowerCase();
+    const s = removeAccents(empSearch);
     return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""));
   });
 
@@ -401,7 +403,7 @@ export default function Ferias() {
   const filtered = useMemo(() => {
     return (feriasList as any[]).filter((a: any) => {
       if (search) {
-        const s = search.toLowerCase();
+        const s = removeAccents(search);
         if (!(a.employeeName || "").toLowerCase().includes(s) && !(a.employeeCpf || "").includes(s)) return false;
       }
       return true;
@@ -1565,6 +1567,7 @@ export default function Ferias() {
       )}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -750,6 +751,7 @@ export default function VisaoPanoramica() {
       </div>
       {/* Score Detail Dialog */}
       <ScoreDetailDialog open={showScoreDetail} onClose={() => setShowScoreDetail(false)} analise={analise} />
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

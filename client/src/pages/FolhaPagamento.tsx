@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { toast } from "sonner";
@@ -2047,6 +2048,7 @@ export default function FolhaPagamento() {
             </div>
         </FullScreenDialog>
       </div>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

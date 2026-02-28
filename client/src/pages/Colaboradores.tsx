@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -2595,6 +2596,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
         </div>
       </FullScreenDialog>
        <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

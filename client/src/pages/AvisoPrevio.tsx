@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { formatCPF, formatMoeda } from "@/lib/formatters";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -133,7 +135,7 @@ export default function AvisoPrevio() {
   const filtered = useMemo(() => {
     return (avisosList as any[]).filter((a: any) => {
       if (search) {
-        const s = search.toLowerCase();
+        const s = removeAccents(search);
         if (!(a.employeeName || "").toLowerCase().includes(s) && !(a.employeeCpf || "").includes(s)) return false;
       }
       return true;
@@ -624,8 +626,9 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
   <div class="sig-line">${pdfData.funcionario.nome}<br/><small>Empregado(a)</small></div>
 </div>
 <div class="footer">
-  <p>Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} pelo sistema FC Gestão Integrada</p>
+  <p><strong>Documento gerado por:</strong> ${user?.name || user?.username || 'Usuário não identificado'} | <strong>Data/Hora:</strong> ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | <strong>Sistema:</strong> FC Gestão Integrada</p>
   <p>Este documento não substitui o TRCT homologado. Serve como previsão de verbas rescisórias.</p>
+  <p style="font-size:7px;color:#aaa;margin-top:4px">Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD). É proibida a reprodução, distribuição ou compartilhamento sem autorização. O uso indevido está sujeito às sanções previstas na legislação vigente.</p>
 </div>
 </body></html>`);
                       w.document.close();
@@ -1022,6 +1025,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
       </div>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

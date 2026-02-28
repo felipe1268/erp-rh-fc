@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { FileText, Trash2, RotateCcw, AlertTriangle, Clock, User, Building2, Sea
 import { useState } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
+import { removeAccents } from "@/lib/searchUtils";
 
 const actionColors: Record<string, string> = {
   CREATE: "bg-green-100 text-green-700",
@@ -78,8 +80,8 @@ export default function Auditoria() {
 
   const filteredLogs = logs?.filter(log => {
     if (!searchLogs) return true;
-    const s = searchLogs.toLowerCase();
-    return (log.userName?.toLowerCase().includes(s) || log.details?.toLowerCase().includes(s) || log.module?.toLowerCase().includes(s) || log.action?.toLowerCase().includes(s));
+    const s = removeAccents(searchLogs);
+    return (removeAccents(log.userName || '').includes(s) || removeAccents(log.details || '').includes(s) || removeAccents(log.module || '').includes(s) || removeAccents(log.action || '').includes(s));
   });
 
   return (
@@ -273,6 +275,7 @@ export default function Auditoria() {
           </TabsContent>
         </Tabs>
       </div>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

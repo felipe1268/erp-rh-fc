@@ -5,6 +5,7 @@ import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import BrazilMap from "@/components/BrazilMap";
 import DrillDownModal from "@/components/DrillDownModal";
 import PrintActions from "@/components/PrintActions";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -354,6 +355,7 @@ export default function DashFuncionarios() {
         filterType={drillDown.filterType}
         filterValue={drillDown.filterValue}
       />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

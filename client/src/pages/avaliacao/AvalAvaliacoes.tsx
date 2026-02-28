@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import { Search, Eye, Trash2, Calendar, Clock, User, Star, Filter } from "lucide-react";
+import { removeAccents } from "@/lib/searchUtils";
 
 const PILARES = [
   { nome: "Postura e Disciplina", cor: "#1e3a5f", criterios: ["comportamento", "pontualidade", "assiduidade", "segurancaEpis"] },
@@ -62,8 +63,8 @@ export default function AvalAvaliacoes() {
     if (!avaliacoes.data) return [];
     let list = avaliacoes.data;
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      list = list.filter((a: any) => a.employeeName?.toLowerCase().includes(term) || a.evaluatorName?.toLowerCase().includes(term));
+      const term = removeAccents(searchTerm);
+      list = list.filter((a: any) => removeAccents(a.employeeName || '').includes(term) || removeAccents(a.evaluatorName || '').includes(term));
     }
     if (filterRec !== "all") list = list.filter((a: any) => a.recomendacao === filterRec);
     return list;

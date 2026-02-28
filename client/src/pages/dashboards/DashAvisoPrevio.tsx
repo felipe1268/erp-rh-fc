@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -601,6 +602,7 @@ export default function DashAvisoPrevio() {
           </>
         )}
       </div>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

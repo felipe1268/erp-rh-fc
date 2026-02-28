@@ -22,7 +22,8 @@ import {
   checkDuplicateCpf, checkBlacklist, getBlacklistedEmployees,
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, restoreObra, getObrasByCompanyActive,
-  getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
+  getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio, checkEmployeeAllocations,
+  getEquipeObra, getEfetivoDashboardMensal,
   getEmployeeSiteHistory, getEfetivoPorObra, getEfetivoHistorico, getFuncionariosSemObra, transferirFuncionariosEmLote,
   detectarInconsistenciaPonto, getInconsistenciasPendentes, resolverInconsistenciaEsporadico, resolverInconsistenciaTransferir, countInconsistenciasPendentes, getOndeTrabalhouNoMes,
   getObraSns, getObraSnsByCompany, getActiveSnsByCompany, getAvailableSns, checkSnAvailability, addSnToObra, updateSnObra, removeSnFromObra, releaseObraSns, findObraBySn,
@@ -766,6 +767,10 @@ export const appRouter = router({
     }),
     // Funcionários alocados
     funcionarios: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraFuncionarios(input.obraId)),
+    // Check if employees already have active allocations (pre-validation)
+    checkAllocations: protectedProcedure.input(z.object({
+      employeeIds: z.array(z.number()),
+    })).query(({ input }) => checkEmployeeAllocations(input.employeeIds)),
     allocateEmployee: protectedProcedure.input(z.object({
       obraId: z.number(),
       employeeId: z.number(),
@@ -783,6 +788,8 @@ export const appRouter = router({
     efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses)),
     // Funcionários sem obra
     semObra: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getFuncionariosSemObra(input.companyId)),
+    equipeObra: protectedProcedure.input(z.object({ obraId: z.number(), companyId: z.number() })).query(({ input }) => getEquipeObra(input.obraId, input.companyId)),
+    efetivoDashMensal: protectedProcedure.input(z.object({ companyId: z.number(), mesRef: z.string() })).query(({ input }) => getEfetivoDashboardMensal(input.companyId, input.mesRef)),
     // Transferência em lote
     transferirEmLote: protectedProcedure.input(z.object({
       companyId: z.number(),

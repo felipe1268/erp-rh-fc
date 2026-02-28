@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -598,6 +599,7 @@ export default function SolicitacaoHE() {
         </div>
       </div>
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

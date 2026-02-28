@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -128,6 +129,7 @@ export default function AvaliacaoDesempenho() {
           </div>
         </Tabs>
       </div>
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

@@ -2,6 +2,7 @@ import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import MonthSelector from "@/components/MonthSelector";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -239,6 +240,7 @@ export default function DashCartaoPonto() {
           </>
         )}
       </div>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

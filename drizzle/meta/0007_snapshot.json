@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "26958d52-fbf3-44cf-8753-87fdc0369a91",
+  "id": "82897a52-d842-4a0d-a861-e5e9d98fc550",
   "prevId": "f5b90a30-7361-4344-9987-e40713e88771",
   "tables": {
     "accidents": {
@@ -3718,6 +3718,138 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
+    "employee_site_history": {
+      "name": "employee_site_history",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "companyId": {
+          "name": "companyId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "employeeId": {
+          "name": "employeeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "obraId": {
+          "name": "obraId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tipo": {
+          "name": "tipo",
+          "type": "enum('alocacao','transferencia','retorno','saida','temporario')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dataInicio": {
+          "name": "dataInicio",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dataFim": {
+          "name": "dataFim",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "motivoTransferencia": {
+          "name": "motivoTransferencia",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "obraOrigemId": {
+          "name": "obraOrigemId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "registradoPor": {
+          "name": "registradoPor",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "registradoPorUserId": {
+          "name": "registradoPorUserId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "observacoes": {
+          "name": "observacoes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "esh_company": {
+          "name": "esh_company",
+          "columns": [
+            "companyId"
+          ],
+          "isUnique": false
+        },
+        "esh_employee": {
+          "name": "esh_employee",
+          "columns": [
+            "employeeId"
+          ],
+          "isUnique": false
+        },
+        "esh_obra": {
+          "name": "esh_obra",
+          "columns": [
+            "obraId"
+          ],
+          "isUnique": false
+        },
+        "esh_data": {
+          "name": "esh_data",
+          "columns": [
+            "dataInicio",
+            "dataFim"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
     "employees": {
       "name": "employees",
       "columns": {
@@ -4027,7 +4159,8 @@
           "type": "enum('CLT','PJ','Temporario','Estagio','Aprendiz','Horista')",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'CLT'"
         },
         "jornadaTrabalho": {
           "name": "jornadaTrabalho",
@@ -9860,6 +9993,138 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "obra_ponto_inconsistencies": {
+      "name": "obra_ponto_inconsistencies",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "companyId": {
+          "name": "companyId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "employeeId": {
+          "name": "employeeId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "obraAlocadaId": {
+          "name": "obraAlocadaId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "obraPontoId": {
+          "name": "obraPontoId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dataPonto": {
+          "name": "dataPonto",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snRelogio": {
+          "name": "snRelogio",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('pendente','esporadico','transferido','ignorado')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pendente'"
+        },
+        "resolvidoPor": {
+          "name": "resolvidoPor",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolvidoPorUserId": {
+          "name": "resolvidoPorUserId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolvidoEm": {
+          "name": "resolvidoEm",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "observacoes": {
+          "name": "observacoes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "opi_company": {
+          "name": "opi_company",
+          "columns": [
+            "companyId"
+          ],
+          "isUnique": false
+        },
+        "opi_employee": {
+          "name": "opi_employee",
+          "columns": [
+            "employeeId"
+          ],
+          "isUnique": false
+        },
+        "opi_status": {
+          "name": "opi_status",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "opi_data": {
+          "name": "opi_data",
+          "columns": [
+            "dataPonto"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

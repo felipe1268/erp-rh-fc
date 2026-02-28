@@ -279,4 +279,16 @@
   .card, [class*="CardContent"] {
     page-break-inside: avoid;
   }
+
+  /* Rodapé LGPD - fixo no final de cada página impressa */
+  .print-footer-lgpd {
+    display: block !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 4px 10px;
+    z-index: 9999;
+  }
 }

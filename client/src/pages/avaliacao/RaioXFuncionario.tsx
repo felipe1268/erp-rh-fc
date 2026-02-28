@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/contexts/CompanyContext";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   ArrowLeft, User, TrendingUp, TrendingDown, Calendar, Clock, Search,
   Share2, Printer, Eye, ChevronRight
@@ -332,8 +334,8 @@ export default function RaioXFuncionario() {
   const filtered = useMemo(() => {
     if (!ranking.data) return [];
     if (!searchTerm) return ranking.data;
-    const term = searchTerm.toLowerCase();
-    return ranking.data.filter((e: any) => e.employeeName?.toLowerCase().includes(term) || e.employeeFuncao?.toLowerCase().includes(term) || e.employeeSetor?.toLowerCase().includes(term));
+    const term = removeAccents(searchTerm);
+    return ranking.data.filter((e: any) => removeAccents(e.employeeName || '').includes(term) || removeAccents(e.employeeFuncao || '').includes(term) || removeAccents(e.employeeSetor || '').includes(term));
   }, [ranking.data, searchTerm]);
 
   return (
@@ -377,6 +379,7 @@ export default function RaioXFuncionario() {
           })}
         </div>
       )}
+      <PrintFooterLGPD />
     </div>
   );
 }

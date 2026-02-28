@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -14,6 +15,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { removeAccents } from "@/lib/searchUtils";
 
 type SetorForm = { nome: string; descricao: string };
 const emptyForm: SetorForm = { nome: "", descricao: "" };
@@ -35,8 +37,8 @@ const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyI
 
   const filtered = useMemo(() => {
     if (!search) return setores;
-    const s = search.toLowerCase();
-    return setores.filter((st: any) => st.nome?.toLowerCase().includes(s) || (st.descricao || "").toLowerCase().includes(s));
+    const s = removeAccents(search);
+    return setores.filter((st: any) => removeAccents(st.nome || '').includes(s) || (st.descricao || "").toLowerCase().includes(s));
   }, [setores, search]);
 
   const openNew = () => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); };
@@ -152,6 +154,7 @@ const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyI
           </div>
         </div>
       </FullScreenDialog>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

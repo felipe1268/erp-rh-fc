@@ -3,6 +3,7 @@ import MonthSelector from "@/components/MonthSelector";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -12,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   UtensilsCrossed, Search, Upload, FileSpreadsheet, Users, DollarSign,
   Settings, ListChecks, History, CheckCircle, XCircle, Pencil, Trash2,
@@ -181,8 +183,8 @@ export default function ValeAlimentacao() {
     return lancamentos.filter((l: any) => {
       if (statusFilter !== "all" && l.status !== statusFilter) return false;
       if (search) {
-        const s = search.toLowerCase();
-        return l.nomeCompleto?.toLowerCase().includes(s) || l.cpf?.includes(s);
+        const s = removeAccents(search);
+        return removeAccents(l.nomeCompleto || '').includes(s) || l.cpf?.includes(s);
       }
       return true;
     });
@@ -946,6 +948,7 @@ export default function ValeAlimentacao() {
         </DialogContent>
       </Dialog>
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

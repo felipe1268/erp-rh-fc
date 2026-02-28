@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Badge } from "@/components/ui/badge";
+import { removeAccents } from "@/lib/searchUtils";
 
 type ContaForm = {
   banco: string;
@@ -73,9 +75,9 @@ export default function ContasBancarias() {
 
   const filtered = useMemo(() => {
     if (!search) return contas;
-    const s = search.toLowerCase();
+    const s = removeAccents(search);
     return contas.filter((c: any) =>
-      c.banco?.toLowerCase().includes(s) ||
+      removeAccents(c.banco || '').includes(s) ||
 
       (c.agencia || "").includes(s) ||
       (c.conta || "").includes(s) ||
@@ -426,6 +428,7 @@ export default function ContasBancarias() {
           </div>
         </div>
       </FullScreenDialog>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

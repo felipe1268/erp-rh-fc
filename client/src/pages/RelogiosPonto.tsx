@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Badge } from "@/components/ui/badge";
+import { removeAccents } from "@/lib/searchUtils";
 
 type SnForm = {
   sn: string;
@@ -77,7 +79,7 @@ export default function RelogiosPonto() {
   const filtered = useMemo(() => {
     let result = sns;
     if (search) {
-      const s = search.toLowerCase();
+      const s = removeAccents(search);
       result = result.filter((sn: any) =>
         (sn.sn || "").toLowerCase().includes(s) ||
         (sn.obraNome || "").toLowerCase().includes(s)
@@ -466,6 +468,7 @@ export default function RelogiosPonto() {
           </div>
         </div>
       </FullScreenDialog>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

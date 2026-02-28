@@ -1,23 +1,41 @@
 import { useState, useMemo } from "react";
 import { CHART_PALETTE, getChartColors } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
-import DashChart, { DashKpi } from "@/components/DashChart";
+import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { HardHat, Users, Building2, AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, UserX, TrendingUp, TrendingDown, ArrowRightLeft } from "lucide-react";
-import { Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  HardHat, Users, Building2, AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight,
+  UserX, TrendingUp, TrendingDown, ArrowRightLeft, Eye, Calendar, ClipboardList,
+  Loader2, User,
+} from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+
+const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export default function DashEfetivoObra() {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
-  const currentYear = new Date().getFullYear();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
   const [ano, setAno] = useState(currentYear);
+  const [mes, setMes] = useState(currentMonth);
+
+  // Dialog states
+  const [equipeDialogOpen, setEquipeDialogOpen] = useState(false);
+  const [selectedObra, setSelectedObra] = useState<{ id: number; nome: string } | null>(null);
+  const [drillDialogOpen, setDrillDialogOpen] = useState(false);
+  const [drillData, setDrillData] = useState<{ title: string; items: any[] } | null>(null);
+
+  const mesRef = `${ano}-${String(mes).padStart(2, '0')}`;
 
   // Dados
   const { data: efetivoPorObra, isLoading: loadingEfetivo } = trpc.obras.efetivoPorObra.useQuery(
@@ -36,6 +54,14 @@ export default function DashEfetivoObra() {
     { companyId },
     { enabled: companyId > 0 }
   );
+  const { data: dashMensal } = trpc.obras.efetivoDashMensal.useQuery(
+    { companyId, mesRef },
+    { enabled: companyId > 0 }
+  );
+  const { data: equipeData, isLoading: loadingEquipe } = trpc.obras.equipeObra.useQuery(
+    { obraId: selectedObra?.id || 0, companyId },
+    { enabled: !!selectedObra && companyId > 0 }
+  );
 
   const isLoading = loadingEfetivo || loadingHistorico || loadingSemObra;
 
@@ -53,26 +79,27 @@ export default function DashEfetivoObra() {
 
   const totalObrasComEfetivo = useMemo(() => {
     if (!efetivoPorObra) return 0;
-    return (efetivoPorObra as any[]).filter((o: any) => o.efetivo > 0).length;
+    return (efetivoPorObra as any[]).filter((o: any) => (o.efetivo || 0) > 0).length;
   }, [efetivoPorObra]);
 
   const totalSemObra = (semObra as any[] || []).length;
   const totalInconsistencias = (inconsistenciasCount as any)?.count || 0;
 
-  // Histograma: efetivo por obra (barras horizontais)
-  const obraLabels = useMemo(() => {
+  // Dados do mês selecionado
+  const dadosMes = useMemo(() => {
+    if (!dashMensal) return null;
+    return dashMensal as any;
+  }, [dashMensal]);
+
+  // Histograma: efetivo por obra (barras)
+  const obrasSorted = useMemo(() => {
     if (!efetivoPorObra) return [];
     return (efetivoPorObra as any[])
-      .sort((a: any, b: any) => (b.efetivo || 0) - (a.efetivo || 0))
-      .map((o: any) => o.obraNome || `Obra #${o.obraId}`);
+      .sort((a: any, b: any) => (b.efetivo || 0) - (a.efetivo || 0));
   }, [efetivoPorObra]);
 
-  const obraValues = useMemo(() => {
-    if (!efetivoPorObra) return [];
-    return (efetivoPorObra as any[])
-      .sort((a: any, b: any) => (b.efetivo || 0) - (a.efetivo || 0))
-      .map((o: any) => o.efetivo || 0);
-  }, [efetivoPorObra]);
+  const obraLabels = useMemo(() => obrasSorted.map((o: any) => o.obraNome || `Obra #${o.obraId}`), [obrasSorted]);
+  const obraValues = useMemo(() => obrasSorted.map((o: any) => o.efetivo || 0), [obrasSorted]);
 
   // Evolução mensal: stacked bar chart por obra
   const mesesDoAno = useMemo(() => {
@@ -83,13 +110,10 @@ export default function DashEfetivoObra() {
     return meses;
   }, [ano]);
 
-  const mesesLabels = useMemo(() => {
-    return mesesDoAno.map(m => {
-      const [, mes] = m.split('-');
-      const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-      return nomes[parseInt(mes) - 1] || mes;
-    });
-  }, [mesesDoAno]);
+  const mesesLabels = useMemo(() => mesesDoAno.map(m => {
+    const [, mesN] = m.split('-');
+    return MESES_NOMES[parseInt(mesN) - 1] || mesN;
+  }), [mesesDoAno]);
 
   const obrasUnicas = useMemo(() => {
     if (!historicoFiltrado.length) return [];
@@ -104,24 +128,24 @@ export default function DashEfetivoObra() {
     const colors = getChartColors(obrasUnicas.length);
     return obrasUnicas.map((obra, idx) => ({
       label: obra.nome,
-      data: mesesDoAno.map(mes => {
-        const found = historicoFiltrado.find((h: any) => h.obraId === obra.id && h.mes === mes);
+      data: mesesDoAno.map(m => {
+        const found = historicoFiltrado.find((h: any) => h.obraId === obra.id && h.mes === m);
         return found ? found.efetivo : 0;
       }),
       backgroundColor: colors[idx] || CHART_PALETTE[idx % CHART_PALETTE.length],
     }));
   }, [obrasUnicas, mesesDoAno, historicoFiltrado]);
 
-  // Total mensal (linha de tendência)
+  // Total mensal (tendência)
   const totalMensal = useMemo(() => {
-    return mesesDoAno.map(mes => {
+    return mesesDoAno.map(m => {
       return historicoFiltrado
-        .filter((h: any) => h.mes === mes)
+        .filter((h: any) => h.mes === m)
         .reduce((acc: number, h: any) => acc + h.efetivo, 0);
     });
   }, [mesesDoAno, historicoFiltrado]);
 
-  // Variação mês a mês
+  // Variação
   const variacao = useMemo(() => {
     const nonZero = totalMensal.filter(v => v > 0);
     if (nonZero.length < 2) return null;
@@ -131,6 +155,57 @@ export default function DashEfetivoObra() {
     const pct = penultimo > 0 ? ((diff / penultimo) * 100).toFixed(1) : '0';
     return { diff, pct, cresceu: diff >= 0 };
   }, [totalMensal]);
+
+  // Chart click handlers
+  const handleBarClick = (info: ChartClickInfo) => {
+    const obra = obrasSorted[info.dataIndex];
+    if (obra) {
+      setSelectedObra({ id: obra.obraId, nome: obra.obraNome });
+      setEquipeDialogOpen(true);
+    }
+  };
+
+  const handlePieClick = (info: ChartClickInfo) => {
+    const obra = obrasSorted[info.dataIndex];
+    if (obra) {
+      setSelectedObra({ id: obra.obraId, nome: obra.obraNome });
+      setEquipeDialogOpen(true);
+    }
+  };
+
+  const handleEvolucaoClick = (info: ChartClickInfo) => {
+    const mesClicked = mesesDoAno[info.dataIndex];
+    const obraClicked = obrasUnicas[info.datasetIndex];
+    if (mesClicked && obraClicked) {
+      const [, mesN] = mesClicked.split('-');
+      const mesNome = MESES_NOMES[parseInt(mesN) - 1];
+      const efetivo = historicoFiltrado.find((h: any) => h.obraId === obraClicked.id && h.mes === mesClicked);
+      setDrillData({
+        title: `${obraClicked.nome} — ${mesNome}/${ano}`,
+        items: [{
+          label: 'Funcionários alocados',
+          value: efetivo?.efetivo || 0,
+        }],
+      });
+      setDrillDialogOpen(true);
+    }
+  };
+
+  const openEquipe = (obraId: number, obraNome: string) => {
+    setSelectedObra({ id: obraId, nome: obraNome });
+    setEquipeDialogOpen(true);
+  };
+
+  // Navigate months
+  const prevMonth = () => {
+    if (mes === 1) { setMes(12); setAno(a => a - 1); }
+    else setMes(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (ano === currentYear && mes >= currentMonth) return;
+    if (mes === 12) { setMes(1); setAno(a => a + 1); }
+    else setMes(m => m + 1);
+  };
 
   if (isLoading) {
     return (
@@ -164,13 +239,26 @@ export default function DashEfetivoObra() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Seletor de Ano */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Seletor de Mês */}
+            <div className="flex items-center gap-1 bg-muted rounded-lg px-2 py-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-1 min-w-[8rem] justify-center">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm font-bold">{MESES_NOMES[mes - 1]} {ano}</span>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={nextMonth} disabled={ano === currentYear && mes >= currentMonth}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* Seletor de Ano (para gráfico evolução) */}
             <div className="flex items-center gap-1 bg-muted rounded-lg px-2 py-1">
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAno(a => a - 1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm font-bold min-w-[4rem] text-center">{ano}</span>
+              <span className="text-sm font-bold min-w-[3rem] text-center">{ano}</span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAno(a => a + 1)} disabled={ano >= currentYear}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -229,6 +317,56 @@ export default function DashEfetivoObra() {
           </Card>
         )}
 
+        {/* Dados do Mês Selecionado */}
+        {dadosMes && (dadosMes as any).porObra?.length > 0 && (
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-blue-700">
+                <ClipboardList className="h-4 w-4" />
+                Resumo de {MESES_NOMES[mes - 1]}/{ano} — Alocação x Ponto
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-blue-100/50">
+                      <th className="text-left p-2 font-medium">Obra</th>
+                      <th className="text-center p-2 font-medium">Alocados</th>
+                      <th className="text-center p-2 font-medium">Com Ponto</th>
+                      <th className="text-center p-2 font-medium">Dias Ponto</th>
+                      <th className="text-right p-2 font-medium">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {((dadosMes as any).porObra || []).map((o: any, idx: number) => (
+                      <tr key={o.obraId} className="border-b hover:bg-blue-50/50 transition-colors">
+                        <td className="p-2 font-medium">{o.obraNome}</td>
+                        <td className="p-2 text-center">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{o.alocados}</Badge>
+                        </td>
+                        <td className="p-2 text-center">
+                          {o.comPonto > 0 ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">{o.comPonto}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="p-2 text-center text-xs text-muted-foreground">{o.diasPonto || '—'}</td>
+                        <td className="p-2 text-right">
+                          <Button variant="ghost" size="sm" className="text-xs text-blue-700 gap-1" onClick={() => openEquipe(o.obraId, o.obraNome)}>
+                            <Eye className="h-3 w-3" /> Ver equipe
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Histograma: Efetivo por Obra (atual) */}
@@ -237,6 +375,7 @@ export default function DashEfetivoObra() {
               <CardTitle className="text-base flex items-center gap-2">
                 <HardHat className="h-4 w-4 text-orange-600" />
                 Efetivo Atual por Obra
+                <span className="text-[10px] text-muted-foreground font-normal ml-1">(clique para ver equipe)</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -256,6 +395,7 @@ export default function DashEfetivoObra() {
                   }]}
                   height={Math.max(200, obraLabels.length * 35)}
                   showPercentage={false}
+                  onChartClick={handleBarClick}
                 />
               )}
             </CardContent>
@@ -267,10 +407,11 @@ export default function DashEfetivoObra() {
               <CardTitle className="text-base flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-blue-600" />
                 Distribuição Percentual
+                <span className="text-[10px] text-muted-foreground font-normal ml-1">(clique para ver equipe)</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {obraLabels.length === 0 ? (
+              {obraLabels.length === 0 || obraValues.every((v: number) => v === 0) ? (
                 <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
                   Sem dados
                 </div>
@@ -285,6 +426,7 @@ export default function DashEfetivoObra() {
                     backgroundColor: getChartColors(obraLabels.length),
                   }]}
                   height={280}
+                  onChartClick={handlePieClick}
                 />
               )}
             </CardContent>
@@ -297,6 +439,7 @@ export default function DashEfetivoObra() {
             <CardTitle className="text-base flex items-center gap-2">
               <ArrowRightLeft className="h-4 w-4 text-indigo-600" />
               Evolução Mensal do Efetivo — {ano}
+              <span className="text-[10px] text-muted-foreground font-normal ml-1">(clique nas barras para detalhes)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -312,6 +455,7 @@ export default function DashEfetivoObra() {
                 datasets={evolucaoDatasets}
                 height={320}
                 showPercentage={false}
+                onChartClick={handleEvolucaoClick}
               />
             )}
           </CardContent>
@@ -337,48 +481,49 @@ export default function DashEfetivoObra() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(efetivoPorObra as any[] || [])
-                    .sort((a: any, b: any) => (b.efetivo || 0) - (a.efetivo || 0))
-                    .map((obra: any, idx: number) => {
-                      const pct = totalFuncionariosAlocados > 0
-                        ? ((obra.efetivo / totalFuncionariosAlocados) * 100).toFixed(1)
-                        : '0';
-                      return (
-                        <tr key={obra.obraId || idx} className="border-b hover:bg-muted/30 transition-colors">
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
+                  {obrasSorted.map((obra: any, idx: number) => {
+                    const pct = totalFuncionariosAlocados > 0
+                      ? ((obra.efetivo / totalFuncionariosAlocados) * 100).toFixed(1)
+                      : '0';
+                    return (
+                      <tr key={obra.obraId || idx} className="border-b hover:bg-muted/30 transition-colors">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: getChartColors(obraLabels.length)[idx] || CHART_PALETTE[0] }}
+                            />
+                            <span className="font-medium">{obra.obraNome || `Obra #${obra.obraId}`}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-center font-bold text-lg">{obra.efetivo || 0}</td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
                               <div
-                                className="h-3 w-3 rounded-full shrink-0"
-                                style={{ backgroundColor: getChartColors(obraLabels.length)[idx] || CHART_PALETTE[0] }}
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${pct}%`,
+                                  backgroundColor: getChartColors(obraLabels.length)[idx] || CHART_PALETTE[0],
+                                }}
                               />
-                              <span className="font-medium">{obra.obraNome || `Obra #${obra.obraId}`}</span>
                             </div>
-                          </td>
-                          <td className="p-3 text-center font-bold text-lg">{obra.efetivo || 0}</td>
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all"
-                                  style={{
-                                    width: `${pct}%`,
-                                    backgroundColor: getChartColors(obraLabels.length)[idx] || CHART_PALETTE[0],
-                                  }}
-                                />
-                              </div>
-                              <span className="text-xs text-muted-foreground">{pct}%</span>
-                            </div>
-                          </td>
-                          <td className="p-3 text-right">
-                            <Link href="/obras/efetivo">
-                              <Button variant="ghost" size="sm" className="text-xs">
-                                Ver equipe
-                              </Button>
-                            </Link>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            <span className="text-xs text-muted-foreground">{pct}%</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs gap-1 text-blue-700 hover:text-blue-900"
+                            onClick={() => openEquipe(obra.obraId, obra.obraNome)}
+                          >
+                            <Eye className="h-3 w-3" /> Ver equipe
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {totalSemObra > 0 && (
                     <tr className="border-b bg-amber-50/50">
                       <td className="p-3">
@@ -426,6 +571,81 @@ export default function DashEfetivoObra() {
           </Card>
         )}
       </div>
+
+      {/* Dialog: Ver Equipe da Obra */}
+      <Dialog open={equipeDialogOpen} onOpenChange={setEquipeDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HardHat className="h-5 w-5 text-orange-600" />
+              Equipe — {selectedObra?.nome}
+            </DialogTitle>
+            <DialogDescription>
+              {loadingEquipe ? 'Carregando...' : `${(equipeData as any[] || []).length} funcionário(s) alocado(s)`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-2 py-2">
+            {loadingEquipe ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : (equipeData as any[] || []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum funcionário alocado nesta obra.</p>
+            ) : (
+              (equipeData as any[]).map((emp: any) => (
+                <div key={emp.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                  <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                    <User className="h-4 w-4 text-blue-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{emp.nomeCompleto}</p>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                      {emp.funcao && <span>{emp.funcao}</span>}
+                      {emp.setor && <span>• {emp.setor}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <Badge variant="outline" className={`text-[10px] ${
+                      emp.status === 'Ativo' ? 'bg-green-50 text-green-700 border-green-200' :
+                      emp.status === 'Ferias' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                      'bg-gray-50 text-gray-700 border-gray-200'
+                    }`}>
+                      {emp.status}
+                    </Badge>
+                    {emp.dataInicioObra && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Desde {new Date(emp.dataInicioObra + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Drill-down de gráfico */}
+      <Dialog open={drillDialogOpen} onOpenChange={setDrillDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-indigo-600" />
+              {drillData?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {drillData?.items.map((item: any, idx: number) => (
+              <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
+                <span className="text-sm text-muted-foreground">{item.label}</span>
+                <span className="text-lg font-bold">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

@@ -1264,6 +1264,35 @@ export async function getObraFuncionarios(obraId: number) {
   return allocs.map(a => ({ ...a, employee: empMap[a.employeeId] || null }));
 }
 
+/** Check which employees from a list already have active obra allocations */
+export async function checkEmployeeAllocations(employeeIds: number[]) {
+  const db = await getDb();
+  if (!db || employeeIds.length === 0) return [];
+  const allocs = await db.select({
+    employeeId: obraFuncionarios.employeeId,
+    obraId: obraFuncionarios.obraId,
+    dataInicio: obraFuncionarios.dataInicio,
+  }).from(obraFuncionarios).where(and(
+    sql`${obraFuncionarios.employeeId} IN (${sql.raw(employeeIds.join(','))})`,
+    eq(obraFuncionarios.isActive, 1)
+  ));
+  if (allocs.length === 0) return [];
+  // Get obra names
+  const obraIds = Array.from(new Set(allocs.map(a => a.obraId)));
+  const obrasList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.raw(obraIds.join(','))})`);
+  const obraMap = Object.fromEntries(obrasList.map(o => [o.id, o.nome]));
+  // Get employee names
+  const empsList = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto }).from(employees).where(sql`${employees.id} IN (${sql.raw(employeeIds.join(','))})`);
+  const empMap = Object.fromEntries(empsList.map(e => [e.id, e.nomeCompleto]));
+  return allocs.map(a => ({
+    employeeId: a.employeeId,
+    employeeName: empMap[a.employeeId] || `#${a.employeeId}`,
+    obraAtualId: a.obraId,
+    obraAtualNome: obraMap[a.obraId] || `Obra #${a.obraId}`,
+    dataInicio: a.dataInicio,
+  }));
+}
+
 export async function allocateEmployeeToObra(data: { obraId: number; employeeId: number; companyId: number; funcaoNaObra?: string; dataInicio?: string; motivo?: string; registradoPor?: string; registradoPorUserId?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -1663,7 +1692,7 @@ export async function getEfetivoPorObra(companyId: number) {
     obraCodigo: obras.codigo,
     obraStatus: obras.status,
     obraCidade: obras.cidade,
-    count: sql<number>`COUNT(*)`.as('count'),
+    efetivo: sql<number>`COUNT(*)`.as('efetivo'),
   }).from(obraFuncionarios)
     .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
     .where(and(
@@ -1981,5 +2010,121 @@ export async function getOndeTrabalhouNoMes(companyId: number, employeeId: numbe
     obraPrincipal: alocacoes.find(a => a.isActive === 1) || alocacoes[0] || null,
     alocacoesNoMes: alocacoes,
     obrasVisitadas,
+  };
+}
+
+
+/** Get team members of a specific obra (with employee details) */
+export async function getEquipeObra(obraId: number, companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const allocs = await db.select({
+    employeeId: obraFuncionarios.employeeId,
+    dataInicio: obraFuncionarios.dataInicio,
+  }).from(obraFuncionarios).where(and(
+    eq(obraFuncionarios.obraId, obraId),
+    eq(obraFuncionarios.companyId, companyId),
+    eq(obraFuncionarios.isActive, 1),
+  ));
+  if (allocs.length === 0) return [];
+  const empIds = allocs.map(a => a.employeeId);
+  const emps = await db.select({
+    id: employees.id,
+    nomeCompleto: employees.nomeCompleto,
+    funcao: employees.funcao,
+    cargo: employees.cargo,
+    setor: employees.setor,
+    status: employees.status,
+    dataAdmissao: employees.dataAdmissao,
+    cpf: employees.cpf,
+  }).from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
+  const empMap = Object.fromEntries(emps.map(e => [e.id, e]));
+  const allocMap = Object.fromEntries(allocs.map(a => [a.employeeId, a]));
+  return emps.map(e => ({
+    ...e,
+    dataInicioObra: allocMap[e.id]?.dataInicio || null,
+  })).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || ''));
+}
+
+/** Get efetivo dashboard data with ponto cross-reference for a specific month */
+export async function getEfetivoDashboardMensal(companyId: number, mesRef: string) {
+  const db = await getDb();
+  if (!db) return { porObra: [], pontoData: [], semObra: 0 };
+  
+  // 1. Get active allocations for this company
+  const alocacoes = await db.select({
+    obraId: obraFuncionarios.obraId,
+    obraNome: obras.nome,
+    employeeId: obraFuncionarios.employeeId,
+    dataInicio: obraFuncionarios.dataInicio,
+    dataFim: obraFuncionarios.dataFim,
+    isActive: obraFuncionarios.isActive,
+  }).from(obraFuncionarios)
+    .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+    .where(eq(obraFuncionarios.companyId, companyId));
+  
+  // 2. Get ponto records for this month (if any)
+  const pontoRecords = await db.select({
+    employeeId: timeRecords.employeeId,
+    obraId: timeRecords.obraId,
+    diasTrabalhados: sql<number>`COUNT(DISTINCT ${timeRecords.data})`.as('diasTrabalhados'),
+    totalHoras: sql<string>`SUM(CASE WHEN ${timeRecords.horasTrabalhadas} IS NOT NULL AND ${timeRecords.horasTrabalhadas} != '' THEN CAST(REPLACE(${timeRecords.horasTrabalhadas}, ':', '.') AS DECIMAL(10,2)) ELSE 0 END)`.as('totalHoras'),
+  }).from(timeRecords)
+    .where(and(
+      eq(timeRecords.companyId, companyId),
+      like(timeRecords.data, `${mesRef}%`),
+    ))
+    .groupBy(timeRecords.employeeId, timeRecords.obraId);
+  
+  // 3. Calculate efetivo per obra for the given month
+  const [anoNum, mesNum] = mesRef.split('-').map(Number);
+  const primDia = `${mesRef}-01`;
+  const ultDia = new Date(anoNum, mesNum, 0).toISOString().split('T')[0];
+  
+  const porObra: Record<number, { obraNome: string; alocados: Set<number>; comPonto: Set<number>; diasPonto: number }> = {};
+  
+  for (const a of alocacoes) {
+    const inicio = a.dataInicio || '2000-01-01';
+    const fim = a.dataFim || '2099-12-31';
+    if (inicio <= ultDia && fim >= primDia) {
+      if (!porObra[a.obraId]) {
+        porObra[a.obraId] = { obraNome: a.obraNome, alocados: new Set(), comPonto: new Set(), diasPonto: 0 };
+      }
+      porObra[a.obraId].alocados.add(a.employeeId);
+    }
+  }
+  
+  // 4. Cross-reference with ponto
+  for (const p of pontoRecords) {
+    if (p.obraId && porObra[p.obraId]) {
+      porObra[p.obraId].comPonto.add(p.employeeId);
+      porObra[p.obraId].diasPonto += p.diasTrabalhados;
+    }
+  }
+  
+  // 5. Count sem obra
+  const activeEmps = await db.select({ id: employees.id }).from(employees).where(and(
+    eq(employees.companyId, companyId),
+    isNull(employees.deletedAt),
+    sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+    sql`(${employees.obraAtualId} IS NULL OR ${employees.obraAtualId} = 0)`,
+  ));
+  
+  const result = Object.entries(porObra).map(([obraId, data]) => ({
+    obraId: Number(obraId),
+    obraNome: data.obraNome,
+    alocados: data.alocados.size,
+    comPonto: data.comPonto.size,
+    diasPonto: data.diasPonto,
+  })).sort((a, b) => b.alocados - a.alocados);
+  
+  return {
+    porObra: result,
+    pontoData: pontoRecords.map(p => ({
+      employeeId: p.employeeId,
+      obraId: p.obraId,
+      diasTrabalhados: p.diasTrabalhados,
+    })),
+    semObra: activeEmps.length,
   };
 }

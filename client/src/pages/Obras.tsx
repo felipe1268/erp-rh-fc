@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -15,6 +16,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { removeAccents } from "@/lib/searchUtils";
 
 const STATUS_OPTIONS = [
   { value: "Planejamento", label: "Planejamento", color: "bg-blue-100 text-blue-800" },
@@ -89,11 +91,11 @@ export default function Obras() {
   const filtered = useMemo(() => {
     let list = obras;
     if (search) {
-      const s = search.toLowerCase();
+      const s = removeAccents(search);
       list = list.filter((o: any) => {
-        const matchName = o.nome?.toLowerCase().includes(s);
-        const matchOrc = o.numOrcamento?.toLowerCase().includes(s);
-        const matchSn = (snsByObra[o.id] || []).some(sn => sn.sn.toLowerCase().includes(s));
+        const matchName = removeAccents(o.nome || '').includes(s);
+        const matchOrc = removeAccents(o.numOrcamento || '').includes(s);
+        const matchSn = (snsByObra[o.id] || []).some(sn => removeAccents(sn.sn || '').includes(s));
         return matchName || matchOrc || matchSn;
       });
     }
@@ -552,6 +554,7 @@ export default function Obras() {
           </div>
         </div>
       </FullScreenDialog>
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -393,6 +394,7 @@ export default function Empresas() {
         className="hidden"
         onChange={(e) => logoCompanyId && handleLogoUpload(e, logoCompanyId)}
       />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { formatCPF } from "@/lib/formatters";
 import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
   Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2
@@ -67,8 +69,8 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
     if (filterTipo === "ASO") list = list.filter(d => d.tipoDoc === "ASO");
     else if (filterTipo === "Treinamento") list = list.filter(d => d.tipoDoc === "Treinamento");
     if (searchVal) {
-      const s = searchVal.toLowerCase();
-      list = list.filter(d => d.nomeCompleto?.toLowerCase().includes(s) || d.descricao?.toLowerCase().includes(s));
+      const s = removeAccents(searchVal);
+      list = list.filter(d => removeAccents(d.nomeCompleto || '').includes(s) || removeAccents(d.descricao || '').includes(s));
     }
     return list;
   }, [data, filterStatus, filterTipo, searchVal]);
@@ -355,11 +357,11 @@ function DocumentosPanel({ companyId, employees, onClickEmployee }: { companyId:
   const filtered = useMemo(() => {
     let list = docs as any[];
     if (searchDoc) {
-      const s = searchDoc.toLowerCase();
+      const s = removeAccents(searchDoc);
       const emp = employees.find((e: any) => list.some(d => d.employeeId === e.id));
       list = list.filter(d => {
         const empName = employees.find((e: any) => e.id === d.employeeId)?.nomeCompleto || "";
-        return empName.toLowerCase().includes(s) || d.nome?.toLowerCase().includes(s) || (TIPOS_DOC_LABELS[d.tipo] || d.tipo).toLowerCase().includes(s);
+        return removeAccents(empName || '').includes(s) || removeAccents(d.nome || '').includes(s) || (TIPOS_DOC_LABELS[d.tipo] || d.tipo).toLowerCase().includes(s);
       });
     }
     if (filterTipo !== "todos") list = list.filter(d => d.tipo === filterTipo);
@@ -667,8 +669,8 @@ export default function ControleDocumentos() {
   const filteredAso = useMemo(() => {
     let list = asoList as any[];
     if (search) {
-      const s = search.toLowerCase();
-      list = list.filter((a: any) => a.nomeCompleto?.toLowerCase().includes(s) || a.cpf?.includes(s));
+      const s = removeAccents(search);
+      list = list.filter((a: any) => removeAccents(a.nomeCompleto || '').includes(s) || a.cpf?.includes(s));
     }
     if (statusFilter === "valido") list = list.filter((a: any) => a.status === "VÁLIDO");
     else if (statusFilter === "vencer") list = list.filter((a: any) => a.status?.includes("DIAS PARA VENCER"));
@@ -679,8 +681,8 @@ export default function ControleDocumentos() {
   const filteredTrein = useMemo(() => {
     let list = treinList as any[];
     if (search) {
-      const s = search.toLowerCase();
-      list = list.filter((t: any) => t.nomeCompleto?.toLowerCase().includes(s) || t.nome?.toLowerCase().includes(s));
+      const s = removeAccents(search);
+      list = list.filter((t: any) => removeAccents(t.nomeCompleto || '').includes(s) || removeAccents(t.nome || '').includes(s));
     }
     return list;
   }, [treinList, search]);
@@ -688,8 +690,8 @@ export default function ControleDocumentos() {
   const filteredAtest = useMemo(() => {
     let list = atestList as any[];
     if (search) {
-      const s = search.toLowerCase();
-      list = list.filter((a: any) => a.nomeCompleto?.toLowerCase().includes(s));
+      const s = removeAccents(search);
+      list = list.filter((a: any) => removeAccents(a.nomeCompleto || '').includes(s));
     }
     return list;
   }, [atestList, search]);
@@ -697,8 +699,8 @@ export default function ControleDocumentos() {
   const filteredAdv = useMemo(() => {
     let list = advList as any[];
     if (search) {
-      const s = search.toLowerCase();
-      list = list.filter((a: any) => a.nomeCompleto?.toLowerCase().includes(s));
+      const s = removeAccents(search);
+      list = list.filter((a: any) => removeAccents(a.nomeCompleto || '').includes(s));
     }
     return list;
   }, [advList, search]);
@@ -2110,6 +2112,7 @@ export default function ControleDocumentos() {
 
       {/* ===================== RAIO-X DO FUNCIONÁRIO ===================== */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+          <PrintFooterLGPD />
     </DashboardLayout>
   );
 }

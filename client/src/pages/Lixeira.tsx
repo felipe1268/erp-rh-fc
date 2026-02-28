@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
@@ -7,6 +8,7 @@ import { Trash2, RotateCcw, AlertTriangle, Search, Filter, Loader2 } from "lucid
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { removeAccents } from "@/lib/searchUtils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,6 +78,7 @@ export default function Lixeira() {
   return (
     <DashboardLayout>
       <LixeiraContent />
+    <PrintFooterLGPD />
     </DashboardLayout>
   );
 }
@@ -126,7 +129,7 @@ function LixeiraContent() {
       result = result.filter((i: any) => i.entity === entityFilter);
     }
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q = removeAccents(search);
       result = result.filter((i: any) =>
         (i.label || "").toLowerCase().includes(q) ||
         (ENTITY_LABELS[i.entity] || "").toLowerCase().includes(q) ||
