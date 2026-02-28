@@ -543,6 +543,19 @@ export default function DashEfetivoObra() {
                       </td>
                     </tr>
                   )}
+                  {/* Linha de TOTAL */}
+                  <tr className="bg-slate-100 border-t-2 border-slate-300">
+                    <td className="p-3">
+                      <span className="font-bold text-slate-800">TOTAL GERAL</span>
+                    </td>
+                    <td className="p-3 text-center font-bold text-lg text-slate-800">{totalFuncionariosAlocados + totalSemObra}</td>
+                    <td className="p-3 text-center">
+                      <span className="text-xs font-semibold text-slate-600">100%</span>
+                    </td>
+                    <td className="p-3 text-right">
+                      <span className="text-xs text-slate-500">{obrasSorted.length} obras</span>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>

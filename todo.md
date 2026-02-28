@@ -3700,3 +3700,4 @@
 - [x] Verificar por que os funcionários alocados não aparecem ao abrir a obra
 - [x] BUG: Alocação de funcionário não atualiza a lista em tempo real (precisa recarregar página)
 - [x] Clicar no card da obra deve abrir FullScreenDialog com equipe e opção de alocar
+- [x] Adicionar linha de TOTAL no final da tabela Detalhamento por Obra no DashEfetivoObra
