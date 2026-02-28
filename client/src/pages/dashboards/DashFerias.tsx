@@ -35,6 +35,12 @@ export default function DashFerias() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
   const [ano, setAno] = useState(new Date().getFullYear());
   const [drillDialog, setDrillDialog] = useState<{ title: string; items: any[] } | null>(null);
+  const [ganttEmployeeId, setGanttEmployeeId] = useState<number | null>(null);
+
+  const feriasDoFunc = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
+    { employeeId: ganttEmployeeId! },
+    { enabled: !!ganttEmployeeId }
+  );
 
   const { data, isLoading } = trpc.dashboards.ferias.useQuery(
     { companyId, ano },
@@ -462,9 +468,12 @@ export default function DashFerias() {
                   {topFuncionariosVencidos.map((f: any, i: number) => (
                     <tr key={f.employeeId} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
                       <td className="py-2">
-                        <Link href={`/colaboradores?id=${f.employeeId}`} className="text-[#1e3a5f] hover:underline font-medium">
+                        <button
+                          onClick={() => setGanttEmployeeId(f.employeeId)}
+                          className="text-[#1e3a5f] hover:underline font-medium cursor-pointer bg-transparent border-none p-0 text-left"
+                        >
                           {f.nome}
-                        </Link>
+                        </button>
                       </td>
                       <td className="py-2 text-[#64748B]">{f.funcao}</td>
                       <td className="py-2 text-[#64748B]">{f.setor}</td>
@@ -593,6 +602,110 @@ export default function DashFerias() {
               </tbody>
             </table>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Férias do Funcionário */}
+      <Dialog open={!!ganttEmployeeId} onOpenChange={() => setGanttEmployeeId(null)}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Palmtree className="w-5 h-5 text-[#10B981]" />
+              Férias do Funcionário
+            </DialogTitle>
+          </DialogHeader>
+          {feriasDoFunc.isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : feriasDoFunc.data ? (
+            <div className="space-y-4">
+              {/* Info do Funcionário */}
+              <div className="bg-muted/30 rounded-lg p-4">
+                <h3 className="font-bold text-lg">{feriasDoFunc.data.funcionario.nome}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {feriasDoFunc.data.funcionario.cargo || '-'} | CPF: {feriasDoFunc.data.funcionario.cpf || '-'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Admissão: {feriasDoFunc.data.funcionario.dataAdmissao ? new Date(feriasDoFunc.data.funcionario.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                  {feriasDoFunc.data.funcionario.salarioBase && ` | Salário: R$ ${feriasDoFunc.data.funcionario.salarioBase}`}
+                </p>
+              </div>
+
+              {/* Resumo */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-700">{feriasDoFunc.data.periodos.length}</p>
+                  <p className="text-xs text-blue-600">Total Períodos</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-red-700">{feriasDoFunc.data.periodos.filter((p: any) => p.vencida).length}</p>
+                  <p className="text-xs text-red-600">Vencidas</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-700">
+                    {fmtBRL(feriasDoFunc.data.periodos.reduce((s: number, p: any) => s + parseFloat(p.valorEstimado || '0'), 0))}
+                  </p>
+                  <p className="text-xs text-green-600">Valor Total</p>
+                </div>
+              </div>
+
+              {/* Tabela de Períodos */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="py-2 px-3 text-left text-xs font-medium text-muted-foreground">#</th>
+                      <th className="py-2 px-3 text-left text-xs font-medium text-muted-foreground">Período Aquisitivo</th>
+                      <th className="py-2 px-3 text-left text-xs font-medium text-muted-foreground">Concessivo Até</th>
+                      <th className="py-2 px-3 text-right text-xs font-medium text-muted-foreground">Valor</th>
+                      <th className="py-2 px-3 text-center text-xs font-medium text-muted-foreground">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {feriasDoFunc.data.periodos.map((p: any, i: number) => {
+                      const statusColors: Record<string, string> = {
+                        prevista: 'bg-blue-100 text-blue-700',
+                        vencida: 'bg-red-100 text-red-700',
+                        agendada: 'bg-amber-100 text-amber-700',
+                        em_gozo: 'bg-green-100 text-green-700',
+                        concluida: 'bg-gray-100 text-gray-700',
+                      };
+                      const statusLabel: Record<string, string> = {
+                        prevista: 'Prevista', vencida: 'Vencida', agendada: 'Agendada',
+                        em_gozo: 'Em Gozo', concluida: 'Concluída',
+                      };
+                      const fmtDate = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+                      const st = p.vencida ? 'vencida' : (p.status || 'prevista');
+                      return (
+                        <tr key={i} className={`border-b hover:bg-muted/20 ${p.vencida ? 'bg-red-50/50' : ''}`}>
+                          <td className="py-2 px-3 text-muted-foreground">{i + 1}</td>
+                          <td className="py-2 px-3">{fmtDate(p.inicio)} a {fmtDate(p.fim)}</td>
+                          <td className="py-2 px-3">{fmtDate(p.fimConcessivo)}</td>
+                          <td className="py-2 px-3 text-right font-semibold">{fmtBRL(parseFloat(p.valorEstimado || '0'))}</td>
+                          <td className="py-2 px-3 text-center">
+                            <Badge className={`text-[10px] ${statusColors[st] || 'bg-gray-100 text-gray-700'}`}>
+                              {statusLabel[st] || st}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="text-center">
+                <Link href={`/ferias`}>
+                  <Button variant="outline" size="sm">
+                    <ArrowRight className="h-4 w-4 mr-1" /> Ir para Gestão de Férias
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">Nenhum dado encontrado.</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>

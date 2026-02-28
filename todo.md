@@ -3477,3 +3477,6 @@
 - [x] Aplicar mesma separação nos cards mensais do fluxo de caixa
 - [x] Atualizar backend para retornar valores separados (salário e 1/3)
 - [x] Separar totais no dialog mensal detalhado (tabela com tfoot)
+
+## Nomes Clicáveis na Tabela Férias Vencidas
+- [x] Tornar nomes clicáveis na tabela "Funcionários com Mais Férias Vencidas" para abrir dialog de férias
