@@ -1,6 +1,7 @@
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import DashChart, { DashKpi } from "@/components/DashChart";
+import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -8,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle, Clock, DollarSign, Users, CalendarDays,
   TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
-  CheckCircle2, XCircle, ArrowRight, Loader2
+  CheckCircle2, XCircle, ArrowRight, Loader2, X
 } from "lucide-react";
 import { Link } from "wouter";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /** Formata número para moeda brasileira: R$ 3.561,47 */
 function fmtBRL(v: number) {
@@ -74,6 +76,23 @@ export default function DashAvisoPrevio() {
     { companyId },
     { enabled: companyId > 0 }
   );
+
+  const [drillDown, setDrillDown] = useState<{ type: string; label: string } | null>(null);
+
+  // Filtra avisos pelo drill-down selecionado
+  const drillDownAvisos = useMemo(() => {
+    if (!drillDown || !data) return [];
+    return data.avisos.filter(a => {
+      if (drillDown.type === 'funcao') {
+        const funcao = a.funcao || a.nomeCompleto;
+        return funcao === drillDown.label || (funcao && funcao.startsWith(drillDown.label.replace('...', '')));
+      }
+      if (drillDown.type === 'setor') {
+        return (a.setor || 'Sem Setor') === drillDown.label;
+      }
+      return false;
+    });
+  }, [drillDown, data]);
 
   if (isLoading) return (
     <DashboardLayout>
@@ -191,6 +210,7 @@ export default function DashAvisoPrevio() {
                     backgroundColor: CHART_PALETTE[0],
                   }]}
                   height={Math.max(200, data.setorDist.length * 40)}
+                  onChartClick={(info) => setDrillDown({ type: 'setor', label: info.label })}
                 />
               )}
               {data.funcaoDist.length > 0 && (
@@ -204,6 +224,11 @@ export default function DashAvisoPrevio() {
                     backgroundColor: CHART_PALETTE[3],
                   }]}
                   height={Math.max(200, data.funcaoDist.length * 40)}
+                  onChartClick={(info) => {
+                    // Recupera o nome completo da função (sem truncamento)
+                    const fullLabel = data.funcaoDist[info.dataIndex]?.funcao || info.label;
+                    setDrillDown({ type: 'funcao', label: fullLabel });
+                  }}
                 />
               )}
             </div>
@@ -326,6 +351,53 @@ export default function DashAvisoPrevio() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Drill-down Dialog */}
+            <Dialog open={!!drillDown} onOpenChange={(open) => !open && setDrillDown(null)}>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-lg">
+                    {drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-500" /> : <Building2 className="h-5 w-5 text-blue-500" />}
+                    {drillDown?.type === 'funcao' ? 'Função' : 'Setor'}: {drillDown?.label}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="mt-2">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {drillDownAvisos.length} aviso(s) prévio(s) encontrado(s)
+                    {drillDownAvisos.length > 0 && (
+                      <span className="ml-2 font-semibold text-red-600">
+                        Total: {fmtBRL(drillDownAvisos.reduce((sum, a) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0))}
+                      </span>
+                    )}
+                  </p>
+                  {drillDownAvisos.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground">Nenhum aviso encontrado para este filtro.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {drillDownAvisos.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm truncate">{a.nomeCompleto}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtTipoLabel(a.tipo)} · {a.diasAviso} dias · {fmtReducaoLabel(a.reducaoJornada || 'nenhuma')}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {a.dataInicio ? new Date(a.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} → {a.dataFim ? new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                            </p>
+                          </div>
+                          <div className="text-right ml-3 shrink-0">
+                            <p className="font-bold text-sm text-red-600">{fmtValorStr(a.valorEstimadoTotal)}</p>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusColor(a.status)}`}>
+                              {fmtStatus(a.status)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Informação Legal */}
             <Card>

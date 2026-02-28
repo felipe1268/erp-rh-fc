@@ -3115,3 +3115,8 @@
 - [x] Registrar todas as alterações feitas nesta sessão no Controle de Revisões e atualizar número da revisão (Rev. 105-111)
 ## CAEPI - Botão Atualizar não funciona - 2026-02-28
 - [x] FIX: Botão "Atualizar Base CAEPI" não funciona ao clicar - implementado fallback XLSX via dados.gov.br
+## Dashboard Aviso Prévio - Gráfico Top 10 Funções - 2026-02-28
+- [x] FIX: Gráfico "Top 10 Funções com Avisos" não responsivo
+- [x] Adicionar drill-down ao clicar no gráfico (mostrar funcionários da função)
+- [x] Adicionar drill-down ao clicar no gráfico "Avisos por Setor" (mostrar funcionários do setor)
+- [x] Registrar revisão 112 no sistema
