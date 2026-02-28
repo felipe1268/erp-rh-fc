@@ -13,7 +13,8 @@ import {
   Plus, Search, Gavel, ArrowLeft, Calendar, AlertTriangle,
   Trash2, Pencil, Eye, ChevronDown, ChevronUp, Clock,
   Scale, FileText, User, Building2, DollarSign, Shield,
-  X, MessageSquare,
+  X, MessageSquare, RefreshCw, Database, Zap, Ban, Activity,
+  Globe, BookOpen, Loader2, CheckCircle2, Info,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -141,6 +142,8 @@ export default function ProcessosTrabalhistas() {
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [novoPedido, setNovoPedido] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [showDatajudPanel, setShowDatajudPanel] = useState(false);
+  const [consultandoDatajud, setConsultandoDatajud] = useState(false);
 
   // Andamento form
   const [andamentoForm, setAndamentoForm] = useState({
@@ -219,6 +222,37 @@ export default function ProcessosTrabalhistas() {
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
   });
+
+  // DataJud mutations
+  const datajudConsultarMut = trpc.processos.datajudConsultar.useMutation({
+    onSuccess: (data) => {
+      toast.success(`DataJud: ${data.datajud.totalMovimentos} movimentações encontradas, ${data.datajud.novasMovimentacoes} novas. Risco: ${data.datajud.riscoCalculado.toUpperCase()}`);
+      detalhe.refetch();
+      processos.refetch();
+      stats.refetch();
+      setConsultandoDatajud(false);
+    },
+    onError: (err) => { toast.error(`DataJud: ${err.message}`); setConsultandoDatajud(false); },
+  });
+
+  const datajudConsultarTodosMut = trpc.processos.datajudConsultarTodos.useMutation({
+    onSuccess: (data) => {
+      toast.success(`DataJud: ${data.atualizados}/${data.total} processos atualizados. ${data.novasMovsTotal} novas movimentações. ${data.erros} erros.`);
+      processos.refetch();
+      stats.refetch();
+    },
+    onError: (err) => toast.error(`DataJud: ${err.message}`),
+  });
+
+  const datajudBlacklistMut = trpc.processos.datajudBlacklist.useMutation({
+    onSuccess: (data) => { toast.success(data.message); detalhe.refetch(); },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+
+  const datajudMovimentacoes = trpc.processos.datajudMovimentacoes.useQuery(
+    { processoId: selectedProcessoId! },
+    { enabled: !!selectedProcessoId && viewMode === "detalhe" && showDatajudPanel }
+  );
 
   const excluirLoteMut = trpc.processos.excluirLote.useMutation({
     onSuccess: (res) => {
@@ -335,7 +369,7 @@ export default function ProcessosTrabalhistas() {
             <div className="text-center py-12 text-muted-foreground">Carregando...</div>
           ) : p ? (
             <>
-              {/* Status + Risco badges */}
+              {/* Status + Risco badges + DataJud */}
               <div className="flex items-center gap-3 flex-wrap">
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_LABELS[p.status]?.bg} ${STATUS_LABELS[p.status]?.color}`}>
                   {STATUS_LABELS[p.status]?.label}
@@ -349,7 +383,113 @@ export default function ProcessosTrabalhistas() {
                 <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
                   {TIPO_ACAO_LABELS[p.tipoAcao]}
                 </span>
+                {p.datajudId && (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 flex items-center gap-1">
+                    <Database className="h-3 w-3" /> DataJud
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                    onClick={() => { setConsultandoDatajud(true); datajudConsultarMut.mutate({ processoId: p.id }); }}
+                    disabled={consultandoDatajud}>
+                    {consultandoDatajud ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                    {consultandoDatajud ? "Consultando..." : "Consultar DataJud"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowDatajudPanel(!showDatajudPanel)}
+                    className={showDatajudPanel ? "bg-blue-50 border-blue-300" : ""}>
+                    <Activity className="h-3.5 w-3.5 mr-1" /> Movimentações
+                  </Button>
+                  {p.employeeId && p.employee?.status === 'Desligado' && !(p.employee as any)?.listaNegra && (
+                    <Button size="sm" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50"
+                      onClick={() => datajudBlacklistMut.mutate({ processoId: p.id, employeeId: p.employeeId })}
+                      disabled={datajudBlacklistMut.isPending}>
+                      <Ban className="h-3.5 w-3.5 mr-1" /> Lista Negra
+                    </Button>
+                  )}
+                </div>
               </div>
+
+              {/* DataJud Info Banner */}
+              {p.datajudId && (
+                <Card className="border-blue-200 bg-blue-50/50">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Database className="h-4 w-4 text-blue-600" />
+                      <span className="text-xs font-semibold text-blue-700">Dados do DataJud (CNJ)</span>
+                      {p.datajudUltimaConsulta && (
+                        <span className="text-xs text-blue-500 ml-auto">
+                          Última consulta: {formatDate(typeof p.datajudUltimaConsulta === 'string' ? p.datajudUltimaConsulta.substring(0, 10) : '')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div><span className="text-blue-500">Classe:</span> <span className="font-medium">{p.datajudClasse || '—'}</span></div>
+                      <div><span className="text-blue-500">Órgão:</span> <span className="font-medium">{p.datajudOrgaoJulgador || '—'}</span></div>
+                      <div><span className="text-blue-500">Grau:</span> <span className="font-medium">{p.datajudGrau || '—'}</span></div>
+                      <div><span className="text-blue-500">Sistema:</span> <span className="font-medium">{p.datajudSistema || '—'} ({p.datajudFormato || ''})</span></div>
+                      <div><span className="text-blue-500">Movimentações:</span> <span className="font-medium">{p.datajudTotalMovimentos || 0}</span></div>
+                      {p.datajudAssuntos ? (() => {
+                        try {
+                          const assuntos = typeof p.datajudAssuntos === 'string' ? JSON.parse(p.datajudAssuntos as string) : (p.datajudAssuntos as any[]);
+                          return assuntos?.length > 0 ? (
+                            <div className="col-span-3"><span className="text-blue-500">Assuntos:</span> <span className="font-medium">{assuntos.map((a: any) => a.nome).join(', ')}</span></div>
+                          ) : null;
+                        } catch { return null; }
+                      })() : null}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* DataJud Movimentações Panel */}
+              {showDatajudPanel && (
+                <Card className="border-blue-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-blue-600" /> Movimentações do DataJud
+                      {datajudMovimentacoes.data && <span className="text-xs font-normal text-muted-foreground">({datajudMovimentacoes.data.totalMovimentos} total)</span>}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {datajudMovimentacoes.isLoading ? (
+                      <div className="text-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" /> Carregando movimentações...</div>
+                    ) : datajudMovimentacoes.data?.movimentos?.length ? (
+                      <div className="max-h-[400px] overflow-y-auto space-y-2">
+                        {(datajudMovimentacoes.data.movimentos as any[]).map((mov: any, idx: number) => {
+                          const isImportant = ['audiência', 'sentença', 'procedência', 'improcedência', 'acordo', 'recurso', 'perícia', 'citação', 'penhora', 'execução', 'baixa', 'julgamento'].some(k => (mov.nome || '').toLowerCase().includes(k));
+                          return (
+                            <div key={idx} className={`flex items-start gap-3 p-2 rounded-lg text-xs ${isImportant ? 'bg-amber-50 border border-amber-200' : 'bg-muted/30'}`}>
+                              <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isImportant ? 'bg-amber-500' : 'bg-gray-300'}`} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`font-medium ${isImportant ? 'text-amber-800' : ''}`}>{mov.nome}</span>
+                                  <span className="text-muted-foreground flex-shrink-0">{mov.dataHora ? formatDate(mov.dataHora.substring(0, 10)) : '—'}</span>
+                                </div>
+                                {mov.complementosTabelados?.length > 0 && (
+                                  <div className="text-muted-foreground mt-0.5">
+                                    {mov.complementosTabelados.map((c: any, ci: number) => (
+                                      <span key={ci} className="mr-2">{c.nome}{c.descricao ? `: ${c.descricao}` : ''}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                {mov.orgaoJulgador?.nome && (
+                                  <span className="text-muted-foreground">{mov.orgaoJulgador.nome}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6">
+                        <Database className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                        <p className="text-sm text-muted-foreground">Nenhuma movimentação do DataJud</p>
+                        <p className="text-xs text-muted-foreground mt-1">Clique em "Consultar DataJud" para buscar as movimentações</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Info cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -860,7 +1000,13 @@ export default function ProcessosTrabalhistas() {
             <h1 className="text-xl font-bold flex items-center gap-2"><Gavel className="h-5 w-5" /> Processos Trabalhistas</h1>
             <p className="text-sm text-muted-foreground">Acompanhamento de processos trabalhistas vinculados a funcionários desligados</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => datajudConsultarTodosMut.mutate({ companyId })}
+              disabled={datajudConsultarTodosMut.isPending}
+              className="border-blue-200 text-blue-700 hover:bg-blue-50">
+              {datajudConsultarTodosMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Database className="h-4 w-4 mr-1" />}
+              {datajudConsultarTodosMut.isPending ? "Consultando DataJud..." : "Atualizar Todos via DataJud"}
+            </Button>
             <PrintActions title="Processos Trabalhistas" />
             <Button onClick={() => setViewMode("novo")}><Plus className="h-4 w-4 mr-1" /> Novo Processo</Button>
           </div>

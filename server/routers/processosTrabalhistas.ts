@@ -6,6 +6,22 @@ import { processosTrabalhistas, processosAndamentos, employees } from "../../dri
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 
+// Helper: inferir tipo de andamento a partir do nome da movimentação
+function inferirTipoAndamento(nome: string): 'audiencia' | 'despacho' | 'sentenca' | 'recurso' | 'pericia' | 'acordo' | 'pagamento' | 'citacao' | 'intimacao' | 'peticao' | 'outros' {
+  const n = nome.toLowerCase();
+  if (n.includes('audiência')) return 'audiencia';
+  if (n.includes('sentença') || n.includes('procedência') || n.includes('improcedência') || n.includes('julgamento')) return 'sentenca';
+  if (n.includes('recurso') || n.includes('agravo') || n.includes('embargos')) return 'recurso';
+  if (n.includes('perícia') || n.includes('perito')) return 'pericia';
+  if (n.includes('acordo') || n.includes('conciliação')) return 'acordo';
+  if (n.includes('pagamento') || n.includes('depósito')) return 'pagamento';
+  if (n.includes('citação')) return 'citacao';
+  if (n.includes('intimação')) return 'intimacao';
+  if (n.includes('petição')) return 'peticao';
+  if (n.includes('despacho') || n.includes('ato ordinátório')) return 'despacho';
+  return 'outros';
+}
+
 export const processosTrabRouter = router({
   // ============================================================
   // LISTAR PROCESSOS
@@ -327,5 +343,300 @@ export const processosTrabRouter = router({
           sql`${employees.deletedAt} IS NULL`,
         ));
       return desligados;
+    }),
+
+  // ============================================================
+  // DATAJUD: CONSULTAR PROCESSO POR NÚMERO
+  // ============================================================
+  datajudConsultar: protectedProcedure
+    .input(z.object({ processoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { buscarPorNumero, inferirSituacao, calcularRisco, getUltimasMovimentacoes, parseDatajudDate } = await import("../datajud");
+      const db = (await getDb())!;
+      
+      const [processo] = await db.select().from(processosTrabalhistas)
+        .where(eq(processosTrabalhistas.id, input.processoId));
+      if (!processo) throw new TRPCError({ code: "NOT_FOUND", message: "Processo não encontrado" });
+
+      const resultado = await buscarPorNumero(processo.numeroProcesso);
+      if (!resultado) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Processo não encontrado no DataJud. Verifique o número do processo." });
+      }
+
+      // Inferir situação e risco
+      const situacao = inferirSituacao(resultado.movimentos);
+      const risco = calcularRisco(processo.valorCausa, resultado.assuntos, resultado.movimentos);
+      const ultimasMovs = getUltimasMovimentacoes(resultado.movimentos, 50);
+      const dataAjuiz = parseDatajudDate(resultado.dataAjuizamento);
+
+      // Detectar novas movimentações
+      const { detectarNovasMovimentacoes } = await import("../datajud");
+      const movsAntigas = processo.datajudMovimentos ? 
+        (typeof processo.datajudMovimentos === 'string' ? JSON.parse(processo.datajudMovimentos) : processo.datajudMovimentos) : [];
+      const novasMovs = detectarNovasMovimentacoes(movsAntigas, resultado.movimentos);
+
+      // Atualizar processo com dados do DataJud
+      const updateData: any = {
+        datajudId: resultado.id,
+        datajudUltimaConsulta: sql`NOW()`,
+        datajudUltimaAtualizacao: resultado.dataHoraUltimaAtualizacao,
+        datajudGrau: resultado.grau,
+        datajudClasse: resultado.classe?.nome,
+        datajudAssuntos: JSON.stringify(resultado.assuntos),
+        datajudOrgaoJulgador: resultado.orgaoJulgador?.nome,
+        datajudSistema: resultado.sistema?.nome,
+        datajudFormato: resultado.formato?.nome,
+        datajudMovimentos: JSON.stringify(ultimasMovs),
+        datajudTotalMovimentos: resultado.movimentos.length,
+        // Atualizar campos do processo
+        tribunal: resultado.tribunal || processo.tribunal,
+        vara: resultado.orgaoJulgador?.nome || processo.vara,
+        status: situacao.status as any,
+        fase: situacao.fase as any,
+        risco: risco,
+      };
+
+      // Atualizar data de distribuição se não preenchida
+      if (!processo.dataDistribuicao && dataAjuiz) {
+        updateData.dataDistribuicao = dataAjuiz;
+      }
+
+      await db.update(processosTrabalhistas).set(updateData)
+        .where(eq(processosTrabalhistas.id, input.processoId));
+
+      // Inserir novas movimentações como andamentos (apenas as mais recentes e relevantes)
+      const movsParaAndamento = novasMovs
+        .filter(m => {
+          const nome = m.nome.toLowerCase();
+          return nome.includes('audiência') || nome.includes('sentença') || nome.includes('procedência') || 
+                 nome.includes('improcedência') || nome.includes('acordo') || nome.includes('recurso') ||
+                 nome.includes('perícia') || nome.includes('citação') || nome.includes('intimação') ||
+                 nome.includes('distribuição') || nome.includes('penhora') || nome.includes('execução') ||
+                 nome.includes('baixa') || nome.includes('arquiv') || nome.includes('julgamento');
+        })
+        .slice(0, 20);
+
+      for (const mov of movsParaAndamento) {
+        const dataStr = mov.dataHora ? mov.dataHora.substring(0, 10) : new Date().toISOString().substring(0, 10);
+        // Verificar se já existe esse andamento
+        const existente = await db.select().from(processosAndamentos)
+          .where(and(
+            eq(processosAndamentos.processoId, input.processoId),
+            eq(processosAndamentos.data, dataStr),
+            eq(processosAndamentos.descricao, `[DataJud] ${mov.nome}`),
+          ));
+        if (existente.length === 0) {
+          await db.insert(processosAndamentos).values({
+            processoId: input.processoId,
+            data: dataStr,
+            tipo: inferirTipoAndamento(mov.nome),
+            descricao: `[DataJud] ${mov.nome}`,
+            resultado: mov.complementosTabelados?.map(c => c.nome).join(', ') || null,
+            criadoPor: 'DataJud API',
+          });
+        }
+      }
+
+      return {
+        success: true,
+        datajud: {
+          id: resultado.id,
+          classe: resultado.classe,
+          tribunal: resultado.tribunal,
+          grau: resultado.grau,
+          orgaoJulgador: resultado.orgaoJulgador,
+          assuntos: resultado.assuntos,
+          dataAjuizamento: dataAjuiz,
+          totalMovimentos: resultado.movimentos.length,
+          novasMovimentacoes: novasMovs.length,
+          situacaoInferida: situacao,
+          riscoCalculado: risco,
+        },
+      };
+    }),
+
+  // ============================================================
+  // DATAJUD: CONSULTAR TODOS OS PROCESSOS DA EMPRESA
+  // ============================================================
+  datajudConsultarTodos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { buscarPorNumero, inferirSituacao, calcularRisco, getUltimasMovimentacoes, parseDatajudDate, detectarNovasMovimentacoes } = await import("../datajud");
+      const db = (await getDb())!;
+      
+      const processos = await db.select().from(processosTrabalhistas)
+        .where(and(
+          eq(processosTrabalhistas.companyId, input.companyId),
+          sql`${processosTrabalhistas.deletedAt} IS NULL`,
+        ));
+
+      let atualizados = 0;
+      let erros = 0;
+      let novasMovsTotal = 0;
+      const resultados: Array<{ id: number; numero: string; status: string; novasMovs: number }> = [];
+
+      for (const processo of processos) {
+        try {
+          const resultado = await buscarPorNumero(processo.numeroProcesso);
+          if (!resultado) {
+            erros++;
+            continue;
+          }
+
+          const situacao = inferirSituacao(resultado.movimentos);
+          const risco = calcularRisco(processo.valorCausa, resultado.assuntos, resultado.movimentos);
+          const ultimasMovs = getUltimasMovimentacoes(resultado.movimentos, 50);
+          const dataAjuiz = parseDatajudDate(resultado.dataAjuizamento);
+
+          const movsAntigas = processo.datajudMovimentos ?
+            (typeof processo.datajudMovimentos === 'string' ? JSON.parse(processo.datajudMovimentos) : processo.datajudMovimentos) : [];
+          const novasMovs = detectarNovasMovimentacoes(movsAntigas, resultado.movimentos);
+
+          const updateData: any = {
+            datajudId: resultado.id,
+            datajudUltimaConsulta: sql`NOW()`,
+            datajudUltimaAtualizacao: resultado.dataHoraUltimaAtualizacao,
+            datajudGrau: resultado.grau,
+            datajudClasse: resultado.classe?.nome,
+            datajudAssuntos: JSON.stringify(resultado.assuntos),
+            datajudOrgaoJulgador: resultado.orgaoJulgador?.nome,
+            datajudSistema: resultado.sistema?.nome,
+            datajudFormato: resultado.formato?.nome,
+            datajudMovimentos: JSON.stringify(ultimasMovs),
+            datajudTotalMovimentos: resultado.movimentos.length,
+            tribunal: resultado.tribunal || processo.tribunal,
+            vara: resultado.orgaoJulgador?.nome || processo.vara,
+            status: situacao.status as any,
+            fase: situacao.fase as any,
+            risco: risco,
+          };
+
+          if (!processo.dataDistribuicao && dataAjuiz) {
+            updateData.dataDistribuicao = dataAjuiz;
+          }
+
+          await db.update(processosTrabalhistas).set(updateData)
+            .where(eq(processosTrabalhistas.id, processo.id));
+
+          atualizados++;
+          novasMovsTotal += novasMovs.length;
+          resultados.push({
+            id: processo.id,
+            numero: processo.numeroProcesso,
+            status: situacao.status,
+            novasMovs: novasMovs.length,
+          });
+
+          // Rate limit: esperar 500ms entre consultas
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+          console.error(`Erro ao consultar DataJud para processo ${processo.numeroProcesso}:`, e);
+          erros++;
+        }
+      }
+
+      return { total: processos.length, atualizados, erros, novasMovsTotal, resultados };
+    }),
+
+  // ============================================================
+  // DATAJUD: BUSCAR NOVOS PROCESSOS POR NOME DE FUNCIONÁRIOS
+  // ============================================================
+  datajudBuscarNovos: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      trtRegiao: z.number().min(1).max(24).default(6),
+    }))
+    .mutation(async ({ input }) => {
+      const { buscarPorNumero } = await import("../datajud");
+      const db = (await getDb())!;
+
+      // Buscar todos os funcionários (ativos e desligados) para cruzamento
+      const todosEmps = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        cpf: employees.cpf,
+        status: employees.status,
+        funcao: employees.funcao,
+      }).from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          sql`${employees.deletedAt} IS NULL`,
+        ));
+
+      // Nota: A API pública do DataJud não permite busca por CNPJ ou nome de parte
+      // (dados de partes são protegidos por sigilo)
+      // Retornamos informação sobre a limitação
+      return {
+        mensagem: "A API pública do DataJud não permite busca por CNPJ ou nome de parte (dados protegidos por sigilo). " +
+          "Para detectar novos processos, cadastre o número do processo manualmente ou use a consulta individual por número. " +
+          "Os dados serão preenchidos automaticamente após o cadastro.",
+        totalFuncionarios: todosEmps.length,
+        sugestao: "Configure alertas com seu advogado para receber notificações de novos processos.",
+      };
+    }),
+
+  // ============================================================
+  // DATAJUD: MOVIMENTAÇÕES DE UM PROCESSO
+  // ============================================================
+  datajudMovimentacoes: protectedProcedure
+    .input(z.object({ processoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [processo] = await db.select().from(processosTrabalhistas)
+        .where(eq(processosTrabalhistas.id, input.processoId));
+      if (!processo) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const movimentos = processo.datajudMovimentos ?
+        (typeof processo.datajudMovimentos === 'string' ? JSON.parse(processo.datajudMovimentos) : processo.datajudMovimentos) : [];
+
+      return {
+        movimentos,
+        totalMovimentos: processo.datajudTotalMovimentos || 0,
+        ultimaConsulta: processo.datajudUltimaConsulta,
+        ultimaAtualizacao: processo.datajudUltimaAtualizacao,
+        orgaoJulgador: processo.datajudOrgaoJulgador,
+        classe: processo.datajudClasse,
+        assuntos: processo.datajudAssuntos ?
+          (typeof processo.datajudAssuntos === 'string' ? JSON.parse(processo.datajudAssuntos) : processo.datajudAssuntos) : [],
+        grau: processo.datajudGrau,
+        sistema: processo.datajudSistema,
+        formato: processo.datajudFormato,
+      };
+    }),
+
+  // ============================================================
+  // DATAJUD: MARCAR NA BLACKLIST AUTOMATICAMENTE
+  // ============================================================
+  datajudBlacklist: protectedProcedure
+    .input(z.object({
+      processoId: z.number(),
+      employeeId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      
+      // Verificar se o funcionário já está na blacklist
+      const [emp] = await db.select().from(employees)
+        .where(eq(employees.id, input.employeeId));
+      if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+      if (emp.listaNegra === 1) {
+        return { success: true, message: "Funcionário já está na Lista Negra" };
+      }
+
+      // Buscar dados do processo
+      const [processo] = await db.select().from(processosTrabalhistas)
+        .where(eq(processosTrabalhistas.id, input.processoId));
+
+      await db.update(employees).set({
+        listaNegra: 1,
+        listaNegraPor: ctx.user.name || 'DataJud Auto',
+        listaNegraUserId: ctx.user.id,
+      } as any).where(eq(employees.id, input.employeeId));
+
+      return {
+        success: true,
+        message: `${emp.nomeCompleto} adicionado à Lista Negra (Processo ${processo?.numeroProcesso || 'N/A'})`,
+      };
     }),
 });

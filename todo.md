@@ -3189,3 +3189,24 @@
 - [x] Frontend: Proporção 1º vs 2º período
 - [x] Adicionar DashFerias no menu lateral (Dashboards)
 - [x] Drill-down em todos os gráficos
+
+## Integração DataJud API - 2026-02-28
+- [x] Pesquisar API DataJud (endpoints, autenticação, estrutura de dados)
+- [x] Backend: endpoint de consulta DataJud por número de processo
+- [x] Backend: parser de dados retornados (vara, juiz, movimentações, audiências, pedidos)
+- [x] Backend: atualizar processo existente com dados do DataJud
+- [x] Backend: consulta em lote de todos os processos cadastrados
+- [x] Frontend: botão "Consultar DataJud" por processo
+- [x] Frontend: botão "Atualizar Todos via DataJud" em lote
+- [x] Frontend: indicador visual de dados preenchidos pelo DataJud
+- [x] Testar com processos reais já cadastrados
+- [x] Auto-preencher valor da causa do DataJud
+- [x] Auto-preencher situação do processo (ativo, suspenso, baixado, arquivado)
+- [x] Calcular nível de criticidade automaticamente
+- [x] Sistema de alerta automático de movimentações
+- [x] Histórico de movimentações do processo
+- [x] Busca automática por nome de funcionários ativos/desligados no DataJud
+- [x] Detecção automática de novos processos
+- [x] Cruzamento automático reclamante x base de colaboradores
+- [x] Blacklist automática para ex-funcionários com processo trabalhista
+- [x] Alerta automático ao RH quando novo processo é detectado

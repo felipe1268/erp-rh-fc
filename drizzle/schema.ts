@@ -1193,6 +1193,19 @@ export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
 	clienteNomeFantasia: varchar({ length: 255 }),
 	// Observações
 	observacoes: text(),
+	// DataJud integration
+	datajudId: varchar({ length: 255 }), // ID do processo no DataJud
+	datajudUltimaConsulta: timestamp({ mode: 'string' }), // Última consulta ao DataJud
+	datajudUltimaAtualizacao: varchar({ length: 100 }), // dataHoraUltimaAtualizacao do DataJud
+	datajudGrau: varchar({ length: 20 }), // Grau/instância (G1, G2, JE)
+	datajudClasse: varchar({ length: 255 }), // Classe processual do DataJud
+	datajudAssuntos: json(), // Assuntos do DataJud [{codigo, nome}]
+	datajudOrgaoJulgador: varchar({ length: 255 }), // Órgão julgador do DataJud
+	datajudSistema: varchar({ length: 100 }), // Sistema (PJe, etc)
+	datajudFormato: varchar({ length: 50 }), // Físico/Eletrônico
+	datajudMovimentos: json(), // Últimas movimentações do DataJud
+	datajudTotalMovimentos: int(), // Total de movimentações
+	datajudAutoDetectado: tinyint().default(0), // 1 = detectado automaticamente
 	// Metadados
 	criadoPor: varchar({ length: 255 }),
 	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
