@@ -474,7 +474,42 @@ export const processosTrabRouter = router({
       let atualizados = 0;
       let erros = 0;
       let novasMovsTotal = 0;
-      const resultados: Array<{ id: number; numero: string; status: string; novasMovs: number }> = [];
+      const resultados: Array<{
+        id: number;
+        numero: string;
+        reclamante: string;
+        status: string;
+        novasMovs: number;
+        mudancas: Array<{ campo: string; label: string; antes: string | null; depois: string | null }>;
+        semMudanca: boolean;
+      }> = [];
+
+      // Helper: comparar campos e gerar changelog
+      const FIELD_LABELS: Record<string, string> = {
+        status: 'Status',
+        fase: 'Fase',
+        risco: 'Risco',
+        tribunal: 'Tribunal',
+        vara: 'Vara',
+        datajudGrau: 'Grau/Instância',
+        datajudClasse: 'Classe Processual',
+        datajudOrgaoJulgador: 'Órgão Julgador',
+        datajudSistema: 'Sistema',
+        datajudFormato: 'Formato',
+        datajudTotalMovimentos: 'Total Movimentações',
+        dataDistribuicao: 'Data Distribuição',
+      };
+      function gerarChangelog(antes: any, depois: any): Array<{ campo: string; label: string; antes: string | null; depois: string | null }> {
+        const mudancas: Array<{ campo: string; label: string; antes: string | null; depois: string | null }> = [];
+        for (const [campo, label] of Object.entries(FIELD_LABELS)) {
+          const valAntes = antes[campo] != null ? String(antes[campo]) : null;
+          const valDepois = depois[campo] != null ? String(depois[campo]) : null;
+          if (valAntes !== valDepois) {
+            mudancas.push({ campo, label, antes: valAntes, depois: valDepois });
+          }
+        }
+        return mudancas;
+      }
 
       for (const processo of processos) {
         try {
@@ -519,13 +554,47 @@ export const processosTrabRouter = router({
           await db.update(processosTrabalhistas).set(updateData)
             .where(eq(processosTrabalhistas.id, processo.id));
 
+          // Gerar changelog comparando antes vs depois
+          const dadosDepois: any = {
+            status: situacao.status,
+            fase: situacao.fase,
+            risco: risco,
+            tribunal: resultado.tribunal || processo.tribunal,
+            vara: resultado.orgaoJulgador?.nome || processo.vara,
+            datajudGrau: resultado.grau,
+            datajudClasse: resultado.classe?.nome,
+            datajudOrgaoJulgador: resultado.orgaoJulgador?.nome,
+            datajudSistema: resultado.sistema?.nome,
+            datajudFormato: resultado.formato?.nome,
+            datajudTotalMovimentos: resultado.movimentos.length,
+            dataDistribuicao: (!processo.dataDistribuicao && dataAjuiz) ? dataAjuiz : processo.dataDistribuicao,
+          };
+          const dadosAntes: any = {
+            status: processo.status,
+            fase: processo.fase,
+            risco: processo.risco,
+            tribunal: processo.tribunal,
+            vara: processo.vara,
+            datajudGrau: processo.datajudGrau,
+            datajudClasse: processo.datajudClasse,
+            datajudOrgaoJulgador: processo.datajudOrgaoJulgador,
+            datajudSistema: processo.datajudSistema,
+            datajudFormato: processo.datajudFormato,
+            datajudTotalMovimentos: processo.datajudTotalMovimentos,
+            dataDistribuicao: processo.dataDistribuicao,
+          };
+          const mudancas = gerarChangelog(dadosAntes, dadosDepois);
+
           atualizados++;
           novasMovsTotal += novasMovs.length;
           resultados.push({
             id: processo.id,
             numero: processo.numeroProcesso,
+            reclamante: processo.reclamante || '',
             status: situacao.status,
             novasMovs: novasMovs.length,
+            mudancas,
+            semMudanca: mudancas.length === 0 && novasMovs.length === 0,
           });
 
           // Rate limit: esperar 500ms entre consultas

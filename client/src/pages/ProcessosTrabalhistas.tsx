@@ -148,6 +148,8 @@ export default function ProcessosTrabalhistas() {
   const [showIAPanel, setShowIAPanel] = useState(false);
   const [analisandoIA, setAnalisandoIA] = useState(false);
   const [reAnalisarProgress, setReAnalisarProgress] = useState<{ current: number; total: number } | null>(null);
+  const [showChangelogDialog, setShowChangelogDialog] = useState(false);
+  const [changelogData, setChangelogData] = useState<any>(null);
 
   // Andamento form
   const [andamentoForm, setAndamentoForm] = useState({
@@ -241,9 +243,14 @@ export default function ProcessosTrabalhistas() {
 
   const datajudConsultarTodosMut = trpc.processos.datajudConsultarTodos.useMutation({
     onSuccess: (data) => {
-      toast.success(`DataJud: ${data.atualizados}/${data.total} processos atualizados. ${data.novasMovsTotal} novas movimentações. ${data.erros} erros.`);
+      toast.success(`DataJud: ${data.atualizados}/${data.total} processos atualizados. ${data.novasMovsTotal} novas movimentações.`);
       processos.refetch();
       stats.refetch();
+      // Abrir dialog de changelog se houve atualizações
+      if (data.resultados && data.resultados.length > 0) {
+        setChangelogData(data);
+        setShowChangelogDialog(true);
+      }
     },
     onError: (err) => toast.error(`DataJud: ${err.message}`),
   });
@@ -1484,6 +1491,138 @@ export default function ProcessosTrabalhistas() {
           </Dialog>
           </>
         )}
+
+        {/* ============================================================ */}
+        {/* DIALOG: CHANGELOG DATAJUD - Relatório de Mudanças */}
+        {/* ============================================================ */}
+        <Dialog open={showChangelogDialog} onOpenChange={setShowChangelogDialog}>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-blue-700">
+                <Database className="h-5 w-5" /> Relatório de Atualização DataJud
+              </DialogTitle>
+            </DialogHeader>
+            {changelogData && (
+              <div className="space-y-4">
+                {/* Resumo geral */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-blue-50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-blue-700">{changelogData.total}</div>
+                    <div className="text-xs text-blue-600">Total Consultados</div>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-green-700">{changelogData.atualizados}</div>
+                    <div className="text-xs text-green-600">Atualizados</div>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-amber-700">{changelogData.novasMovsTotal}</div>
+                    <div className="text-xs text-amber-600">Novas Movimentações</div>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-red-700">{changelogData.erros}</div>
+                    <div className="text-xs text-red-600">Erros</div>
+                  </div>
+                </div>
+
+                {/* Processos com mudanças */}
+                {(() => {
+                  const comMudanca = changelogData.resultados?.filter((r: any) => !r.semMudanca) || [];
+                  const semMudanca = changelogData.resultados?.filter((r: any) => r.semMudanca) || [];
+                  return (
+                    <>
+                      {comMudanca.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                            <RefreshCw className="h-4 w-4 text-blue-600" /> Processos com Alterações ({comMudanca.length})
+                          </h3>
+                          <div className="space-y-3">
+                            {comMudanca.map((r: any) => (
+                              <div key={r.id} className="border rounded-lg p-3 bg-blue-50/30">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div>
+                                    <span className="font-mono text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded">{r.numero}</span>
+                                    <span className="ml-2 text-sm font-medium">{r.reclamante}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {r.novasMovs > 0 && (
+                                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                                        +{r.novasMovs} movimentações
+                                      </span>
+                                    )}
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_LABELS[r.status]?.bg} ${STATUS_LABELS[r.status]?.color}`}>
+                                      {STATUS_LABELS[r.status]?.label}
+                                    </span>
+                                  </div>
+                                </div>
+                                {r.mudancas && r.mudancas.length > 0 && (
+                                  <div className="mt-2">
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="border-b">
+                                          <th className="text-left py-1 px-2 font-semibold text-muted-foreground w-1/4">Campo</th>
+                                          <th className="text-left py-1 px-2 font-semibold text-red-600 w-[37.5%]">Antes</th>
+                                          <th className="text-left py-1 px-2 font-semibold text-green-600 w-[37.5%]">Depois</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {r.mudancas.map((m: any, idx: number) => (
+                                          <tr key={idx} className="border-b border-dashed last:border-0">
+                                            <td className="py-1.5 px-2 font-medium text-muted-foreground">{m.label}</td>
+                                            <td className="py-1.5 px-2">
+                                              <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded line-through">
+                                                {m.antes || '(vazio)'}
+                                              </span>
+                                            </td>
+                                            <td className="py-1.5 px-2">
+                                              <span className="bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-semibold">
+                                                {m.depois || '(vazio)'}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                                {r.mudancas?.length === 0 && r.novasMovs > 0 && (
+                                  <p className="text-xs text-amber-600 mt-1">Apenas novas movimentações detectadas (sem alteração de campos)</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {semMudanca.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-green-500" /> Processos sem Alterações ({semMudanca.length})
+                          </h3>
+                          <div className="bg-muted/30 rounded-lg p-3">
+                            <div className="flex flex-wrap gap-2">
+                              {semMudanca.map((r: any) => (
+                                <span key={r.id} className="text-xs bg-muted px-2 py-1 rounded">
+                                  {r.numero} - {r.reclamante}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+
+                <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+                  Atualização realizada em {new Date().toLocaleString('pt-BR')} via API Pública DataJud (CNJ)
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowChangelogDialog(false)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

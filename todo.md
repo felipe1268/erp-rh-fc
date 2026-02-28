@@ -3387,3 +3387,9 @@
 - [x] Preencher Vara e Tribunal do processo 30008 (estava nulo)
 - [x] Testar fluxo completo do Vale Alimentação Fevereiro 2026 - Gerar, Aprovar Individual, Aprovar Todos (145 lançamentos)
 - [x] Validar cálculo de rescisão no Aviso Prévio (GILBERTO DA COSTA BARBOZA - R$ 3.709,14)
+
+## Changelog de Atualização DataJud - Processos Trabalhistas
+- [x] Implementar comparação detalhada (diff) ao atualizar processos via DataJud
+- [x] Armazenar histórico de mudanças por processo (campo antigo vs novo)
+- [x] Exibir relatório de mudanças após "Atualizar Todos via DataJud"
+- [x] Mostrar quais campos mudaram em cada processo (status, fase, valor, audiência, etc.)
