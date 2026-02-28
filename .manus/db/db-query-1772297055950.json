@@ -1,0 +1,150 @@
+{
+  "query": "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'vacation_periods' ORDER BY ordinal_position;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'vacation_periods' ORDER BY ordinal_position;",
+  "rows": [
+    {
+      "column_name": "id",
+      "data_type": "int"
+    },
+    {
+      "column_name": "companyId",
+      "data_type": "int"
+    },
+    {
+      "column_name": "employeeId",
+      "data_type": "int"
+    },
+    {
+      "column_name": "periodoAquisitivoInicio",
+      "data_type": "date"
+    },
+    {
+      "column_name": "periodoAquisitivoFim",
+      "data_type": "date"
+    },
+    {
+      "column_name": "periodoConcessivoFim",
+      "data_type": "date"
+    },
+    {
+      "column_name": "dataInicio",
+      "data_type": "date"
+    },
+    {
+      "column_name": "dataFim",
+      "data_type": "date"
+    },
+    {
+      "column_name": "diasGozo",
+      "data_type": "int"
+    },
+    {
+      "column_name": "fracionamento",
+      "data_type": "int"
+    },
+    {
+      "column_name": "periodo2Inicio",
+      "data_type": "date"
+    },
+    {
+      "column_name": "periodo2Fim",
+      "data_type": "date"
+    },
+    {
+      "column_name": "periodo3Inicio",
+      "data_type": "date"
+    },
+    {
+      "column_name": "periodo3Fim",
+      "data_type": "date"
+    },
+    {
+      "column_name": "abonoPecuniario",
+      "data_type": "tinyint"
+    },
+    {
+      "column_name": "valorFerias",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "valorTercoConstitucional",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "valorAbono",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "valorTotal",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "dataPagamento",
+      "data_type": "date"
+    },
+    {
+      "column_name": "status",
+      "data_type": "enum"
+    },
+    {
+      "column_name": "vencida",
+      "data_type": "tinyint"
+    },
+    {
+      "column_name": "pagamentoEmDobro",
+      "data_type": "tinyint"
+    },
+    {
+      "column_name": "observacoes",
+      "data_type": "text"
+    },
+    {
+      "column_name": "aprovadoPor",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "aprovadoPorUserId",
+      "data_type": "int"
+    },
+    {
+      "column_name": "createdAt",
+      "data_type": "timestamp"
+    },
+    {
+      "column_name": "updatedAt",
+      "data_type": "timestamp"
+    },
+    {
+      "column_name": "deletedAt",
+      "data_type": "timestamp"
+    },
+    {
+      "column_name": "deletedBy",
+      "data_type": "varchar"
+    },
+    {
+      "column_name": "deletedByUserId",
+      "data_type": "int"
+    },
+    {
+      "column_name": "dataSugeridaInicio",
+      "data_type": "date"
+    },
+    {
+      "column_name": "dataSugeridaFim",
+      "data_type": "date"
+    },
+    {
+      "column_name": "dataAlteradaPeloRH",
+      "data_type": "tinyint"
+    },
+    {
+      "column_name": "numeroPeriodo",
+      "data_type": "int"
+    }
+  ],
+  "messages": [],
+  "stdout": "column_name\tdata_type\nid\tint\ncompanyId\tint\nemployeeId\tint\nperiodoAquisitivoInicio\tdate\nperiodoAquisitivoFim\tdate\nperiodoConcessivoFim\tdate\ndataInicio\tdate\ndataFim\tdate\ndiasGozo\tint\nfracionamento\tint\nperiodo2Inicio\tdate\nperiodo2Fim\tdate\nperiodo3Inicio\tdate\nperiodo3Fim\tdate\nabonoPecuniario\ttinyint\nvalorFerias\tvarchar\nvalorTercoConstitucional\tvarchar\nvalorAbono\tvarchar\nvalorTotal\tvarchar\ndataPagamento\tdate\nstatus\tenum\nvencida\ttinyint\npagamentoEmDobro\ttinyint\nobservacoes\ttext\naprovadoPor\tvarchar\naprovadoPorUserId\tint\ncreatedAt\ttimestamp\nupdatedAt\ttimestamp\ndeletedAt\ttimestamp\ndeletedBy\tvarchar\ndeletedByUserId\tint\ndataSugeridaInicio\tdate\ndataSugeridaFim\tdate\ndataAlteradaPeloRH\ttinyint\nnumeroPeriodo\tint\n",
+  "stderr": "",
+  "execution_time_ms": 115
+}

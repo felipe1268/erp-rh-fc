@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, employee_id, status, periodo_aquisitivo_inicio, periodo_aquisitivo_fim, periodo_concessivo_fim, dias_direito, dias_gozo FROM vacation_periods LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, employee_id, status, periodo_aquisitivo_inicio, periodo_aquisitivo_fim, periodo_concessivo_fim, dias_direito, dias_gozo FROM vacation_periods LIMIT 5;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'employee_id' in 'field list'"
+  ]
+}

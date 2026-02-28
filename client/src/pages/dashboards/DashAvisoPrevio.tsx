@@ -105,6 +105,12 @@ export default function DashAvisoPrevio() {
       if (drillDown.type === 'custoSetor') {
         return (a.setor || 'Não informado') === drillDown.label;
       }
+      if (drillDown.type === 'finTotal') {
+        return true; // show all avisos
+      }
+      if (drillDown.type === 'finStatus') {
+        return a.status === drillDown.label;
+      }
       if (drillDown.type === 'mes') {
         const d = a.dataInicio ? new Date(a.dataInicio) : null;
         if (!d) return false;
@@ -177,28 +183,48 @@ export default function DashAvisoPrevio() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {/* Custo Total */}
-                  <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-3 sm:p-4 text-center">
+                  <div
+                    className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-blue-400 hover:shadow-md active:scale-[0.98] transition-all"
+                    onClick={() => setDrillDown({ type: 'finTotal', label: 'total' })}
+                    title="Clique para ver detalhes"
+                  >
                     <DollarSign className="h-5 w-5 text-blue-500 mx-auto mb-1" />
                     <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-700 tabular-nums">{fmtBRL(data.valorTotalEstimado)}</p>
                     <p className="text-[10px] sm:text-xs text-blue-600 font-medium mt-1">Custo Total Estimado</p>
+                    <p className="text-[9px] text-blue-400 mt-0.5">Clique para detalhes</p>
                   </div>
                   {/* Em Andamento */}
-                  <div className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-3 sm:p-4 text-center">
+                  <div
+                    className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-orange-400 hover:shadow-md active:scale-[0.98] transition-all"
+                    onClick={() => setDrillDown({ type: 'finStatus', label: 'em_andamento' })}
+                    title="Clique para ver detalhes"
+                  >
                     <Clock className="h-5 w-5 text-orange-500 mx-auto mb-1" />
                     <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-700 tabular-nums">{fmtBRL(data.valorEmAndamento)}</p>
                     <p className="text-[10px] sm:text-xs text-orange-600 font-medium mt-1">Custo Em Andamento</p>
+                    <p className="text-[9px] text-orange-400 mt-0.5">Clique para detalhes</p>
                   </div>
                   {/* Concluído */}
-                  <div className="rounded-xl border-2 border-green-200 bg-green-50/50 p-3 sm:p-4 text-center">
+                  <div
+                    className="rounded-xl border-2 border-green-200 bg-green-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-green-400 hover:shadow-md active:scale-[0.98] transition-all"
+                    onClick={() => setDrillDown({ type: 'finStatus', label: 'concluido' })}
+                    title="Clique para ver detalhes"
+                  >
                     <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto mb-1" />
                     <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-700 tabular-nums">{fmtBRL(data.valorConcluido)}</p>
                     <p className="text-[10px] sm:text-xs text-green-600 font-medium mt-1">Custo Concluído</p>
+                    <p className="text-[9px] text-green-400 mt-0.5">Clique para detalhes</p>
                   </div>
                   {/* Cancelado */}
-                  <div className="rounded-xl border-2 border-gray-200 bg-gray-50/50 p-3 sm:p-4 text-center">
+                  <div
+                    className="rounded-xl border-2 border-gray-200 bg-gray-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-gray-400 hover:shadow-md active:scale-[0.98] transition-all"
+                    onClick={() => setDrillDown({ type: 'finStatus', label: 'cancelado' })}
+                    title="Clique para ver detalhes"
+                  >
                     <Ban className="h-5 w-5 text-gray-400 mx-auto mb-1" />
                     <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-500 tabular-nums">{fmtBRL(data.valorCancelado)}</p>
                     <p className="text-[10px] sm:text-xs text-gray-500 font-medium mt-1">Custo Cancelado</p>
+                    <p className="text-[9px] text-gray-400 mt-0.5">Clique para detalhes</p>
                   </div>
                 </div>
                 {/* Barra visual de proporção */}
@@ -490,11 +516,14 @@ export default function DashAvisoPrevio() {
                   <DialogTitle className="flex items-center gap-2 text-lg">
                     {drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-500" /> :
                      drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-5 w-5 text-blue-500" /> :
-                     drillDown?.type === 'status' ? <BarChart3 className="h-5 w-5 text-blue-500" /> :
+                     drillDown?.type === 'status' || drillDown?.type === 'finStatus' ? <BarChart3 className="h-5 w-5 text-blue-500" /> :
+                     drillDown?.type === 'finTotal' ? <DollarSign className="h-5 w-5 text-blue-500" /> :
                      <AlertTriangle className="h-5 w-5 text-amber-500" />}
                     {drillDown?.type === 'funcao' ? `Função: ${drillDown?.label}` :
                      drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? `Setor: ${drillDown?.label}` :
                      drillDown?.type === 'status' ? `Status: ${fmtStatus(drillDown?.label || '')}` :
+                     drillDown?.type === 'finTotal' ? 'Custo Total Estimado — Todos os Avisos' :
+                     drillDown?.type === 'finStatus' ? `Custo ${fmtStatus(drillDown?.label || '')}` :
                      drillDown?.type === 'tipo' ? `Tipo: ${fmtTipoLabel(drillDown?.label || '')}` :
                      drillDown?.type === 'dias' ? `Dias de Aviso: ${drillDown?.label}` :
                      drillDown?.type === 'anos' ? `Anos de Serviço: ${drillDown?.label === '0' ? '< 1 ano' : drillDown?.label + ' ano(s)'}` :

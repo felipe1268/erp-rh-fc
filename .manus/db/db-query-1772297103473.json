@@ -1,0 +1,34 @@
+{
+  "query": "SELECT status, COUNT(*) as total, MIN(periodoConcessivoFim) as oldest_concessivo, MAX(periodoConcessivoFim) as newest_concessivo FROM vacation_periods WHERE deletedAt IS NULL GROUP BY status ORDER BY total DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT status, COUNT(*) as total, MIN(periodoConcessivoFim) as oldest_concessivo, MAX(periodoConcessivoFim) as newest_concessivo FROM vacation_periods WHERE deletedAt IS NULL GROUP BY status ORDER BY total DESC;",
+  "rows": [
+    {
+      "status": "vencida",
+      "total": "109",
+      "oldest_concessivo": "2020-02-28",
+      "newest_concessivo": "2026-02-28"
+    },
+    {
+      "status": "pendente",
+      "total": "74",
+      "oldest_concessivo": "2026-03-03",
+      "newest_concessivo": "2027-02-28"
+    },
+    {
+      "status": "concluida",
+      "total": "2",
+      "oldest_concessivo": "2025-08-31",
+      "newest_concessivo": "2025-12-31"
+    },
+    {
+      "status": "agendada",
+      "total": "2",
+      "oldest_concessivo": "2026-01-31",
+      "newest_concessivo": "2026-07-14"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\ttotal\toldest_concessivo\tnewest_concessivo\nvencida\t109\t2020-02-28\t2026-02-28\npendente\t74\t2026-03-03\t2027-02-28\nconcluida\t2\t2025-08-31\t2025-12-31\nagendada\t2\t2026-01-31\t2026-07-14\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

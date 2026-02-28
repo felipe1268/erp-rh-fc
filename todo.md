@@ -3480,3 +3480,37 @@
 
 ## Nomes Clicáveis na Tabela Férias Vencidas
 - [x] Tornar nomes clicáveis na tabela "Funcionários com Mais Férias Vencidas" para abrir dialog de férias
+
+## Redesign Visual Centro de Comando
+- [x] Reformular Centro de Comando com cores claras, fundo branco/cinza claro
+- [x] Textos escuros e boa legibilidade
+- [x] Remover fundo escuro/azulado que dificulta leitura
+
+## Liquidação de Férias Antigas
+- [ ] Liquidar via SQL todas as férias com período concessivo anterior a 2024 (marcar como concluídas)
+
+## Cards Resumo Financeiro Clicáveis - Dashboard Aviso Prévio
+- [ ] Tornar cards do Resumo Financeiro clicáveis (Custo Total, Em Andamento, Concluído, Cancelado)
+- [ ] Ao clicar, abrir lista detalhada mostrando quais funcionários compõem aquele valor
+- [ ] Garantir responsividade dos cards
+
+## Rev. 116 - Liquidação de Férias + Cards Clicáveis Aviso Prévio
+
+### Liquidação de Férias Antigas
+- [x] Liquidar 38 períodos de férias anteriores a 2024 via banco de dados (status → concluída)
+- [x] Adicionar observação automática de liquidação nos registros
+
+### Dashboard Aviso Prévio - Cards Clicáveis
+- [x] Card "Custo Total Estimado" clicável com drill-down mostrando todos os avisos
+- [x] Card "Custo Em Andamento" clicável filtrando por status em_andamento
+- [x] Card "Custo Concluído" clicável filtrando por status concluido
+- [x] Card "Custo Cancelado" clicável filtrando por status cancelado
+- [x] Hover e feedback visual nos cards (borda, sombra, scale)
+- [x] Texto "Clique para detalhes" nos cards financeiros
+- [x] Dialog com lista detalhada de funcionários, valores e totalização
+
+### Centro de Comando
+- [x] Verificar e confirmar cores claras e responsividade (já implementado)
+
+### Changelog
+- [x] Inserir Rev. 116 no banco de dados (system_revisions)

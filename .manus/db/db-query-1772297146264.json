@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE vacation_periods SET status = 'concluida', vencida = 0, observacoes = CONCAT(COALESCE(observacoes, ''), ' [Liquidação automática] Férias anteriores a 2024 - consideradas pagas e liquidadas em ', DATE_FORMAT(periodoConcessivoFim, '%d/%m/%Y'), '.'), updatedAt = NOW() WHERE deletedAt IS NULL AND periodoConcessivoFim < '2024-01-01' AND status != 'concluida' AND status != 'cancelada';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute UPDATE vacation_periods SET status = 'concluida', vencida = 0, observacoes = CONCAT(COALESCE(observacoes, ''), ' [Liquidação automática] Férias anteriores a 2024 - consideradas pagas e liquidadas em ', DATE_FORMAT(periodoConcessivoFim, '%d/%m/%Y'), '.'), updatedAt = NOW() WHERE deletedAt IS NULL AND periodoConcessivoFim < '2024-01-01' AND status != 'concluida' AND status != 'cancelada';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 67
+}
