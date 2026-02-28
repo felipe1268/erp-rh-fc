@@ -511,9 +511,9 @@ export const avisoPrevioFeriasRouter = router({
             // Total VA iFood MENSAL = café(dia × diasUteis) + lanche(dia × diasUteis) + VA mensal
             // Cada item só entra se estiver ativo na config
             const totalVAMensal = (cafeAtivo ? cafe * diasUteis : 0) + (lancheAtivo ? lanche * diasUteis : 0) + vaMes;
-            // VR proporcional na rescisão = totalMensal / dias reais do mês × dias trabalhados
-            const diasReaisMesVR = new Date(dtFimAviso.getFullYear(), dtFimAviso.getMonth() + 1, 0).getDate();
-            vrDiario = totalVAMensal / diasReaisMesVR; // usar dias reais do mês (28 para fev, 30/31 para outros)
+            // VR proporcional na rescisão = totalMensal / 30 (divisor CLT) × dias trabalhados
+            const DIVISOR_CLT_VR = 30;
+            vrDiario = totalVAMensal / DIVISOR_CLT_VR; // usar divisor CLT padrão (30 dias)
             vrConfigNome = cfg.nome || 'Padrão';
             // Guardar info extra para exibição
             vrExtra = { totalVAMensal, cafeAtivo, lancheAtivo, cafeDia: cafe, lancheDia: lanche, vaMes, diasUteis };

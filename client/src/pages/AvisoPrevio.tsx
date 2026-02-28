@@ -191,10 +191,15 @@ export default function AvisoPrevio() {
 
   const handleEdit = (item: any) => {
     setEditingItem(item);
+    // dataDesligamento = último dia trabalhado = dataInicio do aviso - 1 dia
+    // Porque calcularDataInicioAviso(dataDesligamento) adiciona 1 dia
+    const dtInicio = new Date(item.dataInicio + 'T00:00:00');
+    dtInicio.setDate(dtInicio.getDate() - 1);
+    const ultimoDiaTrab = dtInicio.toISOString().split('T')[0];
     setForm({
       employeeId: item.employeeId,
       tipo: item.tipo,
-      dataDesligamento: item.dataInicio,
+      dataDesligamento: ultimoDiaTrab,
       reducaoJornada: item.reducaoJornada || "nenhuma",
       observacoes: item.observacoes || "",
       diasTrabalhadosOverride: "",
@@ -682,7 +687,7 @@ export default function AvisoPrevio() {
                     <DollarSign className="h-5 w-5" /> Previsão de Rescisão — {calculoPreview.funcionario?.nome || ''}
                   </p>
                   <p className="text-xs text-green-700 mt-0.5">
-                    Salário Base: {formatMoeda(calculoPreview.salarioBase)} | Admissão: {formatDate(calculoPreview.dataAdmissao)} | Desligamento: {formatDate(calculoPreview.dataDesligamento)}
+                    Salário Base: {formatMoeda(calculoPreview.salarioBase)} | Admissão: {formatDate(calculoPreview.dataAdmissao)} | Término Aviso: {formatDate(calculoPreview.dataFim)}
                   </p>
                 </div>
                 <div className="p-6">
@@ -778,25 +783,25 @@ export default function AvisoPrevio() {
                           <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.avisoPrevioIndenizado)}</span>
                         </div>
 
-                        {/* Separador FGTS */}
+                        {/* FGTS */}
                         <div className="pt-3 mt-2">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">FGTS (Informativo — depositado na conta FGTS)</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">FGTS</p>
                         </div>
                         <div className="flex justify-between py-1.5 border-b border-gray-50 bg-gray-50 px-2 rounded">
-                          <span className="text-xs text-gray-500">FGTS Estimado (8% × {calculoPreview.previsaoRescisao.mesesFerias + calculoPreview.previsaoRescisao.meses13o} meses)</span>
+                          <span className="text-xs text-gray-500">FGTS Estimado no período (8% × {calculoPreview.previsaoRescisao.mesesTotais || 0} meses)</span>
                           <span className="text-xs font-medium text-gray-500">{formatMoeda(calculoPreview.previsaoRescisao.fgtsEstimado)}</span>
                         </div>
-                        <div className="flex justify-between py-1.5 border-b border-gray-50 bg-gray-50 px-2 rounded mt-1">
-                          <span className="text-xs text-gray-500">Multa 40% FGTS</span>
-                          <span className="text-xs font-medium text-gray-500">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span>
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-sm text-gray-700">Multa 40% FGTS</span>
+                          <span className="font-semibold text-sm">{formatMoeda(calculoPreview.previsaoRescisao.multaFGTS)}</span>
                         </div>
                       </div>
 
                       {/* Total Verbas */}
                       <div className="mt-4 pt-3 border-t-2 border-green-300 flex justify-between items-center">
                         <div>
-                          <span className="text-lg font-bold text-green-800">TOTAL VERBAS</span>
-                          <p className="text-[10px] text-green-600">Saldo + Férias + VR + 13º + Aviso Prévio</p>
+                          <span className="text-lg font-bold text-green-800">TOTAL ESTIMADO DA RESCISÃO</span>
+                          <p className="text-[10px] text-green-600">Saldo + Férias + VR + 13º + Aviso Prévio + Multa FGTS</p>
                         </div>
                         <span className="text-2xl font-bold text-green-700">{formatMoeda(calculoPreview.previsaoRescisao.total)}</span>
                       </div>

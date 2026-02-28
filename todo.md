@@ -3411,3 +3411,14 @@
 - [x] Corrigir cálculo de férias - usa projeção até último dia do mês de término
 - [x] Garantir que TODAS as telas usem o mesmo cálculo corrigido (getById recalcula)
 - [x] Incluir Multa FGTS 40% no total da rescisão (é custo para empresa)
+
+## Correção Tela Editar Aviso Prévio (mutation calcular)
+- [x] BUG: Saldo de salário usa 31 dias - CORRIGIDO para divisor CLT 30
+- [x] BUG: Férias usa data de início - CORRIGIDO: projeção até fim do mês de término
+- [x] BUG: 13º usa data de início - CORRIGIDO: projeção até fim do mês de término (3/12)
+- [x] BUG: FGTS/Multa - CORRIGIDO: projeção até fim do mês de término
+- [x] BUG: VR usa dias reais - CORRIGIDO para divisor CLT 30
+- [x] BUG: Total Verbas não inclui multa FGTS - CORRIGIDO
+- [x] BUG: Label Desligamento - CORRIGIDO para Término Aviso
+- [x] Alinhar mutation calcular com calcularRescisaoCompleta - FEITO
+- [ ] BUG: Valor Estimado na lista principal ainda mostra valor antigo (armazenado)
