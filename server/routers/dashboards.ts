@@ -1540,8 +1540,10 @@ async function getDashFerias(companyId: number, ano?: number) {
   if (!db) return null;
   const anoRef = ano || new Date().getFullYear();
 
-  // Todos os períodos de férias da empresa
-  const allPeriods = await db.select({
+  // Todos os períodos de férias da empresa — filtrados pelo ano selecionado
+  // Um período pertence ao ano se: o período concessivo termina naquele ano,
+  // OU o período aquisitivo termina naquele ano, OU as férias foram gozadas naquele ano
+  const allPeriodsRaw = await db.select({
     id: vacationPeriods.id,
     employeeId: vacationPeriods.employeeId,
     periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio,
@@ -1579,6 +1581,30 @@ async function getDashFerias(companyId: number, ano?: number) {
       isNull(employees.deletedAt),
     ))
     .orderBy(desc(vacationPeriods.createdAt));
+
+  // Filtrar pelo ano selecionado: período pertence ao ano se:
+  // - periodoConcessivoFim cai no ano, OU
+  // - periodoAquisitivoFim cai no ano, OU
+  // - dataInicio (gozo) cai no ano, OU
+  // - status é vencida/pendente e o concessivo já expirou antes do ano (ainda relevante)
+  const allPeriods = allPeriodsRaw.filter(p => {
+    const getYear = (d: string | null) => d ? new Date(d + 'T00:00:00').getFullYear() : null;
+    const aqFimYear = getYear(p.periodoAquisitivoFim);
+    const concFimYear = getYear(p.periodoConcessivoFim);
+    const inicioYear = getYear(p.dataInicio);
+    const pagYear = getYear(p.dataPagamento);
+    // Período aquisitivo termina no ano selecionado
+    if (aqFimYear === anoRef) return true;
+    // Período concessivo termina no ano selecionado
+    if (concFimYear === anoRef) return true;
+    // Férias foram gozadas/agendadas no ano selecionado
+    if (inicioYear === anoRef) return true;
+    // Pagamento foi feito no ano selecionado
+    if (pagYear === anoRef) return true;
+    // Vencidas: concessivo expirou antes do ano e ainda está pendente/vencida
+    if ((p.status === 'vencida' || p.vencida === 1 || p.status === 'pendente') && concFimYear && concFimYear <= anoRef) return true;
+    return false;
+  });
 
   // Recalcular valores de férias em tempo real usando salário atual
   function recalcFeriasVal(p: typeof allPeriods[0]): number {

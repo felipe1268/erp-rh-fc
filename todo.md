@@ -3559,3 +3559,9 @@
 - [x] Tabela custom_exams criada com índice por empresa e constraint unique
 - [x] Endpoints list/add/remove no router docs.customExams
 - [x] Toast de confirmação ao adicionar exame customizado
+
+## Rev. 121 - Filtro por Ano no Dashboard de Férias
+- [x] Corrigir Dashboard de Férias para filtrar dados apenas pelo ano selecionado no filtro superior
+- [x] Cards quantitativos (Total, Pendentes, Vencidas, etc.) devem refletir apenas o ano selecionado
+- [x] Cards financeiros (Provisão Total, A Pagar, Custo Vencidas, Já Pago) devem refletir apenas o ano selecionado
+- [x] Alertas de férias vencidas devem refletir apenas o ano selecionado
