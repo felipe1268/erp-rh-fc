@@ -3565,3 +3565,14 @@
 - [x] Cards quantitativos (Total, Pendentes, Vencidas, etc.) devem refletir apenas o ano selecionado
 - [x] Cards financeiros (Provisão Total, A Pagar, Custo Vencidas, Já Pago) devem refletir apenas o ano selecionado
 - [x] Alertas de férias vencidas devem refletir apenas o ano selecionado
+
+## Rev. 122 - Dialog Férias do Funcionário em Full Screen
+- [x] Tornar dialog "Férias do Funcionário" em tela cheia para melhor visualização
+
+### Filtro por Ano em TODOS os Dashboards
+- [x] Dashboard Aviso Prévio - adicionar filtro por ano (backend + frontend com seletor de ano)
+- [ ] Dashboard Funcionários - verificar se precisa filtro por ano
+- [ ] Dashboard Cartão de Ponto - verificar se precisa filtro por ano
+- [ ] Dashboard Folha de Pagamento - verificar se precisa filtro por ano
+- [ ] Dashboard Horas Extras - verificar se precisa filtro por ano
+- [x] Dashboard Férias - corrigido filtro por ano (remover períodos antigos)

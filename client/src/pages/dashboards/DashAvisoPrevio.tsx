@@ -13,6 +13,8 @@ import {
   Wallet, Receipt, BarChart3, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 /** Formata número para moeda brasileira: R$ 3.561,47 */
 function fmtBRL(v: number) {
@@ -72,8 +74,9 @@ function statusColor(s: string) {
 export default function DashAvisoPrevio() {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const [ano, setAno] = useState(new Date().getFullYear());
   const { data, isLoading } = trpc.dashboards.avisoPrevio.useQuery(
-    { companyId },
+    { companyId, ano },
     { enabled: companyId > 0 }
   );
 
@@ -148,7 +151,18 @@ export default function DashAvisoPrevio() {
             <h1 className="text-2xl font-bold tracking-tight">Dashboard Aviso Prévio</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise completa de avisos prévios, custos e prazos</p>
           </div>
-          <PrintActions title="Dashboard Aviso Prévio" />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-white border border-[#E2E8F0] rounded-lg px-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAno(a => a - 1)}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-semibold text-[#0F172A] min-w-[50px] text-center">{ano}</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAno(a => a + 1)}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+            <PrintActions title="Dashboard Aviso Prévio" />
+          </div>
         </div>
 
         {!data ? (

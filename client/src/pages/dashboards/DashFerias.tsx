@@ -225,7 +225,7 @@ export default function DashFerias() {
           <CardContent className="pt-4 pb-3 px-4">
             <p className="text-xs font-medium text-[#64748B] uppercase tracking-wide">Provisão Total</p>
             <p className="text-xl font-bold text-[#0F172A] mt-1">{fmtBRL(financeiro.custoTotalEstimado)}</p>
-            <p className="text-xs text-[#94A3B8] mt-1">Todos os períodos cadastrados</p>
+            <p className="text-xs text-[#94A3B8] mt-1">{kpis.total} períodos em {ano}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-[#F59E0B] bg-white">
@@ -607,7 +607,7 @@ export default function DashFerias() {
 
       {/* Dialog de Férias do Funcionário */}
       <Dialog open={!!ganttEmployeeId} onOpenChange={() => setGanttEmployeeId(null)}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[95vw] h-[90vh] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Palmtree className="w-5 h-5 text-[#10B981]" />

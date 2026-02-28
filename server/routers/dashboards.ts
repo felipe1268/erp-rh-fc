@@ -1306,9 +1306,10 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
 // ============================================================
 // 8. DASHBOARD AVISO PRÉVIO
 // ============================================================
-async function getDashAvisoPrevio(companyId: number) {
+async function getDashAvisoPrevio(companyId: number, ano?: number) {
   const db = await getDb();
   if (!db) return null;
+  const anoRef = ano || new Date().getFullYear();
 
   // Auto-conclude: mark as 'concluido' any aviso where dataFim < today and status is still 'em_andamento'
   const today = new Date().toISOString().split('T')[0];
@@ -1349,14 +1350,26 @@ async function getDashAvisoPrevio(companyId: number) {
     .where(and(eq(terminationNotices.companyId, companyId), isNull(terminationNotices.deletedAt)))
     .orderBy(desc(terminationNotices.createdAt));
 
-  const total = allNotices.length;
-  const emAndamento = allNotices.filter(n => n.status === 'em_andamento').length;
-  const concluidos = allNotices.filter(n => n.status === 'concluido').length;
-  const cancelados = allNotices.filter(n => n.status === 'cancelado').length;
-  const empregadorTrabalhado = allNotices.filter(n => n.tipo === 'empregador_trabalhado').length;
-  const empregadorIndenizado = allNotices.filter(n => n.tipo === 'empregador_indenizado').length;
-  const empregadoTrabalhado = allNotices.filter(n => n.tipo === 'empregado_trabalhado').length;
-  const empregadoIndenizado = allNotices.filter(n => n.tipo === 'empregado_indenizado').length;
+  // Filtrar pelo ano selecionado
+  const filteredNotices = allNotices.filter(n => {
+    const getYear = (d: string | null | undefined) => d ? new Date(d + 'T00:00:00').getFullYear() : null;
+    const inicioYear = getYear(n.dataInicio);
+    const fimYear = getYear(n.dataFim);
+    const conclusaoYear = getYear(n.dataConclusao);
+    if (inicioYear === anoRef) return true;
+    if (fimYear === anoRef) return true;
+    if (conclusaoYear === anoRef) return true;
+    return false;
+  });
+
+  const total = filteredNotices.length;
+  const emAndamento = filteredNotices.filter(n => n.status === 'em_andamento').length;
+  const concluidos = filteredNotices.filter(n => n.status === 'concluido').length;
+  const cancelados = filteredNotices.filter(n => n.status === 'cancelado').length;
+  const empregadorTrabalhado = filteredNotices.filter(n => n.tipo === 'empregador_trabalhado').length;
+  const empregadorIndenizado = filteredNotices.filter(n => n.tipo === 'empregador_indenizado').length;
+  const empregadoTrabalhado = filteredNotices.filter(n => n.tipo === 'empregado_trabalhado').length;
+  const empregadoIndenizado = filteredNotices.filter(n => n.tipo === 'empregado_indenizado').length;
 
   // Recalcular valores em tempo real para cada aviso (importar função inline)
   const { calcularRescisaoCompletaDash } = (() => {
@@ -1427,7 +1440,7 @@ async function getDashAvisoPrevio(companyId: number) {
   })();
 
   // Recalcular valor de cada aviso em tempo real
-  const recalculated = allNotices.map(n => {
+  const recalculated = filteredNotices.map(n => {
     try {
       const salBase = parseBRL(n.empSalarioBase || n.salarioBase || '0');
       const admissao = n.dataAdmissao || new Date().toISOString().split('T')[0];
@@ -1445,20 +1458,20 @@ async function getDashAvisoPrevio(companyId: number) {
   const valorConcluido = recalculated.filter(n => n.status === 'concluido').reduce((s, n) => s + n.valorRecalculado, 0);
   const valorCancelado = recalculated.filter(n => n.status === 'cancelado').reduce((s, n) => s + n.valorRecalculado, 0);
 
-  const reducao2h = allNotices.filter(n => n.reducaoJornada === '2h_dia').length;
-  const reducao7dias = allNotices.filter(n => n.reducaoJornada === '7_dias_corridos').length;
-  const semReducao = allNotices.filter(n => n.reducaoJornada === 'nenhuma' || !n.reducaoJornada).length;
+  const reducao2h = filteredNotices.filter(n => n.reducaoJornada === '2h_dia').length;
+  const reducao7dias = filteredNotices.filter(n => n.reducaoJornada === '7_dias_corridos').length;
+  const semReducao = filteredNotices.filter(n => n.reducaoJornada === 'nenhuma' || !n.reducaoJornada).length;
 
   const porSetor: Record<string, number> = {};
-  allNotices.forEach(n => { const s = n.setor || 'Não informado'; porSetor[s] = (porSetor[s] || 0) + 1; });
+  filteredNotices.forEach(n => { const s = n.setor || 'Não informado'; porSetor[s] = (porSetor[s] || 0) + 1; });
   const setorDist = Object.entries(porSetor).map(([setor, c]) => ({ setor, count: c })).sort((a, b) => b.count - a.count);
 
   const porFuncao: Record<string, number> = {};
-  allNotices.forEach(n => { const f = n.funcao || n.cargo || 'Não informado'; porFuncao[f] = (porFuncao[f] || 0) + 1; });
+  filteredNotices.forEach(n => { const f = n.funcao || n.cargo || 'Não informado'; porFuncao[f] = (porFuncao[f] || 0) + 1; });
   const funcaoDist = Object.entries(porFuncao).map(([funcao, c]) => ({ funcao, count: c })).sort((a, b) => b.count - a.count).slice(0, 10);
 
   const porMes: Record<string, { trabalhado: number; indenizado: number }> = {};
-  allNotices.forEach(n => {
+  filteredNotices.forEach(n => {
     const d = n.dataInicio ? new Date(n.dataInicio) : new Date(n.createdAt);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (!porMes[key]) porMes[key] = { trabalhado: 0, indenizado: 0 };
@@ -1467,11 +1480,11 @@ async function getDashAvisoPrevio(companyId: number) {
   const evolucaoMensal = Object.entries(porMes).map(([mes, v]) => ({ mes, ...v, total: v.trabalhado + v.indenizado })).sort((a, b) => a.mes.localeCompare(b.mes));
 
   const diasDist: Record<number, number> = {};
-  allNotices.forEach(n => { const d = n.diasAviso || 30; diasDist[d] = (diasDist[d] || 0) + 1; });
+  filteredNotices.forEach(n => { const d = n.diasAviso || 30; diasDist[d] = (diasDist[d] || 0) + 1; });
   const diasAvisoDist = Object.entries(diasDist).map(([dias, c]) => ({ dias: Number(dias), count: c })).sort((a, b) => a.dias - b.dias);
 
   const anosDist: Record<number, number> = {};
-  allNotices.forEach(n => { const a = n.anosServico || 0; anosDist[a] = (anosDist[a] || 0) + 1; });
+  filteredNotices.forEach(n => { const a = n.anosServico || 0; anosDist[a] = (anosDist[a] || 0) + 1; });
   const anosServicoDist = Object.entries(anosDist).map(([anos, c]) => ({ anos: Number(anos), count: c })).sort((a, b) => a.anos - b.anos);
 
   const custoSetor: Record<string, number> = {};
@@ -1481,8 +1494,8 @@ async function getDashAvisoPrevio(companyId: number) {
   const hoje = new Date();
   const em7dias = new Date(hoje); em7dias.setDate(em7dias.getDate() + 7);
   const em30dias = new Date(hoje); em30dias.setDate(em30dias.getDate() + 30);
-  const vencendo7dias = allNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em7dias; }).length;
-  const vencendo30dias = allNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em30dias; }).length;
+  const vencendo7dias = filteredNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em7dias; }).length;
+  const vencendo30dias = filteredNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em30dias; }).length;
 
   let totalSaldoSalario = 0, totalFerias = 0, total13o = 0, totalFGTS = 0, totalMultaFGTS = 0, totalAvisoIndenizado = 0;
   recalculated.forEach(n => {
@@ -1583,10 +1596,11 @@ async function getDashFerias(companyId: number, ano?: number) {
     .orderBy(desc(vacationPeriods.createdAt));
 
   // Filtrar pelo ano selecionado: período pertence ao ano se:
-  // - periodoConcessivoFim cai no ano, OU
   // - periodoAquisitivoFim cai no ano, OU
+  // - periodoConcessivoFim cai no ano, OU
   // - dataInicio (gozo) cai no ano, OU
-  // - status é vencida/pendente e o concessivo já expirou antes do ano (ainda relevante)
+  // - dataPagamento cai no ano
+  // NÃO inclui períodos antigos só porque estão vencidos
   const allPeriods = allPeriodsRaw.filter(p => {
     const getYear = (d: string | null) => d ? new Date(d + 'T00:00:00').getFullYear() : null;
     const aqFimYear = getYear(p.periodoAquisitivoFim);
@@ -1601,8 +1615,6 @@ async function getDashFerias(companyId: number, ano?: number) {
     if (inicioYear === anoRef) return true;
     // Pagamento foi feito no ano selecionado
     if (pagYear === anoRef) return true;
-    // Vencidas: concessivo expirou antes do ano e ainda está pendente/vencida
-    if ((p.status === 'vencida' || p.vencida === 1 || p.status === 'pendente') && concFimYear && concFimYear <= anoRef) return true;
     return false;
   });
 
@@ -1815,6 +1827,6 @@ export const dashboardsRouter = router({
   })).query(({ input }) => getDashHorasExtras(input.companyId, input.year, input)),
   epis: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashEpis(input.companyId)),
   juridico: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashJuridico(input.companyId)),
-  avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashAvisoPrevio(input.companyId)),
+  avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashAvisoPrevio(input.companyId, input.ano)),
   ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano)),
 });
