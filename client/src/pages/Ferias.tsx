@@ -338,16 +338,19 @@ export default function Ferias() {
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
+  // tRPC utils for invalidation
+  const utils = trpc.useUtils();
+
   // Mutations
   const createFerias = trpc.avisoPrevio.ferias.create.useMutation({
-    onSuccess: () => { refetch(); toast.success("Férias registradas!"); setShowDialog(false); setForm({}); },
+    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias registradas!"); setShowDialog(false); setForm({}); },
     onError: (e: any) => toast.error(e.message),
   });
   const updateFerias = trpc.avisoPrevio.ferias.update.useMutation({
-    onSuccess: () => { refetch(); toast.success("Férias atualizadas!"); },
+    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias atualizadas!"); },
   });
   const deleteFerias = trpc.avisoPrevio.ferias.delete.useMutation({
-    onSuccess: () => { refetch(); toast.success("Férias excluídas!"); },
+    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Férias excluídas!"); },
   });
   const gerarPeriodos = trpc.avisoPrevio.ferias.gerarPeriodos.useMutation({
     onSuccess: (data: any) => { refetch(); toast.success(`${data.periodosGerados} período(s) gerado(s)!`); },
@@ -381,6 +384,7 @@ export default function Ferias() {
   const definirDataFerias = trpc.avisoPrevio.ferias.definirDataFerias.useMutation({
     onSuccess: (data: any) => {
       refetch();
+      utils.obras.efetivoPorObra.invalidate();
       setShowDefinirDialog(false);
       setDefinirItem(null);
       setDefinirForm({});

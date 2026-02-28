@@ -3703,3 +3703,11 @@
 - [x] Adicionar linha de TOTAL no final da tabela Detalhamento por Obra no DashEfetivoObra
 - [x] BUG: Discrepância no "Sem Obra" - KPIs mostram 24 mas dialog de alocação mostra 22 (correto é 22)
 - [x] Equipe da Obra: separar funcionários por status (Ativo, Aviso Prévio, Férias, Afastado, Recluso)
+
+## Rev. 132 - Dashboard Efetivo: FullScreen equipe + histograma + auto-desligamento
+- [x] DashEfetivoObra: "Ver equipe" abre FullScreenDialog (não dialog pequeno) com tabela agrupada por função
+- [x] DashEfetivoObra: histograma por função na equipe da obra
+- [x] Auto-remover funcionário da obra quando for desligado (status = Desligado)
+- [x] Detalhamento por Obra: adicionar colunas Aviso Prévio (cruzando termination_notices em_andamento), Afastados, Férias + Total Geral por obra
+- [x] Aviso Prévio na tabela deve atualizar automaticamente quando aviso é criado/concluído/cancelado (invalidar query)
+- [x] Férias na tabela deve atualizar automaticamente cruzando vacation_periods em gozo com alocações (invalidar query)

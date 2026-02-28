@@ -10,6 +10,7 @@ import {
   auditLogs, InsertAuditLog,
   trainingDocuments, payrollUploads, dixiDevices,
   obras, InsertObra, obraFuncionarios, obraHorasRateio, obraSns, employeeSiteHistory, obraPontoInconsistencies,
+  terminationNotices, vacationPeriods,
   sectors, InsertSector, jobFunctions, InsertJobFunction,
   systemRevisions,
   userCompanies,
@@ -1682,26 +1683,96 @@ export async function getEmployeeSiteHistory(employeeId: number) {
   return history;
 }
 
-/** Efetivo atual por obra (quantos funcionários ativos em cada obra) */
+/** Efetivo atual por obra (quantos funcionários ativos em cada obra)
+ * Cruza com termination_notices (em_andamento) para Aviso Prévio
+ * e vacation_periods (em_gozo/agendada com datas atuais) para Férias
+ * Dados em tempo real — sempre reflete o estado atual do banco */
 export async function getEfetivoPorObra(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  const result = await db.select({
+  const today = new Date().toISOString().split('T')[0];
+
+  // 1. Buscar alocações ativas com dados do funcionário
+  const alocacoes = await db.select({
     obraId: obraFuncionarios.obraId,
     obraNome: obras.nome,
     obraCodigo: obras.codigo,
     obraStatus: obras.status,
     obraCidade: obras.cidade,
-    efetivo: sql<number>`COUNT(*)`.as('efetivo'),
+    employeeId: obraFuncionarios.employeeId,
+    empStatus: employees.status,
   }).from(obraFuncionarios)
     .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+    .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
     .where(and(
       eq(obraFuncionarios.companyId, companyId),
       eq(obraFuncionarios.isActive, 1),
-    ))
-    .groupBy(obraFuncionarios.obraId, obras.nome, obras.codigo, obras.status, obras.cidade)
-    .orderBy(desc(sql`COUNT(*)`));
-  return result;
+    ));
+
+  if (alocacoes.length === 0) return [];
+
+  // 2. Buscar funcionários com aviso prévio em andamento (tempo real)
+  const avisosAtivos = await db.select({
+    employeeId: terminationNotices.employeeId,
+  }).from(terminationNotices)
+    .where(and(
+      eq(terminationNotices.companyId, companyId),
+      eq(terminationNotices.status, 'em_andamento'),
+      sql`${terminationNotices.deletedAt} IS NULL`,
+    ));
+  const empIdsEmAviso = new Set(avisosAtivos.map(a => a.employeeId));
+
+  // 3. Buscar funcionários em férias agora (em_gozo OU agendada com data atual dentro do período)
+  const feriasAtivas = await db.select({
+    employeeId: vacationPeriods.employeeId,
+  }).from(vacationPeriods)
+    .where(and(
+      eq(vacationPeriods.companyId, companyId),
+      sql`${vacationPeriods.deletedAt} IS NULL`,
+      sql`(
+        ${vacationPeriods.status} = 'em_gozo'
+        OR (
+          ${vacationPeriods.status} = 'agendada'
+          AND ${vacationPeriods.dataInicio} IS NOT NULL
+          AND ${vacationPeriods.dataFim} IS NOT NULL
+          AND ${vacationPeriods.dataInicio} <= ${today}
+          AND ${vacationPeriods.dataFim} >= ${today}
+        )
+      )`,
+    ));
+  const empIdsEmFerias = new Set(feriasAtivas.map(f => f.employeeId));
+
+  // 4. Agregar por obra com status real
+  const obraMap = new Map<number, {
+    obraId: number; obraNome: string; obraCodigo: string | null; obraStatus: string | null; obraCidade: string | null;
+    efetivo: number; qtdAtivo: number; qtdAviso: number; qtdFerias: number; qtdAfastado: number; qtdRecluso: number;
+  }>();
+
+  for (const a of alocacoes) {
+    if (!obraMap.has(a.obraId)) {
+      obraMap.set(a.obraId, {
+        obraId: a.obraId, obraNome: a.obraNome, obraCodigo: a.obraCodigo, obraStatus: a.obraStatus, obraCidade: a.obraCidade,
+        efetivo: 0, qtdAtivo: 0, qtdAviso: 0, qtdFerias: 0, qtdAfastado: 0, qtdRecluso: 0,
+      });
+    }
+    const o = obraMap.get(a.obraId)!;
+    o.efetivo++;
+
+    // Prioridade: Aviso Prévio > Férias > Status do employees
+    if (empIdsEmAviso.has(a.employeeId)) {
+      o.qtdAviso++;
+    } else if (empIdsEmFerias.has(a.employeeId) || a.empStatus === 'Ferias') {
+      o.qtdFerias++;
+    } else if (a.empStatus === 'Afastado' || a.empStatus === 'Licenca') {
+      o.qtdAfastado++;
+    } else if (a.empStatus === 'Recluso') {
+      o.qtdRecluso++;
+    } else {
+      o.qtdAtivo++;
+    }
+  }
+
+  return Array.from(obraMap.values()).sort((a, b) => b.efetivo - a.efetivo);
 }
 
 /** Efetivo histórico por obra para dashboard (evolução mensal) */

@@ -9,6 +9,9 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import FullScreenDialog from "@/components/FullScreenDialog";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   HardHat, Users, Building2, AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight,
@@ -476,6 +479,10 @@ export default function DashEfetivoObra() {
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium">Obra</th>
                     <th className="text-center p-3 font-medium">Efetivo Atual</th>
+                    <th className="text-center p-2 font-medium text-xs text-green-700">Ativos</th>
+                    <th className="text-center p-2 font-medium text-xs text-red-700">Aviso</th>
+                    <th className="text-center p-2 font-medium text-xs text-blue-700">Férias</th>
+                    <th className="text-center p-2 font-medium text-xs text-amber-700">Afast.</th>
                     <th className="text-center p-3 font-medium">% do Total</th>
                     <th className="text-right p-3 font-medium">Ações</th>
                   </tr>
@@ -497,6 +504,10 @@ export default function DashEfetivoObra() {
                           </div>
                         </td>
                         <td className="p-3 text-center font-bold text-lg">{obra.efetivo || 0}</td>
+                        <td className="p-2 text-center text-sm text-green-700 font-medium">{obra.qtdAtivo || 0}</td>
+                        <td className="p-2 text-center text-sm text-red-700 font-medium">{obra.qtdAviso || 0}</td>
+                        <td className="p-2 text-center text-sm text-blue-700 font-medium">{obra.qtdFerias || 0}</td>
+                        <td className="p-2 text-center text-sm text-amber-700 font-medium">{obra.qtdAfastado || 0}</td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
@@ -533,6 +544,10 @@ export default function DashEfetivoObra() {
                         </div>
                       </td>
                       <td className="p-3 text-center font-bold text-lg text-amber-700">{totalSemObra}</td>
+                      <td className="p-2 text-center text-sm text-muted-foreground">—</td>
+                      <td className="p-2 text-center text-sm text-muted-foreground">—</td>
+                      <td className="p-2 text-center text-sm text-muted-foreground">—</td>
+                      <td className="p-2 text-center text-sm text-muted-foreground">—</td>
                       <td className="p-3 text-center text-xs text-amber-600">—</td>
                       <td className="p-3 text-right">
                         <Link href="/obras/efetivo">
@@ -549,6 +564,10 @@ export default function DashEfetivoObra() {
                       <span className="font-bold text-slate-800">TOTAL GERAL</span>
                     </td>
                     <td className="p-3 text-center font-bold text-lg text-slate-800">{totalFuncionariosAlocados + totalSemObra}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-green-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAtivo || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-red-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAviso || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-blue-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdFerias || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-amber-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAfastado || 0), 0)}</td>
                     <td className="p-3 text-center">
                       <span className="text-xs font-semibold text-slate-600">100%</span>
                     </td>
@@ -586,57 +605,13 @@ export default function DashEfetivoObra() {
       </div>
 
       {/* Dialog: Ver Equipe da Obra */}
-      <Dialog open={equipeDialogOpen} onOpenChange={setEquipeDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <HardHat className="h-5 w-5 text-orange-600" />
-              Equipe — {selectedObra?.nome}
-            </DialogTitle>
-            <DialogDescription>
-              {loadingEquipe ? 'Carregando...' : `${(equipeData as any[] || []).length} funcionário(s) alocado(s)`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto space-y-2 py-2">
-            {loadingEquipe ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : (equipeData as any[] || []).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Nenhum funcionário alocado nesta obra.</p>
-            ) : (
-              (equipeData as any[]).map((emp: any) => (
-                <div key={emp.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
-                  <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                    <User className="h-4 w-4 text-blue-700" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{emp.nomeCompleto}</p>
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                      {emp.funcao && <span>{emp.funcao}</span>}
-                      {emp.setor && <span>• {emp.setor}</span>}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <Badge variant="outline" className={`text-[10px] ${
-                      emp.status === 'Ativo' ? 'bg-green-50 text-green-700 border-green-200' :
-                      emp.status === 'Ferias' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                      'bg-gray-50 text-gray-700 border-gray-200'
-                    }`}>
-                      {emp.status}
-                    </Badge>
-                    {emp.dataInicioObra && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        Desde {new Date(emp.dataInicioObra + 'T12:00:00').toLocaleDateString('pt-BR')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EquipeFullScreenDialog
+        open={equipeDialogOpen}
+        onClose={() => setEquipeDialogOpen(false)}
+        obraNome={selectedObra?.nome || ''}
+        equipeData={equipeData as any[] || []}
+        loading={loadingEquipe}
+      />
 
       {/* Dialog: Drill-down de gráfico */}
       <Dialog open={drillDialogOpen} onOpenChange={setDrillDialogOpen}>
@@ -660,5 +635,199 @@ export default function DashEfetivoObra() {
 
       <PrintFooterLGPD />
     </DashboardLayout>
+  );
+}
+
+/* ─── Componente: FullScreen Equipe da Obra ─── */
+const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  Ativo: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+  Ferias: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  Afastado: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  Aviso: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+  Recluso: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+};
+const STATUS_LABELS: Record<string, string> = {
+  Ativo: 'Ativos', Ferias: 'Férias', Afastado: 'Afastados', Aviso: 'Aviso Prévio', Recluso: 'Reclusos',
+};
+
+function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }: {
+  open: boolean; onClose: () => void; obraNome: string; equipeData: any[]; loading: boolean;
+}) {
+  const [busca, setBusca] = useState('');
+  const removeAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+  // Filtrar por busca
+  const filtered = useMemo(() => {
+    if (!busca) return equipeData;
+    const s = removeAccents(busca);
+    return equipeData.filter((e: any) =>
+      removeAccents(e.nomeCompleto || '').includes(s) ||
+      removeAccents(e.funcao || '').includes(s) ||
+      removeAccents(e.setor || '').includes(s)
+    );
+  }, [equipeData, busca]);
+
+  // Histograma por função
+  const funcaoHist = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const e of equipeData) {
+      const f = e.funcao || 'Sem Função';
+      map[f] = (map[f] || 0) + 1;
+    }
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [equipeData]);
+
+  // Agrupar por função para tabela
+  const groupedByFuncao = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const e of filtered) {
+      const f = e.funcao || 'Sem Função';
+      if (!map[f]) map[f] = [];
+      map[f].push(e);
+    }
+    return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+  }, [filtered]);
+
+  // Status summary
+  const statusSummary = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const e of equipeData) {
+      const s = e.status || 'Outro';
+      map[s] = (map[s] || 0) + 1;
+    }
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [equipeData]);
+
+  const maxBar = funcaoHist.length > 0 ? funcaoHist[0][1] : 1;
+
+  return (
+    <FullScreenDialog
+      open={open}
+      onClose={onClose}
+      title={`Equipe — ${obraNome}`}
+      subtitle={`${equipeData.length} funcionário(s) alocado(s) nesta obra`}
+      icon={<HardHat className="h-6 w-6" />}
+    >
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : equipeData.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <Users className="h-12 w-12 mb-3 opacity-40" />
+          <p className="text-lg font-medium">Nenhum funcionário alocado</p>
+          <p className="text-sm">Aloque funcionários nesta obra para visualizar a equipe.</p>
+        </div>
+      ) : (
+        <div className="space-y-6 p-4">
+          {/* Status badges */}
+          <div className="flex flex-wrap gap-3">
+            {statusSummary.map(([status, count]) => {
+              const c = STATUS_COLORS[status] || { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
+              return (
+                <div key={status} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${c.bg} ${c.border}`}>
+                  <span className={`text-sm font-semibold ${c.text}`}>{count}</span>
+                  <span className={`text-xs ${c.text}`}>{STATUS_LABELS[status] || status}</span>
+                </div>
+              );
+            })}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border bg-slate-50 border-slate-200">
+              <span className="text-sm font-semibold text-slate-700">{equipeData.length}</span>
+              <span className="text-xs text-slate-600">Total</span>
+            </div>
+          </div>
+
+          {/* Histograma por Função */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-indigo-600" />
+                Distribuição por Função
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {funcaoHist.map(([funcao, count]) => (
+                  <div key={funcao} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-44 truncate text-right" title={funcao}>{funcao}</span>
+                    <div className="flex-1 h-6 bg-muted/30 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded flex items-center justify-end pr-2"
+                        style={{ width: `${Math.max((count / maxBar) * 100, 8)}%` }}
+                      >
+                        <span className="text-[10px] font-bold text-white">{count}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Busca */}
+          <div className="flex items-center gap-3">
+            <Input
+              placeholder="Buscar por nome, função ou setor..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="max-w-md"
+            />
+            <span className="text-sm text-muted-foreground">
+              {filtered.length} de {equipeData.length} funcionários
+            </span>
+          </div>
+
+          {/* Tabela agrupada por função */}
+          {groupedByFuncao.map(([funcao, emps]) => (
+            <div key={funcao}>
+              <div className="flex items-center gap-2 mb-2 mt-4">
+                <div className="h-2 w-2 rounded-full bg-blue-500" />
+                <h3 className="text-sm font-semibold text-foreground">{funcao}</h3>
+                <Badge variant="secondary" className="text-[10px]">{emps.length}</Badge>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40%]">Nome</TableHead>
+                    <TableHead>Setor</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Desde</TableHead>
+                    <TableHead>Admissão</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {emps.map((emp: any) => {
+                    const sc = STATUS_COLORS[emp.status] || { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
+                    return (
+                      <TableRow key={emp.id}>
+                        <TableCell className="font-medium text-sm">{emp.nomeCompleto}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{emp.setor || '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-[10px] ${sc.bg} ${sc.text} ${sc.border}`}>
+                            {emp.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {emp.dataInicioObra ? new Date(emp.dataInicioObra + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {emp.dataAdmissao ? new Date(emp.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ))}
+
+          {/* Total geral */}
+          <div className="border-t pt-3 mt-4 flex items-center justify-between">
+            <span className="text-sm font-semibold">TOTAL GERAL</span>
+            <span className="text-lg font-bold">{equipeData.length} funcionários</span>
+          </div>
+        </div>
+      )}
+    </FullScreenDialog>
   );
 }

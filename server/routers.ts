@@ -385,9 +385,22 @@ export const appRouter = router({
       await updateEmployee(input.id, input.companyId, employeeData);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador atualizado: ${employeeData.nomeCompleto || input.nomeCompleto || ""}` });
       
-      // Disparo automático de notificação por mudança de status
+      // === AUTO-DESALOCAÇÃO: Remover de obra quando status muda para Desligado ou Lista_Negra ===
       const statusAnterior = empAnterior?.status || null;
       const statusNovo = employeeData.status || null;
+      if (statusNovo && ['Desligado', 'Lista_Negra'].includes(statusNovo) && statusAnterior !== statusNovo) {
+        try {
+          const allocations = await checkEmployeeAllocations([input.id]);
+          const activeAlloc = allocations.find((a: any) => a.employeeId === input.id);
+          if (activeAlloc) {
+            await removeEmployeeFromObra(input.id, `Auto-desalocação: status alterado para ${statusNovo}`, ctx.user.name ?? 'Sistema', ctx.user.id);
+            await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "obras", entityType: "obra_funcionario", entityId: activeAlloc.obraAtualId, details: `Funcionário ${employeeData.nomeCompleto || empAnterior?.nomeCompleto || ''} removido automaticamente da obra ${activeAlloc.obraAtualNome} (status: ${statusNovo})` });
+            console.log(`[AutoDesalocação] Funcionário #${input.id} removido da obra #${activeAlloc.obraAtualId} (status: ${statusNovo})`);
+          }
+        } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
+      }
+      
+      // Disparo automático de notificação por mudança de status
       if (statusNovo && statusAnterior !== statusNovo) {
         const tipoMov = mapStatusToTipoMovimentacao(statusAnterior, statusNovo);
         if (tipoMov && input.companyId) {
@@ -524,6 +537,15 @@ export const appRouter = router({
       } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Colaborador DESLIGADO durante período de experiência. Motivo: ${input.motivo}` });
       await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Desligamento' as any, descricao: `Desligado durante período de experiência por ${ctx.user.name}. Motivo: ${input.motivo}`, data: new Date().toISOString().split('T')[0], registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      // Auto-desalocação de obra
+      try {
+        const allocations = await checkEmployeeAllocations([input.employeeId]);
+        const activeAlloc = allocations.find((a: any) => a.employeeId === input.employeeId);
+        if (activeAlloc) {
+          await removeEmployeeFromObra(input.employeeId, 'Auto-desalocação: desligamento durante período de experiência', ctx.user.name ?? 'Sistema', ctx.user.id);
+          console.log(`[AutoDesalocação] Funcionário #${input.employeeId} removido da obra #${activeAlloc.obraAtualId} (desligamento experiência)`);
+        }
+      } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
       return { success: true };
     }),
   }),

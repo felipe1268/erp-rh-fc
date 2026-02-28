@@ -74,10 +74,14 @@ export default function AvisoPrevio() {
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
+  // tRPC utils for imperative queries & invalidation
+  const utils = trpc.useUtils();
+
   // Mutations
   const createAviso = trpc.avisoPrevio.avisoPrevio.create.useMutation({
     onSuccess: (data: any) => {
       refetch();
+      utils.obras.efetivoPorObra.invalidate();
       toast.success(`Aviso prévio criado! ${data.diasAviso} dias, término: ${formatDate(data.dataFim)}`);
       setShowDialog(false);
       setForm({});
@@ -86,14 +90,11 @@ export default function AvisoPrevio() {
     onError: (e: any) => toast.error(e.message),
   });
   const updateAviso = trpc.avisoPrevio.avisoPrevio.update.useMutation({
-    onSuccess: () => { refetch(); toast.success("Aviso prévio atualizado!"); },
+    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Aviso prévio atualizado!"); },
   });
   const deleteAviso = trpc.avisoPrevio.avisoPrevio.delete.useMutation({
-    onSuccess: () => { refetch(); toast.success("Aviso prévio excluído!"); },
+    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Aviso prévio excluído!"); },
   });
-
-  // tRPC utils for imperative queries
-  const utils = trpc.useUtils();
 
   // Cálculo automático via useEffect
   const [calculoLoading, setCalculoLoading] = useState(false);
@@ -146,6 +147,7 @@ export default function AvisoPrevio() {
   const recalcularTodos = trpc.avisoPrevio.avisoPrevio.recalcularTodos.useMutation({
     onSuccess: (data: any) => {
       refetch();
+      utils.obras.efetivoPorObra.invalidate();
       toast.success(`${data.recalculados} avisos recalculados com sucesso!${data.erros > 0 ? ` (${data.erros} erros)` : ''}`);
     },
     onError: (e: any) => toast.error(e.message),

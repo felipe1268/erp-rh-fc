@@ -171,11 +171,11 @@ export default function Colaboradores() {
     onError: (e) => toast.error("Erro: " + e.message),
   });
   const updateMut = trpc.employees.update.useMutation({
-    onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); setDialogOpen(false); toast.success("Colaborador atualizado!"); },
+    onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); utils.obras.efetivoPorObra.invalidate(); utils.obras.semObra.invalidate(); setDialogOpen(false); toast.success("Colaborador atualizado!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
   const deleteMut = trpc.employees.delete.useMutation({
-    onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); toast.success("Colaborador excluído!"); },
+    onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); utils.obras.efetivoPorObra.invalidate(); utils.obras.semObra.invalidate(); toast.success("Colaborador excluído!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
   const uploadFotoMut = trpc.employees.uploadFoto.useMutation({
