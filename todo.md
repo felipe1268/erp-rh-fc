@@ -3111,3 +3111,5 @@
 - [x] Redesign da tela de Medições PJ para ficar mais apresentável e profissional
 ## Dashboard Jurídico - Filtros responsivos - 2026-02-27
 - [x] FIX: Tornar filtros e KPIs do Dashboard Jurídico responsivos no mobile
+## Controle de Revisões - Registrar alterações da sessão - 2026-02-28
+- [x] Registrar todas as alterações feitas nesta sessão no Controle de Revisões e atualizar número da revisão (Rev. 105-111)
