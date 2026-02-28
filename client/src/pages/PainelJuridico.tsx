@@ -10,7 +10,8 @@ import {
   Scale, Gavel, AlertTriangle, ChevronRight, BarChart3,
   Calendar, Activity, Clock, DollarSign, FileText, TrendingUp,
   ShieldAlert, ExternalLink, Eye, ArrowUpRight, ArrowDownRight,
-  Loader2, Users, Briefcase, Target, PieChart, Zap, Hash
+  Loader2, Users, Briefcase, Target, PieChart, Zap, Hash,
+  Bell, BellRing, CheckCheck, Settings2, RefreshCw, Trash2
 } from "lucide-react";
 import { formatDateTime } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
@@ -169,6 +170,39 @@ export default function PainelJuridico() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
   const [selectedProcesso, setSelectedProcesso] = useState<any>(null);
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configInterval, setConfigInterval] = useState(60);
+  const [configActive, setConfigActive] = useState(true);
+
+  // DataJud Auto-Check alerts
+  const { data: alertsData, refetch: refetchAlerts } = trpc.datajudAutoCheck.listarAlertas.useQuery(
+    { companyId: companyId!, apenasNaoLidos: false, limit: 50 },
+    { enabled: !!companyId && companyId > 0 }
+  );
+  const { data: alertCount } = trpc.datajudAutoCheck.contarNaoLidos.useQuery(
+    { companyId: companyId! },
+    { enabled: !!companyId && companyId > 0, refetchInterval: 60000 }
+  );
+  const { data: autoCheckConfig } = trpc.datajudAutoCheck.getConfig.useQuery(
+    { companyId: companyId! },
+    { enabled: !!companyId && companyId > 0 }
+  );
+  const saveConfigMut = trpc.datajudAutoCheck.saveConfig.useMutation({
+    onSuccess: () => { refetchAlerts(); }
+  });
+  const marcarLidoMut = trpc.datajudAutoCheck.marcarLido.useMutation({
+    onSuccess: () => { refetchAlerts(); }
+  });
+  const marcarTodosLidosMut = trpc.datajudAutoCheck.marcarTodosLidos.useMutation({
+    onSuccess: () => { refetchAlerts(); }
+  });
+  const excluirAlertaMut = trpc.datajudAutoCheck.excluirAlerta.useMutation({
+    onSuccess: () => { refetchAlerts(); }
+  });
+  const executarVerifMut = trpc.datajudAutoCheck.executarVerificacao.useMutation({
+    onSuccess: () => { refetchAlerts(); }
+  });
 
   // Use the full dashboard data (same as DashJuridico) for rich info
   const { data: dashData, isLoading: dashLoading } = trpc.dashboards.juridico.useQuery(
@@ -205,12 +239,14 @@ export default function PainelJuridico() {
     }).slice(0, 5);
   }, [processos]);
 
-  const totalAlertas = useMemo(() => {
-    if (!dashData) return 0;
-    const riscoAlto = dashData.porRisco.filter((r: any) => r.label === "alto" || r.label === "critico").reduce((s: number, r: any) => s + r.value, 0);
-    const audiencias = dashData.proximasAudiencias.length;
-    return riscoAlto + audiencias;
-  }, [dashData]);
+  const alertDetails = useMemo(() => {
+    if (!dashData || !processos) return { total: 0, riscoAlto: [] as any[], audiencias: [] as any[] };
+    const riscoAltoList = processos.filter((p: any) => p.risco === "alto" || p.risco === "critico");
+    const audiencias = dashData.proximasAudiencias || [];
+    return { total: riscoAltoList.length + audiencias.length, riscoAlto: riscoAltoList, audiencias };
+  }, [dashData, processos]);
+  const datajudNaoLidos = alertCount?.count || 0;
+  const totalAlertas = alertDetails.total + datajudNaoLidos;
 
   return (
     <DashboardLayout>
@@ -229,12 +265,10 @@ export default function PainelJuridico() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {totalAlertas > 0 && (
-              <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
-                <ShieldAlert className="h-4 w-4 text-red-600" />
-                <span className="text-xs font-semibold text-red-700">{totalAlertas} alerta{totalAlertas !== 1 ? "s" : ""}</span>
-              </div>
-            )}
+            <button onClick={() => setShowAlertModal(true)} className={`flex items-center gap-1.5 ${totalAlertas > 0 ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'} border rounded-lg px-3 py-1.5 transition-colors cursor-pointer`}>
+              {totalAlertas > 0 ? <BellRing className="h-4 w-4 text-red-600 animate-pulse" /> : <Bell className="h-4 w-4 text-gray-500" />}
+              <span className={`text-xs font-semibold ${totalAlertas > 0 ? 'text-red-700' : 'text-gray-600'}`}>{totalAlertas > 0 ? `${totalAlertas} alerta${totalAlertas !== 1 ? 's' : ''}` : 'Alertas'}</span>
+            </button>
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/processos-trabalhistas")}>
               <Gavel className="h-3.5 w-3.5" /> Processos
             </Button>
@@ -731,6 +765,205 @@ export default function PainelJuridico() {
           </>
         )}
       </div>
+      {/* Alert Modal */}
+      <Dialog open={showAlertModal} onOpenChange={setShowAlertModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-red-700">
+                <BellRing className="h-5 w-5" /> Central de Alertas ({totalAlertas})
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setShowAlertModal(false); setShowConfigModal(true); }}>
+                  <Settings2 className="h-3.5 w-3.5" /> Config
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" disabled={executarVerifMut.isPending} onClick={() => executarVerifMut.mutate({ companyId: companyId! })}>
+                  <RefreshCw className={`h-3.5 w-3.5 ${executarVerifMut.isPending ? 'animate-spin' : ''}`} /> {executarVerifMut.isPending ? 'Verificando...' : 'Verificar Agora'}
+                </Button>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* DataJud Auto-Check Alerts */}
+            {alertsData && alertsData.alertas.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-blue-700 flex items-center gap-1.5">
+                    <Activity className="h-4 w-4" /> Movimentações DataJud ({alertsData.alertas.filter((a: any) => !a.lido).length} não lidos)
+                  </h4>
+                  {alertsData.alertas.some((a: any) => !a.lido) && (
+                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => marcarTodosLidosMut.mutate({ companyId: companyId! })}>
+                      <CheckCheck className="h-3 w-3 mr-1" /> Marcar todos como lidos
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {alertsData.alertas.map((alerta: any) => {
+                    const prioridadeColors: Record<string, string> = {
+                      critica: 'bg-red-50 border-red-300',
+                      alta: 'bg-orange-50 border-orange-300',
+                      media: 'bg-yellow-50 border-yellow-300',
+                      baixa: 'bg-blue-50 border-blue-200',
+                    };
+                    const prioridadeLabels: Record<string, string> = {
+                      critica: 'Crítica', alta: 'Alta', media: 'Média', baixa: 'Baixa',
+                    };
+                    return (
+                      <div key={alerta.id} className={`border rounded-lg p-3 ${alerta.lido ? 'bg-gray-50 border-gray-200 opacity-60' : prioridadeColors[alerta.prioridade] || 'bg-gray-50 border-gray-200'}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-foreground truncate">{alerta.titulo}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap ${
+                                alerta.prioridade === 'critica' ? 'bg-red-200 text-red-800' :
+                                alerta.prioridade === 'alta' ? 'bg-orange-200 text-orange-800' :
+                                alerta.prioridade === 'media' ? 'bg-yellow-200 text-yellow-800' :
+                                'bg-blue-200 text-blue-800'
+                              }`}>{prioridadeLabels[alerta.prioridade]}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{alerta.descricao}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{alerta.createdAt ? new Date(alerta.createdAt).toLocaleString('pt-BR') : ''}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {!alerta.lido && (
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => marcarLidoMut.mutate({ alertaId: alerta.id })} title="Marcar como lido">
+                                <CheckCheck className="h-3.5 w-3.5 text-green-600" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => excluirAlertaMut.mutate({ alertaId: alerta.id })} title="Excluir">
+                              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Risk Alerts */}
+            {alertDetails.riscoAlto.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4" /> Processos de Risco Alto/Crítico ({alertDetails.riscoAlto.length})
+                </h4>
+                <div className="space-y-2">
+                  {alertDetails.riscoAlto.map((p: any) => (
+                    <div key={p.id} className="bg-red-50 border border-red-200 rounded-lg p-3 cursor-pointer hover:bg-red-100 transition-colors" onClick={() => { setShowAlertModal(false); navigate("/processos-trabalhistas"); }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-foreground">{p.numeroProcesso}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${p.risco === 'critico' ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'}`}>
+                          {p.risco === 'critico' ? 'Crítico' : 'Alto'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{p.reclamante}</p>
+                      {p.valorCausa && <p className="text-xs font-medium text-red-700 mt-0.5">Valor: {fmtBRL(Number(p.valorCausa))}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Upcoming Hearings */}
+            {alertDetails.audiencias.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4" /> Próximas Audiências ({alertDetails.audiencias.length})
+                </h4>
+                <div className="space-y-2">
+                  {alertDetails.audiencias.map((a: any, i: number) => (
+                    <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-foreground">{a.numero}</span>
+                        <span className="text-xs text-amber-700 font-medium">{a.data ? new Date(a.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{a.reclamante} {a.vara ? `• ${a.vara}` : ''}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Auto-check status */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-gray-500" />
+                  <span className="text-xs text-gray-600">Monitoramento automático: <strong>{autoCheckConfig?.isActive ? 'Ativo' : 'Inativo'}</strong></span>
+                </div>
+                <span className="text-[10px] text-gray-500">
+                  {autoCheckConfig?.intervaloMinutos ? `A cada ${autoCheckConfig.intervaloMinutos >= 60 ? `${autoCheckConfig.intervaloMinutos / 60}h` : `${autoCheckConfig.intervaloMinutos}min`}` : 'Não configurado'}
+                  {autoCheckConfig?.ultimaVerificacao ? ` • Última: ${new Date(autoCheckConfig.ultimaVerificacao).toLocaleString('pt-BR')}` : ''}
+                </span>
+              </div>
+            </div>
+
+            {totalAlertas === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Nenhum alerta no momento</p>
+                <p className="text-xs mt-1">O sistema monitora automaticamente seus processos via DataJud</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Config Modal */}
+      <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5" /> Configuração do Monitoramento DataJud
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Status do Monitoramento</label>
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${configActive ? 'bg-green-100 border-green-300 text-green-800' : 'bg-gray-100 border-gray-300 text-gray-600'}`}
+                  onClick={() => setConfigActive(true)}
+                >Ativo</button>
+                <button
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${!configActive ? 'bg-red-100 border-red-300 text-red-800' : 'bg-gray-100 border-gray-300 text-gray-600'}`}
+                  onClick={() => setConfigActive(false)}
+                >Inativo</button>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Intervalo de Verificação</label>
+              <p className="text-xs text-muted-foreground mb-2">Com que frequência o sistema consulta o DataJud para novas movimentações</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[{ min: 30, label: '30 min' }, { min: 60, label: '1 hora' }, { min: 120, label: '2 horas' }, { min: 360, label: '6 horas' }, { min: 720, label: '12 horas' }, { min: 1440, label: '24 horas' }].map(opt => (
+                  <button
+                    key={opt.min}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${configInterval === opt.min ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                    onClick={() => setConfigInterval(opt.min)}
+                  >{opt.label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-700">
+                <strong>Como funciona:</strong> O sistema consulta o DataJud periodicamente pelo número de cada processo cadastrado, detectando novas movimentações (audiências, sentenças, recursos, etc.) e gerando alertas automáticos.
+              </p>
+            </div>
+            <Button
+              className="w-full"
+              disabled={saveConfigMut.isPending}
+              onClick={() => {
+                saveConfigMut.mutate({ companyId: companyId!, isActive: configActive, intervaloMinutos: configInterval });
+                setShowConfigModal(false);
+              }}
+            >
+              {saveConfigMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Settings2 className="h-4 w-4 mr-2" />}
+              Salvar Configuração
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS datajud_alerts (\n  id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,\n  companyId INT NOT NULL,\n  processoId INT,\n  tipo ENUM('nova_movimentacao','audiencia_marcada','sentenca','recurso','acordo','penhora','execucao','arquivamento','novo_processo','erro_consulta') NOT NULL,\n  titulo VARCHAR(255) NOT NULL,\n  descricao TEXT,\n  prioridade ENUM('baixa','media','alta','critica') DEFAULT 'media' NOT NULL,\n  lido TINYINT DEFAULT 0 NOT NULL,\n  lidoPor VARCHAR(255),\n  lidoEm TIMESTAMP NULL,\n  dados JSON,\n  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  INDEX dja_company (companyId),\n  INDEX dja_company_lido (companyId, lido),\n  INDEX dja_processo (processoId)\n)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS datajud_alerts (\n  id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,\n  companyId INT NOT NULL,\n  processoId INT,\n  tipo ENUM('nova_movimentacao','audiencia_marcada','sentenca','recurso','acordo','penhora','execucao','arquivamento','novo_processo','erro_consulta') NOT NULL,\n  titulo VARCHAR(255) NOT NULL,\n  descricao TEXT,\n  prioridade ENUM('baixa','media','alta','critica') DEFAULT 'media' NOT NULL,\n  lido TINYINT DEFAULT 0 NOT NULL,\n  lidoPor VARCHAR(255),\n  lidoEm TIMESTAMP NULL,\n  dados JSON,\n  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  INDEX dja_company (companyId),\n  INDEX dja_company_lido (companyId, lido),\n  INDEX dja_processo (processoId)\n)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 181
+}

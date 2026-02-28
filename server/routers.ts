@@ -48,6 +48,7 @@ import { episRouter } from "./routers/epis";
 import { menuConfigRouter } from "./routers/menuConfig";
 import { goldenRulesRouter } from "./routers/goldenRules";
 import { visaoPanoramicaRouter } from "./routers/visaoPanoramica";
+import { datajudAutoCheckRouter, startAutoCheckJob } from "./routers/datajudAutoCheck";
 import { notificationsRouter } from "./routers/notifications";
 import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
 import { cipaRouter } from "./routers/cipa";
@@ -1439,6 +1440,7 @@ export const appRouter = router({
   pjMedicoes: pjMedicoesRouter,
   dissidio: dissidioRouter,
   sindical: sindicalRouter,
+  datajudAutoCheck: datajudAutoCheckRouter,
   // ============================================================
   // LIXEIRA (TRASH) - Listar e restaurar itens excluídos
   // ============================================================

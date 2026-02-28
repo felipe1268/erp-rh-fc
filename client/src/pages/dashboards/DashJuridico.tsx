@@ -1,11 +1,12 @@
 import { SEMANTIC_COLORS, CHART_PALETTE } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
+import BrazilMap from "@/components/BrazilMap";
 import PrintActions from "@/components/PrintActions";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Gavel, DollarSign, AlertTriangle, Scale, Calendar, FileText, TrendingUp, ShieldAlert, ArrowLeft } from "lucide-react";
+import { Gavel, DollarSign, AlertTriangle, Scale, Calendar, FileText, TrendingUp, ShieldAlert, ArrowLeft, MapPin } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -152,6 +153,18 @@ export default function DashJuridico() {
                 height={Math.max(200, data.topPedidos.length * 30)}
               />
             )}
+
+            {/* Mapa do Brasil - Processos por Estado */}
+            <BrazilMap
+              title="Distribuição Geográfica dos Processos"
+              icon={<MapPin className="h-4 w-4 text-red-500" />}
+              data={(data as any).porEstado || []}
+              colorScheme="red"
+              onStateClick={(state, name) => {
+                const count = (data as any).porEstado?.find((s: any) => s.state === state)?.count || 0;
+                alert(`${name} (${state}): ${count} processo${count !== 1 ? 's' : ''}`);
+              }}
+            />
 
             {/* Próximas Audiências */}
             <Card>

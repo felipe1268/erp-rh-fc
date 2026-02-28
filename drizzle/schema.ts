@@ -2660,3 +2660,46 @@ export const processoDocumentos = mysqlTable("processo_documentos", {
 	index("pd_company").on(table.companyId),
 	index("pd_processo").on(table.processoId),
 ]);
+
+
+// ============================================================
+// ALERTAS DO DATAJUD (notificações automáticas)
+// ============================================================
+export const datajudAlerts = mysqlTable("datajud_alerts", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	processoId: int(), // FK para processosTrabalhistas (null se alerta geral)
+	tipo: mysqlEnum(['nova_movimentacao', 'audiencia_marcada', 'sentenca', 'recurso', 'acordo', 'penhora', 'execucao', 'arquivamento', 'novo_processo', 'erro_consulta']).notNull(),
+	titulo: varchar({ length: 255 }).notNull(),
+	descricao: text(),
+	prioridade: mysqlEnum(['baixa', 'media', 'alta', 'critica']).default('media').notNull(),
+	lido: tinyint().default(0).notNull(),
+	lidoPor: varchar({ length: 255 }),
+	lidoEm: timestamp({ mode: 'string' }),
+	dados: json(), // dados adicionais (movimentação, etc.)
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+	index("dja_company").on(table.companyId),
+	index("dja_company_lido").on(table.companyId, table.lido),
+	index("dja_processo").on(table.processoId),
+]);
+
+// ============================================================
+// CONFIGURAÇÃO DE VERIFICAÇÃO AUTOMÁTICA DO DATAJUD
+// ============================================================
+export const datajudAutoCheckConfig = mysqlTable("datajud_auto_check_config", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	isActive: tinyint().default(1).notNull(),
+	intervaloMinutos: int().default(60).notNull(), // 30, 60, 120, 360, 720, 1440
+	ultimaVerificacao: timestamp({ mode: 'string' }),
+	totalVerificacoes: int().default(0).notNull(),
+	totalAlertas: int().default(0).notNull(),
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("djac_company").on(table.companyId),
+]);

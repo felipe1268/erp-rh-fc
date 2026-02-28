@@ -3299,3 +3299,38 @@
 - [x] Seção de Análise com IA: insights estratégicos, pontos fortes, pontos fracos, riscos e oportunidades
 - [x] Consultar Regras de Ouro da empresa na análise IA
 - [x] Layout responsivo e visual impactante para tomada de decisão
+
+## Redesign Futurista: Tela de Dashboards Analíticos - 2026-02-28
+- [x] Redesign com visual futurista sci-fi/cyberpunk corporativo
+- [x] Glassmorphism (vidro fosco translúcido) nos cards
+- [x] Gradientes neon e efeitos de brilho (glow)
+- [x] Bordas luminosas e hover holográfico
+- [x] Fundo escuro com grid/partículas futuristas
+- [x] Tipografia bold com destaque neon
+- [x] Cards com efeito de energia/pulso
+- [x] Visual impactante e diferenciado para CEO/Diretor
+
+## Botão Voltar - Processos Trabalhistas - 2026-02-28
+- [x] Adicionar botão de voltar à tela inicial na página de Processos Trabalhistas
+
+## Painel Jurídico - Alertas e Verificação Automática - 2026-02-28
+- [x] FIX: Botão "alerta" no Painel Jurídico não abre nada ao clicar
+- [x] Adicionar modal/painel de alertas com detalhes (processos alto risco, audiências, etc.)
+- [x] Adicionar botão voltar à tela inicial na página de Processos Trabalhistas
+- [x] Implementar verificação automática periódica do DataJud (padrão 1h, configurável pelo master: 30min/1h/2h/6h/12h/24h)
+- [x] Gerar alertas automáticos para o usuário quando detectar novidades no DataJud
+
+## Painel Jurídico - Alertas, Gráficos e Verificação Automática - 2026-02-28
+- [x] FIX: Botão "alerta" no Painel Jurídico não abre nada ao clicar
+- [x] Adicionar modal/painel de alertas com detalhes (processos alto risco, audiências, etc.)
+- [x] FIX: Gráficos no Painel Jurídico não responsivos ao clicar (Assuntos DataJud, etc.)
+- [x] Adicionar botão voltar à tela inicial na página de Processos Trabalhistas
+- [x] Implementar verificação automática periódica do DataJud (padrão 1h, configurável pelo master: 30min/1h/2h/6h/12h/24h)
+- [x] Gerar alertas automáticos para o usuário quando detectar novidades no DataJud
+
+## Dashboard Jurídico - Mapa do Brasil - 2026-02-28
+- [x] Adicionar mapa interativo do Brasil no Dashboard Jurídico mostrando distribuição de processos por estado/cidade
+- [x] Ao clicar em um estado, mostrar detalhes dos processos daquela região
+
+## Dashboard Funcionários - Mapa do Brasil - 2026-02-28
+- [x] Adicionar mapa interativo do Brasil no Dashboard Funcionários mostrando distribuição de funcionários por cidade/estado

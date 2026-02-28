@@ -194,6 +194,13 @@ async function getDashFuncionarios(companyId: number) {
     contratoDist: contratoDist.map(r => ({ label: r.tipo || "Não informado", value: Number(r.count) })),
     estadoCivilDist: estadoCivilDist.map(r => ({ label: r.estadoCivil || "Não informado", value: Number(r.count) })),
     cidadeDist: cidadeDist.map(r => ({ label: r.cidade || "Não informado", value: Number(r.count) })),
+    estadoDist: await (async () => {
+      const rows = await db.select({
+        estado: employees.estado,
+        count: sql<number>`count(*)`,
+      }).from(employees).where(and(eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`, sql`${employees.estado} IS NOT NULL AND ${employees.estado} != ''`)).groupBy(employees.estado).orderBy(sql`count(*) desc`);
+      return rows.map(r => ({ state: (r.estado || '').toUpperCase(), count: Number(r.count) }));
+    })(),
     ageDist: ageDist.map(r => ({ faixa: r.faixa, sexo: r.sexo || "Outro", count: Number(r.count) })),
     tenureDist: (() => {
       const ordemCrescente = ['< 3 meses', '3-6 meses', '6-12 meses', '1-2 anos', '2-5 anos', '5-10 anos', '10+ anos'];
@@ -1113,6 +1120,51 @@ async function getDashJuridico(companyId: number) {
     proximasAudiencias,
     topPedidos,
     topAssuntos,
+    porEstado: (() => {
+      const stateMap: Record<string, number> = {};
+      const trtMap: Record<string, string> = {
+        'TRT-1': 'RJ', 'TRT-2': 'SP', 'TRT-3': 'MG', 'TRT-4': 'RS', 'TRT-5': 'BA',
+        'TRT-6': 'PE', 'TRT-7': 'CE', 'TRT-8': 'PA', 'TRT-9': 'PR', 'TRT-10': 'DF',
+        'TRT-11': 'AM', 'TRT-12': 'SC', 'TRT-13': 'PB', 'TRT-14': 'RO', 'TRT-15': 'SP',
+        'TRT-16': 'MA', 'TRT-17': 'ES', 'TRT-18': 'GO', 'TRT-19': 'AL', 'TRT-20': 'SE',
+        'TRT-21': 'RN', 'TRT-22': 'PI', 'TRT-23': 'MT', 'TRT-24': 'MS',
+      };
+      // TRT number map (number only)
+      const trtNumMap: Record<string, string> = {
+        '1': 'RJ', '2': 'SP', '3': 'MG', '4': 'RS', '5': 'BA',
+        '6': 'PE', '7': 'CE', '8': 'PA', '9': 'PR', '10': 'DF',
+        '11': 'AM', '12': 'SC', '13': 'PB', '14': 'RO', '15': 'SP',
+        '16': 'MA', '17': 'ES', '18': 'GO', '19': 'AL', '20': 'SE',
+        '21': 'RN', '22': 'PI', '23': 'MT', '24': 'MS',
+      };
+      for (const p of allProcessos) {
+        let state = '';
+        // 1. Try extracting from processo number: NNNNNNN-NN.YYYY.5.TR.OOOO
+        const numProc = p.numeroProcesso || '';
+        const numMatch = numProc.match(/\d{7}-\d{2}\.\d{4}\.5\.(\d{2})\.\d{4}/);
+        if (numMatch) {
+          const trtNum = String(parseInt(numMatch[1], 10)); // remove leading zero
+          if (trtNumMap[trtNum]) state = trtNumMap[trtNum];
+        }
+        // 2. Try tribunal field
+        if (!state) {
+          const tribunal = (p.tribunal || '').toUpperCase();
+          for (const [trt, uf] of Object.entries(trtMap)) {
+            if (tribunal.includes(trt)) { state = uf; break; }
+          }
+        }
+        // 3. Try comarca field
+        if (!state) {
+          const comarca = (p.comarca || '').toUpperCase();
+          if (comarca) {
+            const match = comarca.match(/\/([A-Z]{2})$/);
+            if (match) state = match[1];
+          }
+        }
+        if (state) stateMap[state] = (stateMap[state] || 0) + 1;
+      }
+      return Object.entries(stateMap).map(([state, count]) => ({ state, count }));
+    })(),
   };
 }
 
@@ -1169,6 +1221,13 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
         whereClause = and(whereClause, sql`(${employees.cidade} IS NULL OR ${employees.cidade} = '')`);
       } else {
         whereClause = and(whereClause, sql`${employees.cidade} = ${filterValue}`);
+      }
+      break;
+    case 'estado':
+      if (filterValue === 'Não informado') {
+        whereClause = and(whereClause, sql`(${employees.estado} IS NULL OR ${employees.estado} = '')`);
+      } else {
+        whereClause = and(whereClause, sql`UPPER(${employees.estado}) = ${filterValue.toUpperCase()}`);
       }
       break;
     case 'faixaEtaria': {

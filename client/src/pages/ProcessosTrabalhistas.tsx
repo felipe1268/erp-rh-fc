@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -1222,6 +1223,9 @@ export default function ProcessosTrabalhistas() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
+            <Link href="/painel/juridico" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1 w-fit">
+              <ArrowLeft className="h-3 w-3" /> Voltar ao Painel Jurídico
+            </Link>
             <h1 className="text-xl font-bold flex items-center gap-2"><Gavel className="h-5 w-5" /> Processos Trabalhistas</h1>
             <p className="text-sm text-muted-foreground">Acompanhamento de processos trabalhistas vinculados a funcionários desligados</p>
           </div>

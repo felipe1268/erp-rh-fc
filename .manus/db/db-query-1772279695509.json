@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, tribunal, comarca FROM processos_trabalhistas LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, tribunal, comarca FROM processos_trabalhistas LIMIT 10;",
+  "rows": [
+    {
+      "id": "30002",
+      "tribunal": "TRT6",
+      "comarca": "NULL"
+    },
+    {
+      "id": "30003",
+      "tribunal": "TRT6",
+      "comarca": "NULL"
+    },
+    {
+      "id": "30004",
+      "tribunal": "TRT6",
+      "comarca": "NULL"
+    },
+    {
+      "id": "30005",
+      "tribunal": "TRT6",
+      "comarca": "NULL"
+    },
+    {
+      "id": "30006",
+      "tribunal": "TRT6",
+      "comarca": "NULL"
+    },
+    {
+      "id": "30007",
+      "tribunal": "TRT6",
+      "comarca": "NULL"
+    },
+    {
+      "id": "30008",
+      "tribunal": "NULL",
+      "comarca": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttribunal\tcomarca\n30002\tTRT6\tNULL\n30003\tTRT6\tNULL\n30004\tTRT6\tNULL\n30005\tTRT6\tNULL\n30006\tTRT6\tNULL\n30007\tTRT6\tNULL\n30008\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

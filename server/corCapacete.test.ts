@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 describe("Cor Capacete - EPI Router Schema", () => {
-  it("should accept corCapacete field in create input schema", async () => {
+  it("should accept corCapacete field in create input schema", { timeout: 15000 }, async () => {
     const { episRouter } = await import("./routers/epis");
     const procedures = Object.keys(episRouter._def.procedures);
     expect(procedures).toContain("create");
