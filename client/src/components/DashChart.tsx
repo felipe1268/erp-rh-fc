@@ -249,18 +249,19 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub }: {
   };
   const c = colorMap[color] || colorMap.blue;
   const [textColor, bgColor, borderColor] = c.split(" ");
+  const isMonetary = typeof value === 'string' && value.startsWith('R$');
   return (
     <Card className={`border-l-4 ${borderColor}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-center gap-2 sm:gap-3">
           {Icon && (
-            <div className={`h-10 w-10 rounded-lg ${bgColor} flex items-center justify-center`}>
-              <Icon className={`h-5 w-5 ${textColor}`} />
+            <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg ${bgColor} flex items-center justify-center shrink-0`}>
+              <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${textColor}`} />
             </div>
           )}
-          <div>
-            <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
-            <p className="text-xs text-muted-foreground">{label}</p>
+          <div className="min-w-0">
+            <p className={`${isMonetary ? 'text-base sm:text-lg md:text-2xl' : 'text-xl sm:text-2xl'} font-bold ${textColor} truncate`}>{value}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
             {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
           </div>
         </div>

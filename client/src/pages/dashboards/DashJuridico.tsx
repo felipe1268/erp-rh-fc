@@ -31,14 +31,14 @@ export default function DashJuridico() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Link href="/dashboards" className="text-sm text-muted-foreground hover:text-foreground">Dashboards</Link>
               <span className="text-muted-foreground">/</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Dashboard Jurídico</h1>
-            <p className="text-muted-foreground text-sm mt-1">Processos trabalhistas, valores e riscos</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard Jurídico</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm mt-1">Processos trabalhistas, valores e riscos</p>
           </div>
           <PrintActions title="Dashboard Jurídico" />
         </div>
@@ -48,14 +48,14 @@ export default function DashJuridico() {
         ) : (
           <>
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <DashKpi label="Total Processos" value={data.resumo.totalProcessos} icon={Gavel} color="blue" />
               <DashKpi label="Ativos" value={data.resumo.processosAtivos} icon={AlertTriangle} color="red" />
               <DashKpi label="Encerrados" value={data.resumo.processosEncerrados} icon={FileText} color="green" />
               <DashKpi label="Valor em Risco" value={fmtBRL(data.resumo.valorEmRisco)} icon={ShieldAlert} color="orange" />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <DashKpi label="Valor da Causa" value={fmtBRL(data.resumo.totalValorCausa)} icon={DollarSign} color="red" />
               <DashKpi label="Condenação" value={fmtBRL(data.resumo.totalValorCondenacao)} icon={Scale} color="purple" />
               <DashKpi label="Acordos" value={fmtBRL(data.resumo.totalValorAcordo)} icon={TrendingUp} color="teal" />
@@ -63,7 +63,7 @@ export default function DashJuridico() {
             </div>
 
             {/* Gráficos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               <DashChart
                 title="Processos por Status"
                 type="doughnut"

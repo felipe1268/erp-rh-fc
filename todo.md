@@ -3107,3 +3107,7 @@
 - [x] Tornar cards de aviso prévio clicáveis no Painel RH, abrindo dialog com cálculos detalhados da rescisão
 ## Dashboard Aviso Prévio - Gráfico responsivo - 2026-02-27
 - [x] FIX: Gráfico de Redução de Jornada (Art. 488 CLT) não responsivo — legenda agora fica embaixo no mobile
+## Medições PJ - Melhorar Layout - 2026-02-27
+- [x] Redesign da tela de Medições PJ para ficar mais apresentável e profissional
+## Dashboard Jurídico - Filtros responsivos - 2026-02-27
+- [x] FIX: Tornar filtros e KPIs do Dashboard Jurídico responsivos no mobile
