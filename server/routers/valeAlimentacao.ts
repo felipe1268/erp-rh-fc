@@ -339,6 +339,30 @@ export const valeAlimentacaoRouter = router({
     }),
 
   // ============================================================
+  // REVERTER PAGO → APROVADO (corrigir clique errado)
+  // ============================================================
+  reverterPago: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      ids: z.array(z.number()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      if (input.ids && input.ids.length > 0) {
+        await db.execute(
+          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE id IN (${sql.raw(input.ids.join(","))}) AND status = 'pago'`
+        );
+        return { success: true, revertidos: input.ids.length };
+      } else {
+        const [result] = await db.execute(
+          sql`UPDATE vr_benefits SET status = 'aprovado' WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND status = 'pago'`
+        ) as any;
+        return { success: true, revertidos: result?.affectedRows || 0 };
+      }
+    }),
+
+  // ============================================================
   // CANCELAR LANÇAMENTO
   // ============================================================
   cancelarLancamento: protectedProcedure

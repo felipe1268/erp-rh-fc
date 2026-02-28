@@ -130,6 +130,14 @@ export default function ValeAlimentacao() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const reverterPagoMut = trpc.valeAlimentacao.reverterPago.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.revertidos} lançamento(s) revertido(s) para Aprovado!`);
+      lancamentosQ.refetch();
+      statsQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const cancelarMut = trpc.valeAlimentacao.cancelarLancamento.useMutation({
     onSuccess: () => {
       toast.success("Lançamento cancelado!");
@@ -262,6 +270,15 @@ export default function ValeAlimentacao() {
                         }
                       }} disabled={pagarMut.isPending}>
                         <DollarSign className="h-3.5 w-3.5" /> Marcar Pagos ({stats.aprovados})
+                      </Button>
+                    )}
+                    {stats && stats.pagos > 0 && (
+                      <Button size="sm" variant="outline" className="gap-1.5 text-xs text-amber-700 border-amber-300 hover:bg-amber-50" onClick={() => {
+                        if (confirm(`Reverter ${stats.pagos} lançamento(s) de 'Pago' para 'Aprovado'?`)) {
+                          reverterPagoMut.mutate({ companyId, mesReferencia: mesAno });
+                        }
+                      }} disabled={reverterPagoMut.isPending}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Reverter Pagos ({stats.pagos})
                       </Button>
                     )}
                   </>
@@ -437,6 +454,15 @@ export default function ValeAlimentacao() {
                                     pagarMut.mutate({ companyId, mesReferencia: mesAno, ids: [l.id] });
                                   }}>
                                     <DollarSign className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {l.status === "pago" && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" title="Reverter para Aprovado" onClick={() => {
+                                    if (confirm("Reverter este lançamento de 'Pago' para 'Aprovado'?")) {
+                                      reverterPagoMut.mutate({ companyId, mesReferencia: mesAno, ids: [l.id] });
+                                    }
+                                  }}>
+                                    <RefreshCw className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
                               </div>

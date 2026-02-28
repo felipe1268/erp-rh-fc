@@ -3454,3 +3454,9 @@
 ## Atualização de Revisão do Sistema
 - [x] Atualizar número de revisão de 114 para 115
 - [x] Registrar changelog completo de todas as alterações feitas nesta sessão
+
+## Editar Status de Pagamento - Vale Alimentação
+- [x] Adicionar opção de reverter status "Pago" para "Aprovado" na tela de Vale Alimentação
+- [x] Permitir que o usuário corrija cliques errados no botão de pagamento
+- [x] Botão individual (RefreshCw) em cada linha com status "Pago"
+- [x] Botão em lote "Reverter Pagos" na barra de ações superior
