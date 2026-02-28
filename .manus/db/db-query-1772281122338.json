@@ -1,0 +1,294 @@
+{
+  "query": "SELECT companyId, COUNT(*) as total FROM employees WHERE status = 'Ativo' AND deletedAt IS NULL GROUP BY companyId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT companyId, COUNT(*) as total FROM employees WHERE status = 'Ativo' AND deletedAt IS NULL GROUP BY companyId;",
+  "rows": [
+    {
+      "companyId": "450051",
+      "total": "2"
+    },
+    {
+      "companyId": "480001",
+      "total": "2"
+    },
+    {
+      "companyId": "510002",
+      "total": "2"
+    },
+    {
+      "companyId": "600001",
+      "total": "2"
+    },
+    {
+      "companyId": "750002",
+      "total": "2"
+    },
+    {
+      "companyId": "900004",
+      "total": "2"
+    },
+    {
+      "companyId": "930001",
+      "total": "2"
+    },
+    {
+      "companyId": "960002",
+      "total": "2"
+    },
+    {
+      "companyId": "60004",
+      "total": "1"
+    },
+    {
+      "companyId": "450044",
+      "total": "2"
+    },
+    {
+      "companyId": "480005",
+      "total": "2"
+    },
+    {
+      "companyId": "630003",
+      "total": "2"
+    },
+    {
+      "companyId": "750008",
+      "total": "2"
+    },
+    {
+      "companyId": "810001",
+      "total": "2"
+    },
+    {
+      "companyId": "810004",
+      "total": "2"
+    },
+    {
+      "companyId": "870002",
+      "total": "2"
+    },
+    {
+      "companyId": "450045",
+      "total": "2"
+    },
+    {
+      "companyId": "840002",
+      "total": "2"
+    },
+    {
+      "companyId": "780001",
+      "total": "2"
+    },
+    {
+      "companyId": "810003",
+      "total": "2"
+    },
+    {
+      "companyId": "900003",
+      "total": "2"
+    },
+    {
+      "companyId": "450042",
+      "total": "2"
+    },
+    {
+      "companyId": "450048",
+      "total": "2"
+    },
+    {
+      "companyId": "660004",
+      "total": "2"
+    },
+    {
+      "companyId": "660006",
+      "total": "2"
+    },
+    {
+      "companyId": "750004",
+      "total": "2"
+    },
+    {
+      "companyId": "450050",
+      "total": "2"
+    },
+    {
+      "companyId": "480007",
+      "total": "2"
+    },
+    {
+      "companyId": "660002",
+      "total": "2"
+    },
+    {
+      "companyId": "660003",
+      "total": "2"
+    },
+    {
+      "companyId": "660005",
+      "total": "2"
+    },
+    {
+      "companyId": "600002",
+      "total": "2"
+    },
+    {
+      "companyId": "660007",
+      "total": "2"
+    },
+    {
+      "companyId": "720001",
+      "total": "2"
+    },
+    {
+      "companyId": "750006",
+      "total": "2"
+    },
+    {
+      "companyId": "960001",
+      "total": "2"
+    },
+    {
+      "companyId": "600003",
+      "total": "2"
+    },
+    {
+      "companyId": "720002",
+      "total": "2"
+    },
+    {
+      "companyId": "720003",
+      "total": "2"
+    },
+    {
+      "companyId": "810002",
+      "total": "2"
+    },
+    {
+      "companyId": "840001",
+      "total": "2"
+    },
+    {
+      "companyId": "900002",
+      "total": "2"
+    },
+    {
+      "companyId": "450046",
+      "total": "2"
+    },
+    {
+      "companyId": "960003",
+      "total": "2"
+    },
+    {
+      "companyId": "450043",
+      "total": "2"
+    },
+    {
+      "companyId": "540002",
+      "total": "2"
+    },
+    {
+      "companyId": "630002",
+      "total": "2"
+    },
+    {
+      "companyId": "750007",
+      "total": "2"
+    },
+    {
+      "companyId": "840003",
+      "total": "2"
+    },
+    {
+      "companyId": "60002",
+      "total": "145"
+    },
+    {
+      "companyId": "450049",
+      "total": "2"
+    },
+    {
+      "companyId": "480003",
+      "total": "2"
+    },
+    {
+      "companyId": "480006",
+      "total": "2"
+    },
+    {
+      "companyId": "630004",
+      "total": "2"
+    },
+    {
+      "companyId": "660001",
+      "total": "2"
+    },
+    {
+      "companyId": "690001",
+      "total": "2"
+    },
+    {
+      "companyId": "750001",
+      "total": "2"
+    },
+    {
+      "companyId": "750003",
+      "total": "2"
+    },
+    {
+      "companyId": "510003",
+      "total": "2"
+    },
+    {
+      "companyId": "570002",
+      "total": "2"
+    },
+    {
+      "companyId": "630005",
+      "total": "2"
+    },
+    {
+      "companyId": "870001",
+      "total": "2"
+    },
+    {
+      "companyId": "900001",
+      "total": "2"
+    },
+    {
+      "companyId": "480004",
+      "total": "2"
+    },
+    {
+      "companyId": "510001",
+      "total": "2"
+    },
+    {
+      "companyId": "570001",
+      "total": "2"
+    },
+    {
+      "companyId": "630001",
+      "total": "2"
+    },
+    {
+      "companyId": "750005",
+      "total": "2"
+    },
+    {
+      "companyId": "450047",
+      "total": "2"
+    },
+    {
+      "companyId": "480002",
+      "total": "2"
+    },
+    {
+      "companyId": "540001",
+      "total": "2"
+    }
+  ],
+  "messages": [],
+  "stdout": "companyId\ttotal\n450051\t2\n480001\t2\n510002\t2\n600001\t2\n750002\t2\n900004\t2\n930001\t2\n960002\t2\n60004\t1\n450044\t2\n480005\t2\n630003\t2\n750008\t2\n810001\t2\n810004\t2\n870002\t2\n450045\t2\n840002\t2\n780001\t2\n810003\t2\n900003\t2\n450042\t2\n450048\t2\n660004\t2\n660006\t2\n750004\t2\n450050\t2\n480007\t2\n660002\t2\n660003\t2\n660005\t2\n600002\t2\n660007\t2\n720001\t2\n750006\t2\n960001\t2\n600003\t2\n720002\t2\n720003\t2\n810002\t2\n840001\t2\n900002\t2\n450046\t2\n960003\t2\n450043\t2\n540002\t2\n630002\t2\n750007\t2\n840003\t2\n60002\t145\n450049\t2\n480003\t2\n480006\t2\n630004\t2\n660001\t2\n690001\t2\n750001\t2\n750003\t2\n510003\t2\n570002\t2\n630005\t2\n870001\t2\n900001\t2\n480004\t2\n510001\t2\n570001\t2\n630001\t2\n750005\t2\n450047\t2\n480002\t2\n540001\t2\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

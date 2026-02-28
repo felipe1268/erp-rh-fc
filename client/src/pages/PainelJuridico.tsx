@@ -686,7 +686,10 @@ export default function PainelJuridico() {
                   </CardHeader>
                   <CardContent className="px-4 pb-3">
                     <div className="space-y-2">
-                      {dashData.valorPorRisco.map((r: any) => {
+                      {[...dashData.valorPorRisco].sort((a: any, b: any) => {
+                        const order: Record<string, number> = { baixo: 0, medio: 1, alto: 2, critico: 3 };
+                        return (order[a.risco] ?? 99) - (order[b.risco] ?? 99);
+                      }).map((r: any) => {
                         const cfg = RISCO_CONFIG[r.risco] || RISCO_CONFIG.medio;
                         const totalRisco = dashData.resumo.valorEmRisco;
                         const pct = totalRisco > 0 ? Math.round((r.valor / totalRisco) * 100) : 0;

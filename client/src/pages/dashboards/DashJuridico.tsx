@@ -103,9 +103,14 @@ export default function DashJuridico() {
               <DashChart
                 title="Valor em Risco por Nível"
                 type="bar"
-                labels={data.valorPorRisco.map(r => r.risco)}
-                datasets={[{ label: "Valor (R$)", data: data.valorPorRisco.map(r => r.valor), backgroundColor: data.valorPorRisco.map(r => RISCO_COLORS[r.risco] || SEMANTIC_COLORS.neutro) }]}
-                height={260}
+                labels={data.valorPorRisco.map(r => r.risco.charAt(0).toUpperCase() + r.risco.slice(1))}
+                datasets={[{ label: "Valor em Risco", data: data.valorPorRisco.map(r => r.valor), backgroundColor: data.valorPorRisco.map(r => RISCO_COLORS[r.risco] || SEMANTIC_COLORS.neutro) }]}
+                height={280}
+                valueFormatter={(v) => fmtBRL(v)}
+                onChartClick={(info) => {
+                  const risco = data.valorPorRisco[info.dataIndex]?.risco;
+                  if (risco) alert(`Risco ${risco.charAt(0).toUpperCase() + risco.slice(1)}:\n\nValor total: ${fmtBRL(info.value)}`);
+                }}
               />
             )}
 

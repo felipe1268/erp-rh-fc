@@ -746,7 +746,9 @@ ${contextoRegras}
 Com base em TODOS os dados acima, forneça a análise em formato JSON conforme o schema solicitado. Seja específico, prático e baseie-se em jurisprudência real do TST e TRTs. Considere a CLT, súmulas e OJs do TST.
 
 IMPORTANTE:
-- Estime o valor da causa se não informado, baseando-se nos pedidos e assuntos
+- Para cada pedido do reclamante, estime o valor individual que o advogado está pleiteando
+- O campo valorCausaEstimado DEVE ser a SOMA de todos os valorEstimado de pedidosAnalisados (soma de todos os pedidos do reclamante)
+- O valorEstimadoRisco (risco de condenação) pode ser diferente do valorCausaEstimado - é o valor que a empresa realmente pode ser condenada a pagar considerando probabilidades
 - Calcule probabilidades realistas baseadas nos dados disponíveis
 - Sugira valores de acordo baseados na jurisprudência
 - Cite jurisprudência REAL e relevante (súmulas, OJs do TST)
@@ -769,7 +771,7 @@ IMPORTANTE:
                 resumoExecutivo: { type: "string", description: "Resumo executivo do caso em 3-5 parágrafos" },
                 valorEstimadoRisco: { type: "number", description: "Valor estimado de condenação em reais" },
                 valorEstimadoAcordo: { type: "number", description: "Valor sugerido para acordo em reais" },
-                valorCausaEstimado: { type: "number", description: "Valor estimado da causa se não informado" },
+                valorCausaEstimado: { type: "number", description: "Soma total de todos os valores dos pedidos do reclamante (deve ser igual à soma dos valorEstimado em pedidosAnalisados)" },
                 probabilidadeCondenacao: { type: "integer", description: "Probabilidade de condenação 0-100" },
                 probabilidadeAcordo: { type: "integer", description: "Probabilidade de acordo 0-100" },
                 probabilidadeArquivamento: { type: "integer", description: "Probabilidade de arquivamento 0-100" },
@@ -830,15 +832,25 @@ IMPORTANTE:
         criadoPorUserId: ctx.user.id,
       } as any);
 
-      // Atualizar valor da causa se estava vazio
-      if ((!processo.valorCausa || processo.valorCausa === '0' || processo.valorCausa === '0.00') && analise.valorCausaEstimado > 0) {
+      // Calcular valor da causa como soma dos pedidos analisados (mais conservador)
+      let valorCausaCalculado = analise.valorCausaEstimado;
+      if (analise.pedidosAnalisados && analise.pedidosAnalisados.length > 0) {
+        const somaPedidos = analise.pedidosAnalisados.reduce((acc: number, p: any) => acc + (p.valorEstimado || 0), 0);
+        if (somaPedidos > 0) {
+          valorCausaCalculado = somaPedidos;
+        }
+      }
+
+      // Sempre atualizar o valor da causa com a soma dos pedidos (abordagem conservadora)
+      if (valorCausaCalculado > 0) {
         await db.update(processosTrabalhistas).set({
-          valorCausa: String(analise.valorCausaEstimado),
+          valorCausa: String(valorCausaCalculado),
         }).where(eq(processosTrabalhistas.id, input.processoId));
       }
 
       return {
         ...analise,
+        valorCausaCalculado,
         versao,
         tempoMs,
         modelo: response.model,

@@ -3334,3 +3334,37 @@
 
 ## Dashboard Funcionários - Mapa do Brasil - 2026-02-28
 - [x] Adicionar mapa interativo do Brasil no Dashboard Funcionários mostrando distribuição de funcionários por cidade/estado
+
+## FIX: Gráfico Valor em Risco e Mapa do Brasil - 2026-02-28
+- [ ] Gráfico "Valor em Risco por Nível" não mostra valores formatados em reais (R$ 80.000,00)
+- [ ] Gráfico "Valor em Risco por Nível" não é interativo ao clicar
+- [ ] Mapa do Brasil SVG muito pequeno e desproporcional - redesenhar maior e mais profissional
+- [ ] Adicionar tooltip ao passar o mouse nos estados do mapa
+- [ ] Melhorar interatividade do mapa ao clicar nos estados
+
+## Redesign Cores Claras: Tela de Dashboards Analíticos - 2026-02-28
+- [ ] Reformular cores para tons claros (fundo branco, cards brancos, sombras suaves)
+- [ ] Remover glassmorphism pesado e fundo escuro
+- [ ] Cores de destaque em tons pastéis (azul claro, verde menta, laranja suave)
+- [ ] Layout limpo e profissional com boa legibilidade
+
+## Redesign Resolver Inconsistência
+- [ ] Redesign "Resolver Inconsistência" page with better visual layout
+- [ ] Add quick action buttons (Justificar, Abonar, Aplicar Falta) instead of dropdown
+- [ ] Add pre-defined justification suggestions for 1-click selection
+- [ ] Improve inconsistencies list visual design with icons and colors
+- [ ] Show timeline of registered punches visually
+
+## Redesign Completo Vale Alimentação
+- [ ] Criar tabela va_config (configurações: valor padrão, regras por cargo/setor, critérios elegibilidade)
+- [ ] Criar tabela va_lancamentos (lançamentos mensais por colaborador com valor, status, motivo)
+- [ ] Backend: rota de configuração do VA (CRUD regras)
+- [ ] Backend: rota de geração mensal automática baseada nas regras
+- [ ] Backend: rota de edição individual de VA por colaborador/mês
+- [ ] Frontend: Aba Configuração (valor padrão, regras, critérios)
+- [ ] Frontend: Aba Lançamento Mensal (gerar, editar individual, aprovar)
+- [ ] Frontend: Detalhe VA do colaborador (histórico, valores)
+- [ ] Frontend: KPIs corretos (total a pagar, beneficiários, média)
+- [ ] Corrigir clique no nome (abrir detalhe VA, não Raio-X)
+- [x] Fix risk level ordering in Painel RH: Baixo → Médio → Alto (crescente)
+- [x] IA Jurídica: somar todos os pedidos do reclamante e atualizar valorCausa automaticamente

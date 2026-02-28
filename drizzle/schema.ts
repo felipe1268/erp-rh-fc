@@ -903,11 +903,23 @@ export const vrBenefits = mysqlTable("vr_benefits", {
 	valorDiario: varchar({ length: 20 }),
 	diasUteis: int(),
 	valorTotal: varchar({ length: 20 }).notNull(),
+	valorCafe: varchar({ length: 20 }).default('0'),
+	valorLanche: varchar({ length: 20 }).default('0'),
+	valorJanta: varchar({ length: 20 }).default('0'),
+	valorVA: varchar({ length: 20 }).default('0'),
 	operadora: varchar({ length: 100 }).default('iFood Benefícios'),
+	status: mysqlEnum(['pendente','aprovado','pago','cancelado']).default('pendente').notNull(),
+	motivoAlteracao: text(),
 	observacoes: text(),
+	geradoPor: varchar({ length: 255 }),
+	aprovadoPor: varchar({ length: 255 }),
 	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-});
+},
+(table) => [
+	index("vr_company_mes").on(table.companyId, table.mesReferencia),
+	index("vr_employee").on(table.employeeId),
+]);
 
 export const warnings = mysqlTable("warnings", {
 	id: int().autoincrement().notNull(),

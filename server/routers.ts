@@ -49,6 +49,7 @@ import { menuConfigRouter } from "./routers/menuConfig";
 import { goldenRulesRouter } from "./routers/goldenRules";
 import { visaoPanoramicaRouter } from "./routers/visaoPanoramica";
 import { datajudAutoCheckRouter, startAutoCheckJob } from "./routers/datajudAutoCheck";
+import { valeAlimentacaoRouter } from "./routers/valeAlimentacao";
 import { notificationsRouter } from "./routers/notifications";
 import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
 import { cipaRouter } from "./routers/cipa";
@@ -1441,6 +1442,7 @@ export const appRouter = router({
   dissidio: dissidioRouter,
   sindical: sindicalRouter,
   datajudAutoCheck: datajudAutoCheckRouter,
+  valeAlimentacao: valeAlimentacaoRouter,
   // ============================================================
   // LIXEIRA (TRASH) - Listar e restaurar itens excluídos
   // ============================================================

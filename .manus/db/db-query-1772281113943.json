@@ -1,0 +1,13 @@
+{
+  "query": "SELECT CONCAT(id, '|', companyId, '|', COALESCE(obraId,'NULL'), '|', nome, '|', cafeManhaDia, '|', lancheTardeDia, '|', valeAlimentacaoMes, '|', totalVA_iFood, '|', diasUteisRef) as info FROM meal_benefit_configs;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT CONCAT(id, '|', companyId, '|', COALESCE(obraId,'NULL'), '|', nome, '|', cafeManhaDia, '|', lancheTardeDia, '|', valeAlimentacaoMes, '|', totalVA_iFood, '|', diasUteisRef) as info FROM meal_benefit_configs;",
+  "rows": [
+    {
+      "info": "1|60002|NULL|Padrão FC Engenharia|5,45|4,55|460,75|680,75|22"
+    }
+  ],
+  "messages": [],
+  "stdout": "info\n1|60002|NULL|Padrão FC Engenharia|5,45|4,55|460,75|680,75|22\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}
