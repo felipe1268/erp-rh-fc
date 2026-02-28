@@ -572,7 +572,7 @@ export default function Ferias() {
             {(alertas.vencidas?.length || 0) > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                 <p className="text-sm font-semibold text-red-800 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" /> {alertas.vencidas.length} Férias Vencidas — Pagamento em Dobro (Art. 137 CLT)
+                  <AlertTriangle className="h-4 w-4" /> {alertas.vencidas.length} Férias Vencidas — Período Concessivo Expirado (Art. 134 CLT)
                 </p>
                 <div className="mt-2 space-y-1">
                   {alertas.vencidas.slice(0, 5).map((v: any) => (
@@ -1391,7 +1391,7 @@ export default function Ferias() {
                 <div className="bg-muted/30 rounded-lg p-4">
                   <p className="text-xs text-muted-foreground uppercase">Status</p>
                   <p className="font-semibold text-lg">{STATUS_LABELS[selectedItem.status]?.label}</p>
-                  {selectedItem.vencida ? <Badge variant="destructive">Pagamento em Dobro</Badge> : null}
+                  {selectedItem.pagamentoEmDobro === 1 ? <Badge variant="destructive">Pagamento em Dobro</Badge> : selectedItem.vencida ? <Badge variant="outline" className="border-red-300 text-red-600">Período Vencido</Badge> : null}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

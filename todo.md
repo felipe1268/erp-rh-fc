@@ -3514,3 +3514,9 @@
 
 ### Changelog
 - [x] Inserir Rev. 116 no banco de dados (system_revisions)
+
+### Bug Fix - Indicador Pagamento em Dobro
+- [x] Corrigir indicador "Pagamento em Dobro" que mostra 109 períodos incorretamente (não houve pagamento em dobro)
+- [x] Zerar flag pagamentoEmDobro nos registros de férias concluídas/liquidadas
+- [x] Remover lógica automática que marcava pagamentoEmDobro=1 em períodos vencidos
+- [x] Atualizar textos de alerta: "Pagamento em Dobro" → "Período Concessivo Expirado"

@@ -1228,7 +1228,7 @@ export const avisoPrevioFeriasRouter = router({
               periodoConcessivoFim: p.fimConcessivo,
               status: p.vencida ? 'vencida' : 'pendente',
               vencida: p.vencida ? 1 : 0,
-              pagamentoEmDobro: p.vencida ? 1 : 0,
+              pagamentoEmDobro: 0,
             });
             criados++;
           }
@@ -1505,7 +1505,7 @@ export const avisoPrevioFeriasRouter = router({
                 periodoConcessivoFim: p.fimConcessivo,
                 status: p.vencida ? 'vencida' : 'pendente',
                 vencida: p.vencida ? 1 : 0,
-                pagamentoEmDobro: p.vencida ? 1 : 0,
+                pagamentoEmDobro: 0,
                 numeroPeriodo: numPeriodo,
                 dataSugeridaInicio: sugeridaInicio.toISOString().split('T')[0],
                 dataSugeridaFim: sugeridaFim.toISOString().split('T')[0],
