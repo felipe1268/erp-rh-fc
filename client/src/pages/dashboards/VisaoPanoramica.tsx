@@ -10,8 +10,9 @@ import {
   TrendingUp, TrendingDown, Minus, BarChart3, Sparkles, RefreshCw,
   Shield, Target, Lightbulb, AlertCircle, CheckCircle2, XCircle,
   ArrowUpRight, ArrowDownRight, Activity, FileText, Brain,
-  ChevronDown, ChevronUp, Zap, Eye, DollarSign, Percent,
+  ChevronDown, ChevronUp, Zap, Eye, DollarSign, Percent, X, Info,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ── Helpers ──
 function fmt(v: number | undefined | null): string {
@@ -27,8 +28,8 @@ function fmtPercent(v: number | undefined | null): string {
   return `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
-// ── Saúde Badge ──
-function SaudeBadge({ saude, pontuacao }: { saude: string; pontuacao: number }) {
+// ── Saúde Badge (clicável) ──
+function SaudeBadge({ saude, pontuacao, onClick }: { saude: string; pontuacao: number; onClick?: () => void }) {
   const config: Record<string, { bg: string; text: string; label: string }> = {
     verde: { bg: "bg-emerald-500/10", text: "text-emerald-600", label: "Saudável" },
     amarelo: { bg: "bg-amber-500/10", text: "text-amber-600", label: "Atenção" },
@@ -36,11 +37,207 @@ function SaudeBadge({ saude, pontuacao }: { saude: string; pontuacao: number }) 
   };
   const c = config[saude] || config.amarelo;
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${c.bg}`}>
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${c.bg} hover:opacity-80 transition-all cursor-pointer`}
+      title="Clique para ver o detalhamento da pontuação"
+    >
       <div className={`w-2.5 h-2.5 rounded-full ${c.text.replace("text-", "bg-")} animate-pulse`} />
       <span className={`text-sm font-semibold ${c.text}`}>{c.label}</span>
       <span className={`text-sm font-bold ${c.text}`}>{pontuacao}/100</span>
-    </div>
+      <Info className={`h-3.5 w-3.5 ${c.text} opacity-60`} />
+    </button>
+  );
+}
+
+// ── Score Detail Dialog ──
+function ScoreDetailDialog({ open, onClose, analise }: { open: boolean; onClose: () => void; analise: any }) {
+  if (!analise) return null;
+  const config: Record<string, { bg: string; text: string; label: string; ring: string }> = {
+    verde: { bg: "bg-emerald-500", text: "text-emerald-600", label: "Saudável", ring: "ring-emerald-500" },
+    amarelo: { bg: "bg-amber-500", text: "text-amber-600", label: "Atenção", ring: "ring-amber-500" },
+    vermelho: { bg: "bg-red-500", text: "text-red-600", label: "Crítico", ring: "ring-red-500" },
+  };
+  const c = config[analise.saudeGeral] || config.amarelo;
+  const pct = analise.pontuacao;
+
+  // Categorize KPIs
+  const kpisCriticos = analise.kpisAlerta?.filter((k: any) => k.status === "critico") || [];
+  const kpisAtencao = analise.kpisAlerta?.filter((k: any) => k.status === "atencao") || [];
+  const kpisOk = analise.kpisAlerta?.filter((k: any) => k.status === "ok") || [];
+
+  // Count impacts
+  const riscosAltos = analise.riscos?.filter((r: any) => r.severidade === "critico" || r.severidade === "alto") || [];
+  const pontosFortes = analise.pontosFortes?.length || 0;
+  const pontosFracos = analise.pontosFracos?.length || 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-blue-500" />
+            Detalhamento da Pontuação de Saúde
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Score Visual */}
+        <div className="flex flex-col items-center py-4">
+          <div className={`relative w-32 h-32 rounded-full flex items-center justify-center ring-8 ${c.ring}/20`}>
+            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
+              <circle cx="60" cy="60" r="52" fill="none" strokeWidth="8"
+                className={c.text}
+                stroke="currentColor"
+                strokeDasharray={`${(pct / 100) * 327} 327`}
+                strokeLinecap="round" />
+            </svg>
+            <div className="text-center z-10">
+              <span className={`text-3xl font-bold ${c.text}`}>{pct}</span>
+              <span className="text-sm text-muted-foreground">/100</span>
+            </div>
+          </div>
+          <span className={`mt-3 text-sm font-semibold ${c.text}`}>{c.label}</span>
+          <p className="text-xs text-muted-foreground mt-1 text-center max-w-md">{analise.resumoExecutivo}</p>
+        </div>
+
+        {/* Composição da Nota */}
+        <div className="space-y-4">
+          {/* Resumo Rápido */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-center">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 mx-auto" />
+              <p className="text-lg font-bold text-emerald-600 mt-1">{pontosFortes}</p>
+              <p className="text-[10px] text-muted-foreground">Pontos Fortes</p>
+            </div>
+            <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10 text-center">
+              <XCircle className="h-5 w-5 text-red-500 mx-auto" />
+              <p className="text-lg font-bold text-red-600 mt-1">{pontosFracos}</p>
+              <p className="text-[10px] text-muted-foreground">Pontos Fracos</p>
+            </div>
+            <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 text-center">
+              <AlertTriangle className="h-5 w-5 text-amber-500 mx-auto" />
+              <p className="text-lg font-bold text-amber-600 mt-1">{riscosAltos.length}</p>
+              <p className="text-[10px] text-muted-foreground">Riscos Altos</p>
+            </div>
+            <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 text-center">
+              <Lightbulb className="h-5 w-5 text-blue-500 mx-auto" />
+              <p className="text-lg font-bold text-blue-600 mt-1">{analise.oportunidades?.length || 0}</p>
+              <p className="text-[10px] text-muted-foreground">Oportunidades</p>
+            </div>
+          </div>
+
+          {/* KPIs em Alerta (Críticos) */}
+          {kpisCriticos.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                <XCircle className="h-4 w-4 text-red-500" />
+                Indicadores Críticos ({kpisCriticos.length})
+              </h4>
+              <div className="space-y-1.5">
+                {kpisCriticos.map((k: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-red-500/5 border-l-4 border-l-red-500">
+                    <div>
+                      <p className="text-sm font-medium">{k.indicador}</p>
+                      <p className="text-[10px] text-muted-foreground">Meta: {k.meta}</p>
+                    </div>
+                    <span className="text-sm font-bold text-red-600">{k.valor}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* KPIs em Atenção */}
+          {kpisAtencao.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                Indicadores em Atenção ({kpisAtencao.length})
+              </h4>
+              <div className="space-y-1.5">
+                {kpisAtencao.map((k: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/5 border-l-4 border-l-amber-500">
+                    <div>
+                      <p className="text-sm font-medium">{k.indicador}</p>
+                      <p className="text-[10px] text-muted-foreground">Meta: {k.meta}</p>
+                    </div>
+                    <span className="text-sm font-bold text-amber-600">{k.valor}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* KPIs OK */}
+          {kpisOk.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                Indicadores OK ({kpisOk.length})
+              </h4>
+              <div className="space-y-1.5">
+                {kpisOk.map((k: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/5 border-l-4 border-l-emerald-500">
+                    <div>
+                      <p className="text-sm font-medium">{k.indicador}</p>
+                      <p className="text-[10px] text-muted-foreground">Meta: {k.meta}</p>
+                    </div>
+                    <span className="text-sm font-bold text-emerald-600">{k.valor}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Principais Riscos */}
+          {riscosAltos.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                Riscos que Impactam a Nota
+              </h4>
+              <div className="space-y-1.5">
+                {riscosAltos.map((r: any, i: number) => (
+                  <div key={i} className="p-2.5 rounded-lg bg-red-500/5 border-l-4 border-l-red-500">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{r.titulo}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-600 font-medium">{r.severidade}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{r.descricao}</p>
+                    <p className="text-xs text-blue-500 mt-1">Ação: {r.acaoImediata}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pontos Fracos que puxam a nota */}
+          {analise.pontosFracos?.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                <XCircle className="h-4 w-4 text-red-500" />
+                Pontos Fracos que Reduzem a Nota
+              </h4>
+              <div className="space-y-1.5">
+                {analise.pontosFracos.map((p: any, i: number) => (
+                  <div key={i} className="p-2.5 rounded-lg bg-muted/30 border-l-4 border-l-red-400">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{p.titulo}</p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        p.impacto === "alto" ? "bg-red-500/10 text-red-600" : p.impacto === "medio" ? "bg-amber-500/10 text-amber-600" : "bg-emerald-500/10 text-emerald-600"
+                      }`}>{p.impacto}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{p.descricao}</p>
+                    <p className="text-xs text-blue-500 mt-1">Recomendação: {p.recomendacao}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -186,6 +383,7 @@ export default function VisaoPanoramica() {
   const { selectedCompanyId, selectedCompany } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const companyName = (selectedCompany as any)?.nomeFantasia || (selectedCompany as any)?.razaoSocial || "Empresa";
+  const [showScoreDetail, setShowScoreDetail] = useState(false);
   const [showAllFortes, setShowAllFortes] = useState(false);
   const [showAllFracos, setShowAllFracos] = useState(false);
   const [showAllRiscos, setShowAllRiscos] = useState(false);
@@ -253,7 +451,7 @@ export default function VisaoPanoramica() {
               </div>
             </div>
           </div>
-          {analise && <SaudeBadge saude={analise.saudeGeral} pontuacao={analise.pontuacao} />}
+          {analise && <SaudeBadge saude={analise.saudeGeral} pontuacao={analise.pontuacao} onClick={() => setShowScoreDetail(true)} />}
         </div>
 
         {/* ── KPIs PESSOAL ── */}
@@ -550,6 +748,8 @@ export default function VisaoPanoramica() {
           )}
         </div>
       </div>
+      {/* Score Detail Dialog */}
+      <ScoreDetailDialog open={showScoreDetail} onClose={() => setShowScoreDetail(false)} analise={analise} />
     </DashboardLayout>
   );
 }

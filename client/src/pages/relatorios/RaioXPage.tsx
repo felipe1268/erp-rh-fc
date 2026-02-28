@@ -5,7 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { formatCPF } from "@/lib/formatters";
-import { Search, UserSearch, Users, UserCheck, UserX, Clock, Shield, Ban, AlertTriangle, Palmtree } from "lucide-react";
+import { Search, UserSearch, Users, UserCheck, UserX, Clock, Shield, Ban, AlertTriangle, Palmtree, FileWarning } from "lucide-react";
 
 const STATUS_OPTIONS = [
   { value: "Todos", label: "Todos", icon: Users, color: "bg-gray-100 text-gray-700 border-gray-300", activeColor: "bg-gray-700 text-white border-gray-700" },
@@ -14,6 +14,7 @@ const STATUS_OPTIONS = [
   { value: "Afastado", label: "Afastados", icon: Clock, color: "bg-amber-50 text-amber-700 border-amber-300", activeColor: "bg-amber-600 text-white border-amber-600" },
   { value: "Ferias", label: "Férias", icon: Palmtree, color: "bg-blue-50 text-blue-700 border-blue-300", activeColor: "bg-blue-600 text-white border-blue-600" },
   { value: "Licenca", label: "Licença", icon: Shield, color: "bg-purple-50 text-purple-700 border-purple-300", activeColor: "bg-purple-600 text-white border-purple-600" },
+  { value: "AvisoPrevio", label: "Aviso Prévio", icon: FileWarning, color: "bg-orange-50 text-orange-700 border-orange-300", activeColor: "bg-orange-600 text-white border-orange-600" },
   { value: "Recluso", label: "Reclusos", icon: Ban, color: "bg-gray-50 text-gray-700 border-gray-400", activeColor: "bg-gray-600 text-white border-gray-600" },
   { value: "Lista_Negra", label: "Blacklist", icon: AlertTriangle, color: "bg-red-50 text-red-800 border-red-400", activeColor: "bg-red-800 text-white border-red-800" },
 ];
@@ -50,22 +51,43 @@ export default function RaioXPage() {
     { enabled: !!companyId }
   );
 
+  // Buscar avisos prévios em andamento para identificar quem está em aviso prévio
+  const { data: avisosAtivos = [] } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+
+  // IDs de funcionários com aviso prévio em andamento
+  const avisoPrevioEmployeeIds = useMemo(() => {
+    const ids = new Set<number>();
+    (avisosAtivos as any[]).forEach((a: any) => {
+      if (a.status === "em_andamento") {
+        ids.add(a.employeeId);
+      }
+    });
+    return ids;
+  }, [avisosAtivos]);
+
   // Contadores por status
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { Todos: 0 };
+    const counts: Record<string, number> = { Todos: 0, AvisoPrevio: 0 };
     (allEmployees as any[]).forEach((e: any) => {
       counts.Todos = (counts.Todos || 0) + 1;
       const st = e.status || "Ativo";
       counts[st] = (counts[st] || 0) + 1;
     });
+    counts.AvisoPrevio = avisoPrevioEmployeeIds.size;
     return counts;
-  }, [allEmployees]);
+  }, [allEmployees, avisoPrevioEmployeeIds]);
 
   // Filtrar por status
   const statusFiltered = useMemo(() => {
     if (statusFilter === "Todos") return allEmployees as any[];
+    if (statusFilter === "AvisoPrevio") {
+      return (allEmployees as any[]).filter((e: any) => avisoPrevioEmployeeIds.has(e.id));
+    }
     return (allEmployees as any[]).filter((e: any) => e.status === statusFilter);
-  }, [allEmployees, statusFilter]);
+  }, [allEmployees, statusFilter, avisoPrevioEmployeeIds]);
 
   // Filtrar por busca
   const filtered = useMemo(() => {
@@ -148,7 +170,10 @@ export default function RaioXPage() {
             </div>
           ) : (
             filtered.map((emp: any) => {
-              const avatarColor = STATUS_AVATAR_COLORS[emp.status] || "bg-blue-100 text-blue-700";
+              const isEmAvisoPrevio = avisoPrevioEmployeeIds.has(emp.id);
+              const avatarColor = isEmAvisoPrevio 
+                ? "bg-orange-100 text-orange-700 ring-2 ring-orange-400" 
+                : (STATUS_AVATAR_COLORS[emp.status] || "bg-blue-100 text-blue-700");
               const badgeColor = STATUS_BADGE_COLORS[emp.status] || "bg-gray-100 text-gray-700";
               const statusLabel = emp.status === "Ferias" ? "Férias" 
                 : emp.status === "Licenca" ? "Licença"
@@ -158,7 +183,9 @@ export default function RaioXPage() {
                 <button
                   key={emp.id}
                   onClick={() => setSelectedEmployeeId(emp.id)}
-                  className="text-left p-4 rounded-lg border hover:border-blue-400 hover:bg-blue-50/50 transition-all group"
+                  className={`text-left p-4 rounded-lg border hover:border-blue-400 hover:bg-blue-50/50 transition-all group ${
+                    isEmAvisoPrevio ? "border-orange-300 bg-orange-50/30" : ""
+                  }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`h-10 w-10 rounded-full ${avatarColor} flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden`}>
@@ -174,10 +201,16 @@ export default function RaioXPage() {
                       </p>
                       <p className="text-xs text-muted-foreground">{formatCPF(emp.cpf)}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{emp.funcao || "Sem função"}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${badgeColor}`}>
                           {statusLabel}
                         </span>
+                        {isEmAvisoPrevio && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700">
+                            <FileWarning className="h-2.5 w-2.5" />
+                            Aviso Prévio
+                          </span>
+                        )}
                         {emp.codigoInterno ? (
                           <span className="text-[10px] text-muted-foreground font-mono">
                             {emp.codigoInterno}

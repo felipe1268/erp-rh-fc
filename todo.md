@@ -3538,3 +3538,12 @@
 ### Correções de Dados
 - [x] Férias de desligados já estavam zeradas (nenhum desligado tinha férias pendentes/vencidas)
 - [x] Benefícios de desligados agora são filtrados nas queries
+
+## Rev. 118 - Filtro Aviso Prévio no Raio-X do Funcionário
+- [ ] Adicionar filtro "Aviso Prévio" na barra de filtros do Raio-X do Funcionário
+- [ ] Filtrar colaboradores que estão em aviso prévio ativo
+
+## Rev. 118 - Badge Crítico Clicável + Filtro Aviso Prévio
+- [x] Adicionar filtro "Aviso Prévio" na barra de filtros do Raio-X do Funcionário
+- [x] Tornar badge "Crítico 35/100" clicável na Visão Panorâmica
+- [x] Abrir dialog com detalhamento da pontuação ao clicar (quais indicadores contribuem)
