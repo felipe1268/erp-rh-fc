@@ -38,8 +38,8 @@ export default function DashFerias() {
   const [ganttEmployeeId, setGanttEmployeeId] = useState<number | null>(null);
 
   const feriasDoFunc = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
-    { employeeId: ganttEmployeeId! },
-    { enabled: !!ganttEmployeeId }
+    { companyId, employeeId: ganttEmployeeId! },
+    { enabled: !!ganttEmployeeId && !!companyId }
   );
 
   const { data, isLoading } = trpc.dashboards.ferias.useQuery(
@@ -618,7 +618,13 @@ export default function DashFerias() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : feriasDoFunc.data ? (
+          ) : feriasDoFunc.data ? (() => {
+            const allPeriodos = [
+              ...feriasDoFunc.data.periodosRegistrados.map((p: any) => ({ ...p, source: 'db' })),
+              ...feriasDoFunc.data.periodosNaoRegistrados.map((p: any) => ({ ...p, source: 'calc' })),
+            ];
+            const { resumo } = feriasDoFunc.data;
+            return (
             <div className="space-y-4">
               {/* Info do Funcionário */}
               <div className="bg-muted/30 rounded-lg p-4">
@@ -635,16 +641,16 @@ export default function DashFerias() {
               {/* Resumo */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-blue-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-blue-700">{feriasDoFunc.data.periodos.length}</p>
+                  <p className="text-2xl font-bold text-blue-700">{resumo.totalPeriodos}</p>
                   <p className="text-xs text-blue-600">Total Períodos</p>
                 </div>
                 <div className="bg-red-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-red-700">{feriasDoFunc.data.periodos.filter((p: any) => p.vencida).length}</p>
+                  <p className="text-2xl font-bold text-red-700">{resumo.totalVencidas}</p>
                   <p className="text-xs text-red-600">Vencidas</p>
                 </div>
                 <div className="bg-green-50 rounded-lg p-3 text-center">
                   <p className="text-2xl font-bold text-green-700">
-                    {fmtBRL(feriasDoFunc.data.periodos.reduce((s: number, p: any) => s + parseFloat(p.valorEstimado || '0'), 0))}
+                    {fmtBRL(typeof resumo.valorTotalEstimado === 'number' ? resumo.valorTotalEstimado : parseFloat(String(resumo.valorTotalEstimado || '0')))}
                   </p>
                   <p className="text-xs text-green-600">Valor Total</p>
                 </div>
@@ -663,7 +669,7 @@ export default function DashFerias() {
                     </tr>
                   </thead>
                   <tbody>
-                    {feriasDoFunc.data.periodos.map((p: any, i: number) => {
+                    {allPeriodos.map((p: any, i: number) => {
                       const statusColors: Record<string, string> = {
                         prevista: 'bg-blue-100 text-blue-700',
                         vencida: 'bg-red-100 text-red-700',
@@ -703,7 +709,8 @@ export default function DashFerias() {
                 </Link>
               </div>
             </div>
-          ) : (
+            );
+          })() : (
             <p className="text-center text-muted-foreground py-8">Nenhum dado encontrado.</p>
           )}
         </DialogContent>
