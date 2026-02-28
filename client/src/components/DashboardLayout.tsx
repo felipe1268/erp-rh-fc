@@ -28,7 +28,7 @@ import {
   ChevronDown, ChevronRight,
   BarChart3, Settings, Grid2X2,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
-  ClipboardList, UserSearch, Gavel, Wifi, HardHat, Trash2,
+  ClipboardList, ClipboardCheck, UserSearch, UserCheck, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen,
 } from "lucide-react";
@@ -200,8 +200,17 @@ const menuSectionsAvaliacao: MenuSection[] = [
   {
     title: "Avaliação",
     items: [
-      { icon: LayoutDashboard, label: "Painel de Avaliação", path: "/avaliacao-desempenho" },
-      { icon: ClipboardList, label: "Minhas Avaliações", path: "/avaliacao-desempenho?tab=avaliacoes" },
+      { icon: LayoutDashboard, label: "Dashboard", path: "/avaliacao-desempenho" },
+      { icon: ClipboardCheck, label: "Avaliar Funcionário", path: "/avaliacao-desempenho?tab=avaliar" },
+      { icon: ClipboardList, label: "Avaliações Realizadas", path: "/avaliacao-desempenho?tab=avaliacoes" },
+      { icon: UserCheck, label: "Raio-X do Funcionário", path: "/avaliacao-desempenho?tab=raio-x" },
+    ],
+  },
+  {
+    title: "Gestão",
+    items: [
+      { icon: Users, label: "Avaliadores", path: "/avaliacao-desempenho?tab=avaliadores" },
+      { icon: Layers, label: "Critérios", path: "/avaliacao-desempenho?tab=criterios" },
     ],
   },
   {
@@ -212,8 +221,9 @@ const menuSectionsAvaliacao: MenuSection[] = [
     ],
   },
   {
-    title: "Ajuda",
+    title: "Administração",
     items: [
+      { icon: Shield, label: "Auditoria", path: "/avaliacao-desempenho?tab=auditoria" },
       { icon: BookOpen, label: "Biblioteca de Conhecimento", path: "/ajuda" },
     ],
   },

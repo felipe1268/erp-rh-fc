@@ -3120,3 +3120,27 @@
 - [x] Adicionar drill-down ao clicar no gráfico (mostrar funcionários da função)
 - [x] Adicionar drill-down ao clicar no gráfico "Avisos por Setor" (mostrar funcionários do setor)
 - [x] Registrar revisão 112 no sistema
+## REWRITE: Módulo Avaliação de Desempenho - Replicar sistema original completo - 2026-02-28
+- [x] Backend: Login unificado ERP (removido JWT separado)
+- [x] Backend: Trava de frequência (não repetir avaliação no período)
+- [x] Backend: Filtro apenas funcionários ATIVOS para avaliação
+- [x] Backend: Endpoint Raio-X do funcionário com evolução mensal por critério
+- [x] Backend: Sigilo - avaliador NÃO vê nota final/recomendação
+- [x] Backend: listPendingForEvaluator, checkMonthlyLock, listEmployeesForEvaluator
+- [x] Backend: adminUpdate, adminDelete, adminBulkDelete, listAll
+- [x] Frontend: Tela de login do avaliador (removida - login unificado ERP)
+- [x] Frontend: Stepper de avaliação por pilar (3 pilares, 12 critérios)
+- [x] Frontend: Painel do avaliador (funcionários pendentes, histórico)
+- [x] Frontend: Admin Dashboard com gráficos
+- [x] Frontend: Lista de avaliações admin com filtros
+- [x] Frontend: Raio-X do funcionário com gráfico evolução mensal por critério
+- [x] Frontend: Gestão de avaliadores (CRUD, vincular usuário ERP)
+- [x] Frontend: Critérios configuráveis (revisões)
+- [x] Frontend: Pesquisas customizadas
+- [x] Frontend: Pesquisa de clima organizacional
+- [ ] Frontend: Participantes externos (pendente)
+- [ ] Frontend: Integrar Raio-X no perfil do funcionário (pendente)
+- [x] Rotas e navegação integradas no sidebar
+- [x] CHANGE: Remover login separado do avaliador - usar login único do ERP
+- [x] CHANGE: Avaliador é um usuário do ERP com role/permissão específica
+- [x] CHANGE: Avaliador só vê painel de avaliação (stepper), admin vê tudo

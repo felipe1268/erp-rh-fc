@@ -27,6 +27,40 @@ import {
 import { eq, and, desc, asc, sql, count, avg, inArray, gte, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
+import bcrypt from "bcryptjs";
+import { SignJWT, jwtVerify } from "jose";
+import { ENV } from "../_core/env";
+import { getSessionCookieOptions } from "../_core/cookies";
+
+// ─── Evaluator JWT helpers ───────────────────────────────────────
+const EVALUATOR_COOKIE = "evaluator_session";
+const JWT_SECRET_KEY = new TextEncoder().encode(ENV.cookieSecret || "fc-engenharia-secret");
+
+async function signEvaluatorToken(evaluatorId: number, email: string, nome: string, obraId: number | null, companyId: number) {
+  return new SignJWT({ evaluatorId, email, nome, obraId, companyId, type: "evaluator" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("30d")
+    .sign(JWT_SECRET_KEY);
+}
+
+async function verifyEvaluatorToken(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET_KEY);
+    if (payload.type !== "evaluator") return null;
+    return payload as { evaluatorId: number; email: string; nome: string; obraId: number | null; companyId: number };
+  } catch {
+    return null;
+  }
+}
+
+function parseCookies(cookieHeader: string): Record<string, string> {
+  return Object.fromEntries(
+    cookieHeader.split("; ").filter(Boolean).map(c => {
+      const [k, ...v] = c.split("=");
+      return [k, v.join("=")];
+    })
+  );
+}
 
 async function getDb() {
   const db = await _getDb();
@@ -68,6 +102,335 @@ function generateToken(): string {
 
 export const avaliacaoRouter = router({
   // ============================================================
+  // EVALUATOR AUTH (login unificado ERP - busca avaliador pelo userId)
+  // ============================================================
+  evaluatorAuth: router({
+    // Buscar avaliador vinculado ao usuário logado no ERP
+    getMyEvaluator: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const db = await getDb();
+        const userId = ctx.user?.id;
+        if (!userId) return null;
+        const [evaluator] = await db.select().from(evalAvaliadores)
+          .where(and(eq(evalAvaliadores.userId, userId), eq(evalAvaliadores.companyId, input.companyId), eq(evalAvaliadores.status, "ativo")));
+        if (!evaluator) return null;
+        return { id: evaluator.id, nome: evaluator.nome, email: evaluator.email, obraId: evaluator.obraId, companyId: evaluator.companyId, evaluationFrequency: evaluator.evaluationFrequency };
+      }),
+  }),
+
+  // ============================================================
+  // EVALUATOR PANEL (endpoints para o painel do avaliador logado)
+  // ============================================================
+  evaluatorPanel: router({
+    // Listar funcionários que o avaliador pode avaliar (APENAS ATIVOS)
+    listEmployees: publicProcedure
+      .input(z.object({ evaluatorId: z.number(), companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+        if (!evaluator) return [];
+        const conditions: any[] = [eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")];
+        if (evaluator.obraId) conditions.push(eq(employees.obraAtualId, evaluator.obraId));
+        return db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, obraId: employees.obraAtualId, fotoUrl: employees.fotoUrl })
+          .from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
+      }),
+
+    // Listar funcionários pendentes de avaliação (exclui já avaliados no período)
+    listPending: publicProcedure
+      .input(z.object({ evaluatorId: z.number(), companyId: z.number(), mesReferencia: z.string().optional() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const now = new Date();
+        const mesRef = input.mesReferencia || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+        if (!evaluator) return [];
+        // Buscar IDs dos funcionários já avaliados neste mês por este avaliador
+        const alreadyEvaluated = await db.select({ employeeId: evalAvaliacoes.employeeId })
+          .from(evalAvaliacoes)
+          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.mesReferencia, mesRef)));
+        const evaluatedIds = new Set(alreadyEvaluated.map(e => e.employeeId));
+        // Buscar todos os funcionários ATIVOS da empresa (e obra se aplicável)
+        const conditions: any[] = [eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")];
+        if (evaluator.obraId) conditions.push(eq(employees.obraAtualId, evaluator.obraId));
+        const allEmployees = await db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, obraId: employees.obraAtualId, fotoUrl: employees.fotoUrl })
+          .from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
+        return allEmployees.map(emp => ({ ...emp, jaAvaliado: evaluatedIds.has(emp.id) }));
+      }),
+
+    // Verificar trava de frequência
+    checkFrequencyLock: publicProcedure
+      .input(z.object({ evaluatorId: z.number(), employeeId: z.number(), mesReferencia: z.string().optional() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const now = new Date();
+        const mesRef = input.mesReferencia || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+        const freq = evaluator?.evaluationFrequency || "monthly";
+        // Verificar se já avaliou no mês de referência
+        const existing = await db.select({ id: evalAvaliacoes.id }).from(evalAvaliacoes)
+          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.employeeId, input.employeeId), eq(evalAvaliacoes.mesReferencia, mesRef)));
+        const freqLabels: Record<string, string> = { daily: "dia", weekly: "semana", monthly: "mês", quarterly: "trimestre", annual: "ano" };
+        return { locked: existing.length > 0, mesReferencia: mesRef, frequency: freq, frequencyLabel: freqLabels[freq] || freq };
+      }),
+
+    // Criar avaliação (pelo avaliador logado) - COM TRAVA DE FREQUÊNCIA e APENAS ATIVOS
+    createEvaluation: publicProcedure
+      .input(z.object({
+        evaluatorId: z.number(),
+        companyId: z.number(),
+        employeeId: z.number(),
+        obraId: z.number().optional(),
+        comportamento: z.number().min(1).max(5),
+        pontualidade: z.number().min(1).max(5),
+        assiduidade: z.number().min(1).max(5),
+        segurancaEpis: z.number().min(1).max(5),
+        qualidadeAcabamento: z.number().min(1).max(5),
+        produtividadeRitmo: z.number().min(1).max(5),
+        cuidadoFerramentas: z.number().min(1).max(5),
+        economiaMateriais: z.number().min(1).max(5),
+        trabalhoEquipe: z.number().min(1).max(5),
+        iniciativaProatividade: z.number().min(1).max(5),
+        disponibilidadeFlexibilidade: z.number().min(1).max(5),
+        organizacaoLimpeza: z.number().min(1).max(5),
+        observacoes: z.string().optional(),
+        mesReferencia: z.string().optional(),
+        startedAt: z.string().optional(),
+        durationSeconds: z.number().optional(),
+        deviceType: z.string().optional(),
+        revisionId: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        const now = new Date();
+        const mesRef = input.mesReferencia || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        // Verificar se avaliador existe e está ativo
+        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+        if (!evaluator || evaluator.status !== "ativo") throw new TRPCError({ code: "FORBIDDEN", message: "Avaliador não encontrado ou inativo." });
+
+        // Verificar se funcionário existe e está ATIVO
+        const [employee] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
+        if (!employee) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado." });
+        if (employee.status !== "Ativo") throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas funcionários com status ATIVO podem ser avaliados." });
+
+        // TRAVA DE FREQUÊNCIA - verificar se já avaliou neste período
+        const freq = evaluator.evaluationFrequency || "monthly";
+        const freqLabels: Record<string, string> = { daily: "dia", weekly: "semana", monthly: "mês", quarterly: "trimestre", annual: "ano" };
+        const cutoffDate = new Date(now);
+        if (freq === "daily") cutoffDate.setDate(cutoffDate.getDate() - 1);
+        else if (freq === "weekly") cutoffDate.setDate(cutoffDate.getDate() - 7);
+        else if (freq === "monthly") cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+        else if (freq === "quarterly") cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+        else if (freq === "annual") cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+        const existingEval = await db.select({ id: evalAvaliacoes.id }).from(evalAvaliacoes)
+          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.employeeId, input.employeeId), sql`${evalAvaliacoes.createdAt} >= ${cutoffDate}`));
+        if (existingEval.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Você já avaliou este funcionário neste período. Sua frequência de avaliação é ${freqLabels[freq] || freq}. Aguarde o próximo período.` });
+
+        // Verificar se avaliador pode avaliar este funcionário (mesma obra)
+        if (evaluator.obraId && employee.obraAtualId && evaluator.obraId !== employee.obraAtualId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode avaliar funcionários da obra que você gerencia." });
+        }
+
+        // Calcular médias
+        const mediaPilar1 = (input.comportamento + input.pontualidade + input.assiduidade + input.segurancaEpis) / 4;
+        const mediaPilar2 = (input.qualidadeAcabamento + input.produtividadeRitmo + input.cuidadoFerramentas + input.economiaMateriais) / 4;
+        const mediaPilar3 = (input.trabalhoEquipe + input.iniciativaProatividade + input.disponibilidadeFlexibilidade + input.organizacaoLimpeza) / 4;
+        const mediaGeral = (mediaPilar1 + mediaPilar2 + mediaPilar3) / 3;
+        const recomendacao = getRecomendacao(mediaGeral);
+
+        const [result] = await db.insert(evalAvaliacoes).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          evaluatorId: input.evaluatorId,
+          obraId: input.obraId || null,
+          evaluatorName: evaluator.nome,
+          comportamento: input.comportamento,
+          pontualidade: input.pontualidade,
+          assiduidade: input.assiduidade,
+          segurancaEpis: input.segurancaEpis,
+          qualidadeAcabamento: input.qualidadeAcabamento,
+          produtividadeRitmo: input.produtividadeRitmo,
+          cuidadoFerramentas: input.cuidadoFerramentas,
+          economiaMateriais: input.economiaMateriais,
+          trabalhoEquipe: input.trabalhoEquipe,
+          iniciativaProatividade: input.iniciativaProatividade,
+          disponibilidadeFlexibilidade: input.disponibilidadeFlexibilidade,
+          organizacaoLimpeza: input.organizacaoLimpeza,
+          mediaPilar1: String(mediaPilar1.toFixed(1)),
+          mediaPilar2: String(mediaPilar2.toFixed(1)),
+          mediaPilar3: String(mediaPilar3.toFixed(1)),
+          mediaGeral: String(mediaGeral.toFixed(1)),
+          recomendacao,
+          observacoes: input.observacoes || null,
+          mesReferencia: mesRef,
+          locked: 1,
+          startedAt: input.startedAt || null,
+          durationSeconds: input.durationSeconds || null,
+          deviceType: input.deviceType || null,
+          revisionId: input.revisionId || null,
+        });
+
+        await db.insert(evalAuditLog).values({
+          companyId: input.companyId,
+          action: "AVALIACAO_CRIADA_AVALIADOR",
+          actorType: "evaluator",
+          actorId: input.evaluatorId,
+          actorName: evaluator.nome,
+          targetType: "avaliacao",
+          targetId: result.insertId,
+          details: JSON.stringify({ employeeId: input.employeeId, employeeName: employee.nomeCompleto, mesReferencia: mesRef }),
+        });
+
+        // Retorno SIGILOSO: avaliador NÃO vê nota final nem recomendação
+        return { success: true, evaluationId: result.insertId };
+      }),
+
+    // Listar avaliações do avaliador (SEM mediaGeral, SEM recomendação - SIGILOSO)
+    listMyEvaluations: publicProcedure
+      .input(z.object({ evaluatorId: z.number(), companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const evals = await db.select({
+          id: evalAvaliacoes.id,
+          employeeId: evalAvaliacoes.employeeId,
+          obraId: evalAvaliacoes.obraId,
+          mesReferencia: evalAvaliacoes.mesReferencia,
+          locked: evalAvaliacoes.locked,
+          createdAt: evalAvaliacoes.createdAt,
+          // NÃO retorna mediaGeral, recomendação - SIGILOSO
+        }).from(evalAvaliacoes)
+          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.companyId, input.companyId)))
+          .orderBy(desc(evalAvaliacoes.createdAt));
+        const enriched = [];
+        for (const ev of evals) {
+          const [emp] = await db.select({ nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao })
+            .from(employees).where(eq(employees.id, ev.employeeId));
+          let obraNome = "";
+          if (ev.obraId) {
+            const [obra] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, ev.obraId));
+            obraNome = obra?.nome || "";
+          }
+          enriched.push({ ...ev, employeeName: emp?.nome || "N/A", employeeCpf: emp?.cpf || "", employeeFuncao: emp?.funcao || "", obraNome });
+        }
+        return enriched;
+      }),
+  }),
+
+  // ============================================================
+  // RAIO-X DO FUNCIONÁRIO (evolução mensal por critério)
+  // ============================================================
+  raioX: router({
+    getByEmployee: protectedProcedure
+      .input(z.object({ employeeId: z.number(), companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
+        if (!emp) return null;
+
+        // Buscar todas as avaliações do funcionário ordenadas por mês
+        const avaliacoes = await db.select().from(evalAvaliacoes)
+          .where(and(eq(evalAvaliacoes.employeeId, input.employeeId), eq(evalAvaliacoes.companyId, input.companyId)))
+          .orderBy(asc(evalAvaliacoes.mesReferencia));
+
+        if (avaliacoes.length === 0) return { employee: emp, avaliacoes: [], evolucaoMensal: [], mediasGerais: null, totalAvaliacoes: 0 };
+
+        // Agrupar por mês e calcular médias mensais de cada critério
+        const byMonth: Record<string, { criterios: Record<string, number[]>; count: number }> = {};
+        for (const av of avaliacoes) {
+          const mes = av.mesReferencia || "sem-data";
+          if (!byMonth[mes]) byMonth[mes] = { criterios: {}, count: 0 };
+          byMonth[mes].count++;
+          const criterios: Record<string, number | null> = {
+            comportamento: av.comportamento,
+            pontualidade: av.pontualidade,
+            assiduidade: av.assiduidade,
+            segurancaEpis: av.segurancaEpis,
+            qualidadeAcabamento: av.qualidadeAcabamento,
+            produtividadeRitmo: av.produtividadeRitmo,
+            cuidadoFerramentas: av.cuidadoFerramentas,
+            economiaMateriais: av.economiaMateriais,
+            trabalhoEquipe: av.trabalhoEquipe,
+            iniciativaProatividade: av.iniciativaProatividade,
+            disponibilidadeFlexibilidade: av.disponibilidadeFlexibilidade,
+            organizacaoLimpeza: av.organizacaoLimpeza,
+          };
+          for (const [key, val] of Object.entries(criterios)) {
+            if (val !== null && val !== undefined) {
+              if (!byMonth[mes].criterios[key]) byMonth[mes].criterios[key] = [];
+              byMonth[mes].criterios[key].push(val);
+            }
+          }
+        }
+
+        // Construir evolução mensal
+        const meses = Object.keys(byMonth).sort();
+        const criterioLabels: Record<string, string> = {
+          comportamento: "Comportamento",
+          pontualidade: "Pontualidade",
+          assiduidade: "Assiduidade",
+          segurancaEpis: "Segurança/EPIs",
+          qualidadeAcabamento: "Qualidade/Acabamento",
+          produtividadeRitmo: "Produtividade/Ritmo",
+          cuidadoFerramentas: "Cuidado Ferramentas",
+          economiaMateriais: "Economia Materiais",
+          trabalhoEquipe: "Trabalho em Equipe",
+          iniciativaProatividade: "Iniciativa/Proatividade",
+          disponibilidadeFlexibilidade: "Disponibilidade/Flexibilidade",
+          organizacaoLimpeza: "Organização/Limpeza",
+        };
+
+        const evolucaoMensal = meses.map(mes => {
+          const data = byMonth[mes];
+          const mediaCriterios: Record<string, number> = {};
+          for (const [key, vals] of Object.entries(data.criterios)) {
+            mediaCriterios[key] = vals.reduce((a, b) => a + b, 0) / vals.length;
+          }
+          const p1 = ((mediaCriterios.comportamento || 0) + (mediaCriterios.pontualidade || 0) + (mediaCriterios.assiduidade || 0) + (mediaCriterios.segurancaEpis || 0)) / 4;
+          const p2 = ((mediaCriterios.qualidadeAcabamento || 0) + (mediaCriterios.produtividadeRitmo || 0) + (mediaCriterios.cuidadoFerramentas || 0) + (mediaCriterios.economiaMateriais || 0)) / 4;
+          const p3 = ((mediaCriterios.trabalhoEquipe || 0) + (mediaCriterios.iniciativaProatividade || 0) + (mediaCriterios.disponibilidadeFlexibilidade || 0) + (mediaCriterios.organizacaoLimpeza || 0)) / 4;
+          const geral = (p1 + p2 + p3) / 3;
+          return { mes, criterios: mediaCriterios, mediaPilar1: p1, mediaPilar2: p2, mediaPilar3: p3, mediaGeral: geral, totalAvaliacoes: data.count };
+        });
+
+        // Médias gerais (todas as avaliações)
+        const allCriterios: Record<string, number[]> = {};
+        for (const av of avaliacoes) {
+          const criterios: Record<string, number | null> = {
+            comportamento: av.comportamento, pontualidade: av.pontualidade, assiduidade: av.assiduidade, segurancaEpis: av.segurancaEpis,
+            qualidadeAcabamento: av.qualidadeAcabamento, produtividadeRitmo: av.produtividadeRitmo, cuidadoFerramentas: av.cuidadoFerramentas, economiaMateriais: av.economiaMateriais,
+            trabalhoEquipe: av.trabalhoEquipe, iniciativaProatividade: av.iniciativaProatividade, disponibilidadeFlexibilidade: av.disponibilidadeFlexibilidade, organizacaoLimpeza: av.organizacaoLimpeza,
+          };
+          for (const [key, val] of Object.entries(criterios)) {
+            if (val !== null && val !== undefined) {
+              if (!allCriterios[key]) allCriterios[key] = [];
+              allCriterios[key].push(val);
+            }
+          }
+        }
+        const mediasGerais: Record<string, number> = {};
+        for (const [key, vals] of Object.entries(allCriterios)) {
+          mediasGerais[key] = vals.reduce((a, b) => a + b, 0) / vals.length;
+        }
+        const p1g = ((mediasGerais.comportamento || 0) + (mediasGerais.pontualidade || 0) + (mediasGerais.assiduidade || 0) + (mediasGerais.segurancaEpis || 0)) / 4;
+        const p2g = ((mediasGerais.qualidadeAcabamento || 0) + (mediasGerais.produtividadeRitmo || 0) + (mediasGerais.cuidadoFerramentas || 0) + (mediasGerais.economiaMateriais || 0)) / 4;
+        const p3g = ((mediasGerais.trabalhoEquipe || 0) + (mediasGerais.iniciativaProatividade || 0) + (mediasGerais.disponibilidadeFlexibilidade || 0) + (mediasGerais.organizacaoLimpeza || 0)) / 4;
+        const mediaGeralTotal = (p1g + p2g + p3g) / 3;
+
+        return {
+          employee: emp,
+          avaliacoes: avaliacoes.map(av => {
+            let evaluatorName = av.evaluatorName || "N/A";
+            return { ...av, evaluatorName };
+          }),
+          evolucaoMensal,
+          mediasGerais: { criterios: mediasGerais, criterioLabels, mediaPilar1: p1g, mediaPilar2: p2g, mediaPilar3: p3g, mediaGeral: mediaGeralTotal, recomendacao: getRecomendacao(mediaGeralTotal), corRecomendacao: getCorRecomendacao(getRecomendacao(mediaGeralTotal)) },
+          totalAvaliacoes: avaliacoes.length,
+        };
+      }),
+  }),
+
+  // ============================================================
   // AVALIADORES (gestão de avaliadores com login próprio)
   // ============================================================
   avaliadores: router({
@@ -92,22 +455,33 @@ export const avaliacaoRouter = router({
         companyId: z.number(),
         nome: z.string().min(1),
         email: z.string().email(),
+        userId: z.number().optional(), // vínculo com usuário do ERP
         obraId: z.number().optional(),
         evaluationFrequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annual"]).default("monthly"),
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
-        const tempPassword = Math.random().toString(36).slice(-8);
+        // Verificar se e-mail já existe
+        const [existing] = await db.select().from(evalAvaliadores)
+          .where(and(eq(evalAvaliadores.email, input.email.toLowerCase()), eq(evalAvaliadores.companyId, input.companyId)));
+        if (existing) throw new TRPCError({ code: "BAD_REQUEST", message: "E-mail já cadastrado nesta empresa." });
+        // Se userId fornecido, verificar se já não está vinculado
+        if (input.userId) {
+          const [existingUser] = await db.select().from(evalAvaliadores)
+            .where(and(eq(evalAvaliadores.userId, input.userId), eq(evalAvaliadores.companyId, input.companyId)));
+          if (existingUser) throw new TRPCError({ code: "BAD_REQUEST", message: "Este usuário já está vinculado como avaliador nesta empresa." });
+        }
         const [result] = await db.insert(evalAvaliadores).values({
           companyId: input.companyId,
+          userId: input.userId || null,
           nome: input.nome,
-          email: input.email,
-          passwordHash: tempPassword,
+          email: input.email.toLowerCase(),
+          passwordHash: '',
           obraId: input.obraId || null,
           evaluationFrequency: input.evaluationFrequency,
-          mustChangePassword: 1,
+          mustChangePassword: 0,
         });
-        return { id: result.insertId, tempPassword };
+        return { id: result.insertId };
       }),
 
     update: protectedProcedure
@@ -115,6 +489,7 @@ export const avaliacaoRouter = router({
         id: z.number(),
         nome: z.string().optional(),
         email: z.string().email().optional(),
+        userId: z.number().nullable().optional(),
         obraId: z.number().nullable().optional(),
         evaluationFrequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annual"]).optional(),
       }))
@@ -124,6 +499,7 @@ export const avaliacaoRouter = router({
         const updateData: any = {};
         if (data.nome !== undefined) updateData.nome = data.nome;
         if (data.email !== undefined) updateData.email = data.email;
+        if (data.userId !== undefined) updateData.userId = data.userId;
         if (data.obraId !== undefined) updateData.obraId = data.obraId;
         if (data.evaluationFrequency !== undefined) updateData.evaluationFrequency = data.evaluationFrequency;
         await db.update(evalAvaliadores).set(updateData).where(eq(evalAvaliadores.id, id));
@@ -131,12 +507,14 @@ export const avaliacaoRouter = router({
       }),
 
     resetPassword: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number(), novaSenha: z.string().min(4) }))
       .mutation(async ({ input }) => {
         const db = await getDb();
-        const tempPassword = Math.random().toString(36).slice(-8);
-        await db.update(evalAvaliadores).set({ passwordHash: tempPassword, mustChangePassword: 1 }).where(eq(evalAvaliadores.id, input.id));
-        return { tempPassword };
+        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.id));
+        if (!evaluator) throw new TRPCError({ code: "NOT_FOUND", message: "Avaliador não encontrado." });
+        const hash = await bcrypt.hash(input.novaSenha, 10);
+        await db.update(evalAvaliadores).set({ passwordHash: hash, mustChangePassword: 1 }).where(eq(evalAvaliadores.id, input.id));
+        return { success: true };
       }),
 
     toggleStatus: protectedProcedure

@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "4c032b69-8145-43d1-b262-48704bc17313",
-  "prevId": "0b2bb1f6-1305-45a5-9e6d-66c5fba50c3d",
+  "id": "0c4e7c1d-e21f-4036-80da-d05f4f3c69ec",
+  "prevId": "4c032b69-8145-43d1-b262-48704bc17313",
   "tables": {
     "accidents": {
       "name": "accidents",
@@ -5485,6 +5485,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "nome": {
           "name": "nome",
           "type": "varchar(255)",
@@ -5504,7 +5511,8 @@
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "''"
         },
         "emailVerified": {
           "name": "emailVerified",
@@ -5520,7 +5528,7 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false,
-          "default": 1
+          "default": 0
         },
         "obraId": {
           "name": "obraId",

@@ -2234,15 +2234,16 @@ jantaDia: varchar({ length: 20 }).default('0'), // valor diário jantar (se nece
 // MÓDULO AVALIAÇÃO DE DESEMPENHO (Fusão fc-engenharia-avaliacao)
 // ============================================================
 
-// Avaliadores com login próprio (email + senha)
+// Avaliadores vinculados a usuários do ERP (login único)
 export const evalAvaliadores = mysqlTable("eval_avaliadores", {
 	id: int().autoincrement().notNull(),
 	companyId: int().notNull(),
+	userId: int('user_id'), // vínculo com usuário do ERP (login único)
 	nome: varchar({ length: 255 }).notNull(),
 	email: varchar({ length: 320 }).notNull(),
-	passwordHash: varchar({ length: 255 }).notNull(),
+	passwordHash: varchar({ length: 255 }).default('').notNull(),
 	emailVerified: tinyint().default(0),
-	mustChangePassword: tinyint().default(1),
+	mustChangePassword: tinyint().default(0),
 	obraId: int(), // obra vinculada
 	evaluationFrequency: mysqlEnum(['daily','weekly','monthly','quarterly','annual']).default('monthly').notNull(),
 	status: mysqlEnum(['ativo','inativo']).default('ativo').notNull(),

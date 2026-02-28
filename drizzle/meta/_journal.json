@@ -8,6 +8,13 @@
       "when": 1772203679551,
       "tag": "0000_last_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1772241342713,
+      "tag": "0001_flowery_fat_cobra",
+      "breakpoints": true
     }
   ]
 }
