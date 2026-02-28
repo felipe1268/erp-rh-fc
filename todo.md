@@ -3460,3 +3460,6 @@
 - [x] Permitir que o usuário corrija cliques errados no botão de pagamento
 - [x] Botão individual (RefreshCw) em cada linha com status "Pago"
 - [x] Botão em lote "Reverter Pagos" na barra de ações superior
+
+## Layout Totalizador Vale Alimentação
+- [x] Mover totalizador para o topo da tabela (não repetir por página)

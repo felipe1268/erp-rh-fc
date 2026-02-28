@@ -402,6 +402,26 @@ export default function ValeAlimentacao() {
                         </tr>
                       </thead>
                       <tbody>
+                        {/* Totalizador no topo */}
+                        <tr className="bg-muted/50 font-bold border-b-2 sticky top-0">
+                          <td className="px-4 py-3" colSpan={2}>Total ({filteredLancamentos.filter((l: any) => l.status !== "cancelado").length} beneficiários)</td>
+                          <td className="px-3 py-3 text-right text-xs">
+                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorCafe), 0))}
+                          </td>
+                          <td className="px-3 py-3 text-right text-xs">
+                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorLanche), 0))}
+                          </td>
+                          <td className="px-3 py-3 text-right text-xs">
+                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorJanta), 0))}
+                          </td>
+                          <td className="px-3 py-3 text-right text-xs">
+                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorVA), 0))}
+                          </td>
+                          <td className="px-3 py-3 text-right text-base">
+                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorTotal), 0))}
+                          </td>
+                          <td colSpan={3}></td>
+                        </tr>
                         {filteredLancamentos.map((l: any) => (
                           <tr key={l.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                             <td className="px-4 py-2.5">
@@ -470,28 +490,7 @@ export default function ValeAlimentacao() {
                           </tr>
                         ))}
                       </tbody>
-                      {/* Totalizador */}
-                      <tfoot>
-                        <tr className="bg-muted/50 font-bold border-t-2">
-                          <td className="px-4 py-3" colSpan={2}>Total ({filteredLancamentos.filter((l: any) => l.status !== "cancelado").length} beneficiários)</td>
-                          <td className="px-3 py-3 text-right text-xs">
-                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorCafe), 0))}
-                          </td>
-                          <td className="px-3 py-3 text-right text-xs">
-                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorLanche), 0))}
-                          </td>
-                          <td className="px-3 py-3 text-right text-xs">
-                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorJanta), 0))}
-                          </td>
-                          <td className="px-3 py-3 text-right text-xs">
-                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorVA), 0))}
-                          </td>
-                          <td className="px-3 py-3 text-right text-base">
-                            {fmtBRL(filteredLancamentos.filter((l: any) => l.status !== "cancelado").reduce((s: number, l: any) => s + parseBRL(l.valorTotal), 0))}
-                          </td>
-                          <td colSpan={3}></td>
-                        </tr>
-                      </tfoot>
+
                     </table>
                   </div>
                 </CardContent>
