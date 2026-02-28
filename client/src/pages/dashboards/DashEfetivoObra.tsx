@@ -481,11 +481,10 @@ export default function DashEfetivoObra() {
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium">Obra</th>
                     <th className="text-center p-3 font-medium">Efetivo Atual</th>
-                    <th className="text-center p-2 font-medium text-xs text-green-700">Ativos</th>
-                    <th className="text-center p-2 font-medium text-xs text-red-700">Aviso</th>
-                    <th className="text-center p-2 font-medium text-xs text-blue-700">Férias</th>
-                    <th className="text-center p-2 font-medium text-xs text-amber-700">Afast.</th>
-                    <th className="text-center p-3 font-medium">% do Total</th>
+                    <th className="p-2 text-center text-xs font-semibold text-blue-700">Ativos</th>
+                    <th className="p-2 text-center text-xs font-semibold text-red-400">Aviso</th>
+                    <th className="p-2 text-center text-xs font-semibold text-orange-600">Férias</th>
+                    <th className="p-2 text-center text-xs font-semibold text-yellow-600">Afast.</th>             <th className="text-center p-3 font-medium">% do Total</th>
                     <th className="text-right p-3 font-medium">Ações</th>
                   </tr>
                 </thead>
@@ -506,10 +505,10 @@ export default function DashEfetivoObra() {
                           </div>
                         </td>
                         <td className="p-3 text-center font-bold text-lg">{obra.efetivo || 0}</td>
-                        <td className="p-2 text-center text-sm text-green-700 font-medium">{obra.qtdAtivo || 0}</td>
-                        <td className="p-2 text-center text-sm text-red-700 font-medium">{obra.qtdAviso || 0}</td>
-                        <td className="p-2 text-center text-sm text-blue-700 font-medium">{obra.qtdFerias || 0}</td>
-                        <td className="p-2 text-center text-sm text-amber-700 font-medium">{obra.qtdAfastado || 0}</td>
+                        <td className="p-2 text-center text-sm text-blue-700 font-medium">{obra.qtdAtivo || 0}</td>
+                        <td className="p-2 text-center text-sm text-red-400 font-medium">{obra.qtdAviso || 0}</td>
+                        <td className="p-2 text-center text-sm text-orange-600 font-medium">{obra.qtdFerias || 0}</td>
+                        <td className="p-2 text-center text-sm text-yellow-600 font-medium">{obra.qtdAfastado || 0}</td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
@@ -566,10 +565,10 @@ export default function DashEfetivoObra() {
                       <span className="font-bold text-slate-800">TOTAL GERAL</span>
                     </td>
                     <td className="p-3 text-center font-bold text-lg text-slate-800">{totalFuncionariosAlocados + totalSemObra}</td>
-                    <td className="p-2 text-center text-sm font-semibold text-green-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAtivo || 0), 0)}</td>
-                    <td className="p-2 text-center text-sm font-semibold text-red-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAviso || 0), 0)}</td>
-                    <td className="p-2 text-center text-sm font-semibold text-blue-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdFerias || 0), 0)}</td>
-                    <td className="p-2 text-center text-sm font-semibold text-amber-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAfastado || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-blue-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAtivo || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-red-400">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAviso || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-orange-600">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdFerias || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-yellow-600">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAfastado || 0), 0)}</td>
                     <td className="p-3 text-center">
                       <span className="text-xs font-semibold text-slate-600">100%</span>
                     </td>
@@ -642,23 +641,28 @@ export default function DashEfetivoObra() {
 
 /* ─── Componente: FullScreen Equipe da Obra ─── */
 const STATUS_BAR_COLORS: Record<string, string> = {
-  Ativo: '#16a34a',    // verde
-  Ferias: '#2563eb',   // azul
-  Afastado: '#d97706', // amarelo/âmbar
-  Aviso: '#dc2626',    // vermelho
-  Recluso: '#7c3aed',  // roxo
-  Licenca: '#0891b2',  // ciano
+  Ativo: '#2563eb',       // azul
+  Aviso: '#f87171',       // vermelho claro
+  Ferias: '#f97316',      // laranja
+  Afastado: '#eab308',    // amarelo
+  Licenca: '#8b5cf6',     // roxo
+  Recluso: '#6b7280',     // cinza
+  Desligado: '#374151',   // cinza escuro
+  Lista_Negra: '#111827', // preto
 };
 const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  Ativo: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-  Ferias: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-  Afastado: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-  Aviso: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-  Recluso: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-  Licenca: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
+  Ativo: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  Aviso: { bg: 'bg-red-50', text: 'text-red-400', border: 'border-red-200' },
+  Ferias: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+  Afastado: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+  Licenca: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  Recluso: { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' },
+  Desligado: { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' },
+  Lista_Negra: { bg: 'bg-gray-200', text: 'text-gray-900', border: 'border-gray-400' },
 };
 const STATUS_LABELS: Record<string, string> = {
-  Ativo: 'Ativos', Ferias: 'Férias', Afastado: 'Afastados', Aviso: 'Aviso Prévio', Recluso: 'Reclusos', Licenca: 'Licença',
+  Ativo: 'Ativos', Aviso: 'Aviso Prévio', Ferias: 'Férias', Afastado: 'Afastados',
+  Licenca: 'Licença', Recluso: 'Reclusos', Desligado: 'Desligados', Lista_Negra: 'Lista Negra',
 };
 
 function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }: {
@@ -713,16 +717,14 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
       .sort((a, b) => b.total - a.total);
   }, [equipeData]);
 
-  // Todos os status presentes
-  const allStatuses = useMemo(() => {
+  // Todos os status - sempre mostra a legenda completa
+  const ALL_STATUS_ORDER = ['Ativo', 'Aviso', 'Ferias', 'Afastado', 'Licenca', 'Recluso'];
+  const allStatuses = ALL_STATUS_ORDER;
+  // Status presentes nos dados (para o gráfico empilhado)
+  const presentStatuses = useMemo(() => {
     const set = new Set<string>();
     for (const e of equipeData) set.add(e.status || 'Outro');
-    // Ordenar: Ativo primeiro, depois os demais
-    const order = ['Ativo', 'Aviso', 'Ferias', 'Afastado', 'Licenca', 'Recluso'];
-    return Array.from(set).sort((a, b) => {
-      const ia = order.indexOf(a); const ib = order.indexOf(b);
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    });
+    return ALL_STATUS_ORDER.filter(s => set.has(s));
   }, [equipeData]);
 
   // Agrupar por função para tabela
@@ -863,7 +865,7 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
                   <div key={funcao} className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground w-28 sm:w-44 truncate text-right" title={funcao}>{funcao}</span>
                     <div className="flex-1 h-6 bg-muted/30 rounded overflow-hidden flex" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
-                      {allStatuses.map(status => {
+                      {presentStatuses.map(status => {
                         const count = statuses[status] || 0;
                         if (count === 0) return null;
                         const pct = (count / maxBar) * 100;

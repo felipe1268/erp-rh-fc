@@ -207,7 +207,7 @@
   nav,
   .print\\:hidden,
   .print-hidden,
-  button,
+  button:not(.print-keep),
   input[type="file"],
   .toast-container,
   [data-sonner-toaster] {

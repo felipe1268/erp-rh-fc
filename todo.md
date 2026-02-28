@@ -3726,3 +3726,6 @@
 - [x] Legenda Férias (azul) + Afastado (amarelo) no gráfico empilhado da Equipe da Obra
 - [x] Clique na barra do gráfico filtra a tabela de funcionários por função/status
 - [x] Gráfico e tabela responsivos para telas menores
+- [x] Cores do gráfico: Azul=Ativo, Vermelho claro=Aviso Prévio, Laranja=Férias, Amarelo=Afastado, Roxo=Licença, Cinza=Recluso
+- [x] Legenda completa com todos os status prontos
+- [x] Impressão só da tela visível (não imprime tudo, só o que está na viewport)
