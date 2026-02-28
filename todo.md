@@ -3662,3 +3662,8 @@
 - [x] Frontend: Dashboard com gráficos comparativos por faixa de tempo de casa
 - [x] Frontend: Seção de IA com análise de pontos positivos e negativos
 - [x] Adicionar rota e menu para o novo dashboard
+
+## Rev. 128 - Correções Assistente IA
+- [x] Renomear "Assistente FC" para apenas "Assistente"
+- [x] X deve fechar/minimizar o chat completamente para não atrapalhar navegação no celular
+- [x] Ajustar tamanho do chat no mobile para não ultrapassar a tela

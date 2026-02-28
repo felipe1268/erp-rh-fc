@@ -85,7 +85,7 @@ export default function AssistenteIAFloat() {
   // Tamanho do chat
   const chatSize = maximizado
     ? "fixed inset-4 z-[9999]"
-    : "fixed bottom-20 right-4 w-[400px] h-[560px] z-[9999]";
+    : "fixed bottom-20 right-4 w-[min(400px,calc(100vw-2rem))] h-[min(560px,calc(100vh-6rem))] z-[9999]";
 
   return (
     <>
@@ -111,7 +111,7 @@ export default function AssistenteIAFloat() {
                 <Bot className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white">Assistente FC</h3>
+                <h3 className="text-sm font-semibold text-white">Assistente</h3>
                 <p className="text-[10px] text-white/70">IA especialista em RH & DP</p>
               </div>
             </div>
@@ -150,7 +150,7 @@ export default function AssistenteIAFloat() {
                   <Sparkles className="h-8 w-8 text-blue-500" />
                 </div>
                 <h4 className="text-base font-semibold text-foreground mb-1">
-                  Olá! Sou o Assistente FC
+                  Olá! Sou o Assistente
                 </h4>
                 <p className="text-sm text-muted-foreground mb-5 max-w-xs">
                   Posso ajudar com dúvidas sobre o sistema, cálculos trabalhistas, legislação e processos de RH & DP.
@@ -248,7 +248,7 @@ export default function AssistenteIAFloat() {
               </Button>
             </div>
             <p className="text-[10px] text-muted-foreground/50 mt-1.5 text-center">
-              Assistente IA • FC Gestão Integrada • Respostas podem conter imprecisões
+              Assistente IA • Respostas podem conter imprecisões
             </p>
           </div>
         </div>
