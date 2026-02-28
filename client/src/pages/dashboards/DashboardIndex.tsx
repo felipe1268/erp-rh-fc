@@ -3,7 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useEffect, useState } from "react";
 import {
   Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
-  ArrowRight, Eye, Activity, ChevronRight,
+  ArrowRight, Eye, Activity, ChevronRight, Building2,
 } from "lucide-react";
 
 /* ─── Data ─── */
@@ -112,6 +112,18 @@ const dashboards = [
     borderColor: "border-green-200",
     hoverBg: "hover:bg-green-50/80",
     stats: "Planejamento & Custos",
+  },
+  {
+    path: "/dashboards/efetivo-obra",
+    title: "Efetivo por Obra",
+    desc: "Histograma de mão de obra por obra, evolução mensal, inconsistências ponto x alocação e funcionários sem obra.",
+    icon: Building2,
+    color: "#F97316",
+    bgLight: "bg-orange-50",
+    textColor: "text-orange-600",
+    borderColor: "border-orange-200",
+    hoverBg: "hover:bg-orange-50/80",
+    stats: "Alocação & Efetivo",
   },
 ];
 

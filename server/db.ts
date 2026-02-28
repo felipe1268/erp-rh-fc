@@ -9,7 +9,7 @@ import {
   permissions, InsertPermission,
   auditLogs, InsertAuditLog,
   trainingDocuments, payrollUploads, dixiDevices,
-  obras, InsertObra, obraFuncionarios, obraHorasRateio, obraSns,
+  obras, InsertObra, obraFuncionarios, obraHorasRateio, obraSns, employeeSiteHistory, obraPontoInconsistencies,
   sectors, InsertSector, jobFunctions, InsertJobFunction,
   systemRevisions,
   userCompanies,
@@ -1254,30 +1254,77 @@ export async function getObraFuncionarios(obraId: number) {
   return allocs.map(a => ({ ...a, employee: empMap[a.employeeId] || null }));
 }
 
-export async function allocateEmployeeToObra(data: { obraId: number; employeeId: number; companyId: number; funcaoNaObra?: string; dataInicio?: string }) {
+export async function allocateEmployeeToObra(data: { obraId: number; employeeId: number; companyId: number; funcaoNaObra?: string; dataInicio?: string; motivo?: string; registradoPor?: string; registradoPorUserId?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Desativar alocação anterior do funcionário
-  await db.update(obraFuncionarios).set({ isActive: 0 } as any).where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, 1)));
+  const hoje = data.dataInicio || new Date().toISOString().split('T')[0];
+  // Buscar alocação ativa anterior
+  const [alocAnterior] = await db.select().from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, 1)));
+  const obraOrigemId = alocAnterior?.obraId || null;
+  const isTransferencia = !!alocAnterior;
+  // Encerrar alocação anterior
+  if (alocAnterior) {
+    await db.update(obraFuncionarios).set({ isActive: 0, dataFim: hoje } as any).where(eq(obraFuncionarios.id, alocAnterior.id));
+    // Registrar saída no histórico
+    await db.insert(employeeSiteHistory).values({
+      companyId: data.companyId,
+      employeeId: data.employeeId,
+      obraId: alocAnterior.obraId,
+      tipo: 'saida',
+      dataInicio: alocAnterior.dataInicio || hoje,
+      dataFim: hoje,
+      motivoTransferencia: data.motivo || (isTransferencia ? 'Transferência para outra obra' : null),
+      registradoPor: data.registradoPor || null,
+      registradoPorUserId: data.registradoPorUserId || null,
+    } as any);
+  }
   // Criar nova alocação
   const insertData: any = {
     obraId: data.obraId,
     employeeId: data.employeeId,
     companyId: data.companyId,
     funcaoNaObra: data.funcaoNaObra || null,
-    dataInicio: data.dataInicio || null,
+    dataInicio: hoje,
     isActive: true,
   };
   const [result] = await db.insert(obraFuncionarios).values(insertData);
+  // Registrar entrada no histórico
+  await db.insert(employeeSiteHistory).values({
+    companyId: data.companyId,
+    employeeId: data.employeeId,
+    obraId: data.obraId,
+    tipo: isTransferencia ? 'transferencia' : 'alocacao',
+    dataInicio: hoje,
+    obraOrigemId: obraOrigemId,
+    motivoTransferencia: data.motivo || null,
+    registradoPor: data.registradoPor || null,
+    registradoPorUserId: data.registradoPorUserId || null,
+  } as any);
   // Atualizar obraAtualId do funcionário
   await db.update(employees).set({ obraAtualId: data.obraId } as any).where(eq(employees.id, data.employeeId));
-  return { id: result.insertId };
+  return { id: result.insertId, isTransferencia, obraOrigemId };
 }
 
-export async function removeEmployeeFromObra(employeeId: number) {
+export async function removeEmployeeFromObra(employeeId: number, motivo?: string, registradoPor?: string, registradoPorUserId?: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(obraFuncionarios).set({ isActive: 0, dataFim: sql`CURDATE()` } as any).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, 1)));
+  const hoje = new Date().toISOString().split('T')[0];
+  // Buscar alocação ativa para registrar histórico
+  const [alocAtiva] = await db.select().from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, 1)));
+  if (alocAtiva) {
+    await db.insert(employeeSiteHistory).values({
+      companyId: alocAtiva.companyId,
+      employeeId: employeeId,
+      obraId: alocAtiva.obraId,
+      tipo: 'saida',
+      dataInicio: alocAtiva.dataInicio || hoje,
+      dataFim: hoje,
+      motivoTransferencia: motivo || 'Remoção da obra',
+      registradoPor: registradoPor || null,
+      registradoPorUserId: registradoPorUserId || null,
+    } as any);
+  }
+  await db.update(obraFuncionarios).set({ isActive: 0, dataFim: hoje } as any).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, 1)));
   await db.update(employees).set({ obraAtualId: null } as any).where(eq(employees.id, employeeId));
 }
 
@@ -1563,4 +1610,366 @@ export async function deleteRevision(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(systemRevisions).where(eq(systemRevisions.id, id));
+}
+
+
+// ============================================================
+// HISTÓRICO DE ALOCAÇÕES E EFETIVO POR OBRA
+// ============================================================
+
+/** Histórico de alocações de um funcionário */
+export async function getEmployeeSiteHistory(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const history = await db.select({
+    id: employeeSiteHistory.id,
+    companyId: employeeSiteHistory.companyId,
+    employeeId: employeeSiteHistory.employeeId,
+    obraId: employeeSiteHistory.obraId,
+    tipo: employeeSiteHistory.tipo,
+    dataInicio: employeeSiteHistory.dataInicio,
+    dataFim: employeeSiteHistory.dataFim,
+    motivoTransferencia: employeeSiteHistory.motivoTransferencia,
+    obraOrigemId: employeeSiteHistory.obraOrigemId,
+    registradoPor: employeeSiteHistory.registradoPor,
+    observacoes: employeeSiteHistory.observacoes,
+    createdAt: employeeSiteHistory.createdAt,
+    obraNome: obras.nome,
+    obraCodigo: obras.codigo,
+  }).from(employeeSiteHistory)
+    .leftJoin(obras, eq(employeeSiteHistory.obraId, obras.id))
+    .where(eq(employeeSiteHistory.employeeId, employeeId))
+    .orderBy(desc(employeeSiteHistory.dataInicio));
+  return history;
+}
+
+/** Efetivo atual por obra (quantos funcionários ativos em cada obra) */
+export async function getEfetivoPorObra(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({
+    obraId: obraFuncionarios.obraId,
+    obraNome: obras.nome,
+    obraCodigo: obras.codigo,
+    obraStatus: obras.status,
+    obraCidade: obras.cidade,
+    count: sql<number>`COUNT(*)`.as('count'),
+  }).from(obraFuncionarios)
+    .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+    .where(and(
+      eq(obraFuncionarios.companyId, companyId),
+      eq(obraFuncionarios.isActive, 1),
+    ))
+    .groupBy(obraFuncionarios.obraId, obras.nome, obras.codigo, obras.status, obras.cidade)
+    .orderBy(desc(sql`COUNT(*)`));
+  return result;
+}
+
+/** Efetivo histórico por obra para dashboard (evolução mensal) */
+export async function getEfetivoHistorico(companyId: number, meses: number = 12) {
+  const db = await getDb();
+  if (!db) return [];
+  // Gerar lista de meses para análise
+  const hoje = new Date();
+  const mesesList: string[] = [];
+  for (let i = meses - 1; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    mesesList.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  
+  // Buscar todas as alocações da empresa (ativas e inativas)
+  const allAlocs = await db.select({
+    obraId: obraFuncionarios.obraId,
+    obraNome: obras.nome,
+    employeeId: obraFuncionarios.employeeId,
+    dataInicio: obraFuncionarios.dataInicio,
+    dataFim: obraFuncionarios.dataFim,
+    isActive: obraFuncionarios.isActive,
+  }).from(obraFuncionarios)
+    .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+    .where(eq(obraFuncionarios.companyId, companyId));
+  
+  // Calcular efetivo por obra por mês
+  const obrasMap: Record<number, string> = {};
+  allAlocs.forEach(a => { obrasMap[a.obraId] = a.obraNome; });
+  
+  const result: { mes: string; obraId: number; obraNome: string; efetivo: number }[] = [];
+  
+  for (const mes of mesesList) {
+    const [ano, mesNum] = mes.split('-').map(Number);
+    const primeiroDia = new Date(ano, mesNum - 1, 1);
+    const ultimoDia = new Date(ano, mesNum, 0);
+    const primDiaStr = primeiroDia.toISOString().split('T')[0];
+    const ultDiaStr = ultimoDia.toISOString().split('T')[0];
+    
+    // Contar funcionários por obra que estavam alocados nesse mês
+    const porObra: Record<number, Set<number>> = {};
+    for (const a of allAlocs) {
+      const inicio = a.dataInicio || '2000-01-01';
+      const fim = a.dataFim || '2099-12-31';
+      // Funcionário estava na obra se: início <= último dia do mês E fim >= primeiro dia do mês
+      if (inicio <= ultDiaStr && fim >= primDiaStr) {
+        if (!porObra[a.obraId]) porObra[a.obraId] = new Set();
+        porObra[a.obraId].add(a.employeeId);
+      }
+    }
+    
+    for (const [obraId, empSet] of Object.entries(porObra)) {
+      result.push({
+        mes,
+        obraId: Number(obraId),
+        obraNome: obrasMap[Number(obraId)] || 'Desconhecida',
+        efetivo: empSet.size,
+      });
+    }
+  }
+  
+  return result;
+}
+
+/** Funcionários sem obra alocada */
+export async function getFuncionariosSemObra(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({
+    id: employees.id,
+    nomeCompleto: employees.nomeCompleto,
+    funcao: employees.funcao,
+    cargo: employees.cargo,
+    setor: employees.setor,
+    status: employees.status,
+    dataAdmissao: employees.dataAdmissao,
+    obraAtualId: employees.obraAtualId,
+  }).from(employees)
+    .where(and(
+      eq(employees.companyId, companyId),
+      isNull(employees.deletedAt),
+      sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+      sql`(${employees.obraAtualId} IS NULL OR ${employees.obraAtualId} = 0)`,
+    ))
+    .orderBy(employees.nomeCompleto);
+  return result;
+}
+
+/** Transferência em lote de funcionários para uma obra */
+export async function transferirFuncionariosEmLote(data: {
+  companyId: number;
+  obraDestinoId: number;
+  employeeIds: number[];
+  dataInicio: string;
+  motivo?: string;
+  registradoPor?: string;
+  registradoPorUserId?: number;
+}) {
+  const resultados: { employeeId: number; success: boolean; error?: string }[] = [];
+  for (const empId of data.employeeIds) {
+    try {
+      await allocateEmployeeToObra({
+        obraId: data.obraDestinoId,
+        employeeId: empId,
+        companyId: data.companyId,
+        dataInicio: data.dataInicio,
+        motivo: data.motivo,
+        registradoPor: data.registradoPor,
+        registradoPorUserId: data.registradoPorUserId,
+      });
+      resultados.push({ employeeId: empId, success: true });
+    } catch (e: any) {
+      resultados.push({ employeeId: empId, success: false, error: e.message });
+    }
+  }
+  return resultados;
+}
+
+
+// ============================================================
+// INCONSISTÊNCIAS PONTO x OBRA
+// ============================================================
+
+/** Detectar e registrar inconsistência quando ponto é batido em obra diferente da alocação */
+export async function detectarInconsistenciaPonto(data: {
+  companyId: number;
+  employeeId: number;
+  obraPontoId: number;
+  dataPonto: string;
+  snRelogio?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  // Buscar obra alocada do funcionário
+  const [emp] = await db.select({ obraAtualId: employees.obraAtualId }).from(employees).where(eq(employees.id, data.employeeId));
+  const obraAlocadaId = emp?.obraAtualId || null;
+  // Se não tem obra alocada ou é a mesma, não é inconsistência
+  if (!obraAlocadaId || obraAlocadaId === data.obraPontoId) return null;
+  // Verificar se já existe inconsistência para este funcionário/data/obra
+  const existing = await db.select().from(obraPontoInconsistencies).where(and(
+    eq(obraPontoInconsistencies.employeeId, data.employeeId),
+    eq(obraPontoInconsistencies.obraPontoId, data.obraPontoId),
+    eq(obraPontoInconsistencies.dataPonto, data.dataPonto),
+  ));
+  if (existing.length > 0) return existing[0];
+  // Criar novo alerta
+  const [result] = await db.insert(obraPontoInconsistencies).values({
+    companyId: data.companyId,
+    employeeId: data.employeeId,
+    obraAlocadaId: obraAlocadaId,
+    obraPontoId: data.obraPontoId,
+    dataPonto: data.dataPonto,
+    snRelogio: data.snRelogio || null,
+  } as any);
+  return { id: result.insertId, isNew: true };
+}
+
+/** Listar inconsistências pendentes */
+export async function getInconsistenciasPendentes(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({
+    id: obraPontoInconsistencies.id,
+    companyId: obraPontoInconsistencies.companyId,
+    employeeId: obraPontoInconsistencies.employeeId,
+    obraAlocadaId: obraPontoInconsistencies.obraAlocadaId,
+    obraPontoId: obraPontoInconsistencies.obraPontoId,
+    dataPonto: obraPontoInconsistencies.dataPonto,
+    snRelogio: obraPontoInconsistencies.snRelogio,
+    status: obraPontoInconsistencies.status,
+    createdAt: obraPontoInconsistencies.createdAt,
+    employeeName: employees.nomeCompleto,
+    employeeFuncao: employees.funcao,
+  }).from(obraPontoInconsistencies)
+    .leftJoin(employees, eq(obraPontoInconsistencies.employeeId, employees.id))
+    .where(and(
+      eq(obraPontoInconsistencies.companyId, companyId),
+      eq(obraPontoInconsistencies.status, 'pendente'),
+    ))
+    .orderBy(desc(obraPontoInconsistencies.dataPonto));
+  // Enriquecer com nomes das obras
+  if (result.length === 0) return [];
+  const obraIds = Array.from(new Set([
+    ...result.map(r => r.obraAlocadaId).filter(Boolean),
+    ...result.map(r => r.obraPontoId),
+  ])) as number[];
+  if (obraIds.length === 0) return result.map(r => ({ ...r, obraAlocadaNome: null, obraPontoNome: null }));
+  const obrasData = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.raw(obraIds.join(","))})`);
+  const obrasMap = Object.fromEntries(obrasData.map(o => [o.id, o.nome]));
+  return result.map(r => ({
+    ...r,
+    obraAlocadaNome: r.obraAlocadaId ? obrasMap[r.obraAlocadaId] || null : 'Sem alocação',
+    obraPontoNome: obrasMap[r.obraPontoId] || null,
+  }));
+}
+
+/** Resolver inconsistência: marcar como esporádico */
+export async function resolverInconsistenciaEsporadico(id: number, userId: number, userName: string, obs?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(obraPontoInconsistencies).set({
+    status: 'esporadico',
+    resolvidoPor: userName,
+    resolvidoPorUserId: userId,
+    resolvidoEm: sql`NOW()`,
+    observacoes: obs || 'Marcado como esporádico pelo gestor',
+  } as any).where(eq(obraPontoInconsistencies.id, id));
+}
+
+/** Resolver inconsistência: transferir funcionário para a obra do ponto */
+export async function resolverInconsistenciaTransferir(id: number, userId: number, userName: string, obs?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Buscar dados da inconsistência
+  const [inc] = await db.select().from(obraPontoInconsistencies).where(eq(obraPontoInconsistencies.id, id));
+  if (!inc) throw new Error("Inconsistência não encontrada");
+  // Transferir funcionário
+  await allocateEmployeeToObra({
+    obraId: inc.obraPontoId,
+    employeeId: inc.employeeId,
+    companyId: inc.companyId,
+    dataInicio: inc.dataPonto,
+    motivo: `Transferência via resolução de inconsistência de ponto (${obs || 'Funcionário bateu ponto em obra diferente'})`,
+    registradoPor: userName,
+    registradoPorUserId: userId,
+  });
+  // Marcar como resolvido
+  await db.update(obraPontoInconsistencies).set({
+    status: 'transferido',
+    resolvidoPor: userName,
+    resolvidoPorUserId: userId,
+    resolvidoEm: sql`NOW()`,
+    observacoes: obs || 'Funcionário transferido para a obra do ponto',
+  } as any).where(eq(obraPontoInconsistencies.id, id));
+  // Resolver todas as pendentes do mesmo funcionário/obra (lote)
+  await db.update(obraPontoInconsistencies).set({
+    status: 'transferido',
+    resolvidoPor: userName,
+    resolvidoPorUserId: userId,
+    resolvidoEm: sql`NOW()`,
+    observacoes: 'Resolvido em lote pela transferência',
+  } as any).where(and(
+    eq(obraPontoInconsistencies.employeeId, inc.employeeId),
+    eq(obraPontoInconsistencies.obraPontoId, inc.obraPontoId),
+    eq(obraPontoInconsistencies.status, 'pendente'),
+  ));
+}
+
+/** Contar inconsistências pendentes (para badge no menu) */
+export async function countInconsistenciasPendentes(companyId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ count: sql<number>`COUNT(*)` }).from(obraPontoInconsistencies).where(and(
+    eq(obraPontoInconsistencies.companyId, companyId),
+    eq(obraPontoInconsistencies.status, 'pendente'),
+  ));
+  return result?.count || 0;
+}
+
+/** Onde o funcionário trabalhou no mês (obra principal + obras visitadas via ponto) */
+export async function getOndeTrabalhouNoMes(companyId: number, employeeId: number, mesAno: string) {
+  const db = await getDb();
+  if (!db) return { obraPrincipal: null, obrasVisitadas: [] };
+  const [ano, mes] = mesAno.split('-').map(Number);
+  const primeiroDia = `${ano}-${String(mes).padStart(2, '0')}-01`;
+  const ultimoDia = new Date(ano, mes, 0).toISOString().split('T')[0];
+  // Obra principal (alocação ativa no período)
+  const alocacoes = await db.select({
+    obraId: obraFuncionarios.obraId,
+    obraNome: obras.nome,
+    dataInicio: obraFuncionarios.dataInicio,
+    dataFim: obraFuncionarios.dataFim,
+    isActive: obraFuncionarios.isActive,
+  }).from(obraFuncionarios)
+    .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+    .where(and(
+      eq(obraFuncionarios.employeeId, employeeId),
+      sql`(${obraFuncionarios.dataInicio} IS NULL OR ${obraFuncionarios.dataInicio} <= ${ultimoDia})`,
+      sql`(${obraFuncionarios.dataFim} IS NULL OR ${obraFuncionarios.dataFim} >= ${primeiroDia})`,
+    ));
+  // Obras visitadas via ponto (inconsistências do mês)
+  const inconsistencias = await db.select({
+    obraPontoId: obraPontoInconsistencies.obraPontoId,
+    dataPonto: obraPontoInconsistencies.dataPonto,
+    status: obraPontoInconsistencies.status,
+  }).from(obraPontoInconsistencies)
+    .where(and(
+      eq(obraPontoInconsistencies.employeeId, employeeId),
+      sql`${obraPontoInconsistencies.dataPonto} >= ${primeiroDia}`,
+      sql`${obraPontoInconsistencies.dataPonto} <= ${ultimoDia}`,
+    ));
+  // Buscar nomes das obras visitadas
+  const obraVisitadaIds = Array.from(new Set(inconsistencias.map(i => i.obraPontoId)));
+  let obrasVisitadas: { obraId: number; obraNome: string; dias: number; status: string }[] = [];
+  if (obraVisitadaIds.length > 0) {
+    const obrasData = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.raw(obraVisitadaIds.join(","))})`);
+    const obrasMap = Object.fromEntries(obrasData.map(o => [o.id, o.nome]));
+    obrasVisitadas = obraVisitadaIds.map(obraId => ({
+      obraId,
+      obraNome: obrasMap[obraId] || 'Desconhecida',
+      dias: inconsistencias.filter(i => i.obraPontoId === obraId).length,
+      status: inconsistencias.find(i => i.obraPontoId === obraId)?.status || 'pendente',
+    }));
+  }
+  return {
+    obraPrincipal: alocacoes.find(a => a.isActive === 1) || alocacoes[0] || null,
+    alocacoesNoMes: alocacoes,
+    obrasVisitadas,
+  };
 }

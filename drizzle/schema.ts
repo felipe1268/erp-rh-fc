@@ -2727,3 +2727,56 @@ export const customExams = mysqlTable("custom_exams", {
 (table) => [
 	index("ce_company").on(table.companyId),
 ]);
+
+
+// ============================================================
+// HISTÓRICO DE ALOCAÇÕES DE FUNCIONÁRIOS EM OBRAS
+// Registra cada movimentação (entrada, transferência, saída) para análise temporal
+// ============================================================
+export const employeeSiteHistory = mysqlTable("employee_site_history", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	obraId: int().notNull(),
+	tipo: mysqlEnum(['alocacao', 'transferencia', 'retorno', 'saida', 'temporario']).notNull(),
+	dataInicio: date({ mode: 'string' }).notNull(),
+	dataFim: date({ mode: 'string' }),
+	motivoTransferencia: text(),
+	obraOrigemId: int(), // De qual obra veio (em caso de transferência)
+	registradoPor: varchar({ length: 255 }),
+	registradoPorUserId: int(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+	index("esh_company").on(table.companyId),
+	index("esh_employee").on(table.employeeId),
+	index("esh_obra").on(table.obraId),
+	index("esh_data").on(table.dataInicio, table.dataFim),
+]);
+
+// ============================================================
+// INCONSISTÊNCIAS PONTO x OBRA (Alertas para o gestor)
+// Quando funcionário bate ponto em obra diferente da alocação principal
+// ============================================================
+export const obraPontoInconsistencies = mysqlTable("obra_ponto_inconsistencies", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	obraAlocadaId: int(), // Obra principal do funcionário (pode ser null se não alocado)
+	obraPontoId: int().notNull(), // Obra onde bateu o ponto (via SN do relógio)
+	dataPonto: date({ mode: 'string' }).notNull(),
+	snRelogio: varchar({ length: 50 }), // SN do relógio que gerou o registro
+	status: mysqlEnum(['pendente', 'esporadico', 'transferido', 'ignorado']).default('pendente').notNull(),
+	resolvidoPor: varchar({ length: 255 }),
+	resolvidoPorUserId: int(),
+	resolvidoEm: timestamp({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+	index("opi_company").on(table.companyId),
+	index("opi_employee").on(table.employeeId),
+	index("opi_status").on(table.status),
+	index("opi_data").on(table.dataPonto),
+]);

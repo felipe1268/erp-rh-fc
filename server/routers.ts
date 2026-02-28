@@ -23,6 +23,8 @@ import {
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, restoreObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio,
+  getEmployeeSiteHistory, getEfetivoPorObra, getEfetivoHistorico, getFuncionariosSemObra, transferirFuncionariosEmLote,
+  detectarInconsistenciaPonto, getInconsistenciasPendentes, resolverInconsistenciaEsporadico, resolverInconsistenciaTransferir, countInconsistenciasPendentes, getOndeTrabalhouNoMes,
   getObraSns, getObraSnsByCompany, getActiveSnsByCompany, getAvailableSns, checkSnAvailability, addSnToObra, updateSnObra, removeSnFromObra, releaseObraSns, findObraBySn,
   // Setores e Funções
   listSectors, createSector, updateSector, deleteSector, restoreSector,
@@ -770,8 +772,25 @@ export const appRouter = router({
       companyId: z.number(),
       funcaoNaObra: z.string().optional(),
       dataInicio: z.string().optional(),
-    })).mutation(({ input }) => allocateEmployeeToObra(input)),
-    removeEmployee: protectedProcedure.input(z.object({ employeeId: z.number() })).mutation(({ input }) => removeEmployeeFromObra(input.employeeId)),
+      motivo: z.string().optional(),
+    })).mutation(({ input, ctx }) => allocateEmployeeToObra({ ...input, registradoPor: ctx.user.name ?? 'Sistema', registradoPorUserId: ctx.user.id })),
+    removeEmployee: protectedProcedure.input(z.object({ employeeId: z.number(), motivo: z.string().optional() })).mutation(({ input, ctx }) => removeEmployeeFromObra(input.employeeId, input.motivo, ctx.user.name ?? 'Sistema', ctx.user.id)),
+    // Histórico de alocações de um funcionário
+    employeeHistory: protectedProcedure.input(z.object({ employeeId: z.number() })).query(({ input }) => getEmployeeSiteHistory(input.employeeId)),
+    // Efetivo atual por obra
+    efetivoPorObra: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getEfetivoPorObra(input.companyId)),
+    // Efetivo histórico (evolução mensal)
+    efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses)),
+    // Funcionários sem obra
+    semObra: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getFuncionariosSemObra(input.companyId)),
+    // Transferência em lote
+    transferirEmLote: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      obraDestinoId: z.number(),
+      employeeIds: z.array(z.number()),
+      dataInicio: z.string(),
+      motivo: z.string().optional(),
+    })).mutation(({ input, ctx }) => transferirFuncionariosEmLote({ ...input, registradoPor: ctx.user.name ?? 'Sistema', registradoPorUserId: ctx.user.id })),
     // Rateio de horas
     horasRateio: protectedProcedure.input(z.object({
       companyId: z.number(),
@@ -822,6 +841,14 @@ export const appRouter = router({
     }),
     removeSn: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => removeSnFromObra(input.id)),
     releaseSns: protectedProcedure.input(z.object({ obraId: z.number() })).mutation(({ input }) => releaseObraSns(input.obraId)),
+    // ============================================================
+    // INCONSISTÊNCIAS PONTO x OBRA
+    // ============================================================
+    inconsistencias: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getInconsistenciasPendentes(input.companyId)),
+    inconsistenciasCount: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => countInconsistenciasPendentes(input.companyId)),
+    resolverEsporadico: protectedProcedure.input(z.object({ id: z.number(), observacoes: z.string().optional() })).mutation(({ input, ctx }) => resolverInconsistenciaEsporadico(input.id, ctx.user.id, ctx.user.name ?? 'Sistema', input.observacoes)),
+    resolverTransferir: protectedProcedure.input(z.object({ id: z.number(), observacoes: z.string().optional() })).mutation(({ input, ctx }) => resolverInconsistenciaTransferir(input.id, ctx.user.id, ctx.user.name ?? 'Sistema', input.observacoes)),
+    ondeTrabalhou: protectedProcedure.input(z.object({ companyId: z.number(), employeeId: z.number(), mesAno: z.string() })).query(({ input }) => getOndeTrabalhouNoMes(input.companyId, input.employeeId, input.mesAno)),
   }),
 
   // ============================================================

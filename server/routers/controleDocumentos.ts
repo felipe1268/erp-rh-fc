@@ -888,6 +888,12 @@ export const controleDocumentosRouter = router({
       // Dados do funcionário
       const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
       if (!emp) return null;
+      // Buscar nome da obra principal
+      let obraAtualNome: string | null = null;
+      if (emp.obraAtualId) {
+        const [obraAtual] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, emp.obraAtualId));
+        if (obraAtual) obraAtualNome = obraAtual.nome;
+      }
 
       // Descrição da Função (CBO + Descrição + Ordem de Serviço NR-1)
       let funcaoDetalhes: any = null;
@@ -1154,7 +1160,7 @@ export const controleDocumentosRouter = router({
       timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
       return {
-        funcionario: emp,
+        funcionario: { ...emp, obraAtualNome },
         funcaoDetalhes,
         asos: asosComStatus,
         treinamentos: empTreinamentos,

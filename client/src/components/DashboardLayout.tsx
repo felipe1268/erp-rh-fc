@@ -74,6 +74,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Building2, label: "Empresas", path: "/empresas" },
       { icon: Users, label: "Colaboradores", path: "/colaboradores" },
       { icon: Landmark, label: "Obras", path: "/obras" },
+      { icon: HardHat, label: "Efetivo por Obra", path: "/obras/efetivo" },
       { icon: Layers, label: "Setores", path: "/setores" },
       { icon: Briefcase, label: "Funções", path: "/funcoes" },
       { icon: Wifi, label: "Relógios de Ponto", path: "/relogios-ponto" },
@@ -121,6 +122,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Clock, label: "Horas Extras", path: "/dashboards/horas-extras" },
       { icon: AlertTriangle, label: "Aviso Prévio", path: "/dashboards/aviso-previo" },
       { icon: Palmtree, label: "Férias", path: "/dashboards/ferias" },
+      { icon: Building2, label: "Efetivo por Obra", path: "/dashboards/efetivo-obra" },
     ],
   },
   {
@@ -244,6 +246,7 @@ const ICON_MAP: Record<string, any> = {
   "Empresas": Building2,
   "Colaboradores": Users,
   "Obras": Landmark,
+  "Efetivo por Obra": HardHat,
   "Setores": Layers,
   "Funções": Briefcase,
   "Relógios de Ponto": Wifi,
@@ -436,7 +439,7 @@ function DashboardLayoutContent({
           // Painel sempre visível
           if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
           // Shared features (empresas, obras, setores, funcoes) - visíveis se tem acesso ao módulo
-          const sharedPaths = ['/empresas', '/obras', '/setores', '/funcoes'];
+          const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes'];
           if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
           // Dashboard paths - visíveis se tem acesso ao módulo
           if (item.path.startsWith('/dashboards')) return true;

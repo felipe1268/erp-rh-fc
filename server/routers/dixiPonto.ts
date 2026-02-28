@@ -1,9 +1,9 @@
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, detectarInconsistenciaPonto } from "../db";
 import {
   dixiAfdImportacoes, dixiAfdMarcacoes, employees, obras, obraSns, dixiDevices,
   timeRecords, timeInconsistencies, unmatchedDixiRecords, dixiNameMappings,
-  obraHorasRateio, systemCriteria, terminationNotices,
+  obraHorasRateio, systemCriteria, terminationNotices, obraFuncionarios,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull, like, or, between } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -652,6 +652,49 @@ export const dixiPontoRouter = router({
         }
       }
 
+      // ===== DETECTAR INCONSISTÊNCIAS PONTO x OBRA (alocação principal) =====
+      // Para cada funcionário que bateu ponto nesta obra, verificar se é a obra principal dele
+      const uniqueEmpIds = Array.from(new Set(timeRecordsToInsert.map(r => r.employeeId)));
+      let obraInconsistenciasCount = 0;
+      if (obraId && uniqueEmpIds.length > 0) {
+        // Buscar alocações ativas dos funcionários
+        const alocacoes = await db.select({
+          employeeId: obraFuncionarios.employeeId,
+          obraId: obraFuncionarios.obraId,
+        }).from(obraFuncionarios)
+          .where(and(
+            eq(obraFuncionarios.companyId, input.companyId),
+            eq(obraFuncionarios.isActive, 1),
+            sql`${obraFuncionarios.employeeId} IN (${sql.raw(uniqueEmpIds.join(","))})`,
+          ));
+        const alocMap = Object.fromEntries(alocacoes.map(a => [a.employeeId, a.obraId]));
+        // Agrupar datas por funcionário
+        const empDatas: Record<number, Set<string>> = {};
+        for (const rec of timeRecordsToInsert) {
+          if (!empDatas[rec.employeeId]) empDatas[rec.employeeId] = new Set();
+          empDatas[rec.employeeId].add(rec.data);
+        }
+        for (const empId of uniqueEmpIds) {
+          const obraAlocada = alocMap[empId];
+          // Se funcionário tem obra alocada diferente da obra do ponto, ou não tem obra alocada
+          if (obraAlocada && obraAlocada !== obraId) {
+            const datas = empDatas[empId];
+            if (datas) {
+              for (const dataPonto of Array.from(datas)) {
+                await detectarInconsistenciaPonto({
+                  companyId: input.companyId,
+                  employeeId: empId,
+                  obraPontoId: obraId,
+                  dataPonto,
+                  snRelogio: header.sn,
+                });
+                obraInconsistenciasCount++;
+              }
+            }
+          }
+        }
+      }
+
       // ===== ATUALIZAR LOG DE IMPORTAÇÃO =====
       const uniqueEmployees = new Set(timeRecordsToInsert.map(r => r.employeeId));
       await db.update(dixiAfdImportacoes).set({
@@ -676,6 +719,7 @@ export const dixiPontoRouter = router({
         mesesAfetados: Array.from(mesesAfetados).sort(),
         obraNome,
         snRelogio: header.sn,
+        obraInconsistencias: obraInconsistenciasCount,
       };
     }),
 

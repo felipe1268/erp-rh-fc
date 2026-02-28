@@ -510,6 +510,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         emp.valorHora ? { icon: Clock, label: "Valor/Hora", value: formatSalario(emp.valorHora) } : null,
                         emp.dataNascimento ? { icon: User, label: "Idade", value: calcIdade(emp.dataNascimento) } : null,
                         emp.dataNascimento ? { icon: Gift, label: "Aniversário", value: `${anivInfo.aniversario} (${anivInfo.texto})` } : null,
+                        emp.obraAtualNome ? { icon: HardHat, label: "Obra Principal", value: emp.obraAtualNome } : null,
                       ].filter(Boolean);
                     })().map((item: any, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-sm text-blue-700">

@@ -16,6 +16,7 @@ import Auditoria from "./pages/Auditoria";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
 import Obras from "./pages/Obras";
+import ObraEfetivo from "./pages/ObraEfetivo";
 import FechamentoPonto from "./pages/FechamentoPonto";
 import FolhaPagamento from "./pages/FolhaPagamento";
 import ControleDocumentos from "./pages/ControleDocumentos";
@@ -39,6 +40,7 @@ import DashJuridico from "./pages/dashboards/DashJuridico";
 import DashAvisoPrevio from "./pages/dashboards/DashAvisoPrevio";
 import DashFerias from "./pages/dashboards/DashFerias";
 import VisaoPanoramica from "./pages/dashboards/VisaoPanoramica";
+import DashEfetivoObra from "./pages/dashboards/DashEfetivoObra";
 import Lixeira from "./pages/Lixeira";
 import AvisoPrevio from "./pages/AvisoPrevio";
 import Ferias from "./pages/Ferias";
@@ -72,6 +74,7 @@ function Router() {
       <Route path={"/empresas"} component={Empresas} />
       <Route path={"/colaboradores"} component={Colaboradores} />
       <Route path={"/obras"} component={Obras} />
+      <Route path={"/obras/efetivo"} component={ObraEfetivo} />
       <Route path={"/setores"} component={Setores} />
       <Route path={"/funcoes"} component={Funcoes} />
       <Route path={"/contas-bancarias"} component={ContasBancarias} />
@@ -112,6 +115,7 @@ function Router() {
       <Route path={"/dashboards/juridico"} component={DashJuridico} />
       <Route path={"/dashboards/aviso-previo"} component={DashAvisoPrevio} />
       <Route path={"/dashboards/ferias"} component={DashFerias} />
+      <Route path={"/dashboards/efetivo-obra"} component={DashEfetivoObra} />
       <Route path={"/dashboards/visao-panoramica"} component={VisaoPanoramica} />
       <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />

@@ -3576,3 +3576,55 @@
 - [ ] Dashboard Folha de Pagamento - verificar se precisa filtro por ano
 - [ ] Dashboard Horas Extras - verificar se precisa filtro por ano
 - [x] Dashboard Férias - corrigido filtro por ano (remover períodos antigos)
+
+## Rev. 123 - Vinculação de Funcionários a Obras (Alocação de Efetivo)
+### Schema / Banco de Dados
+- [x] Criar tabela `employee_site_history` para histórico de alocações (já existia `obras` e `obra_funcionarios`)
+- [x] Criar tabela `obra_ponto_inconsistencies` para alertas de inconsistência ponto x obra
+- [x] Migrar schemas para o banco via SQL direto
+
+### Backend tRPC
+- [x] CRUD completo de obras (já existia, mantido)
+- [x] Gestão de alocações: alocar funcionário com histórico, transferir, encerrar alocação
+- [x] Endpoint de efetivo por obra (getEfetivoPorObra)
+- [x] Endpoint de histórico de alocações por funcionário (getEmployeeSiteHistory)
+- [x] Endpoint de efetivo histórico para dashboard histograma (getEfetivoHistorico)
+- [x] Endpoint de funcionários sem obra (getFuncionariosSemObra)
+- [x] Endpoint de transferência em lote (transferirEmLote)
+
+### Frontend - Tela de Obras
+- [x] Tela de Efetivo por Obra (/obras/efetivo) com 3 abas: Efetivo, Sem Obra, Inconsistências
+- [x] KPIs: Alocados, Obras com Efetivo, Sem Obra, Inconsistências
+- [x] Busca por obra ou funcionário
+- [x] Botão Alocar Funcionário com dialog de seleção
+- [x] Aba Sem Obra lista funcionários sem alocação com botão Alocar individual
+
+### Frontend - Integração com Funcionário
+- [x] Campo "Obra Principal" já existia no cadastro de funcionário (obraAtualId)
+- [x] Exibir obra atual no Raio-X do Funcionário (seção Dados Profissionais)
+- [x] Obra principal retornada pelo endpoint raioX
+
+### Dashboard - Efetivo por Obra
+- [x] Dashboard Efetivo por Obra (/dashboards/efetivo-obra) com histograma
+- [x] Evolução mensal do efetivo (gráfico de barras empilhadas por obra)
+- [x] Distribuição percentual (gráfico de rosca)
+- [x] KPIs: Funcionários Alocados, Obras com Efetivo, Sem Obra, Inconsistências
+- [x] Tabela de detalhamento por obra com ações
+- [x] Filtro por ano com seletor
+
+### Preparação para Módulo Futuro (Diário de Obras)
+- [x] Estrutura preparada: employee_site_history + obra_ponto_inconsistencies
+- [x] Detecção automática integrada no importAFD (cruza SN do relógio com alocação principal)
+
+### Integração Ponto x Alocação de Obra
+- [x] Ponto cruza SN do relógio (obra do equipamento) com alocação principal do funcionário
+- [x] Detecta inconsistência quando ponto é batido em obra diferente da alocação
+- [x] Registra inconsistência na tabela obra_ponto_inconsistencies
+- [x] Integrado no fluxo de importAFD (detectarInconsistenciaPonto chamado automaticamente)
+
+### Alertas de Inconsistência Ponto x Obra
+- [x] Tabela `obra_ponto_inconsistencies` criada e funcional
+- [x] Detecção automática integrada no importAFD
+- [x] Aba Inconsistências na tela Efetivo por Obra com opções: Esporádico / Transferir
+- [x] Esporádico: marca como resolvido, mantém alocação principal
+- [x] Transferir: executa transferência automática e registra no histórico de alocações
