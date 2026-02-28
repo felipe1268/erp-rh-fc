@@ -3368,3 +3368,5 @@
 - [ ] Corrigir clique no nome (abrir detalhe VA, não Raio-X)
 - [x] Fix risk level ordering in Painel RH: Baixo → Médio → Alto (crescente)
 - [x] IA Jurídica: somar todos os pedidos do reclamante e atualizar valorCausa automaticamente
+- [x] Fix Valor Causa column to display as currency (R$ format) in processos trabalhistas list
+- [x] Add "Re-analisar Todos" button to batch re-analyze all processos and update valorCausa

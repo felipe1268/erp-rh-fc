@@ -277,6 +277,15 @@ export default function ProcessosTrabalhistas() {
     { enabled: !!selectedProcessoId && viewMode === "detalhe" }
   );
 
+  const reAnalisarTodosMut = trpc.processos.reAnalisarTodos.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Re-análise concluída: ${data.sucesso}/${data.total} processos analisados. ${data.erros} erros.`);
+      processos.refetch();
+      stats.refetch();
+    },
+    onError: (err) => toast.error(`Erro na re-análise: ${err.message}`),
+  });
+
   const excluirLoteMut = trpc.processos.excluirLote.useMutation({
     onSuccess: (res) => {
       toast.success(`${res.count} processo(s) excluído(s)!`);
@@ -1235,6 +1244,16 @@ export default function ProcessosTrabalhistas() {
               className="border-blue-200 text-blue-700 hover:bg-blue-50">
               {datajudConsultarTodosMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Database className="h-4 w-4 mr-1" />}
               {datajudConsultarTodosMut.isPending ? "Consultando DataJud..." : "Atualizar Todos via DataJud"}
+            </Button>
+            <Button variant="outline" onClick={() => {
+              if (confirm(`Deseja re-analisar todos os processos via IA Jurídica?\nIsso vai recalcular o Valor da Causa de cada processo com a soma dos pedidos.\nPode levar alguns minutos.`)) {
+                reAnalisarTodosMut.mutate({ companyId });
+              }
+            }}
+              disabled={reAnalisarTodosMut.isPending}
+              className="border-purple-200 text-purple-700 hover:bg-purple-50">
+              {reAnalisarTodosMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Zap className="h-4 w-4 mr-1" />}
+              {reAnalisarTodosMut.isPending ? "Re-analisando..." : "Re-analisar Todos (IA)"}
             </Button>
             <PrintActions title="Processos Trabalhistas" />
             <Button onClick={() => setViewMode("novo")}><Plus className="h-4 w-4 mr-1" /> Novo Processo</Button>

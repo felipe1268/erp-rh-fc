@@ -998,4 +998,241 @@ IMPORTANTE:
 
       return { links, tribunal: `TRT${tribunal}`, sistema: processo.datajudSistema || 'PJe' };
     }),
+
+  // ============================================================
+  // RE-ANALISAR TODOS OS PROCESSOS (BATCH)
+  // ============================================================
+  reAnalisarTodos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+
+      // Buscar todos os processos ativos da empresa
+      const todosProcessos = await db.select({ id: processosTrabalhistas.id })
+        .from(processosTrabalhistas)
+        .where(and(
+          eq(processosTrabalhistas.companyId, input.companyId),
+          sql`${processosTrabalhistas.status} != 'arquivado'`
+        ));
+
+      if (todosProcessos.length === 0) {
+        return { total: 0, sucesso: 0, erros: 0, detalhes: [] as any[] };
+      }
+
+      const detalhes: { processoId: number; status: string; valorCausa?: string; erro?: string }[] = [];
+      let sucesso = 0;
+      let erros = 0;
+
+      // Processar sequencialmente para não sobrecarregar a API
+      for (const proc of todosProcessos) {
+        try {
+          // Buscar processo completo
+          const [processo] = await db.select().from(processosTrabalhistas)
+            .where(eq(processosTrabalhistas.id, proc.id));
+          if (!processo) continue;
+
+          // Buscar funcionário
+          const [emp] = await db.select().from(employees)
+            .where(eq(employees.id, processo.employeeId));
+
+          // Buscar andamentos
+          const andamentos = await db.select().from(processosAndamentos)
+            .where(eq(processosAndamentos.processoId, proc.id))
+            .orderBy(desc(processosAndamentos.data));
+
+          // Buscar regras de ouro
+          const regras = await db.select().from(goldenRules)
+            .where(and(
+              eq(goldenRules.companyId, input.companyId),
+              eq(goldenRules.isActive, 1)
+            ));
+          const regrasJuridicas = regras.filter(r => r.categoria === 'juridico' || r.categoria === 'geral');
+
+          // Buscar histórico
+          const historico = await db.select().from(processoAprendizado)
+            .where(eq(processoAprendizado.companyId, input.companyId));
+
+          // Parsear dados
+          let assuntos: any[] = [];
+          try { assuntos = typeof processo.datajudAssuntos === 'string' ? JSON.parse(processo.datajudAssuntos) : (processo.datajudAssuntos || []); } catch { assuntos = []; }
+          let pedidos: string[] = [];
+          try { pedidos = typeof processo.pedidos === 'string' ? JSON.parse(processo.pedidos) : (processo.pedidos || []); } catch { pedidos = []; }
+          let movimentos: any[] = [];
+          try { movimentos = typeof processo.datajudMovimentos === 'string' ? JSON.parse(processo.datajudMovimentos) : (processo.datajudMovimentos || []); } catch { movimentos = []; }
+
+          const contextoProcesso = `
+## DADOS DO PROCESSO TRABALHISTA
+- Número: ${processo.numeroProcesso}
+- Tipo: ${processo.tipoAcao || 'Reclamatória Trabalhista'}
+- Status atual: ${processo.status}
+- Fase: ${processo.fase}
+- Risco classificado: ${processo.risco}
+- Vara: ${processo.vara || 'N/I'}
+- Comarca: ${processo.comarca || 'N/I'}
+- Tribunal: ${processo.tribunal || 'N/I'}
+- Valor da Causa: ${processo.valorCausa || 'Não informado'}
+- Data Distribuição: ${processo.dataDistribuicao || 'N/I'}
+- Data Desligamento: ${processo.dataDesligamento || 'N/I'}
+- Data Citação: ${processo.dataCitacao || 'N/I'}
+- Próxima Audiência: ${processo.dataAudiencia || 'N/I'}
+
+## PARTES
+- Reclamante: ${processo.reclamante}
+- Funcionário vinculado: ${emp?.nomeCompleto || 'N/I'} (Cargo: ${emp?.cargo || 'N/I'})
+- Advogado Reclamante: ${processo.advogadoReclamante || 'N/I'}
+- Advogado Empresa: ${processo.advogadoEmpresa || 'N/I'}
+
+## CLASSE E ASSUNTOS (DataJud)
+- Classe: ${processo.datajudClasse || 'N/I'}
+- Assuntos: ${assuntos.map((a: any) => a.nome || a).join(', ') || 'N/I'}
+
+## PEDIDOS DO RECLAMANTE
+${pedidos.length > 0 ? pedidos.map((p, i) => `${i+1}. ${p}`).join('\n') : 'Não informados'}
+
+## MOVIMENTAÇÕES DO DATAJUD (${processo.datajudTotalMovimentos || movimentos.length} total)
+${movimentos.slice(0, 30).map((m: any) => `- ${m.dataHora?.split('T')[0] || ''}: ${m.nome || ''} ${m.complementosTabelados?.map((c: any) => c.nome || c.descricao || '').join(', ') || ''}`).join('\n')}
+
+## ANDAMENTOS REGISTRADOS NO SISTEMA (${andamentos.length})
+${andamentos.slice(0, 15).map(a => `- ${a.data}: [${a.tipo}] ${a.descricao}`).join('\n')}
+
+## OBSERVAÇÕES
+${processo.observacoes || 'Nenhuma'}
+
+## CLIENTE/TOMADOR
+${processo.clienteRazaoSocial ? `Razão Social: ${processo.clienteRazaoSocial}, CNPJ: ${processo.clienteCnpj || 'N/I'}` : 'Não informado'}
+`;
+
+          const contextoHistorico = historico.length > 0 ? `
+## HISTÓRICO DE PROCESSOS ANTERIORES DA EMPRESA (${historico.length} casos)
+${historico.slice(0, 10).map(h => `- Tipo: ${h.tipoProcesso}, Resultado: ${h.resultadoFinal || 'Em andamento'}, Valor Condenação: ${h.valorFinalCondenacao || 'N/I'}, Valor Acordo: ${h.valorFinalAcordo || 'N/I'}, Duração: ${h.duracaoMeses || 'N/I'} meses, Lição: ${h.licaoAprendida || 'N/I'}`).join('\n')}
+` : '';
+
+          const contextoRegras = regrasJuridicas.length > 0 ? `
+## REGRAS DE OURO DA EMPRESA
+${regrasJuridicas.map(r => `- [${r.prioridade?.toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')}
+` : '';
+
+          const prompt = `Você é um consultor jurídico especialista em Direito do Trabalho brasileiro. Analise o processo trabalhista abaixo e forneça uma análise completa e estratégica para orientar a tomada de decisão da empresa.
+
+${contextoProcesso}
+${contextoHistorico}
+${contextoRegras}
+
+Com base em TODOS os dados acima, forneça a análise em formato JSON conforme o schema solicitado. Seja específico, prático e baseie-se em jurisprudência real do TST e TRTs. Considere a CLT, súmulas e OJs do TST.
+
+IMPORTANTE:
+- Para cada pedido do reclamante, estime o valor individual que o advogado está pleiteando
+- O campo valorCausaEstimado DEVE ser a SOMA de todos os valorEstimado de pedidosAnalisados (soma de todos os pedidos do reclamante)
+- O valorEstimadoRisco (risco de condenação) pode ser diferente do valorCausaEstimado - é o valor que a empresa realmente pode ser condenada a pagar considerando probabilidades
+- Calcule probabilidades realistas baseadas nos dados disponíveis
+- Sugira valores de acordo baseados na jurisprudência
+- Cite jurisprudência REAL e relevante (súmulas, OJs do TST)
+- Considere o histórico de processos anteriores da empresa se disponível
+- Forneça recomendações práticas e acionáveis`;
+
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "Você é um consultor jurídico trabalhista brasileiro experiente. Responda SEMPRE em JSON válido conforme o schema solicitado." },
+              { role: "user", content: prompt },
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "analise_juridica",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    resumoExecutivo: { type: "string", description: "Resumo executivo do caso em 3-5 parágrafos" },
+                    valorEstimadoRisco: { type: "number", description: "Valor estimado de condenação em reais" },
+                    valorEstimadoAcordo: { type: "number", description: "Valor sugerido para acordo em reais" },
+                    valorCausaEstimado: { type: "number", description: "Soma total de todos os valores dos pedidos do reclamante (deve ser igual à soma dos valorEstimado em pedidosAnalisados)" },
+                    probabilidadeCondenacao: { type: "integer", description: "Probabilidade de condenação 0-100" },
+                    probabilidadeAcordo: { type: "integer", description: "Probabilidade de acordo 0-100" },
+                    probabilidadeArquivamento: { type: "integer", description: "Probabilidade de arquivamento 0-100" },
+                    pontosFortes: { type: "array", items: { type: "object", properties: { titulo: { type: "string" }, descricao: { type: "string" } }, required: ["titulo", "descricao"], additionalProperties: false }, description: "Pontos fortes da defesa da empresa" },
+                    pontosFracos: { type: "array", items: { type: "object", properties: { titulo: { type: "string" }, descricao: { type: "string" } }, required: ["titulo", "descricao"], additionalProperties: false }, description: "Pontos fracos / riscos para a empresa" },
+                    caminhosPositivos: { type: "array", items: { type: "object", properties: { caminho: { type: "string" }, descricao: { type: "string" }, probabilidade: { type: "integer" }, impactoFinanceiro: { type: "string" } }, required: ["caminho", "descricao", "probabilidade", "impactoFinanceiro"], additionalProperties: false }, description: "Caminhos estratégicos possíveis" },
+                    jurisprudencia: { type: "array", items: { type: "object", properties: { referencia: { type: "string" }, ementa: { type: "string" }, relevancia: { type: "string" } }, required: ["referencia", "ementa", "relevancia"], additionalProperties: false }, description: "Jurisprudência relevante" },
+                    recomendacaoEstrategica: { type: "string", description: "Recomendação estratégica final detalhada" },
+                    insights: { type: "array", items: { type: "object", properties: { titulo: { type: "string" }, descricao: { type: "string" }, prioridade: { type: "string" } }, required: ["titulo", "descricao", "prioridade"], additionalProperties: false }, description: "Insights adicionais para tomada de decisão" },
+                    pedidosAnalisados: { type: "array", items: { type: "object", properties: { pedido: { type: "string" }, valorEstimado: { type: "number" }, fundamentacao: { type: "string" } }, required: ["pedido", "valorEstimado", "fundamentacao"], additionalProperties: false }, description: "Análise de cada pedido com valor estimado" }
+                  },
+                  required: ["resumoExecutivo", "valorEstimadoRisco", "valorEstimadoAcordo", "valorCausaEstimado", "probabilidadeCondenacao", "probabilidadeAcordo", "probabilidadeArquivamento", "pontosFortes", "pontosFracos", "caminhosPositivos", "jurisprudencia", "recomendacaoEstrategica", "insights", "pedidosAnalisados"],
+                  additionalProperties: false
+                }
+              }
+            }
+          });
+
+          const content = response.choices[0]?.message?.content;
+          let analise: any;
+          try {
+            analise = typeof content === 'string' ? JSON.parse(content) : content;
+          } catch {
+            detalhes.push({ processoId: proc.id, status: 'erro', erro: 'Erro ao processar resposta da IA' });
+            erros++;
+            continue;
+          }
+
+          const tempoMs = Date.now() - Date.now();
+
+          // Contar versão
+          const existentes = await db.select({ id: processoAnalises.id }).from(processoAnalises)
+            .where(eq(processoAnalises.processoId, proc.id));
+          const versao = existentes.length + 1;
+
+          // Salvar análise
+          await db.insert(processoAnalises).values({
+            companyId: input.companyId,
+            processoId: proc.id,
+            resumoExecutivo: analise.resumoExecutivo,
+            valorEstimadoRisco: String(analise.valorEstimadoRisco),
+            valorEstimadoAcordo: String(analise.valorEstimadoAcordo),
+            probabilidadeCondenacao: analise.probabilidadeCondenacao,
+            probabilidadeAcordo: analise.probabilidadeAcordo,
+            probabilidadeArquivamento: analise.probabilidadeArquivamento,
+            pontosFortes: analise.pontosFortes,
+            pontosFracos: analise.pontosFracos,
+            caminhosPositivos: analise.caminhosPositivos,
+            jurisprudenciaRelevante: analise.jurisprudencia,
+            recomendacaoEstrategica: analise.recomendacaoEstrategica,
+            insightsAdicionais: analise.insights,
+            valorCausaExtraido: String(analise.valorCausaEstimado),
+            pedidosExtraidos: analise.pedidosAnalisados,
+            modeloIA: response.model || 'default',
+            promptUsado: prompt.substring(0, 5000),
+            respostaCompleta: typeof content === 'string' ? content.substring(0, 10000) : JSON.stringify(content).substring(0, 10000),
+            tempoAnaliseMs: tempoMs,
+            versaoAnalise: versao,
+            criadoPor: ctx.user.name || 'Sistema',
+            criadoPorUserId: ctx.user.id,
+          } as any);
+
+          // Calcular valor da causa como soma dos pedidos (conservador)
+          let valorCausaCalculado = analise.valorCausaEstimado;
+          if (analise.pedidosAnalisados && analise.pedidosAnalisados.length > 0) {
+            const somaPedidos = analise.pedidosAnalisados.reduce((acc: number, p: any) => acc + (p.valorEstimado || 0), 0);
+            if (somaPedidos > 0) {
+              valorCausaCalculado = somaPedidos;
+            }
+          }
+
+          // Sempre atualizar valor da causa
+          if (valorCausaCalculado > 0) {
+            await db.update(processosTrabalhistas).set({
+              valorCausa: String(valorCausaCalculado),
+            }).where(eq(processosTrabalhistas.id, proc.id));
+          }
+
+          detalhes.push({ processoId: proc.id, status: 'sucesso', valorCausa: String(valorCausaCalculado) });
+          sucesso++;
+        } catch (e: any) {
+          detalhes.push({ processoId: proc.id, status: 'erro', erro: e.message || 'Erro desconhecido' });
+          erros++;
+        }
+      }
+
+      return { total: todosProcessos.length, sucesso, erros, detalhes };
+    }),
 });
