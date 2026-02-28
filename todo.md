@@ -3552,3 +3552,10 @@
 - [x] Adicionar botão "Recalcular Todos" na tela de Aviso Prévio
 - [x] Criar endpoint backend para recalcular todos os avisos prévios em andamento
 - [x] Mostrar valor total estimado nos cards de resumo quantitativo
+
+## Rev. 120 - Persistir Exames Customizados no ASO
+- [x] Salvar exames adicionados pelo campo "Adicionar outro exame" no banco de dados
+- [x] Carregar exames customizados salvos na lista de exames para próximos ASOs
+- [x] Tabela custom_exams criada com índice por empresa e constraint unique
+- [x] Endpoints list/add/remove no router docs.customExams
+- [x] Toast de confirmação ao adicionar exame customizado

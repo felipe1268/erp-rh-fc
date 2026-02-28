@@ -256,7 +256,7 @@ const EXAMES_PADRAO = [
 ];
 
 // ============ COMPONENTE: EXAMES REALIZADOS (Checkboxes + Upload) ============
-function ExamesRealizadosField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function ExamesRealizadosField({ value, onChange, companyId }: { value: string; onChange: (v: string) => void; companyId: number }) {
   // Parse existing value: comma-separated string
   const selected = useMemo(() => {
     if (!value) return new Set<string>();
@@ -264,15 +264,20 @@ function ExamesRealizadosField({ value, onChange }: { value: string; onChange: (
   }, [value]);
 
   const [customExame, setCustomExame] = useState("");
-  const [customExames, setCustomExames] = useState<string[]>([]);
 
-  // Initialize custom exames from value that aren't in EXAMES_PADRAO
-  useEffect(() => {
-    if (value) {
-      const extras = value.split(",").map(s => s.trim()).filter(s => s && !EXAMES_PADRAO.includes(s));
-      if (extras.length > 0 && customExames.length === 0) setCustomExames(extras);
-    }
-  }, []);
+  // Carregar exames customizados do banco de dados
+  const { data: savedCustomExams = [] } = trpc.docs.customExams.list.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const addCustomExamMutation = trpc.docs.customExams.add.useMutation();
+
+  // Merge: exames do banco + exames do valor atual que não estão no padrão nem no banco
+  const customExamesFromDb = useMemo(() => (savedCustomExams as any[]).map((e: any) => e.nome), [savedCustomExams]);
+  const customExamesFromValue = useMemo(() => {
+    if (!value) return [];
+    return value.split(",").map(s => s.trim()).filter(s => s && !EXAMES_PADRAO.includes(s) && !customExamesFromDb.includes(s));
+  }, [value, customExamesFromDb]);
 
   const toggleExame = (exame: string) => {
     const newSet = new Set(selected);
@@ -284,14 +289,16 @@ function ExamesRealizadosField({ value, onChange }: { value: string; onChange: (
   const addCustom = () => {
     const trimmed = customExame.trim();
     if (!trimmed) return;
-    if (!customExames.includes(trimmed)) setCustomExames(prev => [...prev, trimmed]);
+    // Salvar no banco para persistir para próximos ASOs
+    addCustomExamMutation.mutate({ companyId, nome: trimmed });
     const newSet = new Set(selected);
     newSet.add(trimmed);
     onChange(Array.from(newSet).join(", "));
     setCustomExame("");
+    toast.success(`Exame "${trimmed}" adicionado e salvo para próximos ASOs`);
   };
 
-  const allExames = [...EXAMES_PADRAO, ...customExames.filter(c => !EXAMES_PADRAO.includes(c))];
+  const allExames = [...EXAMES_PADRAO, ...customExamesFromDb.filter(c => !EXAMES_PADRAO.includes(c)), ...customExamesFromValue.filter(c => !customExamesFromDb.includes(c))];
 
   return (
     <div className="space-y-3">
@@ -1638,7 +1645,7 @@ export default function ControleDocumentos() {
             </div>
             <div className="col-span-2">
               <label className="text-sm font-medium">Exames Realizados</label>
-              <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} />
+              <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} companyId={companyId} />
             </div>
             <div className="col-span-2">
               <label className="text-sm font-medium">Observações</label>

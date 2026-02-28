@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (120, 'Exames Customizados Persistentes no ASO', 'Exames adicionados pelo campo Adicionar outro exame agora são salvos no banco de dados e ficam disponíveis automaticamente na lista de exames para os próximos ASOs da mesma empresa. Tabela custom_exams com constraint unique por empresa. Toast de confirmação ao adicionar.', 'feature', 'Controle de Documentos, ASO', 'Manus AI', NOW(), NOW())",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (120, 'Exames Customizados Persistentes no ASO', 'Exames adicionados pelo campo Adicionar outro exame agora são salvos no banco de dados e ficam disponíveis automaticamente na lista de exames para os próximos ASOs da mesma empresa. Tabela custom_exams com constraint unique por empresa. Toast de confirmação ao adicionar.', 'feature', 'Controle de Documentos, ASO', 'Manus AI', NOW(), NOW())",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 97
+}

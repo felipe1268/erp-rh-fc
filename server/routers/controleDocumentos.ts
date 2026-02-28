@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull } from "drizzle-orm";
 import { storagePut } from "../storage";
 
@@ -1377,4 +1377,44 @@ export const controleDocumentosRouter = router({
         stats: { vencidos, aVencer30, aVencer60, validos, total: todos.length },
       };
     }),
+
+  // ===================== EXAMES CUSTOMIZADOS =====================
+  customExams: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const rows = await db.select().from(customExams)
+          .where(eq(customExams.companyId, input.companyId))
+          .orderBy(customExams.nome);
+        return rows;
+      }),
+
+    add: protectedProcedure
+      .input(z.object({ companyId: z.number(), nome: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        // Check if already exists (ignore case)
+        const existing = await db.select().from(customExams)
+          .where(and(
+            eq(customExams.companyId, input.companyId),
+            eq(customExams.nome, input.nome.trim()),
+          ));
+        if (existing.length > 0) return { id: existing[0].id, already: true };
+        const [result] = await db.insert(customExams).values({
+          companyId: input.companyId,
+          nome: input.nome.trim(),
+          criadoPor: ctx.user.name ?? 'Sistema',
+        });
+        return { id: result.insertId, already: false };
+      }),
+
+    remove: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(customExams).where(eq(customExams.id, input.id));
+        return { success: true };
+      }),
+  }),
 });

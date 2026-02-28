@@ -2715,3 +2715,15 @@ export const datajudAutoCheckConfig = mysqlTable("datajud_auto_check_config", {
 (table) => [
 	index("djac_company").on(table.companyId),
 ]);
+
+
+export const customExams = mysqlTable("custom_exams", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	criadoPor: varchar({ length: 255 }),
+	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+	index("ce_company").on(table.companyId),
+]);
