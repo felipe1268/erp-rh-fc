@@ -3376,3 +3376,7 @@
 - [x] Central de Alertas: mudar de popup para full screen
 - [x] Add progress indicator to Re-analisar Todos button (Analisando 3/7...)
 - [x] Add Comarca (Cidade/Estado) column to processos trabalhistas list
+- [x] Fix Saldo Salário: usar dias reais do mês (não 30 fixo) e calcular até término do aviso
+- [x] Fix Férias Proporcionais: calcular da admissão até término do aviso (não início)
+- [x] Add 13º Salário Proporcional: salário/12 x meses de jan até término do aviso
+- [x] Fix Multa FGTS: calcular até término do aviso (não início)

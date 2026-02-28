@@ -135,32 +135,39 @@ function calcularRescisaoCompleta(params: {
   salarioBase: number;
   dataAdmissao: string;
   dataDesligamento: string;
+  dataFimAviso?: string; // data de término do aviso prévio (para férias, 13º, FGTS)
   tipo: string;
   vrDiario: number; // valor diário do VR/VA
-  diasTrabalhadosMes: number; // dias trabalhados no mês do desligamento
+  diasTrabalhadosMes: number; // dias trabalhados no mês do término do aviso
 }) {
   const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
   
-  // Usar dias reais do mês para cálculo do saldo de salário (CLT)
-  // Fevereiro = 28 ou 29, meses com 31 dias, etc.
-  const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
-  const diasReaisMes = new Date(dtDeslig.getFullYear(), dtDeslig.getMonth() + 1, 0).getDate();
+  // Data de referência para cálculos de férias, 13º e FGTS:
+  // Deve ser a data de TÉRMINO do aviso (não o início)
+  // CLT: o período do aviso prévio integra o tempo de serviço para todos os efeitos legais
+  const dataRefCalculo = params.dataFimAviso || dataDesligamento;
+  
+  // Usar dias reais do mês do TÉRMINO do aviso para cálculo do saldo de salário
+  const dtRef = new Date(dataRefCalculo + 'T00:00:00');
+  const diasReaisMes = new Date(dtRef.getFullYear(), dtRef.getMonth() + 1, 0).getDate();
   const salarioDia = salarioBase / diasReaisMes;
-  const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
+  const anosServico = calcularAnosServico(dataAdmissao, dataRefCalculo);
   const diasAvisoTotal = calcularDiasAvisoTotal(anosServico);
   const diasExtrasAviso = calcularDiasExtrasAviso(anosServico);
   
   // ============================================================
   // 1. SALDO DE SALÁRIO
-  // Dias trabalhados no mês do desligamento
+  // Dias trabalhados no mês do TÉRMINO do aviso
+  // Usa dias reais do mês (28 para fev, 30/31 para outros)
   // ============================================================
   const saldoSalario = salarioDia * diasTrabalhadosMes;
   
   // ============================================================
   // 2. FÉRIAS PROPORCIONAIS + 1/3 CONSTITUCIONAL
-  // Meses desde o início do período aquisitivo atual
+  // CLT Art. 487 §1º: O período do aviso integra o tempo de serviço
+  // Calcula da admissão até o TÉRMINO do aviso
   // ============================================================
-  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataDesligamento);
+  const mesesFerias = calcularMesesFeriasProporcionais(dataAdmissao, dataRefCalculo);
   const feriasProporcional = (salarioBase * mesesFerias) / 12;
   const tercoConstitucional = feriasProporcional / 3;
   const totalFerias = feriasProporcional + tercoConstitucional;
@@ -169,15 +176,17 @@ function calcularRescisaoCompleta(params: {
   // 3. FÉRIAS VENCIDAS (se houver)
   // Períodos aquisitivos completos não gozados
   // ============================================================
-  const periodosVencidos = Math.max(0, calcularFeriasVencidas(dataAdmissao, dataDesligamento) - 1);
+  const periodosVencidos = Math.max(0, calcularFeriasVencidas(dataAdmissao, dataRefCalculo) - 1);
   // -1 porque o primeiro período completo gera as férias proporcionais acima
   const feriasVencidas = periodosVencidos > 0 ? (salarioBase + salarioBase / 3) * periodosVencidos : 0;
   
   // ============================================================
   // 4. 13º SALÁRIO PROPORCIONAL
-  // Meses trabalhados no ano do desligamento (>14 dias = conta o mês)
+  // Conta de JANEIRO do ano vigente até o TÉRMINO do aviso
+  // (>14 dias no mês = conta o mês)
+  // CLT: o aviso prévio integra o tempo de serviço
   // ============================================================
-  const meses13o = calcularMeses13o(dataAdmissao, dataDesligamento);
+  const meses13o = calcularMeses13o(dataAdmissao, dataRefCalculo);
   const decimoTerceiroProporcional = (salarioBase * meses13o) / 12;
   
   // ============================================================
@@ -204,8 +213,9 @@ function calcularRescisaoCompleta(params: {
   
   // ============================================================
   // 7. FGTS (estimativa - 8% sobre remuneração)
+  // Calcula até o TÉRMINO do aviso (aviso integra tempo de serviço)
   // ============================================================
-  const mesesTotais = calcularMesesServico(dataAdmissao, dataDesligamento);
+  const mesesTotais = calcularMesesServico(dataAdmissao, dataRefCalculo);
   const fgtsEstimado = salarioBase * 0.08 * mesesTotais;
   
   // ============================================================
@@ -250,9 +260,12 @@ function calcularRescisaoCompleta(params: {
     // Total
     total: total.toFixed(2),
     
-    // Data limite pagamento (Art. 477 §6º CLT: 10 dias corridos após desligamento)
+    mesesTotais,
+    dataRefCalculo,
+    
+    // Data limite pagamento (Art. 477 §6º CLT: 10 dias corridos após término do aviso)
     dataLimitePagamento: (() => {
-      const dt = new Date(dataDesligamento + 'T00:00:00');
+      const dt = new Date(dataRefCalculo + 'T00:00:00');
       dt.setDate(dt.getDate() + 10);
       return dt.toISOString().split("T")[0];
     })(),
@@ -384,9 +397,13 @@ export const avisoPrevioFeriasRouter = router({
         const diasAviso = calcularDiasAviso(anosServico, input.tipo);
         const diasExtras = calcularDiasExtrasAviso(anosServico);
         
-        // Dias trabalhados no mês do desligamento
-        const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
-        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtDeslig.getDate();
+        // Data de término do aviso = início do aviso + dias de aviso
+        const dataInicioAviso = calcularDataInicioAviso(dataDesligamento);
+        const dataFimAviso = calcularDataFim(dataInicioAviso, diasAviso);
+        
+        // Dias trabalhados no mês do TÉRMINO do aviso
+        const dtFimAviso = new Date(dataFimAviso + 'T00:00:00');
+        const diasTrabalhadosMes = input.diasTrabalhadosOverride ?? dtFimAviso.getDate();
         
         // ============================================================
         // VR: buscar da config de benefícios da obra do funcionário
@@ -421,7 +438,7 @@ export const avisoPrevioFeriasRouter = router({
             // Cada item só entra se estiver ativo na config
             const totalVAMensal = (cafeAtivo ? cafe * diasUteis : 0) + (lancheAtivo ? lanche * diasUteis : 0) + vaMes;
             // VR proporcional na rescisão = totalMensal / dias reais do mês × dias trabalhados
-            const diasReaisMesVR = new Date(dtDeslig.getFullYear(), dtDeslig.getMonth() + 1, 0).getDate();
+            const diasReaisMesVR = new Date(dtFimAviso.getFullYear(), dtFimAviso.getMonth() + 1, 0).getDate();
             vrDiario = totalVAMensal / diasReaisMesVR; // usar dias reais do mês (28 para fev, 30/31 para outros)
             vrConfigNome = cfg.nome || 'Padrão';
             // Guardar info extra para exibição
@@ -504,6 +521,7 @@ export const avisoPrevioFeriasRouter = router({
           salarioBase,
           dataAdmissao,
           dataDesligamento,
+          dataFimAviso,
           tipo: input.tipo,
           vrDiario,
           diasTrabalhadosMes,
@@ -521,7 +539,8 @@ export const avisoPrevioFeriasRouter = router({
           dataAdmissao,
           dataDesligamento,
           dataInicioAviso: calcularDataInicioAviso(dataDesligamento),
-          dataFimEstimada: calcularDataFim(calcularDataInicioAviso(dataDesligamento), diasAviso),
+          dataFimAviso,
+          dataFimEstimada: dataFimAviso,
           previsaoRescisao: previsao,
           vrConfigNome,
           vrExtra,
@@ -673,13 +692,15 @@ export const avisoPrevioFeriasRouter = router({
         const salarioBase = parseBRL(emp.salarioBase);
         const dataFim = calcularDataFim(dataInicioAviso, diasAviso);
         
-        const dtDeslig = new Date(dataDesligamento + 'T00:00:00');
-        const diasTrabalhadosMes = input.diasTrabalhados ?? dtDeslig.getDate();
+        // Dias trabalhados no mês do TÉRMINO do aviso
+        const dtFimAviso = new Date(dataFim + 'T00:00:00');
+        const diasTrabalhadosMes = input.diasTrabalhados ?? dtFimAviso.getDate();
         
         const previsao = calcularRescisaoCompleta({
           salarioBase,
           dataAdmissao,
           dataDesligamento,
+          dataFimAviso: dataFim, // TÉRMINO do aviso para férias, 13º, FGTS
           tipo: input.tipo,
           vrDiario: input.vrDiario ?? 0,
           diasTrabalhadosMes,
@@ -742,13 +763,15 @@ export const avisoPrevioFeriasRouter = router({
           const diasAviso = calcularDiasAviso(anosServico, tipo);
           const salarioBase = parseBRL(emp.salarioBase);
           const dataFim = calcularDataFim(dataInicioFinal, diasAviso);
-          const dtDeslig = new Date(dataDesligFinal + 'T00:00:00');
-          const diasTrabalhadosMes = diasTrabalhados ?? dtDeslig.getDate();
+          // Dias trabalhados no mês do TÉRMINO do aviso
+          const dtFimAviso = new Date(dataFim + 'T00:00:00');
+          const diasTrabalhadosMes = diasTrabalhados ?? dtFimAviso.getDate();
 
           const previsao = calcularRescisaoCompleta({
             salarioBase,
             dataAdmissao,
             dataDesligamento: dataDesligFinal,
+            dataFimAviso: dataFim, // TÉRMINO do aviso para férias, 13º, FGTS
             tipo,
             vrDiario: 0,
             diasTrabalhadosMes,
