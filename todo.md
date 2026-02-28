@@ -3290,3 +3290,12 @@
 - [x] Layout totalmente responsivo (mobile e desktop)
 - [x] Corrigir gráfico "Novos Processos por Mês" com label "undefined/sconhecido"
 - [x] Corrigir drill-down nos gráficos do Dashboard Jurídico
+
+## Redesign: Tela de Dashboards + Visão Panorâmica Executiva - 2026-02-28
+- [x] Redesign completo da tela de Dashboards Analíticos com ícones e layout profissional
+- [x] Novo Dashboard "Visão Panorâmica" executivo para CEO/Diretor
+- [x] Compilar KPIs estratégicos de todos os módulos (RH, Folha, Ponto, HE, EPIs, Jurídico, Férias, Aviso Prévio)
+- [x] Backend: endpoint aggregando dados de todos os dashboards
+- [x] Seção de Análise com IA: insights estratégicos, pontos fortes, pontos fracos, riscos e oportunidades
+- [x] Consultar Regras de Ouro da empresa na análise IA
+- [x] Layout responsivo e visual impactante para tomada de decisão

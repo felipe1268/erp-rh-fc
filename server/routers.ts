@@ -47,6 +47,7 @@ import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
 import { menuConfigRouter } from "./routers/menuConfig";
 import { goldenRulesRouter } from "./routers/goldenRules";
+import { visaoPanoramicaRouter } from "./routers/visaoPanoramica";
 import { notificationsRouter } from "./routers/notifications";
 import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
 import { cipaRouter } from "./routers/cipa";
@@ -649,6 +650,7 @@ export const appRouter = router({
   // DASHBOARDS INTERATIVOS
   // ============================================================
   dashboards: dashboardsRouter,
+  visaoPanoramica: visaoPanoramicaRouter,
 
   // ============================================================
   // FOLHA DE PAGAMENTO (parsers, vales, extras, VR)
