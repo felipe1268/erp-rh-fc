@@ -229,12 +229,13 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
 }
 
 // KPI Card for dashboards
-export function DashKpi({ label, value, color = "blue", icon: Icon, sub }: {
+export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active }: {
   label: string;
   value: string | number;
   color?: string;
   icon?: any;
   sub?: string;
+  active?: boolean;
 }) {
   const colorMap: Record<string, string> = {
     blue: "text-blue-600 bg-blue-50 border-l-blue-500",
@@ -257,7 +258,7 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub }: {
     return value;
   })();
   return (
-    <Card className={`border-l-4 ${borderColor}`}>
+    <Card className={`border-l-4 ${borderColor} transition-all ${active ? 'ring-2 ring-offset-1 ring-blue-400 shadow-md scale-[1.02]' : 'hover:shadow-sm'}`}>
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-center gap-2 sm:gap-3">
           {Icon && (

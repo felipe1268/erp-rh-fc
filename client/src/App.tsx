@@ -41,6 +41,7 @@ import DashAvisoPrevio from "./pages/dashboards/DashAvisoPrevio";
 import DashFerias from "./pages/dashboards/DashFerias";
 import VisaoPanoramica from "./pages/dashboards/VisaoPanoramica";
 import DashEfetivoObra from "./pages/dashboards/DashEfetivoObra";
+import DashPerfilTempoCasa from "./pages/dashboards/DashPerfilTempoCasa";
 import Lixeira from "./pages/Lixeira";
 import AvisoPrevio from "./pages/AvisoPrevio";
 import Ferias from "./pages/Ferias";
@@ -117,6 +118,7 @@ function Router() {
       <Route path={"/dashboards/ferias"} component={DashFerias} />
       <Route path={"/dashboards/efetivo-obra"} component={DashEfetivoObra} />
       <Route path={"/dashboards/visao-panoramica"} component={VisaoPanoramica} />
+      <Route path={"/dashboards/perfil-tempo-casa"} component={DashPerfilTempoCasa} />
       <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
       <Route path={"404"} component={NotFound} />

@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -14,7 +15,7 @@ import { trpc } from "@/lib/trpc";
 import {
   HardHat, Users, Search, ArrowRightLeft, UserPlus, AlertTriangle,
   Building2, CheckCircle, XCircle, Clock, MapPin, ChevronRight,
-  Loader2, UserMinus, History, BarChart3,
+  Loader2, UserMinus, History, BarChart3, X,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -32,9 +33,12 @@ export default function ObraEfetivo() {
   const [inconsistenciaDialogOpen, setInconsistenciaDialogOpen] = useState(false);
   const [selectedInconsistencia, setSelectedInconsistencia] = useState<any>(null);
   const [obsInconsistencia, setObsInconsistencia] = useState("");
-  const [allocForm, setAllocForm] = useState({ employeeId: 0, obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "" });
+  const [allocForm, setAllocForm] = useState({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "" });
+  const [selectedEmployees, setSelectedEmployees] = useState<number[]>([]);
+  const [empSearch, setEmpSearch] = useState("");
   const [historyEmployeeId, setHistoryEmployeeId] = useState<number | null>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
   // Queries
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
@@ -52,6 +56,10 @@ export default function ObraEfetivo() {
   const funcObraQ = trpc.obras.funcionarios.useQuery({ obraId: selectedObraId || 0 }, { enabled: !!selectedObraId });
   const funcObra = funcObraQ.data ?? [];
 
+  // All active employees for multi-select
+  const allEmpsQ = trpc.employees.list.useQuery({ companyId, status: "ativo" }, { enabled: !!companyId });
+  const allEmps = allEmpsQ.data ?? [];
+
   // Histórico de alocações
   const historyQ = trpc.obras.employeeHistory.useQuery({ employeeId: historyEmployeeId || 0 }, { enabled: !!historyEmployeeId });
   const history = historyQ.data ?? [];
@@ -61,7 +69,20 @@ export default function ObraEfetivo() {
     onSuccess: (data) => {
       toast.success(data.isTransferencia ? "Funcionário transferido com sucesso!" : "Funcionário alocado com sucesso!");
       efetivoQ.refetch(); semObraQ.refetch(); funcObraQ.refetch(); inconsistenciasQ.refetch(); inconsistenciasCountQ.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const batchAllocMut = trpc.obras.transferirEmLote.useMutation({
+    onSuccess: (results) => {
+      const ok = results.filter((r: any) => r.success).length;
+      const fail = results.filter((r: any) => !r.success).length;
+      if (ok > 0) toast.success(`${ok} funcionário(s) alocado(s) com sucesso!`);
+      if (fail > 0) toast.error(`${fail} funcionário(s) com erro na alocação.`);
+      efetivoQ.refetch(); semObraQ.refetch(); funcObraQ.refetch(); inconsistenciasQ.refetch(); inconsistenciasCountQ.refetch();
       setAllocDialogOpen(false);
+      setSelectedEmployees([]);
+      setEmpSearch("");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -108,22 +129,41 @@ export default function ObraEfetivo() {
     return semObra.filter((e: any) => e.nomeCompleto?.toLowerCase().includes(s) || e.funcao?.toLowerCase().includes(s));
   }, [semObra, search]);
 
+  // Filtered employees for search in dialog
+  const filteredAllEmps = useMemo(() => {
+    if (!empSearch) return allEmps.slice(0, 50);
+    const s = empSearch.toLowerCase();
+    return allEmps.filter((e: any) =>
+      e.nomeCompleto?.toLowerCase().includes(s) ||
+      e.cpf?.includes(s) ||
+      e.funcao?.toLowerCase().includes(s) ||
+      e.setor?.toLowerCase().includes(s)
+    ).slice(0, 50);
+  }, [allEmps, empSearch]);
+
+  const toggleEmployee = (empId: number) => {
+    setSelectedEmployees(prev =>
+      prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]
+    );
+  };
+
   const openAllocDialog = (employeeId?: number) => {
     setAllocForm({
-      employeeId: employeeId || 0,
       obraId: 0,
       dataInicio: new Date().toISOString().split("T")[0],
       motivo: "",
     });
+    setSelectedEmployees(employeeId ? [employeeId] : []);
+    setEmpSearch("");
     setAllocDialogOpen(true);
   };
 
   const handleAlloc = () => {
     if (!allocForm.obraId) { toast.error("Selecione uma obra"); return; }
-    if (!allocForm.employeeId) { toast.error("Selecione um funcionário"); return; }
-    allocMut.mutate({
-      obraId: allocForm.obraId,
-      employeeId: allocForm.employeeId,
+    if (selectedEmployees.length === 0) { toast.error("Selecione pelo menos um funcionário"); return; }
+    batchAllocMut.mutate({
+      obraDestinoId: allocForm.obraId,
+      employeeIds: selectedEmployees,
       companyId,
       dataInicio: allocForm.dataInicio,
       motivo: allocForm.motivo || undefined,
@@ -341,7 +381,7 @@ export default function ObraEfetivo() {
                       {funcObra.map((f: any) => (
                         <div key={f.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-slate-50">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{f.employee?.nomeCompleto || "—"}</p>
+                            <p className="font-medium text-sm truncate text-blue-700 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setRaioXEmployeeId(f.employeeId); }}>{f.employee?.nomeCompleto || "—"}</p>
                             <p className="text-xs text-muted-foreground">
                               {f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—"}
                               {f.dataInicio && ` · Desde ${new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}`}
@@ -351,7 +391,7 @@ export default function ObraEfetivo() {
                             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openHistory(f.employeeId)}>
                               <History className="h-3.5 w-3.5 mr-1" /> Histórico
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setAllocForm({ employeeId: f.employeeId, obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "" }); setAllocDialogOpen(true); }}>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setSelectedEmployees([f.employeeId]); setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "Transferência" }); setAllocDialogOpen(true); }}>
                               <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir
                             </Button>
                             <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600 hover:text-red-700" onClick={() => handleRemove(f.employeeId, f.employee?.nomeCompleto || "")}>
@@ -394,7 +434,7 @@ export default function ObraEfetivo() {
                       <tbody>
                         {filteredSemObra.map((emp: any) => (
                           <tr key={emp.id} className="border-b hover:bg-slate-50">
-                            <td className="p-3 font-medium">{emp.nomeCompleto}</td>
+                            <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
                             <td className="p-3 text-muted-foreground">{emp.funcao || emp.cargo || "—"}</td>
                             <td className="p-3 text-muted-foreground">{emp.setor || "—"}</td>
                             <td className="p-3 text-muted-foreground">
@@ -478,32 +518,102 @@ export default function ObraEfetivo() {
         </Tabs>
       </div>
 
-      {/* Dialog: Alocar/Transferir Funcionário */}
-      <Dialog open={allocDialogOpen} onOpenChange={setAllocDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+      {/* Dialog: Alocar/Transferir Funcionário (Multi-Select) */}
+      <Dialog open={allocDialogOpen} onOpenChange={(open) => { setAllocDialogOpen(open); if (!open) { setSelectedEmployees([]); setEmpSearch(""); } }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
-              {allocForm.employeeId ? "Alocar / Transferir Funcionário" : "Alocar Funcionário"}
+              Alocar Funcionários
             </DialogTitle>
             <DialogDescription>
-              Selecione o funcionário e a obra de destino.
+              Busque e selecione os funcionários, depois escolha a obra de destino.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {!allocForm.employeeId && (
-              <div>
-                <Label>Funcionário</Label>
-                <Select value={allocForm.employeeId ? String(allocForm.employeeId) : "0"} onValueChange={v => setAllocForm(f => ({ ...f, employeeId: Number(v) }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {semObra.map((emp: any) => (
-                      <SelectItem key={emp.id} value={String(emp.id)}>{emp.nomeCompleto} - {emp.funcao || emp.cargo || "Sem função"}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className="space-y-4 py-2 flex-1 overflow-hidden flex flex-col">
+            {/* Selected employees chips */}
+            {selectedEmployees.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto p-2 bg-slate-50 rounded-lg border">
+                {selectedEmployees.map(empId => {
+                  const emp = allEmps.find((e: any) => e.id === empId);
+                  return (
+                    <span key={empId} className="inline-flex items-center gap-1 bg-[#1B2A4A] text-white text-xs px-2.5 py-1 rounded-full">
+                      {emp?.nomeCompleto || `#${empId}`}
+                      <button onClick={() => toggleEmployee(empId)} className="hover:bg-white/20 rounded-full p-0.5 transition-colors">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+                <button onClick={() => setSelectedEmployees([])} className="text-[10px] text-red-500 hover:text-red-700 px-2 py-1">
+                  Limpar todos
+                </button>
               </div>
             )}
+            <div className="text-xs text-muted-foreground">
+              {selectedEmployees.length} funcionário(s) selecionado(s)
+            </div>
+
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, CPF, função ou setor..."
+                value={empSearch}
+                onChange={e => setEmpSearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+            </div>
+
+            {/* Employee list */}
+            <div className="border rounded-lg overflow-y-auto max-h-[200px] flex-shrink-0">
+              {allEmpsQ.isLoading ? (
+                <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              ) : filteredAllEmps.length === 0 ? (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  {empSearch ? "Nenhum funcionário encontrado" : "Nenhum funcionário ativo"}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredAllEmps.map((emp: any) => {
+                    const isSelected = selectedEmployees.includes(emp.id);
+                    return (
+                      <div
+                        key={emp.id}
+                        className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors hover:bg-slate-50 ${
+                          isSelected ? "bg-blue-50 border-l-2 border-l-[#1B2A4A]" : ""
+                        }`}
+                        onClick={() => toggleEmployee(emp.id)}
+                      >
+                        <div className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                          isSelected ? "bg-[#1B2A4A] border-[#1B2A4A]" : "border-gray-300"
+                        }`}>
+                          {isSelected && <CheckCircle className="h-3.5 w-3.5 text-white" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{emp.nomeCompleto}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {emp.funcao || "Sem função"} {emp.setor ? `• ${emp.setor}` : ""}
+                            {emp.obraAtualNome ? ` • Obra: ${emp.obraAtualNome}` : " • Sem obra"}
+                          </p>
+                        </div>
+                        {emp.obraAtualNome && (
+                          <Badge variant="outline" className="text-[10px] shrink-0 bg-blue-50 text-blue-700">{emp.obraAtualNome}</Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {allEmps.length > 50 && !empSearch && (
+                    <div className="text-center py-2 text-xs text-muted-foreground bg-slate-50">
+                      Mostrando 50 de {allEmps.length} — digite para filtrar
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Obra + Data + Motivo */}
             <div>
               <Label>Obra de Destino</Label>
               <Select value={allocForm.obraId ? String(allocForm.obraId) : "0"} onValueChange={v => setAllocForm(f => ({ ...f, obraId: Number(v) }))}>
@@ -515,20 +625,22 @@ export default function ObraEfetivo() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Data de Início</Label>
-              <Input type="date" value={allocForm.dataInicio} onChange={e => setAllocForm(f => ({ ...f, dataInicio: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Motivo (opcional)</Label>
-              <Textarea value={allocForm.motivo} onChange={e => setAllocForm(f => ({ ...f, motivo: e.target.value }))} placeholder="Ex: Transferência por demanda da obra" rows={2} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Data de Início</Label>
+                <Input type="date" value={allocForm.dataInicio} onChange={e => setAllocForm(f => ({ ...f, dataInicio: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Motivo (opcional)</Label>
+                <Input value={allocForm.motivo} onChange={e => setAllocForm(f => ({ ...f, motivo: e.target.value }))} placeholder="Ex: Demanda da obra" />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAllocDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAlloc} disabled={allocMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              {allocMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
-              Confirmar
+            <Button onClick={handleAlloc} disabled={batchAllocMut.isPending || selectedEmployees.length === 0} className="bg-[#1B2A4A] hover:bg-[#243660]">
+              {batchAllocMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+              Alocar {selectedEmployees.length > 0 ? `(${selectedEmployees.length})` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -636,6 +748,7 @@ export default function ObraEfetivo() {
           </div>
         </DialogContent>
       </Dialog>
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

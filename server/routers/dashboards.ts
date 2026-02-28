@@ -5,10 +5,11 @@ import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
-  epiDiscountAlerts, terminationNotices, vacationPeriods,
+  epiDiscountAlerts, terminationNotices, vacationPeriods, goldenRules,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
+import { invokeLLM } from "../_core/llm";
 
 // ============================================================
 // 1. DASHBOARD FUNCIONÁRIOS (análise completa)
@@ -199,8 +200,8 @@ async function getDashFuncionarios(companyId: number) {
       const rows = await db.select({
         estado: employees.estado,
         count: sql<number>`count(*)`,
-      }).from(employees).where(and(eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`, sql`${employees.estado} IS NOT NULL AND ${employees.estado} != ''`)).groupBy(employees.estado).orderBy(sql`count(*) desc`);
-      return rows.map(r => ({ state: (r.estado || '').toUpperCase(), count: Number(r.count) }));
+      }).from(employees).where(and(eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`, sql`${employees.status} IN ('Ativo', 'Ferias')`)).groupBy(employees.estado).orderBy(sql`count(*) desc`);
+      return rows.map(r => ({ state: (r.estado && r.estado.trim()) ? r.estado.toUpperCase() : 'Não informado', count: Number(r.count) }));
     })(),
     ageDist: ageDist.map(r => ({ faixa: r.faixa, sexo: r.sexo || "Outro", count: Number(r.count) })),
     tenureDist: (() => {
@@ -1809,6 +1810,317 @@ async function getDashFerias(companyId: number, ano?: number) {
 }
 
 // ============================================================
+// DASHBOARD ANÁLISE DE PERFIL POR TEMPO DE CASA
+// ============================================================
+const FAIXAS_TEMPO = [
+  { label: '< 3 meses', minDays: 0, maxDays: 90 },
+  { label: '3-6 meses', minDays: 91, maxDays: 180 },
+  { label: '6-12 meses', minDays: 181, maxDays: 365 },
+  { label: '1-2 anos', minDays: 366, maxDays: 730 },
+  { label: '2-5 anos', minDays: 731, maxDays: 1825 },
+  { label: '5+ anos', minDays: 1826, maxDays: 999999 },
+];
+
+function getFaixaTempo(dataAdmissao: string | null): string {
+  if (!dataAdmissao) return 'N/A';
+  const diff = Math.floor((Date.now() - new Date(dataAdmissao).getTime()) / (1000 * 60 * 60 * 24));
+  for (const f of FAIXAS_TEMPO) {
+    if (diff >= f.minDays && diff <= f.maxDays) return f.label;
+  }
+  return '5+ anos';
+}
+
+function getFaixaEtaria(dataNascimento: string | null): string {
+  if (!dataNascimento) return 'N/A';
+  const age = Math.floor((Date.now() - new Date(dataNascimento).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+  if (age < 25) return '18-24';
+  if (age < 35) return '25-34';
+  if (age < 45) return '35-44';
+  if (age < 55) return '45-54';
+  return '55+';
+}
+
+async function getDashPerfilTempoCasa(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const allEmps = await db.select({
+    id: employees.id,
+    nomeCompleto: employees.nomeCompleto,
+    funcao: employees.funcao,
+    setor: employees.setor,
+    sexo: employees.sexo,
+    estadoCivil: employees.estadoCivil,
+    cidade: employees.cidade,
+    estado: employees.estado,
+    dataAdmissao: employees.dataAdmissao,
+    dataNascimento: employees.dataNascimento,
+    tipoContrato: employees.tipoContrato,
+    obraAtualId: employees.obraAtualId,
+    status: employees.status,
+  }).from(employees).where(
+    and(
+      eq(employees.companyId, companyId),
+      sql`${employees.deletedAt} IS NULL`,
+      sql`${employees.status} IN ('Ativo', 'Ferias')`
+    )
+  );
+
+  // Buscar nomes das obras
+  const obrasList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(eq(obras.companyId, companyId));
+  const obraMap = new Map(obrasList.map(o => [o.id, o.nome]));
+
+  // Buscar advertencias count por employee
+  const warnRows = await db.select({
+    employeeId: warnings.employeeId,
+    total: sql<number>`count(*)`,
+  }).from(warnings).where(
+    and(eq(warnings.companyId, companyId), sql`${warnings.deletedAt} IS NULL`)
+  ).groupBy(warnings.employeeId);
+  const warnMap = new Map(warnRows.map(r => [r.employeeId, Number(r.total)]));
+
+  // Buscar atestados count por employee
+  const atestRows = await db.select({
+    employeeId: atestados.employeeId,
+    total: sql<number>`count(*)`,
+  }).from(atestados).where(
+    and(eq(atestados.companyId, companyId), sql`${atestados.deletedAt} IS NULL`)
+  ).groupBy(atestados.employeeId);
+  const atestMap = new Map(atestRows.map(r => [r.employeeId, Number(r.total)]));
+
+  // Agrupar por faixa de tempo
+  const faixaData: Record<string, {
+    total: number;
+    estadoCivil: Record<string, number>;
+    sexo: Record<string, number>;
+    faixaEtaria: Record<string, number>;
+    estado: Record<string, number>;
+    cidade: Record<string, number>;
+    funcao: Record<string, number>;
+    setor: Record<string, number>;
+    obra: Record<string, number>;
+    advertencias: number;
+    atestados: number;
+    funcionarios: { nome: string; funcao: string; tempo: string; advertencias: number; atestados: number }[];
+  }> = {};
+
+  for (const f of FAIXAS_TEMPO) {
+    faixaData[f.label] = {
+      total: 0,
+      estadoCivil: {}, sexo: {}, faixaEtaria: {}, estado: {}, cidade: {},
+      funcao: {}, setor: {}, obra: {},
+      advertencias: 0, atestados: 0,
+      funcionarios: [],
+    };
+  }
+
+  for (const emp of allEmps) {
+    const faixa = getFaixaTempo(emp.dataAdmissao);
+    if (faixa === 'N/A' || !faixaData[faixa]) continue;
+    const d = faixaData[faixa];
+    d.total++;
+
+    const ec = emp.estadoCivil || 'Não informado';
+    d.estadoCivil[ec] = (d.estadoCivil[ec] || 0) + 1;
+
+    const sx = emp.sexo === 'M' ? 'Masculino' : emp.sexo === 'F' ? 'Feminino' : 'Outro';
+    d.sexo[sx] = (d.sexo[sx] || 0) + 1;
+
+    const fe = getFaixaEtaria(emp.dataNascimento);
+    d.faixaEtaria[fe] = (d.faixaEtaria[fe] || 0) + 1;
+
+    const uf = (emp.estado && emp.estado.trim()) ? emp.estado.toUpperCase() : 'Não informado';
+    d.estado[uf] = (d.estado[uf] || 0) + 1;
+
+    const cid = emp.cidade || 'Não informado';
+    d.cidade[cid] = (d.cidade[cid] || 0) + 1;
+
+    const fn = emp.funcao || 'Não informado';
+    d.funcao[fn] = (d.funcao[fn] || 0) + 1;
+
+    const st = emp.setor || 'Não informado';
+    d.setor[st] = (d.setor[st] || 0) + 1;
+
+    const ob = emp.obraAtualId ? (obraMap.get(emp.obraAtualId) || 'Sem obra') : 'Sem obra';
+    d.obra[ob] = (d.obra[ob] || 0) + 1;
+
+    const advCount = warnMap.get(emp.id) || 0;
+    const atCount = atestMap.get(emp.id) || 0;
+    d.advertencias += advCount;
+    d.atestados += atCount;
+
+    d.funcionarios.push({
+      nome: emp.nomeCompleto || '',
+      funcao: emp.funcao || '',
+      tempo: faixa,
+      advertencias: advCount,
+      atestados: atCount,
+    });
+  }
+
+  // Converter para array ordenada
+  const faixas = FAIXAS_TEMPO.map(f => ({
+    label: f.label,
+    ...faixaData[f.label],
+    estadoCivil: Object.entries(faixaData[f.label].estadoCivil).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+    sexo: Object.entries(faixaData[f.label].sexo).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+    faixaEtaria: Object.entries(faixaData[f.label].faixaEtaria).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+    estado: Object.entries(faixaData[f.label].estado).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+    cidade: Object.entries(faixaData[f.label].cidade).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+    funcao: Object.entries(faixaData[f.label].funcao).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+    setor: Object.entries(faixaData[f.label].setor).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+    obra: Object.entries(faixaData[f.label].obra).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value),
+  }));
+
+  return {
+    totalAtivos: allEmps.length,
+    faixas,
+  };
+}
+
+async function getAnaliseIAPerfil(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Buscar dados do dashboard
+  const dashData = await getDashPerfilTempoCasa(companyId);
+  if (!dashData) return { analise: 'Dados não disponíveis.' };
+
+  // Buscar regras de ouro da empresa
+  const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
+    .from(goldenRules)
+    .where(and(eq(goldenRules.companyId, companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+
+  // Buscar demitidos recentes para análise de turnover
+  const demitidos = await db.select({
+    funcao: employees.funcao,
+    setor: employees.setor,
+    sexo: employees.sexo,
+    estadoCivil: employees.estadoCivil,
+    estado: employees.estado,
+    cidade: employees.cidade,
+    dataAdmissao: employees.dataAdmissao,
+    categoriaDesligamento: employees.categoriaDesligamento,
+  }).from(employees).where(
+    and(
+      eq(employees.companyId, companyId),
+      sql`${employees.deletedAt} IS NULL`,
+      sql`${employees.status} = 'Demitido'`
+    )
+  );
+
+  // Montar resumo para a IA
+  const resumoFaixas = dashData.faixas.map(f => {
+    const topEstadoCivil = f.estadoCivil.slice(0, 3).map(e => `${e.label}(${e.value})`).join(', ');
+    const topFuncao = f.funcao.slice(0, 5).map(e => `${e.label}(${e.value})`).join(', ');
+    const topEstado = f.estado.slice(0, 3).map(e => `${e.label}(${e.value})`).join(', ');
+    const topSexo = f.sexo.map(e => `${e.label}(${e.value})`).join(', ');
+    const topIdade = f.faixaEtaria.slice(0, 3).map(e => `${e.label}(${e.value})`).join(', ');
+    return `Faixa "${f.label}" (${f.total} funcionários): Estado civil: ${topEstadoCivil}. Funções: ${topFuncao}. UF: ${topEstado}. Sexo: ${topSexo}. Idade: ${topIdade}. Advertências: ${f.advertencias}. Atestados: ${f.atestados}.`;
+  }).join('\n');
+
+  let resumoDemitidos = '';
+  if (demitidos.length > 0) {
+    const categoriasArr: string[] = [];
+    const catSet = new Set<string>();
+    for (const d of demitidos) { const c = d.categoriaDesligamento || 'N/A'; if (!catSet.has(c)) { catSet.add(c); categoriasArr.push(c); } }
+    const funcFreq: Record<string, number> = {};
+    for (const d of demitidos) { const fn = d.funcao || 'N/A'; funcFreq[fn] = (funcFreq[fn] || 0) + 1; }
+    const topFuncDem = Object.entries(funcFreq).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k);
+    resumoDemitidos = `\nDemitidos (${demitidos.length} total): Categorias: ${categoriasArr.join(', ')}. Funções mais frequentes: ${topFuncDem.join(', ')}.`;
+  }
+
+  const regrasTexto = rules.length > 0 ? `\nRegras de Ouro da empresa:\n${rules.map(r => `- [${r.categoria}] ${r.titulo}: ${r.descricao}`).join('\n')}` : '';
+
+  const prompt = `Você é um analista de RH especializado em construção civil. Analise os dados dos funcionários agrupados por tempo de casa e forneça insights estratégicos.
+
+Dados da empresa (${dashData.totalAtivos} funcionários ativos):
+${resumoFaixas}
+${resumoDemitidos}
+${regrasTexto}
+
+Forneça uma análise estruturada em JSON com exatamente este formato:
+{
+  "pontosPositivos": [
+    { "titulo": "Título curto", "descricao": "Explicação detalhada do que aproveitar", "acaoSugerida": "Ação prática" }
+  ],
+  "pontosNegativos": [
+    { "titulo": "Título curto", "descricao": "Explicação do que evitar ou melhorar", "acaoSugerida": "Ação prática" }
+  ],
+  "perfilIdeal": "Descrição do perfil ideal de contratação baseado nos padrões de retenção",
+  "alertas": ["Alerta 1", "Alerta 2"]
+}
+
+Foque em:
+- PONTOS POSITIVOS: O que os funcionários com mais tempo de casa têm em comum (perfil que retém bem, características a replicar nas contratações)
+- PONTOS NEGATIVOS: Padrões dos que saíram rápido ou têm problemas (advertências, faltas, perfil a evitar ou trabalhar melhor no onboarding)
+- Considere as Regras de Ouro da empresa se fornecidas
+- Seja específico com dados e números, não genérico
+- Máximo 4 pontos positivos e 4 negativos
+- Responda APENAS o JSON, sem texto adicional`;
+
+  try {
+    const result = await invokeLLM({
+      messages: [
+        { role: 'system', content: 'Você é um analista de RH especializado em construção civil brasileira. Responda sempre em português do Brasil. Retorne APENAS JSON válido.' },
+        { role: 'user', content: prompt },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'analise_perfil',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              pontosPositivos: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    titulo: { type: 'string' },
+                    descricao: { type: 'string' },
+                    acaoSugerida: { type: 'string' },
+                  },
+                  required: ['titulo', 'descricao', 'acaoSugerida'],
+                  additionalProperties: false,
+                },
+              },
+              pontosNegativos: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    titulo: { type: 'string' },
+                    descricao: { type: 'string' },
+                    acaoSugerida: { type: 'string' },
+                  },
+                  required: ['titulo', 'descricao', 'acaoSugerida'],
+                  additionalProperties: false,
+                },
+              },
+              perfilIdeal: { type: 'string' },
+              alertas: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['pontosPositivos', 'pontosNegativos', 'perfilIdeal', 'alertas'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = result.choices?.[0]?.message?.content;
+    if (content && typeof content === 'string') {
+      return { analise: JSON.parse(content) };
+    }
+    return { analise: null };
+  } catch (err) {
+    console.error('[IA Perfil] Erro:', err);
+    return { analise: null };
+  }
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 export const dashboardsRouter = router({
@@ -1829,4 +2141,6 @@ export const dashboardsRouter = router({
   juridico: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashJuridico(input.companyId)),
   avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashAvisoPrevio(input.companyId, input.ano)),
   ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano)),
+  perfilTempoCasa: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashPerfilTempoCasa(input.companyId)),
+  analiseIAPerfil: protectedProcedure.input(z.object({ companyId: z.number() })).mutation(({ input }) => getAnaliseIAPerfil(input.companyId)),
 });

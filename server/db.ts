@@ -423,7 +423,17 @@ export async function getEmployees(companyId: number, search?: string, status?: 
     }
     conditions.push(or(...orConditions)!);
   }
-  return db.select().from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
+  // Get all employee rows
+  const rows = await db.select().from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
+  
+  // Enrich with obra name if any employees have obraAtualId
+  const obraIds = Array.from(new Set(rows.filter(r => r.obraAtualId).map(r => r.obraAtualId!)));
+  let obraMap: Record<number, string> = {};
+  if (obraIds.length > 0) {
+    const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.join(obraIds.map(id => sql`${id}`), sql`,`)})`);
+    obraList.forEach(o => { obraMap[o.id] = o.nome; });
+  }
+  return rows.map(r => ({ ...r, obraAtualNome: r.obraAtualId ? (obraMap[r.obraAtualId] || null) : null }));
 }
 
 export async function getEmployeeById(id: number, companyId: number) {

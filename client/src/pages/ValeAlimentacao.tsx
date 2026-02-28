@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import MonthSelector from "@/components/MonthSelector";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,7 @@ export default function ValeAlimentacao() {
   const [histEmployeeId, setHistEmployeeId] = useState<number | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [detailRecord, setDetailRecord] = useState<any>(null);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
   // Queries
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: !!companyId });
@@ -426,7 +428,7 @@ export default function ValeAlimentacao() {
                           <tr key={l.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                             <td className="px-4 py-2.5">
                               <div>
-                                <span className="font-medium text-sm">{l.nomeCompleto}</span>
+                                <span className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(l.employeeId)}>{l.nomeCompleto}</span>
                                 {l.obraNome && (
                                   <span className="block text-xs text-muted-foreground"><Building2 className="h-3 w-3 inline mr-1" />{l.obraNome}</span>
                                 )}
@@ -943,6 +945,7 @@ export default function ValeAlimentacao() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

@@ -14,7 +14,7 @@ import {
   Loader2, Users, Briefcase, Target, PieChart, Zap, Hash,
   Bell, BellRing, CheckCheck, Settings2, RefreshCw, Trash2
 } from "lucide-react";
-import { formatDateTime } from "@/lib/dateUtils";
+import { formatDateTime, formatDate } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { CHART_PALETTE, SEMANTIC_COLORS } from "@/lib/chartColors";
@@ -440,7 +440,7 @@ export default function PainelJuridico() {
                             <div className="flex items-center justify-between gap-1">
                               <span className="font-semibold truncate flex-1">{a.reclamante}</span>
                               <span className={`text-[10px] font-mono shrink-0 ${urgente ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
-                                {dataAud ? dataAud.toLocaleDateString("pt-BR") : "—"}
+                                {a.data ? formatDate(a.data) : "—"}
                               </span>
                             </div>
                             <div className="flex items-center justify-between mt-0.5">
@@ -827,7 +827,7 @@ export default function PainelJuridico() {
                               }`}>{prioridadeLabels[alerta.prioridade]}</span>
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">{alerta.descricao}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">{alerta.createdAt ? new Date(alerta.createdAt).toLocaleString('pt-BR') : ''}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{alerta.createdAt ? formatDateTime(alerta.createdAt) : ''}</p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             {!alerta.lido && (
@@ -881,7 +881,7 @@ export default function PainelJuridico() {
                     <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-foreground">{a.numero}</span>
-                        <span className="text-xs text-amber-700 font-medium">{a.data ? new Date(a.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span>
+                        <span className="text-xs text-amber-700 font-medium">{a.data ? formatDate(a.data) : '—'}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{a.reclamante} {a.vara ? `• ${a.vara}` : ''}</p>
                     </div>
@@ -899,7 +899,7 @@ export default function PainelJuridico() {
                 </div>
                 <span className="text-[10px] text-gray-500">
                   {autoCheckConfig?.intervaloMinutos ? `A cada ${autoCheckConfig.intervaloMinutos >= 60 ? `${autoCheckConfig.intervaloMinutos / 60}h` : `${autoCheckConfig.intervaloMinutos}min`}` : 'Não configurado'}
-                  {autoCheckConfig?.ultimaVerificacao ? ` • Última: ${new Date(autoCheckConfig.ultimaVerificacao).toLocaleString('pt-BR')}` : ''}
+                  {autoCheckConfig?.ultimaVerificacao ? ` • Última: ${formatDateTime(autoCheckConfig.ultimaVerificacao)}` : ''}
                 </span>
               </div>
             </div>

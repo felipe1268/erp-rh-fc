@@ -98,10 +98,17 @@ export default function BrazilMap({ title, icon, data, onStateClick, colorScheme
     return palette.active(d.count / maxCount);
   };
 
-  // Top states list
+  // Top states list (only valid state codes)
   const topStates = useMemo(() => {
-    return [...data].filter(d => d.count > 0).sort((a, b) => b.count - a.count).slice(0, 8);
+    return [...data].filter(d => d.count > 0 && d.state.length === 2 && d.state !== 'NÃ').sort((a, b) => b.count - a.count).slice(0, 8);
   }, [data]);
+
+  // "Não informado" count (entries that are not valid state codes)
+  const naoInformadoCount = useMemo(() => {
+    return data.filter(d => d.count > 0 && (d.state.length !== 2 || d.state === 'NÃ')).reduce((sum, d) => sum + d.count, 0);
+  }, [data]);
+
+  const totalCount = useMemo(() => data.reduce((sum, d) => sum + d.count, 0), [data]);
 
   return (
     <Card className="border-border">
@@ -206,8 +213,17 @@ export default function BrazilMap({ title, icon, data, onStateClick, colorScheme
                   );
                 })}
               </div>
+              {naoInformadoCount > 0 && (
+                <div className="flex items-center gap-2 text-xs px-1.5 py-1 bg-gray-100 rounded mt-1">
+                  <span className="font-mono text-muted-foreground w-4 text-right">—</span>
+                  <div className="w-3 h-3 rounded-sm shrink-0 bg-gray-300" />
+                  <span className="font-medium truncate flex-1">Não informado</span>
+                  <span className="font-bold text-gray-500">{naoInformadoCount}</span>
+                </div>
+              )}
+              <div className="text-[10px] text-muted-foreground mt-2 text-right">Total: {totalCount}</div>
               {/* Color scale */}
-              <div className="mt-4 pt-3 border-t border-border">
+              <div className="mt-2 pt-3 border-t border-border">
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-muted-foreground">0</span>
                   <div className="flex-1 h-2 rounded-full overflow-hidden flex">

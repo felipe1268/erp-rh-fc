@@ -66,6 +66,31 @@ export default function DashFerias() {
     setDrillDialog({ title: `Férias — ${labels[statusFilter] || statusFilter}`, items });
   }
 
+  function drillByFinanceiro(tipo: "provisao" | "a_pagar" | "vencidas" | "concluido") {
+    if (!data?.feriasLista) return;
+    let items: any[] = [];
+    let title = "";
+    switch (tipo) {
+      case "provisao":
+        items = data.feriasLista;
+        title = "Provisão Total — Todos os Períodos";
+        break;
+      case "a_pagar":
+        items = data.feriasLista.filter((f: any) => f.status === "pendente" || f.status === "agendada");
+        title = "A Pagar — Pendentes + Agendadas";
+        break;
+      case "vencidas":
+        items = data.feriasLista.filter((f: any) => f.status === "vencida" || f.vencida === 1);
+        title = "Custo Vencidas";
+        break;
+      case "concluido":
+        items = data.feriasLista.filter((f: any) => f.status === "concluida");
+        title = "Já Pago — Concluídos";
+        break;
+    }
+    setDrillDialog({ title, items });
+  }
+
   function drillByChart(info: ChartClickInfo, chartType: string) {
     if (!data?.feriasLista) return;
     let items: any[] = [];
@@ -221,21 +246,21 @@ export default function DashFerias() {
 
       {/* KPIs - Financeiro */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="border-l-4 border-l-[#5B8DEF] bg-white">
+        <Card className="border-l-4 border-l-[#5B8DEF] bg-white cursor-pointer hover:shadow-md hover:ring-2 hover:ring-blue-300 transition-all" onClick={() => drillByFinanceiro("provisao")}>
           <CardContent className="pt-4 pb-3 px-4">
             <p className="text-xs font-medium text-[#64748B] uppercase tracking-wide">Provisão Total</p>
             <p className="text-xl font-bold text-[#0F172A] mt-1">{fmtBRL(financeiro.custoTotalEstimado)}</p>
             <p className="text-xs text-[#94A3B8] mt-1">{kpis.total} períodos em {ano}</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-[#F59E0B] bg-white">
+        <Card className="border-l-4 border-l-[#F59E0B] bg-white cursor-pointer hover:shadow-md hover:ring-2 hover:ring-amber-300 transition-all" onClick={() => drillByFinanceiro("a_pagar")}>
           <CardContent className="pt-4 pb-3 px-4">
             <p className="text-xs font-medium text-[#64748B] uppercase tracking-wide">A Pagar (Pendente + Agendada)</p>
             <p className="text-xl font-bold text-[#F59E0B] mt-1">{fmtBRL(financeiro.custoPendente)}</p>
             <p className="text-xs text-[#94A3B8] mt-1">{kpis.pendentes + kpis.agendadas} períodos</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-[#EF4444] bg-white">
+        <Card className="border-l-4 border-l-[#EF4444] bg-white cursor-pointer hover:shadow-md hover:ring-2 hover:ring-red-300 transition-all" onClick={() => drillByFinanceiro("vencidas")}>
           <CardContent className="pt-4 pb-3 px-4">
             <p className="text-xs font-medium text-[#64748B] uppercase tracking-wide">Custo Vencidas</p>
             <p className="text-xl font-bold text-[#EF4444] mt-1">{fmtBRL(financeiro.custoVencidas)}</p>
@@ -247,7 +272,7 @@ export default function DashFerias() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-[#10B981] bg-white">
+        <Card className="border-l-4 border-l-[#10B981] bg-white cursor-pointer hover:shadow-md hover:ring-2 hover:ring-emerald-300 transition-all" onClick={() => drillByFinanceiro("concluido")}>
           <CardContent className="pt-4 pb-3 px-4">
             <p className="text-xs font-medium text-[#64748B] uppercase tracking-wide">Já Pago (Concluído)</p>
             <p className="text-xl font-bold text-[#10B981] mt-1">{fmtBRL(financeiro.custoConcluido)}</p>

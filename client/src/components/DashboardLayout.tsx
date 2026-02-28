@@ -123,6 +123,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: AlertTriangle, label: "Aviso Prévio", path: "/dashboards/aviso-previo" },
       { icon: Palmtree, label: "Férias", path: "/dashboards/ferias" },
       { icon: Building2, label: "Efetivo por Obra", path: "/dashboards/efetivo-obra" },
+      { icon: UserSearch, label: "Perfil por Tempo de Casa", path: "/dashboards/perfil-tempo-casa" },
     ],
   },
   {

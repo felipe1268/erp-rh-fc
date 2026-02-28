@@ -326,7 +326,7 @@ export const employees = mysqlTable("employees", {
 	salarioBase: varchar({ length: 20 }),
 	valorHora: varchar({ length: 20 }),
 	horasMensais: varchar({ length: 10 }),
-	tipoContrato: mysqlEnum(['CLT','PJ','Temporario','Estagio','Aprendiz','Horista']),
+	tipoContrato: mysqlEnum(['CLT','PJ','Temporario','Estagio','Aprendiz','Horista']).default('CLT'),
 	jornadaTrabalho: varchar({ length: 50 }),
 	banco: varchar({ length: 100 }),
 	bancoNome: varchar({ length: 100 }),

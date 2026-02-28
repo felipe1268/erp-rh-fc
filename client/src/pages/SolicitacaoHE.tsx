@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -40,6 +41,7 @@ export default function SolicitacaoHE() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -376,7 +378,7 @@ export default function SolicitacaoHE() {
                                 className="rounded"
                               />
                             </td>
-                            <td className="p-2 font-medium">{emp.nomeCompleto}</td>
+                            <td className="p-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
                             <td className="p-2 text-muted-foreground">{emp.funcao || "-"}</td>
                             <td className="p-2 text-muted-foreground">{emp.cpf || "-"}</td>
                           </tr>
@@ -595,6 +597,7 @@ export default function SolicitacaoHE() {
           )}
         </div>
       </div>
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

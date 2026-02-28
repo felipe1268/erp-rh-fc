@@ -7,9 +7,12 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import FullScreenDialog from "@/components/FullScreenDialog";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { toast } from "sonner";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
+import { formatDate as formatDateBR, formatDateTime as formatDateTimeBR } from "@/lib/dateUtils";
 import {
   Plus, Search, Gavel, ArrowLeft, Calendar, AlertTriangle,
   Trash2, Pencil, Eye, ChevronDown, ChevronUp, Clock,
@@ -106,6 +109,7 @@ export default function ProcessosTrabalhistas() {
   const { user } = useAuth();
   const [viewMode, setViewMode] = useState<"lista" | "detalhe" | "novo">("lista");
   const [selectedProcessoId, setSelectedProcessoId] = useState<number | null>(null);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisco, setFilterRisco] = useState("all");
@@ -706,7 +710,7 @@ export default function ProcessosTrabalhistas() {
 
                         {/* Metadata */}
                         <div className="text-xs text-muted-foreground border-t pt-2 flex items-center justify-between">
-                          <span>Análise v{analiseIA.data.versaoAnalise} • {analiseIA.data.criadoPor} • {analiseIA.data.createdAt ? new Date(analiseIA.data.createdAt).toLocaleString('pt-BR') : ''}</span>
+                          <span>Análise v{analiseIA.data.versaoAnalise} • {analiseIA.data.criadoPor} • {analiseIA.data.createdAt ? formatDateTimeBR(analiseIA.data.createdAt) : ''}</span>
                           <span>{analiseIA.data.tempoAnaliseMs ? `${(analiseIA.data.tempoAnaliseMs / 1000).toFixed(1)}s` : ''}</span>
                         </div>
                       </div>
@@ -782,7 +786,7 @@ export default function ProcessosTrabalhistas() {
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Reclamante</span><span className="font-medium">{p.reclamante}</span></div>
                     {p.employee && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium">{p.employee.nomeCompleto}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(p.employee.id)}>{p.employee.nomeCompleto}</span></div>
                     )}
                     <EditableField label="Adv. Reclamante" value={p.advogadoReclamante} field="advogadoReclamante" processoId={p.id} onSave={atualizarMut.mutate} />
                     <EditableField label="Adv. Empresa" value={p.advogadoEmpresa} field="advogadoEmpresa" processoId={p.id} onSave={atualizarMut.mutate} />
@@ -1495,13 +1499,14 @@ export default function ProcessosTrabalhistas() {
         {/* ============================================================ */}
         {/* DIALOG: CHANGELOG DATAJUD - Relatório de Mudanças */}
         {/* ============================================================ */}
-        <Dialog open={showChangelogDialog} onOpenChange={setShowChangelogDialog}>
-          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-blue-700">
-                <Database className="h-5 w-5" /> Relatório de Atualização DataJud
-              </DialogTitle>
-            </DialogHeader>
+        <FullScreenDialog
+          open={showChangelogDialog}
+          onClose={() => setShowChangelogDialog(false)}
+          title="Relatório de Atualização DataJud"
+          subtitle="Resultado da verificação automática via API Pública DataJud (CNJ)"
+          icon={<Database className="h-5 w-5" />}
+          headerColor="bg-gradient-to-r from-blue-700 to-blue-500"
+        >
             {changelogData && (
               <div className="space-y-4">
                 {/* Resumo geral */}
@@ -1614,16 +1619,13 @@ export default function ProcessosTrabalhistas() {
                 })()}
 
                 <div className="text-xs text-muted-foreground text-center pt-2 border-t">
-                  Atualização realizada em {new Date().toLocaleString('pt-BR')} via API Pública DataJud (CNJ)
+                  Atualização realizada em {formatDateTimeBR(new Date())} via API Pública DataJud (CNJ)
                 </div>
               </div>
             )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowChangelogDialog(false)}>Fechar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </FullScreenDialog>
       </div>
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

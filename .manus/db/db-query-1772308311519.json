@@ -1,0 +1,18 @@
+{
+  "query": "SELECT tipoContrato, COUNT(*) as cnt FROM employees WHERE deletedAt IS NULL GROUP BY tipoContrato;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT tipoContrato, COUNT(*) as cnt FROM employees WHERE deletedAt IS NULL GROUP BY tipoContrato;",
+  "rows": [
+    {
+      "tipoContrato": "NULL",
+      "cnt": "75"
+    },
+    {
+      "tipoContrato": "CLT",
+      "cnt": "231"
+    }
+  ],
+  "messages": [],
+  "stdout": "tipoContrato\tcnt\nNULL\t75\nCLT\t231\n",
+  "stderr": "",
+  "execution_time_ms": 268
+}

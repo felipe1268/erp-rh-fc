@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -120,6 +121,7 @@ export default function Epis() {
   const [selectedEpis, setSelectedEpis] = useState<Set<number>>(new Set());
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
   const [fichaDelivery, setFichaDelivery] = useState<any>(null);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
 
   // Queries
   const episQ = trpc.epis.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -1781,6 +1783,7 @@ export default function Epis() {
           </div>
         </div>
       )}
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

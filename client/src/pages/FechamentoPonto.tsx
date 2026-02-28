@@ -1214,7 +1214,7 @@ export default function FechamentoPonto() {
             </Button>
             <Button variant={viewMode === "simulador_horistas" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("simulador_horistas")}
               className={viewMode === "simulador_horistas" ? "bg-emerald-600 text-white" : ""}>
-              <ListChecks className="h-4 w-4 mr-1" /> Simulador Horistas
+              <ListChecks className="h-4 w-4 mr-1" /> Simulador CLT (Horistas)
             </Button>
             <Button variant={viewMode === "descontos_clt" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("descontos_clt")}
               className={viewMode === "descontos_clt" ? "bg-rose-600 text-white" : ""}>
@@ -3076,10 +3076,10 @@ export default function FechamentoPonto() {
             <CardHeader className="pb-3 bg-emerald-50 rounded-t-lg">
               <CardTitle className="text-base flex items-center gap-2 text-emerald-800">
                 <ListChecks className="h-5 w-5" />
-                Simulador de Folha — Horistas
+                Simulador de Folha — CLT (Horistas)
               </CardTitle>
               <p className="text-xs text-emerald-600 mt-1">
-                Simule o custo mensal dos colaboradores do tipo "Horista" com base nos dias úteis do mês.
+                Simule o custo mensal dos colaboradores CLT com base nos dias úteis do mês e valor/hora.
               </p>
             </CardHeader>
             <CardContent className="pt-4">
@@ -3106,15 +3106,15 @@ export default function FechamentoPonto() {
               ) : !simuladorData.data || simuladorData.data.totalFuncionarios === 0 ? (
                 <div className="text-center py-8">
                   <ListChecks className="h-10 w-10 text-emerald-300 mx-auto mb-3" />
-                  <p className="font-medium">Nenhum colaborador do tipo "Horista" encontrado</p>
-                  <p className="text-sm text-muted-foreground mt-1">Cadastre colaboradores com tipo de contrato "Horista" e valor da hora preenchido.</p>
+                  <p className="font-medium">Nenhum colaborador CLT com valor/hora encontrado</p>
+                  <p className="text-sm text-muted-foreground mt-1">Cadastre colaboradores CLT com valor da hora preenchido.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-emerald-700">{simuladorData.data.totalFuncionarios}</p>
-                      <p className="text-xs text-emerald-600">Horistas Ativos</p>
+                      <p className="text-xs text-emerald-600">CLT com Valor/Hora</p>
                     </div>
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
                       <p className="text-2xl font-bold text-emerald-700">{simuladorData.data.horasTotaisMes}h</p>

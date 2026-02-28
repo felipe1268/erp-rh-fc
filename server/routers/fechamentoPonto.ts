@@ -2658,7 +2658,7 @@ export const fechamentoPontoRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
       
-      // Buscar todos os funcionários horistas ativos
+      // Buscar todos os funcionários CLT ativos (todos são horistas)
       const empList = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
@@ -2672,7 +2672,8 @@ export const fechamentoPontoRouter = router({
       }).from(employees).where(
         and(
           eq(employees.companyId, input.companyId),
-          eq(employees.tipoContrato, 'Horista'),
+          eq(employees.tipoContrato, 'CLT'),
+          sql`${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != ''`,
           sql`${employees.status} IN ('Ativo', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
         )

@@ -3628,3 +3628,37 @@
 - [x] Aba Inconsistências na tela Efetivo por Obra com opções: Esporádico / Transferir
 - [x] Esporádico: marca como resolvido, mantém alocação principal
 - [x] Transferir: executa transferência automática e registra no histórico de alocações
+
+## Rev. 124 - KPIs Clicáveis no Dashboard de Férias
+- [ ] KPIs de status (Total, Pendentes, Agendadas, Vencidas, Em Gozo, Concluídas, Canceladas) devem ser clicáveis
+- [ ] Ao clicar em um KPI, filtrar todos os dados do dashboard para aquele status
+- [ ] KPIs financeiros (Provisão, A Pagar, Custo Vencidas, Já Pago) também devem filtrar
+- [ ] Visual feedback: KPI selecionado deve ter destaque visual (borda, sombra ou fundo diferente)
+- [ ] Botão "Limpar filtro" ou clicar novamente no KPI ativo para voltar à visão geral
+- [ ] Gráficos, tabelas e alertas devem respeitar o filtro selecionado
+
+## Rev. 125 - Dialog Alocar Funcionário com Multi-Select
+- [ ] Substituir select simples por campo de busca com digitação e seleção múltipla de colaboradores
+- [ ] Mostrar TODOS os funcionários ativos no dialog (não apenas sem obra)
+- [ ] Mostrar chips/tags dos funcionários selecionados com botão X para remover
+- [ ] Filtrar lista conforme o usuário digita (nome, matrícula, CPF)
+- [ ] Permitir alocar vários funcionários de uma vez na mesma obra
+- [ ] Manter campo de Obra de Destino, Data de Início e Motivo
+
+## Rev. 126 - Correções e Melhorias
+- [x] Corrigir horário UTC para GMT-3 (Brasília) no módulo jurídico (Central de Alertas / DataJud)
+- [x] Clicar no nome do funcionário na tela de ASO abre Raio-X em full screen
+- [x] Clicar no nome do funcionário em outras telas também abre Raio-X full screen (ObraEfetivo, Epis, ProcessosTrabalhistas, ValeAlimentacao, SolicitacaoHE)
+- [x] KPIs financeiros do Dashboard de Férias clicáveis (Provisão, A Pagar, Custo Vencidas, Já Pago)
+- [x] Feedback visual (ring/highlight) nos KPIs ao clicar
+- [x] Dialog "Relatório de Atualização DataJud" em full screen (já usava FullScreenDialog)
+- [x] Tipo de contrato: remover "Horista" como opção separada, manter apenas CLT e PJ (todos CLT são horistas)
+- [x] Corrigir funcionário com tipo "Horista" para "CLT" no banco (127 registros atualizados)
+- [x] Mapa de Distribuição por Estado: somatória não bate com total de ativos (adicionado "Não informado" + total no ranking)
+
+## Rev. 127 - Dashboard Análise de Perfil por Tempo de Casa
+- [x] Backend: endpoint que agrupa funcionários por faixa de tempo de casa e cruza com estado civil, localidade, função, gênero, faixa etária, obra
+- [x] Backend: endpoint de análise IA que gera insights (pontos positivos a aproveitar e negativos a evitar)
+- [x] Frontend: Dashboard com gráficos comparativos por faixa de tempo de casa
+- [x] Frontend: Seção de IA com análise de pontos positivos e negativos
+- [x] Adicionar rota e menu para o novo dashboard
