@@ -1093,7 +1093,32 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(...conditions))
         .orderBy(desc(vacationPeriods.periodoConcessivoFim));
         
-        return rows;
+        // Recálculo em tempo real dos valores de férias usando salário atual
+        const recalculated = rows.map(r => {
+          try {
+            const salAtual = parseBRL(r.employeeSalario || '0');
+            const diasGozo = r.diasGozo || 30;
+            const abono = r.abonoPecuniario ? 1 : 0;
+            const diasAbono = abono ? Math.floor(diasGozo / 3) : 0;
+            const diasEfetivos = diasGozo - diasAbono;
+            if (salAtual > 0) {
+              const valorFerias = (salAtual / 30) * diasEfetivos;
+              const terco = valorFerias / 3;
+              const valorAbono = abono ? ((salAtual / 30) * diasAbono + (salAtual / 30) * diasAbono / 3) : 0;
+              const pagDobro = r.pagamentoEmDobro === 1;
+              const mult = pagDobro ? 2 : 1;
+              const totalRecalc = (valorFerias + terco + valorAbono) * mult;
+              return {
+                ...r,
+                valorFerias: (valorFerias * mult).toFixed(2),
+                valorTercoConstitucional: (terco * mult).toFixed(2),
+                valorTotal: totalRecalc.toFixed(2),
+              };
+            }
+          } catch {}
+          return r;
+        });
+        return recalculated;
       }),
 
     calendario: protectedProcedure

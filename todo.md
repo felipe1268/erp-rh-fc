@@ -3432,3 +3432,25 @@
 - [x] Atualizar getDashAvisoPrevio para recalcular valores de rescisão em tempo real (não usar valorEstimadoTotal armazenado)
 - [x] Recalcular breakdownRescisao com valores atualizados
 - [x] Recalcular custoPorSetor com valores atualizados
+
+## Recálculo em Tempo Real - Tela de Féria- [x] Analisar como valores de férias são calculados/armazenados
+- [x] Implementar recálculo em tempo real na lista de férias (usar salário atual)
+- [x] Implementar recálculo em tempo real no Dashboard de Férias
+## Exportar PDF/TRCT no Aviso Prévio
+- [x] Criar endpoint backend para gerar PDF do TRCT (já existia gerarPdf)
+- [x] Adicionar botão "Exportar TRCT (PDF)" no card de detalhes do Aviso Prévio
+- [x] Gerar documento TRCT com todas as verbas rescisórias (abre em nova aba com opção de imprimir/salvar PDF)
+
+## Notificação Automática - Prazo Pagamento Rescisão (Art. 477 §6º CLT)
+- [x] Implementar verificação automática de prazos de pagamento de rescisão (job a cada 6h)
+- [x] Enviar notificação ao owner quando prazo estiver próximo (3 dias antes)
+- [x] Enviar notificação quando prazo estiver vencido
+
+## Correções Painel RH
+- [x] Verificar e corrigir cálculo da Massa Salarial no Painel RH - CORRIGIDO (parseBRL ao invés de parseFloat)
+- [x] Corrigir valor de Avisos Prévios no Painel RH para usar recálculo em tempo real - CORRIGIDO
+- [x] Corrigir custo férias vencidas e valor em risco jurídico (parseBRL)
+
+## Atualização de Revisão do Sistema
+- [x] Atualizar número de revisão de 114 para 115
+- [x] Registrar changelog completo de todas as alterações feitas nesta sessão

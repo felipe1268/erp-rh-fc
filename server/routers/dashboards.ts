@@ -1575,7 +1575,25 @@ async function getDashFerias(companyId: number, ano?: number) {
     .where(and(eq(vacationPeriods.companyId, companyId), isNull(vacationPeriods.deletedAt)))
     .orderBy(desc(vacationPeriods.createdAt));
 
-  const parseVal = (v: string | null) => { const n = parseFloat(v || '0'); return isNaN(n) ? 0 : n; };
+  // Recalcular valores de férias em tempo real usando salário atual
+  function recalcFeriasVal(p: typeof allPeriods[0]): number {
+    try {
+      const sal = parseBRL(p.salarioBase || '0');
+      const diasGozo = p.diasGozo || 30;
+      const abono = p.abonoPecuniario ? 1 : 0;
+      const diasAbono = abono ? Math.floor(diasGozo / 3) : 0;
+      const diasEfetivos = diasGozo - diasAbono;
+      if (sal > 0) {
+        const valorFerias = (sal / 30) * diasEfetivos;
+        const terco = valorFerias / 3;
+        const valorAbonoPec = abono ? ((sal / 30) * diasAbono + (sal / 30) * diasAbono / 3) : 0;
+        const pagDobro = p.pagamentoEmDobro === 1;
+        const mult = pagDobro ? 2 : 1;
+        return (valorFerias + terco + valorAbonoPec) * mult;
+      }
+    } catch {}
+    return parseBRL(p.valorTotal || '0');
+  }
 
   // KPIs por status
   const total = allPeriods.length;
@@ -1587,11 +1605,11 @@ async function getDashFerias(companyId: number, ano?: number) {
   const canceladas = allPeriods.filter(p => p.status === 'cancelada').length;
 
   // KPIs financeiros
-  const custoTotalEstimado = allPeriods.reduce((s, p) => s + parseVal(p.valorTotal), 0);
-  const custoPendente = allPeriods.filter(p => p.status === 'pendente' || p.status === 'agendada').reduce((s, p) => s + parseVal(p.valorTotal), 0);
-  const custoVencidas = allPeriods.filter(p => p.status === 'vencida' || p.vencida === 1).reduce((s, p) => s + parseVal(p.valorTotal), 0);
-  const custoConcluido = allPeriods.filter(p => p.status === 'concluida').reduce((s, p) => s + parseVal(p.valorTotal), 0);
-  const custoEmGozo = allPeriods.filter(p => p.status === 'em_gozo').reduce((s, p) => s + parseVal(p.valorTotal), 0);
+  const custoTotalEstimado = allPeriods.reduce((s, p) => s + recalcFeriasVal(p), 0);
+  const custoPendente = allPeriods.filter(p => p.status === 'pendente' || p.status === 'agendada').reduce((s, p) => s + recalcFeriasVal(p), 0);
+  const custoVencidas = allPeriods.filter(p => p.status === 'vencida' || p.vencida === 1).reduce((s, p) => s + recalcFeriasVal(p), 0);
+  const custoConcluido = allPeriods.filter(p => p.status === 'concluida').reduce((s, p) => s + recalcFeriasVal(p), 0);
+  const custoEmGozo = allPeriods.filter(p => p.status === 'em_gozo').reduce((s, p) => s + recalcFeriasVal(p), 0);
   const pagamentosEmDobro = allPeriods.filter(p => p.pagamentoEmDobro === 1).length;
   const totalAbonoPecuniario = allPeriods.filter(p => p.abonoPecuniario === 1).length;
 
@@ -1638,7 +1656,7 @@ async function getDashFerias(companyId: number, ano?: number) {
     const dt = new Date(d);
     if (dt.getFullYear() !== anoRef) return;
     const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
-    custoMensal[key] = (custoMensal[key] || 0) + parseVal(p.valorTotal);
+    custoMensal[key] = (custoMensal[key] || 0) + recalcFeriasVal(p);
   });
   const custoMensalDist = [];
   for (let m = 1; m <= 12; m++) {
@@ -1708,7 +1726,7 @@ async function getDashFerias(companyId: number, ano?: number) {
   const custoSetor: Record<string, number> = {};
   allPeriods.forEach(p => {
     const s = p.setor || 'Não informado';
-    custoSetor[s] = (custoSetor[s] || 0) + parseVal(p.valorTotal);
+    custoSetor[s] = (custoSetor[s] || 0) + recalcFeriasVal(p);
   });
   const custoPorSetor = Object.entries(custoSetor).map(([setor, valor]) => ({ setor, valor })).sort((a, b) => b.valor - a.valor).slice(0, 10);
 

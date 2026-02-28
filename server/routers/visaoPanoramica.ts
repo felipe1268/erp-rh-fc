@@ -9,6 +9,7 @@ import {
   goldenRules, epiDiscountAlerts,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
+import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
 // VISÃO PANORÂMICA — Dashboard Executivo
@@ -47,8 +48,8 @@ async function getVisaoPanoramica(companyId: number) {
   // Setores únicos
   const setoresUnicos = new Set(allEmps.map(e => e.setor).filter(Boolean));
 
-  // Massa salarial
-  const massaSalarial = allEmps.filter(e => e.status === "Ativo").reduce((s, e) => s + (parseFloat(String(e.salarioBase || 0))), 0);
+  // Massa salarial (usa parseBRL para formato brasileiro "2.774,20")
+  const massaSalarial = allEmps.filter(e => e.status === "Ativo").reduce((s, e) => s + parseBRL(e.salarioBase || '0'), 0);
 
   // ── 2. FOLHA DE PAGAMENTO ──
   const folhaRows = await db.select({
@@ -148,7 +149,7 @@ async function getVisaoPanoramica(companyId: number) {
   const processosAtivos = processos.filter(p => !['Encerrado', 'Arquivado'].includes(p.status || '')).length;
   const processosAltoRisco = processos.filter(p => ['Crítico', 'Alto'].includes(p.nivelRisco || '')).length;
   const valorEmRisco = processos.filter(p => !['Encerrado', 'Arquivado'].includes(p.status || ''))
-    .reduce((s, p) => s + parseFloat(String(p.valorCausa || 0)), 0);
+    .reduce((s, p) => s + parseBRL(p.valorCausa || '0'), 0);
 
   // Próximas audiências
   // Audiências: join processos -> andamentos
@@ -191,20 +192,83 @@ async function getVisaoPanoramica(companyId: number) {
   const feriasVencidas = feriasRows.filter(f => f.status === 'vencida').length;
   const feriasAgendadas = feriasRows.filter(f => f.status === 'agendada').length;
   const custoFeriasVencidas = feriasRows.filter(f => f.status === 'vencida')
-    .reduce((s, f) => s + parseFloat(String(f.valorTotal || 0)), 0);
+    .reduce((s, f) => s + parseBRL(f.valorTotal || '0'), 0);
 
-  // ── 10. AVISO PRÉVIO ──
+  // ── 10. AVISO PRÉVIO (recálculo em tempo real) ──
   const avisosRows = await db.select({
     id: terminationNotices.id,
     status: terminationNotices.status,
     valorEstimadoTotal: terminationNotices.valorEstimadoTotal,
+    tipo: terminationNotices.tipo,
+    dataInicio: terminationNotices.dataInicio,
     dataFim: terminationNotices.dataFim,
+    empId: terminationNotices.employeeId,
+    salarioBase: terminationNotices.salarioBase,
   }).from(terminationNotices)
     .where(and(eq(terminationNotices.companyId, companyId), sql`${terminationNotices.deletedAt} IS NULL`));
 
+  // Buscar salarioBase e dataAdmissao dos funcionários para recálculo
+  const empMap = new Map(allEmps.map(e => [e.id, e]));
+
+  function recalcAvisoTotal(a: typeof avisosRows[0]): number {
+    try {
+      const emp = empMap.get(a.empId!);
+      const sal = parseBRL(emp?.salarioBase || a.salarioBase || '0');
+      const admissao = emp?.dataAdmissao || '';
+      if (sal <= 0 || !admissao || !a.dataFim || !a.tipo) return parseBRL(a.valorEstimadoTotal || '0');
+      const DIVISOR = 30;
+      const salDia = sal / DIVISOR;
+      const dtFim = new Date(a.dataFim + 'T00:00:00');
+      const dtSaida = new Date(dtFim); dtSaida.setDate(dtSaida.getDate() + 1);
+      const dataSaida = dtSaida.toISOString().split('T')[0];
+      const dtProj = new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 0);
+      const dataProj = dtProj.toISOString().split('T')[0];
+      const diasTrab = dtSaida.getDate();
+      // Anos de serviço
+      const admD = new Date(admissao + 'T00:00:00');
+      const fimD = new Date(dataSaida + 'T00:00:00');
+      let anos = fimD.getFullYear() - admD.getFullYear();
+      if (fimD.getMonth() < admD.getMonth() || (fimD.getMonth() === admD.getMonth() && fimD.getDate() < admD.getDate())) anos--;
+      anos = Math.max(0, anos);
+      const diasAvisoTotal = Math.min(30 + anos * 3, 90);
+      const diasExtras = Math.min(anos * 3, 60);
+      const saldoSalario = salDia * diasTrab;
+      // Férias proporcionais
+      const admDate = new Date(admissao + 'T00:00:00');
+      const refDate = new Date(dataProj + 'T00:00:00');
+      let lastAniv = new Date(refDate.getFullYear(), admDate.getMonth(), admDate.getDate());
+      if (lastAniv > refDate) lastAniv.setFullYear(lastAniv.getFullYear() - 1);
+      let mF = (refDate.getFullYear() - lastAniv.getFullYear()) * 12 + refDate.getMonth() - lastAniv.getMonth();
+      if (refDate.getDate() < lastAniv.getDate()) mF--;
+      mF = Math.min(Math.max(0, mF), 12);
+      const feriasProp = (sal * mF) / 12;
+      const totalFerias = feriasProp + feriasProp / 3;
+      // 13º
+      const anoRef = refDate.getFullYear();
+      const inicioAno = new Date(anoRef, 0, 1);
+      const start = admDate > inicioAno ? admDate : inicioAno;
+      let m13 = 0;
+      if (start <= refDate) {
+        m13 = (refDate.getFullYear() - start.getFullYear()) * 12 + refDate.getMonth() - start.getMonth();
+        if (refDate.getDate() >= start.getDate()) m13++;
+        m13 = Math.min(Math.max(0, m13), 12);
+      }
+      const dec13 = (sal * m13) / 12;
+      // Aviso indenizado
+      let avisoInd = 0;
+      if (a.tipo === 'empregador_indenizado') avisoInd = salDia * diasAvisoTotal;
+      else if (a.tipo === 'empregador_trabalhado') avisoInd = salDia * diasExtras;
+      // FGTS
+      const mServ = Math.max(0, (refDate.getFullYear() - admDate.getFullYear()) * 12 + refDate.getMonth() - admDate.getMonth());
+      const fgts = sal * 0.08 * mServ;
+      const multa = a.tipo?.includes('empregador') ? fgts * 0.4 : 0;
+      return saldoSalario + totalFerias + dec13 + avisoInd + multa;
+    } catch { return parseBRL(a.valorEstimadoTotal || '0'); }
+  }
+
   const avisosEmAndamento = avisosRows.filter(a => a.status === 'em_andamento').length;
   const custoAvisos = avisosRows.filter(a => a.status === 'em_andamento')
-    .reduce((s, a) => s + parseFloat(String(a.valorEstimadoTotal || 0)), 0);
+    .reduce((s, a) => s + recalcAvisoTotal(a), 0);
 
   // Vencendo em 7 dias
   const seteDias = new Date(now);

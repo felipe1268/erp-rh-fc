@@ -17,7 +17,7 @@ import { formatCPF, formatMoeda } from "@/lib/formatters";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
-  CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check,
+  CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
@@ -507,6 +507,121 @@ export default function AvisoPrevio() {
                   <p className="text-sm mt-1">{selectedItem.observacoes}</p>
                 </div>
               )}
+              {/* Botão Exportar PDF/TRCT */}
+              <div className="flex gap-3 justify-center pt-4 border-t">
+                <Button
+                  variant="outline"
+                  className="gap-2 border-green-300 text-green-700 hover:bg-green-50"
+                  onClick={async () => {
+                    try {
+                      toast.info('Gerando TRCT...');
+                      const pdfData = await utils.avisoPrevio.avisoPrevio.gerarPdf.fetch({ id: selectedItem.id });
+                      const w = window.open('', '_blank', 'width=800,height=1100');
+                      if (!w) { toast.error('Popup bloqueado. Permita popups para gerar o PDF.'); return; }
+                      w.document.write(`<!DOCTYPE html><html><head><title>TRCT - ${pdfData.funcionario.nome}</title>
+<style>
+  @media print { body { margin: 0; } @page { margin: 15mm; size: A4; } }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; max-width: 800px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 16px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+  h2 { text-align: center; font-size: 12px; font-weight: normal; color: #555; margin-top: 0; }
+  .header-box { border: 2px solid #333; padding: 12px; margin-bottom: 12px; }
+  .section { border: 1px solid #999; margin-bottom: 8px; }
+  .section-title { background: #2d5016; color: white; padding: 4px 8px; font-weight: bold; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .section-body { padding: 8px; }
+  .row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .field { flex: 1; }
+  .field-label { font-size: 8px; color: #666; text-transform: uppercase; }
+  .field-value { font-weight: bold; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; }
+  table th, table td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; font-size: 10px; }
+  table th { background: #f0f0f0; font-weight: bold; text-transform: uppercase; font-size: 9px; }
+  .total-row { background: #e8f5e9; font-weight: bold; font-size: 12px; }
+  .total-row td { border-top: 2px solid #2d5016; }
+  .footer { margin-top: 30px; font-size: 9px; color: #666; text-align: center; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 50px; }
+  .sig-line { width: 45%; text-align: center; border-top: 1px solid #333; padding-top: 4px; font-size: 10px; }
+  .no-print { text-align: center; margin: 10px 0; }
+  @media print { .no-print { display: none; } }
+</style></head><body>
+<div class="no-print"><button onclick="window.print()" style="padding:8px 24px;font-size:14px;cursor:pointer;background:#2d5016;color:white;border:none;border-radius:4px;">Imprimir / Salvar PDF</button></div>
+<h1>Termo de Rescisão do Contrato de Trabalho</h1>
+<h2>TRCT - Conforme Art. 477 da CLT</h2>
+<div class="section">
+  <div class="section-title">Identificação do Empregador</div>
+  <div class="section-body">
+    <div class="row"><div class="field"><div class="field-label">Razão Social</div><div class="field-value">${pdfData.empresa.nome}</div></div><div class="field"><div class="field-label">CNPJ</div><div class="field-value">${pdfData.empresa.cnpj}</div></div></div>
+    <div class="row"><div class="field"><div class="field-label">Endereço</div><div class="field-value">${pdfData.empresa.endereco || '-'}, ${pdfData.empresa.cidade || ''} - ${pdfData.empresa.estado || ''}</div></div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">Identificação do Trabalhador</div>
+  <div class="section-body">
+    <div class="row"><div class="field"><div class="field-label">Nome</div><div class="field-value">${pdfData.funcionario.nome}</div></div><div class="field"><div class="field-label">CPF</div><div class="field-value">${pdfData.funcionario.cpf}</div></div></div>
+    <div class="row"><div class="field"><div class="field-label">Cargo/Função</div><div class="field-value">${pdfData.funcionario.cargo}</div></div><div class="field"><div class="field-label">Data Admissão</div><div class="field-value">${pdfData.funcionario.dataAdmissao ? pdfData.funcionario.dataAdmissao.split('-').reverse().join('/') : '-'}</div></div></div>
+    <div class="row"><div class="field"><div class="field-label">CTPS</div><div class="field-value">${pdfData.funcionario.ctps || '-'}</div></div><div class="field"><div class="field-label">Série</div><div class="field-value">${pdfData.funcionario.serieCtps || '-'}</div></div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">Dados do Aviso Prévio</div>
+  <div class="section-body">
+    <div class="row"><div class="field"><div class="field-label">Tipo</div><div class="field-value">${pdfData.aviso.tipoLabel}</div></div><div class="field"><div class="field-label">Salário Base</div><div class="field-value">R$ ${pdfData.aviso.salarioBase}</div></div></div>
+    <div class="row"><div class="field"><div class="field-label">Data Início</div><div class="field-value">${pdfData.aviso.dataInicio ? pdfData.aviso.dataInicio.split('-').reverse().join('/') : '-'}</div></div><div class="field"><div class="field-label">Data Término</div><div class="field-value">${pdfData.aviso.dataFim ? pdfData.aviso.dataFim.split('-').reverse().join('/') : '-'}</div></div><div class="field"><div class="field-label">Dias de Aviso</div><div class="field-value">${pdfData.aviso.diasAviso} dias</div></div></div>
+    <div class="row"><div class="field"><div class="field-label">Redução de Jornada</div><div class="field-value">${pdfData.aviso.reducaoLabel}</div></div><div class="field"><div class="field-label">Anos de Serviço</div><div class="field-value">${pdfData.aviso.anosServico}</div></div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">Discriminação das Verbas Rescisórias</div>
+  <div class="section-body">
+    <table>
+      <thead><tr><th>Verba</th><th>Referência</th><th style="text-align:right">Valor (R$)</th></tr></thead>
+      <tbody>
+        <tr><td>Saldo de Salário</td><td>${pdfData.previsaoRescisao.diasTrabalhadosMes || '-'}/${pdfData.previsaoRescisao.diasReaisMes || 30} dias</td><td style="text-align:right">${pdfData.previsaoRescisao.saldoSalario || '0,00'}</td></tr>
+        <tr><td>Férias Proporcionais + 1/3</td><td>${pdfData.previsaoRescisao.mesesFerias || '-'} meses</td><td style="text-align:right">${pdfData.previsaoRescisao.totalFerias || '0,00'}</td></tr>
+        ${parseFloat(pdfData.previsaoRescisao.feriasVencidas || '0') > 0 ? '<tr style="background:#fff3f3"><td>Férias Vencidas (em dobro)</td><td>' + (pdfData.previsaoRescisao.periodosVencidos || '-') + ' períodos</td><td style="text-align:right">' + pdfData.previsaoRescisao.feriasVencidas + '</td></tr>' : ''}
+        <tr><td>VR Proporcional</td><td>R$ ${pdfData.previsaoRescisao.vrDiario || '0'}/dia × ${pdfData.previsaoRescisao.diasTrabalhadosMes || '-'} dias</td><td style="text-align:right">${pdfData.previsaoRescisao.vrProporcional || '0,00'}</td></tr>
+        <tr><td>13º Salário Proporcional</td><td>${pdfData.previsaoRescisao.meses13o || '-'}/12</td><td style="text-align:right">${pdfData.previsaoRescisao.decimoTerceiroProporcional || '0,00'}</td></tr>
+        <tr><td>Aviso Prévio Indenizado</td><td>${pdfData.previsaoRescisao.diasExtrasAviso || '0'} dias extras</td><td style="text-align:right">${pdfData.previsaoRescisao.avisoPrevioIndenizado || '0,00'}</td></tr>
+        <tr><td colspan="3" style="background:#f5f5f5;font-size:9px;font-weight:bold;text-transform:uppercase">FGTS (Informativo)</td></tr>
+        <tr style="color:#888"><td>FGTS Estimado</td><td>-</td><td style="text-align:right">${pdfData.previsaoRescisao.fgtsEstimado || '0,00'}</td></tr>
+        <tr style="color:#888"><td>Multa 40% FGTS</td><td>-</td><td style="text-align:right">${pdfData.previsaoRescisao.multaFGTS || '0,00'}</td></tr>
+        <tr class="total-row"><td colspan="2"><strong>TOTAL RESCISÃO</strong></td><td style="text-align:right"><strong>${pdfData.previsaoRescisao.total || pdfData.valorEstimadoTotal || '0,00'}</strong></td></tr>
+      </tbody>
+    </table>
+    ${pdfData.previsaoRescisao.dataLimitePagamento ? '<p style="font-size:9px;color:#c00;margin-top:4px;text-align:right">Prazo de pagamento: ' + pdfData.previsaoRescisao.dataLimitePagamento.split('-').reverse().join('/') + ' (Art. 477 §6º CLT)</p>' : ''}
+  </div>
+</div>
+${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">Observações</div><div class="section-body">' + pdfData.aviso.observacoes + '</div></div>' : ''}
+<div class="signatures">
+  <div class="sig-line">${pdfData.empresa.nome}<br/><small>Empregador</small></div>
+  <div class="sig-line">${pdfData.funcionario.nome}<br/><small>Empregado(a)</small></div>
+</div>
+<div class="footer">
+  <p>Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} pelo sistema FC Gestão Integrada</p>
+  <p>Este documento não substitui o TRCT homologado. Serve como previsão de verbas rescisórias.</p>
+</div>
+</body></html>`);
+                      w.document.close();
+                      toast.success('TRCT gerado com sucesso!');
+                    } catch (err) {
+                      console.error(err);
+                      toast.error('Erro ao gerar TRCT');
+                    }
+                  }}
+                >
+                  <FileText className="h-4 w-4" />
+                  Exportar TRCT (PDF)
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    window.print();
+                  }}
+                >
+                  <Printer className="h-4 w-4" />
+                  Imprimir Detalhes
+                </Button>
+              </div>
             </div>
           </FullScreenDialog>
         )}

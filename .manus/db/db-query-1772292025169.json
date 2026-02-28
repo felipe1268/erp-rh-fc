@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, version, titulo, tipo, criadoPor, DATE_FORMAT(dataPublicacao, '%d/%m/%Y') as data FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, tipo, criadoPor, DATE_FORMAT(dataPublicacao, '%d/%m/%Y') as data FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "180003",
+      "version": "114",
+      "titulo": "Rev. 114 - IA Jurídica, Formatação e Interatividade",
+      "tipo": "feature",
+      "criadoPor": "Sistema",
+      "data": "28/02/2026"
+    },
+    {
+      "id": "180002",
+      "version": "113",
+      "titulo": "IA Jurídica + Assuntos DataJud",
+      "tipo": "feature",
+      "criadoPor": "Sistema",
+      "data": "28/02/2026"
+    },
+    {
+      "id": "180001",
+      "version": "112",
+      "titulo": "DataJud + Dashboards + Responsividade",
+      "tipo": "melhoria",
+      "criadoPor": "Sistema",
+      "data": "28/02/2026"
+    },
+    {
+      "id": "150008",
+      "version": "112",
+      "titulo": "Drill-down interativo nos gráficos de Aviso Prévio",
+      "tipo": "feature",
+      "criadoPor": "Sistema",
+      "data": "28/02/2026"
+    },
+    {
+      "id": "150007",
+      "version": "111",
+      "titulo": "Redesign Medições PJ + Dashboard Jurídico responsivo + Breakpoint xs",
+      "tipo": "melhoria",
+      "criadoPor": "Sistema",
+      "data": "28/02/2026"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\ttipo\tcriadoPor\tdata\n180003\t114\tRev. 114 - IA Jurídica, Formatação e Interatividade\tfeature\tSistema\t28/02/2026\n180002\t113\tIA Jurídica + Assuntos DataJud\tfeature\tSistema\t28/02/2026\n180001\t112\tDataJud + Dashboards + Responsividade\tmelhoria\tSistema\t28/02/2026\n150008\t112\tDrill-down interativo nos gráficos de Aviso Prévio\tfeature\tSistema\t28/02/2026\n150007\t111\tRedesign Medições PJ + Dashboard Jurídico responsivo + Breakpoint xs\tmelhoria\tSistema\t28/02/2026\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}
