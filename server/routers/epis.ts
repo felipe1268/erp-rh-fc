@@ -847,31 +847,73 @@ Exemplos de referência:
         }
 
         // ============================================================
-        // ESTRATÉGIA 2: Fallback — dados.gov.br API para descobrir URL dinâmica do XLSX
+        // ESTRATÉGIA 2: Fallback — dados.gov.br API + XLSX parser
         // ============================================================
         if (!fetched) {
           try {
+            console.log('CAEPI: Tentando fallback via dados.gov.br API...');
             const apiResp = await fetch(
               'https://dados.gov.br/api/publico/conjuntos-dados/cadastro-de-equipamento-de-protecao-individual',
               { headers: { 'User-Agent': 'Mozilla/5.0 ERP-RH-FC/1.0' }, signal: AbortSignal.timeout(15000) }
             );
             if (apiResp.ok) {
               const apiData = await apiResp.json();
-              const xlsxResource = apiData.resources?.find((r: any) => 
-                r.format?.toUpperCase().includes('XLS') && r.url
-              );
-              if (xlsxResource?.url) {
-                const xlsResp = await fetch(xlsxResource.url, {
+              // Find XLSX/XLSM resource - check recursos array (new API format) or resources
+              const resourceList = apiData.recursos || apiData.resources || [];
+              const xlsxResource = resourceList.find((r: any) => {
+                const fmt = (r.formato || r.format || '').toUpperCase();
+                const url = r.link || r.url || '';
+                return (fmt.includes('XLS') || fmt.includes('XLSM')) && url;
+              });
+              const xlsUrl = xlsxResource?.link || xlsxResource?.url;
+              if (xlsUrl) {
+                console.log('CAEPI: Baixando XLSX de', xlsUrl);
+                const xlsResp = await fetch(xlsUrl, {
                   headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-                  signal: AbortSignal.timeout(60000)
+                  signal: AbortSignal.timeout(120000),
+                  redirect: 'follow',
                 });
                 if (xlsResp.ok) {
-                  // TODO: Parse XLSX if needed in the future
-                  console.log('XLSX resource found but XLSX parsing not implemented in fallback');
+                  const arrayBuf = await xlsResp.arrayBuffer();
+                  const XLSX = (await import('xlsx')).default;
+                  const wb = XLSX.read(new Uint8Array(arrayBuf), { type: 'array' });
+                  const ws = wb.Sheets[wb.SheetNames[0]];
+                  const rows: any[] = XLSX.utils.sheet_to_json(ws, { range: 0 });
+                  console.log(`CAEPI: XLSX parsed, ${rows.length} rows`);
+                  
+                  if (rows.length > 0) {
+                    const caMap = new Map<string, any>();
+                    for (const item of rows) {
+                      const ca = String(item['NR Registro CA'] || '').replace(/\D/g, '');
+                      if (ca && ca.length > 0 && !caMap.has(ca)) {
+                        caMap.set(ca, {
+                          ca,
+                          validade: item['DATA DE VALIDADE'] || null,
+                          situacao: item['SITUACAO'] || null,
+                          cnpj: item['CNPJ'] || null,
+                          fabricante: item['RAZAO SOCIAL'] || null,
+                          natureza: item['NATUREZA'] || null,
+                          equipamento: item['EQUIPAMENTO'] || null,
+                          descricao: item['DESCRICAO EQUIPAMENTO'] || null,
+                          referencia: item['REFERENCIA'] || null,
+                          cor: item['COR'] || null,
+                          aprovadoPara: item['APROVADO PARA LAUDO'] || null,
+                        });
+                      }
+                    }
+                    records = Array.from(caMap.values());
+                    if (records.length > 0) {
+                      fetched = true;
+                      sourceUsed = 'Portal de Dados Abertos (dados.gov.br)';
+                      console.log(`CAEPI: ${records.length} CAs únicos via XLSX`);
+                    }
+                  }
                 }
               }
             }
-          } catch { /* fallback failed */ }
+          } catch (xlsErr: any) {
+            console.error('CAEPI XLSX fallback failed:', xlsErr.message);
+          }
         }
 
         if (!fetched || records.length === 0) {

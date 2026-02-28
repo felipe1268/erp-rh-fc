@@ -3113,3 +3113,5 @@
 - [x] FIX: Tornar filtros e KPIs do Dashboard Jurídico responsivos no mobile
 ## Controle de Revisões - Registrar alterações da sessão - 2026-02-28
 - [x] Registrar todas as alterações feitas nesta sessão no Controle de Revisões e atualizar número da revisão (Rev. 105-111)
+## CAEPI - Botão Atualizar não funciona - 2026-02-28
+- [x] FIX: Botão "Atualizar Base CAEPI" não funciona ao clicar - implementado fallback XLSX via dados.gov.br
