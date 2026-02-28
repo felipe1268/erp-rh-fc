@@ -147,6 +147,7 @@ export default function ProcessosTrabalhistas() {
   const [consultandoDatajud, setConsultandoDatajud] = useState(false);
   const [showIAPanel, setShowIAPanel] = useState(false);
   const [analisandoIA, setAnalisandoIA] = useState(false);
+  const [reAnalisarProgress, setReAnalisarProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Andamento form
   const [andamentoForm, setAndamentoForm] = useState({
@@ -279,11 +280,15 @@ export default function ProcessosTrabalhistas() {
 
   const reAnalisarTodosMut = trpc.processos.reAnalisarTodos.useMutation({
     onSuccess: (data) => {
+      setReAnalisarProgress(null);
       toast.success(`Re-análise concluída: ${data.sucesso}/${data.total} processos analisados. ${data.erros} erros.`);
       processos.refetch();
       stats.refetch();
     },
-    onError: (err) => toast.error(`Erro na re-análise: ${err.message}`),
+    onError: (err) => {
+      setReAnalisarProgress(null);
+      toast.error(`Erro na re-análise: ${err.message}`);
+    },
   });
 
   const excluirLoteMut = trpc.processos.excluirLote.useMutation({
@@ -1246,14 +1251,29 @@ export default function ProcessosTrabalhistas() {
               {datajudConsultarTodosMut.isPending ? "Consultando DataJud..." : "Atualizar Todos via DataJud"}
             </Button>
             <Button variant="outline" onClick={() => {
-              if (confirm(`Deseja re-analisar todos os processos via IA Jurídica?\nIsso vai recalcular o Valor da Causa de cada processo com a soma dos pedidos.\nPode levar alguns minutos.`)) {
-                reAnalisarTodosMut.mutate({ companyId });
+              const total = processos.data?.length || 0;
+              if (total === 0) { toast.error("Nenhum processo encontrado."); return; }
+              if (confirm(`Deseja re-analisar ${total} processos via IA Jurídica?\nIsso vai recalcular o Valor da Causa de cada processo com a soma dos pedidos.\nPode levar ${Math.ceil(total * 0.4)} minutos.`)) {
+                setReAnalisarProgress({ current: 0, total });
+                // Simulate progress while waiting for the mutation
+                let current = 0;
+                const interval = setInterval(() => {
+                  current++;
+                  if (current <= total) {
+                    setReAnalisarProgress({ current, total });
+                  } else {
+                    clearInterval(interval);
+                  }
+                }, 18000); // ~18s per process
+                reAnalisarTodosMut.mutate({ companyId }, {
+                  onSettled: () => clearInterval(interval),
+                });
               }
             }}
               disabled={reAnalisarTodosMut.isPending}
               className="border-purple-200 text-purple-700 hover:bg-purple-50">
               {reAnalisarTodosMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Zap className="h-4 w-4 mr-1" />}
-              {reAnalisarTodosMut.isPending ? "Re-analisando..." : "Re-analisar Todos (IA)"}
+              {reAnalisarProgress ? `Analisando ${reAnalisarProgress.current}/${reAnalisarProgress.total}...` : reAnalisarTodosMut.isPending ? "Re-analisando..." : "Re-analisar Todos (IA)"}
             </Button>
             <PrintActions title="Processos Trabalhistas" />
             <Button onClick={() => setViewMode("novo")}><Plus className="h-4 w-4 mr-1" /> Novo Processo</Button>
@@ -1366,6 +1386,7 @@ export default function ProcessosTrabalhistas() {
                       <th className="p-2.5 font-medium">Nº Processo</th>
                       <th className="p-2.5 font-medium">Reclamante</th>
                       <th className="p-2.5 font-medium">Tipo</th>
+                      <th className="p-2.5 font-medium">Comarca</th>
                       <th className="p-2.5 font-medium text-center">Status</th>
                       <th className="p-2.5 font-medium text-center">Risco</th>
                       <th className="p-2.5 font-medium text-center">Fase</th>
@@ -1388,6 +1409,7 @@ export default function ProcessosTrabalhistas() {
                             {p.employee && <p className="text-xs text-muted-foreground">{p.employee.funcao || ""}</p>}
                           </td>
                           <td className="p-2.5 text-xs">{TIPO_ACAO_LABELS[p.tipoAcao] || p.tipoAcao}</td>
+                          <td className="p-2.5 text-xs">{p.comarca || p.vara ? `${p.comarca || ''}${p.comarca && p.tribunal ? ` - ${p.tribunal.replace('TRT', '').replace(/\d+/g, '').trim()}` : ''}` : '—'}</td>
                           <td className="p-2.5 text-center">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>{statusInfo.label}</span>
                           </td>

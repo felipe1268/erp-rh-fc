@@ -3374,3 +3374,5 @@
 - [x] Redesenhar dialog "Resolver Inconsistência" do Fechamento de Ponto (mais prático e visual)
 - [x] Configurar valores do VA por obra na aba Configuração do Vale Alimentação (já funcional)
 - [x] Central de Alertas: mudar de popup para full screen
+- [x] Add progress indicator to Re-analisar Todos button (Analisando 3/7...)
+- [x] Add Comarca (Cidade/Estado) column to processos trabalhistas list
