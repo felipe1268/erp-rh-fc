@@ -3693,3 +3693,10 @@
 - [ ] REGRA GLOBAL: Todos os gráficos devem ser responsivos e clicáveis com drill-down de dados
 - [x] Dashboard Efetivo: "Ver equipe" deve abrir dialog com funcionários da obra específica
 - [x] Dashboard Efetivo: testar todos os vínculos e links corretamente
+
+## Rev. 131 - Correção ObraEfetivo: clicar na obra
+- [x] Clicar no card da obra deve abrir a equipe com funcionários já alocados visíveis
+- [x] Permitir alocar mais funcionários diretamente ao clicar na obra
+- [x] Verificar por que os funcionários alocados não aparecem ao abrir a obra
+- [x] BUG: Alocação de funcionário não atualiza a lista em tempo real (precisa recarregar página)
+- [x] Clicar no card da obra deve abrir FullScreenDialog com equipe e opção de alocar
