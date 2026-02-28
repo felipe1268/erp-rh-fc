@@ -3463,3 +3463,11 @@
 
 ## Layout Totalizador Vale Alimentação
 - [x] Mover totalizador para o topo da tabela (não repetir por página)
+
+## Melhorias Gráfico Gantt de Férias
+- [x] Adicionar mais cores na legenda para identificar cada tipo de período (Previstas, Agendadas, Em Gozo, Concluídas, Vencidas)
+- [x] Tornar nome do funcionário clicável para abrir tela completa de férias
+- [x] Criar dialog/sheet com informações completas de férias do funcionário para análise do RH
+- [x] Barras coloridas por status no Gantt (azul=prevista, vermelho=vencida, laranja=agendada, verde=em gozo, cinza=concluída)
+- [x] Backend feriasDoFuncionario com todos os períodos aquisitivos, status e valores
+- [x] Dialog mostra: dados do colaborador, total períodos, vencidas, valor estimado, tabela detalhada

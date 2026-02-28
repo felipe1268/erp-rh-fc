@@ -1257,6 +1257,28 @@ export const avisoPrevioFeriasRouter = router({
           isNull(employees.deletedAt),
         ));
         
+        // Also fetch DB vacation periods to get actual status (agendada, em_gozo, etc.)
+        const dbPeriods = await db.select({
+          employeeId: vacationPeriods.employeeId,
+          periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio,
+          periodoAquisitivoFim: vacationPeriods.periodoAquisitivoFim,
+          status: vacationPeriods.status,
+          dataInicio: vacationPeriods.dataInicio,
+          dataFim: vacationPeriods.dataFim,
+        })
+        .from(vacationPeriods)
+        .where(and(
+          eq(vacationPeriods.companyId, input.companyId),
+          isNull(vacationPeriods.deletedAt),
+        ));
+        // Map: employeeId -> { periodoKey -> status }
+        const dbStatusMap: Record<number, Record<string, string>> = {};
+        for (const dp of dbPeriods) {
+          if (!dbStatusMap[dp.employeeId]) dbStatusMap[dp.employeeId] = {};
+          const key = `${dp.periodoAquisitivoInicio}_${dp.periodoAquisitivoFim}`;
+          dbStatusMap[dp.employeeId][key] = dp.status;
+        }
+
         const meses: any[] = [];
         for (let mes = 0; mes < 12; mes++) {
           const inicioMes = new Date(input.ano, mes, 1);
@@ -1275,6 +1297,16 @@ export const avisoPrevioFeriasRouter = router({
                 const salario = parseBRL(func.salario);
                 const valorFerias = salario + (salario / 3);
                 totalMes += valorFerias;
+                // Determine status: check DB first, then fallback to calculated
+                const periodoKey = `${p.inicio}_${p.fim}`;
+                const dbStatus = dbStatusMap[func.id]?.[periodoKey];
+                let fStatus = 'prevista';
+                if (dbStatus && dbStatus !== 'pendente') {
+                  fStatus = dbStatus; // agendada, em_gozo, concluida, vencida, cancelada
+                } else if (p.vencida) {
+                  fStatus = 'vencida';
+                }
+
                 funcionariosNoMes.push({
                   id: func.id,
                   nome: func.nome,
@@ -1283,6 +1315,7 @@ export const avisoPrevioFeriasRouter = router({
                   valorEstimado: valorFerias.toFixed(2),
                   fimConcessivo: p.fimConcessivo,
                   vencida: p.vencida,
+                  status: fStatus,
                 });
                 break;
               }
@@ -1687,6 +1720,119 @@ export const avisoPrevioFeriasRouter = router({
         }
 
         return Object.values(grouped);
+      }),
+
+    // ============================================================
+    // DETALHES COMPLETOS DE FÉRIAS DE UM FUNCIONÁRIO
+    // ============================================================
+    feriasDoFuncionario: protectedProcedure
+      .input(z.object({ companyId: z.number(), employeeId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        
+        // Dados do funcionário
+        const [emp] = await db.select({
+          id: employees.id,
+          nome: employees.nomeCompleto,
+          cpf: employees.cpf,
+          cargo: employees.cargo,
+          setor: employees.setor,
+          dataAdmissao: employees.dataAdmissao,
+          salarioBase: employees.salarioBase,
+          status: employees.status,
+        })
+        .from(employees)
+        .where(eq(employees.id, input.employeeId));
+        
+        if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Funcionário não encontrado' });
+        
+        // Períodos calculados (baseado na data de admissão)
+        const periodosCalculados = emp.dataAdmissao ? calcularPeriodosFerias(emp.dataAdmissao) : [];
+        
+        // Períodos registrados no banco
+        const periodosDb = await db.select({
+          id: vacationPeriods.id,
+          periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio,
+          periodoAquisitivoFim: vacationPeriods.periodoAquisitivoFim,
+          periodoConcessivoFim: vacationPeriods.periodoConcessivoFim,
+          dataInicio: vacationPeriods.dataInicio,
+          dataFim: vacationPeriods.dataFim,
+          diasGozo: vacationPeriods.diasGozo,
+          fracionamento: vacationPeriods.fracionamento,
+          abonoPecuniario: vacationPeriods.abonoPecuniario,
+          valorFerias: vacationPeriods.valorFerias,
+          valorTercoConstitucional: vacationPeriods.valorTercoConstitucional,
+          valorTotal: vacationPeriods.valorTotal,
+          dataPagamento: vacationPeriods.dataPagamento,
+          status: vacationPeriods.status,
+          vencida: vacationPeriods.vencida,
+          pagamentoEmDobro: vacationPeriods.pagamentoEmDobro,
+          dataSugeridaInicio: vacationPeriods.dataSugeridaInicio,
+          dataSugeridaFim: vacationPeriods.dataSugeridaFim,
+          dataAlteradaPeloRH: vacationPeriods.dataAlteradaPeloRH,
+          numeroPeriodo: vacationPeriods.numeroPeriodo,
+          observacoes: vacationPeriods.observacoes,
+          createdAt: vacationPeriods.createdAt,
+        })
+        .from(vacationPeriods)
+        .where(and(
+          eq(vacationPeriods.companyId, input.companyId),
+          eq(vacationPeriods.employeeId, input.employeeId),
+          isNull(vacationPeriods.deletedAt),
+        ))
+        .orderBy(asc(vacationPeriods.periodoAquisitivoInicio));
+        
+        // Recalcular valores com salário atual
+        const salAtual = parseBRL(emp.salarioBase || '0');
+        const periodosRecalc = periodosDb.map(p => {
+          const diasGozo = p.diasGozo || 30;
+          const abono = p.abonoPecuniario ? 1 : 0;
+          const diasAbono = abono ? Math.floor(diasGozo / 3) : 0;
+          const diasEfetivos = diasGozo - diasAbono;
+          if (salAtual > 0) {
+            const vf = (salAtual / 30) * diasEfetivos;
+            const terco = vf / 3;
+            const va = abono ? ((salAtual / 30) * diasAbono + (salAtual / 30) * diasAbono / 3) : 0;
+            const mult = p.pagamentoEmDobro === 1 ? 2 : 1;
+            return { ...p, valorTotal: ((vf + terco + va) * mult).toFixed(2), valorFerias: (vf * mult).toFixed(2), valorTercoConstitucional: (terco * mult).toFixed(2) };
+          }
+          return p;
+        });
+        
+        // Merge: períodos calculados que NÃO estão no banco
+        const dbInicios = new Set(periodosDb.map(p => p.periodoAquisitivoInicio));
+        const periodosNaoRegistrados = periodosCalculados
+          .filter(p => p.adquirido && !dbInicios.has(p.inicio))
+          .map((p, i) => ({
+            id: null as number | null,
+            tipo: 'nao_registrado' as const,
+            periodoAquisitivoInicio: p.inicio,
+            periodoAquisitivoFim: p.fim,
+            periodoConcessivoFim: p.fimConcessivo,
+            vencida: p.vencida,
+            status: p.vencida ? 'vencida' : 'pendente',
+            valorEstimado: salAtual > 0 ? (salAtual + salAtual / 3).toFixed(2) : '0.00',
+          }));
+        
+        // Resumo
+        const totalVencidas = periodosRecalc.filter(p => p.vencida === 1 || p.status === 'vencida').length + periodosNaoRegistrados.filter(p => p.vencida).length;
+        const totalRegistrados = periodosRecalc.length;
+        const totalNaoRegistrados = periodosNaoRegistrados.length;
+        const valorTotalEstimado = periodosRecalc.reduce((sum, p) => sum + parseFloat(p.valorTotal || '0'), 0)
+          + periodosNaoRegistrados.reduce((sum, p) => sum + parseFloat(p.valorEstimado || '0'), 0);
+        
+        return {
+          funcionario: emp,
+          periodosRegistrados: periodosRecalc,
+          periodosNaoRegistrados,
+          resumo: {
+            totalPeriodos: totalRegistrados + totalNaoRegistrados,
+            totalRegistrados,
+            totalNaoRegistrados,
+            totalVencidas,
+            valorTotalEstimado: valorTotalEstimado.toFixed(2),
+          },
+        };
       }),
   }),
 });

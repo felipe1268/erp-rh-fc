@@ -39,6 +39,254 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
+// ============================================================
+// DIALOG: Detalhes completos de férias do funcionário (Gantt click)
+// ============================================================
+function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirData, refetch: parentRefetch }: {
+  companyId: number;
+  employeeId: number;
+  onClose: () => void;
+  onDefinirData: (item: any) => void;
+  refetch: () => void;
+}) {
+  const { data, isLoading } = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
+    { companyId, employeeId },
+    { enabled: !!companyId && !!employeeId }
+  );
+  const confirmarVencidasLote = trpc.avisoPrevio.ferias.confirmarVencidasLote.useMutation({
+    onSuccess: (d: any) => { parentRefetch(); toast.success(`${d.confirmados} férias confirmada(s)!`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const gerarPeriodos = trpc.avisoPrevio.ferias.gerarPeriodos.useMutation({
+    onSuccess: (d: any) => { parentRefetch(); toast.success(`${d.periodosGerados} período(s) gerado(s)!`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const STATUS_BADGE: Record<string, { label: string; variant: string; className: string }> = {
+    pendente: { label: "Pendente", variant: "outline", className: "border-amber-400 text-amber-700 bg-amber-50" },
+    agendada: { label: "Agendada", variant: "outline", className: "border-blue-400 text-blue-700 bg-blue-50" },
+    em_gozo: { label: "Em Gozo", variant: "outline", className: "border-green-400 text-green-700 bg-green-50" },
+    concluida: { label: "Concluída", variant: "outline", className: "border-gray-400 text-gray-700 bg-gray-100" },
+    vencida: { label: "Vencida", variant: "destructive", className: "" },
+    cancelada: { label: "Cancelada", variant: "outline", className: "border-gray-300 text-gray-500" },
+  };
+
+  return (
+    <FullScreenDialog open={true} onClose={onClose} title="Detalhes de Férias do Funcionário" icon={<Palmtree className="h-5 w-5 text-white" />}>
+      <div className="w-full max-w-4xl mx-auto space-y-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="ml-3 text-muted-foreground">Carregando dados de férias...</span>
+          </div>
+        ) : !data ? (
+          <div className="text-center py-20 text-muted-foreground">Funcionário não encontrado</div>
+        ) : (
+          <>
+            {/* Dados do funcionário */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="col-span-2 bg-muted/30 rounded-lg p-4">
+                <p className="text-xs text-muted-foreground uppercase">Colaborador</p>
+                <p className="font-semibold text-lg">{data.funcionario.nome}</p>
+                <p className="text-sm text-muted-foreground">{formatCPF(data.funcionario.cpf)} — {data.funcionario.cargo}</p>
+                {data.funcionario.setor && <p className="text-xs text-muted-foreground mt-1">Setor: {data.funcionario.setor}</p>}
+              </div>
+              <div className="bg-muted/30 rounded-lg p-4">
+                <p className="text-xs text-muted-foreground uppercase">Admissão</p>
+                <p className="font-semibold">{formatDate(data.funcionario.dataAdmissao)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Salário: {data.funcionario.salarioBase ? `R$ ${data.funcionario.salarioBase}` : '-'}</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-4">
+                <p className="text-xs text-muted-foreground uppercase">Status</p>
+                <p className="font-semibold">{data.funcionario.status}</p>
+              </div>
+            </div>
+
+            {/* Resumo */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                <p className="text-xs text-blue-600 font-semibold uppercase">Total Períodos</p>
+                <p className="text-2xl font-bold text-blue-700">{data.resumo.totalPeriodos}</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                <p className="text-xs text-green-600 font-semibold uppercase">Registrados</p>
+                <p className="text-2xl font-bold text-green-700">{data.resumo.totalRegistrados}</p>
+              </div>
+              <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
+                <p className="text-xs text-amber-600 font-semibold uppercase">Não Registrados</p>
+                <p className="text-2xl font-bold text-amber-700">{data.resumo.totalNaoRegistrados}</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+                <p className="text-xs text-red-600 font-semibold uppercase">Vencidas</p>
+                <p className="text-2xl font-bold text-red-700">{data.resumo.totalVencidas}</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
+                <p className="text-xs text-purple-600 font-semibold uppercase">Valor Estimado</p>
+                <p className="text-xl font-bold text-purple-700">{formatMoeda(parseFloat(data.resumo.valorTotalEstimado))}</p>
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-green-300 text-green-700 hover:bg-green-50"
+                onClick={() => gerarPeriodos.mutate({ companyId, employeeId })}
+                disabled={gerarPeriodos.isPending}
+              >
+                <Zap className="h-4 w-4 mr-1" />
+                {gerarPeriodos.isPending ? 'Gerando...' : 'Gerar Períodos Automáticos'}
+              </Button>
+              {data.resumo.totalVencidas > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={() => {
+                    const vencidaIds = data.periodosRegistrados.filter((p: any) => p.vencida === 1 || p.status === 'vencida').map((p: any) => p.id);
+                    if (vencidaIds.length > 0 && confirm(`Confirmar ${vencidaIds.length} férias vencidas como pagas?`)) {
+                      confirmarVencidasLote.mutate({ ids: vencidaIds, observacao: 'Confirmado via detalhes do funcionário' });
+                    }
+                  }}
+                  disabled={confirmarVencidasLote.isPending}
+                >
+                  <CheckCheck className="h-4 w-4 mr-1" />
+                  {confirmarVencidasLote.isPending ? 'Confirmando...' : 'Confirmar Vencidas como Pagas'}
+                </Button>
+              )}
+            </div>
+
+            {/* Períodos Registrados */}
+            {data.periodosRegistrados.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Períodos Registrados no Sistema ({data.periodosRegistrados.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="p-2 text-left">#</th>
+                        <th className="p-2 text-left">Período Aquisitivo</th>
+                        <th className="p-2 text-left">Concessivo Até</th>
+                        <th className="p-2 text-left">Gozo</th>
+                        <th className="p-2 text-left">Dias</th>
+                        <th className="p-2 text-right">Valor</th>
+                        <th className="p-2 text-center">Status</th>
+                        <th className="p-2 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.periodosRegistrados.map((p: any, i: number) => {
+                        const st = STATUS_BADGE[p.status] || STATUS_BADGE.pendente;
+                        const isVencida = p.vencida === 1 || p.status === 'vencida';
+                        return (
+                          <tr key={p.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? 'bg-red-50/50' : ''}`}>
+                            <td className="p-2 text-muted-foreground">{p.numeroPeriodo || (i + 1)}º</td>
+                            <td className="p-2">
+                              <span className="font-medium">{formatDate(p.periodoAquisitivoInicio)}</span>
+                              <span className="text-muted-foreground"> a </span>
+                              <span className="font-medium">{formatDate(p.periodoAquisitivoFim)}</span>
+                            </td>
+                            <td className="p-2">{formatDate(p.periodoConcessivoFim)}</td>
+                            <td className="p-2">
+                              {p.dataInicio ? (
+                                <span>{formatDate(p.dataInicio)} a {formatDate(p.dataFim)}</span>
+                              ) : p.dataSugeridaInicio ? (
+                                <span className="text-muted-foreground italic">Sugerido: {formatDate(p.dataSugeridaInicio)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">Não definido</span>
+                              )}
+                            </td>
+                            <td className="p-2">{p.diasGozo || 30}</td>
+                            <td className="p-2 text-right font-bold">{formatMoeda(parseFloat(p.valorTotal || '0'))}</td>
+                            <td className="p-2 text-center">
+                              <Badge className={`text-[10px] ${st.className}`}>{st.label}</Badge>
+                              {p.pagamentoEmDobro === 1 && <Badge variant="destructive" className="ml-1 text-[9px]">2x</Badge>}
+                              {p.dataAlteradaPeloRH === 1 && <Badge variant="outline" className="ml-1 text-[9px] border-purple-300 text-purple-600">RH</Badge>}
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {(p.status === 'pendente' || p.status === 'vencida') && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Definir Data" onClick={() => onDefinirData(p)}>
+                                    <PenLine className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Períodos Não Registrados */}
+            {data.periodosNaoRegistrados.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" /> Períodos Não Registrados ({data.periodosNaoRegistrados.length})
+                </h3>
+                <p className="text-xs text-muted-foreground mb-2">Estes períodos foram calculados com base na data de admissão, mas ainda não foram registrados no sistema. Clique em "Gerar Períodos Automáticos" para registrá-los.</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-amber-50/50">
+                        <th className="p-2 text-left">Período Aquisitivo</th>
+                        <th className="p-2 text-left">Concessivo Até</th>
+                        <th className="p-2 text-right">Valor Estimado</th>
+                        <th className="p-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.periodosNaoRegistrados.map((p: any, i: number) => (
+                        <tr key={i} className={`border-b last:border-0 ${p.vencida ? 'bg-red-50/50' : 'bg-amber-50/20'}`}>
+                          <td className="p-2">
+                            <span className="font-medium">{formatDate(p.periodoAquisitivoInicio)}</span>
+                            <span className="text-muted-foreground"> a </span>
+                            <span className="font-medium">{formatDate(p.periodoAquisitivoFim)}</span>
+                          </td>
+                          <td className="p-2">{formatDate(p.periodoConcessivoFim)}</td>
+                          <td className="p-2 text-right font-bold">{formatMoeda(parseFloat(p.valorEstimado || '0'))}</td>
+                          <td className="p-2 text-center">
+                            <Badge variant={p.vencida ? 'destructive' : 'outline'} className="text-[10px]">
+                              {p.vencida ? 'Vencida' : 'Pendente'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Observações */}
+            {data.periodosRegistrados.some((p: any) => p.observacoes) && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+                  <Info className="h-4 w-4" /> Observações
+                </h3>
+                <div className="space-y-2">
+                  {data.periodosRegistrados.filter((p: any) => p.observacoes).map((p: any) => (
+                    <div key={p.id} className="bg-muted/20 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground">{p.numeroPeriodo}º Período ({formatDate(p.periodoAquisitivoInicio)} a {formatDate(p.periodoAquisitivoFim)})</p>
+                      <p className="text-sm mt-1">{p.observacoes}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </FullScreenDialog>
+  );
+}
+
 export default function Ferias() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
@@ -55,6 +303,9 @@ export default function Ferias() {
   // Dialog para detalhamento do mês no Fluxo de Caixa
   const [showFluxoMesDialog, setShowFluxoMesDialog] = useState(false);
   const [fluxoMesSelecionado, setFluxoMesSelecionado] = useState<any>(null);
+
+  // Dialog para detalhes de férias do funcionário (Gantt click)
+  const [ganttEmployeeId, setGanttEmployeeId] = useState<number | null>(null);
 
   // Dialog para definir data de férias (RH override)
   const [showDefinirDialog, setShowDefinirDialog] = useState(false);
@@ -810,23 +1061,28 @@ export default function Ferias() {
                   {(() => {
                     const dados = fluxoCaixa as any[];
                     // Collect all employees across all months (unique by id)
-                    const allFuncs: Record<number, { id: number; nome: string; cargo: string; meses: { mes: number; valor: number; vencida: boolean }[] }> = {};
+                    const allFuncs: Record<number, { id: number; nome: string; cargo: string; meses: { mes: number; valor: number; vencida: boolean; status: string }[] }> = {};
                     for (const m of dados) {
                       for (const f of (m.funcionarios || [])) {
                         if (!allFuncs[f.id]) {
                           allFuncs[f.id] = { id: f.id, nome: f.nome, cargo: f.cargo || "", meses: [] };
                         }
-                        allFuncs[f.id].meses.push({ mes: m.mes, valor: parseFloat(f.valorEstimado || "0"), vencida: f.vencida });
+                        allFuncs[f.id].meses.push({ mes: m.mes, valor: parseFloat(f.valorEstimado || "0"), vencida: f.vencida, status: f.status || (f.vencida ? 'vencida' : 'prevista') });
                       }
                     }
                     const funcList = Object.values(allFuncs).sort((a, b) => a.nome.localeCompare(b.nome));
                     if (funcList.length === 0) return null;
 
-                    const GANTT_COLORS = [
-                      "bg-blue-400", "bg-green-400", "bg-purple-400", "bg-orange-400",
-                      "bg-teal-400", "bg-pink-400", "bg-indigo-400", "bg-amber-400",
-                      "bg-cyan-400", "bg-rose-400",
-                    ];
+                    // Status-based colors for the Gantt bars
+                    const STATUS_GANTT_COLORS: Record<string, string> = {
+                      prevista: "bg-blue-400",
+                      pendente: "bg-blue-400",
+                      agendada: "bg-emerald-400",
+                      em_gozo: "bg-green-500",
+                      concluida: "bg-gray-400",
+                      vencida: "bg-red-400",
+                      cancelada: "bg-gray-300",
+                    };
 
                     return (
                       <div className="mt-6">
@@ -845,20 +1101,25 @@ export default function Ferias() {
                             {/* Rows */}
                             {funcList.map((func, idx) => (
                               <div key={func.id} className={`grid grid-cols-[200px_repeat(12,1fr)] items-center ${idx % 2 === 0 ? "bg-muted/20" : ""} py-0.5`}>
-                                <div className="text-xs font-medium truncate px-1" title={`${func.nome} - ${func.cargo}`}>
+                                <div
+                                  className="text-xs font-medium truncate px-1 cursor-pointer hover:text-blue-600 hover:underline"
+                                  title={`${func.nome} - ${func.cargo} — Clique para ver detalhes de férias`}
+                                  onClick={() => setGanttEmployeeId(func.id)}
+                                >
                                   {func.nome.split(" ").slice(0, 2).join(" ")}
                                 </div>
                                 {Array.from({ length: 12 }, (_, mesIdx) => {
                                   const mesNum = mesIdx + 1;
                                   const entry = func.meses.find(m => m.mes === mesNum);
-                                  const colorClass = GANTT_COLORS[idx % GANTT_COLORS.length];
+                                  const statusColor = STATUS_GANTT_COLORS[entry?.status || 'prevista'] || 'bg-blue-400';
+                                  const statusLabel = entry?.status === 'vencida' ? 'VENCIDA' : entry?.status === 'agendada' ? 'Agendada' : entry?.status === 'em_gozo' ? 'Em Gozo' : entry?.status === 'concluida' ? 'Concluída' : 'Prevista';
                                   return (
                                     <div key={mesIdx} className="px-0.5 h-6 flex items-center">
                                       {entry ? (
                                         <div
-                                          className={`w-full h-4 rounded-sm ${entry.vencida ? "bg-red-400" : colorClass} opacity-80 hover:opacity-100 transition-opacity cursor-pointer relative group`}
-                                          title={`${func.nome} — ${dados[mesIdx]?.nomeMes}: ${formatMoeda(entry.valor)}${entry.vencida ? " (VENCIDA)" : ""}`}
-                                          onClick={() => { setFluxoMesSelecionado(dados[mesIdx]); setShowFluxoMesDialog(true); }}
+                                          className={`w-full h-4 rounded-sm ${statusColor} opacity-80 hover:opacity-100 transition-opacity cursor-pointer relative group`}
+                                          title={`${func.nome} — ${dados[mesIdx]?.nomeMes}: ${formatMoeda(entry.valor)} (${statusLabel})`}
+                                          onClick={() => setGanttEmployeeId(func.id)}
                                         >
                                           <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white opacity-0 group-hover:opacity-100">
                                             {formatMoeda(entry.valor)}
@@ -873,16 +1134,28 @@ export default function Ferias() {
                               </div>
                             ))}
                             {/* Legend */}
-                            <div className="flex items-center gap-4 mt-3 pt-2 border-t border-gray-200">
+                            <div className="flex flex-wrap items-center gap-4 mt-3 pt-2 border-t border-gray-200">
                               <div className="flex items-center gap-1.5">
                                 <div className="w-3 h-3 rounded-sm bg-blue-400" />
-                                <span className="text-[10px] text-muted-foreground">Férias previstas</span>
+                                <span className="text-[10px] text-muted-foreground">Previstas</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-3 h-3 rounded-sm bg-emerald-400" />
+                                <span className="text-[10px] text-muted-foreground">Agendadas</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-3 h-3 rounded-sm bg-green-500" />
+                                <span className="text-[10px] text-muted-foreground">Em Gozo</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-3 h-3 rounded-sm bg-gray-400" />
+                                <span className="text-[10px] text-muted-foreground">Concluídas</span>
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-3 h-3 rounded-sm bg-red-400" />
-                                <span className="text-[10px] text-muted-foreground">Férias vencidas</span>
+                                <span className="text-[10px] text-muted-foreground">Vencidas</span>
                               </div>
-                              <span className="text-[10px] text-muted-foreground ml-auto">Passe o mouse sobre as barras para ver valores</span>
+                              <span className="text-[10px] text-muted-foreground ml-auto">Clique no nome ou barra para ver detalhes</span>
                             </div>
                           </div>
                         </div>
@@ -1246,6 +1519,17 @@ export default function Ferias() {
           </div>
         </FullScreenDialog>
       </div>
+
+      {/* ===== DIALOG: DETALHES DE FÉRIAS DO FUNCIONÁRIO (Gantt click) ===== */}
+      {ganttEmployeeId && (
+        <GanttEmployeeFeriasDialog
+          companyId={companyId}
+          employeeId={ganttEmployeeId}
+          onClose={() => setGanttEmployeeId(null)}
+          onDefinirData={(item: any) => { setGanttEmployeeId(null); handleDefinirData(item); }}
+          refetch={refetch}
+        />
+      )}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
