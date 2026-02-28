@@ -428,7 +428,31 @@ export default function AvisoPrevio() {
                   <Clock className="h-5 w-5 mx-auto text-amber-600 mb-1" />
                   <p className="text-xs text-amber-600 uppercase">Dias de Aviso</p>
                   <p className="font-bold text-lg">{selectedItem.diasAviso} dias</p>
-                  <p className="text-xs text-amber-500">{selectedItem.anosServico} anos de serviço</p>
+                  <p className="text-xs text-amber-500">{(() => {
+                    // Calcular anos, meses e dias de serviço usando dataAdmissao do previsaoRescisao
+                    let admStr = '';
+                    try {
+                      const prev = JSON.parse(selectedItem.previsaoRescisao || '{}');
+                      admStr = prev.dataAdmissao || '';
+                    } catch {}
+                    if (!admStr || !selectedItem.dataFim) return `${selectedItem.anosServico} anos de serviço`;
+                    const adm = new Date(admStr + 'T00:00:00');
+                    const fim = new Date(selectedItem.dataFim + 'T00:00:00');
+                    let anos = fim.getFullYear() - adm.getFullYear();
+                    let meses = fim.getMonth() - adm.getMonth();
+                    let dias = fim.getDate() - adm.getDate();
+                    if (dias < 0) {
+                      meses--;
+                      const mesAnterior = new Date(fim.getFullYear(), fim.getMonth(), 0);
+                      dias += mesAnterior.getDate();
+                    }
+                    if (meses < 0) { anos--; meses += 12; }
+                    const parts = [];
+                    if (anos > 0) parts.push(`${anos} ${anos === 1 ? 'ano' : 'anos'}`);
+                    if (meses > 0) parts.push(`${meses} ${meses === 1 ? 'mês' : 'meses'}`);
+                    parts.push(`${dias} ${dias === 1 ? 'dia' : 'dias'}`);
+                    return parts.join(', ') + ' de serviço';
+                  })()}</p>
                   {selectedItem.anosServico > 0 && selectedItem.tipo?.includes('trabalhado') && (
                     <p className="text-[10px] text-amber-600 mt-1">+ {Math.min(selectedItem.anosServico * 3, 60)} dias indenizados</p>
                   )}

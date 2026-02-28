@@ -3421,4 +3421,9 @@
 - [x] BUG: Total Verbas não inclui multa FGTS - CORRIGIDO
 - [x] BUG: Label Desligamento - CORRIGIDO para Término Aviso
 - [x] Alinhar mutation calcular com calcularRescisaoCompleta - FEITO
-- [ ] BUG: Valor Estimado na lista principal ainda mostra valor antigo (armazenado)
+- [x] BUG: Valor Estimado na lista principal ainda mostra valor antigo (armazenado) - CORRIGIDO (recálculo em tempo real no list)
+
+## Exibição Detalhada Tempo de Serviço
+- [x] Mostrar anos, meses e dias de serviço no card "DIAS DE AVISO" - FEITO (ex: "11 meses, 24 dias de serviço")
+- [x] Incluir dataAdmissao no JSON previsaoRescisao do getById para cálculo no frontend
+- [x] BUG: Nome do colaborador aparecia como "—" no card de detalhes - CORRIGIDO (getById agora inclui employeeName, employeeCpf, employeeCargo)

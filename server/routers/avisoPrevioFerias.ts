@@ -391,13 +391,43 @@ export const avisoPrevioFeriasRouter = router({
         .where(and(...conditions))
         .orderBy(desc(terminationNotices.createdAt));
         
-        // Fallback for deleted employees
-        return rows.map(r => ({
-          ...r,
-          employeeName: r.employeeName || 'Funcionário excluído',
-          employeeCpf: r.employeeCpf || '-',
-          employeeCargo: r.employeeCargo || '-',
-        }));
+        // Recalcular valorEstimadoTotal em tempo real para cada registro
+        const results = [];
+        for (const r of rows) {
+          let valorRecalculado = r.valorEstimadoTotal;
+          try {
+            const [emp] = await db.select().from(employees).where(eq(employees.id, r.employeeId));
+            if (emp && r.dataFim) {
+              const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
+              const salarioBase = parseBRL(emp.salarioBase);
+              const dtFimAviso = new Date(r.dataFim + 'T00:00:00');
+              const dtDataSaida = new Date(dtFimAviso);
+              dtDataSaida.setDate(dtDataSaida.getDate() + 1);
+              const diasTrabalhadosMes = dtDataSaida.getDate();
+              
+              const previsao = calcularRescisaoCompleta({
+                salarioBase,
+                dataAdmissao,
+                dataDesligamento: r.dataInicio,
+                dataFimAviso: r.dataFim,
+                tipo: r.tipo,
+                vrDiario: 0,
+                diasTrabalhadosMes,
+              });
+              valorRecalculado = previsao.total;
+            }
+          } catch (e) {
+            // Se falhar o recálculo, mantém o valor armazenado
+          }
+          results.push({
+            ...r,
+            valorEstimadoTotal: valorRecalculado,
+            employeeName: r.employeeName || 'Funcionário excluído',
+            employeeCpf: r.employeeCpf || '-',
+            employeeCargo: r.employeeCargo || '-',
+          });
+        }
+        return results;
       }),
 
     getById: protectedProcedure
@@ -433,10 +463,13 @@ export const avisoPrevioFeriasRouter = router({
               diasTrabalhadosMes,
             });
             
-            // Retornar com previsão recalculada
+            // Retornar com previsão recalculada (incluir dataAdmissao para cálculo de tempo de serviço no frontend)
             return {
               ...row,
-              previsaoRescisao: JSON.stringify(previsao),
+              employeeName: emp.nomeCompleto || 'Funcionário',
+              employeeCpf: emp.cpf || '-',
+              employeeCargo: emp.cargo || emp.funcao || '-',
+              previsaoRescisao: JSON.stringify({ ...previsao, dataAdmissao }),
             };
           }
         } catch (e) {
@@ -444,7 +477,19 @@ export const avisoPrevioFeriasRouter = router({
           console.error('Erro ao recalcular previsão:', e);
         }
         
-        return row;
+        // Fallback: buscar dados do funcionário mesmo sem recálculo
+        try {
+          const [emp2] = await db.select().from(employees).where(eq(employees.id, row.employeeId));
+          if (emp2) {
+            return {
+              ...row,
+              employeeName: emp2.nomeCompleto || 'Funcionário',
+              employeeCpf: emp2.cpf || '-',
+              employeeCargo: emp2.cargo || emp2.funcao || '-',
+            };
+          }
+        } catch {}
+        return { ...row, employeeName: 'Funcionário excluído', employeeCpf: '-', employeeCargo: '-' };
       }),
 
     /** Calcular previsão de rescisão - CLT completa com descontos */
