@@ -1,220 +1,250 @@
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import {
   Scale, Gavel, AlertTriangle, ChevronRight, BarChart3,
-  Calendar, Activity, Clock, DollarSign, FileText, TrendingUp
+  Calendar, Activity, Clock, DollarSign, FileText, TrendingUp,
+  ShieldAlert, ExternalLink, Eye, ArrowUpRight, ArrowDownRight,
+  Loader2, Users, Briefcase, Target, PieChart, Zap, Hash
 } from "lucide-react";
 import { formatDateTime } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import { CHART_PALETTE, SEMANTIC_COLORS } from "@/lib/chartColors";
+
+// Lazy load Chart.js
+let ChartJS: any = null;
+const loadChartJS = async () => {
+  if (ChartJS) return ChartJS;
+  const mod = await import("chart.js/auto");
+  ChartJS = mod.default || mod.Chart;
+  return ChartJS;
+};
+
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+}
+
+function fmtNum(v: number) {
+  return v.toLocaleString("pt-BR");
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  em_andamento: "Em Andamento",
+  aguardando_audiencia: "Aguardando Audiência",
+  aguardando_pericia: "Aguardando Perícia",
+  acordo: "Acordo",
+  sentenca: "Sentença",
+  recurso: "Recurso",
+  execucao: "Execução",
+  arquivado: "Arquivado",
+  encerrado: "Encerrado",
+};
+
+const RISCO_CONFIG: Record<string, { label: string; color: string; bg: string; text: string; dot: string }> = {
+  critico: { label: "Crítico", color: SEMANTIC_COLORS.riscoAlto, bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500" },
+  alto: { label: "Alto", color: "#F97316", bg: "bg-orange-50", text: "text-orange-700", dot: "bg-orange-500" },
+  medio: { label: "Médio", color: SEMANTIC_COLORS.riscoMedio, bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" },
+  baixo: { label: "Baixo", color: SEMANTIC_COLORS.riscoBaixo, bg: "bg-green-50", text: "text-green-700", dot: "bg-green-500" },
+};
+
+const FASE_LABELS: Record<string, string> = {
+  conhecimento: "Conhecimento",
+  recursal: "Recursal",
+  execucao: "Execução",
+  encerrado: "Encerrado",
+};
+
+// Mini chart component for inline use
+function MiniDoughnut({ data, colors, size = 80 }: { data: number[]; colors: string[]; size?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<any>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    loadChartJS().then((CJS) => {
+      if (!mounted || !canvasRef.current) return;
+      if (chartRef.current) chartRef.current.destroy();
+      chartRef.current = new CJS(canvasRef.current, {
+        type: "doughnut",
+        data: {
+          datasets: [{ data, backgroundColor: colors, borderWidth: 0 }],
+        },
+        options: {
+          responsive: false,
+          cutout: "65%",
+          plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
+        },
+      });
+    });
+    return () => { mounted = false; if (chartRef.current) chartRef.current.destroy(); };
+  }, [data, colors, size]);
+
+  return <canvas ref={canvasRef} width={size} height={size} />;
+}
+
+// Bar chart component for inline use
+function MiniBarChart({ labels, data, color, height = 160 }: { labels: string[]; data: number[]; color: string; height?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<any>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    loadChartJS().then((CJS) => {
+      if (!mounted || !canvasRef.current) return;
+      if (chartRef.current) chartRef.current.destroy();
+      chartRef.current = new CJS(canvasRef.current, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: color, borderRadius: 4, barThickness: 18 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: true }, datalabels: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { font: { size: 10 }, stepSize: 1 }, grid: { display: false } },
+            x: { ticks: { font: { size: 9 }, maxRotation: 45 }, grid: { display: false } },
+          },
+        },
+      });
+    });
+    return () => { mounted = false; if (chartRef.current) chartRef.current.destroy(); };
+  }, [labels, data, color, height]);
+
+  return (
+    <div style={{ height: `${height}px` }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
+
+// Horizontal bar chart for assuntos
+function MiniHBarChart({ labels, data, color, height = 200 }: { labels: string[]; data: number[]; color: string; height?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<any>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    loadChartJS().then((CJS) => {
+      if (!mounted || !canvasRef.current) return;
+      if (chartRef.current) chartRef.current.destroy();
+      chartRef.current = new CJS(canvasRef.current, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: color, borderRadius: 4, barThickness: 16 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: "y",
+          plugins: { legend: { display: false }, tooltip: { enabled: true }, datalabels: { display: false } },
+          scales: {
+            x: { beginAtZero: true, ticks: { font: { size: 10 }, stepSize: 1 }, grid: { display: false } },
+            y: { ticks: { font: { size: 10 } }, grid: { display: false } },
+          },
+        },
+      });
+    });
+    return () => { mounted = false; if (chartRef.current) chartRef.current.destroy(); };
+  }, [labels, data, color, height]);
+
+  return (
+    <div style={{ height: `${height}px` }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
 
 export default function PainelJuridico() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const [selectedProcesso, setSelectedProcesso] = useState<any>(null);
 
-  const { data: homeData, isLoading } = trpc.home.getData.useQuery(
+  // Use the full dashboard data (same as DashJuridico) for rich info
+  const { data: dashData, isLoading: dashLoading } = trpc.dashboards.juridico.useQuery(
     { companyId: companyId! },
-    { enabled: !!companyId }
+    { enabled: !!companyId && companyId > 0 }
   );
+
+  // Also get the processos list for the table
+  const { data: processos, isLoading: processosLoading } = trpc.processos.listar.useQuery(
+    { companyId: companyId! },
+    { enabled: !!companyId && companyId > 0 }
+  );
+
+  // Get audit logs for activity
   const { data: logs } = trpc.audit.list.useQuery(
-    { companyId, limit: 6 },
+    { companyId, limit: 5 },
     { enabled: !!companyId }
   );
 
-  const s = homeData?.stats;
+  const isLoading = dashLoading || processosLoading;
+
+  // Derived data
+  const processosAtivos = useMemo(() => {
+    if (!processos) return [];
+    return processos.filter((p: any) => !["encerrado", "arquivado"].includes(p.status));
+  }, [processos]);
+
+  const processosRecentes = useMemo(() => {
+    if (!processos) return [];
+    return [...processos].sort((a: any, b: any) => {
+      const da = a.updatedAt || a.createdAt || "";
+      const db2 = b.updatedAt || b.createdAt || "";
+      return db2.localeCompare(da);
+    }).slice(0, 5);
+  }, [processos]);
+
+  const totalAlertas = useMemo(() => {
+    if (!dashData) return 0;
+    const riscoAlto = dashData.porRisco.filter((r: any) => r.label === "alto" || r.label === "critico").reduce((s: number, r: any) => s + r.value, 0);
+    const audiencias = dashData.proximasAudiencias.length;
+    return riscoAlto + audiencias;
+  }, [dashData]);
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Scale className="h-4 w-4 text-amber-600" />
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center shadow-sm">
+                <Scale className="h-5 w-5 text-amber-700" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Painel Jurídico</h1>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Painel Jurídico</h1>
+                <p className="text-muted-foreground text-xs">Gestão Jurídica Trabalhista</p>
+              </div>
             </div>
-            <p className="text-muted-foreground text-sm">
-              Departamento Jurídico - Processos Trabalhistas
-            </p>
           </div>
-          {(s?.processosRiscoAlto ?? 0) > 0 ? (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-              <span className="text-sm font-semibold text-red-700">{s!.processosRiscoAlto} processo{s!.processosRiscoAlto !== 1 ? "s" : ""} de risco alto/crítico</span>
-            </div>
-          ) : null}
+          <div className="flex items-center gap-2 flex-wrap">
+            {totalAlertas > 0 && (
+              <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+                <ShieldAlert className="h-4 w-4 text-red-600" />
+                <span className="text-xs font-semibold text-red-700">{totalAlertas} alerta{totalAlertas !== 1 ? "s" : ""}</span>
+              </div>
+            )}
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/processos-trabalhistas")}>
+              <Gavel className="h-3.5 w-3.5" /> Processos
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/dashboards/juridico")}>
+              <BarChart3 className="h-3.5 w-3.5" /> Dashboard
+            </Button>
+          </div>
         </div>
 
-        {companyId ? (
-          isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Card key={i} className="animate-pulse"><CardContent className="p-4 h-24" /></Card>
-              ))}
-            </div>
-          ) : (
-            <>
-              {/* KPI Cards - Jurídico */}
-              <div>
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Indicadores Jurídicos</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiCard title="Processos Ativos" value={s?.processosAtivos ?? 0} icon={Gavel} color="amber" onClick={() => navigate("/processos-trabalhistas")} />
-                  <KpiCard title="Risco Alto/Crítico" value={s?.processosRiscoAlto ?? 0} icon={AlertTriangle} color="red" onClick={() => navigate("/processos-trabalhistas")} alert={!!s?.processosRiscoAlto} />
-                  <KpiCard title="Audiências (30d)" value={homeData?.proximasAudiencias?.length ?? 0} icon={Calendar} color="blue" onClick={() => navigate("/processos-trabalhistas")} />
-                  <KpiCard title="Valor Provisionado" value={0} icon={DollarSign} color="green" onClick={() => navigate("/processos-trabalhistas")} isMonetary customValue={
-                    homeData?.proximasAudiencias?.reduce((acc: number, p: any) => acc + (p.valorCausa || 0), 0) ?? 0
-                  } />
-                </div>
-              </div>
-
-              {/* Main Content Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Próximas Audiências */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-blue-500" />
-                        Próximas Audiências
-                        {(homeData?.proximasAudiencias?.length ?? 0) > 0 ? <Badge className="bg-blue-100 text-blue-700 text-[10px]">{homeData!.proximasAudiencias.length}</Badge> : null}
-                      </CardTitle>
-                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/processos-trabalhistas")}>
-                        Ver todos <ChevronRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {!homeData?.proximasAudiencias?.length ? (
-                      <div className="flex flex-col items-center py-6">
-                        <Calendar className="h-10 w-10 text-green-400 mb-2" />
-                        <p className="text-sm font-medium text-green-600">Nenhuma audiência agendada</p>
-                        <p className="text-xs text-muted-foreground">Tudo em dia!</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {homeData.proximasAudiencias.map((p: any) => {
-                          const urgColor = p.dias <= 7 ? "bg-red-50 border-red-200" : p.dias <= 30 ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200";
-                          const urgText = p.dias <= 7 ? "text-red-600 font-bold" : p.dias <= 30 ? "text-orange-600 font-semibold" : "text-muted-foreground";
-                          return (
-                            <div key={p.id} className={`px-3 py-2 rounded-lg border ${urgColor}`}>
-                              <div className="flex items-center justify-between">
-                                <div className="min-w-0">
-                                  <span className="text-sm font-semibold">{p.reclamante}</span>
-                                  <span className="text-xs text-muted-foreground ml-2">{p.numeroProcesso}</span>
-                                </div>
-                                <Badge className={`text-[10px] ${p.risco === 'critico' ? 'bg-red-100 text-red-700' : p.risco === 'alto' ? 'bg-orange-100 text-orange-700' : p.risco === 'medio' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                                  {p.risco}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center justify-between mt-1">
-                                <span className="text-xs text-muted-foreground">
-                                  {p.dataAudiencia ? new Date(p.dataAudiencia + "T00:00:00").toLocaleDateString("pt-BR") : "Sem data"}
-                                </span>
-                                <span className={`text-xs font-mono ${urgText}`}>
-                                  {p.dias === 0 ? "HOJE" : p.dias === 1 ? "Amanhã" : `em ${p.dias}d`}
-                                </span>
-                              </div>
-                              {p.valorCausa ? (
-                                <div className="text-[10px] text-muted-foreground mt-0.5">
-                                  Valor da causa: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valorCausa)}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Processos por Risco */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-amber-500" />
-                      Processos por Nível de Risco
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {[
-                        { label: "Crítico", color: "bg-red-500", textColor: "text-red-700", bgColor: "bg-red-50", count: homeData?.proximasAudiencias?.filter((p: any) => p.risco === 'critico').length ?? 0 },
-                        { label: "Alto", color: "bg-orange-500", textColor: "text-orange-700", bgColor: "bg-orange-50", count: homeData?.proximasAudiencias?.filter((p: any) => p.risco === 'alto').length ?? 0 },
-                        { label: "Médio", color: "bg-yellow-500", textColor: "text-yellow-700", bgColor: "bg-yellow-50", count: homeData?.proximasAudiencias?.filter((p: any) => p.risco === 'medio').length ?? 0 },
-                        { label: "Baixo", color: "bg-green-500", textColor: "text-green-700", bgColor: "bg-green-50", count: homeData?.proximasAudiencias?.filter((p: any) => p.risco === 'baixo').length ?? 0 },
-                      ].map(r => (
-                        <div key={r.label} className={`flex items-center justify-between px-3 py-2 rounded-lg ${r.bgColor}`}>
-                          <div className="flex items-center gap-2">
-                            <div className={`h-3 w-3 rounded-full ${r.color}`} />
-                            <span className={`text-sm font-medium ${r.textColor}`}>{r.label}</span>
-                          </div>
-                          <span className={`text-lg font-bold ${r.textColor}`}>{r.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-4 pt-3 border-t">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Total de processos ativos</span>
-                        <span className="text-lg font-bold text-foreground">{s?.processosAtivos ?? 0}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Atividade Recente */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-amber-500" />
-                    Atividade Recente - Jurídico
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!logs || logs.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Nenhuma atividade registrada</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {logs.map((log: any) => (
-                        <div key={log.id} className="flex items-start gap-2 text-xs">
-                          <div className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${log.action === "DELETE" ? "bg-red-500" : log.action === "CREATE" ? "bg-green-500" : "bg-blue-500"}`} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-foreground truncate">{log.details}</p>
-                            <p className="text-[10px] text-muted-foreground">{log.userName} · {formatDateTime(log.createdAt)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Acesso Rápido Jurídico */}
-              <div>
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido - Jurídico</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {[
-                    { label: "Processos Trabalhistas", icon: Gavel, path: "/processos-trabalhistas", color: "text-amber-600" },
-                    { label: "Dashboard Jurídico", icon: BarChart3, path: "/dashboards/juridico", color: "text-purple-600" },
-                  ].map(item => (
-                    <button key={item.path} onClick={() => navigate(item.path)} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border hover:bg-accent/50 hover:shadow-sm transition-all text-left">
-                      <item.icon className={`h-4 w-4 ${item.color} shrink-0`} />
-                      <span className="text-xs font-medium">{item.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )
-        ) : (
+        {!companyId ? (
           <Card className="bg-card border-border">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Scale className="h-12 w-12 text-muted-foreground mb-4" />
@@ -222,6 +252,483 @@ export default function PainelJuridico() {
               <p className="text-muted-foreground text-sm text-center max-w-md">Selecione uma empresa no seletor acima para visualizar o painel jurídico.</p>
             </CardContent>
           </Card>
+        ) : isLoading ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Card key={i} className="animate-pulse"><CardContent className="p-4 h-20" /></Card>
+              ))}
+            </div>
+          </div>
+        ) : !dashData ? (
+          <div className="text-center py-16 text-muted-foreground">Nenhum dado disponível.</div>
+        ) : (
+          <>
+            {/* === ROW 1: KPIs Principais === */}
+            <div>
+              <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Visão Geral</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <KpiCard
+                  title="Total de Processos"
+                  value={fmtNum(dashData.resumo.totalProcessos)}
+                  icon={Gavel}
+                  color="blue"
+                  onClick={() => navigate("/processos-trabalhistas")}
+                />
+                <KpiCard
+                  title="Processos Ativos"
+                  value={fmtNum(dashData.resumo.processosAtivos)}
+                  icon={AlertTriangle}
+                  color="amber"
+                  onClick={() => navigate("/processos-trabalhistas")}
+                />
+                <KpiCard
+                  title="Encerrados"
+                  value={fmtNum(dashData.resumo.processosEncerrados)}
+                  icon={FileText}
+                  color="green"
+                  onClick={() => navigate("/processos-trabalhistas")}
+                />
+                <KpiCard
+                  title="Valor em Risco"
+                  value={fmtBRL(dashData.resumo.valorEmRisco)}
+                  icon={ShieldAlert}
+                  color="red"
+                  isMonetary
+                />
+              </div>
+            </div>
+
+            {/* === ROW 2: KPIs Financeiros === */}
+            <div>
+              <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Valores Financeiros</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <KpiCard
+                  title="Valor da Causa"
+                  value={fmtBRL(dashData.resumo.totalValorCausa)}
+                  icon={DollarSign}
+                  color="red"
+                  isMonetary
+                />
+                <KpiCard
+                  title="Condenação"
+                  value={fmtBRL(dashData.resumo.totalValorCondenacao)}
+                  icon={Scale}
+                  color="purple"
+                  isMonetary
+                />
+                <KpiCard
+                  title="Acordos"
+                  value={fmtBRL(dashData.resumo.totalValorAcordo)}
+                  icon={TrendingUp}
+                  color="teal"
+                  isMonetary
+                />
+                <KpiCard
+                  title="Valor Pago"
+                  value={fmtBRL(dashData.resumo.totalValorPago)}
+                  icon={DollarSign}
+                  color="slate"
+                  isMonetary
+                />
+              </div>
+            </div>
+
+            {/* === ROW 3: Risco + Audiências + Status === */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Processos por Risco */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                    <Target className="h-3.5 w-3.5 text-amber-500" />
+                    Nível de Risco
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <div className="flex items-center gap-4">
+                    <div className="shrink-0">
+                      <MiniDoughnut
+                        data={dashData.porRisco.map((r: any) => r.value)}
+                        colors={dashData.porRisco.map((r: any) => RISCO_CONFIG[r.label]?.color || SEMANTIC_COLORS.neutro)}
+                        size={72}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      {(["critico", "alto", "medio", "baixo"] as const).map(risco => {
+                        const item = dashData.porRisco.find((r: any) => r.label === risco);
+                        const count = item?.value ?? 0;
+                        const cfg = RISCO_CONFIG[risco];
+                        return (
+                          <div key={risco} className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <div className={`h-2 w-2 rounded-full ${cfg.dot}`} />
+                              <span className="text-xs text-muted-foreground">{cfg.label}</span>
+                            </div>
+                            <span className={`text-sm font-bold ${cfg.text}`}>{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Próximas Audiências */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                      Próximas Audiências
+                      {dashData.proximasAudiencias.length > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0">{dashData.proximasAudiencias.length}</Badge>
+                      )}
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  {dashData.proximasAudiencias.length === 0 ? (
+                    <div className="flex flex-col items-center py-4">
+                      <Calendar className="h-8 w-8 text-green-400 mb-1.5" />
+                      <p className="text-xs font-medium text-green-600">Nenhuma audiência agendada</p>
+                      <p className="text-[10px] text-muted-foreground">Tudo em dia!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
+                      {dashData.proximasAudiencias.slice(0, 5).map((a: any, i: number) => {
+                        const dataAud = a.data ? new Date(a.data + "T00:00:00") : null;
+                        const hoje = new Date();
+                        const dias = dataAud ? Math.ceil((dataAud.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                        const urgente = dias !== null && dias <= 7;
+                        return (
+                          <div key={i} className={`px-2.5 py-1.5 rounded-lg border text-xs ${urgente ? "bg-red-50 border-red-200" : "bg-muted/30 border-border/50"}`}>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-semibold truncate flex-1">{a.reclamante}</span>
+                              <span className={`text-[10px] font-mono shrink-0 ${urgente ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
+                                {dataAud ? dataAud.toLocaleDateString("pt-BR") : "—"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="text-[10px] text-muted-foreground font-mono">{a.numero}</span>
+                              <Badge className={`text-[9px] px-1 py-0 ${a.risco === "critico" || a.risco === "alto" ? "bg-red-100 text-red-700" : a.risco === "medio" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                                {a.risco}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Processos por Status */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                    <PieChart className="h-3.5 w-3.5 text-purple-500" />
+                    Por Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  <div className="flex items-center gap-4">
+                    <div className="shrink-0">
+                      <MiniDoughnut
+                        data={dashData.porStatus.map((s: any) => s.value)}
+                        colors={CHART_PALETTE.slice(0, dashData.porStatus.length)}
+                        size={72}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1 max-h-[160px] overflow-y-auto">
+                      {dashData.porStatus.map((s: any, i: number) => (
+                        <div key={s.label} className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{STATUS_LABELS[s.label] || s.label}</span>
+                          </div>
+                          <span className="text-xs font-bold">{s.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* === ROW 4: Evolução Mensal + Assuntos DataJud === */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* Evolução Mensal */}
+              {dashData.evolucaoMensal.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                      <BarChart3 className="h-3.5 w-3.5 text-blue-500" />
+                      Novos Processos por Mês
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <MiniBarChart
+                      labels={dashData.evolucaoMensal
+                        .filter((r: any) => r.mes !== "Desconhecido")
+                        .map((r: any) => {
+                          const parts = r.mes.split("-");
+                          if (parts.length === 2) return `${parts[1]}/${parts[0].slice(2)}`;
+                          return r.mes;
+                        })}
+                      data={dashData.evolucaoMensal.filter((r: any) => r.mes !== "Desconhecido").map((r: any) => r.count)}
+                      color={CHART_PALETTE[0]}
+                      height={180}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Assuntos DataJud */}
+              {(dashData as any).topAssuntos?.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                      <Hash className="h-3.5 w-3.5 text-teal-500" />
+                      Assuntos Mais Comuns (DataJud)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <MiniHBarChart
+                      labels={(dashData as any).topAssuntos.map((a: any) => a.assunto.length > 30 ? a.assunto.slice(0, 30) + "..." : a.assunto)}
+                      data={(dashData as any).topAssuntos.map((a: any) => a.count)}
+                      color={CHART_PALETTE[4]}
+                      height={Math.max(160, (dashData as any).topAssuntos.length * 28)}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* === ROW 5: Processos por Fase + Tipo de Ação === */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Por Fase */}
+              {dashData.porFase.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                      <Briefcase className="h-3.5 w-3.5 text-indigo-500" />
+                      Fase Processual
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="space-y-2">
+                      {dashData.porFase.map((f: any, i: number) => {
+                        const total = dashData.resumo.totalProcessos;
+                        const pct = total > 0 ? Math.round((f.value / total) * 100) : 0;
+                        return (
+                          <div key={f.label}>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-xs text-muted-foreground">{FASE_LABELS[f.label] || f.label}</span>
+                              <span className="text-xs font-bold">{f.value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${pct}%`, backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Tipo de Ação */}
+              {dashData.porTipo.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-orange-500" />
+                      Tipo de Ação
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="space-y-2">
+                      {dashData.porTipo.map((t: any, i: number) => {
+                        const total = dashData.resumo.totalProcessos;
+                        const pct = total > 0 ? Math.round((t.value / total) * 100) : 0;
+                        return (
+                          <div key={t.label}>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-xs text-muted-foreground capitalize">{t.label}</span>
+                              <span className="text-xs font-bold">{t.value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${pct}%`, backgroundColor: CHART_PALETTE[(i + 3) % CHART_PALETTE.length] }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* === ROW 6: Lista de Processos Recentes === */}
+            <Card>
+              <CardHeader className="pb-2 pt-3 px-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                    <Gavel className="h-3.5 w-3.5 text-amber-500" />
+                    Processos Recentes
+                    {processos && <Badge variant="secondary" className="text-[9px] px-1.5 py-0 ml-1">{processos.length} total</Badge>}
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-0.5" onClick={() => navigate("/processos-trabalhistas")}>
+                    Ver todos <ChevronRight className="h-3 w-3" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 pb-3">
+                {!processosRecentes.length ? (
+                  <p className="text-xs text-muted-foreground text-center py-6">Nenhum processo cadastrado</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-1.5 pr-2 font-medium text-muted-foreground">Processo</th>
+                          <th className="py-1.5 pr-2 font-medium text-muted-foreground hidden sm:table-cell">Reclamante</th>
+                          <th className="py-1.5 pr-2 font-medium text-muted-foreground hidden md:table-cell">Vara</th>
+                          <th className="py-1.5 pr-2 font-medium text-muted-foreground">Status</th>
+                          <th className="py-1.5 pr-2 font-medium text-muted-foreground">Risco</th>
+                          <th className="py-1.5 font-medium text-muted-foreground hidden lg:table-cell">Valor Causa</th>
+                          <th className="py-1.5 w-8"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {processosRecentes.map((p: any) => {
+                          const rCfg = RISCO_CONFIG[p.risco] || RISCO_CONFIG.medio;
+                          return (
+                            <tr key={p.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate("/processos-trabalhistas")}>
+                              <td className="py-1.5 pr-2">
+                                <span className="font-mono text-[10px]">{p.numeroProcesso}</span>
+                                <span className="block sm:hidden text-[10px] text-muted-foreground truncate max-w-[120px]">{p.reclamante}</span>
+                              </td>
+                              <td className="py-1.5 pr-2 hidden sm:table-cell">
+                                <span className="font-medium truncate max-w-[150px] block">{p.reclamante}</span>
+                              </td>
+                              <td className="py-1.5 pr-2 hidden md:table-cell text-muted-foreground text-[10px]">{p.vara || "—"}</td>
+                              <td className="py-1.5 pr-2">
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0">{STATUS_LABELS[p.status] || p.status}</Badge>
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                <Badge className={`text-[9px] px-1.5 py-0 ${rCfg.bg} ${rCfg.text} border-0`}>{rCfg.label}</Badge>
+                              </td>
+                              <td className="py-1.5 hidden lg:table-cell text-muted-foreground">{p.valorCausa || "—"}</td>
+                              <td className="py-1.5">
+                                <Eye className="h-3 w-3 text-muted-foreground" />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* === ROW 7: Valor por Risco + Atividade Recente === */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Valor em Risco por Nível */}
+              {dashData.valorPorRisco.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                      <DollarSign className="h-3.5 w-3.5 text-red-500" />
+                      Valor em Risco por Nível
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="space-y-2">
+                      {dashData.valorPorRisco.map((r: any) => {
+                        const cfg = RISCO_CONFIG[r.risco] || RISCO_CONFIG.medio;
+                        const totalRisco = dashData.resumo.valorEmRisco;
+                        const pct = totalRisco > 0 ? Math.round((r.valor / totalRisco) * 100) : 0;
+                        return (
+                          <div key={r.risco}>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <div className={`h-2 w-2 rounded-full ${cfg.dot}`} />
+                                <span className="text-xs text-muted-foreground">{cfg.label}</span>
+                              </div>
+                              <span className="text-xs font-bold">{fmtBRL(r.valor)}</span>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: cfg.color }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 pt-2 border-t flex items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground">Total em risco</span>
+                      <span className="text-sm font-bold text-red-600">{fmtBRL(dashData.resumo.valorEmRisco)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Atividade Recente */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5 text-amber-500" />
+                    Atividade Recente
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3">
+                  {!logs || logs.length === 0 ? (
+                    <p className="text-[10px] text-muted-foreground text-center py-4">Nenhuma atividade registrada</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {logs.map((log: any) => (
+                        <div key={log.id} className="flex items-start gap-2">
+                          <div className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${log.action === "DELETE" ? "bg-red-500" : log.action === "CREATE" ? "bg-green-500" : "bg-blue-500"}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] text-foreground truncate">{log.details}</p>
+                            <p className="text-[9px] text-muted-foreground">{log.userName} · {formatDateTime(log.createdAt)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* === ROW 8: Acesso Rápido === */}
+            <div>
+              <h2 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Acesso Rápido</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { label: "Processos Trabalhistas", icon: Gavel, path: "/processos-trabalhistas", color: "text-amber-600", bg: "bg-amber-50" },
+                  { label: "Dashboard Jurídico", icon: BarChart3, path: "/dashboards/juridico", color: "text-purple-600", bg: "bg-purple-50" },
+                  { label: "Todos os Dashboards", icon: PieChart, path: "/dashboards", color: "text-blue-600", bg: "bg-blue-50" },
+                  { label: "Aviso Prévio", icon: FileText, path: "/aviso-previo", color: "text-orange-600", bg: "bg-orange-50" },
+                ].map(item => (
+                  <button key={item.path} onClick={() => navigate(item.path)} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border hover:bg-accent/50 hover:shadow-sm transition-all text-left group">
+                    <div className={`h-7 w-7 rounded-lg ${item.bg} flex items-center justify-center shrink-0`}>
+                      <item.icon className={`h-3.5 w-3.5 ${item.color}`} />
+                    </div>
+                    <span className="text-[11px] font-medium">{item.label}</span>
+                    <ChevronRight className="h-3 w-3 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </DashboardLayout>
@@ -229,29 +736,34 @@ export default function PainelJuridico() {
 }
 
 // KPI Card
-const COLOR_MAP: Record<string, { bg: string; icon: string; border: string; text: string }> = {
-  blue: { bg: "bg-blue-50", icon: "text-blue-600", border: "border-l-blue-500", text: "text-blue-600" },
-  green: { bg: "bg-green-50", icon: "text-green-600", border: "border-l-green-500", text: "text-green-600" },
-  amber: { bg: "bg-amber-50", icon: "text-amber-600", border: "border-l-amber-500", text: "text-amber-600" },
-  red: { bg: "bg-red-50", icon: "text-red-600", border: "border-l-red-500", text: "text-red-600" },
+const COLOR_MAP: Record<string, { bg: string; icon: string; border: string; text: string; gradient: string }> = {
+  blue: { bg: "bg-blue-50", icon: "text-blue-600", border: "border-l-blue-500", text: "text-blue-600", gradient: "from-blue-50 to-blue-100/50" },
+  green: { bg: "bg-green-50", icon: "text-green-600", border: "border-l-green-500", text: "text-green-600", gradient: "from-green-50 to-green-100/50" },
+  amber: { bg: "bg-amber-50", icon: "text-amber-600", border: "border-l-amber-500", text: "text-amber-600", gradient: "from-amber-50 to-amber-100/50" },
+  red: { bg: "bg-red-50", icon: "text-red-600", border: "border-l-red-500", text: "text-red-600", gradient: "from-red-50 to-red-100/50" },
+  purple: { bg: "bg-purple-50", icon: "text-purple-600", border: "border-l-purple-500", text: "text-purple-600", gradient: "from-purple-50 to-purple-100/50" },
+  teal: { bg: "bg-teal-50", icon: "text-teal-600", border: "border-l-teal-500", text: "text-teal-600", gradient: "from-teal-50 to-teal-100/50" },
+  slate: { bg: "bg-slate-50", icon: "text-slate-600", border: "border-l-slate-500", text: "text-slate-600", gradient: "from-slate-50 to-slate-100/50" },
 };
 
-function KpiCard({ title, value, icon: Icon, color, onClick, alert, isMonetary, customValue }: {
-  title: string; value: number; icon: any; color: string; onClick?: () => void; alert?: boolean; isMonetary?: boolean; customValue?: number;
+function KpiCard({ title, value, icon: Icon, color, onClick, isMonetary, alert }: {
+  title: string; value: string; icon: any; color: string; onClick?: () => void; isMonetary?: boolean; alert?: boolean;
 }) {
   const c = COLOR_MAP[color] || COLOR_MAP.blue;
-  const displayValue = isMonetary
-    ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(customValue ?? value)
-    : String(value);
   return (
-    <Card className={`border-l-4 ${c.border} hover:shadow-md transition-shadow cursor-pointer ${alert ? "ring-2 ring-red-300 animate-pulse" : ""}`} onClick={onClick}>
-      <CardContent className="p-3 flex flex-col gap-2">
-        <div className={`h-8 w-8 rounded-lg ${c.bg} flex items-center justify-center shrink-0`}>
-          <Icon className={`h-4 w-4 ${c.icon}`} />
-        </div>
-        <div>
-          <p className={`${isMonetary ? 'text-lg' : 'text-2xl'} font-bold ${c.text}`}>{displayValue}</p>
-          <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{title}</p>
+    <Card
+      className={`border-l-4 ${c.border} hover:shadow-md transition-all ${onClick ? "cursor-pointer" : ""} ${alert ? "ring-2 ring-red-300 animate-pulse" : ""}`}
+      onClick={onClick}
+    >
+      <CardContent className="p-2.5 sm:p-3">
+        <div className="flex items-center gap-2">
+          <div className={`h-7 w-7 sm:h-8 sm:w-8 rounded-lg ${c.bg} flex items-center justify-center shrink-0`}>
+            <Icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${c.icon}`} />
+          </div>
+          <div className="min-w-0">
+            <p className={`${isMonetary ? 'text-sm sm:text-base' : 'text-lg sm:text-xl'} font-bold ${c.text} truncate leading-tight`}>{value}</p>
+            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-tight">{title}</p>
+          </div>
         </div>
       </CardContent>
     </Card>

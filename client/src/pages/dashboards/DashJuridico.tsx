@@ -109,15 +109,27 @@ export default function DashJuridico() {
             )}
 
             {/* Evolução mensal */}
-            {data.evolucaoMensal.length > 0 && (
-              <DashChart
-                title="Novos Processos por Mês (data de distribuição)"
-                type="bar"
-                labels={data.evolucaoMensal.map(r => { const [y, m] = r.mes.split("-"); return `${m}/${y.slice(2)}`; })}
-                datasets={[{ label: "Processos", data: data.evolucaoMensal.map(r => r.count), backgroundColor: SEMANTIC_COLORS.negativo }]}
-                height={260}
-              />
-            )}
+            {data.evolucaoMensal.length > 0 && (() => {
+              // Filter out entries without valid date ("Desconhecido") to avoid undefined labels
+              const validEntries = data.evolucaoMensal.filter(r => r.mes && r.mes !== "Desconhecido" && r.mes.includes("-"));
+              const unknownCount = data.evolucaoMensal.filter(r => !r.mes || r.mes === "Desconhecido" || !r.mes.includes("-")).reduce((s, r) => s + r.count, 0);
+              // Add unknown at the end if any
+              const entries = unknownCount > 0 ? [...validEntries, { mes: "_sem_data", count: unknownCount }] : validEntries;
+              return entries.length > 0 ? (
+                <DashChart
+                  title="Novos Processos por Mês (data de distribuição)"
+                  type="bar"
+                  labels={entries.map(r => {
+                    if (r.mes === "_sem_data") return "Sem data";
+                    const parts = r.mes.split("-");
+                    if (parts.length === 2) return `${parts[1]}/${parts[0].slice(2)}`;
+                    return r.mes;
+                  })}
+                  datasets={[{ label: "Processos", data: entries.map(r => r.count), backgroundColor: SEMANTIC_COLORS.negativo }]}
+                  height={260}
+                />
+              ) : null;
+            })()}
 
             {/* Top Assuntos (DataJud) */}
             {(data as any).topAssuntos?.length > 0 && (

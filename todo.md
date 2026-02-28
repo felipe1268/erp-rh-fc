@@ -3275,3 +3275,18 @@
 
 ## Bug: Troca de Módulo não navega para tela inicial - 2026-02-28
 - [x] Ao trocar módulo no dropdown da sidebar, navega para a tela inicial do módulo selecionado
+
+## Bug: Dashboard Jurídico - Gráficos - 2026-02-28
+- [x] Gráfico "Novos Processos por Mês" mostra "undefined/sconhecido" na última barra (label incorreto)
+- [x] Gráficos do Dashboard Jurídico não responsivos ao clicar (drill-down não funciona)
+
+## Redesign: Painel Jurídico - 2026-02-28
+- [x] Reformular completamente o Painel Jurídico com layout rico e responsivo
+- [x] KPIs completos com dados reais dos processos (ativos, encerrados, risco, valores)
+- [x] Gráficos interativos (risco, status, evolução, assuntos DataJud)
+- [x] Lista de processos recentes com informações-chave
+- [x] Próximas audiências com destaque visual
+- [x] Valores financeiros consolidados
+- [x] Layout totalmente responsivo (mobile e desktop)
+- [x] Corrigir gráfico "Novos Processos por Mês" com label "undefined/sconhecido"
+- [x] Corrigir drill-down nos gráficos do Dashboard Jurídico
