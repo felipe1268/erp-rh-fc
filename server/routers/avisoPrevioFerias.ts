@@ -1233,5 +1233,288 @@ export const avisoPrevioFeriasRouter = router({
         } as any).where(eq(vacationPeriods.id, input.id));
         return { success: true };
       }),
+
+    // ============================================================
+    // GERAR PERÍODOS PARA TODOS OS ATIVOS DE UMA VEZ
+    // ============================================================
+    gerarPeriodosTodos: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const ativos = await db.select({
+          id: employees.id,
+          nome: employees.nomeCompleto,
+          dataAdmissao: employees.dataAdmissao,
+          salario: employees.salarioBase,
+        })
+        .from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.status, 'Ativo'),
+          isNull(employees.deletedAt),
+        ));
+
+        let totalCriados = 0;
+        let funcionariosProcessados = 0;
+        let funcionariosSemAdmissao = 0;
+
+        for (const emp of ativos) {
+          if (!emp.dataAdmissao) {
+            funcionariosSemAdmissao++;
+            continue;
+          }
+          funcionariosProcessados++;
+          const periodos = calcularPeriodosFerias(emp.dataAdmissao);
+          const existentes = await db.select({ periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio })
+            .from(vacationPeriods)
+            .where(and(
+              eq(vacationPeriods.companyId, input.companyId),
+              eq(vacationPeriods.employeeId, emp.id),
+              isNull(vacationPeriods.deletedAt),
+            ));
+          const existentesSet = new Set(existentes.map(e => e.periodoAquisitivoInicio));
+          let numPeriodo = existentes.length;
+
+          for (const p of periodos) {
+            if (p.adquirido && !existentesSet.has(p.inicio)) {
+              numPeriodo++;
+              // Calcular data sugerida: 30 dias antes do fim do concessivo
+              const fimConcessivo = new Date(p.fimConcessivo + 'T00:00:00');
+              const sugeridaInicio = new Date(fimConcessivo);
+              sugeridaInicio.setDate(sugeridaInicio.getDate() - 30);
+              const sugeridaFim = new Date(fimConcessivo);
+              sugeridaFim.setDate(sugeridaFim.getDate() - 1);
+
+              await db.insert(vacationPeriods).values({
+                companyId: input.companyId,
+                employeeId: emp.id,
+                periodoAquisitivoInicio: p.inicio,
+                periodoAquisitivoFim: p.fim,
+                periodoConcessivoFim: p.fimConcessivo,
+                status: p.vencida ? 'vencida' : 'pendente',
+                vencida: p.vencida ? 1 : 0,
+                pagamentoEmDobro: p.vencida ? 1 : 0,
+                numeroPeriodo: numPeriodo,
+                dataSugeridaInicio: sugeridaInicio.toISOString().split('T')[0],
+                dataSugeridaFim: sugeridaFim.toISOString().split('T')[0],
+              });
+              totalCriados++;
+            }
+          }
+        }
+
+        return {
+          success: true,
+          totalCriados,
+          funcionariosProcessados,
+          funcionariosSemAdmissao,
+          totalAtivos: ativos.length,
+        };
+      }),
+
+    // ============================================================
+    // CONFIRMAR FÉRIAS VENCIDAS EM LOTE ("Já foi pago")
+    // ============================================================
+    confirmarVencidasLote: protectedProcedure
+      .input(z.object({
+        ids: z.array(z.number()),
+        observacao: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        let confirmados = 0;
+        for (const id of input.ids) {
+          await db.update(vacationPeriods).set({
+            status: 'concluida',
+            observacoes: input.observacao || `Férias confirmadas como pagas por ${ctx.user.name} em ${new Date().toLocaleDateString('pt-BR')}`,
+            aprovadoPor: ctx.user.name ?? 'Sistema',
+            aprovadoPorUserId: ctx.user.id,
+          } as any).where(eq(vacationPeriods.id, id));
+          confirmados++;
+        }
+        return { success: true, confirmados };
+      }),
+
+    // ============================================================
+    // CONFIRMAR TODAS AS VENCIDAS DE UM FUNCIONÁRIO
+    // ============================================================
+    confirmarTodasVencidasFuncionario: protectedProcedure
+      .input(z.object({ companyId: z.number(), employeeId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const vencidas = await db.select({ id: vacationPeriods.id })
+          .from(vacationPeriods)
+          .where(and(
+            eq(vacationPeriods.companyId, input.companyId),
+            eq(vacationPeriods.employeeId, input.employeeId),
+            eq(vacationPeriods.status, 'vencida'),
+            isNull(vacationPeriods.deletedAt),
+          ));
+        let confirmados = 0;
+        for (const v of vencidas) {
+          await db.update(vacationPeriods).set({
+            status: 'concluida',
+            observacoes: `Férias confirmadas como pagas (lote) por ${ctx.user.name} em ${new Date().toLocaleDateString('pt-BR')}`,
+            aprovadoPor: ctx.user.name ?? 'Sistema',
+            aprovadoPorUserId: ctx.user.id,
+          } as any).where(eq(vacationPeriods.id, v.id));
+          confirmados++;
+        }
+        return { success: true, confirmados };
+      }),
+
+    // ============================================================
+    // RH DEFINE/ALTERA DATA DE FÉRIAS (com tracking de alteração)
+    // ============================================================
+    definirDataFerias: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        dataInicio: z.string(),
+        dataFim: z.string(),
+        diasGozo: z.number().default(30),
+        observacoes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [periodo] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, input.id));
+        if (!periodo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período não encontrado' });
+
+        // Buscar salário do funcionário para calcular valores
+        const [emp] = await db.select().from(employees).where(eq(employees.id, periodo.employeeId));
+        const salario = emp ? parseBRL(emp.salarioBase) : 0;
+        const valorFerias = (salario / 30) * input.diasGozo;
+        const terco = valorFerias / 3;
+        const total = valorFerias + terco;
+
+        // Calcular data de pagamento (2 dias antes do início)
+        const dtPag = new Date(input.dataInicio + 'T00:00:00');
+        dtPag.setDate(dtPag.getDate() - 2);
+
+        // Verificar se a data foi alterada em relação à sugerida
+        const foiAlterada = periodo.dataSugeridaInicio && periodo.dataSugeridaInicio !== input.dataInicio ? 1 : 0;
+
+        await db.update(vacationPeriods).set({
+          dataInicio: input.dataInicio,
+          dataFim: input.dataFim,
+          diasGozo: input.diasGozo,
+          valorFerias: valorFerias.toFixed(2),
+          valorTercoConstitucional: terco.toFixed(2),
+          valorTotal: total.toFixed(2),
+          dataPagamento: dtPag.toISOString().split('T')[0],
+          status: 'agendada',
+          dataAlteradaPeloRH: foiAlterada,
+          observacoes: input.observacoes || (foiAlterada ? `Data alterada pelo RH (${ctx.user.name}). Original: ${periodo.dataSugeridaInicio} a ${periodo.dataSugeridaFim}` : null),
+          aprovadoPor: ctx.user.name ?? 'Sistema',
+          aprovadoPorUserId: ctx.user.id,
+        } as any).where(eq(vacationPeriods.id, input.id));
+
+        return { success: true, foiAlterada: !!foiAlterada };
+      }),
+
+    // ============================================================
+    // CALENDÁRIO COMPLETO (com dados sugeridos e status)
+    // ============================================================
+    calendarioCompleto: protectedProcedure
+      .input(z.object({ companyId: z.number(), ano: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const inicioAno = `${input.ano}-01-01`;
+        const fimAno = `${input.ano}-12-31`;
+
+        // Buscar todos os períodos que têm data no ano OU concessivo no ano
+        const rows = await db.select({
+          id: vacationPeriods.id,
+          employeeId: vacationPeriods.employeeId,
+          periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio,
+          periodoAquisitivoFim: vacationPeriods.periodoAquisitivoFim,
+          periodoConcessivoFim: vacationPeriods.periodoConcessivoFim,
+          dataInicio: vacationPeriods.dataInicio,
+          dataFim: vacationPeriods.dataFim,
+          dataSugeridaInicio: vacationPeriods.dataSugeridaInicio,
+          dataSugeridaFim: vacationPeriods.dataSugeridaFim,
+          dataAlteradaPeloRH: vacationPeriods.dataAlteradaPeloRH,
+          numeroPeriodo: vacationPeriods.numeroPeriodo,
+          diasGozo: vacationPeriods.diasGozo,
+          valorTotal: vacationPeriods.valorTotal,
+          status: vacationPeriods.status,
+          vencida: vacationPeriods.vencida,
+          observacoes: vacationPeriods.observacoes,
+          employeeName: employees.nomeCompleto,
+          employeeCargo: employees.cargo,
+          employeeSalario: employees.salarioBase,
+          employeeSetor: employees.setor,
+        })
+        .from(vacationPeriods)
+        .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
+        .where(and(
+          eq(vacationPeriods.companyId, input.companyId),
+          isNull(vacationPeriods.deletedAt),
+          sql`(
+            (${vacationPeriods.dataInicio} BETWEEN ${inicioAno} AND ${fimAno})
+            OR (${vacationPeriods.dataSugeridaInicio} BETWEEN ${inicioAno} AND ${fimAno})
+            OR (${vacationPeriods.periodoConcessivoFim} BETWEEN ${inicioAno} AND ${fimAno})
+            OR (${vacationPeriods.status} IN ('pendente', 'vencida', 'agendada', 'em_gozo'))
+          )`,
+        ))
+        .orderBy(asc(employees.nomeCompleto), asc(vacationPeriods.periodoAquisitivoInicio));
+
+        return rows;
+      }),
+
+    // ============================================================
+    // LISTAR VENCIDAS PARA CONFIRMAÇÃO
+    // ============================================================
+    listarVencidas: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const rows = await db.select({
+          id: vacationPeriods.id,
+          employeeId: vacationPeriods.employeeId,
+          periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio,
+          periodoAquisitivoFim: vacationPeriods.periodoAquisitivoFim,
+          periodoConcessivoFim: vacationPeriods.periodoConcessivoFim,
+          numeroPeriodo: vacationPeriods.numeroPeriodo,
+          status: vacationPeriods.status,
+          employeeName: employees.nomeCompleto,
+          employeeCpf: employees.cpf,
+          employeeCargo: employees.cargo,
+          employeeDataAdmissao: employees.dataAdmissao,
+        })
+        .from(vacationPeriods)
+        .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
+        .where(and(
+          eq(vacationPeriods.companyId, input.companyId),
+          eq(vacationPeriods.status, 'vencida'),
+          isNull(vacationPeriods.deletedAt),
+        ))
+        .orderBy(asc(employees.nomeCompleto), asc(vacationPeriods.periodoAquisitivoInicio));
+
+        // Agrupar por funcionário
+        const grouped: Record<number, { employee: any; periodos: any[] }> = {};
+        for (const r of rows) {
+          if (!grouped[r.employeeId]) {
+            grouped[r.employeeId] = {
+              employee: {
+                id: r.employeeId,
+                nome: r.employeeName,
+                cpf: r.employeeCpf,
+                cargo: r.employeeCargo,
+                dataAdmissao: r.employeeDataAdmissao,
+              },
+              periodos: [],
+            };
+          }
+          grouped[r.employeeId].periodos.push({
+            id: r.id,
+            periodoAquisitivoInicio: r.periodoAquisitivoInicio,
+            periodoAquisitivoFim: r.periodoAquisitivoFim,
+            periodoConcessivoFim: r.periodoConcessivoFim,
+            numeroPeriodo: r.numeroPeriodo,
+          });
+        }
+
+        return Object.values(grouped);
+      }),
   }),
 });

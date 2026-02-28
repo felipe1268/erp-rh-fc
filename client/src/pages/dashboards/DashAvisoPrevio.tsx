@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle, Clock, DollarSign, Users, CalendarDays,
   TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
-  CheckCircle2, XCircle, ArrowRight, Loader2, X
+  CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
+  Wallet, Receipt, BarChart3
 } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -82,13 +83,41 @@ export default function DashAvisoPrevio() {
   // Filtra avisos pelo drill-down selecionado
   const drillDownAvisos = useMemo(() => {
     if (!drillDown || !data) return [];
-    return data.avisos.filter(a => {
+    return data.avisos.filter((a: any) => {
       if (drillDown.type === 'funcao') {
         const funcao = a.funcao || a.nomeCompleto;
         return funcao === drillDown.label || (funcao && funcao.startsWith(drillDown.label.replace('...', '')));
       }
       if (drillDown.type === 'setor') {
-        return (a.setor || 'Sem Setor') === drillDown.label;
+        return (a.setor || 'Sem Setor') === drillDown.label || (a.setor || 'Não informado') === drillDown.label;
+      }
+      if (drillDown.type === 'status') {
+        return a.status === drillDown.label;
+      }
+      if (drillDown.type === 'tipo') {
+        return a.tipo === drillDown.label;
+      }
+      if (drillDown.type === 'dias') {
+        return String(a.diasAviso) === drillDown.label;
+      }
+      if (drillDown.type === 'anos') {
+        return String(a.anosServico || 0) === drillDown.label;
+      }
+      if (drillDown.type === 'custoSetor') {
+        return (a.setor || 'Não informado') === drillDown.label;
+      }
+      if (drillDown.type === 'mes') {
+        const d = a.dataInicio ? new Date(a.dataInicio) : null;
+        if (!d) return false;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return key === drillDown.label;
+      }
+      if (drillDown.type === 'reducao') {
+        const r = a.reducaoJornada || 'nenhuma';
+        if (drillDown.label === '2h por dia') return r === '2h_dia';
+        if (drillDown.label === '7 dias corridos') return r === '7_dias_corridos';
+        if (drillDown.label === 'Nenhuma') return r === 'nenhuma' || !a.reducaoJornada;
+        return false;
       }
       return false;
     });
@@ -122,23 +151,101 @@ export default function DashAvisoPrevio() {
           <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
         ) : (
           <>
-            {/* KPIs Principais */}
+            {/* ===== SEÇÃO 1: RESUMO QUANTITATIVO ===== */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <DashKpi label="Total de Avisos" value={data.total} icon={AlertTriangle} color="blue" />
-              <DashKpi label="Em Andamento" value={data.emAndamento} icon={Clock} color="orange" />
-              <DashKpi label="Concluídos" value={data.concluidos} icon={CheckCircle2} color="green" />
-              <DashKpi label="Cancelados" value={data.cancelados} icon={XCircle} color="red" />
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'status', label: 'em_andamento' })}>
+                <DashKpi label="Em Andamento" value={data.emAndamento} icon={Clock} color="orange" />
+              </div>
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'status', label: 'concluido' })}>
+                <DashKpi label="Concluídos" value={data.concluidos} icon={CheckCircle2} color="green" />
+              </div>
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'status', label: 'cancelado' })}>
+                <DashKpi label="Cancelados" value={data.cancelados} icon={XCircle} color="red" />
+              </div>
             </div>
 
-            {/* KPIs Financeiros e Alertas */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <DashKpi label="Custo Total Estimado" value={fmtBRL(data.valorTotalEstimado)} icon={DollarSign} color="red" />
-              <DashKpi label="Custo Em Andamento" value={fmtBRL(data.valorEmAndamento)} icon={DollarSign} color="orange" />
+            {/* ===== SEÇÃO 2: RESUMO FINANCEIRO (visão rápida) ===== */}
+            <Card>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Wallet className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm">Resumo Financeiro</h3>
+                    <p className="text-[10px] text-muted-foreground">Visão consolidada dos custos de rescisão</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* Custo Total */}
+                  <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-3 sm:p-4 text-center">
+                    <DollarSign className="h-5 w-5 text-blue-500 mx-auto mb-1" />
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-700 tabular-nums">{fmtBRL(data.valorTotalEstimado)}</p>
+                    <p className="text-[10px] sm:text-xs text-blue-600 font-medium mt-1">Custo Total Estimado</p>
+                  </div>
+                  {/* Em Andamento */}
+                  <div className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-3 sm:p-4 text-center">
+                    <Clock className="h-5 w-5 text-orange-500 mx-auto mb-1" />
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-700 tabular-nums">{fmtBRL(data.valorEmAndamento)}</p>
+                    <p className="text-[10px] sm:text-xs text-orange-600 font-medium mt-1">Custo Em Andamento</p>
+                  </div>
+                  {/* Concluído */}
+                  <div className="rounded-xl border-2 border-green-200 bg-green-50/50 p-3 sm:p-4 text-center">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto mb-1" />
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-700 tabular-nums">{fmtBRL(data.valorConcluido)}</p>
+                    <p className="text-[10px] sm:text-xs text-green-600 font-medium mt-1">Custo Concluído</p>
+                  </div>
+                  {/* Cancelado */}
+                  <div className="rounded-xl border-2 border-gray-200 bg-gray-50/50 p-3 sm:p-4 text-center">
+                    <Ban className="h-5 w-5 text-gray-400 mx-auto mb-1" />
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-500 tabular-nums">{fmtBRL(data.valorCancelado)}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 font-medium mt-1">Custo Cancelado</p>
+                  </div>
+                </div>
+                {/* Barra visual de proporção */}
+                {data.valorTotalEstimado > 0 && (
+                  <div className="mt-4">
+                    <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
+                      {data.valorEmAndamento > 0 && (
+                        <div
+                          className="bg-orange-400 transition-all"
+                          style={{ width: `${(data.valorEmAndamento / data.valorTotalEstimado) * 100}%` }}
+                          title={`Em Andamento: ${fmtBRL(data.valorEmAndamento)} (${((data.valorEmAndamento / data.valorTotalEstimado) * 100).toFixed(1)}%)`}
+                        />
+                      )}
+                      {data.valorConcluido > 0 && (
+                        <div
+                          className="bg-green-400 transition-all"
+                          style={{ width: `${(data.valorConcluido / data.valorTotalEstimado) * 100}%` }}
+                          title={`Concluído: ${fmtBRL(data.valorConcluido)} (${((data.valorConcluido / data.valorTotalEstimado) * 100).toFixed(1)}%)`}
+                        />
+                      )}
+                      {data.valorCancelado > 0 && (
+                        <div
+                          className="bg-gray-300 transition-all"
+                          style={{ width: `${(data.valorCancelado / data.valorTotalEstimado) * 100}%` }}
+                          title={`Cancelado: ${fmtBRL(data.valorCancelado)} (${((data.valorCancelado / data.valorTotalEstimado) * 100).toFixed(1)}%)`}
+                        />
+                      )}
+                    </div>
+                    <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400 inline-block" /> Em Andamento ({data.valorTotalEstimado > 0 ? ((data.valorEmAndamento / data.valorTotalEstimado) * 100).toFixed(1) : 0}%)</span>
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-400 inline-block" /> Concluído ({data.valorTotalEstimado > 0 ? ((data.valorConcluido / data.valorTotalEstimado) * 100).toFixed(1) : 0}%)</span>
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300 inline-block" /> Cancelado ({data.valorTotalEstimado > 0 ? ((data.valorCancelado / data.valorTotalEstimado) * 100).toFixed(1) : 0}%)</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ===== SEÇÃO 3: ALERTAS ===== */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <DashKpi label="Vencendo em 7 dias" value={data.vencendo7dias} icon={ShieldAlert} color="red" sub="Atenção imediata" />
               <DashKpi label="Vencendo em 30 dias" value={data.vencendo30dias} icon={CalendarDays} color="yellow" sub="Planejamento" />
             </div>
 
-            {/* Row: Tipo de Aviso + Redução de Jornada */}
+            {/* ===== SEÇÃO 4: GRÁFICOS — Tipo + Redução ===== */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <DashChart
                 title="Distribuição por Tipo de Aviso"
@@ -159,6 +266,15 @@ export default function DashAvisoPrevio() {
                   backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[3]],
                 }]}
                 height={280}
+                onChartClick={(info) => {
+                  const tipoMap: Record<string, string> = {
+                    "Empregador (Trabalhado)": "empregador_trabalhado",
+                    "Empregador (Indenizado)": "empregador_indenizado",
+                    "Empregado (Trabalhado)": "empregado_trabalhado",
+                    "Empregado (Indenizado)": "empregado_indenizado",
+                  };
+                  setDrillDown({ type: 'tipo', label: tipoMap[info.label] || info.label });
+                }}
               />
               <DashChart
                 title="Redução de Jornada (Art. 488 CLT)"
@@ -169,44 +285,51 @@ export default function DashAvisoPrevio() {
                   backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[2], SEMANTIC_COLORS.neutro],
                 }]}
                 height={280}
+                onChartClick={(info) => {
+                  setDrillDown({ type: 'reducao', label: info.label });
+                }}
               />
             </div>
 
-            {/* Evolução Mensal */}
+            {/* ===== SEÇÃO 5: Evolução Mensal ===== */}
             {data.evolucaoMensal.length > 0 && (
               <DashChart
                 title="Evolução Mensal de Avisos Prévios"
                 type="bar"
-                labels={data.evolucaoMensal.map(r => {
+                labels={data.evolucaoMensal.map((r: any) => {
                   const [y, m] = r.mes.split("-");
                   return `${m}/${y.slice(2)}`;
                 })}
                 datasets={[
                   {
                     label: "Trabalhado",
-                    data: data.evolucaoMensal.map(r => r.trabalhado),
+                    data: data.evolucaoMensal.map((r: any) => r.trabalhado),
                     backgroundColor: CHART_PALETTE[0],
                   },
                   {
                     label: "Indenizado",
-                    data: data.evolucaoMensal.map(r => r.indenizado),
+                    data: data.evolucaoMensal.map((r: any) => r.indenizado),
                     backgroundColor: CHART_PALETTE[2],
                   },
                 ]}
                 height={280}
+                onChartClick={(info) => {
+                  const mesData = data.evolucaoMensal[info.dataIndex];
+                  if (mesData) setDrillDown({ type: 'mes', label: mesData.mes });
+                }}
               />
             )}
 
-            {/* Row: Por Setor + Por Função */}
+            {/* ===== SEÇÃO 6: Por Setor + Por Função ===== */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {data.setorDist.length > 0 && (
                 <DashChart
                   title="Avisos por Setor"
                   type="horizontalBar"
-                  labels={data.setorDist.map(s => s.setor)}
+                  labels={data.setorDist.map((s: any) => s.setor)}
                   datasets={[{
                     label: "Avisos",
-                    data: data.setorDist.map(s => s.count),
+                    data: data.setorDist.map((s: any) => s.count),
                     backgroundColor: CHART_PALETTE[0],
                   }]}
                   height={Math.max(200, data.setorDist.length * 40)}
@@ -217,15 +340,14 @@ export default function DashAvisoPrevio() {
                 <DashChart
                   title="Top 10 Funções com Avisos"
                   type="horizontalBar"
-                  labels={data.funcaoDist.map(f => f.funcao.length > 25 ? f.funcao.slice(0, 25) + "..." : f.funcao)}
+                  labels={data.funcaoDist.map((f: any) => f.funcao.length > 25 ? f.funcao.slice(0, 25) + "..." : f.funcao)}
                   datasets={[{
                     label: "Avisos",
-                    data: data.funcaoDist.map(f => f.count),
+                    data: data.funcaoDist.map((f: any) => f.count),
                     backgroundColor: CHART_PALETTE[3],
                   }]}
                   height={Math.max(200, data.funcaoDist.length * 40)}
                   onChartClick={(info) => {
-                    // Recupera o nome completo da função (sem truncamento)
                     const fullLabel = data.funcaoDist[info.dataIndex]?.funcao || info.label;
                     setDrillDown({ type: 'funcao', label: fullLabel });
                   }}
@@ -233,31 +355,34 @@ export default function DashAvisoPrevio() {
               )}
             </div>
 
-            {/* Custo por Setor - com formatação BRL */}
+            {/* ===== SEÇÃO 7: Custo por Setor ===== */}
             {data.custoPorSetor.length > 0 && (
               <DashChart
                 title="Custo Estimado de Rescisão por Setor"
                 type="bar"
-                labels={data.custoPorSetor.map(s => s.setor)}
+                labels={data.custoPorSetor.map((s: any) => s.setor)}
                 datasets={[{
                   label: "Valor (R$)",
-                  data: data.custoPorSetor.map(s => s.valor),
-                  backgroundColor: data.custoPorSetor.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                  data: data.custoPorSetor.map((s: any) => s.valor),
+                  backgroundColor: data.custoPorSetor.map((_: any, i: number) => CHART_PALETTE[i % CHART_PALETTE.length]),
                 }]}
                 height={280}
                 valueFormatter={fmtBRLShort}
+                onChartClick={(info) => {
+                  setDrillDown({ type: 'custoSetor', label: info.label });
+                }}
               />
             )}
 
-            {/* Breakdown da Rescisão - com formatação BRL */}
-            {data.breakdownRescisao.some(b => b.valor > 0) && (
+            {/* ===== SEÇÃO 8: Composição das Rescisões ===== */}
+            {data.breakdownRescisao.some((b: any) => b.valor > 0) && (
               <DashChart
                 title="Composição Total das Rescisões"
                 type="bar"
-                labels={data.breakdownRescisao.map(b => b.componente)}
+                labels={data.breakdownRescisao.map((b: any) => b.componente)}
                 datasets={[{
                   label: "Valor Total (R$)",
-                  data: data.breakdownRescisao.map(b => b.valor),
+                  data: data.breakdownRescisao.map((b: any) => b.valor),
                   backgroundColor: [
                     CHART_PALETTE[0], CHART_PALETTE[1], CHART_PALETTE[2],
                     CHART_PALETTE[4], SEMANTIC_COLORS.negativo, CHART_PALETTE[3],
@@ -268,37 +393,45 @@ export default function DashAvisoPrevio() {
               />
             )}
 
-            {/* Row: Dias de Aviso + Anos de Serviço */}
+            {/* ===== SEÇÃO 9: Dias de Aviso + Anos de Serviço ===== */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {data.diasAvisoDist.length > 0 && (
                 <DashChart
                   title="Distribuição de Dias de Aviso (Lei 12.506/2011)"
                   type="bar"
-                  labels={data.diasAvisoDist.map(d => `${d.dias} dias`)}
+                  labels={data.diasAvisoDist.map((d: any) => `${d.dias} dias`)}
                   datasets={[{
                     label: "Avisos",
-                    data: data.diasAvisoDist.map(d => d.count),
+                    data: data.diasAvisoDist.map((d: any) => d.count),
                     backgroundColor: CHART_PALETTE[4],
                   }]}
                   height={260}
+                  onChartClick={(info) => {
+                    const diasStr = info.label.replace(' dias', '');
+                    setDrillDown({ type: 'dias', label: diasStr });
+                  }}
                 />
               )}
               {data.anosServicoDist.length > 0 && (
                 <DashChart
                   title="Distribuição por Anos de Serviço"
                   type="bar"
-                  labels={data.anosServicoDist.map(a => a.anos === 0 ? "< 1 ano" : `${a.anos} ano${a.anos > 1 ? "s" : ""}`)}
+                  labels={data.anosServicoDist.map((a: any) => a.anos === 0 ? "< 1 ano" : `${a.anos} ano${a.anos > 1 ? "s" : ""}`)}
                   datasets={[{
                     label: "Avisos",
-                    data: data.anosServicoDist.map(a => a.count),
+                    data: data.anosServicoDist.map((a: any) => a.count),
                     backgroundColor: CHART_PALETTE[1],
                   }]}
                   height={260}
+                  onChartClick={(info) => {
+                    const anosData = data.anosServicoDist[info.dataIndex];
+                    if (anosData) setDrillDown({ type: 'anos', label: String(anosData.anos) });
+                  }}
                 />
               )}
             </div>
 
-            {/* Tabela Detalhada */}
+            {/* ===== SEÇÃO 10: Tabela Detalhada ===== */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -326,7 +459,7 @@ export default function DashAvisoPrevio() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.avisos.map((a) => (
+                        {data.avisos.map((a: any) => (
                           <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30">
                             <td className="py-2 pr-3 font-medium truncate max-w-[180px]">{a.nomeCompleto}</td>
                             <td className="py-2 pr-3 text-xs">{fmtTipoLabel(a.tipo)}</td>
@@ -352,13 +485,24 @@ export default function DashAvisoPrevio() {
               </CardContent>
             </Card>
 
-            {/* Drill-down Dialog */}
+            {/* ===== DRILL-DOWN DIALOG ===== */}
             <Dialog open={!!drillDown} onOpenChange={(open) => !open && setDrillDown(null)}>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-lg">
-                    {drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-500" /> : <Building2 className="h-5 w-5 text-blue-500" />}
-                    {drillDown?.type === 'funcao' ? 'Função' : 'Setor'}: {drillDown?.label}
+                    {drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-500" /> :
+                     drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-5 w-5 text-blue-500" /> :
+                     drillDown?.type === 'status' ? <BarChart3 className="h-5 w-5 text-blue-500" /> :
+                     <AlertTriangle className="h-5 w-5 text-amber-500" />}
+                    {drillDown?.type === 'funcao' ? `Função: ${drillDown?.label}` :
+                     drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? `Setor: ${drillDown?.label}` :
+                     drillDown?.type === 'status' ? `Status: ${fmtStatus(drillDown?.label || '')}` :
+                     drillDown?.type === 'tipo' ? `Tipo: ${fmtTipoLabel(drillDown?.label || '')}` :
+                     drillDown?.type === 'dias' ? `Dias de Aviso: ${drillDown?.label}` :
+                     drillDown?.type === 'anos' ? `Anos de Serviço: ${drillDown?.label === '0' ? '< 1 ano' : drillDown?.label + ' ano(s)'}` :
+                     drillDown?.type === 'mes' ? `Mês: ${drillDown?.label}` :
+                     drillDown?.type === 'reducao' ? `Redução: ${drillDown?.label}` :
+                     drillDown?.label}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="mt-2">
@@ -366,7 +510,7 @@ export default function DashAvisoPrevio() {
                     {drillDownAvisos.length} aviso(s) prévio(s) encontrado(s)
                     {drillDownAvisos.length > 0 && (
                       <span className="ml-2 font-semibold text-red-600">
-                        Total: {fmtBRL(drillDownAvisos.reduce((sum, a) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0))}
+                        Total: {fmtBRL(drillDownAvisos.reduce((sum: number, a: any) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0))}
                       </span>
                     )}
                   </p>
@@ -374,7 +518,7 @@ export default function DashAvisoPrevio() {
                     <p className="text-center py-8 text-muted-foreground">Nenhum aviso encontrado para este filtro.</p>
                   ) : (
                     <div className="space-y-2">
-                      {drillDownAvisos.map((a) => (
+                      {drillDownAvisos.map((a: any) => (
                         <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-sm truncate">{a.nomeCompleto}</p>
@@ -399,7 +543,7 @@ export default function DashAvisoPrevio() {
               </DialogContent>
             </Dialog>
 
-            {/* Informação Legal */}
+            {/* ===== INFORMAÇÃO LEGAL ===== */}
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">

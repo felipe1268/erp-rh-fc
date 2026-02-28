@@ -275,6 +275,23 @@
 - [x] Corrigir Menubar Portal para usar container fixo
 - [x] Build de produção compilando sem erros
 
+## Dashboard Aviso Prévio - Melhorias
+- [x] Adicionar KPI "Custo Concluído" no dashboard
+- [x] Reorganizar KPIs para visão rápida (uma batida de olho)
+- [x] Tornar todos os gráficos responsivos
+
+## Fase: Calendário Automático de Férias
+- [x] Backend: cálculo automático de períodos aquisitivos e concessivos por colaborador
+- [x] Backend: endpoint para gerar calendário de férias automático
+- [x] Backend: endpoint para RH definir/alterar datas de férias
+- [x] Frontend: calendário visual com cores diferenciadas (1º período azul, 2º período laranja)
+- [x] Frontend: indicador visual quando RH altera data sugerida (badge "Alterado")
+- [x] Frontend: RH pode confirmar ou alterar datas de férias obrigatórias
+- [x] Frontend: experiência agradável e fácil leitura dos dados
+- [x] Backend: gerar períodos automáticos de TODOS os ativos de uma vez
+- [x] Backend: confirmar férias vencidas em lote (1 clique "Já foi pago")
+- [x] Frontend: botão "Confirmar todos anteriores" para validar períodos antigos em lote
+
 ## Bug Fixes - 2026-02-27
 - [x] Fix RaioXFuncionario crash: "Rendered more hooks than during the previous render" - moved avaliacoesQuery hook before conditional return
 - [x] Fix drizzle schema: replaced default('CURRENT_TIMESTAMP') with defaultNow() for proper SQL generation
@@ -3144,3 +3161,19 @@
 - [x] CHANGE: Remover login separado do avaliador - usar login único do ERP
 - [x] CHANGE: Avaliador é um usuário do ERP com role/permissão específica
 - [x] CHANGE: Avaliador só vê painel de avaliação (stepper), admin vê tudo
+
+## Jurídico: Consulta automática de processos e alertas de movimentação - 2026-02-28
+- [ ] Pesquisar APIs disponíveis para consulta de processos judiciais brasileiros
+- [ ] Backend: Integrar API de consulta de processos (auto-preenchimento por número)
+- [ ] Backend: Monitoramento de movimentações processuais com alertas automáticos
+- [ ] Frontend: Auto-preenchimento ao digitar número do processo (Tipo de Ação, Vara, Comarca, Tribunal, Valor da Causa, partes)
+- [ ] Frontend: Painel de alertas de movimentação processual
+- [ ] Cron/Job: Verificação periódica de movimentações em processos cadastrados
+- [ ] FIX: Admin Master deve ter acesso total à aba Avaliar sem precisar ser cadastrado como avaliador
+- [ ] CHANGE: Remover necessidade de cadastro manual de avaliador - gestor de área avalia automaticamente
+- [ ] CHANGE: Admin Master tem acesso total para avaliar qualquer funcionário
+- [ ] CHANGE: Simplificar/remover aba Avaliadores - usar permissões do ERP
+- [ ] Frontend: Critérios editáveis - poder editar pilares e critérios existentes, adicionar novos
+- [ ] Frontend: IA para sugerir perguntas na criação de pesquisas baseado no título digitado
+- [ ] FIX: Clicar no nome do funcionário no drill-down de Avisos Prévios deve abrir o aviso prévio dele
+- [ ] FIX: Revisar TODOS os gráficos de todas as páginas - garantir drill-down ao clicar em todos

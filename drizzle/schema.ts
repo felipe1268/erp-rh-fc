@@ -1558,6 +1558,13 @@ export const vacationPeriods = mysqlTable("vacation_periods", {
 	status: mysqlEnum(['pendente','agendada','em_gozo','concluida','vencida','cancelada']).default('pendente').notNull(),
 	vencida: tinyint().default(0), // flag para férias vencidas (não concedidas no prazo)
 	pagamentoEmDobro: tinyint().default(0), // se deve pagar em dobro
+	// Data sugerida pelo sistema (calculada automaticamente)
+	dataSugeridaInicio: date({ mode: 'string' }),
+	dataSugeridaFim: date({ mode: 'string' }),
+	// Flag: RH alterou a data sugerida?
+	dataAlteradaPeloRH: tinyint().default(0),
+	// Número do período (1º, 2º, 3º, etc.)
+	numeroPeriodo: int().default(1),
 	// Observações
 	observacoes: text(),
 	aprovadoPor: varchar({ length: 255 }),

@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
@@ -16,6 +17,7 @@ import {
   Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
   Users, Trash2, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
+  Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -50,6 +52,11 @@ export default function Ferias() {
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [form, setForm] = useState<any>({});
 
+  // Dialog para definir data de férias (RH override)
+  const [showDefinirDialog, setShowDefinirDialog] = useState(false);
+  const [definirItem, setDefinirItem] = useState<any>(null);
+  const [definirForm, setDefinirForm] = useState<any>({});
+
   // Queries
   const { data: feriasList = [], refetch } = trpc.avisoPrevio.ferias.list.useQuery(
     { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
@@ -59,13 +66,17 @@ export default function Ferias() {
     { companyId },
     { enabled: !!companyId }
   );
-  const { data: calendario = [] } = trpc.avisoPrevio.ferias.calendario.useQuery(
+  const { data: calendarioCompleto = [] } = trpc.avisoPrevio.ferias.calendarioCompleto.useQuery(
     { companyId, ano: anoCalendario },
     { enabled: !!companyId && tab === "calendario" }
   );
   const { data: fluxoCaixa = [] } = trpc.avisoPrevio.ferias.fluxoCaixa.useQuery(
     { companyId, ano: anoCalendario },
     { enabled: !!companyId && tab === "fluxo" }
+  );
+  const { data: vencidasAgrupadas = [], refetch: refetchVencidas } = trpc.avisoPrevio.ferias.listarVencidas.useQuery(
+    { companyId },
+    { enabled: !!companyId && tab === "vencidas" }
   );
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
@@ -83,6 +94,41 @@ export default function Ferias() {
   });
   const gerarPeriodos = trpc.avisoPrevio.ferias.gerarPeriodos.useMutation({
     onSuccess: (data: any) => { refetch(); toast.success(`${data.periodosGerados} período(s) gerado(s)!`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const gerarPeriodosTodos = trpc.avisoPrevio.ferias.gerarPeriodosTodos.useMutation({
+    onSuccess: (data: any) => {
+      refetch();
+      refetchVencidas();
+      toast.success(`${data.totalCriados} período(s) gerado(s) para ${data.funcionariosProcessados} funcionário(s)!`);
+      if (data.funcionariosSemAdmissao > 0) {
+        toast.warning(`${data.funcionariosSemAdmissao} funcionário(s) sem data de admissão foram ignorados.`);
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const confirmarVencidasLote = trpc.avisoPrevio.ferias.confirmarVencidasLote.useMutation({
+    onSuccess: (data: any) => {
+      refetch(); refetchVencidas();
+      toast.success(`${data.confirmados} férias confirmada(s) como paga(s)!`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const confirmarTodasVencidas = trpc.avisoPrevio.ferias.confirmarTodasVencidasFuncionario.useMutation({
+    onSuccess: (data: any) => {
+      refetch(); refetchVencidas();
+      toast.success(`${data.confirmados} férias confirmada(s) como paga(s)!`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const definirDataFerias = trpc.avisoPrevio.ferias.definirDataFerias.useMutation({
+    onSuccess: (data: any) => {
+      refetch();
+      setShowDefinirDialog(false);
+      setDefinirItem(null);
+      setDefinirForm({});
+      toast.success(data.foiAlterada ? "Data definida (alterada da sugerida)!" : "Data de férias definida!");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -119,6 +165,21 @@ export default function Ferias() {
     };
   }, [feriasList]);
 
+  // Calendar data grouped by employee
+  const calendarioAgrupado = useMemo(() => {
+    const map: Record<number, { employee: any; periodos: any[] }> = {};
+    for (const row of calendarioCompleto as any[]) {
+      if (!map[row.employeeId]) {
+        map[row.employeeId] = {
+          employee: { id: row.employeeId, nome: row.employeeName, cargo: row.employeeCargo, setor: row.employeeSetor },
+          periodos: [],
+        };
+      }
+      map[row.employeeId].periodos.push(row);
+    }
+    return Object.values(map);
+  }, [calendarioCompleto]);
+
   const handleSubmit = () => {
     if (!form.employeeId || !form.periodoAquisitivoInicio || !form.periodoAquisitivoFim || !form.periodoConcessivoFim) {
       toast.error("Preencha os campos obrigatórios");
@@ -143,6 +204,45 @@ export default function Ferias() {
     gerarPeriodos.mutate({ companyId, employeeId });
   };
 
+  const handleDefinirData = (item: any) => {
+    setDefinirItem(item);
+    setDefinirForm({
+      dataInicio: item.dataInicio || item.dataSugeridaInicio || "",
+      dataFim: item.dataFim || item.dataSugeridaFim || "",
+      diasGozo: item.diasGozo || 30,
+      observacoes: "",
+    });
+    setShowDefinirDialog(true);
+  };
+
+  const submitDefinirData = () => {
+    if (!definirForm.dataInicio || !definirForm.dataFim) {
+      toast.error("Preencha as datas");
+      return;
+    }
+    definirDataFerias.mutate({
+      id: definirItem.id,
+      dataInicio: definirForm.dataInicio,
+      dataFim: definirForm.dataFim,
+      diasGozo: definirForm.diasGozo || 30,
+      observacoes: definirForm.observacoes || undefined,
+    });
+  };
+
+  // Helper: get color for calendar period
+  const getCalendarColor = (periodo: any) => {
+    const num = periodo.numeroPeriodo || 1;
+    const isAlterado = periodo.dataAlteradaPeloRH;
+    if (periodo.status === "concluida") return { bg: "bg-gray-300", text: "text-gray-700", label: "Concluída" };
+    if (periodo.status === "em_gozo") return { bg: "bg-green-400", text: "text-green-800", label: "Em Gozo" };
+    if (periodo.status === "vencida") return { bg: "bg-red-400", text: "text-red-800", label: "Vencida" };
+    if (periodo.status === "cancelada") return { bg: "bg-gray-200", text: "text-gray-500", label: "Cancelada" };
+    if (isAlterado) return { bg: "bg-purple-400", text: "text-purple-800", label: "Alterado RH" };
+    // 1º período = azul, 2º+ = laranja
+    if (num <= 1) return { bg: "bg-blue-400", text: "text-blue-800", label: "1º Período" };
+    return { bg: "bg-orange-400", text: "text-orange-800", label: `${num}º Período` };
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
@@ -157,7 +257,20 @@ export default function Ferias() {
               Gestão de férias conforme CLT Art. 129-145 — Períodos aquisitivos, concessivos e pagamentos
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => gerarPeriodosTodos.mutate({ companyId })}
+              disabled={gerarPeriodosTodos.isPending}
+              className="border-green-300 text-green-700 hover:bg-green-50"
+            >
+              {gerarPeriodosTodos.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4 mr-2" />
+              )}
+              Gerar Períodos de Todos
+            </Button>
             <Button variant="outline" onClick={() => { setShowDialog(true); setForm({}); }}>
               <Plus className="h-4 w-4 mr-2" /> Registrar Férias
             </Button>
@@ -184,7 +297,7 @@ export default function Ferias() {
               <p className="text-2xl font-bold text-blue-600">{stats.agendadas}</p>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-red-500" onClick={() => setStatusFilter("vencida")}>
+          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-red-500" onClick={() => { setStatusFilter("vencida"); setTab("vencidas"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Vencidas</p>
               <p className="text-2xl font-bold text-red-600">{stats.vencidas}</p>
@@ -238,11 +351,17 @@ export default function Ferias() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="lista"><Users className="h-4 w-4 mr-1" /> Lista de Férias</TabsTrigger>
+            <TabsTrigger value="vencidas" className="relative">
+              <AlertTriangle className="h-4 w-4 mr-1" /> Férias Vencidas
+              {stats.vencidas > 0 && (
+                <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1">{stats.vencidas}</span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" /> Calendário</TabsTrigger>
             <TabsTrigger value="fluxo"><TrendingUp className="h-4 w-4 mr-1" /> Fluxo de Caixa</TabsTrigger>
           </TabsList>
 
-          {/* Lista */}
+          {/* ===== ABA: LISTA ===== */}
           <TabsContent value="lista">
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="relative flex-1">
@@ -307,6 +426,11 @@ export default function Ferias() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center justify-center gap-1">
+                                {(f.status === "pendente" || f.status === "vencida") && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Definir Data" onClick={() => handleDefinirData(f)}>
+                                    <PenLine className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={() => { setSelectedItem(f); setShowDetailDialog(true); }}>
                                   <Eye className="h-3.5 w-3.5" />
                                 </Button>
@@ -325,11 +449,120 @@ export default function Ferias() {
             </Card>
           </TabsContent>
 
-          {/* Calendário */}
+          {/* ===== ABA: FÉRIAS VENCIDAS ===== */}
+          <TabsContent value="vencidas">
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                  <div>
+                    <h3 className="font-semibold text-red-800">Férias Vencidas — Confirmação de Pagamento</h3>
+                    <p className="text-sm text-red-700 mt-1">
+                      Funcionários antigos podem ter férias vencidas que já foram pagas antes do sistema.
+                      Confirme com <strong>1 clique</strong> se o período já foi pago, ou confirme <strong>todos de uma vez</strong> por funcionário.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {(vencidasAgrupadas as any[]).length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  <CheckCircle2 className="h-12 w-12 mx-auto mb-3 opacity-30 text-green-500" />
+                  <p className="text-lg font-medium">Nenhuma férias vencida pendente!</p>
+                  <p className="text-sm mt-1">Todos os períodos estão em dia ou já foram confirmados.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Botão confirmar TODAS de todos */}
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      className="border-green-300 text-green-700 hover:bg-green-50"
+                      onClick={() => {
+                        const allIds = (vencidasAgrupadas as any[]).flatMap((g: any) => g.periodos.map((p: any) => p.id));
+                        if (allIds.length === 0) return;
+                        if (confirm(`Confirmar TODAS as ${allIds.length} férias vencidas como pagas?`)) {
+                          confirmarVencidasLote.mutate({ ids: allIds, observacao: "Confirmação em lote geral" });
+                        }
+                      }}
+                      disabled={confirmarVencidasLote.isPending}
+                    >
+                      {confirmarVencidasLote.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCheck className="h-4 w-4 mr-2" />}
+                      Confirmar Todas como Pagas
+                    </Button>
+                  </div>
+
+                  {(vencidasAgrupadas as any[]).map((grupo: any) => (
+                    <Card key={grupo.employee.id} className="border-l-4 border-l-red-400">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <p className="font-semibold text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(grupo.employee.id)}>
+                                {grupo.employee.nome}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {grupo.employee.cargo} · CPF: {formatCPF(grupo.employee.cpf)} · Admissão: {formatDate(grupo.employee.dataAdmissao)}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-green-300 text-green-700 hover:bg-green-50"
+                            onClick={() => {
+                              if (confirm(`Confirmar TODOS os ${grupo.periodos.length} períodos de ${grupo.employee.nome} como pagos?`)) {
+                                confirmarTodasVencidas.mutate({ companyId, employeeId: grupo.employee.id });
+                              }
+                            }}
+                            disabled={confirmarTodasVencidas.isPending}
+                          >
+                            <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                            Confirmar Todos ({grupo.periodos.length})
+                          </Button>
+                        </div>
+
+                        <div className="grid gap-2">
+                          {grupo.periodos.map((p: any) => (
+                            <div key={p.id} className="flex items-center justify-between bg-red-50/50 rounded-lg px-3 py-2 border border-red-100">
+                              <div className="flex items-center gap-3">
+                                <div className="text-center bg-red-100 rounded-lg px-2 py-1 min-w-[60px]">
+                                  <p className="text-[10px] text-red-600 font-medium">Período</p>
+                                  <p className="text-sm font-bold text-red-700">{p.numeroPeriodo || "?"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {formatDate(p.periodoAquisitivoInicio)} <ArrowRight className="inline h-3 w-3 mx-1" /> {formatDate(p.periodoAquisitivoFim)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">Concessivo até: {formatDate(p.periodoConcessivoFim)}</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                onClick={() => confirmarVencidasLote.mutate({ ids: [p.id] })}
+                                disabled={confirmarVencidasLote.isPending}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                Já foi pago ✓
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* ===== ABA: CALENDÁRIO ===== */}
           <TabsContent value="calendario">
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <CardTitle className="text-base">Calendário de Férias — {anoCalendario}</CardTitle>
                   <div className="flex items-center gap-2">
                     <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setAnoCalendario(a => a - 1)}>
@@ -341,46 +574,132 @@ export default function Ferias() {
                     </Button>
                   </div>
                 </div>
+                {/* Legenda */}
+                <div className="flex flex-wrap gap-3 mt-3">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-3 w-6 rounded bg-blue-400" />
+                    <span>1º Período</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-3 w-6 rounded bg-orange-400" />
+                    <span>2º+ Período</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-3 w-6 rounded bg-purple-400" />
+                    <span className="flex items-center gap-0.5">Alterado pelo RH <PenLine className="h-3 w-3" /></span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-3 w-6 rounded bg-green-400" />
+                    <span>Em Gozo</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-3 w-6 rounded bg-red-400" />
+                    <span>Vencida</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-3 w-6 rounded bg-gray-300" />
+                    <span>Concluída</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="h-3 w-3 rounded-full border-2 border-dashed border-blue-400" />
+                    <span>Data Sugerida</span>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {(calendario as any[]).length === 0 ? (
+                {calendarioAgrupado.length === 0 ? (
                   <div className="py-12 text-center text-muted-foreground">
                     <CalendarDays className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    <p>Nenhuma férias agendada para {anoCalendario}</p>
+                    <p>Nenhuma férias encontrada para {anoCalendario}</p>
+                    <p className="text-sm mt-2">Clique em <strong>"Gerar Períodos de Todos"</strong> para calcular automaticamente.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/30">
-                          <th className="p-2 text-left font-medium">Colaborador</th>
-                          {MESES.map(m => <th key={m} className="p-2 text-center font-medium text-xs">{m}</th>)}
+                          <th className="p-2 text-left font-medium min-w-[180px]">Colaborador</th>
+                          {MESES.map(m => <th key={m} className="p-1 text-center font-medium text-xs min-w-[60px]">{m}</th>)}
+                          <th className="p-2 text-center font-medium text-xs min-w-[80px]">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(calendario as any[]).map((c: any) => {
-                          const inicio = c.dataInicio ? new Date(c.dataInicio) : null;
-                          const fim = c.dataFim ? new Date(c.dataFim) : null;
-                          return (
-                            <tr key={c.id} className="border-b last:border-0 hover:bg-muted/20">
-                              <td className="p-2 font-medium text-blue-700 cursor-pointer hover:underline whitespace-nowrap" onClick={() => setRaioXEmployeeId(c.employeeId)}>
-                                {c.employeeName}
-                              </td>
-                              {MESES.map((_, idx) => {
-                                const mesInicio = inicio ? inicio.getMonth() : -1;
-                                const mesFim = fim ? fim.getMonth() : -1;
-                                const isActive = inicio && fim && idx >= mesInicio && idx <= mesFim;
-                                return (
-                                  <td key={idx} className="p-2 text-center">
-                                    {isActive ? (
-                                      <div className={`h-6 rounded ${c.status === "concluida" ? "bg-gray-300" : c.status === "em_gozo" ? "bg-green-400" : "bg-blue-400"}`} title={`${c.employeeName}: ${formatDate(c.dataInicio)} - ${formatDate(c.dataFim)}`} />
-                                    ) : null}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })}
+                        {calendarioAgrupado.map((grupo: any) => (
+                          <tr key={grupo.employee.id} className="border-b last:border-0 hover:bg-muted/10">
+                            <td className="p-2">
+                              <div className="font-medium text-blue-700 cursor-pointer hover:underline text-xs" onClick={() => setRaioXEmployeeId(grupo.employee.id)}>
+                                {grupo.employee.nome}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">{grupo.employee.cargo}</div>
+                            </td>
+                            {MESES.map((_, mesIdx) => {
+                              // Find periods that overlap this month
+                              const periodosMes = grupo.periodos.filter((p: any) => {
+                                const inicio = p.dataInicio || p.dataSugeridaInicio;
+                                const fim = p.dataFim || p.dataSugeridaFim;
+                                if (!inicio && !fim) {
+                                  // Fallback: use concessivo fim
+                                  const conc = p.periodoConcessivoFim ? new Date(p.periodoConcessivoFim + 'T00:00:00') : null;
+                                  if (conc) {
+                                    const concMonth = conc.getMonth();
+                                    const concYear = conc.getFullYear();
+                                    return concYear === anoCalendario && concMonth === mesIdx;
+                                  }
+                                  return false;
+                                }
+                                const dInicio = new Date(inicio + 'T00:00:00');
+                                const dFim = new Date(fim + 'T00:00:00');
+                                const mesStart = new Date(anoCalendario, mesIdx, 1);
+                                const mesEnd = new Date(anoCalendario, mesIdx + 1, 0);
+                                return dInicio <= mesEnd && dFim >= mesStart;
+                              });
+
+                              if (periodosMes.length === 0) return <td key={mesIdx} className="p-1" />;
+
+                              return (
+                                <td key={mesIdx} className="p-1">
+                                  {periodosMes.map((p: any) => {
+                                    const color = getCalendarColor(p);
+                                    const isSugerida = !p.dataInicio && p.dataSugeridaInicio;
+                                    return (
+                                      <div
+                                        key={p.id}
+                                        className={`h-5 rounded text-[9px] font-medium flex items-center justify-center cursor-pointer mb-0.5 ${
+                                          isSugerida
+                                            ? `border-2 border-dashed ${color.bg.replace('bg-', 'border-')} bg-opacity-30 ${color.text}`
+                                            : `${color.bg} text-white`
+                                        }`}
+                                        title={`${grupo.employee.nome}\n${color.label}\n${p.dataInicio ? 'Definido' : 'Sugerido'}: ${formatDate(p.dataInicio || p.dataSugeridaInicio)} - ${formatDate(p.dataFim || p.dataSugeridaFim)}${p.dataAlteradaPeloRH ? '\n⚠️ Data alterada pelo RH' : ''}`}
+                                        onClick={() => handleDefinirData(p)}
+                                      >
+                                        {p.dataAlteradaPeloRH ? (
+                                          <PenLine className="h-3 w-3" />
+                                        ) : isSugerida ? (
+                                          <span className="opacity-60">?</span>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  })}
+                                </td>
+                              );
+                            })}
+                            <td className="p-2 text-center">
+                              {grupo.periodos.some((p: any) => p.status === 'pendente' || p.status === 'vencida') && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 text-[10px] text-blue-600"
+                                  onClick={() => {
+                                    const first = grupo.periodos.find((p: any) => p.status === 'pendente' || p.status === 'vencida');
+                                    if (first) handleDefinirData(first);
+                                  }}
+                                >
+                                  <PenLine className="h-3 w-3 mr-0.5" /> Definir
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -389,7 +708,7 @@ export default function Ferias() {
             </Card>
           </TabsContent>
 
-          {/* Fluxo de Caixa */}
+          {/* ===== ABA: FLUXO DE CAIXA ===== */}
           <TabsContent value="fluxo">
             <Card>
               <CardHeader className="pb-3">
@@ -435,7 +754,6 @@ export default function Ferias() {
                     </span>
                   </div>
 
-                  {/* Gráfico de barras mensal */}
                   {(() => {
                     const dados = fluxoCaixa as any[];
                     const maxVal = Math.max(...dados.map((m: any) => parseFloat(m.valorTotal || "0")), 1);
@@ -481,6 +799,82 @@ export default function Ferias() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* ===== DIALOG: DEFINIR DATA DE FÉRIAS (RH Override) ===== */}
+        <Dialog open={showDefinirDialog} onOpenChange={(open) => { if (!open) { setShowDefinirDialog(false); setDefinirItem(null); } }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <PenLine className="h-5 w-5 text-blue-600" />
+                Definir Data de Férias
+              </DialogTitle>
+            </DialogHeader>
+            {definirItem && (
+              <div className="space-y-4">
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="font-semibold">{definirItem.employeeName || "Funcionário"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Período: {formatDate(definirItem.periodoAquisitivoInicio)} a {formatDate(definirItem.periodoAquisitivoFim)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Concessivo até: {formatDate(definirItem.periodoConcessivoFim)}
+                  </p>
+                </div>
+
+                {definirItem.dataSugeridaInicio && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-blue-700 flex items-center gap-1">
+                      <Info className="h-3.5 w-3.5" /> Data Sugerida pelo Sistema
+                    </p>
+                    <p className="text-sm font-medium text-blue-800 mt-1">
+                      {formatDate(definirItem.dataSugeridaInicio)} a {formatDate(definirItem.dataSugeridaFim)}
+                    </p>
+                    <p className="text-[10px] text-blue-600 mt-1">
+                      Se alterar, será marcado como "Alterado pelo RH" no calendário
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Data Início *</label>
+                    <Input type="date" value={definirForm.dataInicio || ""} onChange={e => setDefinirForm({ ...definirForm, dataInicio: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Data Fim *</label>
+                    <Input type="date" value={definirForm.dataFim || ""} onChange={e => setDefinirForm({ ...definirForm, dataFim: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Dias de Gozo</label>
+                    <Input type="number" value={definirForm.diasGozo || 30} onChange={e => setDefinirForm({ ...definirForm, diasGozo: parseInt(e.target.value) || 30 })} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Observações</label>
+                  <Textarea value={definirForm.observacoes || ""} onChange={e => setDefinirForm({ ...definirForm, observacoes: e.target.value })} rows={2} placeholder="Motivo da alteração (opcional)" />
+                </div>
+
+                {definirItem.dataSugeridaInicio && definirForm.dataInicio && definirForm.dataInicio !== definirItem.dataSugeridaInicio && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-purple-700 flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Data diferente da sugerida
+                    </p>
+                    <p className="text-[10px] text-purple-600 mt-1">
+                      Esta alteração será registrada e indicada visualmente no calendário com cor roxa e ícone de edição.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setShowDefinirDialog(false); setDefinirItem(null); }}>Cancelar</Button>
+              <Button onClick={submitDefinirData} disabled={definirDataFerias.isPending}>
+                {definirDataFerias.isPending ? "Salvando..." : "Confirmar Data"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Detail Dialog */}
         {selectedItem && (

@@ -1268,6 +1268,8 @@ async function getDashAvisoPrevio(companyId: number) {
   const parseVal = (v: string | null) => { const n = parseFloat(v || '0'); return isNaN(n) ? 0 : n; };
   const valorTotalEstimado = allNotices.reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
   const valorEmAndamento = allNotices.filter(n => n.status === 'em_andamento').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
+  const valorConcluido = allNotices.filter(n => n.status === 'concluido').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
+  const valorCancelado = allNotices.filter(n => n.status === 'cancelado').reduce((s, n) => s + parseVal(n.valorEstimadoTotal), 0);
 
   const reducao2h = allNotices.filter(n => n.reducaoJornada === '2h_dia').length;
   const reducao7dias = allNotices.filter(n => n.reducaoJornada === '7_dias_corridos').length;
@@ -1334,7 +1336,7 @@ async function getDashAvisoPrevio(companyId: number) {
   return {
     total, emAndamento, concluidos, cancelados,
     empregadorTrabalhado, empregadorIndenizado, empregadoTrabalhado, empregadoIndenizado,
-    valorTotalEstimado, valorEmAndamento,
+    valorTotalEstimado, valorEmAndamento, valorConcluido, valorCancelado,
     reducao2h, reducao7dias, semReducao,
     setorDist, funcaoDist, evolucaoMensal, diasAvisoDist, anosServicoDist,
     custoPorSetor, breakdownRescisao, vencendo7dias, vencendo30dias,

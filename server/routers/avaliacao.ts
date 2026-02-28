@@ -23,6 +23,7 @@ import {
   employees,
   obras,
   users,
+  userProfiles,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql, count, avg, inArray, gte, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -106,16 +107,39 @@ export const avaliacaoRouter = router({
   // ============================================================
   evaluatorAuth: router({
     // Buscar avaliador vinculado ao usuário logado no ERP
+    // Admin Master e Admin têm acesso total sem precisar de cadastro de avaliador
     getMyEvaluator: protectedProcedure
       .input(z.object({ companyId: z.number() }))
       .query(async ({ input, ctx }) => {
         const db = await getDb();
         const userId = ctx.user?.id;
         if (!userId) return null;
+        
+        // Verificar se é admin_master ou admin - acesso automático
+        const userRole = (ctx.user as any)?.role;
+        const [profile] = await db.select().from(userProfiles)
+          .where(and(eq(userProfiles.userId, userId), eq(userProfiles.companyId, input.companyId), eq(userProfiles.isActive, 1)));
+        const isAdmin = userRole === 'admin_master' || userRole === 'admin' || 
+          profile?.profileType === 'adm_master' || profile?.profileType === 'adm';
+        
+        // Primeiro tentar encontrar avaliador cadastrado
         const [evaluator] = await db.select().from(evalAvaliadores)
           .where(and(eq(evalAvaliadores.userId, userId), eq(evalAvaliadores.companyId, input.companyId), eq(evalAvaliadores.status, "ativo")));
-        if (!evaluator) return null;
-        return { id: evaluator.id, nome: evaluator.nome, email: evaluator.email, obraId: evaluator.obraId, companyId: evaluator.companyId, evaluationFrequency: evaluator.evaluationFrequency };
+        if (evaluator) {
+          return { id: evaluator.id, nome: evaluator.nome, email: evaluator.email, obraId: isAdmin ? null : evaluator.obraId, companyId: evaluator.companyId, evaluationFrequency: evaluator.evaluationFrequency, isAdmin };
+        }
+        
+        // Se é admin/admin_master, criar acesso virtual (sem cadastro de avaliador)
+        if (isAdmin) {
+          return { id: 0, nome: ctx.user?.name || 'Administrador', email: (ctx.user as any)?.email || '', obraId: null, companyId: input.companyId, evaluationFrequency: 'monthly', isAdmin: true };
+        }
+        
+        // Verificar se tem perfil de avaliador
+        if (profile?.profileType === 'avaliador') {
+          return { id: 0, nome: ctx.user?.name || 'Avaliador', email: (ctx.user as any)?.email || '', obraId: null, companyId: input.companyId, evaluationFrequency: 'monthly', isAdmin: false };
+        }
+        
+        return null;
       }),
   }),
 
@@ -128,10 +152,14 @@ export const avaliacaoRouter = router({
       .input(z.object({ evaluatorId: z.number(), companyId: z.number() }))
       .query(async ({ input }) => {
         const db = await getDb();
-        const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
-        if (!evaluator) return [];
         const conditions: any[] = [eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")];
-        if (evaluator.obraId) conditions.push(eq(employees.obraAtualId, evaluator.obraId));
+        // Se evaluatorId > 0, buscar avaliador cadastrado e filtrar por obra
+        if (input.evaluatorId > 0) {
+          const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+          if (!evaluator) return [];
+          if (evaluator.obraId) conditions.push(eq(employees.obraAtualId, evaluator.obraId));
+        }
+        // Se evaluatorId === 0, é admin/gestor - lista todos os ativos da empresa
         return db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, obraId: employees.obraAtualId, fotoUrl: employees.fotoUrl })
           .from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
       }),
