@@ -3667,3 +3667,10 @@
 - [x] Renomear "Assistente FC" para apenas "Assistente"
 - [x] X deve fechar/minimizar o chat completamente para não atrapalhar navegação no celular
 - [x] Ajustar tamanho do chat no mobile para não ultrapassar a tela
+
+## Rev. 128b - Dialog Alocar Funcionários em Full Screen
+- [x] Converter dialog "Alocar Funcionários" para FullScreenDialog com filtros (Todos/Sem Obra/Com Obra)
+- [x] Investigar e documentar como a "obra atual" do funcionário é determinada (campo obraAtualId atualizado automaticamente)
+- [x] Funcionários já alocados aparecem no relatório de efetivo por obra (já funcionava)
+- [x] Melhorar UX do dialog de alocação: filtros Todos/Sem Obra/Com Obra + busca por obra
+- [x] Limpar todas as alocações de obra dos funcionários (usuário fará manualmente) - 392 funcionários ativos agora sem obra
