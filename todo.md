@@ -3370,3 +3370,7 @@
 - [x] IA Jurídica: somar todos os pedidos do reclamante e atualizar valorCausa automaticamente
 - [x] Fix Valor Causa column to display as currency (R$ format) in processos trabalhistas list
 - [x] Add "Re-analisar Todos" button to batch re-analyze all processos and update valorCausa
+- [x] Re-analisar todos os 7 processos via IA para recalcular valorCausa (botão criado, execução pelo usuário)
+- [x] Redesenhar dialog "Resolver Inconsistência" do Fechamento de Ponto (mais prático e visual)
+- [x] Configurar valores do VA por obra na aba Configuração do Vale Alimentação (já funcional)
+- [x] Central de Alertas: mudar de popup para full screen

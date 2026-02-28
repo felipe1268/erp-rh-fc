@@ -3324,46 +3324,152 @@ export default function FechamentoPonto() {
           </div>
         </FullScreenDialog>
 
-        {/* ===== RESOLVE INCONSISTENCY DIALOG (FULL SCREEN) ===== */}
-        <FullScreenDialog open={showResolveDialog} onClose={() => setShowResolveDialog(false)} title="Resolver Inconsistência" subtitle={selectedInconsistency ? selectedInconsistency.employeeName : ""} icon={<CheckCircle className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a]">
-          <div className="w-full max-w-xl">
-            {selectedInconsistency && (
-              <div className="space-y-3">
-                <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                  <p><strong>Colaborador:</strong> {selectedInconsistency.employeeName}</p>
-                  <p><strong>Data:</strong> {selectedInconsistency.inconsistency.data ? new Date(selectedInconsistency.inconsistency.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</p>
-                  <p><strong>Tipo:</strong> {selectedInconsistency.inconsistency.tipoInconsistencia}</p>
-                  <p><strong>Descrição:</strong> {selectedInconsistency.inconsistency.descricao}</p>
-                </div>
-                <div>
-                  <Label>Ação</Label>
-                  <Select value={resolveData.status} onValueChange={v => setResolveData(p => ({ ...p, status: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="justificado">Justificar (sem penalidade)</SelectItem>
-                      <SelectItem value="ajustado">Marcar como Ajustado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Justificativa</Label>
-                  <Textarea value={resolveData.justificativa} onChange={e => setResolveData(p => ({ ...p, justificativa: e.target.value }))} />
-                </div>
+        {/* ===== RESOLVE INCONSISTENCY DIALOG (REDESIGNED) ===== */}
+        <Dialog open={showResolveDialog} onOpenChange={setShowResolveDialog}>
+          <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+            {selectedInconsistency && (() => {
+              const inc = selectedInconsistency.inconsistency;
+              const tipoIcon: Record<string, { icon: string; color: string; bg: string }> = {
+                sem_registro: { icon: "🚫", color: "text-red-700", bg: "bg-red-50" },
+                falta_batida: { icon: "⏰", color: "text-amber-700", bg: "bg-amber-50" },
+                jornada_excedida: { icon: "⚡", color: "text-orange-700", bg: "bg-orange-50" },
+                intervalo_insuficiente: { icon: "☕", color: "text-purple-700", bg: "bg-purple-50" },
+                atraso: { icon: "🕐", color: "text-blue-700", bg: "bg-blue-50" },
+                saida_antecipada: { icon: "🏃", color: "text-teal-700", bg: "bg-teal-50" },
+              };
+              const tipoInfo = tipoIcon[inc.tipoInconsistencia] || { icon: "⚠️", color: "text-gray-700", bg: "bg-gray-50" };
+              const tipoLabel: Record<string, string> = {
+                sem_registro: "Sem Registro", falta_batida: "Falta de Batida",
+                jornada_excedida: "Jornada Excedida", intervalo_insuficiente: "Intervalo Insuficiente",
+                atraso: "Atraso", saida_antecipada: "Saída Antecipada",
+              };
+              const JUSTIFICATIVAS_RAPIDAS = [
+                { label: "Esqueceu de bater", icon: "🤦" },
+                { label: "Falta justificada", icon: "📋" },
+                { label: "Liberado pela chefia", icon: "👤" },
+                { label: "Serviço externo", icon: "🚗" },
+                { label: "Problema no relógio", icon: "🔧" },
+                { label: "Atestado médico", icon: "🏥" },
+                { label: "Atraso no transporte", icon: "🚌" },
+                { label: "Saiu mais cedo (autorizado)", icon: "✅" },
+              ];
+              return (
+                <>
+                  {/* Header colorido */}
+                  <div className={`${tipoInfo.bg} px-5 py-4 border-b`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xl">{tipoInfo.icon}</span>
+                          <span className={`text-sm font-bold ${tipoInfo.color}`}>{tipoLabel[inc.tipoInconsistencia] || inc.tipoInconsistencia}</span>
+                        </div>
+                        <p className="text-base font-semibold text-foreground">{selectedInconsistency.employeeName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{inc.descricao}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-foreground">
+                          {inc.data ? new Date(inc.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: 'short', day: '2-digit', month: 'short' }) : "-"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-              </div>
-            )}
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-              <Button variant="outline" onClick={() => setShowResolveDialog(false)}>Cancelar</Button>
-              <Button onClick={() => {
-                if (!selectedInconsistency) return;
-                resolveMut.mutate({ id: selectedInconsistency.inconsistency.id, status: resolveData.status as any, justificativa: resolveData.justificativa || undefined });
-              }} disabled={resolveMut.isPending}
-                className="bg-[#1B2A4A] hover:bg-[#243660]">
-                {resolveMut.isPending ? "Processando..." : "Resolver"}
-              </Button>
-            </div>
-          </div>
-        </FullScreenDialog>
+                  {/* Corpo */}
+                  <div className="px-5 py-4 space-y-4">
+                    {/* Ação */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        className={`border-2 rounded-lg p-3 text-left transition-all ${
+                          resolveData.status === "justificado"
+                            ? "border-green-500 bg-green-50 ring-1 ring-green-300"
+                            : "border-gray-200 hover:border-green-300 hover:bg-green-50/50"
+                        }`}
+                        onClick={() => setResolveData(p => ({ ...p, status: "justificado" }))}
+                      >
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className={`h-5 w-5 ${resolveData.status === "justificado" ? "text-green-600" : "text-gray-400"}`} />
+                          <div>
+                            <p className="text-sm font-semibold">Justificar</p>
+                            <p className="text-[10px] text-muted-foreground">Sem penalidade</p>
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        className={`border-2 rounded-lg p-3 text-left transition-all ${
+                          resolveData.status === "ajustado"
+                            ? "border-blue-500 bg-blue-50 ring-1 ring-blue-300"
+                            : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/50"
+                        }`}
+                        onClick={() => setResolveData(p => ({ ...p, status: "ajustado" }))}
+                      >
+                        <div className="flex items-center gap-2">
+                          <PenLine className={`h-5 w-5 ${resolveData.status === "ajustado" ? "text-blue-600" : "text-gray-400"}`} />
+                          <div>
+                            <p className="text-sm font-semibold">Ajustado</p>
+                            <p className="text-[10px] text-muted-foreground">Ponto corrigido</p>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Justificativas rápidas */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Justificativa rápida (1 clique):</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {JUSTIFICATIVAS_RAPIDAS.map(j => (
+                          <button
+                            key={j.label}
+                            className={`px-2.5 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                              resolveData.justificativa === j.label
+                                ? "bg-[#1B2A4A] text-white border-[#1B2A4A]"
+                                : "bg-white text-foreground border-gray-200 hover:border-[#1B2A4A] hover:bg-gray-50"
+                            }`}
+                            onClick={() => setResolveData(p => ({ ...p, justificativa: j.label }))}
+                          >
+                            {j.icon} {j.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Texto livre */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1.5">Ou escreva uma justificativa:</p>
+                      <Textarea
+                        value={resolveData.justificativa}
+                        onChange={e => setResolveData(p => ({ ...p, justificativa: e.target.value }))}
+                        placeholder="Descreva o motivo..."
+                        className="min-h-[60px] text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-5 py-3 border-t bg-gray-50/50 flex items-center justify-between">
+                    <Button variant="ghost" size="sm" onClick={() => setShowResolveDialog(false)} className="text-muted-foreground">
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (!selectedInconsistency) return;
+                        resolveMut.mutate({
+                          id: selectedInconsistency.inconsistency.id,
+                          status: resolveData.status as any,
+                          justificativa: resolveData.justificativa || undefined,
+                        });
+                      }}
+                      disabled={resolveMut.isPending || !resolveData.justificativa}
+                      className="bg-[#1B2A4A] hover:bg-[#243660] gap-1.5"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      {resolveMut.isPending ? "Processando..." : "Resolver Inconsistência"}
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
 
         {/* ===== CONSOLIDAR MÊS DIALOG (FULL SCREEN) ===== */}
         <FullScreenDialog open={showConsolidarDialog} onClose={() => setShowConsolidarDialog(false)} title={`Consolidar Mês — ${formatMesAno(mesAno)}`} icon={<Lock className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-green-800 to-green-600">

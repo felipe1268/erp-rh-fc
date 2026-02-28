@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -768,25 +769,26 @@ export default function PainelJuridico() {
           </>
         )}
       </div>
-      {/* Alert Modal */}
-      <Dialog open={showAlertModal} onOpenChange={setShowAlertModal}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-red-700">
-                <BellRing className="h-5 w-5" /> Central de Alertas ({totalAlertas})
-              </span>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setShowAlertModal(false); setShowConfigModal(true); }}>
-                  <Settings2 className="h-3.5 w-3.5" /> Config
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" disabled={executarVerifMut.isPending} onClick={() => executarVerifMut.mutate({ companyId: companyId! })}>
-                  <RefreshCw className={`h-3.5 w-3.5 ${executarVerifMut.isPending ? 'animate-spin' : ''}`} /> {executarVerifMut.isPending ? 'Verificando...' : 'Verificar Agora'}
-                </Button>
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
+      {/* Alert Modal - Full Screen */}
+      <FullScreenDialog
+        open={showAlertModal}
+        onClose={() => setShowAlertModal(false)}
+        title={`Central de Alertas (${totalAlertas})`}
+        subtitle="Movimentações DataJud, processos de risco e audiências"
+        icon={<BellRing className="h-5 w-5 text-white" />}
+        headerColor="bg-gradient-to-r from-red-700 to-red-500"
+        footer={
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setShowAlertModal(false); setShowConfigModal(true); }}>
+              <Settings2 className="h-4 w-4" /> Configurações
+            </Button>
+            <Button size="sm" className="gap-1.5" disabled={executarVerifMut.isPending} onClick={() => executarVerifMut.mutate({ companyId: companyId! })}>
+              <RefreshCw className={`h-4 w-4 ${executarVerifMut.isPending ? 'animate-spin' : ''}`} /> {executarVerifMut.isPending ? 'Verificando...' : 'Verificar Agora'}
+            </Button>
+          </div>
+        }
+      >
+          <div className="space-y-6">
             {/* DataJud Auto-Check Alerts */}
             {alertsData && alertsData.alertas.length > 0 && (
               <div>
@@ -800,7 +802,7 @@ export default function PainelJuridico() {
                     </Button>
                   )}
                 </div>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                <div className="space-y-2">
                   {alertsData.alertas.map((alerta: any) => {
                     const prioridadeColors: Record<string, string> = {
                       critica: 'bg-red-50 border-red-300',
@@ -910,8 +912,7 @@ export default function PainelJuridico() {
               </div>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+      </FullScreenDialog>
 
       {/* Config Modal */}
       <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
