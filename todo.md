@@ -3722,3 +3722,7 @@
 - [x] Sem folhas em branco no final da impressão
 - [x] BUG: Gráfico de distribuição por função não aparece na impressão (CSS background não imprime)
 - [x] Botão fechar no Assistente IA (floating chat) para usuário desabilitar quando quiser
+- [x] BUG: React error #300 ao fechar o Assistente IA (renderização condicional incorreta)
+- [x] Legenda Férias (azul) + Afastado (amarelo) no gráfico empilhado da Equipe da Obra
+- [x] Clique na barra do gráfico filtra a tabela de funcionários por função/status
+- [x] Gráfico e tabela responsivos para telas menores

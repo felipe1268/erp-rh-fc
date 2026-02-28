@@ -1,0 +1,22 @@
+{
+  "query": "SELECT id, version, titulo, tipo FROM system_revisions ORDER BY id DESC LIMIT 2;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, tipo FROM system_revisions ORDER BY id DESC LIMIT 2;",
+  "rows": [
+    {
+      "id": "210007",
+      "version": "121",
+      "titulo": "Filtro por Ano no Dashboard de Férias",
+      "tipo": "bugfix"
+    },
+    {
+      "id": "210006",
+      "version": "120",
+      "titulo": "Exames Customizados Persistentes no ASO",
+      "tipo": "feature"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\ttipo\n210007\t121\tFiltro por Ano no Dashboard de Férias\tbugfix\n210006\t120\tExames Customizados Persistentes no ASO\tfeature\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

@@ -665,20 +665,34 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
   open: boolean; onClose: () => void; obraNome: string; equipeData: any[]; loading: boolean;
 }) {
   const [busca, setBusca] = useState('');
+  const [chartFilter, setChartFilter] = useState<{ funcao?: string; status?: string } | null>(null);
   const { user } = useAuth();
   const { selectedCompany } = useCompany();
   const removeAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-  // Filtrar por busca
+  // Filtrar por busca + filtro do gráfico
   const filtered = useMemo(() => {
-    if (!busca) return equipeData;
-    const s = removeAccents(busca);
-    return equipeData.filter((e: any) =>
-      removeAccents(e.nomeCompleto || '').includes(s) ||
-      removeAccents(e.funcao || '').includes(s) ||
-      removeAccents(e.setor || '').includes(s)
-    );
-  }, [equipeData, busca]);
+    let result = equipeData;
+    // Filtro do gráfico (clique na barra)
+    if (chartFilter) {
+      if (chartFilter.funcao) {
+        result = result.filter((e: any) => (e.funcao || 'Sem Função') === chartFilter.funcao);
+      }
+      if (chartFilter.status) {
+        result = result.filter((e: any) => (e.status || 'Outro') === chartFilter.status);
+      }
+    }
+    // Filtro de busca texto
+    if (busca) {
+      const s = removeAccents(busca);
+      result = result.filter((e: any) =>
+        removeAccents(e.nomeCompleto || '').includes(s) ||
+        removeAccents(e.funcao || '').includes(s) ||
+        removeAccents(e.setor || '').includes(s)
+      );
+    }
+    return result;
+  }, [equipeData, busca, chartFilter]);
 
   // Histograma por função COM breakdown por status
   const funcaoHistStacked = useMemo(() => {
@@ -847,7 +861,7 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
               <div className="space-y-2">
                 {funcaoHistStacked.map(({ funcao, statuses, total }) => (
                   <div key={funcao} className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-44 truncate text-right" title={funcao}>{funcao}</span>
+                    <span className="text-xs text-muted-foreground w-28 sm:w-44 truncate text-right" title={funcao}>{funcao}</span>
                     <div className="flex-1 h-6 bg-muted/30 rounded overflow-hidden flex" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                       {allStatuses.map(status => {
                         const count = statuses[status] || 0;
@@ -856,14 +870,22 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
                         return (
                           <div
                             key={status}
-                            className="h-full flex items-center justify-center"
+                            className="h-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
                             style={{
                               width: `${Math.max(pct, 3)}%`,
                               backgroundColor: STATUS_BAR_COLORS[status] || '#9ca3af',
                               WebkitPrintColorAdjust: 'exact',
                               printColorAdjust: 'exact' as any,
+                              opacity: chartFilter && (chartFilter.funcao !== funcao || chartFilter.status !== status) ? 0.4 : 1,
                             }}
-                            title={`${STATUS_LABELS[status] || status}: ${count}`}
+                            title={`${STATUS_LABELS[status] || status}: ${count} — Clique para filtrar`}
+                            onClick={() => {
+                              if (chartFilter?.funcao === funcao && chartFilter?.status === status) {
+                                setChartFilter(null); // toggle off
+                              } else {
+                                setChartFilter({ funcao, status });
+                              }
+                            }}
                           >
                             {count >= 2 && <span className="text-[9px] font-bold text-white">{count}</span>}
                           </div>
@@ -877,15 +899,28 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
             </CardContent>
           </Card>
 
+          {/* Filtro ativo do gráfico */}
+          {chartFilter && (
+            <div className="flex items-center gap-2 print:hidden">
+              <Badge variant="secondary" className="gap-1.5 text-xs py-1 px-3">
+                Filtro: {chartFilter.funcao} — {STATUS_LABELS[chartFilter.status || ''] || chartFilter.status}
+                <button onClick={() => setChartFilter(null)} className="ml-1 hover:text-destructive">
+                  <span className="text-xs">✕</span>
+                </button>
+              </Badge>
+              <span className="text-xs text-muted-foreground">{filtered.length} funcionário(s)</span>
+            </div>
+          )}
+
           {/* Busca - ocultar na impressão */}
-          <div className="flex items-center gap-3 print:hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 print:hidden">
             <Input
               placeholder="Buscar por nome, função ou setor..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="max-w-md"
+              className="w-full sm:max-w-md"
             />
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
               {filtered.length} de {equipeData.length} funcionários
             </span>
           </div>
@@ -898,6 +933,7 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
                 <h3 className="text-sm font-semibold text-foreground">{funcao}</h3>
                 <Badge variant="secondary" className="text-[10px]">{emps.length}</Badge>
               </div>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -932,6 +968,7 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
                   })}
                 </TableBody>
               </Table>
+              </div>
             </div>
           ))}
 

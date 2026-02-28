@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
   Bot, X, Send, Loader2, Sparkles, User, BookOpen,
@@ -35,6 +34,24 @@ export default function AssistenteIAFloat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // IMPORTANT: All hooks MUST be called before any conditional return
+  const chatMutation = trpc.assistenteIA.chat.useMutation();
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (scrollRef.current) {
+      const el = scrollRef.current;
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, chatMutation.isPending]);
+
+  // Focus input when opened
+  useEffect(() => {
+    if (aberto && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [aberto]);
+
   const desabilitar = () => {
     setAberto(false);
     setDesabilitado(true);
@@ -59,23 +76,6 @@ export default function AssistenteIAFloat() {
     );
   }
 
-  const chatMutation = trpc.assistenteIA.chat.useMutation();
-
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    if (scrollRef.current) {
-      const el = scrollRef.current;
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [messages, chatMutation.isPending]);
-
-  // Focus input when opened
-  useEffect(() => {
-    if (aberto && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [aberto]);
-
   const enviarMensagem = async (texto: string) => {
     if (!texto.trim() || chatMutation.isPending) return;
 
@@ -86,7 +86,7 @@ export default function AssistenteIAFloat() {
 
     try {
       const result = await chatMutation.mutateAsync({
-        messages: novasMessages.slice(-10), // últimas 10 mensagens para contexto
+        messages: novasMessages.slice(-10),
       });
       setMessages(prev => [...prev, { role: "assistant", content: result.content }]);
     } catch {
