@@ -568,7 +568,8 @@ export default function FechamentoPonto() {
   const resolveMut = trpc.fechamentoPonto.resolveInconsistency.useMutation({
     onSuccess: () => {
       setShowResolveDialog(false);
-      inconsistencies.refetch(); stats.refetch();
+      inconsistencies.refetch(); stats.refetch(); summary.refetch();
+      if (selectedEmployeeId) employeeDetail.refetch();
       toast.success("Inconsistência resolvida!");
     },
     onError: (err) => toast.error("Erro: " + err.message),

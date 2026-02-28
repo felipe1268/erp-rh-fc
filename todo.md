@@ -3380,3 +3380,10 @@
 - [x] Fix Férias Proporcionais: calcular da admissão até término do aviso (não início)
 - [x] Add 13º Salário Proporcional: salário/12 x meses de jan até término do aviso
 - [x] Fix Multa FGTS: calcular até término do aviso (não início)
+
+## Sessão de Testes e Correções - 28/02/2026
+- [x] BUG FIX: Resolver Inconsistência no Fechamento de Ponto - refetch do employeeDetail após resolver (contador local não atualizava)
+- [x] Preencher Comarca nos processos trabalhistas (7 processos atualizados para "Igarassu/PE")
+- [x] Preencher Vara e Tribunal do processo 30008 (estava nulo)
+- [x] Testar fluxo completo do Vale Alimentação Fevereiro 2026 - Gerar, Aprovar Individual, Aprovar Todos (145 lançamentos)
+- [x] Validar cálculo de rescisão no Aviso Prévio (GILBERTO DA COSTA BARBOZA - R$ 3.709,14)
