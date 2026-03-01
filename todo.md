@@ -3858,3 +3858,6 @@
 ## Ajustes Pós-Sprints (fazer depois de finalizar tudo)
 - [ ] Remover "Avaliação de Desempenho" da sidebar do RH & DP (já é módulo separado)
 - [ ] Tornar dialogs/abas redimensionáveis com drag nas bordas (resize com mouse)
+
+## Melhorias de UX
+- [x] Diálogos/modais redimensionáveis (arrastar bordas laterais com mouse para ajustar largura)

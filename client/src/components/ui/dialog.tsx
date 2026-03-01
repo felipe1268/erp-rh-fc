@@ -95,30 +95,70 @@ function DialogOverlay({
 
 DialogOverlay.displayName = "DialogOverlay";
 
+// Hook for resizable dialog width
+function useResizableWidth(initialWidth: number, minWidth = 320, maxWidth = 1600) {
+  const [width, setWidth] = React.useState(initialWidth);
+  const isDragging = React.useRef<"left" | "right" | null>(null);
+  const startX = React.useRef(0);
+  const startWidth = React.useRef(0);
+
+  const onMouseDown = React.useCallback(
+    (side: "left" | "right") => (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isDragging.current = side;
+      startX.current = e.clientX;
+      startWidth.current = width;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!isDragging.current) return;
+        const dx = ev.clientX - startX.current;
+        // Both sides move symmetrically (centered dialog)
+        const delta = isDragging.current === "right" ? dx * 2 : -dx * 2;
+        const newW = Math.min(maxWidth, Math.max(minWidth, startWidth.current + delta));
+        setWidth(newW);
+      };
+
+      const onMouseUp = () => {
+        isDragging.current = null;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [width, minWidth, maxWidth]
+  );
+
+  return { width, onMouseDown };
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
   onEscapeKeyDown,
+  resizable = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  resizable?: boolean;
 }) {
   const { isComposing } = useDialogComposition();
+  const { width, onMouseDown } = useResizableWidth(512);
 
   const handleEscapeKeyDown = React.useCallback(
     (e: KeyboardEvent) => {
-      // Check both the native isComposing property and our context state
-      // This handles Safari's timing issues with composition events
       const isCurrentlyComposing = (e as any).isComposing || isComposing();
-
-      // If IME is composing, prevent dialog from closing
       if (isCurrentlyComposing) {
         e.preventDefault();
         return;
       }
-
-      // Call user's onEscapeKeyDown if provided
       onEscapeKeyDown?.(e);
     },
     [isComposing, onEscapeKeyDown]
@@ -130,9 +170,10 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200",
           className
         )}
+        style={resizable ? { width: `min(${width}px, calc(100vw - 2rem))`, maxWidth: "calc(100vw - 2rem)" } : undefined}
         onEscapeKeyDown={handleEscapeKeyDown}
         {...props}
       >
@@ -145,6 +186,27 @@ function DialogContent({
             <XIcon />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
+        )}
+        {/* Resize handles */}
+        {resizable && (
+          <>
+            {/* Left edge handle */}
+            <div
+              onMouseDown={onMouseDown("left")}
+              className="absolute top-0 left-0 w-2 h-full cursor-col-resize z-[60] group"
+              style={{ transform: "translateX(-50%)" }}
+            >
+              <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 w-1 h-8 rounded-full bg-border opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            {/* Right edge handle */}
+            <div
+              onMouseDown={onMouseDown("right")}
+              className="absolute top-0 right-0 w-2 h-full cursor-col-resize z-[60] group"
+              style={{ transform: "translateX(50%)" }}
+            >
+              <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 w-1 h-8 rounded-full bg-border opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </>
         )}
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -212,4 +274,3 @@ export {
   DialogTitle,
   DialogTrigger
 };
-
