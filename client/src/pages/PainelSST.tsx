@@ -1,18 +1,24 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import {
   Shield, HardHat, HeartPulse, FileWarning, AlertTriangle,
   ChevronRight, BarChart3, ShieldCheck, ClipboardList, Activity,
-  Clock, Users
+  Clock, Users, Search, Filter, X
 } from "lucide-react";
 import { formatDateTime } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useState, useMemo } from "react";
+import { removeAccents } from "@/lib/searchUtils";
 
 export default function PainelSST() {
   const { user } = useAuth();
@@ -32,6 +38,88 @@ export default function PainelSST() {
   const s = homeData?.stats;
   const totalAlertasSST = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0);
 
+  const [showAlertasDialog, setShowAlertasDialog] = useState(false);
+  const [alertFilter, setAlertFilter] = useState<string>("todos");
+  const [alertSearch, setAlertSearch] = useState("");
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+
+  // Build unified alerts list
+  const allAlerts = useMemo(() => {
+    const alerts: Array<{
+      id: string;
+      employeeId: number;
+      nome: string;
+      funcao: string | null;
+      tipo: string;
+      tipoLabel: string;
+      detalhe: string;
+      urgencia: "critico" | "alerta" | "atencao";
+      diasRestantes?: number;
+    }> = [];
+
+    // ASOs vencidos/vencendo
+    (homeData?.asosAlerta || []).forEach((a: any) => {
+      alerts.push({
+        id: `aso-${a.employeeId}`,
+        employeeId: a.employeeId,
+        nome: a.nome,
+        funcao: a.funcao,
+        tipo: "aso",
+        tipoLabel: a.vencido ? "ASO Vencido" : "ASO Vencendo",
+        detalhe: a.vencido
+          ? `Vencido há ${Math.abs(a.diasRestantes)} dia${Math.abs(a.diasRestantes) !== 1 ? "s" : ""} (${new Date(a.dataValidade + "T12:00:00").toLocaleDateString("pt-BR")})`
+          : `Vence em ${a.diasRestantes} dia${a.diasRestantes !== 1 ? "s" : ""} (${new Date(a.dataValidade + "T12:00:00").toLocaleDateString("pt-BR")})`,
+        urgencia: a.vencido ? "critico" : a.diasRestantes <= 15 ? "alerta" : "atencao",
+        diasRestantes: a.diasRestantes,
+      });
+    });
+
+    // Sem ASO
+    (homeData?.semAso || []).forEach((e: any) => {
+      alerts.push({
+        id: `sem-aso-${e.id}`,
+        employeeId: e.id,
+        nome: e.nome,
+        funcao: e.funcao,
+        tipo: "sem_aso",
+        tipoLabel: "Sem ASO",
+        detalhe: "Nenhum ASO cadastrado no sistema",
+        urgencia: "critico",
+      });
+    });
+
+    // Advertencias recentes (segurança)
+    (homeData?.advertenciasRecentes || []).forEach((a: any) => {
+      alerts.push({
+        id: `adv-${a.id}`,
+        employeeId: a.employeeId,
+        nome: a.nome,
+        funcao: null,
+        tipo: "advertencia",
+        tipoLabel: `Advertência: ${a.tipo}`,
+        detalhe: a.data ? `Ocorrência em ${new Date(a.data + "T12:00:00").toLocaleDateString("pt-BR")}` : "Data não informada",
+        urgencia: "alerta",
+      });
+    });
+
+    return alerts;
+  }, [homeData]);
+
+  const filteredAlerts = useMemo(() => {
+    let list = allAlerts;
+    if (alertFilter !== "todos") {
+      if (alertFilter === "aso_vencido") list = list.filter(a => a.tipo === "aso" && a.urgencia === "critico");
+      else if (alertFilter === "aso_vencendo") list = list.filter(a => a.tipo === "aso" && a.urgencia !== "critico");
+      else if (alertFilter === "sem_aso") list = list.filter(a => a.tipo === "sem_aso");
+      else if (alertFilter === "advertencia") list = list.filter(a => a.tipo === "advertencia");
+    }
+    if (alertSearch.trim()) {
+      const term = removeAccents(alertSearch.toLowerCase());
+      list = list.filter(a => removeAccents(a.nome.toLowerCase()).includes(term) || removeAccents(a.tipoLabel.toLowerCase()).includes(term));
+    }
+    return list;
+  }, [allAlerts, alertFilter, alertSearch]);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -49,10 +137,13 @@ export default function PainelSST() {
             </p>
           </div>
           {totalAlertasSST > 0 ? (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            <button
+              onClick={() => setShowAlertasDialog(true)}
+              className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-2 hover:bg-red-100 hover:border-red-300 transition-colors cursor-pointer"
+            >
               <AlertTriangle className="h-5 w-5 text-red-600" />
               <span className="text-sm font-semibold text-red-700">{totalAlertasSST} alerta{totalAlertasSST !== 1 ? "s" : ""} de SST</span>
-            </div>
+            </button>
           ) : null}
         </div>
 
@@ -207,6 +298,125 @@ export default function PainelSST() {
           </Card>
         )}
       </div>
+      {/* FullScreen Dialog de Alertas SST */}
+      <FullScreenDialog
+        open={showAlertasDialog}
+        onClose={() => setShowAlertasDialog(false)}
+        title={`Alertas de SST (${allAlerts.length})`}
+        subtitle="Saúde e Segurança do Trabalho — Todos os alertas ativos"
+        icon={<AlertTriangle className="h-5 w-5 text-red-600" />}
+        headerColor="bg-red-50"
+      >
+        <div className="p-4 md:p-6 space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou tipo..."
+                value={alertSearch}
+                onChange={e => setAlertSearch(e.target.value)}
+                className="pl-9"
+              />
+              {alertSearch && (
+                <button onClick={() => setAlertSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                </button>
+              )}
+            </div>
+            <Select value={alertFilter} onValueChange={setAlertFilter}>
+              <SelectTrigger className="w-full sm:w-52">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os Alertas</SelectItem>
+                <SelectItem value="aso_vencido">ASO Vencido</SelectItem>
+                <SelectItem value="aso_vencendo">ASO Vencendo</SelectItem>
+                <SelectItem value="sem_aso">Sem ASO</SelectItem>
+                <SelectItem value="advertencia">Advertências</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Summary badges */}
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="destructive" className="text-xs">
+              {allAlerts.filter(a => a.urgencia === "critico").length} críticos
+            </Badge>
+            <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-xs">
+              {allAlerts.filter(a => a.urgencia === "alerta").length} alertas
+            </Badge>
+            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">
+              {allAlerts.filter(a => a.urgencia === "atencao").length} atenção
+            </Badge>
+            <span className="text-xs text-muted-foreground self-center ml-2">
+              Exibindo {filteredAlerts.length} de {allAlerts.length}
+            </span>
+          </div>
+
+          {/* Alerts table */}
+          <div className="overflow-x-auto border rounded-lg">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="p-3 text-left font-semibold text-xs">Funcionário</th>
+                  <th className="p-3 text-left font-semibold text-xs hidden md:table-cell">Função</th>
+                  <th className="p-3 text-left font-semibold text-xs">Tipo</th>
+                  <th className="p-3 text-left font-semibold text-xs">Detalhe</th>
+                  <th className="p-3 text-center font-semibold text-xs">Urgência</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAlerts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                      <ShieldCheck className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                      <p>Nenhum alerta encontrado</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAlerts.map(alert => (
+                    <tr key={alert.id} className={`border-t hover:bg-accent/30 ${
+                      alert.urgencia === "critico" ? "bg-red-50/50" :
+                      alert.urgencia === "alerta" ? "bg-orange-50/30" : ""
+                    }`}>
+                      <td className="p-3">
+                        <button
+                          className="font-medium text-blue-700 hover:underline text-left"
+                          onClick={() => setRaioXEmployeeId(alert.employeeId)}
+                        >
+                          {alert.nome}
+                        </button>
+                      </td>
+                      <td className="p-3 text-muted-foreground text-xs hidden md:table-cell">{alert.funcao || "-"}</td>
+                      <td className="p-3">
+                        <Badge variant="outline" className={`text-[10px] md:text-xs whitespace-nowrap ${
+                          alert.tipo === "aso" && alert.urgencia === "critico" ? "border-red-300 text-red-700 bg-red-50" :
+                          alert.tipo === "sem_aso" ? "border-red-300 text-red-700 bg-red-50" :
+                          alert.tipo === "aso" ? "border-orange-300 text-orange-700 bg-orange-50" :
+                          "border-yellow-300 text-yellow-700 bg-yellow-50"
+                        }`}>
+                          {alert.tipoLabel}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground">{alert.detalhe}</td>
+                      <td className="p-3 text-center">
+                        <span className={`inline-block h-3 w-3 rounded-full ${
+                          alert.urgencia === "critico" ? "bg-red-500" :
+                          alert.urgencia === "alerta" ? "bg-orange-500" : "bg-yellow-500"
+                        }`} title={alert.urgencia} />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </FullScreenDialog>
+
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     <PrintFooterLGPD />
     </DashboardLayout>
   );

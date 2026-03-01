@@ -3763,3 +3763,11 @@
 - [x] BUG: Aba Aprovações usava listQuery filtrada por mês, criada pendentesQuery separada sem filtro de mês
 - [x] Tornar a tela de Solicitação de HE totalmente responsiva (cards, tabs, botões, filtros)
 - [x] Inserir revisões 122-132, 134, 135 faltantes no banco de dados (Controle de Revisões)
+
+## Rev. 137 - Alertas SST: FullScreenDialog ao clicar no botão de alertas
+- [x] Botão "X alertas de SST" no Painel SST abre FullScreenDialog com lista completa de alertas
+- [x] Lista detalhada com nome do funcionário, função, tipo de alerta, detalhe, urgência
+- [x] Filtros por tipo de alerta (ASO Vencido, ASO Vencendo, Sem ASO, Advertências) e busca por nome
+- [x] Badges de resumo (críticos, alertas, atenção)
+- [x] Raio-X clicável no nome do funcionário
+- [x] Responsivo (mobile/desktop)
