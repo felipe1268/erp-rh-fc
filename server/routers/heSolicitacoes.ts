@@ -336,8 +336,8 @@ export const heSolicitacoesRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-    // Verificar se é admin
-    if (ctx.user.role !== "admin") {
+    // Verificar se é Admin Master
+    if (ctx.user.role !== "admin_master") {
       throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode excluir solicitações" });
     }
 

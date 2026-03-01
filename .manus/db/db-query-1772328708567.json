@@ -1,0 +1,24 @@
+{
+  "query": "SELECT id, name, role, openId, loginMethod FROM users WHERE name LIKE '%Felipe%' OR name LIKE '%FELIPE%' OR name LIKE '%felipe%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, name, role, openId, loginMethod FROM users WHERE name LIKE '%Felipe%' OR name LIKE '%FELIPE%' OR name LIKE '%felipe%';",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Felipe Alves",
+      "role": "admin_master",
+      "openId": "JEMA66m7MhqSFfpAbPWgBv",
+      "loginMethod": "apple"
+    },
+    {
+      "id": "601043",
+      "name": "Felipe Costa Alves",
+      "role": "admin_master",
+      "openId": "local_1771785953035_9cng9bnpjcu",
+      "loginMethod": "local"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\trole\topenId\tloginMethod\n1\tFelipe Alves\tadmin_master\tJEMA66m7MhqSFfpAbPWgBv\tapple\n601043\tFelipe Costa Alves\tadmin_master\tlocal_1771785953035_9cng9bnpjcu\tlocal\n",
+  "stderr": "",
+  "execution_time_ms": 354
+}

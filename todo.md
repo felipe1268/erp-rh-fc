@@ -3796,3 +3796,8 @@
 - [x] Apenas Admin Master pode excluir solicitações (verificação backend + frontend)
 - [x] Toast de sucesso/erro ao excluir
 - [x] Invalidação automática de queries após exclusão
+
+## Rev. 141 - Bug Fix: Admin Master não consegue excluir HE
+- [x] Investigar verificação isAdminMaster no frontend (SolicitacaoHE.tsx) - frontend OK (user?.role === "admin_master")
+- [x] Investigar verificação de role no backend (delete endpoint) - BUG: comparava com "admin" ao invés de "admin_master"
+- [x] Corrigir para reconhecer corretamente o Admin Master - fix: ctx.user.role !== "admin_master"
