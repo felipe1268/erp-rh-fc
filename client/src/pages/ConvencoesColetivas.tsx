@@ -427,17 +427,17 @@ export default function ConvencoesColetivas() {
 
       {/* Dialog Nova/Editar Convenção */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); }}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Scale className="h-5 w-5 text-indigo-600" />
+        <DialogContent className="!fixed !inset-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none" style={{ top: 0, left: 0, transform: 'none', display: 'flex', flexDirection: 'column' }}>
+          <DialogHeader className="border-b pb-4 shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Scale className="h-6 w-6 text-indigo-600" />
               {editingId ? "Editar Convenção Coletiva" : "Nova Convenção Coletiva"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto space-y-6 py-4 px-1">
             {/* Empresa e Abrangência */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
                 <Label className="text-xs font-semibold">Empresa *</Label>
                 <Select value={form.companyId ? String(form.companyId) : "0"} onValueChange={v => setField("companyId", Number(v))}>
@@ -477,48 +477,51 @@ export default function ConvencoesColetivas() {
             </div>
 
             {/* Dados Principais */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2">
-                <Label className="text-xs font-semibold">Nome da Convenção *</Label>
-                <Input value={form.nome} onChange={e => setField("nome", e.target.value)} placeholder="Ex: CCT Construção Civil 2024/2025" />
-              </div>
-              <div>
-                <Label className="text-xs font-semibold">Sindicato</Label>
-                <Input value={form.sindicato} onChange={e => setField("sindicato", e.target.value)} placeholder="Nome do sindicato" />
-              </div>
-              <div>
-                <Label className="text-xs font-semibold">CNPJ do Sindicato</Label>
-                <Input value={form.cnpjSindicato} onChange={e => setField("cnpjSindicato", e.target.value)} placeholder="00.000.000/0000-00" />
-              </div>
-              <div>
-                <Label className="text-xs font-semibold">Data Base</Label>
-                <Input value={form.dataBase} onChange={e => setField("dataBase", e.target.value)} placeholder="Ex: Maio" />
-              </div>
-              <div>
-                <Label className="text-xs font-semibold">Status</Label>
-                <Select value={form.status} onValueChange={v => setField("status", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="vigente">Vigente</SelectItem>
-                    <SelectItem value="vencida">Vencida</SelectItem>
-                    <SelectItem value="em_negociacao">Em Negociação</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs font-semibold">Vigência Início</Label>
-                <Input type="date" value={form.vigenciaInicio} onChange={e => setField("vigenciaInicio", e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs font-semibold">Vigência Fim</Label>
-                <Input type="date" value={form.vigenciaFim} onChange={e => setField("vigenciaFim", e.target.value)} />
+            <div>
+              <p className="text-sm font-bold text-slate-700 mb-3 border-b pb-1">Dados Principais</p>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="sm:col-span-4">
+                  <Label className="text-xs font-semibold">Nome da Convenção *</Label>
+                  <Input value={form.nome} onChange={e => setField("nome", e.target.value)} placeholder="Ex: CCT Construção Civil 2024/2025" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs font-semibold">Sindicato</Label>
+                  <Input value={form.sindicato} onChange={e => setField("sindicato", e.target.value)} placeholder="Nome do sindicato" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">CNPJ do Sindicato</Label>
+                  <Input value={form.cnpjSindicato} onChange={e => setField("cnpjSindicato", e.target.value)} placeholder="00.000.000/0000-00" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">Data Base</Label>
+                  <Input value={form.dataBase} onChange={e => setField("dataBase", e.target.value)} placeholder="Ex: Maio" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">Status</Label>
+                  <Select value={form.status} onValueChange={v => setField("status", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vigente">Vigente</SelectItem>
+                      <SelectItem value="vencida">Vencida</SelectItem>
+                      <SelectItem value="em_negociacao">Em Negociação</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">Vigência Início</Label>
+                  <Input type="date" value={form.vigenciaInicio} onChange={e => setField("vigenciaInicio", e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">Vigência Fim</Label>
+                  <Input type="date" value={form.vigenciaFim} onChange={e => setField("vigenciaFim", e.target.value)} />
+                </div>
               </div>
             </div>
 
             {/* Valores */}
             <div>
-              <p className="text-xs font-bold text-muted-foreground mb-2 border-b pb-1">Valores e Percentuais</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <p className="text-sm font-bold text-slate-700 mb-3 border-b pb-1">Valores e Percentuais</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
                 <div>
                   <Label className="text-[11px]">Piso Salarial (R$)</Label>
                   <Input value={form.pisoSalarial} onChange={e => setField("pisoSalarial", e.target.value)} placeholder="0,00" />
@@ -556,8 +559,8 @@ export default function ConvencoesColetivas() {
 
             {/* Benefícios */}
             <div>
-              <p className="text-xs font-bold text-muted-foreground mb-2 border-b pb-1">Benefícios</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <p className="text-sm font-bold text-slate-700 mb-3 border-b pb-1">Benefícios</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 <div>
                   <Label className="text-[11px]">Vale Refeição (R$)</Label>
                   <Input value={form.valeRefeicao} onChange={e => setField("valeRefeicao", e.target.value)} placeholder="0,00" />
@@ -582,7 +585,7 @@ export default function ConvencoesColetivas() {
                   <Label className="text-[11px]">Seguro de Vida (R$)</Label>
                   <Input value={form.seguroVida} onChange={e => setField("seguroVida", e.target.value)} placeholder="0,00" />
                 </div>
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-3 lg:col-span-4">
                   <Label className="text-[11px]">Plano de Saúde</Label>
                   <Input value={form.planoSaude} onChange={e => setField("planoSaude", e.target.value)} placeholder="Detalhes do plano" />
                 </div>
@@ -590,7 +593,10 @@ export default function ConvencoesColetivas() {
             </div>
 
             {/* Campos texto */}
-            <div className="space-y-3">
+            <div>
+              <p className="text-sm font-bold text-slate-700 mb-3 border-b pb-1">Informações Adicionais</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label className="text-xs font-semibold">Outros Benefícios</Label>
                 <textarea className="w-full border rounded-md p-2 text-sm min-h-[60px]" value={form.outrosBeneficios} onChange={e => setField("outrosBeneficios", e.target.value)} placeholder="Descreva outros benefícios previstos..." />
@@ -606,13 +612,13 @@ export default function ConvencoesColetivas() {
             </div>
 
             {/* Checkbox Matriz */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pt-2">
               <input type="checkbox" id="isMatriz" checked={form.isMatriz} onChange={e => setField("isMatriz", e.target.checked)} className="rounded" />
               <Label htmlFor="isMatriz" className="text-xs cursor-pointer">Convenção da Matriz (referência principal)</Label>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4 shrink-0">
             <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
             <Button onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending} className="bg-indigo-600 hover:bg-indigo-700">
               {createMut.isPending || updateMut.isPending ? "Salvando..." : editingId ? "Atualizar" : "Cadastrar"}
