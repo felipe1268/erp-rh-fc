@@ -451,76 +451,189 @@ export default function SolicitacaoHE() {
           )}
 
           {/* ========== TAB: APROVAÇÕES (Admin Master) ========== */}
-          {activeTab === "aprovacoes" && (
+          {activeTab === "aprovacoes" && (() => {
+            // Mostrar TODAS as solicitações na aba Aprovações com sub-filtros
+            const allSols = listQuery.data || [];
+            const aprovPendentes = allSols.filter((s: any) => s.status === "pendente");
+            const aprovAprovadas = allSols.filter((s: any) => s.status === "aprovada");
+            const aprovRejeitadas = allSols.filter((s: any) => s.status === "rejeitada");
+            // Também incluir pendentes de outros meses via pendentesQuery
+            const pendentesOutrosMeses = (pendentesQuery.data || []).filter(
+              (p: any) => !aprovPendentes.some((a: any) => a.id === p.id)
+            );
+            const todasPendentes = [...aprovPendentes, ...pendentesOutrosMeses];
+            return (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                Aprovações Pendentes
-                {!isAdminMaster && (
-                  <Badge variant="outline" className="ml-2 text-orange-600 border-orange-300">
-                    Somente Admin Master pode aprovar/rejeitar
-                  </Badge>
-                )}
-              </h2>
-
-              {pendentes.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Nenhuma solicitação pendente de aprovação</p>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <h2 className="text-base md:text-lg font-semibold flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Gestão de Aprovações
+                  {!isAdminMaster && (
+                    <Badge variant="outline" className="ml-2 text-orange-600 border-orange-300 text-[10px] md:text-xs">
+                      Somente Admin Master
+                    </Badge>
+                  )}
+                </h2>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Input
+                    type="month"
+                    value={filterMes}
+                    onChange={e => setFilterMes(e.target.value)}
+                    className="w-full sm:w-40"
+                  />
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas</SelectItem>
+                      <SelectItem value="pendente">Pendentes</SelectItem>
+                      <SelectItem value="aprovada">Aprovadas</SelectItem>
+                      <SelectItem value="rejeitada">Rejeitadas</SelectItem>
+                      <SelectItem value="cancelada">Canceladas</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {pendentes.map((sol: any) => (
+              </div>
+
+              {/* Mini resumo */}
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="text-yellow-700 border-yellow-300 bg-yellow-50">
+                  {todasPendentes.length} pendentes
+                </Badge>
+                <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">
+                  {aprovAprovadas.length} aprovadas
+                </Badge>
+                <Badge variant="outline" className="text-red-700 border-red-300 bg-red-50">
+                  {aprovRejeitadas.length} rejeitadas
+                </Badge>
+              </div>
+
+              {/* Seção: Pendentes (sempre visível se houver) */}
+              {(filterStatus === "todas" || filterStatus === "pendente") && todasPendentes.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-yellow-700 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Aguardando Aprovação ({todasPendentes.length})
+                  </h3>
+                  {todasPendentes.map((sol: any) => (
                     <Card key={sol.id} className="border-l-4 border-l-yellow-400">
-                      <CardContent className="p-4">
+                      <CardContent className="p-3 md:p-4">
                         <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-                          <div className="space-y-2 flex-1">
+                          <div className="space-y-1.5 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className={STATUS_COLORS.pendente}>Pendente</Badge>
+                              <Badge className={STATUS_COLORS.pendente + " text-[10px] md:text-xs"}>Pendente</Badge>
                               <span className="text-xs md:text-sm text-muted-foreground">
                                 #{sol.id} — {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
                               </span>
                               {sol.obraNome && (
-                                <span className="text-xs md:text-sm flex items-center gap-1">
+                                <span className="text-xs flex items-center gap-1">
                                   <Building2 className="h-3 w-3" /> {sol.obraNome}
                                 </span>
                               )}
                             </div>
                             <p className="text-xs md:text-sm"><strong>Motivo:</strong> {sol.motivo}</p>
                             {sol.horaInicio && sol.horaFim && (
-                              <p className="text-xs text-muted-foreground">
-                                Horário previsto: {sol.horaInicio} — {sol.horaFim}
+                              <p className="text-[10px] md:text-xs text-muted-foreground">
+                                Horário: {sol.horaInicio} — {sol.horaFim}
                               </p>
                             )}
-                            <p className="text-xs text-muted-foreground">
-                              Solicitado por: {sol.solicitadoPor} em {new Date(sol.createdAt).toLocaleString("pt-BR")}
+                            <p className="text-[10px] md:text-xs text-muted-foreground">
+                              Por: {sol.solicitadoPor} em {new Date(sol.createdAt).toLocaleString("pt-BR")}
                             </p>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {(sol.funcionarios || []).map((f: any) => (
-                                <Badge key={f.employeeId} variant="secondary" className="text-xs">
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(sol.funcionarios || []).slice(0, 5).map((f: any) => (
+                                <Badge key={f.employeeId} variant="secondary" className="text-[10px] md:text-xs">
                                   {f.employeeName || `ID ${f.employeeId}`}
                                 </Badge>
                               ))}
+                              {(sol.funcionarios || []).length > 5 && (
+                                <Badge variant="secondary" className="text-[10px] md:text-xs">+{(sol.funcionarios || []).length - 5}</Badge>
+                              )}
                             </div>
                           </div>
-                          <div className="flex gap-2 shrink-0">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs md:text-sm"
-                              onClick={() => openDetail(sol.id)}
-                            >
-                              <Eye className="h-3.5 w-3.5 mr-1" /> Analisar
-                            </Button>
-                          </div>
+                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-xs md:text-sm shrink-0" onClick={() => openDetail(sol.id)}>
+                            <Eye className="h-3.5 w-3.5 mr-1" /> Analisar
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
               )}
+
+              {/* Seção: Aprovadas/Rejeitadas/Todas do período */}
+              {(filterStatus !== "pendente") && (() => {
+                const filtered = filterStatus === "todas"
+                  ? allSols.filter((s: any) => s.status !== "pendente")
+                  : allSols;
+                if (filtered.length === 0 && todasPendentes.length === 0) return (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>Nenhuma solicitação encontrada para o período</p>
+                  </div>
+                );
+                if (filtered.length === 0) return null;
+                return (
+                  <div className="space-y-3">
+                    {filterStatus === "todas" && (
+                      <h3 className="text-sm font-semibold text-muted-foreground">Histórico de Decisões</h3>
+                    )}
+                    {filtered.map((sol: any) => (
+                      <Card key={sol.id} className={`border-l-4 ${
+                        sol.status === "aprovada" ? "border-l-green-400" :
+                        sol.status === "rejeitada" ? "border-l-red-400" :
+                        sol.status === "cancelada" ? "border-l-gray-400" :
+                        "border-l-yellow-400"
+                      }`}>
+                        <CardContent className="p-3 md:p-4">
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge className={(STATUS_COLORS[sol.status] || STATUS_COLORS.pendente) + " text-[10px] md:text-xs"}>
+                                  {STATUS_LABELS[sol.status] || sol.status}
+                                </Badge>
+                                <span className="text-xs md:text-sm font-medium">
+                                  #{sol.id} — {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
+                                </span>
+                                {sol.obraNome && (
+                                  <span className="text-xs flex items-center gap-1 text-muted-foreground">
+                                    <Building2 className="h-3 w-3" /> {sol.obraNome}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs md:text-sm">{sol.motivo}</p>
+                              {sol.aprovadoPor && (
+                                <p className="text-[10px] md:text-xs text-muted-foreground">
+                                  {sol.status === "aprovada" ? "Aprovado" : "Rejeitado"} por: {sol.aprovadoPor}
+                                  {sol.aprovadoEm && ` em ${new Date(sol.aprovadoEm).toLocaleString("pt-BR")}`}
+                                </p>
+                              )}
+                              {sol.observacaoAdmin && (
+                                <p className="text-[10px] md:text-xs text-blue-700">Obs Admin: {sol.observacaoAdmin}</p>
+                              )}
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(sol.funcionarios || []).slice(0, 5).map((f: any) => (
+                                  <Badge key={f.employeeId} variant="secondary" className="text-[10px] md:text-xs">
+                                    {f.employeeName || `ID ${f.employeeId}`}
+                                  </Badge>
+                                ))}
+                                {(sol.funcionarios || []).length > 5 && (
+                                  <Badge variant="secondary" className="text-[10px] md:text-xs">+{(sol.funcionarios || []).length - 5}</Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Button size="sm" variant="outline" className="text-xs md:text-sm shrink-0" onClick={() => openDetail(sol.id)}>
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Detalhes
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
-          )}
+            );
+          })()}
 
           {/* ========== TAB: HISTÓRICO ========== */}
           {activeTab === "historico" && (

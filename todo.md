@@ -3779,3 +3779,10 @@
 - [x] Histórico mostra observações do admin e permite editar decisão
 - [x] Schema: adicionado campo observacaoAdmin na tabela heSolicitacoes
 - [x] Fix: Botão Voltar no FullScreenDialog de Alertas SST agora visível (header escuro)
+
+## Rev. 139 - Bug Fix: Aba Aprovações mostra vazio + Responsividade HE
+- [x] BUG: Cards mostram 1 Aprovada mas aba Aprovações mostra "Nenhuma solicitação pendente" (só mostrava pendentes)
+- [x] Aba Aprovações agora mostra TODAS as solicitações: pendentes no topo + histórico de decisões
+- [x] Filtros por mês e status na aba Aprovações
+- [x] Mini resumo com badges (pendentes, aprovadas, rejeitadas)
+- [x] Cards e tabs responsivos (grid 2x2 em mobile, textos menores)
