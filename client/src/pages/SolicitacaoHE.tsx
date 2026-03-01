@@ -120,10 +120,22 @@ export default function SolicitacaoHE() {
     return (employeesQuery.data || []).filter((e: any) => e.status === "Ativo" && !e.deletedAt);
   }, [employeesQuery.data]);
 
+  // Query para buscar funcionários alocados na obra via tabela obraFuncionarios
+  const obraFuncsQuery = trpc.obras.funcionarios.useQuery(
+    { obraId: formData.obraId ? parseInt(formData.obraId) : 0 },
+    { enabled: !!formData.obraId && parseInt(formData.obraId) > 0 }
+  );
+
   const obraEmployees = useMemo(() => {
     if (!formData.obraId) return activeEmployees;
-    return activeEmployees.filter((e: any) => String(e.obraAtual) === formData.obraId || String(e.obraId) === formData.obraId);
-  }, [activeEmployees, formData.obraId]);
+    // Primeiro: buscar pela tabela obraFuncionarios (alocações ativas)
+    const alocadosIds = new Set((obraFuncsQuery.data || []).map((f: any) => f.employeeId || f.id));
+    // Segundo: fallback pelo campo obraAtualId do funcionário
+    const filtered = activeEmployees.filter((e: any) => 
+      alocadosIds.has(e.id) || String(e.obraAtualId) === formData.obraId
+    );
+    return filtered;
+  }, [activeEmployees, formData.obraId, obraFuncsQuery.data]);
 
   const pendentes = useMemo(() => {
     return (listQuery.data || []).filter((s: any) => s.status === "pendente");
@@ -270,7 +282,7 @@ export default function SolicitacaoHE() {
                 {/* Obra */}
                 <div className="space-y-1.5">
                   <Label>Obra (opcional)</Label>
-                  <Select value={formData.obraId} onValueChange={v => setFormData(p => ({ ...p, obraId: v }))}>
+                  <Select value={formData.obraId} onValueChange={v => setFormData(p => ({ ...p, obraId: v, funcionarioIds: [] }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
                       {(obrasQuery.data || []).map((o: any) => (

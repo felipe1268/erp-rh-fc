@@ -3750,3 +3750,8 @@
 - [x] Gráfico mostra apenas meses com dados, faltando continuidade (pula meses sem aviso)
 - [x] Corrigir para mostrar todos os 12 meses do ano selecionado (meses sem dados = 0)
 - [x] Melhorar formato do eixo X (ex: "Fev/25" ao invés de "02/25")
+
+## Rev. 135 - Bug Fix: Funcionários não aparecem na Solicitação de HE
+- [x] BUG: Ao selecionar obra na Nova Solicitação de Horas Extras, mostra "Nenhum funcionário ativo encontrado nesta obra"
+- [x] Corrigido: campo errado (e.obraAtual/e.obraId) trocado para e.obraAtualId + busca via tabela obraFuncionarios
+- [x] Limpar seleção de funcionários ao trocar de obra
