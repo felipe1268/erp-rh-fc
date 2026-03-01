@@ -3755,3 +3755,11 @@
 - [x] BUG: Ao selecionar obra na Nova Solicitação de Horas Extras, mostra "Nenhum funcionário ativo encontrado nesta obra"
 - [x] Corrigido: campo errado (e.obraAtual/e.obraId) trocado para e.obraAtualId + busca via tabela obraFuncionarios
 - [x] Limpar seleção de funcionários ao trocar de obra
+
+## Rev. 135 - Bug Fix: Aba Aprovações mostra vazio mesmo com pendência
+- [x] BUG: Card mostra 1 Pendente, badge mostra 1, mas lista de Aprovações Pendentes aparece vazia
+
+## Rev. 136 - Bug Fix: Aba Aprovações vazia + Responsividade HE + Revisões Faltantes
+- [x] BUG: Aba Aprovações usava listQuery filtrada por mês, criada pendentesQuery separada sem filtro de mês
+- [x] Tornar a tela de Solicitação de HE totalmente responsiva (cards, tabs, botões, filtros)
+- [x] Inserir revisões 122-132, 134, 135 faltantes no banco de dados (Controle de Revisões)

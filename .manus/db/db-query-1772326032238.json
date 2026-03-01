@@ -1,0 +1,24 @@
+{
+  "query": "SELECT version, titulo, tipo, criadoPor, dataPublicacao FROM system_revisions WHERE version >= 121 ORDER BY version DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo, criadoPor, dataPublicacao FROM system_revisions WHERE version >= 121 ORDER BY version DESC LIMIT 20;",
+  "rows": [
+    {
+      "version": "133",
+      "titulo": "Dashboard Efetivo por Obra - Status em Tempo Real",
+      "tipo": "feature",
+      "criadoPor": "Manus AI",
+      "dataPublicacao": "2026-02-28 23:15:10"
+    },
+    {
+      "version": "121",
+      "titulo": "Filtro por Ano no Dashboard de Férias",
+      "tipo": "bugfix",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-28 17:54:33"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\tcriadoPor\tdataPublicacao\n133\tDashboard Efetivo por Obra - Status em Tempo Real\tfeature\tManus AI\t2026-02-28 23:15:10\n121\tFiltro por Ano no Dashboard de Férias\tbugfix\tSistema\t2026-02-28 17:54:33\n",
+  "stderr": "",
+  "execution_time_ms": 368
+}

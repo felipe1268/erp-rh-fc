@@ -70,6 +70,11 @@ export default function SolicitacaoHE() {
     { companyId, status: filterStatus as any, mesReferencia: filterMes || undefined },
     { enabled: companyId > 0 }
   );
+  // Query separada para pendentes SEM filtro de mês (para aba Aprovações)
+  const pendentesQuery = trpc.heSolicitacoes.list.useQuery(
+    { companyId, status: "pendente" as any },
+    { enabled: companyId > 0 }
+  );
   const countsQuery = trpc.heSolicitacoes.counts.useQuery(
     { companyId },
     { enabled: companyId > 0 }
@@ -137,9 +142,10 @@ export default function SolicitacaoHE() {
     return filtered;
   }, [activeEmployees, formData.obraId, obraFuncsQuery.data]);
 
+  // Usa a query dedicada sem filtro de mês para mostrar TODAS as pendentes
   const pendentes = useMemo(() => {
-    return (listQuery.data || []).filter((s: any) => s.status === "pendente");
-  }, [listQuery.data]);
+    return pendentesQuery.data || [];
+  }, [pendentesQuery.data]);
 
   const isAdminMaster = user?.role === "admin_master";
 
@@ -205,62 +211,60 @@ export default function SolicitacaoHE() {
     <DashboardLayout>
       <div className="p-4 md:p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Clock className="h-6 w-6 text-blue-600" />
-              Solicitação de Horas Extras
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Art. 59 CLT — Horas extras com autorização prévia do Admin Master
-            </p>
-          </div>
+        <div>
+          <h1 className="text-lg md:text-2xl font-bold flex items-center gap-2">
+            <Clock className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
+            Solicitação de Horas Extras
+          </h1>
+          <p className="text-xs md:text-sm text-muted-foreground mt-1">
+            Art. 59 CLT — Horas extras com autorização prévia do Admin Master
+          </p>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card className="border-l-4 border-l-yellow-500">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-yellow-600">{countsQuery.data?.pendentes || 0}</div>
-              <div className="text-xs text-muted-foreground">Pendentes</div>
+            <CardContent className="p-3 md:p-4">
+              <div className="text-xl md:text-2xl font-bold text-yellow-600">{countsQuery.data?.pendentes || 0}</div>
+              <div className="text-[10px] md:text-xs text-muted-foreground">Pendentes</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-green-500">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-600">{countsQuery.data?.aprovadas || 0}</div>
-              <div className="text-xs text-muted-foreground">Aprovadas</div>
+            <CardContent className="p-3 md:p-4">
+              <div className="text-xl md:text-2xl font-bold text-green-600">{countsQuery.data?.aprovadas || 0}</div>
+              <div className="text-[10px] md:text-xs text-muted-foreground">Aprovadas</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-red-500">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-red-600">{countsQuery.data?.rejeitadas || 0}</div>
-              <div className="text-xs text-muted-foreground">Rejeitadas</div>
+            <CardContent className="p-3 md:p-4">
+              <div className="text-xl md:text-2xl font-bold text-red-600">{countsQuery.data?.rejeitadas || 0}</div>
+              <div className="text-[10px] md:text-xs text-muted-foreground">Rejeitadas</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-blue-500">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-blue-600">{countsQuery.data?.total || 0}</div>
-              <div className="text-xs text-muted-foreground">Total</div>
+            <CardContent className="p-3 md:p-4">
+              <div className="text-xl md:text-2xl font-bold text-blue-600">{countsQuery.data?.total || 0}</div>
+              <div className="text-[10px] md:text-xs text-muted-foreground">Total</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b pb-0">
+        <div className="flex gap-1 border-b pb-0 overflow-x-auto">
           {tabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors relative ${
+              className={`flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium rounded-t-lg transition-colors relative whitespace-nowrap ${
                 activeTab === tab.key
                   ? "bg-white text-blue-700 border border-b-white -mb-px z-10 shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-gray-50"
               }`}
             >
-              <tab.icon className="h-4 w-4" />
+              <tab.icon className="h-3.5 w-3.5 md:h-4 md:w-4" />
               {tab.label}
               {tab.badge && tab.badge > 0 ? (
-                <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+                <span className="ml-1 bg-red-500 text-white text-[10px] md:text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
                   {tab.badge}
                 </span>
               ) : null}
@@ -269,7 +273,7 @@ export default function SolicitacaoHE() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white rounded-lg border p-6">
+        <div className="bg-white rounded-lg border p-3 md:p-6">
           {/* ========== TAB: NOVA SOLICITAÇÃO ========== */}
           {activeTab === "solicitar" && (
             <div className="space-y-6">
@@ -346,16 +350,16 @@ export default function SolicitacaoHE() {
 
               {/* Seleção de Funcionários */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-semibold flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <Label className="text-sm md:text-base font-semibold flex items-center gap-2">
                     <Users className="h-4 w-4" />
                     Funcionários ({formData.funcionarioIds.length} selecionados)
                   </Label>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={selectAllEmployees}>
+                    <Button variant="outline" size="sm" className="text-xs md:text-sm" onClick={selectAllEmployees}>
                       Selecionar Todos ({obraEmployees.length})
                     </Button>
-                    <Button variant="outline" size="sm" onClick={deselectAllEmployees}>
+                    <Button variant="outline" size="sm" className="text-xs md:text-sm" onClick={deselectAllEmployees}>
                       Limpar Seleção
                     </Button>
                   </div>
@@ -438,26 +442,26 @@ export default function SolicitacaoHE() {
                   {pendentes.map((sol: any) => (
                     <Card key={sol.id} className="border-l-4 border-l-yellow-400">
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
+                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                           <div className="space-y-2 flex-1">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge className={STATUS_COLORS.pendente}>Pendente</Badge>
-                              <span className="text-sm text-muted-foreground">
+                              <span className="text-xs md:text-sm text-muted-foreground">
                                 #{sol.id} — {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
                               </span>
                               {sol.obraNome && (
-                                <span className="text-sm flex items-center gap-1">
+                                <span className="text-xs md:text-sm flex items-center gap-1">
                                   <Building2 className="h-3 w-3" /> {sol.obraNome}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm"><strong>Motivo:</strong> {sol.motivo}</p>
+                            <p className="text-xs md:text-sm"><strong>Motivo:</strong> {sol.motivo}</p>
                             {sol.horaInicio && sol.horaFim && (
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-xs text-muted-foreground">
                                 Horário previsto: {sol.horaInicio} — {sol.horaFim}
                               </p>
                             )}
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               Solicitado por: {sol.solicitadoPor} em {new Date(sol.createdAt).toLocaleString("pt-BR")}
                             </p>
                             <div className="flex flex-wrap gap-1 mt-2">
@@ -469,22 +473,23 @@ export default function SolicitacaoHE() {
                             </div>
                           </div>
                           {isAdminMaster && (
-                            <div className="flex gap-2 ml-4">
+                            <div className="flex gap-2 shrink-0">
                               <Button
                                 size="sm"
-                                className="bg-green-600 hover:bg-green-700"
+                                className="bg-green-600 hover:bg-green-700 text-xs md:text-sm"
                                 onClick={() => handleApprove(sol.id)}
                                 disabled={approveMut.isPending}
                               >
-                                <CheckCircle className="h-4 w-4 mr-1" /> Aprovar
+                                <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
                               </Button>
                               <Button
                                 size="sm"
                                 variant="destructive"
+                                className="text-xs md:text-sm"
                                 onClick={() => handleReject(sol.id)}
                                 disabled={rejectMut.isPending}
                               >
-                                <XCircle className="h-4 w-4 mr-1" /> Rejeitar
+                                <XCircle className="h-3.5 w-3.5 mr-1" /> Rejeitar
                               </Button>
                             </div>
                           )}
@@ -500,20 +505,20 @@ export default function SolicitacaoHE() {
           {/* ========== TAB: HISTÓRICO ========== */}
           {activeTab === "historico" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <h2 className="text-base md:text-lg font-semibold flex items-center gap-2">
                   <FileText className="h-5 w-5 text-blue-600" />
                   Histórico de Solicitações
                 </h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
                   <Input
                     type="month"
                     value={filterMes}
                     onChange={e => setFilterMes(e.target.value)}
-                    className="w-40"
+                    className="w-full sm:w-40"
                   />
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todas">Todas</SelectItem>
                       <SelectItem value="pendente">Pendentes</SelectItem>
@@ -542,13 +547,13 @@ export default function SolicitacaoHE() {
                       "border-l-yellow-400"
                     }`}>
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
+                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                           <div className="space-y-1.5 flex-1">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge className={STATUS_COLORS[sol.status] || STATUS_COLORS.pendente}>
                                 {STATUS_LABELS[sol.status] || sol.status}
                               </Badge>
-                              <span className="text-sm font-medium">
+                              <span className="text-xs md:text-sm font-medium">
                                 #{sol.id} — {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
                               </span>
                               {sol.obraNome && (
@@ -584,18 +589,18 @@ export default function SolicitacaoHE() {
                             </div>
                           </div>
                           {sol.status === "pendente" && (
-                            <div className="flex gap-2 ml-4">
+                            <div className="flex gap-2 shrink-0">
                               {isAdminMaster && (
                                 <>
-                                  <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApprove(sol.id)}>
+                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-xs md:text-sm" onClick={() => handleApprove(sol.id)}>
                                     <CheckCircle className="h-3 w-3 mr-1" /> Aprovar
                                   </Button>
-                                  <Button size="sm" variant="destructive" onClick={() => handleReject(sol.id)}>
+                                  <Button size="sm" variant="destructive" className="text-xs md:text-sm" onClick={() => handleReject(sol.id)}>
                                     <XCircle className="h-3 w-3 mr-1" /> Rejeitar
                                   </Button>
                                 </>
                               )}
-                              <Button size="sm" variant="outline" onClick={() => handleCancel(sol.id)}>
+                              <Button size="sm" variant="outline" className="text-xs md:text-sm" onClick={() => handleCancel(sol.id)}>
                                 Cancelar
                               </Button>
                             </div>
