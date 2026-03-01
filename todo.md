@@ -3876,3 +3876,9 @@
 - [ ] Controle de acesso por módulo por usuário (definir quais módulos cada usuário pode acessar)
 - [x] Detalhamento da Pontuação de Saúde em tela cheia (FullScreenDialog) com botão de voltar
 - [ ] Upload de arquivo da convenção coletiva na Editar Obra quando diferente da matriz
+
+## Bug Fix: Empresas Terceiras e Parceiros
+- [x] BUG CRÍTICO: TypeError "Cannot read properties of undefined (reading 'charAt')" na tela /terceiros/empresas
+- [x] Busca automática de CNPJ na tela de Empresas Terceiras (BrasilAPI) — já existia, verificado OK
+- [x] Busca automática de CNPJ na tela de Parceiros Conveniados (BrasilAPI) — já existia, verificado OK
+- [ ] Sistema de login externo para Terceiros e Parceiros

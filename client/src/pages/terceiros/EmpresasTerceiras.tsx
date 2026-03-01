@@ -119,16 +119,17 @@ export default function EmpresasTerceiras() {
     input.click();
   };
 
-  const statusBadge = (status: string) => {
+  const statusBadge = (status: string | undefined | null) => {
+    const st = status || "ativa";
     const map: Record<string, { bg: string; text: string; icon: any }> = {
       ativa: { bg: "bg-emerald-100", text: "text-emerald-700", icon: CheckCircle },
       suspensa: { bg: "bg-amber-100", text: "text-amber-700", icon: Clock },
       inativa: { bg: "bg-red-100", text: "text-red-700", icon: XCircle },
     };
-    const s = map[status] || map.ativa;
+    const s = map[st] || map.ativa;
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
-        <s.icon className="h-3 w-3" />{status.charAt(0).toUpperCase() + status.slice(1)}
+        <s.icon className="h-3 w-3" />{st.charAt(0).toUpperCase() + st.slice(1)}
       </span>
     );
   };
@@ -172,7 +173,7 @@ export default function EmpresasTerceiras() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-foreground truncate">{emp.razaoSocial}</h3>
-                      {statusBadge(emp.statusTerceira)}
+                      {statusBadge(emp.status)}
                     </div>
                     {emp.nomeFantasia && <p className="text-sm text-muted-foreground">{emp.nomeFantasia}</p>}
                     <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
@@ -259,7 +260,7 @@ export default function EmpresasTerceiras() {
                 {editingId && (
                   <>
                     <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider pt-2">Status</h4>
-                    <Select value={form.status || form.statusTerceira || "ativa"} onValueChange={(v) => setForm({ ...form, status: v })}>
+                    <Select value={form.status || "ativa"} onValueChange={(v) => setForm({ ...form, status: v })}>
                       <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ativa">Ativa</SelectItem>

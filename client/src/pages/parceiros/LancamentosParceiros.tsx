@@ -243,7 +243,7 @@ export default function LancamentosParceiros() {
                 <Select value={form.parceiroConveniadoId ? String(form.parceiroConveniadoId) : ""} onValueChange={(v) => setForm({ ...form, parceiroConveniadoId: parseInt(v) })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {parceiros.filter((p: any) => p.statusParceiro === "ativo").map((p: any) => (
+                    {parceiros.filter((p: any) => p.status === "ativo").map((p: any) => (
                       <SelectItem key={p.id} value={String(p.id)}>{p.nomeFantasia || p.razaoSocial}</SelectItem>
                     ))}
                   </SelectContent>

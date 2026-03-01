@@ -88,7 +88,7 @@ export default function ObrigacoesMensais() {
   };
 
   const criarObrigacaoParaTodas = () => {
-    const empresasAtivas = empresas.filter((e: any) => e.statusTerceira === "ativa");
+    const empresasAtivas = empresas.filter((e: any) => e.status === "ativa");
     const jaExistem = new Set(obrigacoes.map((o: any) => o.empresaTerceiraId));
     const novas = empresasAtivas.filter((e: any) => !jaExistem.has(e.id));
     if (novas.length === 0) { toast.info("Todas as empresas já têm obrigação para este mês"); return; }

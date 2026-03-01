@@ -131,16 +131,17 @@ export default function CadastroParceiros() {
     input.click();
   };
 
-  const statusBadge = (status: string) => {
+  const statusBadge = (status: string | undefined | null) => {
+    const st = status || "ativo";
     const map: Record<string, { bg: string; text: string; icon: any }> = {
       ativo: { bg: "bg-emerald-100", text: "text-emerald-700", icon: CheckCircle },
       suspenso: { bg: "bg-amber-100", text: "text-amber-700", icon: Clock },
       inativo: { bg: "bg-red-100", text: "text-red-700", icon: XCircle },
     };
-    const s = map[status] || map.ativo;
+    const s = map[st] || map.ativo;
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
-        <s.icon className="h-3 w-3" />{status.charAt(0).toUpperCase() + status.slice(1)}
+        <s.icon className="h-3 w-3" />{st.charAt(0).toUpperCase() + st.slice(1)}
       </span>
     );
   };
@@ -184,7 +185,7 @@ export default function CadastroParceiros() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-foreground truncate">{p.razaoSocial}</h3>
-                      {statusBadge(p.statusParceiro)}
+                      {statusBadge(p.status)}
                       <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{TIPO_CONVENIO_LABELS[p.tipoConvenio] || p.tipoConvenio}</span>
                     </div>
                     {p.nomeFantasia && <p className="text-sm text-muted-foreground">{p.nomeFantasia}</p>}
@@ -317,7 +318,7 @@ export default function CadastroParceiros() {
                 {editingId && (
                   <>
                     <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider pt-2">Status</h4>
-                    <Select value={form.status || form.statusParceiro || "ativo"} onValueChange={(v) => setForm({ ...form, status: v })}>
+                    <Select value={form.status || "ativo"} onValueChange={(v) => setForm({ ...form, status: v })}>
                       <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ativo">Ativo</SelectItem>
