@@ -264,7 +264,6 @@ const menuSectionsTerceiros: MenuSection[] = [
     title: "Operacional",
     items: [
       { icon: Globe, label: "Portal Externo", path: "/terceiros/portal" },
-      { icon: CreditCard, label: "Crachás", path: "/terceiros/crachas" },
     ],
   },
   {

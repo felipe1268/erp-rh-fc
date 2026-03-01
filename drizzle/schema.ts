@@ -2966,6 +2966,7 @@ export const lancamentosParceiros = mysqlTable("lancamentos_parceiros", {
   // Status
   status: mysqlEnum("status_lancamento_parceiro", ["pendente", "aprovado", "rejeitado"]).default("pendente").notNull(),
   motivoRejeicao: text("motivo_rejeicao"),
+  comentarioAdmin: text("comentario_admin"),
   aprovadoPor: varchar("aprovado_por", { length: 255 }),
   aprovadoEm: timestamp("aprovado_em", { mode: "string" }),
   // Competência para desconto
