@@ -3944,3 +3944,5 @@
 - [x] Crachá: centralizar nome da empresa no topo
 - [x] Crachá: adicionar logo da empresa
 - [x] Crachá: usar Nº Interno como matrícula (não o código COL gerado)
+- [x] BUG: Calendário de férias aparece vazio - corrigido case sensitivity dataAlteradaPeloRH -> dataAlteradaPeloRh em avisoPrevioFerias.ts e dashboards.ts
+- [ ] Upload de PDF da convenção coletiva com extração automática por IA

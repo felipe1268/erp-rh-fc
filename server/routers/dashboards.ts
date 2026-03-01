@@ -1582,7 +1582,7 @@ async function getDashFerias(companyId: number, ano?: number) {
     pagamentoEmDobro: vacationPeriods.pagamentoEmDobro,
     dataSugeridaInicio: vacationPeriods.dataSugeridaInicio,
     dataSugeridaFim: vacationPeriods.dataSugeridaFim,
-    dataAlteradaPeloRH: vacationPeriods.dataAlteradaPeloRH,
+    dataAlteradaPeloRh: vacationPeriods.dataAlteradaPeloRh,
     numeroPeriodo: vacationPeriods.numeroPeriodo,
     fracionamento: vacationPeriods.fracionamento,
     nomeCompleto: employees.nomeCompleto,
@@ -1742,7 +1742,7 @@ async function getDashFerias(companyId: number, ano?: number) {
   const fracionamento3 = allPeriods.filter(p => (p.fracionamento || 1) === 3).length;
 
   // Alterações pelo RH
-  const totalAlteradoRH = allPeriods.filter(p => p.dataAlteradaPeloRH === 1).length;
+  const totalAlteradoRH = allPeriods.filter(p => p.dataAlteradaPeloRh === 1).length;
   const totalSugerido = allPeriods.filter(p => p.dataSugeridaInicio).length;
 
   // Férias por setor (geral)
@@ -1796,7 +1796,7 @@ async function getDashFerias(companyId: number, ano?: number) {
     dataInicio: p.dataInicio, dataFim: p.dataFim, diasGozo: p.diasGozo,
     valorTotal: p.valorTotal, status: p.status, vencida: p.vencida,
     pagamentoEmDobro: p.pagamentoEmDobro, numeroPeriodo: p.numeroPeriodo,
-    dataAlteradaPeloRH: p.dataAlteradaPeloRH,
+    dataAlteradaPeloRh: p.dataAlteradaPeloRh,
   }));
 
   return {

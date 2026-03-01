@@ -1,0 +1,13 @@
+{
+  "query": "SELECT GROUP_CONCAT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'vacation_periods' ORDER BY ORDINAL_POSITION",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT GROUP_CONCAT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'vacation_periods' ORDER BY ORDINAL_POSITION",
+  "rows": [
+    {
+      "GROUP_CONCAT(COLUMN_NAME)": "id,companyId,employeeId,periodoAquisitivoInicio,periodoAquisitivoFim,periodoConcessivoFim,dataInicio,dataFim,diasGozo,fracionamento,periodo2Inicio,periodo2Fim,periodo3Inicio,periodo3Fim,abonoPecuniario,valorFerias,valorTercoConstitucional,valorAbono,valorTotal,dataPagamento,status,vencida,pagamentoEmDobro,observacoes,aprovadoPor,aprovadoPorUserId,createdAt,updatedAt,deletedAt,deletedBy,deletedByUserId,dataSugeridaInicio,dataSugeridaFim,dataAlteradaPeloRH,numeroPeriodo"
+    }
+  ],
+  "messages": [],
+  "stdout": "GROUP_CONCAT(COLUMN_NAME)\nid,companyId,employeeId,periodoAquisitivoInicio,periodoAquisitivoFim,periodoConcessivoFim,dataInicio,dataFim,diasGozo,fracionamento,periodo2Inicio,periodo2Fim,periodo3Inicio,periodo3Fim,abonoPecuniario,valorFerias,valorTercoConstitucional,valorAbono,valorTotal,dataPagamento,status,vencida,pagamentoEmDobro,observacoes,aprovadoPor,aprovadoPorUserId,createdAt,updatedAt,deletedAt,deletedBy,deletedByUserId,dataSugeridaInicio,dataSugeridaFim,dataAlteradaPeloRH,numeroPeriodo\n",
+  "stderr": "",
+  "execution_time_ms": 355
+}

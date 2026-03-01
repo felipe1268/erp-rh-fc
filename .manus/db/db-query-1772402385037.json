@@ -1,0 +1,42 @@
+{
+  "query": "SELECT status, COUNT(*) as cnt, \n  MIN(periodoConcessivoFim) as min_conc_fim, \n  MAX(periodoConcessivoFim) as max_conc_fim,\n  SUM(CASE WHEN dataInicio IS NOT NULL THEN 1 ELSE 0 END) as has_data_inicio,\n  SUM(CASE WHEN dataSugeridaInicio IS NOT NULL THEN 1 ELSE 0 END) as has_data_sugerida\nFROM vacation_periods \nWHERE deletedAt IS NULL\nGROUP BY status",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT status, COUNT(*) as cnt, \n  MIN(periodoConcessivoFim) as min_conc_fim, \n  MAX(periodoConcessivoFim) as max_conc_fim,\n  SUM(CASE WHEN dataInicio IS NOT NULL THEN 1 ELSE 0 END) as has_data_inicio,\n  SUM(CASE WHEN dataSugeridaInicio IS NOT NULL THEN 1 ELSE 0 END) as has_data_sugerida\nFROM vacation_periods \nWHERE deletedAt IS NULL\nGROUP BY status",
+  "rows": [
+    {
+      "status": "vencida",
+      "cnt": "12",
+      "min_conc_fim": "2020-11-30",
+      "max_conc_fim": "2026-02-28",
+      "has_data_inicio": "0",
+      "has_data_sugerida": "11"
+    },
+    {
+      "status": "pendente",
+      "cnt": "75",
+      "min_conc_fim": "2026-03-03",
+      "max_conc_fim": "2027-02-28",
+      "has_data_inicio": "0",
+      "has_data_sugerida": "74"
+    },
+    {
+      "status": "concluida",
+      "cnt": "105",
+      "min_conc_fim": "2020-02-28",
+      "max_conc_fim": "2025-12-31",
+      "has_data_inicio": "2",
+      "has_data_sugerida": "103"
+    },
+    {
+      "status": "agendada",
+      "cnt": "2",
+      "min_conc_fim": "2026-01-31",
+      "max_conc_fim": "2026-07-14",
+      "has_data_inicio": "2",
+      "has_data_sugerida": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\tcnt\tmin_conc_fim\tmax_conc_fim\thas_data_inicio\thas_data_sugerida\nvencida\t12\t2020-11-30\t2026-02-28\t0\t11\npendente\t75\t2026-03-03\t2027-02-28\t0\t74\nconcluida\t105\t2020-02-28\t2025-12-31\t2\t103\nagendada\t2\t2026-01-31\t2026-07-14\t2\t0\n",
+  "stderr": "",
+  "execution_time_ms": 358
+}
