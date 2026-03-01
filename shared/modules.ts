@@ -108,6 +108,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "contas-bancarias", label: "Contas Bancárias", route: "/contas-bancarias", icon: "Landmark" },
       { key: "feriados", label: "Feriados", route: "/feriados", icon: "Calendar" },
       { key: "relogios-ponto", label: "Relógios de Ponto", route: "/relogios-ponto", icon: "Wifi" },
+      { key: "crachas-rh", label: "Crachás", route: "/terceiros/crachas", icon: "CreditCard" },
     ],
   },
   {
@@ -145,6 +146,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "terceiros-obrigacoes", label: "Obrigações Mensais", route: "/terceiros/obrigacoes", icon: "ClipboardCheck" },
       { key: "terceiros-conformidade", label: "Painel de Conformidade", route: "/terceiros/conformidade", icon: "ShieldCheck" },
       { key: "terceiros-alertas", label: "Alertas e Cobranças", route: "/terceiros/alertas", icon: "Bell" },
+      { key: "terceiros-aprovacao", label: "Aprovação Portal", route: "/terceiros/aprovacao", icon: "UserCheck" },
+      { key: "terceiros-portal", label: "Portal Externo", route: "/terceiros/portal", icon: "ExternalLink" },
       { key: "terceiros-crachas", label: "Crachás", route: "/terceiros/crachas", icon: "CreditCard" },
     ],
   },

@@ -168,14 +168,9 @@ export default function Crachas() {
   }, []);
 
   const generateQRData = (badge: BadgeData) => {
-    return JSON.stringify({
-      id: badge.id,
-      nome: badge.nome,
-      tipo: badge.tipo,
-      empresa: badge.empresa,
-      funcao: badge.funcao,
-      ...(badge.empresaTerceira ? { terceira: badge.empresaTerceira } : {}),
-    });
+    // QR Code aponta para página pública de verificação de aptidão
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/verificar/${badge.tipo}/${badge.id}`;
   };
 
   const isLoading = loadingEmployees || loadingTerceiros;
@@ -337,14 +332,7 @@ function BadgeCard({ badge, onPreview }: { badge: BadgeData; onPreview: () => vo
 // Badge Preview Component (actual badge design)
 function BadgePreview({ badge, companyName, side }: { badge: BadgeData; companyName: string; side: "front" | "back" }) {
   const colors = BADGE_COLORS[badge.tipo];
-  const qrData = JSON.stringify({
-    id: badge.id,
-    nome: badge.nome,
-    tipo: badge.tipo,
-    empresa: badge.empresa,
-    funcao: badge.funcao,
-    ...(badge.empresaTerceira ? { terceira: badge.empresaTerceira } : {}),
-  });
+  const qrData = `${window.location.origin}/verificar/${badge.tipo}/${badge.id}`;
 
   if (side === "back") {
     return (
@@ -357,7 +345,7 @@ function BadgePreview({ badge, companyName, side }: { badge: BadgeData; companyN
           <div className="bg-white p-4 rounded-xl shadow-md">
             <QRCodeSVG value={qrData} size={180} level="H" includeMargin={true} />
           </div>
-          <p className="text-xs text-muted-foreground mt-4 text-center">Escaneie o QR Code para verificar a identidade</p>
+          <p className="text-xs text-muted-foreground mt-4 text-center">Escaneie o QR Code para verificar a aptidão</p>
           <div className="mt-4 text-center">
             <p className="text-xs text-muted-foreground">ID: {badge.tipo.toUpperCase()}-{String(badge.id).padStart(5, "0")}</p>
           </div>

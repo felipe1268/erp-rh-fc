@@ -3900,3 +3900,10 @@
 - [x] Dupla via: RH interno também pode cadastrar funcionários de terceiros
 - [x] Bug fix: Lista de colaboradores não aparecia no Lançamento de Parceiros (campo nome vs nomeCompleto)
 - [x] Bug fix: Campos duplicados datajud removidos do schema
+## Próximos Passos - Portal Externo
+- [x] Notificações automáticas ao aprovar/rejeitar funcionário do portal
+- [x] Portal do Parceiro (login CNPJ+senha, dashboard, lançamentos)
+- [x] Painel de Aprovação em lote no módulo Terceiros (RH visualiza e aprova/rejeita funcionários do portal)
+- [x] BUG: QR Code do crachá corrigido - agora abre página pública de verificação de aptidão
+- [x] Criar página pública de verificação de aptidão (QR Code → mostra se funcionário está apto/inapto)
+- [x] Adicionar opção de Crachás na sidebar do módulo RH/DP

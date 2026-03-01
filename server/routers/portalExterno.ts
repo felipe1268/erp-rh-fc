@@ -3,6 +3,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { getDb } from "../db";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies } from "../../drizzle/schema";
+import { eq, and, inArray, desc } from "drizzle-orm";
+import { storagePut } from "../storage";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -18,10 +22,7 @@ export const portalExternoRouter = router({
       cnpj: z.string(),
       senha: z.string(),
     })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const { portalCredentials } = await import("../../drizzle/schema");
-      const { eq, and } = await import("drizzle-orm");
+      const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
       const [cred] = await db.select().from(portalCredentials).where(
         and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1))
@@ -58,10 +59,7 @@ export const portalExternoRouter = router({
       senhaAtual: z.string(),
       novaSenha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
     })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const { portalCredentials } = await import("../../drizzle/schema");
-      const { eq, and } = await import("drizzle-orm");
+      const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
       const [cred] = await db.select().from(portalCredentials).where(
         and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1))
@@ -91,27 +89,21 @@ export const portalExternoRouter = router({
   // ========== PORTAL DO TERCEIRO ==========
   terceiro: router({
     meusDados: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "terceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const { empresasTerceiras } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
       const [emp] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, decoded.empresaTerceiraId));
       return emp || null;
     }),
 
     meusFuncionarios: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "terceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const { funcionariosTerceiros } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
       const funcs = await db.select().from(funcionariosTerceiros).where(eq(funcionariosTerceiros.empresaTerceiraId, decoded.empresaTerceiraId));
       return funcs;
     }),
@@ -135,13 +127,11 @@ export const portalExternoRouter = router({
       nr33DocUrl: z.string().optional(),
       integracaoDocUrl: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "terceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const { funcionariosTerceiros } = await import("../../drizzle/schema");
       const { token, ...data } = input;
       const [result] = await db.insert(funcionariosTerceiros).values({
         ...data,
@@ -172,14 +162,11 @@ export const portalExternoRouter = router({
       nr33DocUrl: z.string().optional(),
       integracaoDocUrl: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "terceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const { funcionariosTerceiros } = await import("../../drizzle/schema");
-      const { eq, and } = await import("drizzle-orm");
       const { token, id, ...data } = input;
       await db.update(funcionariosTerceiros).set(data).where(
         and(eq(funcionariosTerceiros.id, id), eq(funcionariosTerceiros.empresaTerceiraId, decoded.empresaTerceiraId))
@@ -195,13 +182,11 @@ export const portalExternoRouter = router({
       fileName: z.string(),
       contentType: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "terceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const { storagePut } = await import("../storage");
       const buffer = Buffer.from(input.base64, "base64");
       const suffix = Math.random().toString(36).slice(2, 8);
       const key = `portal-terceiro/${decoded.empresaTerceiraId}/${input.funcionarioId}/${input.tipoDocumento}-${suffix}-${input.fileName}`;
@@ -222,10 +207,7 @@ export const portalExternoRouter = router({
       nomeResponsavel: z.string().optional(),
       nomeEmpresa: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      const { portalCredentials } = await import("../../drizzle/schema");
-      const { eq, and } = await import("drizzle-orm");
+      const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
       // Check if already exists
       const existing = await db.select().from(portalCredentials).where(
@@ -265,10 +247,7 @@ export const portalExternoRouter = router({
       companyId: z.number(),
       tipo: z.enum(["terceiro", "parceiro"]).optional(),
     })).query(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { portalCredentials } = await import("../../drizzle/schema");
-      const { eq, and } = await import("drizzle-orm");
+      const db = (await getDb())!;
       let conditions: any[] = [eq(portalCredentials.companyId, input.companyId)];
       if (input.tipo) conditions.push(eq(portalCredentials.tipo, input.tipo));
       const creds = await db.select().from(portalCredentials).where(and(...conditions));
@@ -276,10 +255,7 @@ export const portalExternoRouter = router({
     }),
 
     desativarAcesso: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { portalCredentials } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
+      const db = (await getDb())!;
       await db.update(portalCredentials).set({ ativo: 0 }).where(eq(portalCredentials.id, input.id));
       return { success: true };
     }),
@@ -290,17 +266,175 @@ export const portalExternoRouter = router({
       status: z.enum(["apto", "inapto", "pendente"]),
       observacao: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
-      const db = (ctx as any).db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { funcionariosTerceiros } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
+      const db = (await getDb())!;
       await db.update(funcionariosTerceiros).set({
-        status: input.status,
+        statusAptidao: input.status,
         observacaoAprovacao: input.observacao || null,
         aprovadoPor: ctx.user.name ?? "RH",
         dataAprovacao: new Date().toISOString().slice(0, 19).replace("T", " "),
       }).where(eq(funcionariosTerceiros.id, input.id));
+      // Notificar o owner
+      try {
+        const { notifyOwner } = await import("../_core/notification");
+        const statusLabel = input.status === "apto" ? "APROVADO" : input.status === "inapto" ? "REJEITADO" : "PENDENTE";
+        const [func] = await db.select().from(funcionariosTerceiros).where(eq(funcionariosTerceiros.id, input.id));
+        await notifyOwner({
+          title: `Funcionário Terceiro ${statusLabel}`,
+          content: `O funcionário ${func?.nomeCompleto || func?.nome || "ID:"+input.id} foi ${statusLabel} por ${ctx.user.name || "RH"}.${input.observacao ? " Obs: " + input.observacao : ""}`,
+        });
+      } catch (e) { /* notification is best-effort */ }
       return { success: true };
+    }),
+
+    // Approve/reject in bulk
+    aprovarEmLote: protectedProcedure.input(z.object({
+      ids: z.array(z.number()),
+      status: z.enum(["apto", "inapto"]),
+      observacao: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.update(funcionariosTerceiros).set({
+        statusAptidao: input.status,
+        observacaoAprovacao: input.observacao || null,
+        aprovadoPor: ctx.user.name ?? "RH",
+        dataAprovacao: new Date().toISOString().slice(0, 19).replace("T", " "),
+      }).where(inArray(funcionariosTerceiros.id, input.ids));
+      try {
+        const { notifyOwner } = await import("../_core/notification");
+        const statusLabel = input.status === "apto" ? "APROVADOS" : "REJEITADOS";
+        await notifyOwner({ title: `${input.ids.length} Funcionários Terceiros ${statusLabel}`, content: `${input.ids.length} funcionários foram ${statusLabel} em lote por ${ctx.user.name || "RH"}.` });
+      } catch (e) { /* best-effort */ }
+      return { success: true, count: input.ids.length };
+    }),
+
+    // List all pending funcionarios for approval panel
+    listarPendentes: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const funcs = await db.select().from(funcionariosTerceiros).where(
+        eq(funcionariosTerceiros.companyId, input.companyId)
+      );
+      // Get empresa names
+      const empresaIds = [...new Set(funcs.map((f: any) => f.empresaTerceiraId))];
+      const empresas = empresaIds.length > 0 ? await db.select().from(empresasTerceiras).where(
+        eq(empresasTerceiras.companyId, input.companyId)
+      ) : [];
+      const empresaMap = Object.fromEntries(empresas.map((e: any) => [e.id, e.razaoSocial || e.nomeFantasia]));
+      return funcs.map((f: any) => ({ ...f, nomeEmpresa: empresaMap[f.empresaTerceiraId] || "Desconhecida" }));
+    }),
+  }),
+
+  // ========== PORTAL DO PARCEIRO ==========
+  parceiro: router({
+    meusDados: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      const [parc] = await db.select().from(parceirosConveniados).where(eq(parceirosConveniados.id, decoded.parceiroId));
+      return parc || null;
+    }),
+
+    meusLancamentos: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      const lancs = await db.select().from(lancamentosParceiros).where(eq(lancamentosParceiros.parceiroId, decoded.parceiroId)).orderBy(desc(lancamentosParceiros.createdAt));
+      return lancs;
+    }),
+
+    criarLancamento: publicProcedure.input(z.object({
+      token: z.string(),
+      employeeId: z.number(),
+      dataCompra: z.string(),
+      descricaoItens: z.string().optional(),
+      valor: z.string(),
+      observacoes: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      const { token, ...data } = input;
+      const [result] = await db.insert(lancamentosParceiros).values({
+        ...data,
+        parceiroId: decoded.parceiroId,
+        companyId: decoded.companyId,
+        status: "pendente",
+      });
+      return { id: result.insertId, success: true };
+    }),
+  }),
+
+  // ========== VERIFICAÇÃO PÚBLICA (QR CODE) ==========
+  verificar: router({
+    // Verificar aptidão de funcionário CLT/PJ pelo QR Code
+    funcionario: publicProcedure.input(z.object({
+      id: z.number(),
+      tipo: z.enum(["clt", "pj"]),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [emp] = await db.select().from(employees).where(eq(employees.id, input.id)).limit(1);
+      if (!emp) return { found: false, message: "Funcionário não encontrado" };
+      
+      // Get company name
+      const [company] = await db.select().from(companies).where(eq(companies.id, emp.companyId)).limit(1);
+      
+      // Get aptidão
+      const [aptidao] = await db.select().from(employeeAptidao).where(eq(employeeAptidao.employeeId, emp.id)).limit(1);
+      
+      return {
+        found: true,
+        nome: emp.nomeCompleto,
+        cpf: emp.cpf ? `***${emp.cpf.substring(3, 9)}***` : undefined,
+        funcao: emp.funcao || emp.cargo,
+        setor: emp.setor,
+        foto: emp.fotoUrl,
+        tipo: input.tipo.toUpperCase(),
+        empresa: company?.nomeFantasia || company?.razaoSocial || "N/A",
+        status: emp.status,
+        aptidao: aptidao?.status || "pendente",
+        motivoInapto: aptidao?.motivoInapto,
+        asoVigente: aptidao?.asoVigente === 1,
+        treinamentosOk: aptidao?.treinamentosObrigatoriosOk === 1,
+        documentosOk: aptidao?.documentosPessoaisOk === 1,
+        nrOk: aptidao?.nrObrigatoriasOk === 1,
+        ultimaVerificacao: aptidao?.ultimaVerificacao,
+      };
+    }),
+
+    // Verificar aptidão de funcionário terceiro pelo QR Code
+    terceiro: publicProcedure.input(z.object({
+      id: z.number(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [func] = await db.select().from(funcionariosTerceiros).where(eq(funcionariosTerceiros.id, input.id)).limit(1);
+      if (!func) return { found: false, message: "Funcionário não encontrado" };
+      
+      // Get empresa terceira name
+      const [empTerceira] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, func.empresaTerceiraId)).limit(1);
+      
+      // Get company name
+      const [company] = await db.select().from(companies).where(eq(companies.id, func.companyId)).limit(1);
+      
+      return {
+        found: true,
+        nome: func.nome || (func as any).nomeCompleto || "N/A",
+        cpf: func.cpf ? `***${func.cpf.substring(3, 9)}***` : undefined,
+        funcao: func.funcao,
+        foto: (func as any).fotoUrl,
+        tipo: "TERCEIRO",
+        empresa: company?.nomeFantasia || company?.razaoSocial || "N/A",
+        empresaTerceira: empTerceira?.razaoSocial || "N/A",
+        status: func.status,
+        aptidao: func.statusAptidao || "pendente",
+        motivoInapto: func.motivoInapto,
+      };
     }),
   }),
 });

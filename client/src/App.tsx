@@ -71,6 +71,7 @@ import PainelConformidade from "./pages/terceiros/PainelConformidade";
 import AlertasCobrancas from "./pages/terceiros/AlertasCobranças";
 import PortalTerceiro from "./pages/terceiros/PortalTerceiro";
 import Crachas from "./pages/terceiros/Crachas";
+import AprovacaoPortal from "./pages/terceiros/AprovacaoPortal";
 // Parceiros
 import PainelParceiros from "./pages/parceiros/PainelParceiros";
 import CadastroParceiros from "./pages/parceiros/CadastroParceiros";
@@ -84,6 +85,7 @@ import ValidacaoIA from "./pages/terceiros/ValidacaoIA";
 import ComparativoConvencoes from "./pages/ComparativoConvencoes";
 // Portal Externo
 import PortalLogin from "./pages/portal/PortalLogin";
+import VerificarAptidao from "./pages/VerificarAptidao";
 import PortalTrocarSenha from "./pages/portal/PortalTrocarSenha";
 import PortalDashboard from "./pages/portal/PortalDashboard";
 
@@ -154,6 +156,7 @@ function Router() {
       <Route path="/terceiros/obrigacoes" component={ObrigacoesMensais} />
       <Route path="/terceiros/conformidade" component={PainelConformidade} />
       <Route path="/terceiros/alertas" component={AlertasCobrancas} />
+      <Route path="/terceiros/aprovacao" component={AprovacaoPortal} />
       <Route path="/terceiros/portal" component={PortalTerceiro} />
       <Route path="/terceiros/crachas" component={Crachas} />
       <Route path="/terceiros/validacao-ia" component={ValidacaoIA} />
@@ -175,6 +178,10 @@ function Router() {
       <Route path="/portal/trocar-senha" component={PortalTrocarSenha} />
       <Route path="/portal/dashboard" component={PortalDashboard} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
+      {/* Verificação Pública de Aptidão (QR Code) */}
+      <Route path="/verificar/clt/:id" component={VerificarAptidao} />
+      <Route path="/verificar/pj/:id" component={VerificarAptidao} />
+      <Route path="/verificar/terceiro/:id" component={VerificarAptidao} />
       <Route path={"404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

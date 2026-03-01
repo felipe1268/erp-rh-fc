@@ -2821,6 +2821,22 @@ export const funcionariosTerceiros = mysqlTable("funcionarios_terceiros", {
   // Status de aptidão
   statusAptidao: mysqlEnum("status_aptidao_terceiro", ["apto", "inapto", "pendente"]).default("pendente").notNull(),
   motivoInapto: text("motivo_inapto"),
+  // Portal - dados extras
+  nomeCompleto: varchar("nome_completo", { length: 255 }),
+  dataAdmissao: timestamp("data_admissao", { mode: "string" }),
+  asoDocUrl: varchar("aso_doc_url", { length: 500 }),
+  nr35Validade: timestamp("nr35_validade", { mode: "string" }),
+  nr35DocUrl: varchar("nr35_doc_url", { length: 500 }),
+  nr10Validade: timestamp("nr10_validade", { mode: "string" }),
+  nr10DocUrl: varchar("nr10_doc_url", { length: 500 }),
+  nr33Validade: timestamp("nr33_validade", { mode: "string" }),
+  nr33DocUrl: varchar("nr33_doc_url", { length: 500 }),
+  integracaoDocUrl: varchar("integracao_doc_url", { length: 500 }),
+  // Aprovação
+  observacaoAprovacao: text("observacao_aprovacao"),
+  aprovadoPor: varchar("aprovado_por", { length: 255 }),
+  dataAprovacao: timestamp("data_aprovacao", { mode: "string" }),
+  cadastradoPor: varchar("cadastrado_por", { length: 50 }).default("rh"),
   // Controle
   status: mysqlEnum("status_func_terceiro", ["ativo", "inativo", "afastado"]).default("ativo").notNull(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
