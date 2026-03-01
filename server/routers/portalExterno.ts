@@ -165,6 +165,7 @@ export const portalExternoRouter = router({
       funcao: z.string().optional(),
       telefone: z.string().optional(),
       email: z.string().optional(),
+      status: z.enum(['ativo','inativo','afastado','desligado']).optional(),
       asoValidade: z.string().optional(),
       asoDocUrl: z.string().optional(),
       nr35Validade: z.string().optional(),

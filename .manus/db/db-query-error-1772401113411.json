@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE funcionarios_terceiros MODIFY COLUMN status ENUM('ativo','inativo','afastado','desligado') NOT NULL DEFAULT 'ativo';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE funcionarios_terceiros MODIFY COLUMN status ENUM('ativo','inativo','afastado','desligado') NOT NULL DEFAULT 'ativo';",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'status' in 'funcionarios_terceiros'"
+  ]
+}

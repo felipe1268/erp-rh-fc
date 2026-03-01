@@ -5,33 +5,178 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Scale, Search, Building2, Landmark, Eye, FileText, Filter, CheckCircle2, AlertTriangle, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Scale, Search, Building2, Landmark, Eye, Plus, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
+import { toast } from "sonner";
+
+const EMPTY_FORM = {
+  companyId: 0,
+  obraId: 0,
+  abrangencia: "sede" as "sede" | "obra",
+  nome: "",
+  sindicato: "",
+  cnpjSindicato: "",
+  dataBase: "",
+  vigenciaInicio: "",
+  vigenciaFim: "",
+  pisoSalarial: "",
+  percentualReajuste: "",
+  adicionalInsalubridade: "",
+  adicionalPericulosidade: "",
+  horaExtraDiurna: "",
+  horaExtraNoturna: "",
+  horaExtraDomingo: "",
+  adicionalNoturno: "",
+  valeRefeicao: "",
+  valeAlimentacao: "",
+  valeTransporte: "",
+  cestaBasica: "",
+  auxilioFarmacia: "",
+  planoSaude: "",
+  seguroVida: "",
+  outrosBeneficios: "",
+  clausulasEspeciais: "",
+  isMatriz: false,
+  status: "vigente" as string,
+  observacoes: "",
+};
 
 export default function ConvencoesColetivas() {
-  const { companies } = useCompany();
+  const { companies, selectedCompanyId } = useCompany();
   const [search, setSearch] = useState("");
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>("todas");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
-  const [filtroTipo, setFiltroTipo] = useState<string>("todos"); // sede, obra, todos
+  const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const { data: convencoes, isLoading } = trpc.sprint1.convencao.listGlobal.useQuery();
+  // Form state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const { data: convencoes, isLoading, refetch } = trpc.sprint1.convencao.listGlobal.useQuery();
+
+  // Get obras for the selected company in the form
+  const { data: obrasEmpresa } = trpc.obras.listActive.useQuery(
+    { companyId: form.companyId },
+    { enabled: form.companyId > 0 && dialogOpen }
+  );
+
+  const createMut = trpc.sprint1.convencao.create.useMutation({
+    onSuccess: () => { toast.success("Convenção cadastrada com sucesso!"); refetch(); closeDialog(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateMut = trpc.sprint1.convencao.update.useMutation({
+    onSuccess: () => { toast.success("Convenção atualizada com sucesso!"); refetch(); closeDialog(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteMut = trpc.sprint1.convencao.delete.useMutation({
+    onSuccess: () => { toast.success("Convenção excluída!"); refetch(); setDeletingId(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingId(null);
+    setForm({ ...EMPTY_FORM });
+  };
+
+  const openNew = () => {
+    setEditingId(null);
+    setForm({ ...EMPTY_FORM, companyId: selectedCompanyId || 0 });
+    setDialogOpen(true);
+  };
+
+  const openEdit = (conv: any) => {
+    setEditingId(conv.id);
+    setForm({
+      companyId: conv.companyId,
+      obraId: conv.obraId || 0,
+      abrangencia: conv.obraId ? "obra" : "sede",
+      nome: conv.nome || "",
+      sindicato: conv.sindicato || "",
+      cnpjSindicato: conv.cnpjSindicato || "",
+      dataBase: conv.dataBase || "",
+      vigenciaInicio: conv.vigenciaInicio || "",
+      vigenciaFim: conv.vigenciaFim || "",
+      pisoSalarial: conv.pisoSalarial || "",
+      percentualReajuste: conv.percentualReajuste || "",
+      adicionalInsalubridade: conv.adicionalInsalubridade || "",
+      adicionalPericulosidade: conv.adicionalPericulosidade || "",
+      horaExtraDiurna: conv.horaExtraDiurna || "",
+      horaExtraNoturna: conv.horaExtraNoturna || "",
+      horaExtraDomingo: conv.horaExtraDomingo || "",
+      adicionalNoturno: conv.adicionalNoturno || "",
+      valeRefeicao: conv.valeRefeicao || "",
+      valeAlimentacao: conv.valeAlimentacao || "",
+      valeTransporte: conv.valeTransporte || "",
+      cestaBasica: conv.cestaBasica || "",
+      auxilioFarmacia: conv.auxilioFarmacia || "",
+      planoSaude: conv.planoSaude || "",
+      seguroVida: conv.seguroVida || "",
+      outrosBeneficios: conv.outrosBeneficios || "",
+      clausulasEspeciais: conv.clausulasEspeciais || "",
+      isMatriz: conv.isMatriz || false,
+      status: conv.status || "vigente",
+      observacoes: conv.observacoes || "",
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = () => {
+    if (!form.companyId) { toast.error("Selecione a empresa"); return; }
+    if (!form.nome.trim()) { toast.error("Nome da convenção é obrigatório"); return; }
+
+    const payload: any = {
+      companyId: form.companyId,
+      nome: form.nome,
+      sindicato: form.sindicato || undefined,
+      cnpjSindicato: form.cnpjSindicato || undefined,
+      dataBase: form.dataBase || undefined,
+      vigenciaInicio: form.vigenciaInicio || undefined,
+      vigenciaFim: form.vigenciaFim || undefined,
+      pisoSalarial: form.pisoSalarial || undefined,
+      percentualReajuste: form.percentualReajuste || undefined,
+      adicionalInsalubridade: form.adicionalInsalubridade || undefined,
+      adicionalPericulosidade: form.adicionalPericulosidade || undefined,
+      horaExtraDiurna: form.horaExtraDiurna || undefined,
+      horaExtraNoturna: form.horaExtraNoturna || undefined,
+      horaExtraDomingo: form.horaExtraDomingo || undefined,
+      adicionalNoturno: form.adicionalNoturno || undefined,
+      valeRefeicao: form.valeRefeicao || undefined,
+      valeAlimentacao: form.valeAlimentacao || undefined,
+      valeTransporte: form.valeTransporte || undefined,
+      cestaBasica: form.cestaBasica || undefined,
+      auxilioFarmacia: form.auxilioFarmacia || undefined,
+      planoSaude: form.planoSaude || undefined,
+      seguroVida: form.seguroVida || undefined,
+      outrosBeneficios: form.outrosBeneficios || undefined,
+      clausulasEspeciais: form.clausulasEspeciais || undefined,
+      isMatriz: form.isMatriz,
+      status: form.status as any,
+      observacoes: form.observacoes || undefined,
+      obraId: form.abrangencia === "obra" && form.obraId > 0 ? form.obraId : undefined,
+    };
+
+    if (editingId) {
+      updateMut.mutate({ id: editingId, ...payload });
+    } else {
+      createMut.mutate(payload);
+    }
+  };
 
   const filtered = useMemo(() => {
     if (!convencoes) return [];
     return convencoes.filter((c: any) => {
-      // Filtro por empresa
       if (filtroEmpresa !== "todas" && String(c.companyId) !== filtroEmpresa) return false;
-      // Filtro por status
       if (filtroStatus !== "todos" && c.status !== filtroStatus) return false;
-      // Filtro por tipo (sede vs obra)
       if (filtroTipo === "sede" && c.obraId) return false;
       if (filtroTipo === "obra" && !c.obraId) return false;
-      // Busca textual
       if (search) {
         const term = removeAccents(search.toLowerCase());
         const nome = removeAccents((c.nome || "").toLowerCase());
@@ -44,7 +189,6 @@ export default function ConvencoesColetivas() {
     });
   }, [convencoes, search, filtroEmpresa, filtroStatus, filtroTipo]);
 
-  // Stats
   const stats = useMemo(() => {
     if (!convencoes) return { total: 0, vigentes: 0, vencidas: 0, negociacao: 0, sede: 0, obra: 0 };
     return {
@@ -67,19 +211,26 @@ export default function ConvencoesColetivas() {
     return <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${s.cls}`}>{s.label}</span>;
   };
 
+  const setField = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+
   return (
     <DashboardLayout>
       <PrintHeader />
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Scale className="h-6 w-6 text-indigo-600" />
-            Convenções Coletivas
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Visão geral de todas as convenções coletivas cadastradas nas empresas
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <Scale className="h-6 w-6 text-indigo-600" />
+              Convenções Coletivas
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Visão geral de todas as convenções coletivas cadastradas nas empresas
+            </p>
+          </div>
+          <Button onClick={openNew} className="bg-indigo-600 hover:bg-indigo-700">
+            <Plus className="h-4 w-4 mr-2" /> Nova Convenção
+          </Button>
         </div>
 
         {/* KPIs */}
@@ -167,7 +318,7 @@ export default function ConvencoesColetivas() {
           <div className="text-center py-12 text-muted-foreground">
             <Scale className="h-12 w-12 mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">Nenhuma convenção encontrada</p>
-            <p className="text-xs mt-1">Cadastre convenções coletivas na aba "Convenção Coletiva" dentro de cada empresa.</p>
+            <p className="text-xs mt-1">Clique em "Nova Convenção" para cadastrar.</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -175,7 +326,6 @@ export default function ConvencoesColetivas() {
               const isExpanded = expandedId === conv.id;
               return (
                 <div key={conv.id} className="bg-white border rounded-lg overflow-hidden">
-                  {/* Card Header */}
                   <div
                     className="p-4 cursor-pointer hover:bg-muted/30 transition-colors"
                     onClick={() => setExpandedId(isExpanded ? null : conv.id)}
@@ -203,9 +353,7 @@ export default function ConvencoesColetivas() {
                               <Landmark className="h-3 w-3" /> {conv.nomeObra}
                             </span>
                           ) : null}
-                          {conv.sindicato ? (
-                            <span>{conv.sindicato}</span>
-                          ) : null}
+                          {conv.sindicato ? <span>{conv.sindicato}</span> : null}
                           {conv.vigenciaInicio && conv.vigenciaFim ? (
                             <span>
                               Vigência: {new Date(conv.vigenciaInicio + "T12:00:00").toLocaleDateString("pt-BR")} a {new Date(conv.vigenciaFim + "T12:00:00").toLocaleDateString("pt-BR")}
@@ -213,9 +361,15 @@ export default function ConvencoesColetivas() {
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 ml-2">
+                      <div className="flex items-center gap-1 ml-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={(e) => { e.stopPropagation(); openEdit(conv); }}>
+                          <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Excluir" onClick={(e) => { e.stopPropagation(); setDeletingId(conv.id); }}>
+                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                        </Button>
                         {conv.documentoUrl ? (
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); window.open(conv.documentoUrl, "_blank"); }}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver Documento" onClick={(e) => { e.stopPropagation(); window.open(conv.documentoUrl, "_blank"); }}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                         ) : null}
@@ -224,14 +378,12 @@ export default function ConvencoesColetivas() {
                     </div>
                   </div>
 
-                  {/* Expanded Details */}
                   {isExpanded ? (
                     <div className="border-t px-4 pb-4 pt-3 bg-muted/10">
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
                         <DetailItem label="Piso Salarial" value={conv.pisoSalarial ? `R$ ${conv.pisoSalarial}` : null} />
                         <DetailItem label="Reajuste" value={conv.percentualReajuste ? `${conv.percentualReajuste}%` : null} />
                         <DetailItem label="Data Base" value={conv.dataBase} />
-                        <DetailItem label="CNPJ Sindicato" value={conv.cnpjSindicato} />
                         <DetailItem label="Adic. Insalubridade" value={conv.adicionalInsalubridade ? `${conv.adicionalInsalubridade}%` : null} />
                         <DetailItem label="Adic. Periculosidade" value={conv.adicionalPericulosidade ? `${conv.adicionalPericulosidade}%` : null} />
                         <DetailItem label="HE Diurna" value={conv.horaExtraDiurna ? `${conv.horaExtraDiurna}%` : null} />
@@ -271,11 +423,222 @@ export default function ConvencoesColetivas() {
             })}
           </div>
         )}
-
-        <p className="text-[11px] text-muted-foreground text-center">
-          Para cadastrar ou editar convenções, acesse a aba "Convenção Coletiva" dentro do cadastro de cada empresa.
-        </p>
       </div>
+
+      {/* Dialog Nova/Editar Convenção */}
+      <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-indigo-600" />
+              {editingId ? "Editar Convenção Coletiva" : "Nova Convenção Coletiva"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Empresa e Abrangência */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">Empresa *</Label>
+                <Select value={form.companyId ? String(form.companyId) : "0"} onValueChange={v => setField("companyId", Number(v))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0" disabled>Selecione a empresa</SelectItem>
+                    {(companies || []).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.nomeFantasia || c.razaoSocial}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Abrangência</Label>
+                <Select value={form.abrangencia} onValueChange={v => { setField("abrangencia", v); if (v === "sede") setField("obraId", 0); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sede">Padrão (Sede)</SelectItem>
+                    <SelectItem value="obra">Por Obra/Região</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.abrangencia === "obra" && (
+                <div>
+                  <Label className="text-xs font-semibold">Obra</Label>
+                  <Select value={form.obraId ? String(form.obraId) : "0"} onValueChange={v => setField("obraId", Number(v))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0" disabled>Selecione a obra</SelectItem>
+                      {(obrasEmpresa || []).map((o: any) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            {/* Dados Principais */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-semibold">Nome da Convenção *</Label>
+                <Input value={form.nome} onChange={e => setField("nome", e.target.value)} placeholder="Ex: CCT Construção Civil 2024/2025" />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Sindicato</Label>
+                <Input value={form.sindicato} onChange={e => setField("sindicato", e.target.value)} placeholder="Nome do sindicato" />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">CNPJ do Sindicato</Label>
+                <Input value={form.cnpjSindicato} onChange={e => setField("cnpjSindicato", e.target.value)} placeholder="00.000.000/0000-00" />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Data Base</Label>
+                <Input value={form.dataBase} onChange={e => setField("dataBase", e.target.value)} placeholder="Ex: Maio" />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Status</Label>
+                <Select value={form.status} onValueChange={v => setField("status", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vigente">Vigente</SelectItem>
+                    <SelectItem value="vencida">Vencida</SelectItem>
+                    <SelectItem value="em_negociacao">Em Negociação</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Vigência Início</Label>
+                <Input type="date" value={form.vigenciaInicio} onChange={e => setField("vigenciaInicio", e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Vigência Fim</Label>
+                <Input type="date" value={form.vigenciaFim} onChange={e => setField("vigenciaFim", e.target.value)} />
+              </div>
+            </div>
+
+            {/* Valores */}
+            <div>
+              <p className="text-xs font-bold text-muted-foreground mb-2 border-b pb-1">Valores e Percentuais</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-[11px]">Piso Salarial (R$)</Label>
+                  <Input value={form.pisoSalarial} onChange={e => setField("pisoSalarial", e.target.value)} placeholder="0,00" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Reajuste (%)</Label>
+                  <Input value={form.percentualReajuste} onChange={e => setField("percentualReajuste", e.target.value)} placeholder="0" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Adic. Insalubridade (%)</Label>
+                  <Input value={form.adicionalInsalubridade} onChange={e => setField("adicionalInsalubridade", e.target.value)} placeholder="0" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Adic. Periculosidade (%)</Label>
+                  <Input value={form.adicionalPericulosidade} onChange={e => setField("adicionalPericulosidade", e.target.value)} placeholder="0" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">HE Diurna (%)</Label>
+                  <Input value={form.horaExtraDiurna} onChange={e => setField("horaExtraDiurna", e.target.value)} placeholder="50" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">HE Noturna (%)</Label>
+                  <Input value={form.horaExtraNoturna} onChange={e => setField("horaExtraNoturna", e.target.value)} placeholder="70" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">HE Domingo (%)</Label>
+                  <Input value={form.horaExtraDomingo} onChange={e => setField("horaExtraDomingo", e.target.value)} placeholder="100" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Adic. Noturno (%)</Label>
+                  <Input value={form.adicionalNoturno} onChange={e => setField("adicionalNoturno", e.target.value)} placeholder="20" />
+                </div>
+              </div>
+            </div>
+
+            {/* Benefícios */}
+            <div>
+              <p className="text-xs font-bold text-muted-foreground mb-2 border-b pb-1">Benefícios</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-[11px]">Vale Refeição (R$)</Label>
+                  <Input value={form.valeRefeicao} onChange={e => setField("valeRefeicao", e.target.value)} placeholder="0,00" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Vale Alimentação (R$)</Label>
+                  <Input value={form.valeAlimentacao} onChange={e => setField("valeAlimentacao", e.target.value)} placeholder="0,00" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Vale Transporte (R$)</Label>
+                  <Input value={form.valeTransporte} onChange={e => setField("valeTransporte", e.target.value)} placeholder="0,00" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Cesta Básica (R$)</Label>
+                  <Input value={form.cestaBasica} onChange={e => setField("cestaBasica", e.target.value)} placeholder="0,00" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Auxílio Farmácia (R$)</Label>
+                  <Input value={form.auxilioFarmacia} onChange={e => setField("auxilioFarmacia", e.target.value)} placeholder="0,00" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Seguro de Vida (R$)</Label>
+                  <Input value={form.seguroVida} onChange={e => setField("seguroVida", e.target.value)} placeholder="0,00" />
+                </div>
+                <div className="sm:col-span-3">
+                  <Label className="text-[11px]">Plano de Saúde</Label>
+                  <Input value={form.planoSaude} onChange={e => setField("planoSaude", e.target.value)} placeholder="Detalhes do plano" />
+                </div>
+              </div>
+            </div>
+
+            {/* Campos texto */}
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs font-semibold">Outros Benefícios</Label>
+                <textarea className="w-full border rounded-md p-2 text-sm min-h-[60px]" value={form.outrosBeneficios} onChange={e => setField("outrosBeneficios", e.target.value)} placeholder="Descreva outros benefícios previstos..." />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Cláusulas Especiais</Label>
+                <textarea className="w-full border rounded-md p-2 text-sm min-h-[60px]" value={form.clausulasEspeciais} onChange={e => setField("clausulasEspeciais", e.target.value)} placeholder="Cláusulas relevantes..." />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Observações</Label>
+                <textarea className="w-full border rounded-md p-2 text-sm min-h-[60px]" value={form.observacoes} onChange={e => setField("observacoes", e.target.value)} placeholder="Observações gerais..." />
+              </div>
+            </div>
+
+            {/* Checkbox Matriz */}
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="isMatriz" checked={form.isMatriz} onChange={e => setField("isMatriz", e.target.checked)} className="rounded" />
+              <Label htmlFor="isMatriz" className="text-xs cursor-pointer">Convenção da Matriz (referência principal)</Label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+              {createMut.isPending || updateMut.isPending ? "Salvando..." : editingId ? "Atualizar" : "Cadastrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Confirmar Exclusão */}
+      <Dialog open={!!deletingId} onOpenChange={(o) => { if (!o) setDeletingId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" /> Excluir Convenção
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Tem certeza que deseja excluir esta convenção coletiva? Esta ação não pode ser desfeita.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => { if (deletingId) deleteMut.mutate({ id: deletingId }); }} disabled={deleteMut.isPending}>
+              {deleteMut.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PrintFooterLGPD />
     </DashboardLayout>
   );

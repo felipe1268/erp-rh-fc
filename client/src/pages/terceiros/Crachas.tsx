@@ -72,11 +72,13 @@ export default function Crachas() {
   // Fetch companies for name
   const { data: companiesData } = trpc.companies.list.useQuery();
 
-  const companyName = useMemo(() => {
-    if (!companiesData || !companyId) return "";
-    const c = (companiesData as any[]).find((c: any) => c.id === companyId);
-    return c?.nomeFantasia || c?.razaoSocial || "";
+  const companyObj = useMemo(() => {
+    if (!companiesData || !companyId) return null;
+    return (companiesData as any[]).find((c: any) => c.id === companyId) || null;
   }, [companiesData, companyId]);
+
+  const companyName = companyObj?.nomeFantasia || companyObj?.razaoSocial || "";
+  const companyLogo = companyObj?.logoUrl || "";
 
   // Transform data into BadgeData
   const cltBadges: BadgeData[] = useMemo(() => {
@@ -92,7 +94,7 @@ export default function Crachas() {
         foto: e.fotoUrl,
         tipo: "clt" as BadgeType,
         empresa: companyName,
-        matricula: e.matricula || e.codigoInterno,
+        matricula: e.codigoInterno || e.matricula,
         dataAdmissao: e.dataAdmissao,
       }));
   }, [employeesData, companyName]);
@@ -110,7 +112,7 @@ export default function Crachas() {
         foto: e.fotoUrl,
         tipo: "pj" as BadgeType,
         empresa: companyName,
-        matricula: e.matricula || e.codigoInterno,
+        matricula: e.codigoInterno || e.matricula,
         dataAdmissao: e.dataAdmissao,
       }));
   }, [employeesData, companyName]);
@@ -274,13 +276,13 @@ export default function Crachas() {
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-3 text-center">Frente do Crachá</h3>
                   <div ref={badgeRef}>
-                    <BadgePreview badge={selectedBadge} companyName={companyName} side="front" />
+                    <BadgePreview badge={selectedBadge} companyName={companyName} companyLogo={companyLogo} side="front" />
                   </div>
                 </div>
                 {/* Badge Preview - Back */}
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-3 text-center">Verso do Crachá</h3>
-                  <BadgePreview badge={selectedBadge} companyName={companyName} side="back" />
+                  <BadgePreview badge={selectedBadge} companyName={companyName} companyLogo={companyLogo} side="back" />
                 </div>
               </div>
             </div>
@@ -330,16 +332,20 @@ function BadgeCard({ badge, onPreview }: { badge: BadgeData; onPreview: () => vo
 }
 
 // Badge Preview Component (actual badge design)
-function BadgePreview({ badge, companyName, side }: { badge: BadgeData; companyName: string; side: "front" | "back" }) {
+function BadgePreview({ badge, companyName, companyLogo, side }: { badge: BadgeData; companyName: string; companyLogo?: string; side: "front" | "back" }) {
   const colors = BADGE_COLORS[badge.tipo];
   const qrData = `${window.location.origin}/verificar/${badge.tipo}/${badge.id}`;
+  const borderColor = badge.tipo === "clt" ? "#1d4ed8" : badge.tipo === "pj" ? "#15803d" : "#ea580c";
 
   if (side === "back") {
     return (
       <div className="w-[340px] h-[540px] rounded-xl overflow-hidden shadow-xl border-2 mx-auto"
-        style={{ borderColor: badge.tipo === "clt" ? "#1d4ed8" : badge.tipo === "pj" ? "#15803d" : "#ea580c" }}>
-        <div className={`${colors.header} h-16 flex items-center justify-center`}>
-          <span className="text-white text-lg font-bold tracking-widest">{companyName || "FC ENGENHARIA"}</span>
+        style={{ borderColor }}>
+        <div className={`${colors.header} h-16 flex items-center justify-center gap-3 px-4`}>
+          {companyLogo && (
+            <img src={companyLogo} alt="" className="h-10 w-10 rounded-md object-contain bg-white/20 p-0.5" />
+          )}
+          <span className="text-white text-sm font-bold tracking-wide text-center">{companyName || "FC ENGENHARIA"}</span>
         </div>
         <div className={`${colors.bg} flex-1 flex flex-col items-center justify-center p-6`} style={{ height: "calc(100% - 4rem)" }}>
           <div className="bg-white p-4 rounded-xl shadow-md">
@@ -351,7 +357,7 @@ function BadgePreview({ badge, companyName, side }: { badge: BadgeData; companyN
           </div>
           <div className="mt-auto pt-4 text-center">
             <p className="text-[10px] text-muted-foreground">Em caso de perda, devolver ao departamento de RH</p>
-            <p className="text-[10px] text-muted-foreground">{companyName || "FC Engenharia"}</p>
+            <p className="text-[10px] font-medium text-muted-foreground">{companyName || "FC Engenharia"}</p>
           </div>
         </div>
       </div>
@@ -360,23 +366,28 @@ function BadgePreview({ badge, companyName, side }: { badge: BadgeData; companyN
 
   return (
     <div className="w-[340px] h-[540px] rounded-xl overflow-hidden shadow-xl border-2 mx-auto"
-      style={{ borderColor: badge.tipo === "clt" ? "#1d4ed8" : badge.tipo === "pj" ? "#15803d" : "#ea580c" }}>
-      {/* Header */}
-      <div className={`${colors.header} px-4 py-3 flex items-center justify-between`}>
-        <div>
-          <p className="text-white text-sm font-bold">{companyName || "FC ENGENHARIA"}</p>
-          <p className="text-white/70 text-[10px]">Gestão Integrada</p>
+      style={{ borderColor }}>
+      {/* Header - Company name centered with logo */}
+      <div className={`${colors.header} px-4 py-3`}>
+        <div className="flex items-center justify-center gap-2">
+          {companyLogo && (
+            <img src={companyLogo} alt="" className="h-9 w-9 rounded-md object-contain bg-white/20 p-0.5" />
+          )}
+          <div className="text-center">
+            <p className="text-white text-sm font-bold leading-tight">{companyName || "FC ENGENHARIA"}</p>
+            <p className="text-white/70 text-[10px]">Gestão Integrada</p>
+          </div>
         </div>
-        <div className="bg-white/20 rounded-md px-2 py-1">
-          <span className="text-white text-xs font-bold tracking-wider">{colors.label}</span>
+        <div className="absolute top-3 right-3 bg-white/20 rounded-md px-2 py-0.5" style={{ position: "relative", float: "right", marginTop: "-28px" }}>
+          <span className="text-white text-[10px] font-bold tracking-wider">{colors.label}</span>
         </div>
       </div>
 
       {/* Body */}
-      <div className={`${colors.bg} p-4 flex flex-col items-center`} style={{ height: "calc(100% - 3.5rem)" }}>
+      <div className={`${colors.bg} p-4 flex flex-col items-center`} style={{ height: "calc(100% - 4rem)" }}>
         {/* Photo */}
-        <div className="w-28 h-28 rounded-full bg-white border-4 flex items-center justify-center overflow-hidden mt-2 shadow-md"
-          style={{ borderColor: badge.tipo === "clt" ? "#1d4ed8" : badge.tipo === "pj" ? "#15803d" : "#ea580c" }}>
+        <div className="w-28 h-28 rounded-full bg-white border-4 flex items-center justify-center overflow-hidden mt-1 shadow-md"
+          style={{ borderColor }}>
           {badge.foto ? (
             <img src={badge.foto} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -393,11 +404,11 @@ function BadgePreview({ badge, companyName, side }: { badge: BadgeData; companyN
         <p className="text-sm text-muted-foreground mt-1 text-center">{badge.funcao || "—"}</p>
 
         {/* Details */}
-        <div className="w-full mt-4 space-y-2 px-2">
+        <div className="w-full mt-3 space-y-2 px-2">
           {badge.matricula && (
             <div className="flex justify-between text-xs border-b border-current/10 pb-1">
-              <span className="text-muted-foreground">Matrícula:</span>
-              <span className="font-medium">{badge.matricula}</span>
+              <span className="text-muted-foreground">Nº Interno:</span>
+              <span className="font-bold">{badge.matricula}</span>
             </div>
           )}
           {badge.setor && (
@@ -427,10 +438,10 @@ function BadgePreview({ badge, companyName, side }: { badge: BadgeData; companyN
         </div>
 
         {/* QR Code small */}
-        <div className="mt-auto pt-3 flex items-center gap-3">
+        <div className="mt-auto pt-2 flex items-center gap-3">
           <QRCodeSVG value={qrData} size={50} level="M" />
           <div className="text-[10px] text-muted-foreground">
-            <p>ID: {badge.tipo.toUpperCase()}-{String(badge.id).padStart(5, "0")}</p>
+            <p className="font-medium">ID: {badge.tipo.toUpperCase()}-{String(badge.id).padStart(5, "0")}</p>
             <p>{companyName || "FC Engenharia"}</p>
           </div>
         </div>

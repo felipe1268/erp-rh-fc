@@ -26,6 +26,7 @@ export default function PortalDashboard() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [form, setForm] = useState<any>({});
+  const [deletingFuncionario, setDeletingFuncionario] = useState<any>(null);
 
   // ========== PARCEIRO STATE ==========
   const [buscaFuncionario, setBuscaFuncionario] = useState("");
@@ -75,6 +76,10 @@ export default function PortalDashboard() {
   });
   const atualizarMut = trpc.portalExterno.terceiro.atualizarFuncionario.useMutation({
     onSuccess: () => { toast.success("Funcionário atualizado!"); setShowForm(false); setEditingId(null); setForm({}); funcionarios.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirFuncMut = trpc.portalExterno.terceiro.excluirFuncionario.useMutation({
+    onSuccess: () => { toast.success("Funcionário excluído!"); setDeletingFuncionario(null); funcionarios.refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -729,10 +734,23 @@ export default function PortalDashboard() {
                         {f.nr35Validade && <div><span className="text-gray-500">NR-35 até:</span> {f.nr35Validade}</div>}
                         {f.nr10Validade && <div><span className="text-gray-500">NR-10 até:</span> {f.nr10Validade}</div>}
                       </div>
-                      <div className="flex gap-2 pt-2">
+                      <div className="flex items-center gap-2 pt-2">
                         <Button size="sm" variant="outline" onClick={() => openEdit(f)}>
                           <Edit className="h-3 w-3 mr-1" /> Editar
                         </Button>
+                        <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeletingFuncionario(f)}>
+                          <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                        </Button>
+                        {f.status === 'ativo' && (
+                          <Button size="sm" variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => { atualizarMut.mutate({ token, id: f.id, status: 'desligado' }); }}>
+                            Desligar
+                          </Button>
+                        )}
+                        {f.status === 'desligado' && (
+                          <Button size="sm" variant="outline" className="text-green-600 border-green-200 hover:bg-green-50" onClick={() => { atualizarMut.mutate({ token, id: f.id, status: 'ativo' }); }}>
+                            Reativar
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -839,6 +857,30 @@ export default function PortalDashboard() {
           </div>
         </div>
       </FullScreenDialog>
+
+      {/* Dialog Confirmar Exclusão de Funcionário */}
+      <Dialog open={!!deletingFuncionario} onOpenChange={(o) => { if (!o) setDeletingFuncionario(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" /> Excluir Funcionário
+            </DialogTitle>
+          </DialogHeader>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm">
+              Deseja realmente excluir <strong>{deletingFuncionario?.nomeCompleto || deletingFuncionario?.nome}</strong>?
+            </p>
+            <p className="text-xs text-red-600 mt-1">Esta ação não pode ser desfeita.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingFuncionario(null)}>Cancelar</Button>
+            <Button variant="destructive" disabled={excluirFuncMut.isPending}
+              onClick={() => excluirFuncMut.mutate({ token, id: deletingFuncionario.id })}>
+              {excluirFuncMut.isPending ? "Excluindo..." : "Confirmar Exclusão"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

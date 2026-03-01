@@ -3929,10 +3929,18 @@
 - [x] Corrigir rota Crachás: mover para módulo RH&DP (não redirecionar para Terceiros)
 - [x] BUG URGENTE: Obras cadastradas sumiram da tela - corrigido mismatch de colunas no schema (usar_convencao_matriz, convencao_id, convencao_divergencias)
 - [x] BUG: Botão Voltar da tela Validação IA de Documentos deixa tela branca - corrigido para navegar de volta ao painel terceiros
-- [ ] Adicionar botão de deletar funcionário no portal do terceiro (ao lado do editar)
-- [ ] Adicionar campo status (Ativo/Desligado) no formulário de edição do funcionário terceiro
+- [x] Adicionar botão de deletar funcionário no portal do terceiro (ao lado do editar)
+- [x] Adicionar campo status (Ativo/Desligado) no formulário de edição do funcionário terceiro
 - [x] Adicionar "Convenções Coletivas" na seção CADASTRO do menu lateral (sidebar)
 - [x] Criar/atualizar página de listagem e gestão de Convenções Coletivas
 - [x] Adicionar opção "Padrão (Sede)" na aba Convenção Coletiva dentro de Empresas
 - [x] Lógica: convenção padrão = sede da empresa, demais = obras em regiões específicas
 - [x] Criar página dedicada /convencoes-coletivas com listagem global de todas as convenções
+- [x] Botão "Nova Convenção Coletiva" na página /convencoes-coletivas com formulário de cadastro
+- [x] Botão de excluir funcionário no Portal do Terceiro (ao lado do Editar)
+- [x] Campo status (Ativo/Desligado) no Portal do Terceiro
+- [x] Seção "Período de Experiência" no Painel RH com alertas de colaboradores em 1º ou 2º período (já existia)
+- [x] Opções de Prorrogar, Efetivar ou Desligar para cada colaborador em experiência (já existia)
+- [x] Crachá: centralizar nome da empresa no topo
+- [x] Crachá: adicionar logo da empresa
+- [x] Crachá: usar Nº Interno como matrícula (não o código COL gerado)
