@@ -9,10 +9,7 @@ import { eq, and, inArray, desc } from "drizzle-orm";
 import { storagePut } from "../storage";
 
 function generateTempPassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  let pw = "";
-  for (let i = 0; i < 8; i++) pw += chars[Math.floor(Math.random() * chars.length)];
-  return pw;
+  return "mudar123";
 }
 
 export const portalExternoRouter = router({
@@ -132,12 +129,28 @@ export const portalExternoRouter = router({
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "terceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const { token, ...data } = input;
+      const { token, nomeCompleto, asoValidade, asoDocUrl, nr35Validade, nr35DocUrl, nr10Validade, nr10DocUrl, nr33Validade, nr33DocUrl, integracaoDocUrl, dataAdmissao, ...rest } = input;
       const [result] = await db.insert(funcionariosTerceiros).values({
-        ...data,
+        nome: nomeCompleto,
+        nomeCompleto: nomeCompleto,
+        cpf: rest.cpf,
+        rg: rest.rg || null,
+        funcao: rest.funcao || null,
+        telefone: rest.telefone || null,
+        email: rest.email || null,
+        dataAdmissao: dataAdmissao || null,
+        asoValidade: asoValidade || null,
+        asoDocUrl: asoDocUrl || null,
+        nr35Validade: nr35Validade || null,
+        nr35DocUrl: nr35DocUrl || null,
+        nr10Validade: nr10Validade || null,
+        nr10DocUrl: nr10DocUrl || null,
+        nr33Validade: nr33Validade || null,
+        nr33DocUrl: nr33DocUrl || null,
+        integracaoDocUrl: integracaoDocUrl || null,
         empresaTerceiraId: decoded.empresaTerceiraId,
         companyId: decoded.companyId,
-        status: "pendente",
+        statusAptidao: "pendente",
         cadastradoPor: "portal",
       });
       return { id: result.insertId, success: true };
@@ -240,7 +253,7 @@ export const portalExternoRouter = router({
           ativo: 1,
         });
       }
-      return { senhaTemporaria: senhaTemp, cnpj: cnpjClean, nomeEmpresa: input.nomeEmpresa || "" };
+      return { senhaTemporaria: "mudar123", cnpj: cnpjClean, nomeEmpresa: input.nomeEmpresa || "" };
     }),
 
     listarAcessos: protectedProcedure.input(z.object({

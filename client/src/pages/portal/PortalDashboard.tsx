@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { Building2, Users, Plus, LogOut, FileText, Upload, CheckCircle, XCircle, Clock, Edit, ChevronDown, ChevronUp, AlertTriangle, User } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Building2, Users, Plus, LogOut, FileText, Upload, CheckCircle, XCircle, Clock, Edit, ChevronDown, ChevronUp, AlertTriangle, User, UserPlus } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 
 export default function PortalDashboard() {
   const [, navigate] = useLocation();
@@ -60,7 +60,7 @@ export default function PortalDashboard() {
 
   const openEdit = (func: any) => {
     setEditingId(func.id);
-    setForm({ ...func });
+    setForm({ nomeCompleto: func.nomeCompleto || func.nome, cpf: func.cpf, rg: func.rg, funcao: func.funcao, telefone: func.telefone, email: func.email, dataAdmissao: func.dataAdmissao, asoValidade: func.asoValidade, nr35Validade: func.nr35Validade, nr10Validade: func.nr10Validade, nr33Validade: func.nr33Validade });
     setShowForm(true);
   };
 
@@ -87,8 +87,8 @@ export default function PortalDashboard() {
     reader.readAsDataURL(file);
   };
 
-  const statusBadge = (status: string | null | undefined) => {
-    const st = status || "pendente";
+  const statusBadge = (func: any) => {
+    const st = func.statusAptidao || func.status_aptidao_terceiro || "pendente";
     const map: Record<string, { bg: string; text: string; icon: any; label: string }> = {
       apto: { bg: "bg-emerald-100", text: "text-emerald-700", icon: CheckCircle, label: "Apto" },
       inapto: { bg: "bg-red-100", text: "text-red-700", icon: XCircle, label: "Inapto" },
@@ -103,9 +103,9 @@ export default function PortalDashboard() {
   };
 
   const funcs = (funcionarios.data || []) as any[];
-  const aptos = funcs.filter((f: any) => f.status === "apto").length;
-  const pendentes = funcs.filter((f: any) => f.status === "pendente").length;
-  const inaptos = funcs.filter((f: any) => f.status === "inapto").length;
+  const aptos = funcs.filter((f: any) => (f.statusAptidao || f.status_aptidao_terceiro) === "apto").length;
+  const pendentes = funcs.filter((f: any) => (f.statusAptidao || f.status_aptidao_terceiro || "pendente") === "pendente").length;
+  const inaptos = funcs.filter((f: any) => (f.statusAptidao || f.status_aptidao_terceiro) === "inapto").length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -176,12 +176,12 @@ export default function PortalDashboard() {
                         <User className="h-4 w-4 text-gray-500" />
                       </div>
                       <div>
-                        <p className="font-medium">{f.nomeCompleto}</p>
+                        <p className="font-medium">{f.nomeCompleto || f.nome}</p>
                         <p className="text-xs text-gray-500">CPF: {f.cpf} {f.funcao && `| ${f.funcao}`}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {statusBadge(f.status)}
+                      {statusBadge(f)}
                       {expandedId === f.id ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                     </div>
                   </div>
@@ -225,73 +225,91 @@ export default function PortalDashboard() {
         </div>
       </div>
 
-      {/* Form Dialog */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Funcionário" : "Novo Funcionário"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label>Nome Completo *</Label>
-                <Input value={form.nomeCompleto || ""} onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })} />
-              </div>
-              <div>
-                <Label>CPF *</Label>
-                <Input value={form.cpf || ""} onChange={(e) => setForm({ ...form, cpf: e.target.value })} placeholder="000.000.000-00" />
-              </div>
-              <div>
-                <Label>RG</Label>
-                <Input value={form.rg || ""} onChange={(e) => setForm({ ...form, rg: e.target.value })} />
-              </div>
-              <div>
-                <Label>Função</Label>
-                <Input value={form.funcao || ""} onChange={(e) => setForm({ ...form, funcao: e.target.value })} />
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <Input value={form.telefone || ""} onChange={(e) => setForm({ ...form, telefone: e.target.value })} />
-              </div>
-              <div>
-                <Label>E-mail</Label>
-                <Input value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div>
-                <Label>Data Admissão</Label>
-                <Input type="date" value={form.dataAdmissao || ""} onChange={(e) => setForm({ ...form, dataAdmissao: e.target.value })} />
-              </div>
-            </div>
-            <div className="border-t pt-3">
-              <p className="font-medium text-sm mb-2">Documentos e Treinamentos</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>ASO - Validade</Label>
-                  <Input type="date" value={form.asoValidade || ""} onChange={(e) => setForm({ ...form, asoValidade: e.target.value })} />
-                </div>
-                <div>
-                  <Label>NR-35 - Validade</Label>
-                  <Input type="date" value={form.nr35Validade || ""} onChange={(e) => setForm({ ...form, nr35Validade: e.target.value })} />
-                </div>
-                <div>
-                  <Label>NR-10 - Validade</Label>
-                  <Input type="date" value={form.nr10Validade || ""} onChange={(e) => setForm({ ...form, nr10Validade: e.target.value })} />
-                </div>
-                <div>
-                  <Label>NR-33 - Validade</Label>
-                  <Input type="date" value={form.nr33Validade || ""} onChange={(e) => setForm({ ...form, nr33Validade: e.target.value })} />
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+      {/* Full Screen Form Dialog */}
+      <FullScreenDialog
+        open={showForm}
+        onClose={() => { setShowForm(false); setEditingId(null); setForm({}); }}
+        title={editingId ? "Editar Funcionário" : "Novo Funcionário"}
+        subtitle="Preencha os dados do funcionário e documentos obrigatórios"
+        icon={<UserPlus className="h-5 w-5 text-white" />}
+        headerColor="bg-gradient-to-r from-orange-500 to-orange-700"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm({}); }}>Cancelar</Button>
             <Button onClick={handleSave} className="bg-orange-500 hover:bg-orange-600" disabled={cadastrarMut.isPending || atualizarMut.isPending}>
               {cadastrarMut.isPending || atualizarMut.isPending ? "Salvando..." : editingId ? "Atualizar" : "Cadastrar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          {/* Dados Pessoais */}
+          <div className="bg-white rounded-xl border p-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <User className="h-5 w-5 text-orange-500" /> Dados Pessoais
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="sm:col-span-2 lg:col-span-3">
+                <Label className="text-sm font-medium">Nome Completo *</Label>
+                <Input value={form.nomeCompleto || ""} onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })} placeholder="Nome completo do funcionário" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">CPF *</Label>
+                <Input value={form.cpf || ""} onChange={(e) => setForm({ ...form, cpf: e.target.value })} placeholder="000.000.000-00" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">RG</Label>
+                <Input value={form.rg || ""} onChange={(e) => setForm({ ...form, rg: e.target.value })} placeholder="Número do RG" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Função</Label>
+                <Input value={form.funcao || ""} onChange={(e) => setForm({ ...form, funcao: e.target.value })} placeholder="Ex: Eletricista, Pintor" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Telefone</Label>
+                <Input value={form.telefone || ""} onChange={(e) => setForm({ ...form, telefone: e.target.value })} placeholder="(00) 00000-0000" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">E-mail</Label>
+                <Input value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@exemplo.com" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Data Admissão</Label>
+                <Input type="date" value={form.dataAdmissao || ""} onChange={(e) => setForm({ ...form, dataAdmissao: e.target.value })} className="mt-1" />
+              </div>
+            </div>
+          </div>
+
+          {/* Documentos e Treinamentos */}
+          <div className="bg-white rounded-xl border p-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-orange-500" /> Documentos e Treinamentos
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <Label className="text-sm font-medium">ASO - Validade</Label>
+                <Input type="date" value={form.asoValidade || ""} onChange={(e) => setForm({ ...form, asoValidade: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">NR-35 - Validade</Label>
+                <Input type="date" value={form.nr35Validade || ""} onChange={(e) => setForm({ ...form, nr35Validade: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">NR-10 - Validade</Label>
+                <Input type="date" value={form.nr10Validade || ""} onChange={(e) => setForm({ ...form, nr10Validade: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">NR-33 - Validade</Label>
+                <Input type="date" value={form.nr33Validade || ""} onChange={(e) => setForm({ ...form, nr33Validade: e.target.value })} className="mt-1" />
+              </div>
+            </div>
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              <AlertTriangle className="h-4 w-4 inline mr-1" />
+              Mantenha os documentos sempre atualizados. Funcionários com ASO ou NRs vencidos serão considerados <strong>INAPTOS</strong>.
+            </div>
+          </div>
+        </div>
+      </FullScreenDialog>
     </div>
   );
 }

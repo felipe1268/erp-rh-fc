@@ -3908,3 +3908,8 @@
 - [x] Criar página pública de verificação de aptidão (QR Code → mostra se funcionário está apto/inapto)
 - [x] Adicionar opção de Crachás na sidebar do módulo RH/DP
 - [x] BUG: Gerar Acesso Portal corrigido - colunas da tabela renomeadas para alinhar com Drizzle schema (tipo_portal→tipo, parceiro_conveniado_id→parceiro_id, ultimo_acesso→ultimo_login)
+
+## Correções Portal Terceiros - Mar/2026
+- [x] Senha padrão do portal: usar "mudar123" em vez de senha aleatória
+- [x] Fix erro cadastro funcionário terceiro: colunas inexistentes no banco (nome_completo, aso_doc_url, nr35_doc_url, etc.)
+- [x] Formulário Novo Funcionário do portal: tornar full screen
