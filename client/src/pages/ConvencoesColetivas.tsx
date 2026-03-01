@@ -84,6 +84,8 @@ export default function ConvencoesColetivas() {
   const [extractingPdf, setExtractingPdf] = useState(false);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
   const [pdfExtracted, setPdfExtracted] = useState(false);
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [pdfMimeType, setPdfMimeType] = useState<string | null>(null);
   const extractPdfMut = trpc.sprint1.convencao.extractPdf.useMutation();
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,6 +106,9 @@ export default function ConvencoesColetivas() {
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = (reader.result as string).split(',')[1];
+        // Store base64 for sending with create/update
+        setPdfBase64(base64);
+        setPdfMimeType(file.type || 'application/pdf');
         try {
           const res = await extractPdfMut.mutateAsync({
             fileBase64: base64,
@@ -213,12 +218,14 @@ export default function ConvencoesColetivas() {
     setForm({ ...EMPTY_FORM });
     setPdfFileName(null);
     setPdfExtracted(false);
+    setPdfBase64(null);
+    setPdfMimeType(null);
     (window as any).__convencaoDocUrl = undefined;
   };
 
   const openNew = () => {
     setEditingId(null);
-    setForm({ ...EMPTY_FORM, companyId: selectedCompanyId || 0 });
+    setForm({ ...EMPTY_FORM, companyId: Number(selectedCompanyId) || 0 });
     setDialogOpen(true);
   };
 
@@ -292,6 +299,13 @@ export default function ConvencoesColetivas() {
       observacoes: form.observacoes || undefined,
       obraId: form.abrangencia === "obra" && form.obraId > 0 ? Number(form.obraId) : undefined,
     };
+
+    // Include PDF data if uploaded
+    if (pdfBase64 && pdfMimeType) {
+      payload.documentoBase64 = pdfBase64;
+      payload.documentoMimeType = pdfMimeType;
+      payload.documentoNomeOriginal = pdfFileName || 'convenção.pdf';
+    }
 
     if (editingId) {
       updateMut.mutate({ id: editingId, ...payload });

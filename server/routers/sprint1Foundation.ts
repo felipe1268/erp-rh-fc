@@ -293,6 +293,8 @@ const convencaoRouter = router({
 
   update: protectedProcedure.input(z.object({
     id: z.number(),
+    companyId: z.number().optional(),
+    obraId: z.number().optional().nullable(),
     nome: z.string().optional(),
     sindicato: z.string().optional(),
     cnpjSindicato: z.string().optional(),
@@ -339,10 +341,12 @@ const convencaoRouter = router({
       documentoUrl = url;
     }
 
-    const { id, documentoBase64, documentoMimeType, documentoNomeOriginal, isMatriz, ...updateData } = input;
+    const { id, documentoBase64, documentoMimeType, documentoNomeOriginal, isMatriz, obraId, companyId, ...updateData } = input;
     await db.update(convencaoColetiva).set({
       ...updateData,
       isMatriz: isMatriz !== undefined ? (isMatriz ? 1 : 0) : undefined,
+      obraId: obraId !== undefined ? (obraId || null) : undefined,
+      companyId: companyId !== undefined ? companyId : undefined,
       documentoUrl,
     }).where(eq(convencaoColetiva.id, id));
 

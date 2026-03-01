@@ -3951,3 +3951,13 @@
 - [x] BUG: Erro ao salvar convenção coletiva - companyId enviado como string em vez de number
 - [x] Upload de PDF da convenção coletiva com extração automática por IA dos campos (nome, sindicato, vigência, piso salarial, benefícios)
 - [x] BUG: Tela branca ao clicar Voltar no Comparativo de Convenções com IA
+- [ ] BUG: Botão Atualizar não salva alterações ao editar convenção coletiva
+
+## Fase: Melhorias Convenções Coletivas
+- [ ] Alertas de vencimento de convenção no Painel RH (60 dias antes do vencimento)
+- [ ] Histórico de versões da convenção (log de alterações com data/hora/usuário)
+- [ ] Vinculação automática de convenção à obra (seletor de CCT no cadastro de obras)
+- [ ] Dashboard/resumo de convenções com indicadores visuais de vencimento
+- [ ] BUG: Ícone do olho (ver documento PDF) não aparece na primeira convenção que tem PDF vinculado
+- [x] BUG: Atualizar convenção coletiva não salva as alterações (dados não persistem)
+- [x] BUG: PDF do upload na edição não fica disponível para visualização futura (ícone do olho)
