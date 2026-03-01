@@ -1196,15 +1196,16 @@ export default function Ferias() {
 
         {/* ===== DIALOG: DETALHAMENTO DO MÊS - FLUXO DE CAIXA ===== */}
         <Dialog open={showFluxoMesDialog} onOpenChange={(open) => { if (!open) { setShowFluxoMesDialog(false); setFluxoMesSelecionado(null); } }}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-green-600" />
+          <DialogContent className="!fixed !inset-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none" style={{ top: 0, left: 0, transform: 'none', display: 'flex', flexDirection: 'column' }}>
+            <DialogHeader className="border-b pb-4 shrink-0">
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <DollarSign className="h-6 w-6 text-green-600" />
                 Detalhamento — {fluxoMesSelecionado?.nomeMes} {anoCalendario}
               </DialogTitle>
             </DialogHeader>
+            <div className="flex-1 overflow-y-auto">
             {fluxoMesSelecionado && (
-              <div className="space-y-4">
+              <div className="space-y-4 p-1">
                 {/* Resumo do mês */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
@@ -1305,6 +1306,7 @@ export default function Ferias() {
                 </div>
               </div>
             )}
+            </div>
           </DialogContent>
         </Dialog>
 

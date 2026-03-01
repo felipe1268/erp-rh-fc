@@ -3946,3 +3946,4 @@
 - [x] Crachá: usar Nº Interno como matrícula (não o código COL gerado)
 - [x] BUG: Calendário de férias aparece vazio - corrigido case sensitivity dataAlteradaPeloRH -> dataAlteradaPeloRh em avisoPrevioFerias.ts e dashboards.ts
 - [ ] Upload de PDF da convenção coletiva com extração automática por IA
+- [x] Dialog Detalhamento do Fluxo de Caixa de Férias em fullscreen
