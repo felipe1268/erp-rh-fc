@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Scale, Search, Building2, Landmark, Eye, Plus, ChevronDown, ChevronUp, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Scale, Search, Building2, Landmark, Eye, Plus, ChevronDown, ChevronUp, Pencil, Trash2, Loader2, FileUp, Brain, FileText, CheckCircle2 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
@@ -80,6 +80,89 @@ export default function ConvencoesColetivas() {
     onError: (e) => toast.error(e.message),
   });
 
+  // PDF extraction with AI
+  const [extractingPdf, setExtractingPdf] = useState(false);
+  const [pdfFileName, setPdfFileName] = useState<string | null>(null);
+  const [pdfExtracted, setPdfExtracted] = useState(false);
+  const extractPdfMut = trpc.sprint1.convencao.extractPdf.useMutation();
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Máximo 16MB.");
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error("Apenas arquivos PDF são aceitos.");
+      return;
+    }
+    setPdfFileName(file.name);
+    setExtractingPdf(true);
+    setPdfExtracted(false);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        try {
+          const res = await extractPdfMut.mutateAsync({
+            fileBase64: base64,
+            fileName: file.name,
+            mimeType: file.type || 'application/pdf',
+          });
+          if (res.success && res.data) {
+            const d = res.data;
+            setForm(prev => ({
+              ...prev,
+              nome: d.nome || prev.nome,
+              sindicato: d.sindicato || prev.sindicato,
+              cnpjSindicato: d.cnpjSindicato || prev.cnpjSindicato,
+              dataBase: d.dataBase || prev.dataBase,
+              vigenciaInicio: d.vigenciaInicio || prev.vigenciaInicio,
+              vigenciaFim: d.vigenciaFim || prev.vigenciaFim,
+              pisoSalarial: d.pisoSalarial || prev.pisoSalarial,
+              percentualReajuste: d.percentualReajuste || prev.percentualReajuste,
+              adicionalInsalubridade: d.adicionalInsalubridade || prev.adicionalInsalubridade,
+              adicionalPericulosidade: d.adicionalPericulosidade || prev.adicionalPericulosidade,
+              horaExtraDiurna: d.horaExtraDiurna || prev.horaExtraDiurna,
+              horaExtraNoturna: d.horaExtraNoturna || prev.horaExtraNoturna,
+              horaExtraDomingo: d.horaExtraDomingo || prev.horaExtraDomingo,
+              adicionalNoturno: d.adicionalNoturno || prev.adicionalNoturno,
+              valeRefeicao: d.valeRefeicao || prev.valeRefeicao,
+              valeAlimentacao: d.valeAlimentacao || prev.valeAlimentacao,
+              valeTransporte: d.valeTransporte || prev.valeTransporte,
+              cestaBasica: d.cestaBasica || prev.cestaBasica,
+              auxilioFarmacia: d.auxilioFarmacia || prev.auxilioFarmacia,
+              planoSaude: d.planoSaude || prev.planoSaude,
+              seguroVida: d.seguroVida || prev.seguroVida,
+              outrosBeneficios: d.outrosBeneficios || prev.outrosBeneficios,
+              clausulasEspeciais: d.clausulasEspeciais || prev.clausulasEspeciais,
+              observacoes: d.observacoes || prev.observacoes,
+            }));
+            // Store documentoUrl for saving
+            if (res.documentoUrl) {
+              (window as any).__convencaoDocUrl = res.documentoUrl;
+            }
+            setPdfExtracted(true);
+            toast.success("PDF analisado com sucesso! Campos preenchidos automaticamente pela IA.");
+          } else {
+            toast.error(res.error || "Erro ao processar PDF.");
+          }
+        } catch (err: any) {
+          toast.error("Erro ao enviar PDF para análise: " + (err.message || "erro desconhecido"));
+        } finally {
+          setExtractingPdf(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast.error("Erro ao ler o arquivo.");
+      setExtractingPdf(false);
+    }
+    // Reset input
+    e.target.value = '';
+  };
+
   // CNPJ lookup
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
 
@@ -128,6 +211,9 @@ export default function ConvencoesColetivas() {
     setDialogOpen(false);
     setEditingId(null);
     setForm({ ...EMPTY_FORM });
+    setPdfFileName(null);
+    setPdfExtracted(false);
+    (window as any).__convencaoDocUrl = undefined;
   };
 
   const openNew = () => {
@@ -516,6 +602,49 @@ export default function ConvencoesColetivas() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+            </div>
+
+            {/* Upload PDF com IA */}
+            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-indigo-100 p-2.5 rounded-lg">
+                    <Brain className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-indigo-900">Importar PDF com IA</p>
+                    <p className="text-xs text-indigo-600">Faça upload do PDF da convenção e a IA preencherá os campos automaticamente</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {pdfExtracted && (
+                    <div className="flex items-center gap-1.5 text-green-600 text-xs font-medium">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Campos preenchidos
+                    </div>
+                  )}
+                  {extractingPdf ? (
+                    <div className="flex items-center gap-2 bg-white border border-indigo-200 rounded-lg px-4 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                      <span className="text-xs font-medium text-indigo-700">Analisando PDF com IA...</span>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer">
+                      <input type="file" accept=".pdf" onChange={handlePdfUpload} className="hidden" />
+                      <div className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 transition-colors">
+                        <FileUp className="h-4 w-4" />
+                        <span className="text-xs font-medium">{pdfFileName ? "Trocar PDF" : "Selecionar PDF"}</span>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              </div>
+              {pdfFileName && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-indigo-700">
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>{pdfFileName}</span>
                 </div>
               )}
             </div>

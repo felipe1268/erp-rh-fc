@@ -385,6 +385,95 @@ const convencaoRouter = router({
     return { success: true };
   }),
   // ============================================================
+  // IA - EXTRAÇÃO DE PDF DA CONVENÇÃO COLETIVA
+  // ============================================================
+  extractPdf: protectedProcedure.input(z.object({
+    fileBase64: z.string(),
+    fileName: z.string(),
+    mimeType: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    // Upload PDF to S3 to get a URL for the LLM
+    const buffer = Buffer.from(input.fileBase64, "base64");
+    const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const ext = input.fileName.split('.').pop() || "pdf";
+    const key = `convencoes/temp/${suffix}.${ext}`;
+    const { url: pdfUrl } = await storagePut(key, buffer, input.mimeType || "application/pdf");
+
+    try {
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `Você é um especialista em direito trabalhista brasileiro. Analise o documento PDF de Convenção Coletiva de Trabalho (CCT) e extraia TODOS os dados relevantes. Retorne um JSON estruturado com os campos extraídos. Para campos numéricos (valores em R$ ou percentuais), retorne apenas o número sem símbolos. Para datas, use formato YYYY-MM-DD. Se um campo não for encontrado no documento, retorne string vazia "".`
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "file_url" as const,
+                file_url: {
+                  url: pdfUrl,
+                  mime_type: "application/pdf" as const,
+                }
+              },
+              {
+                type: "text" as const,
+                text: "Extraia todos os dados desta Convenção Coletiva de Trabalho. Analise cuidadosamente cláusulas sobre salários, adicionais, benefícios, vigência e informações do sindicato."
+              }
+            ]
+          }
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "extracao_convencao",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                nome: { type: "string", description: "Nome/título completo da convenção coletiva" },
+                sindicato: { type: "string", description: "Nome do sindicato dos trabalhadores" },
+                cnpjSindicato: { type: "string", description: "CNPJ do sindicato (formato XX.XXX.XXX/XXXX-XX)" },
+                sindicatoPatronal: { type: "string", description: "Nome do sindicato patronal" },
+                dataBase: { type: "string", description: "Mês da data-base da categoria (ex: Maio, Janeiro)" },
+                vigenciaInicio: { type: "string", description: "Data de início da vigência (YYYY-MM-DD)" },
+                vigenciaFim: { type: "string", description: "Data de fim da vigência (YYYY-MM-DD)" },
+                pisoSalarial: { type: "string", description: "Piso salarial em reais (apenas número, ex: 1800.00)" },
+                percentualReajuste: { type: "string", description: "Percentual de reajuste salarial (apenas número, ex: 5.5)" },
+                adicionalInsalubridade: { type: "string", description: "Percentual de insalubridade (apenas número)" },
+                adicionalPericulosidade: { type: "string", description: "Percentual de periculosidade (apenas número)" },
+                horaExtraDiurna: { type: "string", description: "Percentual de hora extra diurna (apenas número, ex: 50)" },
+                horaExtraNoturna: { type: "string", description: "Percentual de hora extra noturna (apenas número, ex: 70)" },
+                horaExtraDomingo: { type: "string", description: "Percentual de hora extra domingo/feriado (apenas número, ex: 100)" },
+                adicionalNoturno: { type: "string", description: "Percentual de adicional noturno (apenas número, ex: 20)" },
+                valeRefeicao: { type: "string", description: "Valor do vale refeição em reais (apenas número)" },
+                valeAlimentacao: { type: "string", description: "Valor do vale alimentação/cesta básica em reais (apenas número)" },
+                valeTransporte: { type: "string", description: "Informações sobre vale transporte" },
+                cestaBasica: { type: "string", description: "Valor da cesta básica em reais (apenas número)" },
+                auxilioFarmacia: { type: "string", description: "Valor do auxílio farmácia em reais (apenas número)" },
+                planoSaude: { type: "string", description: "Detalhes do plano de saúde previsto" },
+                seguroVida: { type: "string", description: "Valor ou detalhes do seguro de vida" },
+                outrosBeneficios: { type: "string", description: "Outros benefícios previstos na convenção" },
+                clausulasEspeciais: { type: "string", description: "Cláusulas especiais relevantes (estabilidade, garantias, etc.)" },
+                observacoes: { type: "string", description: "Observações gerais e informações adicionais relevantes" },
+              },
+              required: ["nome","sindicato","cnpjSindicato","sindicatoPatronal","dataBase","vigenciaInicio","vigenciaFim","pisoSalarial","percentualReajuste","adicionalInsalubridade","adicionalPericulosidade","horaExtraDiurna","horaExtraNoturna","horaExtraDomingo","adicionalNoturno","valeRefeicao","valeAlimentacao","valeTransporte","cestaBasica","auxilioFarmacia","planoSaude","seguroVida","outrosBeneficios","clausulasEspeciais","observacoes"],
+              additionalProperties: false
+            }
+          }
+        }
+      });
+
+      const content = String(response.choices?.[0]?.message?.content || "{}");
+      const extracted = JSON.parse(content);
+      return { success: true, data: extracted, documentoUrl: pdfUrl };
+    } catch (err: any) {
+      console.error("Erro na extração IA do PDF:", err.message);
+      return { success: false, data: null, documentoUrl: pdfUrl, error: "Erro ao processar o PDF com IA. Tente novamente ou preencha manualmente." };
+    }
+  }),
+
+  // ============================================================
   // IA - COMPARATIVO DE CONVENÇÕES
   // ============================================================
   compararIA: protectedProcedure

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -31,8 +32,14 @@ type ComparisonResult = {
 
 export default function ComparativoConvencoes() {
   const { selectedCompanyId } = useCompany();
+  const [, navigate] = useLocation();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
   const [open, setOpen] = useState(true);
+
+  const handleClose = () => {
+    setOpen(false);
+    navigate("/convencoes-coletivas");
+  };
   const [matrizId, setMatrizId] = useState<string>("");
   const [localId, setLocalId] = useState<string>("");
   const [result, setResult] = useState<ComparisonResult | null>(null);
@@ -78,7 +85,7 @@ export default function ComparativoConvencoes() {
   return (
     <FullScreenDialog
       open={open}
-      onClose={() => setOpen(false)}
+      onClose={handleClose}
       title="Comparativo de Convenções com IA"
       icon={<Scale className="h-5 w-5 text-white" />}
       headerColor="bg-gradient-to-r from-indigo-700 to-blue-500"

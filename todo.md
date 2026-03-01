@@ -3945,7 +3945,9 @@
 - [x] Crachá: adicionar logo da empresa
 - [x] Crachá: usar Nº Interno como matrícula (não o código COL gerado)
 - [x] BUG: Calendário de férias aparece vazio - corrigido case sensitivity dataAlteradaPeloRH -> dataAlteradaPeloRh em avisoPrevioFerias.ts e dashboards.ts
-- [ ] Upload de PDF da convenção coletiva com extração automática por IA
+- [x] Upload de PDF da convenção coletiva com extração automática por IA
 - [x] Dialog Detalhamento do Fluxo de Caixa de Férias em fullscreen
 - [x] BUG: Consulta automática de CNPJ do sindicato - reimplementado com formatação, lookup BrasilAPI e loading state
 - [x] BUG: Erro ao salvar convenção coletiva - companyId enviado como string em vez de number
+- [x] Upload de PDF da convenção coletiva com extração automática por IA dos campos (nome, sindicato, vigência, piso salarial, benefícios)
+- [x] BUG: Tela branca ao clicar Voltar no Comparativo de Convenções com IA
