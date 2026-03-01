@@ -107,7 +107,6 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
       { icon: FileSpreadsheet, label: "PJ Medições", path: "/pj-medicoes" },
-      { icon: Star, label: "Avaliação de Desempenho", path: "/avaliacao-desempenho" },
     ],
   },
   {

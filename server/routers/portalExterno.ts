@@ -329,7 +329,7 @@ export const portalExternoRouter = router({
         eq(funcionariosTerceiros.companyId, input.companyId)
       );
       // Get empresa names
-      const empresaIds = [...new Set(funcs.map((f: any) => f.empresaTerceiraId))];
+      const empresaIds = Array.from(new Set(funcs.map((f: any) => f.empresaTerceiraId)));
       const empresas = empresaIds.length > 0 ? await db.select().from(empresasTerceiras).where(
         eq(empresasTerceiras.companyId, input.companyId)
       ) : [];
@@ -363,6 +363,7 @@ export const portalExternoRouter = router({
     criarLancamento: publicProcedure.input(z.object({
       token: z.string(),
       employeeId: z.number(),
+      employeeNome: z.string().optional(),
       dataCompra: z.string(),
       descricaoItens: z.string().optional(),
       valor: z.string(),
@@ -373,14 +374,73 @@ export const portalExternoRouter = router({
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
-      const { token, ...data } = input;
+      const { token, observacoes, ...data } = input;
+      // Get employee name if not provided
+      let empNome = data.employeeNome || "";
+      if (!empNome) {
+        const [emp] = await db.select().from(employees).where(eq(employees.id, data.employeeId)).limit(1);
+        empNome = emp?.nomeCompleto || "Funcionário";
+      }
       const [result] = await db.insert(lancamentosParceiros).values({
-        ...data,
+        employeeId: data.employeeId,
+        employeeNome: empNome,
+        dataCompra: data.dataCompra,
+        descricaoItens: data.descricaoItens || null,
+        valor: data.valor,
         parceiroId: decoded.parceiroId,
         companyId: decoded.companyId,
         status: "pendente",
       });
       return { id: result.insertId, success: true };
+    }),
+
+    uploadNotaFiscal: publicProcedure.input(z.object({
+      token: z.string(),
+      lancamentoId: z.number(),
+      fileName: z.string(),
+      fileBase64: z.string(),
+      contentType: z.string(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      const buffer = Buffer.from(input.fileBase64, "base64");
+      const ext = input.fileName.split(".").pop() || "pdf";
+      const fileKey = `parceiros/notas/${decoded.parceiroId}/${input.lancamentoId}-${Date.now()}.${ext}`;
+      const { url } = await storagePut(fileKey, buffer, input.contentType);
+      await db.update(lancamentosParceiros).set({ comprovanteUrl: url }).where(eq(lancamentosParceiros.id, input.lancamentoId));
+      return { url, success: true };
+    }),
+
+    buscarFuncionarios: publicProcedure.input(z.object({
+      token: z.string(),
+      busca: z.string().optional(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      const allEmps = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        cargo: employees.cargo,
+        status: employees.status,
+      }).from(employees).where(and(
+        eq(employees.companyId, decoded.companyId),
+        eq(employees.status, "Ativo")
+      ));
+      if (!input.busca) return allEmps;
+      const term = input.busca.toLowerCase().replace(/\D/g, "") || input.busca.toLowerCase();
+      return allEmps.filter((e: any) => {
+        const nome = (e.nomeCompleto || "").toLowerCase();
+        const cpf = (e.cpf || "").replace(/\D/g, "");
+        return nome.includes(input.busca!.toLowerCase()) || cpf.includes(term);
+      });
     }),
   }),
 

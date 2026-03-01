@@ -1,11 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { Building2, Users, Plus, LogOut, FileText, Upload, CheckCircle, XCircle, Clock, Edit, ChevronDown, ChevronUp, AlertTriangle, User, UserPlus } from "lucide-react";
+import {
+  Building2, Users, Plus, LogOut, FileText, Upload, CheckCircle, XCircle,
+  Clock, Edit, ChevronDown, ChevronUp, AlertTriangle, User, UserPlus,
+  Store, Send, Eye, Search, ShoppingCart, DollarSign, Receipt, Camera
+} from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 
 export default function PortalDashboard() {
@@ -13,10 +18,25 @@ export default function PortalDashboard() {
   const token = localStorage.getItem("portal_token") || "";
   const nome = localStorage.getItem("portal_nome") || "Empresa";
   const tipo = localStorage.getItem("portal_tipo") || "terceiro";
+
+  // ========== SHARED STATE ==========
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [form, setForm] = useState<any>({});
+
+  // ========== PARCEIRO STATE ==========
+  const [buscaFuncionario, setBuscaFuncionario] = useState("");
+  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [novoLancamento, setNovoLancamento] = useState({
+    dataCompra: new Date().toISOString().split("T")[0],
+    descricaoItens: "",
+    valor: "",
+    observacoes: "",
+  });
+  const [notaFile, setNotaFile] = useState<File | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Verify token
   const tokenCheck = trpc.portalExterno.auth.verificarToken.useQuery({ token }, { enabled: !!token });
@@ -30,6 +50,18 @@ export default function PortalDashboard() {
     }
   }, [token, tokenCheck.data]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // ========== TERCEIRO QUERIES ==========
   const empresa = trpc.portalExterno.terceiro.meusDados.useQuery({ token }, { enabled: !!token && tipo === "terceiro" });
   const funcionarios = trpc.portalExterno.terceiro.meusFuncionarios.useQuery({ token }, { enabled: !!token && tipo === "terceiro" });
   const cadastrarMut = trpc.portalExterno.terceiro.cadastrarFuncionario.useMutation({
@@ -41,6 +73,34 @@ export default function PortalDashboard() {
     onError: (e) => toast.error(e.message),
   });
 
+  // ========== PARCEIRO QUERIES ==========
+  const parceiroDados = trpc.portalExterno.parceiro.meusDados.useQuery({ token }, { enabled: !!token && tipo === "parceiro" });
+  const parceiroLancamentos = trpc.portalExterno.parceiro.meusLancamentos.useQuery({ token }, { enabled: !!token && tipo === "parceiro" });
+  const parceiroBusca = trpc.portalExterno.parceiro.buscarFuncionarios.useQuery(
+    { token, busca: buscaFuncionario },
+    { enabled: !!token && tipo === "parceiro" && buscaFuncionario.length >= 2 }
+  );
+  const criarLancamentoMut = trpc.portalExterno.parceiro.criarLancamento.useMutation({
+    onSuccess: (data) => {
+      toast.success("Lançamento registrado com sucesso!");
+      // Upload nota fiscal if file selected
+      if (notaFile && data.id) {
+        handleUploadNota(Number(data.id), notaFile);
+      }
+      setNovoLancamento({ dataCompra: new Date().toISOString().split("T")[0], descricaoItens: "", valor: "", observacoes: "" });
+      setSelectedEmployee(null);
+      setBuscaFuncionario("");
+      setNotaFile(null);
+      parceiroLancamentos.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const uploadNotaMut = trpc.portalExterno.parceiro.uploadNotaFiscal.useMutation({
+    onSuccess: () => { toast.success("Nota fiscal enviada!"); parceiroLancamentos.refetch(); },
+    onError: (e) => toast.error("Erro ao enviar nota: " + e.message),
+  });
+
+  // ========== HANDLERS ==========
   const handleLogout = () => {
     localStorage.removeItem("portal_token");
     localStorage.removeItem("portal_tipo");
@@ -87,6 +147,42 @@ export default function PortalDashboard() {
     reader.readAsDataURL(file);
   };
 
+  const handleCriarLancamento = () => {
+    if (!selectedEmployee) { toast.error("Selecione um colaborador"); return; }
+    if (!novoLancamento.valor || parseFloat(novoLancamento.valor) <= 0) { toast.error("Informe o valor da compra"); return; }
+    if (!novoLancamento.dataCompra) { toast.error("Informe a data da compra"); return; }
+    criarLancamentoMut.mutate({
+      token,
+      employeeId: selectedEmployee.id,
+      employeeNome: selectedEmployee.nomeCompleto,
+      dataCompra: novoLancamento.dataCompra,
+      descricaoItens: novoLancamento.descricaoItens || undefined,
+      valor: novoLancamento.valor,
+      observacoes: novoLancamento.observacoes || undefined,
+    });
+  };
+
+  const handleUploadNota = (lancamentoId: number, file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      uploadNotaMut.mutate({
+        token,
+        lancamentoId,
+        fileName: file.name,
+        fileBase64: base64,
+        contentType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const selectEmployee = (emp: any) => {
+    setSelectedEmployee(emp);
+    setBuscaFuncionario(emp.nomeCompleto + (emp.cpf ? ` - ${emp.cpf}` : ""));
+    setShowDropdown(false);
+  };
+
   const statusBadge = (func: any) => {
     const st = func.statusAptidao || func.status_aptidao_terceiro || "pendente";
     const map: Record<string, { bg: string; text: string; icon: any; label: string }> = {
@@ -102,11 +198,344 @@ export default function PortalDashboard() {
     );
   };
 
+  const formatCurrency = (v: any) => {
+    const num = parseFloat(v || "0");
+    return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  };
+
+  // ========== TERCEIRO DATA ==========
   const funcs = (funcionarios.data || []) as any[];
   const aptos = funcs.filter((f: any) => (f.statusAptidao || f.status_aptidao_terceiro) === "apto").length;
   const pendentes = funcs.filter((f: any) => (f.statusAptidao || f.status_aptidao_terceiro || "pendente") === "pendente").length;
   const inaptos = funcs.filter((f: any) => (f.statusAptidao || f.status_aptidao_terceiro) === "inapto").length;
 
+  // ========== PARCEIRO DATA ==========
+  const lancamentos = (parceiroLancamentos.data || []) as any[];
+  const totalMes = lancamentos.reduce((sum: number, l: any) => sum + parseFloat(l.valor || "0"), 0);
+  const lancPendentes = lancamentos.filter((l: any) => l.status === "pendente").length;
+  const lancAprovados = lancamentos.filter((l: any) => l.status === "aprovado").length;
+  const filteredEmployees = (parceiroBusca.data || []) as any[];
+
+  // ========== RENDER PARCEIRO ==========
+  if (tipo === "parceiro") {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b shadow-sm sticky top-0 z-10">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-purple-600 flex items-center justify-center">
+                <Store className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="font-bold text-gray-900">{nome}</h1>
+                <p className="text-xs text-gray-500">Portal do Parceiro - FC Gestão Integrada</p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-1" /> Sair
+            </Button>
+          </div>
+        </header>
+
+        <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white rounded-xl border p-4 text-center">
+              <ShoppingCart className="h-6 w-6 text-purple-500 mx-auto mb-1" />
+              <p className="text-2xl font-bold">{lancamentos.length}</p>
+              <p className="text-xs text-gray-500">Lançamentos</p>
+            </div>
+            <div className="bg-white rounded-xl border p-4 text-center">
+              <DollarSign className="h-6 w-6 text-green-500 mx-auto mb-1" />
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalMes)}</p>
+              <p className="text-xs text-gray-500">Total do Mês</p>
+            </div>
+            <div className="bg-white rounded-xl border p-4 text-center">
+              <Clock className="h-6 w-6 text-amber-500 mx-auto mb-1" />
+              <p className="text-2xl font-bold text-amber-600">{lancPendentes}</p>
+              <p className="text-xs text-gray-500">Pendentes</p>
+            </div>
+            <div className="bg-white rounded-xl border p-4 text-center">
+              <CheckCircle className="h-6 w-6 text-emerald-500 mx-auto mb-1" />
+              <p className="text-2xl font-bold text-emerald-600">{lancAprovados}</p>
+              <p className="text-xs text-gray-500">Aprovados</p>
+            </div>
+          </div>
+
+          {/* Novo Lançamento */}
+          <div className="bg-white rounded-xl border">
+            <div className="p-4 border-b">
+              <h2 className="font-bold text-lg flex items-center gap-2">
+                <Plus className="h-5 w-5 text-purple-500" /> Novo Lançamento de Consumo
+              </h2>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Busca Colaborador por Nome/CPF */}
+                <div className="relative" ref={dropdownRef}>
+                  <Label className="text-sm font-medium mb-1 block">Colaborador * (digite nome ou CPF)</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      value={buscaFuncionario}
+                      onChange={(e) => {
+                        setBuscaFuncionario(e.target.value);
+                        setSelectedEmployee(null);
+                        if (e.target.value.length >= 2) setShowDropdown(true);
+                        else setShowDropdown(false);
+                      }}
+                      onFocus={() => { if (buscaFuncionario.length >= 2) setShowDropdown(true); }}
+                      placeholder="Digite o nome ou CPF do colaborador..."
+                      className="pl-10 h-11"
+                    />
+                  </div>
+                  {showDropdown && filteredEmployees.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredEmployees.map((emp: any) => (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          className="w-full text-left px-4 py-3 hover:bg-purple-50 border-b last:border-b-0 transition-colors"
+                          onClick={() => selectEmployee(emp)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
+                              <User className="h-4 w-4 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm text-gray-900">{emp.nomeCompleto}</p>
+                              <p className="text-xs text-gray-500">
+                                CPF: {emp.cpf || "N/A"} {emp.funcao ? `| ${emp.funcao}` : emp.cargo ? `| ${emp.cargo}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showDropdown && buscaFuncionario.length >= 2 && filteredEmployees.length === 0 && !parceiroBusca.isLoading && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg p-4 text-center text-sm text-gray-500">
+                      Nenhum colaborador encontrado
+                    </div>
+                  )}
+                  {selectedEmployee && (
+                    <div className="mt-2 flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+                      <CheckCircle className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm font-medium text-purple-800">{selectedEmployee.nomeCompleto}</span>
+                      <span className="text-xs text-purple-500">CPF: {selectedEmployee.cpf || "N/A"}</span>
+                      <button onClick={() => { setSelectedEmployee(null); setBuscaFuncionario(""); }} className="ml-auto text-purple-400 hover:text-purple-600">
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Data da Compra */}
+                <div>
+                  <Label className="text-sm font-medium mb-1 block">Data da Compra *</Label>
+                  <Input
+                    type="date"
+                    value={novoLancamento.dataCompra}
+                    onChange={(e) => setNovoLancamento({ ...novoLancamento, dataCompra: e.target.value })}
+                    className="h-11"
+                  />
+                </div>
+
+                {/* Valor */}
+                <div>
+                  <Label className="text-sm font-medium mb-1 block">Valor (R$) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={novoLancamento.valor}
+                    onChange={(e) => setNovoLancamento({ ...novoLancamento, valor: e.target.value })}
+                    className="h-11"
+                  />
+                </div>
+
+                {/* Descrição */}
+                <div>
+                  <Label className="text-sm font-medium mb-1 block">Descrição dos Itens</Label>
+                  <Input
+                    placeholder="Ex: Medicamentos, combustível..."
+                    value={novoLancamento.descricaoItens}
+                    onChange={(e) => setNovoLancamento({ ...novoLancamento, descricaoItens: e.target.value })}
+                    className="h-11"
+                  />
+                </div>
+              </div>
+
+              {/* Upload Nota Fiscal */}
+              <div>
+                <Label className="text-sm font-medium mb-1 block">Nota Fiscal / Cupom Fiscal</Label>
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) setNotaFile(f); }}
+                    />
+                    <div className={`flex items-center gap-3 border-2 border-dashed rounded-lg p-4 transition-colors ${notaFile ? "border-purple-400 bg-purple-50" : "border-gray-300 hover:border-purple-400 hover:bg-purple-50/50"}`}>
+                      {notaFile ? (
+                        <>
+                          <Receipt className="h-6 w-6 text-purple-500" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-purple-700 truncate">{notaFile.name}</p>
+                            <p className="text-xs text-purple-500">{(notaFile.size / 1024).toFixed(1)} KB</p>
+                          </div>
+                          <button onClick={(e) => { e.preventDefault(); setNotaFile(null); }} className="text-purple-400 hover:text-purple-600">
+                            <XCircle className="h-5 w-5" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="h-6 w-6 text-gray-400" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-600">Clique para anexar nota/cupom fiscal</p>
+                            <p className="text-xs text-gray-400">PDF, JPG ou PNG (máx. 5MB)</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Observações */}
+              <div>
+                <Label className="text-sm font-medium mb-1 block">Observações</Label>
+                <Input
+                  placeholder="Observações adicionais (opcional)"
+                  value={novoLancamento.observacoes}
+                  onChange={(e) => setNovoLancamento({ ...novoLancamento, observacoes: e.target.value })}
+                  className="h-11"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  className="bg-purple-600 hover:bg-purple-700"
+                  onClick={handleCriarLancamento}
+                  disabled={criarLancamentoMut.isPending || !selectedEmployee}
+                >
+                  <Send className="w-4 h-4 mr-1" /> {criarLancamentoMut.isPending ? "Enviando..." : "Registrar Consumo"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Lançamentos do Mês */}
+          <div className="bg-white rounded-xl border">
+            <div className="p-4 border-b">
+              <h2 className="font-bold text-lg flex items-center gap-2">
+                <FileText className="h-5 w-5 text-purple-500" /> Lançamentos Registrados
+              </h2>
+            </div>
+            <div className="divide-y">
+              {lancamentos.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">
+                  <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>Nenhum lançamento registrado</p>
+                  <p className="text-sm mt-1">Registre o consumo dos colaboradores acima</p>
+                </div>
+              ) : (
+                <>
+                  {lancamentos.map((l: any) => (
+                    <div key={l.id} className={`p-4 flex items-center justify-between ${
+                      l.status === "aprovado" ? "border-l-4 border-l-green-400" :
+                      l.status === "rejeitado" ? "border-l-4 border-l-red-400" :
+                      "border-l-4 border-l-yellow-400"
+                    }`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{l.employeeNome}</span>
+                          <Badge variant={
+                            l.status === "aprovado" ? "default" :
+                            l.status === "rejeitado" ? "destructive" : "secondary"
+                          } className={`text-xs ${l.status === "aprovado" ? "bg-green-100 text-green-700" : ""}`}>
+                            {l.status === "aprovado" ? "Aprovado" : l.status === "rejeitado" ? "Rejeitado" : "Pendente"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {l.dataCompra ? new Date(l.dataCompra).toLocaleDateString("pt-BR") : ""}
+                          {l.descricaoItens ? ` — ${l.descricaoItens}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-purple-600">{formatCurrency(l.valor)}</span>
+                        {l.comprovanteUrl ? (
+                          <a href={l.comprovanteUrl} target="_blank" rel="noopener noreferrer">
+                            <Button variant="ghost" size="sm" title="Ver nota fiscal">
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </a>
+                        ) : (
+                          <label className="cursor-pointer">
+                            <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadNota(l.id, f); }} />
+                            <Button variant="ghost" size="sm" asChild title="Enviar nota fiscal">
+                              <span><Upload className="w-4 h-4 text-purple-500" /></span>
+                            </Button>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="p-4 flex items-center justify-between font-bold bg-purple-50">
+                    <span>Total</span>
+                    <span className="text-purple-600">{formatCurrency(totalMes)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Dados do Parceiro */}
+          {parceiroDados.data && (
+            <div className="bg-white rounded-xl border p-4">
+              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-purple-500" /> Dados do Estabelecimento
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-500">Razão Social:</span>
+                  <p className="font-medium">{(parceiroDados.data as any).razaoSocial}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">CNPJ:</span>
+                  <p className="font-medium">{(parceiroDados.data as any).cnpj}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Nome Fantasia:</span>
+                  <p className="font-medium">{(parceiroDados.data as any).nomeFantasia || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Contato:</span>
+                  <p className="font-medium">{(parceiroDados.data as any).responsavelNome || "—"} | {(parceiroDados.data as any).telefone || "—"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Info */}
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-sm text-purple-800">
+            <p className="font-medium mb-1">Como funciona?</p>
+            <ul className="list-disc pl-4 space-y-1 text-xs">
+              <li>Busque o colaborador pelo nome ou CPF no campo de busca</li>
+              <li>Preencha os dados da compra e anexe a nota/cupom fiscal</li>
+              <li>O RH da FC irá analisar e aprovar ou rejeitar cada lançamento</li>
+              <li>Lançamentos aprovados serão descontados na folha de pagamento do colaborador</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ========== RENDER TERCEIRO ==========
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}

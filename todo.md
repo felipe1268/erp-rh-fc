@@ -3914,3 +3914,9 @@
 - [x] Fix erro cadastro funcionário terceiro: colunas inexistentes no banco (nome_completo, aso_doc_url, nr35_doc_url, etc.)
 - [x] Formulário Novo Funcionário do portal: tornar full screen
 - [x] Adicionar link de Crachás na seção OPERACIONAL do menu lateral (mesmo link do módulo Terceiros)
+
+## Melhorias Portal Parceiro - Mar/2026
+- [x] Upload de nota/cupom fiscal no formulário de lançamento do parceiro
+- [x] Busca de funcionário por nome ou CPF com autocomplete no portal do parceiro
+- [x] Login do parceiro com CNPJ + senha padrão "mudar123" e troca obrigatória no primeiro acesso
+- [x] Remover "Avaliação de Desempenho" da seção Gestão de Pessoas na sidebar RH&DP (módulo desabilitado)

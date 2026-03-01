@@ -96,7 +96,7 @@ const DEFAULT_MENU = [
     { label: "Auditoria do Sistema", path: "/auditoria", visible: true },
     { label: "Configurações", path: "/configuracoes", visible: true },
   ]},
-  { title: "Em Breve", items: [{ label: "Avaliação de Desempenho", path: "/avaliacao", visible: true }] },
+
 ];
 
 type MenuItem = { label: string; path: string; visible: boolean; originalLabel?: string };
