@@ -3801,3 +3801,45 @@
 - [x] Investigar verificação isAdminMaster no frontend (SolicitacaoHE.tsx) - frontend OK (user?.role === "admin_master")
 - [x] Investigar verificação de role no backend (delete endpoint) - BUG: comparava com "admin" ao invés de "admin_master"
 - [x] Corrigir para reconhecer corretamente o Admin Master - fix: ctx.user.role !== "admin_master"
+
+## Sprint 1 - Fundação (Prioridade 1)
+- [x] 1.1 Tipo de vínculo no colaborador (CLT, PJ, Estagiário, Menor Aprendiz) - já existia como tipoContrato
+- [x] 1.2 Documentos regulatórios no cadastro de empresa (PGR, PCMSO, LTCAT) com upload e validade
+- [x] 1.3 Convenção Coletiva no cadastro de empresa com upload PDF e campos estruturados
+- [x] 1.4 Status de Aptidão automático (Apto/Inapto) para colaboradores - endpoint criado
+
+## Sprint 2 - Módulo Terceiros: Cadastro (Prioridade 2)
+- [ ] 2.1 Cadastro de empresas terceiras com documentos obrigatórios (PGR, PCMSO, contrato social)
+- [ ] 2.2 Cadastro de funcionários terceiros com ficha, documentos, ASO, treinamentos, alocação em obra
+- [ ] 2.3 Aptidão de terceiros (Apto/Inapto automático)
+- [ ] 2.4 Obrigações mensais da empresa terceira (FGTS, INSS, folha, comprovantes) com checklist e upload
+
+## Sprint 3 - Módulo Terceiros: Acesso Externo e Alertas (Prioridade 2 cont.)
+- [ ] 2.5 Acesso externo para empresa terceira enviar documentos mensais
+- [ ] 2.6 Alertas automáticos por e-mail para terceiros (10 dias, 5 dias, vencimento, pós-vencimento)
+- [ ] 2.7 Painel de Conformidade para Medição (visão consolidada por fornecedor/obra)
+
+## Sprint 4 - Crachás (Prioridade 3)
+- [ ] 3.1 Emissão de crachá para colaboradores (azul CLT, verde PJ) com foto, dados, QR Code
+- [ ] 3.2 Emissão de crachá para terceiros (laranja) com dados da empresa terceira
+
+## Sprint 5 - Portal de Parceiros (Prioridade 4)
+- [ ] 4.1 Cadastro completo de parceiro conveniado (dados, CNPJ, bancários, forma pagamento, condições)
+- [ ] 4.2 Portal externo da Farmácia (lançamento consumo, comprovantes, fechamento mensal)
+- [ ] 4.3 Validação e aprovação pelo RH com geração de guia de desconto automática
+- [ ] 4.4 Resumo de pagamento ao parceiro com dados bancários prontos
+- [ ] 4.5 Extensão para outros parceiros (posto, restaurante, etc.)
+
+## Sprint 6 - Inteligência Artificial (Prioridade 5)
+- [ ] 5.1 Validação automática com IA dos documentos enviados por terceiros
+- [ ] 5.2 Convenção Coletiva por obra com busca por cidade/estado
+- [ ] 5.3 Comparativo de convenções com IA (matriz vs. local, destacando divergências)
+
+## Regras de Design (aplicar em TUDO)
+- [ ] Todas as telas FullScreen (FullScreenDialog pattern)
+- [ ] Todos os gráficos responsivos (mobile/desktop)
+- [ ] Layout agradável e consistente
+- [ ] Configurações centralizadas na aba Configurações do sistema
+
+## Ajuste: Remover Horista
+- [x] Remover opção "Horista" do select de tipoContrato (todos CLT já são horistas)
