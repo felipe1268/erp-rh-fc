@@ -3821,20 +3821,23 @@
 - [x] 2.8 Aprovações de Parceiros (workflow de aprovação de lançamentos)
 
 ## Sprint 4 - Crachás (Prioridade 3)
-- [ ] 3.1 Emissão de crachá para colaboradores (azul CLT, verde PJ) com foto, dados, QR Code
-- [ ] 3.2 Emissão de crachá para terceiros (laranja) com dados da empresa terceira
+- [x] 3.1 Emissão de crachá para colaboradores (azul CLT, verde PJ) com foto, dados, QR Code
+- [x] 3.2 Emissão de crachá para terceiros (laranja) com dados da empresa terceira
+- [x] 3.3 QR Code com dados do colaborador para verificação
+- [x] 3.4 Download do crachá em PNG de alta qualidade
+- [x] 3.5 Impressão direta do crachá
 
 ## Sprint 5 - Portal de Parceiros (Prioridade 4)
-- [ ] 4.1 Cadastro completo de parceiro conveniado (dados, CNPJ, bancários, forma pagamento, condições)
-- [ ] 4.2 Portal externo da Farmácia (lançamento consumo, comprovantes, fechamento mensal)
-- [ ] 4.3 Validação e aprovação pelo RH com geração de guia de desconto automática
-- [ ] 4.4 Resumo de pagamento ao parceiro com dados bancários prontos
-- [ ] 4.5 Extensão para outros parceiros (posto, restaurante, etc.)
+- [x] 4.1 Cadastro completo de parceiro conveniado (dados, CNPJ, bancários, forma pagamento, condições)
+- [x] 4.2 Portal externo da Farmácia (lançamento consumo, comprovantes, fechamento mensal)
+- [x] 4.3 Validação e aprovação pelo RH com geração de guia de desconto automática
+- [x] 4.4 Resumo de pagamento ao parceiro com dados bancários prontos
+- [x] 4.5 Extensão para outros parceiros (posto, restaurante, etc.)
 
 ## Sprint 6 - Inteligência Artificial (Prioridade 5)
-- [ ] 5.1 Validação automática com IA dos documentos enviados por terceiros
-- [ ] 5.2 Convenção Coletiva por obra com busca por cidade/estado
-- [ ] 5.3 Comparativo de convenções com IA (matriz vs. local, destacando divergências)
+- [x] 5.1 Validação automática com IA dos documentos enviados por terceiros (Validação IA de Docs)
+- [x] 5.2 Convenção Coletiva por obra com busca por cidade/estado (já existente no módulo Empresas)
+- [x] 5.3 Comparativo de convenções com IA (Comparativo Convenções - matriz vs. local)
 
 ## Regras de Design (aplicar em TUDO)
 - [ ] Todas as telas FullScreen (FullScreenDialog pattern)

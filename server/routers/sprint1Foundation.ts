@@ -5,6 +5,7 @@ import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { getDb, createAuditLog } from "../db";
 import { companyDocuments, convencaoColetiva, employeeAptidao, employees, asos, trainings } from "../../drizzle/schema";
 import { storagePut } from "../storage";
+import { invokeLLM } from "../_core/llm";
 
 // ============================================================
 // SPRINT 1 - DOCUMENTOS REGULATÓRIOS DA EMPRESA
@@ -369,6 +370,52 @@ const convencaoRouter = router({
 
     return { success: true };
   }),
+  // ============================================================
+  // IA - COMPARATIVO DE CONVENÇÕES
+  // ============================================================
+  compararIA: protectedProcedure
+    .input(z.object({
+      convencaoMatrizId: z.number(),
+      convencaoLocalId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [matriz] = await db.select().from(convencaoColetiva).where(eq(convencaoColetiva.id, input.convencaoMatrizId));
+      const [local] = await db.select().from(convencaoColetiva).where(eq(convencaoColetiva.id, input.convencaoLocalId));
+      if (!matriz || !local) throw new TRPCError({ code: "NOT_FOUND", message: "Convenção não encontrada" });
+      const formatConv = (c: any) => `Nome: ${c.nome}\nSindicato: ${c.sindicato}\nVigência: ${c.vigenciaInicio} a ${c.vigenciaFim}\nPiso: ${c.pisoSalarial}\nReajuste: ${c.percentualReajuste}%\nInsalubridade: ${c.adicionalInsalubridade}%\nPericulosidade: ${c.adicionalPericulosidade}%\nHE Diurna: ${c.horaExtraDiurna}%\nHE Noturna: ${c.horaExtraNoturna}%\nHE Domingo: ${c.horaExtraDomingo}%\nAdicional Noturno: ${c.adicionalNoturno}%\nVR: ${c.valeRefeicao}\nVA: ${c.valeAlimentacao}\nVT: ${c.valeTransporte}\nCesta Básica: ${c.cestaBasica}\nAux Farmácia: ${c.auxilioFarmacia}\nPlano Saúde: ${c.planoSaude}\nSeguro Vida: ${c.seguroVida}\nOutros: ${c.outrosBeneficios}\nCláusulas: ${c.clausulasEspeciais}`;
+      try {
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "Você é um especialista em direito trabalhista brasileiro e convenções coletivas. Compare as duas convenções coletivas e retorne um JSON com análise comparativa detalhada." },
+            { role: "user", content: `Compare:\n\n=== MATRIZ ===\n${formatConv(matriz)}\n\n=== LOCAL ===\n${formatConv(local)}` }
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "comparativo_convencoes",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  resumo: { type: "string", description: "Resumo geral" },
+                  divergencias: { type: "array", items: { type: "object", properties: { item: { type: "string" }, valorMatriz: { type: "string" }, valorLocal: { type: "string" }, maisVantajoso: { type: "string" }, impacto: { type: "string" } }, required: ["item","valorMatriz","valorLocal","maisVantajoso","impacto"], additionalProperties: false } },
+                  recomendacoes: { type: "array", items: { type: "string" } },
+                  riscos: { type: "array", items: { type: "string" } }
+                },
+                required: ["resumo","divergencias","recomendacoes","riscos"],
+                additionalProperties: false
+              }
+            }
+          }
+        });
+        const content = String(response.choices?.[0]?.message?.content || "{}");
+        return { ...JSON.parse(content), matrizNome: matriz.nome, localNome: local.nome };
+      } catch {
+        return { resumo: "Erro na análise.", divergencias: [], recomendacoes: ["Compare manualmente."], riscos: ["Erro IA."], matrizNome: matriz.nome, localNome: local.nome };
+      }
+    }),
 });
 
 // ============================================================

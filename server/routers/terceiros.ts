@@ -11,6 +11,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, like, gte, lte } from "drizzle-orm";
 import { storagePut } from "../storage";
+import { invokeLLM } from "../_core/llm";
 
 export const terceirosRouter = router({
   // ============================================================
@@ -474,4 +475,83 @@ export const terceirosRouter = router({
         alertasPendentes: alertas.length,
       };
     }),
+  // ============================================================
+  // IA - VALIDAÇÃO DE DOCUMENTOS
+  // ============================================================
+  ia: router({
+    validarDocumento: protectedProcedure
+      .input(z.object({
+        documentoUrl: z.string(),
+        tipoDocumento: z.string(),
+        empresaNome: z.string(),
+        competencia: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const response = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: `Você é um especialista em validação de documentos trabalhistas brasileiros. Analise o documento fornecido e retorne um JSON com a seguinte estrutura:
+{
+  "valido": boolean,
+  "tipoDetectado": string,
+  "empresa": string,
+  "competencia": string,
+  "valor": string,
+  "observacoes": string[],
+  "alertas": string[],
+  "confianca": number (0-100)
+}
+Seja rigoroso na validação. Verifique se o tipo do documento corresponde ao esperado, se a competência está correta e se os dados são consistentes.`
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text" as const,
+                    text: `Valide este documento:\n- Tipo esperado: ${input.tipoDocumento}\n- Empresa: ${input.empresaNome}\n- Competência: ${input.competencia}\n- URL do documento: ${input.documentoUrl}\n\nAnalise e retorne o JSON de validação.`
+                  }
+                ]
+              }
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "validacao_documento",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    valido: { type: "boolean", description: "Se o documento é válido" },
+                    tipoDetectado: { type: "string", description: "Tipo do documento detectado" },
+                    empresa: { type: "string", description: "Nome da empresa no documento" },
+                    competencia: { type: "string", description: "Competência do documento" },
+                    valor: { type: "string", description: "Valor principal do documento" },
+                    observacoes: { type: "array", items: { type: "string" }, description: "Observações sobre o documento" },
+                    alertas: { type: "array", items: { type: "string" }, description: "Alertas de inconsistência" },
+                    confianca: { type: "number", description: "Nível de confiança da validação (0-100)" }
+                  },
+                  required: ["valido", "tipoDetectado", "empresa", "competencia", "valor", "observacoes", "alertas", "confianca"],
+                  additionalProperties: false
+                }
+              }
+            }
+          });
+          const content = String(response.choices?.[0]?.message?.content || "{}");
+          return JSON.parse(content);
+        } catch (error) {
+          return {
+            valido: false,
+            tipoDetectado: "Erro na análise",
+            empresa: input.empresaNome,
+            competencia: input.competencia,
+            valor: "N/A",
+            observacoes: ["Não foi possível analisar o documento automaticamente"],
+            alertas: ["Erro na validação com IA. Verifique manualmente."],
+            confianca: 0
+          };
+        }
+      }),
+  }),
 });

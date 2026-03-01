@@ -32,6 +32,7 @@ import {
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
+  FileSearch, Brain, Scale,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -133,6 +134,12 @@ const menuSectionsRHDP: MenuSection[] = [
     items: [
       { icon: CalendarDays, label: "Feriados", path: "/feriados" },
       { icon: TrendingUp, label: "Dissídio", path: "/dissidio" },
+    ],
+  },
+  {
+    title: "Inteligência Artificial",
+    items: [
+      { icon: Scale, label: "Comparativo Convenções", path: "/comparativo-convencoes" },
     ],
   },
 ];
@@ -259,6 +266,12 @@ const menuSectionsTerceiros: MenuSection[] = [
       { icon: CreditCard, label: "Crachás", path: "/terceiros/crachas" },
     ],
   },
+  {
+    title: "Inteligência Artificial",
+    items: [
+      { icon: FileSearch, label: "Validação IA de Docs", path: "/terceiros/validacao-ia" },
+    ],
+  },
 ];
 
 const menuSectionsParceiros: MenuSection[] = [
@@ -274,6 +287,7 @@ const menuSectionsParceiros: MenuSection[] = [
     items: [
       { icon: Receipt, label: "Lançamentos", path: "/parceiros/lancamentos" },
       { icon: CheckCircle, label: "Aprovações RH", path: "/parceiros/aprovacoes" },
+      { icon: Globe, label: "Portal Externo", path: "/parceiros/portal" },
     ],
   },
   {

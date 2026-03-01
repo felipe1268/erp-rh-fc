@@ -59,6 +59,9 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/parceiros/aprovacoes": "parceiros" as ModuleId,
   "/parceiros/guia-descontos": "parceiros" as ModuleId,
   "/parceiros/pagamentos": "parceiros" as ModuleId,
+  "/parceiros/portal": "parceiros" as ModuleId,
+  "/terceiros/validacao-ia": "terceiros" as ModuleId,
+  "/comparativo-convencoes": "rh-dp" as ModuleId,
   // Shared routes (appear in all modules)
   "/empresas": "all",
   "/obras": "all",

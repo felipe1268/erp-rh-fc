@@ -69,6 +69,7 @@ import ObrigacoesMensais from "./pages/terceiros/ObrigacoesMensais";
 import PainelConformidade from "./pages/terceiros/PainelConformidade";
 import AlertasCobrancas from "./pages/terceiros/AlertasCobranças";
 import PortalTerceiro from "./pages/terceiros/PortalTerceiro";
+import Crachas from "./pages/terceiros/Crachas";
 // Parceiros
 import PainelParceiros from "./pages/parceiros/PainelParceiros";
 import CadastroParceiros from "./pages/parceiros/CadastroParceiros";
@@ -76,6 +77,10 @@ import LancamentosParceiros from "./pages/parceiros/LancamentosParceiros";
 import GuiaDescontos from "./pages/parceiros/GuiaDescontos";
 import PagamentosParceiros from "./pages/parceiros/PagamentosParceiros";
 import AprovacoesParceiros from "./pages/parceiros/AprovacoesParceiros";
+import PortalParceiro from "./pages/parceiros/PortalParceiro";
+// Sprint 6 - IA
+import ValidacaoIA from "./pages/terceiros/ValidacaoIA";
+import ComparativoConvencoes from "./pages/ComparativoConvencoes";
 
 function Router() {
   return (
@@ -145,6 +150,8 @@ function Router() {
       <Route path="/terceiros/conformidade" component={PainelConformidade} />
       <Route path="/terceiros/alertas" component={AlertasCobrancas} />
       <Route path="/terceiros/portal" component={PortalTerceiro} />
+      <Route path="/terceiros/crachas" component={Crachas} />
+      <Route path="/terceiros/validacao-ia" component={ValidacaoIA} />
       <Route path="/terceiros/painel" component={PainelTerceiros} />
       {/* Parceiros */}
       <Route path="/parceiros" component={PainelParceiros} />
@@ -153,7 +160,10 @@ function Router() {
       <Route path="/parceiros/guia-descontos" component={GuiaDescontos} />
       <Route path="/parceiros/pagamentos" component={PagamentosParceiros} />
       <Route path="/parceiros/aprovacoes" component={AprovacoesParceiros} />
+      <Route path="/parceiros/portal" component={PortalParceiro} />
       <Route path="/parceiros/painel" component={PainelParceiros} />
+      {/* Sprint 6 - IA */}
+      <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
       <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
       <Route path={"404"} component={NotFound} />
