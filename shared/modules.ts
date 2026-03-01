@@ -68,7 +68,7 @@ export type EmployeeStatus = typeof EMPLOYEE_STATUS[number]["value"];
 // Usado para controle de acesso por usuário na sidebar e rotas
 // ============================================================
 
-export type ActiveModuleId = "rh-dp" | "sst" | "juridico";
+export type ActiveModuleId = "rh-dp" | "sst" | "juridico" | "terceiros" | "parceiros";
 
 export interface ModuleFeature {
   key: string;
@@ -130,6 +130,37 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: "Scale",
     features: [
       { key: "processos-trabalhistas", label: "Processos Trabalhistas", route: "/processos-trabalhistas", icon: "Gavel" },
+    ],
+  },
+  {
+    id: "terceiros",
+    label: "Terceiros",
+    description: "Gestão de Empresas Terceirizadas e Subcontratadas",
+    color: "orange",
+    icon: "HardHat",
+    features: [
+      { key: "terceiros-painel", label: "Painel Terceiros", route: "/terceiros/painel", icon: "LayoutDashboard" },
+      { key: "terceiros-empresas", label: "Empresas Terceiras", route: "/terceiros/empresas", icon: "Building2" },
+      { key: "terceiros-funcionarios", label: "Funcionários Terceiros", route: "/terceiros/funcionarios", icon: "Users" },
+      { key: "terceiros-obrigacoes", label: "Obrigações Mensais", route: "/terceiros/obrigacoes", icon: "ClipboardCheck" },
+      { key: "terceiros-conformidade", label: "Painel de Conformidade", route: "/terceiros/conformidade", icon: "ShieldCheck" },
+      { key: "terceiros-alertas", label: "Alertas e Cobranças", route: "/terceiros/alertas", icon: "Bell" },
+      { key: "terceiros-crachas", label: "Crachás", route: "/terceiros/crachas", icon: "CreditCard" },
+    ],
+  },
+  {
+    id: "parceiros",
+    label: "Parceiros",
+    description: "Portal de Parceiros Conveniados (Farmácia, Posto, etc.)",
+    color: "purple",
+    icon: "Handshake",
+    features: [
+      { key: "parceiros-painel", label: "Painel Parceiros", route: "/parceiros/painel", icon: "LayoutDashboard" },
+      { key: "parceiros-cadastro", label: "Parceiros Conveniados", route: "/parceiros/cadastro", icon: "Store" },
+      { key: "parceiros-lancamentos", label: "Lançamentos", route: "/parceiros/lancamentos", icon: "Receipt" },
+      { key: "parceiros-aprovacoes", label: "Aprovações RH", route: "/parceiros/aprovacoes", icon: "CheckCircle" },
+      { key: "parceiros-guia-descontos", label: "Guia de Descontos", route: "/parceiros/guia-descontos", icon: "FileText" },
+      { key: "parceiros-pagamentos", label: "Pagamentos", route: "/parceiros/pagamentos", icon: "Wallet" },
     ],
   },
 ];

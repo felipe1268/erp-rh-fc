@@ -3809,10 +3809,10 @@
 - [x] 1.4 Status de Aptidão automático (Apto/Inapto) para colaboradores - endpoint criado
 
 ## Sprint 2 - Módulo Terceiros: Cadastro (Prioridade 2)
-- [ ] 2.1 Cadastro de empresas terceiras com documentos obrigatórios (PGR, PCMSO, contrato social)
-- [ ] 2.2 Cadastro de funcionários terceiros com ficha, documentos, ASO, treinamentos, alocação em obra
-- [ ] 2.3 Aptidão de terceiros (Apto/Inapto automático)
-- [ ] 2.4 Obrigações mensais da empresa terceira (FGTS, INSS, folha, comprovantes) com checklist e upload
+- [x] 2.1 Cadastro de empresas terceiras com documentos obrigatórios (PGR, PCMSO, contrato social)
+- [x] 2.2 Cadastro de funcionários terceiros com ficha, documentos, ASO, treinamentos, alocação em obra
+- [x] 2.3 Aptidão de terceiros (Apto/Inapto automático)
+- [x] 2.4 Obrigações mensais da empresa terceira (FGTS, INSS, folha, comprovantes) com checklist e upload
 
 ## Sprint 3 - Módulo Terceiros: Acesso Externo e Alertas (Prioridade 2 cont.)
 - [ ] 2.5 Acesso externo para empresa terceira enviar documentos mensais
@@ -3843,3 +3843,14 @@
 
 ## Ajuste: Remover Horista
 - [x] Remover opção "Horista" do select de tipoContrato (todos CLT já são horistas)
+
+## Arquitetura: Módulos Independentes
+- [x] Criar módulo "Terceiros" como módulo independente na tela principal (como RH&DP, SST, Jurídico)
+- [x] Criar módulo "Parceiros" como módulo independente na tela principal
+- [x] Cada módulo com sidebar própria, cor e ícone distintos
+- [x] Terceiros: cor laranja, ícone HardHat/Building
+- [x] Parceiros: cor roxa/violeta, ícone Handshake/Store
+
+## Ajustes Pós-Sprints (fazer depois de finalizar tudo)
+- [ ] Remover "Avaliação de Desempenho" da sidebar do RH & DP (já é módulo separado)
+- [ ] Tornar dialogs/abas redimensionáveis com drag nas bordas (resize com mouse)

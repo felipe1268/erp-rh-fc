@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -43,6 +43,21 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/processos-trabalhistas": "juridico",
   // Avaliação routes
   "/avaliacao-desempenho": "avaliacao" as ModuleId,
+  // Terceiros routes
+  "/terceiros/painel": "terceiros" as ModuleId,
+  "/terceiros/empresas": "terceiros" as ModuleId,
+  "/terceiros/funcionarios": "terceiros" as ModuleId,
+  "/terceiros/obrigacoes": "terceiros" as ModuleId,
+  "/terceiros/conformidade": "terceiros" as ModuleId,
+  "/terceiros/alertas": "terceiros" as ModuleId,
+  "/terceiros/crachas": "terceiros" as ModuleId,
+  // Parceiros routes
+  "/parceiros/painel": "parceiros" as ModuleId,
+  "/parceiros/cadastro": "parceiros" as ModuleId,
+  "/parceiros/lancamentos": "parceiros" as ModuleId,
+  "/parceiros/aprovacoes": "parceiros" as ModuleId,
+  "/parceiros/guia-descontos": "parceiros" as ModuleId,
+  "/parceiros/pagamentos": "parceiros" as ModuleId,
   // Shared routes (appear in all modules)
   "/empresas": "all",
   "/obras": "all",
@@ -60,6 +75,8 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "sst": "SST",
   "juridico": "Jurídico",
   "avaliacao": "Avaliação",
+  "terceiros": "Terceiros",
+  "parceiros": "Parceiros",
   "all": "Todos os Módulos",
 };
 
@@ -69,7 +86,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp"; // Default to RH & DP

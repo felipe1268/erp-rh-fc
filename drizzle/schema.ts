@@ -2742,3 +2742,244 @@ export const warnings = mysqlTable("warnings", {
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
 });
+
+
+// ============================================================
+// MÓDULO TERCEIROS - Empresas Terceirizadas e Subcontratadas
+// ============================================================
+
+export const empresasTerceiras = mysqlTable("empresas_terceiras", {
+  id: int().primaryKey().autoincrement(),
+  companyId: int("company_id").notNull(),
+  razaoSocial: varchar("razao_social", { length: 255 }).notNull(),
+  nomeFantasia: varchar("nome_fantasia", { length: 255 }),
+  cnpj: varchar({ length: 20 }).notNull(),
+  inscricaoEstadual: varchar("inscricao_estadual", { length: 30 }),
+  inscricaoMunicipal: varchar("inscricao_municipal", { length: 30 }),
+  // Endereço
+  cep: varchar({ length: 10 }),
+  logradouro: varchar({ length: 255 }),
+  numero: varchar({ length: 20 }),
+  complemento: varchar({ length: 100 }),
+  bairro: varchar({ length: 100 }),
+  cidade: varchar({ length: 100 }),
+  estado: varchar({ length: 2 }),
+  // Contato
+  telefone: varchar({ length: 30 }),
+  celular: varchar({ length: 30 }),
+  email: varchar({ length: 255 }),
+  emailFinanceiro: varchar("email_financeiro", { length: 255 }),
+  responsavelNome: varchar("responsavel_nome", { length: 255 }),
+  responsavelCargo: varchar("responsavel_cargo", { length: 100 }),
+  // Tipo de serviço
+  tipoServico: varchar("tipo_servico", { length: 255 }),
+  descricaoServico: text("descricao_servico"),
+  // Documentos da empresa
+  pgrUrl: varchar("pgr_url", { length: 500 }),
+  pgrValidade: timestamp("pgr_validade", { mode: "string" }),
+  pcmsoUrl: varchar("pcmso_url", { length: 500 }),
+  pcmsoValidade: timestamp("pcmso_validade", { mode: "string" }),
+  contratoSocialUrl: varchar("contrato_social_url", { length: 500 }),
+  alvaraUrl: varchar("alvara_url", { length: 500 }),
+  alvaraValidade: timestamp("alvara_validade", { mode: "string" }),
+  seguroVidaUrl: varchar("seguro_vida_url", { length: 500 }),
+  seguroVidaValidade: timestamp("seguro_vida_validade", { mode: "string" }),
+  // Dados bancários
+  banco: varchar({ length: 100 }),
+  agencia: varchar({ length: 20 }),
+  conta: varchar({ length: 30 }),
+  tipoConta: mysqlEnum("tipo_conta", ["corrente", "poupanca"]),
+  titularConta: varchar("titular_conta", { length: 255 }),
+  cpfCnpjTitular: varchar("cpf_cnpj_titular", { length: 20 }),
+  // Forma de pagamento
+  formaPagamento: mysqlEnum("forma_pagamento", ["pix", "boleto", "transferencia", "deposito"]),
+  pixChave: varchar("pix_chave", { length: 255 }),
+  pixTipoChave: mysqlEnum("pix_tipo_chave", ["cpf", "cnpj", "email", "telefone", "aleatoria"]),
+  // Status
+  status: mysqlEnum("status_terceira", ["ativa", "suspensa", "inativa"]).default("ativa").notNull(),
+  observacoes: text(),
+  // Controle
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  createdBy: varchar("created_by", { length: 255 }),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+});
+
+export const funcionariosTerceiros = mysqlTable("funcionarios_terceiros", {
+  id: int().primaryKey().autoincrement(),
+  empresaTerceiraId: int("empresa_terceira_id").notNull(),
+  companyId: int("company_id").notNull(),
+  // Dados pessoais
+  nome: varchar({ length: 255 }).notNull(),
+  cpf: varchar({ length: 14 }),
+  rg: varchar({ length: 20 }),
+  dataNascimento: timestamp("data_nascimento", { mode: "string" }),
+  fotoUrl: varchar("foto_url", { length: 500 }),
+  funcao: varchar({ length: 100 }),
+  telefone: varchar({ length: 30 }),
+  email: varchar({ length: 255 }),
+  // Documentos
+  asoUrl: varchar("aso_url", { length: 500 }),
+  asoValidade: timestamp("aso_validade", { mode: "string" }),
+  treinamentoNrUrl: varchar("treinamento_nr_url", { length: 500 }),
+  treinamentoNrValidade: timestamp("treinamento_nr_validade", { mode: "string" }),
+  certificadosUrl: varchar("certificados_url", { length: 500 }),
+  // Alocação
+  obraId: int("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  // Status de aptidão
+  statusAptidao: mysqlEnum("status_aptidao_terceiro", ["apto", "inapto", "pendente"]).default("pendente").notNull(),
+  motivoInapto: text("motivo_inapto"),
+  // Controle
+  status: mysqlEnum("status_func_terceiro", ["ativo", "inativo", "afastado"]).default("ativo").notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+});
+
+export const obrigacoesMensaisTerceiros = mysqlTable("obrigacoes_mensais_terceiros", {
+  id: int().primaryKey().autoincrement(),
+  empresaTerceiraId: int("empresa_terceira_id").notNull(),
+  companyId: int("company_id").notNull(),
+  competencia: varchar({ length: 7 }).notNull(), // YYYY-MM
+  // Documentos mensais
+  fgtsUrl: varchar("fgts_url", { length: 500 }),
+  fgtsStatus: mysqlEnum("fgts_status", ["pendente", "enviado", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  inssUrl: varchar("inss_url", { length: 500 }),
+  inssStatus: mysqlEnum("inss_status", ["pendente", "enviado", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  folhaPagamentoUrl: varchar("folha_pagamento_url", { length: 500 }),
+  folhaPagamentoStatus: mysqlEnum("folha_pagamento_status", ["pendente", "enviado", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  comprovantePagamentoUrl: varchar("comprovante_pagamento_url", { length: 500 }),
+  comprovantePagamentoStatus: mysqlEnum("comprovante_pagamento_status", ["pendente", "enviado", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  gpsUrl: varchar("gps_url", { length: 500 }),
+  gpsStatus: mysqlEnum("gps_status", ["pendente", "enviado", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  cndUrl: varchar("cnd_url", { length: 500 }),
+  cndStatus: mysqlEnum("cnd_status", ["pendente", "enviado", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  // Status geral
+  statusGeral: mysqlEnum("status_geral_obrigacao", ["pendente", "parcial", "completo", "atrasado"]).default("pendente").notNull(),
+  observacoes: text(),
+  validadoPor: varchar("validado_por", { length: 255 }),
+  validadoEm: timestamp("validado_em", { mode: "string" }),
+  // Controle
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const alertasTerceiros = mysqlTable("alertas_terceiros", {
+  id: int().primaryKey().autoincrement(),
+  empresaTerceiraId: int("empresa_terceira_id").notNull(),
+  companyId: int("company_id").notNull(),
+  tipo: mysqlEnum("tipo_alerta", ["documento_vencendo", "obrigacao_pendente", "documento_vencido", "obrigacao_atrasada"]).notNull(),
+  titulo: varchar({ length: 255 }).notNull(),
+  descricao: text(),
+  dataVencimento: timestamp("data_vencimento", { mode: "string" }),
+  emailEnviado: tinyint("email_enviado").default(0),
+  emailEnviadoEm: timestamp("email_enviado_em", { mode: "string" }),
+  resolvido: tinyint().default(0),
+  resolvidoEm: timestamp("resolvido_em", { mode: "string" }),
+  resolvidoPor: varchar("resolvido_por", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+// ============================================================
+// MÓDULO PARCEIROS - Portal de Parceiros Conveniados
+// ============================================================
+
+export const parceirosConveniados = mysqlTable("parceiros_conveniados", {
+  id: int().primaryKey().autoincrement(),
+  companyId: int("company_id").notNull(),
+  // Dados da empresa
+  razaoSocial: varchar("razao_social", { length: 255 }).notNull(),
+  nomeFantasia: varchar("nome_fantasia", { length: 255 }),
+  cnpj: varchar({ length: 20 }).notNull(),
+  inscricaoEstadual: varchar("inscricao_estadual", { length: 30 }),
+  inscricaoMunicipal: varchar("inscricao_municipal", { length: 30 }),
+  // Endereço
+  cep: varchar({ length: 10 }),
+  logradouro: varchar({ length: 255 }),
+  numero: varchar({ length: 20 }),
+  complemento: varchar({ length: 100 }),
+  bairro: varchar({ length: 100 }),
+  cidade: varchar({ length: 100 }),
+  estado: varchar({ length: 2 }),
+  // Contato
+  telefone: varchar({ length: 30 }),
+  celular: varchar({ length: 30 }),
+  emailPrincipal: varchar("email_principal", { length: 255 }),
+  emailFinanceiro: varchar("email_financeiro", { length: 255 }),
+  responsavelNome: varchar("responsavel_nome", { length: 255 }),
+  responsavelCargo: varchar("responsavel_cargo", { length: 100 }),
+  // Tipo de convênio
+  tipoConvenio: mysqlEnum("tipo_convenio", ["farmacia", "posto_combustivel", "restaurante", "mercado", "outros"]).notNull(),
+  tipoConvenioOutro: varchar("tipo_convenio_outro", { length: 100 }),
+  // Dados bancários
+  banco: varchar("banco_parceiro", { length: 100 }),
+  agencia: varchar("agencia_parceiro", { length: 20 }),
+  conta: varchar("conta_parceiro", { length: 30 }),
+  tipoConta: mysqlEnum("tipo_conta_parceiro", ["corrente", "poupanca"]),
+  titularConta: varchar("titular_conta_parceiro", { length: 255 }),
+  cpfCnpjTitular: varchar("cpf_cnpj_titular_parceiro", { length: 20 }),
+  // Forma de pagamento
+  formaPagamento: mysqlEnum("forma_pagamento_parceiro", ["pix", "boleto", "transferencia", "deposito"]),
+  pixChave: varchar("pix_chave_parceiro", { length: 255 }),
+  pixTipoChave: mysqlEnum("pix_tipo_chave_parceiro", ["cpf", "cnpj", "email", "telefone", "aleatoria"]),
+  // Condições do convênio
+  diaFechamento: int("dia_fechamento"),
+  prazoPagamento: int("prazo_pagamento"),
+  limiteMensalPorColaborador: decimal("limite_mensal_por_colaborador", { precision: 10, scale: 2 }),
+  // Documentos
+  contratoConvenioUrl: varchar("contrato_convenio_url", { length: 500 }),
+  contratoSocialUrl: varchar("contrato_social_url_parceiro", { length: 500 }),
+  alvaraUrl: varchar("alvara_url_parceiro", { length: 500 }),
+  // Status
+  status: mysqlEnum("status_parceiro", ["ativo", "suspenso", "inativo"]).default("ativo").notNull(),
+  observacoes: text("observacoes_parceiro"),
+  // Acesso externo
+  loginEmail: varchar("login_email", { length: 255 }),
+  loginSenhaHash: varchar("login_senha_hash", { length: 255 }),
+  acessoExternoAtivo: tinyint("acesso_externo_ativo").default(0),
+  // Controle
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  createdBy: varchar("created_by", { length: 255 }),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+});
+
+export const lancamentosParceiros = mysqlTable("lancamentos_parceiros", {
+  id: int().primaryKey().autoincrement(),
+  parceiroId: int("parceiro_id").notNull(),
+  companyId: int("company_id").notNull(),
+  employeeId: int("employee_id").notNull(),
+  employeeNome: varchar("employee_nome", { length: 255 }).notNull(),
+  // Dados do lançamento
+  dataCompra: timestamp("data_compra", { mode: "string" }).notNull(),
+  descricaoItens: text("descricao_itens"),
+  valor: decimal({ precision: 10, scale: 2 }).notNull(),
+  comprovanteUrl: varchar("comprovante_url", { length: 500 }),
+  // Status
+  status: mysqlEnum("status_lancamento_parceiro", ["pendente", "aprovado", "rejeitado"]).default("pendente").notNull(),
+  motivoRejeicao: text("motivo_rejeicao"),
+  aprovadoPor: varchar("aprovado_por", { length: 255 }),
+  aprovadoEm: timestamp("aprovado_em", { mode: "string" }),
+  // Competência para desconto
+  competenciaDesconto: varchar("competencia_desconto", { length: 7 }), // YYYY-MM
+  // Controle
+  lancadoPor: varchar("lancado_por", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const pagamentosParceiros = mysqlTable("pagamentos_parceiros", {
+  id: int().primaryKey().autoincrement(),
+  parceiroId: int("parceiro_id").notNull(),
+  companyId: int("company_id").notNull(),
+  competencia: varchar("competencia_pagamento", { length: 7 }).notNull(), // YYYY-MM
+  valorTotal: decimal("valor_total", { precision: 10, scale: 2 }).notNull(),
+  status: mysqlEnum("status_pagamento_parceiro", ["pendente", "pago", "cancelado"]).default("pendente").notNull(),
+  dataPagamento: timestamp("data_pagamento", { mode: "string" }),
+  comprovanteUrl: varchar("comprovante_pagamento_url", { length: 500 }),
+  observacoes: text("observacoes_pagamento"),
+  pagoBy: varchar("pago_by", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});

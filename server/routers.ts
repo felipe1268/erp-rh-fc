@@ -69,6 +69,8 @@ import { sindicalRouter } from "./routers/sindical";
 import { avaliacaoRouter } from "./routers/avaliacao";
 import { assistenteIARouter } from "./routers/assistenteIA";
 import { sprint1Router } from "./routers/sprint1Foundation";
+import { terceirosRouter } from "./routers/terceiros";
+import { parceirosRouter } from "./routers/parceiros";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -100,6 +102,8 @@ export const appRouter = router({
   avaliacao: avaliacaoRouter,
   assistenteIA: assistenteIARouter,
   sprint1: sprint1Router,
+  terceiros: terceirosRouter,
+  parceiros: parceirosRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

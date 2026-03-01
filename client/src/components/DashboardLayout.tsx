@@ -31,6 +31,7 @@ import {
   ClipboardList, ClipboardCheck, UserSearch, UserCheck, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
+  Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -234,11 +235,62 @@ const menuSectionsAvaliacao: MenuSection[] = [
   },
 ];
 
+const menuSectionsTerceiros: MenuSection[] = [
+  {
+    title: "Terceiros",
+    items: [
+      { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
+      { icon: Building2, label: "Empresas Terceiras", path: "/terceiros/empresas" },
+      { icon: Users, label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
+    ],
+  },
+  {
+    title: "Conformidade",
+    items: [
+      { icon: ClipboardCheck, label: "Obrigações Mensais", path: "/terceiros/obrigacoes" },
+      { icon: ShieldCheck, label: "Painel de Conformidade", path: "/terceiros/conformidade" },
+      { icon: BellIcon, label: "Alertas e Cobranças", path: "/terceiros/alertas" },
+    ],
+  },
+  {
+    title: "Operacional",
+    items: [
+      { icon: CreditCard, label: "Crachás", path: "/terceiros/crachas" },
+    ],
+  },
+];
+
+const menuSectionsParceiros: MenuSection[] = [
+  {
+    title: "Parceiros",
+    items: [
+      { icon: LayoutDashboard, label: "Painel Parceiros", path: "/parceiros/painel" },
+      { icon: Store, label: "Parceiros Conveniados", path: "/parceiros/cadastro" },
+    ],
+  },
+  {
+    title: "Operacional",
+    items: [
+      { icon: Receipt, label: "Lançamentos", path: "/parceiros/lancamentos" },
+      { icon: CheckCircle, label: "Aprovações RH", path: "/parceiros/aprovacoes" },
+    ],
+  },
+  {
+    title: "Financeiro",
+    items: [
+      { icon: FileText, label: "Guia de Descontos", path: "/parceiros/guia-descontos" },
+      { icon: Wallet, label: "Pagamentos", path: "/parceiros/pagamentos" },
+    ],
+  },
+];
+
 const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
   "juridico": menuSectionsJuridico,
   "avaliacao": menuSectionsAvaliacao,
+  "terceiros": menuSectionsTerceiros,
+  "parceiros": menuSectionsParceiros,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 
@@ -289,6 +341,8 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "sst": "/painel/sst",
   "juridico": "/painel/juridico",
   "avaliacao": "/avaliacao-desempenho",
+  "terceiros": "/terceiros/painel",
+  "parceiros": "/parceiros/painel",
   "all": "/painel",
 };
 
@@ -298,6 +352,8 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "sst": { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/20" },
   "juridico": { icon: Gavel, color: "text-slate-300", bg: "bg-slate-400/20" },
   "avaliacao": { icon: Star, color: "text-amber-400", bg: "bg-amber-500/20" },
+  "terceiros": { icon: HardHat, color: "text-orange-400", bg: "bg-orange-500/20" },
+  "parceiros": { icon: Handshake, color: "text-purple-400", bg: "bg-purple-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
 
@@ -609,6 +665,22 @@ function DashboardLayoutContent({
                       Avaliação
                     </div>
                   </SelectItem>
+                  <SelectItem value="terceiros">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-orange-500/20 flex items-center justify-center">
+                        <HardHat className="h-3 w-3 text-orange-400" />
+                      </div>
+                      Terceiros
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="parceiros">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-purple-500/20 flex items-center justify-center">
+                        <Handshake className="h-3 w-3 text-purple-400" />
+                      </div>
+                      Parceiros
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -642,6 +714,12 @@ function DashboardLayoutContent({
                   )}
                   <DropdownMenuItem onClick={() => { setActiveModule("avaliacao"); setLocation("/avaliacao-desempenho"); }} className="cursor-pointer">
                     <Star className="mr-2 h-4 w-4 text-amber-400" /> Avaliação
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setActiveModule("terceiros" as ModuleId); setLocation("/terceiros/painel"); }} className="cursor-pointer">
+                    <HardHat className="mr-2 h-4 w-4 text-orange-400" /> Terceiros
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setActiveModule("parceiros" as ModuleId); setLocation("/parceiros/painel"); }} className="cursor-pointer">
+                    <Handshake className="mr-2 h-4 w-4 text-purple-400" /> Parceiros
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

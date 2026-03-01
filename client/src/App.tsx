@@ -61,6 +61,17 @@ import BibliotecaConhecimento from "./pages/BibliotecaConhecimento";
 import AvaliacaoDesempenho from "./pages/AvaliacaoDesempenho";
 import { PesquisaPublicaPage, ClimaPublicoPage } from "./pages/PesquisaPublica";
 import AssistenteIAFloat from "./components/AssistenteIAFloat";
+// Terceiros
+import PainelTerceiros from "./pages/terceiros/PainelTerceiros";
+import EmpresasTerceiras from "./pages/terceiros/EmpresasTerceiras";
+import FuncionariosTerceiros from "./pages/terceiros/FuncionariosTerceiros";
+import ObrigacoesMensais from "./pages/terceiros/ObrigacoesMensais";
+// Parceiros
+import PainelParceiros from "./pages/parceiros/PainelParceiros";
+import CadastroParceiros from "./pages/parceiros/CadastroParceiros";
+import LancamentosParceiros from "./pages/parceiros/LancamentosParceiros";
+import GuiaDescontos from "./pages/parceiros/GuiaDescontos";
+import PagamentosParceiros from "./pages/parceiros/PagamentosParceiros";
 
 function Router() {
   return (
@@ -121,6 +132,17 @@ function Router() {
       <Route path={"/dashboards/visao-panoramica"} component={VisaoPanoramica} />
       <Route path={"/dashboards/perfil-tempo-casa"} component={DashPerfilTempoCasa} />
       <Route path={"/dashboards/controle-documentos"} component={DashControleDocumentos} />
+      {/* Terceiros */}
+      <Route path="/terceiros" component={PainelTerceiros} />
+      <Route path="/terceiros/empresas" component={EmpresasTerceiras} />
+      <Route path="/terceiros/funcionarios" component={FuncionariosTerceiros} />
+      <Route path="/terceiros/obrigacoes-mensais" component={ObrigacoesMensais} />
+      {/* Parceiros */}
+      <Route path="/parceiros" component={PainelParceiros} />
+      <Route path="/parceiros/cadastro" component={CadastroParceiros} />
+      <Route path="/parceiros/lancamentos" component={LancamentosParceiros} />
+      <Route path="/parceiros/guia-descontos" component={GuiaDescontos} />
+      <Route path="/parceiros/pagamentos" component={PagamentosParceiros} />
       <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
       <Route path={"404"} component={NotFound} />
