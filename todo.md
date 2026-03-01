@@ -3961,3 +3961,4 @@
 - [ ] BUG: Ícone do olho (ver documento PDF) não aparece na primeira convenção que tem PDF vinculado
 - [x] BUG: Atualizar convenção coletiva não salva as alterações (dados não persistem)
 - [x] BUG: PDF do upload na edição não fica disponível para visualização futura (ícone do olho)
+- [x] Ao clicar no nome do funcionário no Vale Alimentação, abrir histórico de recebíveis dele

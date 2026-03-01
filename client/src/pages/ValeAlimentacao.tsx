@@ -75,6 +75,8 @@ export default function ValeAlimentacao() {
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [detailRecord, setDetailRecord] = useState<any>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [histDialogEmployeeId, setHistDialogEmployeeId] = useState<number | null>(null);
+  const [histDialogName, setHistDialogName] = useState<string>("");
 
   // Queries
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: !!companyId });
@@ -84,6 +86,10 @@ export default function ValeAlimentacao() {
   const histQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
     { companyId, employeeId: histEmployeeId! },
     { enabled: !!companyId && !!histEmployeeId && tab === "historico" }
+  );
+  const histDialogQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
+    { companyId, employeeId: histDialogEmployeeId! },
+    { enabled: !!companyId && !!histDialogEmployeeId }
   );
   const employeesQ = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId && tab === "historico" });
 
@@ -430,7 +436,7 @@ export default function ValeAlimentacao() {
                           <tr key={l.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                             <td className="px-4 py-2.5">
                               <div>
-                                <span className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(l.employeeId)}>{l.nomeCompleto}</span>
+                                <span className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => { setHistDialogEmployeeId(l.employeeId); setHistDialogName(l.nomeCompleto); }}>{l.nomeCompleto}</span>
                                 {l.obraNome && (
                                   <span className="block text-xs text-muted-foreground"><Building2 className="h-3 w-3 inline mr-1" />{l.obraNome}</span>
                                 )}
@@ -944,6 +950,89 @@ export default function ValeAlimentacao() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDetailDialog(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ===== DIALOG: HISTÓRICO DE RECEBÍVEIS DO FUNCIONÁRIO ===== */}
+      <Dialog open={!!histDialogEmployeeId} onOpenChange={(o) => { if (!o) setHistDialogEmployeeId(null); }}>
+        <DialogContent className="sm:max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-orange-600" />
+              Histórico de Recebíveis — {histDialogName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto max-h-[60vh]">
+            {histDialogQ.isLoading ? (
+              <div className="py-8 text-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline mr-2" />Carregando histórico...</div>
+            ) : !histDialogQ.data || (histDialogQ.data as any[]).length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Nenhum lançamento encontrado para este colaborador.</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Total Recebido</p>
+                    <p className="text-lg font-bold text-orange-700">
+                      {fmtBRL((histDialogQ.data as any[]).filter((h: any) => h.status === 'pago').reduce((s: number, h: any) => s + parseBRL(h.valorTotal), 0))}
+                    </p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Meses com Benefício</p>
+                    <p className="text-lg font-bold text-blue-700">{(histDialogQ.data as any[]).length}</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Média Mensal</p>
+                    <p className="text-lg font-bold text-green-700">
+                      {fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorTotal), 0) / ((histDialogQ.data as any[]).length || 1))}
+                    </p>
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left px-4 py-2.5 font-medium">Mês</th>
+                      <th className="text-right px-3 py-2.5 font-medium">Café</th>
+                      <th className="text-right px-3 py-2.5 font-medium">Lanche</th>
+                      <th className="text-right px-3 py-2.5 font-medium">Jantar</th>
+                      <th className="text-right px-3 py-2.5 font-medium">VA</th>
+                      <th className="text-right px-3 py-2.5 font-medium font-bold">Total</th>
+                      <th className="text-center px-3 py-2.5 font-medium">Dias</th>
+                      <th className="text-center px-3 py-2.5 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(histDialogQ.data as any[]).map((h: any) => (
+                      <tr key={h.id} className="border-b last:border-0 hover:bg-muted/20">
+                        <td className="px-4 py-2 font-medium">{h.mesReferencia}</td>
+                        <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorCafe)}</td>
+                        <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorLanche)}</td>
+                        <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorJanta)}</td>
+                        <td className="px-3 py-2 text-right text-xs">{fmtValor(h.valorVA)}</td>
+                        <td className="px-3 py-2 text-right font-bold">{fmtValor(h.valorTotal)}</td>
+                        <td className="px-3 py-2 text-center text-xs">{h.diasUteis || "-"}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[h.status] || "bg-gray-100"}`}>
+                            {STATUS_LABELS[h.status] || h.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-muted/50 font-bold border-t-2">
+                      <td className="px-4 py-2.5">TOTAL</td>
+                      <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorCafe), 0))}</td>
+                      <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorLanche), 0))}</td>
+                      <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorJanta), 0))}</td>
+                      <td className="px-3 py-2.5 text-right text-xs">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorVA), 0))}</td>
+                      <td className="px-3 py-2.5 text-right text-base">{fmtBRL((histDialogQ.data as any[]).reduce((s: number, h: any) => s + parseBRL(h.valorTotal), 0))}</td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistDialogEmployeeId(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
