@@ -71,6 +71,7 @@ import { assistenteIARouter } from "./routers/assistenteIA";
 import { sprint1Router } from "./routers/sprint1Foundation";
 import { terceirosRouter } from "./routers/terceiros";
 import { parceirosRouter } from "./routers/parceiros";
+import { portalExternoRouter } from "./routers/portalExterno";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -104,6 +105,7 @@ export const appRouter = router({
   sprint1: sprint1Router,
   terceiros: terceirosRouter,
   parceiros: parceirosRouter,
+  portalExterno: portalExternoRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

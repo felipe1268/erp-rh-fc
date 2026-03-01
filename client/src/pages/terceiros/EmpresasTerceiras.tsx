@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Building2, Plus, Search, Edit, Trash2, Eye, Upload, FileText, CheckCircle, XCircle, Clock, Phone, Mail, MapPin, Loader2 } from "lucide-react";
+import { Building2, Plus, Search, Edit, Trash2, Eye, Upload, FileText, CheckCircle, XCircle, Clock, Phone, Mail, MapPin, Loader2, KeyRound, Copy } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const ESTADOS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
@@ -27,6 +28,22 @@ export default function EmpresasTerceiras() {
   const [activeTab, setActiveTab] = useState<"dados" | "documentos" | "bancario">("dados");
   const [form, setForm] = useState<any>({});
   const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [acessoDialogOpen, setAcessoDialogOpen] = useState(false);
+  const [acessoResult, setAcessoResult] = useState<{ senhaTemporaria: string; cnpj: string; nomeEmpresa: string } | null>(null);
+  const [acessoEmpresa, setAcessoEmpresa] = useState<any>(null);
+  const [emailResp, setEmailResp] = useState("");
+  const [nomeResp, setNomeResp] = useState("");
+  const gerarAcessoMut = trpc.portalExterno.admin.gerarAcesso.useMutation({
+    onSuccess: (data) => { setAcessoResult(data); toast.success("Acesso gerado!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const handleGerarAcesso = (emp: any) => {
+    setAcessoEmpresa(emp); setEmailResp(emp.emailResponsavel || emp.email || ""); setNomeResp(emp.responsavelNome || ""); setAcessoResult(null); setAcessoDialogOpen(true);
+  };
+  const confirmarGerarAcesso = () => {
+    if (!acessoEmpresa || !companyId) return;
+    gerarAcessoMut.mutate({ tipo: "terceiro", empresaTerceiraId: acessoEmpresa.id, companyId, cnpj: acessoEmpresa.cnpj, emailResponsavel: emailResp, nomeResponsavel: nomeResp, nomeEmpresa: acessoEmpresa.razaoSocial });
+  };
 
   const buscarCNPJ = async (cnpj: string) => {
     const clean = cnpj.replace(/\D/g, "");
@@ -186,6 +203,9 @@ export default function EmpresasTerceiras() {
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => openEdit(emp)}>
                       <Edit className="h-3.5 w-3.5 mr-1" /> Editar
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-amber-600 hover:bg-amber-50" onClick={() => handleGerarAcesso(emp)}>
+                      <KeyRound className="h-3.5 w-3.5 mr-1" /> Acesso Portal
                     </Button>
                     <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => {
                       if (confirm("Excluir esta empresa?")) deleteMut.mutate({ id: emp.id });
@@ -387,6 +407,41 @@ export default function EmpresasTerceiras() {
           </div>
         </FullScreenDialog>
       )}
+      {/* Dialog Gerar Acesso */}
+      <Dialog open={acessoDialogOpen} onOpenChange={setAcessoDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><KeyRound className="w-5 h-5 text-amber-500" /> Gerar Acesso ao Portal</DialogTitle></DialogHeader>
+          {!acessoResult ? (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800 font-bold">{acessoEmpresa?.razaoSocial}</p>
+                <p className="text-xs text-amber-600">CNPJ: {acessoEmpresa?.cnpj}</p>
+              </div>
+              <div><Label>Nome do Responsável</Label><Input value={nomeResp} onChange={(e) => setNomeResp(e.target.value)} placeholder="Nome" /></div>
+              <div><Label>E-mail do Responsável</Label><Input value={emailResp} onChange={(e) => setEmailResp(e.target.value)} placeholder="email@empresa.com" /></div>
+              <p className="text-xs text-gray-500">Uma senha temporária será gerada. No primeiro acesso, o terceiro será obrigado a trocar a senha.</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAcessoDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={confirmarGerarAcesso} disabled={gerarAcessoMut.isPending} className="bg-amber-500 hover:bg-amber-600">{gerarAcessoMut.isPending ? "Gerando..." : "Gerar Acesso"}</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+                <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                <p className="font-semibold text-emerald-800">Acesso gerado com sucesso!</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div><p className="text-xs text-gray-500">Login (CNPJ)</p><div className="flex items-center gap-2"><code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1">{acessoResult.cnpj}</code><Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.cnpj); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button></div></div>
+                <div><p className="text-xs text-gray-500">Senha Temporária</p><div className="flex items-center gap-2"><code className="bg-white border rounded px-2 py-1 text-sm font-mono flex-1 text-amber-600 font-bold">{acessoResult.senhaTemporaria}</code><Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(acessoResult.senhaTemporaria); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button></div></div>
+                <div className="pt-2 border-t"><p className="text-xs text-gray-500 mb-1">Link do Portal</p><div className="flex items-center gap-2"><code className="bg-white border rounded px-2 py-1 text-xs flex-1 truncate">{window.location.origin}/portal/login</code><Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/login`); toast.success("Copiado!"); }}><Copy className="w-3 h-3" /></Button></div></div>
+              </div>
+              <Button className="w-full" onClick={() => { const msg = `Portal do Terceiro - FC Gestão Integrada\n\nOlá ${nomeResp},\n\nSeu acesso ao portal foi criado:\n\nLink: ${window.location.origin}/portal/login\nLogin (CNPJ): ${acessoResult.cnpj}\nSenha: ${acessoResult.senhaTemporaria}\n\nNo primeiro acesso, você será solicitado a trocar a senha.`; navigator.clipboard.writeText(msg); toast.success("Mensagem copiada!"); }}><Copy className="w-4 h-4 mr-2" /> Copiar Mensagem Completa</Button>
+              <Button variant="outline" className="w-full" onClick={() => setAcessoDialogOpen(false)}>Fechar</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

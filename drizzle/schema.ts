@@ -2322,18 +2322,6 @@ export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
 	datajudMovimentos: json("datajud_movimentos"),
 	datajudTotalMovimentos: int("datajud_total_movimentos"),
 	datajudAutoDetectado: tinyint("datajud_auto_detectado").default(0).notNull(),
-	datajudId: varchar({ length: 255 }),
-	datajudUltimaConsulta: timestamp({ mode: 'string' }),
-	datajudUltimaAtualizacao: varchar({ length: 100 }),
-	datajudGrau: varchar({ length: 20 }),
-	datajudClasse: varchar({ length: 255 }),
-	datajudAssuntos: json(),
-	datajudOrgaoJulgador: varchar({ length: 255 }),
-	datajudSistema: varchar({ length: 100 }),
-	datajudFormato: varchar({ length: 50 }),
-	datajudMovimentos: json(),
-	datajudTotalMovimentos: int(),
-	datajudAutoDetectado: tinyint().default(0),
 },
 (table) => [
 	index("pt_company").on(table.companyId),
@@ -3001,4 +2989,28 @@ export const moduleConfig = mysqlTable("module_config", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => [
   index("mc_company_module").on(table.companyId, table.moduleKey),
+]);
+
+
+// ========== PORTAL EXTERNO - CREDENCIAIS ==========
+export const portalCredentials = mysqlTable("portal_credentials", {
+  id: int().primaryKey().autoincrement(),
+  tipo: mysqlEnum(["terceiro", "parceiro"]).notNull(),
+  empresaTerceiraId: int("empresa_terceira_id"),
+  parceiroId: int("parceiro_id"),
+  companyId: int("company_id").notNull(),
+  cnpj: varchar({ length: 20 }).notNull(),
+  senhaHash: varchar("senha_hash", { length: 255 }).notNull(),
+  nomeEmpresa: varchar("nome_empresa", { length: 255 }),
+  emailResponsavel: varchar("email_responsavel", { length: 255 }),
+  nomeResponsavel: varchar("nome_responsavel", { length: 255 }),
+  primeiroAcesso: tinyint("primeiro_acesso").default(1).notNull(),
+  ativo: tinyint().default(1).notNull(),
+  ultimoLogin: timestamp("ultimo_login", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("pc_cnpj").on(table.cnpj),
+  index("pc_tipo_empresa").on(table.tipo, table.empresaTerceiraId),
+  index("pc_tipo_parceiro").on(table.tipo, table.parceiroId),
 ]);

@@ -3882,3 +3882,21 @@
 - [x] Busca automática de CNPJ na tela de Empresas Terceiras (BrasilAPI) — já existia, verificado OK
 - [x] Busca automática de CNPJ na tela de Parceiros Conveniados (BrasilAPI) — já existia, verificado OK
 - [ ] Sistema de login externo para Terceiros e Parceiros
+## Portal Externo do Terceiro (Login com Senha)
+- [x] Tabela portal_credentials no banco (CNPJ + senha hash + tipo + empresa)
+- [x] Backend: Login com CNPJ + senha (JWT token)
+- [x] Backend: Trocar senha (primeiro acesso obrigatório)
+- [x] Backend: Verificar token
+- [x] Backend: CRUD funcionários pelo portal (terceiro cadastra seus próprios)
+- [x] Backend: Upload de documentos pelo portal (S3)
+- [x] Backend: Admin gerar acesso (senha temporária)
+- [x] Backend: Admin listar/desativar acessos
+- [x] Backend: Admin aprovar/rejeitar funcionário do portal
+- [x] Frontend: Tela de login do portal (/portal/login)
+- [x] Frontend: Tela de trocar senha (/portal/trocar-senha)
+- [x] Frontend: Dashboard do portal com gestão de funcionários (/portal/dashboard)
+- [x] Frontend: Botão "Acesso Portal" na lista de Empresas Terceiras
+- [x] Frontend: Dialog para gerar acesso com senha temporária e botão copiar
+- [x] Dupla via: RH interno também pode cadastrar funcionários de terceiros
+- [x] Bug fix: Lista de colaboradores não aparecia no Lançamento de Parceiros (campo nome vs nomeCompleto)
+- [x] Bug fix: Campos duplicados datajud removidos do schema

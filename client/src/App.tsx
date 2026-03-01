@@ -82,6 +82,10 @@ import PortalParceiro from "./pages/parceiros/PortalParceiro";
 // Sprint 6 - IA
 import ValidacaoIA from "./pages/terceiros/ValidacaoIA";
 import ComparativoConvencoes from "./pages/ComparativoConvencoes";
+// Portal Externo
+import PortalLogin from "./pages/portal/PortalLogin";
+import PortalTrocarSenha from "./pages/portal/PortalTrocarSenha";
+import PortalDashboard from "./pages/portal/PortalDashboard";
 
 function Router() {
   return (
@@ -166,6 +170,10 @@ function Router() {
       {/* Sprint 6 - IA */}
       <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
       <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
+      {/* Portal Externo (Terceiros/Parceiros) */}
+      <Route path="/portal/login" component={PortalLogin} />
+      <Route path="/portal/trocar-senha" component={PortalTrocarSenha} />
+      <Route path="/portal/dashboard" component={PortalDashboard} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
       <Route path={"404"} component={NotFound} />
       <Route component={NotFound} />

@@ -91,7 +91,7 @@ export default function LancamentosParceiros() {
 
   const getColaboradorNome = (id: number) => {
     const c = colaboradores.find((c: any) => c.id === id);
-    return c ? (c as any).nome : "—";
+    return c ? ((c as any).nomeCompleto || (c as any).nome) : "—";
   };
 
   const statusBadge = (status: string) => {
@@ -254,7 +254,7 @@ export default function LancamentosParceiros() {
                 <Select value={form.employeeId ? String(form.employeeId) : ""} onValueChange={(v) => setForm({ ...form, employeeId: parseInt(v) })}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {colaboradores.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+                    {colaboradores.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.nomeCompleto || c.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
