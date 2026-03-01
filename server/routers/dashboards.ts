@@ -6,6 +6,7 @@ import {
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
   epiDiscountAlerts, terminationNotices, vacationPeriods, goldenRules,
+  asos, trainings, employeeDocuments, obraFuncionarios,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
@@ -1471,7 +1472,11 @@ async function getDashAvisoPrevio(companyId: number, ano?: number) {
   filteredNotices.forEach(n => { const f = n.funcao || n.cargo || 'Não informado'; porFuncao[f] = (porFuncao[f] || 0) + 1; });
   const funcaoDist = Object.entries(porFuncao).map(([funcao, c]) => ({ funcao, count: c })).sort((a, b) => b.count - a.count).slice(0, 10);
 
+  // Pré-popular todos os 12 meses do ano selecionado para continuidade visual
   const porMes: Record<string, { trabalhado: number; indenizado: number }> = {};
+  for (let m = 1; m <= 12; m++) {
+    porMes[`${anoRef}-${String(m).padStart(2, '0')}`] = { trabalhado: 0, indenizado: 0 };
+  }
   filteredNotices.forEach(n => {
     const d = n.dataInicio ? new Date(n.dataInicio) : new Date(n.createdAt);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -2121,6 +2126,432 @@ Foque em:
 }
 
 // ============================================================
+// DASHBOARD CONTROLE DE DOCUMENTOS
+// ============================================================
+async function getDashDocumentos(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const d30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const d60 = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  const d90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+
+  // ── ASOs ──
+  const asoTotal = await db.select({ count: sql<number>`count(*)` })
+    .from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt)));
+  const asoVencidos = await db.select({ count: sql<number>`count(*)` })
+    .from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`));
+  const asoAVencer30 = await db.select({ count: sql<number>`count(*)` })
+    .from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d30}`));
+  const asoAVencer60 = await db.select({ count: sql<number>`count(*)` })
+    .from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d60}`));
+  const asoAVencer90 = await db.select({ count: sql<number>`count(*)` })
+    .from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d90}`));
+  const asoPorTipo = await db.select({ tipo: asos.tipo, count: sql<number>`count(*)` })
+    .from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt))).groupBy(asos.tipo);
+  const asoPorResultado = await db.select({ resultado: asos.resultado, count: sql<number>`count(*)` })
+    .from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt))).groupBy(asos.resultado);
+  const asosVencidosList = await db.select({
+    id: asos.id, employeeId: asos.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf,
+    funcao: employees.funcao, tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade,
+    resultado: asos.resultado, medico: asos.medico,
+  }).from(asos).innerJoin(employees, eq(asos.employeeId, employees.id))
+    .where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`, isNull(employees.deletedAt)))
+    .orderBy(asc(asos.dataValidade)).limit(50);
+  const asosAVencerList = await db.select({
+    id: asos.id, employeeId: asos.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf,
+    funcao: employees.funcao, tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade,
+    resultado: asos.resultado, medico: asos.medico,
+  }).from(asos).innerJoin(employees, eq(asos.employeeId, employees.id))
+    .where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d90}`, isNull(employees.deletedAt)))
+    .orderBy(asc(asos.dataValidade)).limit(50);
+  // Funcionários ativos sem ASO válido
+  const funcSemAsoValido = await db.select({ count: sql<number>`count(DISTINCT ${employees.id})` })
+    .from(employees)
+    .where(and(
+      eq(employees.companyId, companyId), isNull(employees.deletedAt),
+      sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`,
+      sql`${employees.id} NOT IN (SELECT employeeId FROM asos WHERE companyId = ${companyId} AND deletedAt IS NULL AND dataValidade >= ${today})`,
+    ));
+
+  // ── TREINAMENTOS ──
+  const treinTotal = await db.select({ count: sql<number>`count(*)` })
+    .from(trainings).where(and(eq(trainings.companyId, companyId), isNull(trainings.deletedAt)));
+  const treinVencidos = await db.select({ count: sql<number>`count(*)` })
+    .from(trainings).where(and(eq(trainings.companyId, companyId), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${today}`));
+  const treinAVencer30 = await db.select({ count: sql<number>`count(*)` })
+    .from(trainings).where(and(eq(trainings.companyId, companyId), isNull(trainings.deletedAt), sql`${trainings.dataValidade} >= ${today} AND ${trainings.dataValidade} <= ${d30}`));
+  const treinPorNorma = await db.select({ norma: trainings.norma, count: sql<number>`count(*)` })
+    .from(trainings).where(and(eq(trainings.companyId, companyId), isNull(trainings.deletedAt), sql`${trainings.norma} IS NOT NULL AND ${trainings.norma} != ''`))
+    .groupBy(trainings.norma).orderBy(sql`count(*) desc`).limit(10);
+  const treinTop10 = await db.select({ nome: trainings.nome, count: sql<number>`count(*)` })
+    .from(trainings).where(and(eq(trainings.companyId, companyId), isNull(trainings.deletedAt)))
+    .groupBy(trainings.nome).orderBy(sql`count(*) desc`).limit(10);
+  const treinVencidosList = await db.select({
+    id: trainings.id, employeeId: trainings.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf,
+    funcao: employees.funcao, treinamento: trainings.nome, norma: trainings.norma,
+    dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade, instrutor: trainings.instrutor,
+  }).from(trainings).innerJoin(employees, eq(trainings.employeeId, employees.id))
+    .where(and(eq(trainings.companyId, companyId), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${today}`, isNull(employees.deletedAt)))
+    .orderBy(asc(trainings.dataValidade)).limit(50);
+
+  // ── ATESTADOS ──
+  const atestTotal = await db.select({ count: sql<number>`count(*)` })
+    .from(atestados).where(and(eq(atestados.companyId, companyId), isNull(atestados.deletedAt)));
+  const atestPorTipo = await db.select({ tipo: atestados.tipo, count: sql<number>`count(*)` })
+    .from(atestados).where(and(eq(atestados.companyId, companyId), isNull(atestados.deletedAt))).groupBy(atestados.tipo);
+  const atestPorMes = await db.select({
+    mes: sql<string>`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`,
+    count: sql<number>`count(*)`,
+    diasTotal: sql<number>`COALESCE(SUM(${atestados.diasAfastamento}), 0)`,
+  }).from(atestados).where(and(eq(atestados.companyId, companyId), isNull(atestados.deletedAt), sql`${atestados.dataEmissao} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
+    .groupBy(sql`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`).orderBy(sql`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`);
+
+  // ── ADVERTÊNCIAS ──
+  const advTotal = await db.select({ count: sql<number>`count(*)` })
+    .from(warnings).where(and(eq(warnings.companyId, companyId), isNull(warnings.deletedAt)));
+  const advPorTipo = await db.select({ tipo: warnings.tipoAdvertencia, count: sql<number>`count(*)` })
+    .from(warnings).where(and(eq(warnings.companyId, companyId), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia);
+  const advPorMes = await db.select({
+    mes: sql<string>`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`,
+    count: sql<number>`count(*)`,
+  }).from(warnings).where(and(eq(warnings.companyId, companyId), isNull(warnings.deletedAt), sql`${warnings.dataOcorrencia} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
+    .groupBy(sql`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`).orderBy(sql`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`);
+
+  // ── DOCUMENTOS PESSOAIS ──
+  const docTotal = await db.select({ count: sql<number>`count(*)` })
+    .from(employeeDocuments).where(eq(employeeDocuments.companyId, companyId));
+  const docVencidos = await db.select({ count: sql<number>`count(*)` })
+    .from(employeeDocuments).where(and(eq(employeeDocuments.companyId, companyId), sql`${employeeDocuments.dataValidade} IS NOT NULL AND ${employeeDocuments.dataValidade} < ${today}`));
+  const docPorTipo = await db.select({ tipo: employeeDocuments.tipo, count: sql<number>`count(*)` })
+    .from(employeeDocuments).where(eq(employeeDocuments.companyId, companyId)).groupBy(employeeDocuments.tipo);
+
+  // ── EPIs com CA vencido ──
+  const episCaVencido = await db.select({ count: sql<number>`count(*)` })
+    .from(epis).where(and(eq(epis.companyId, companyId), sql`${epis.validadeCa} IS NOT NULL AND ${epis.validadeCa} < ${today}`));
+
+  // ── RESUMO GERAL ──
+  const totalAtivos = await db.select({ count: sql<number>`count(*)` })
+    .from(employees).where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`));
+
+  return {
+    totalAtivos: totalAtivos[0]?.count ?? 0,
+    asoTotal: asoTotal[0]?.count ?? 0,
+    asoVencidos: asoVencidos[0]?.count ?? 0,
+    asoAVencer30: asoAVencer30[0]?.count ?? 0,
+    asoAVencer60: asoAVencer60[0]?.count ?? 0,
+    asoAVencer90: asoAVencer90[0]?.count ?? 0,
+    asoPorTipo, asoPorResultado, asosVencidosList, asosAVencerList,
+    funcSemAsoValido: funcSemAsoValido[0]?.count ?? 0,
+    treinTotal: treinTotal[0]?.count ?? 0,
+    treinVencidos: treinVencidos[0]?.count ?? 0,
+    treinAVencer30: treinAVencer30[0]?.count ?? 0,
+    treinPorNorma, treinTop10, treinVencidosList,
+    atestTotal: atestTotal[0]?.count ?? 0,
+    atestPorTipo, atestPorMes,
+    advTotal: advTotal[0]?.count ?? 0,
+    advPorTipo, advPorMes,
+    docTotal: docTotal[0]?.count ?? 0,
+    docVencidos: docVencidos[0]?.count ?? 0,
+    docPorTipo,
+    episCaVencido: episCaVencido[0]?.count ?? 0,
+  };
+}
+
+// ============================================================
+// DASHBOARD CONTROLE DE DOCUMENTOS
+// ============================================================
+async function getDashControleDocumentos(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const d30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const d60 = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  const d90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+
+  // ── FUNCIONÁRIOS ATIVOS ──
+  const ativosRows = await db.select({
+    id: employees.id, nomeCompleto: employees.nomeCompleto, cpf: employees.cpf,
+    funcao: employees.funcao, setor: employees.setor, status: employees.status,
+    validadeCnh: employees.validadeCnh, obraAtualId: employees.obraAtualId,
+  }).from(employees).where(and(
+    eq(employees.companyId, companyId), isNull(employees.deletedAt),
+    sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`,
+  ));
+  const totalAtivos = ativosRows.length;
+
+  // ── ASOs ──
+  const allAsos = await db.select({
+    id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo,
+    dataExame: asos.dataExame, dataValidade: asos.dataValidade,
+    resultado: asos.resultado, medico: asos.medico,
+  }).from(asos).where(and(eq(asos.companyId, companyId), isNull(asos.deletedAt)));
+
+  // Último ASO válido por funcionário
+  const lastAsoMap = new Map<number, typeof allAsos[0]>();
+  for (const a of allAsos) {
+    const existing = lastAsoMap.get(a.employeeId);
+    if (!existing || (a.dataExame > existing.dataExame)) {
+      lastAsoMap.set(a.employeeId, a);
+    }
+  }
+
+  const asoTotal = allAsos.length;
+  const asoVencidos = allAsos.filter(a => a.dataValidade && a.dataValidade < today).length;
+  const asoAVencer30 = allAsos.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d30).length;
+  const asoAVencer60 = allAsos.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d60).length;
+  const asoAVencer90 = allAsos.filter(a => a.dataValidade && a.dataValidade >= today && a.dataValidade <= d90).length;
+  const asoEmDia = allAsos.filter(a => a.dataValidade && a.dataValidade > d90).length;
+
+  // Funcionários ativos sem ASO válido
+  const funcSemAso: number[] = [];
+  for (const emp of ativosRows) {
+    const lastAso = lastAsoMap.get(emp.id);
+    if (!lastAso || !lastAso.dataValidade || lastAso.dataValidade < today) {
+      funcSemAso.push(emp.id);
+    }
+  }
+
+  // ── TREINAMENTOS ──
+  const allTrein = await db.select({
+    id: trainings.id, employeeId: trainings.employeeId, nome: trainings.nome,
+    norma: trainings.norma, dataRealizacao: trainings.dataRealizacao,
+    dataValidade: trainings.dataValidade, instrutor: trainings.instrutor,
+  }).from(trainings).where(and(eq(trainings.companyId, companyId), isNull(trainings.deletedAt)));
+
+  const treinTotal = allTrein.length;
+  const treinVencidos = allTrein.filter(t => t.dataValidade && t.dataValidade < today).length;
+  const treinAVencer30 = allTrein.filter(t => t.dataValidade && t.dataValidade >= today && t.dataValidade <= d30).length;
+  const treinAVencer60 = allTrein.filter(t => t.dataValidade && t.dataValidade >= today && t.dataValidade <= d60).length;
+  const treinAVencer90 = allTrein.filter(t => t.dataValidade && t.dataValidade >= today && t.dataValidade <= d90).length;
+  const treinEmDia = allTrein.filter(t => !t.dataValidade || t.dataValidade > d90).length;
+
+  // ── DOCUMENTOS PESSOAIS ──
+  const allDocs = await db.select({
+    id: employeeDocuments.id, employeeId: employeeDocuments.employeeId,
+    tipo: employeeDocuments.tipo, nome: employeeDocuments.nome,
+    dataValidade: employeeDocuments.dataValidade, createdAt: employeeDocuments.createdAt,
+  }).from(employeeDocuments).where(and(
+    eq(employeeDocuments.companyId, companyId),
+    sql`${employeeDocuments.deletedAt} IS NULL`,
+  ));
+
+  const docTotal = allDocs.length;
+  const docComValidade = allDocs.filter(d => d.dataValidade);
+  const docVencidos = docComValidade.filter(d => d.dataValidade! < today).length;
+  const docAVencer30 = docComValidade.filter(d => d.dataValidade! >= today && d.dataValidade! <= d30).length;
+  const docAVencer60 = docComValidade.filter(d => d.dataValidade! >= today && d.dataValidade! <= d60).length;
+  const docAVencer90 = docComValidade.filter(d => d.dataValidade! >= today && d.dataValidade! <= d90).length;
+
+  // Docs por tipo
+  const docPorTipoMap = new Map<string, number>();
+  for (const d of allDocs) { docPorTipoMap.set(d.tipo, (docPorTipoMap.get(d.tipo) || 0) + 1); }
+  const docPorTipo = Array.from(docPorTipoMap.entries()).map(([tipo, count]) => ({ tipo, count })).sort((a, b) => b.count - a.count);
+
+  // ── CNH (do cadastro do funcionário) ──
+  const cnhAtivos = ativosRows.filter(e => e.validadeCnh);
+  const cnhVencidas = cnhAtivos.filter(e => e.validadeCnh! < today).length;
+  const cnhAVencer30 = cnhAtivos.filter(e => e.validadeCnh! >= today && e.validadeCnh! <= d30).length;
+  const cnhAVencer60 = cnhAtivos.filter(e => e.validadeCnh! >= today && e.validadeCnh! <= d60).length;
+  const cnhAVencer90 = cnhAtivos.filter(e => e.validadeCnh! >= today && e.validadeCnh! <= d90).length;
+
+  // ── OBRAS (para filtro) ──
+  const obrasRows = await db.select({ id: obras.id, nome: obras.nome })
+    .from(obras).where(and(eq(obras.companyId, companyId), isNull(obras.deletedAt)));
+
+  // Alocações ativas
+  const alocacoes = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+    .from(obraFuncionarios).where(and(
+      eq(obraFuncionarios.companyId, companyId),
+      eq(obraFuncionarios.isActive, 1),
+    ));
+  const empObraMap = new Map<number, number>();
+  for (const a of alocacoes) empObraMap.set(a.employeeId, a.obraId);
+
+  // ── CONSOLIDAR: Totais gerais ──
+  const totalDocumentos = asoTotal + treinTotal + docTotal + cnhAtivos.length;
+  const totalVencidos = asoVencidos + treinVencidos + docVencidos + cnhVencidas;
+  const totalAVencer30 = asoAVencer30 + treinAVencer30 + docAVencer30 + cnhAVencer30;
+  const totalAVencer90 = asoAVencer90 + treinAVencer90 + docAVencer90 + cnhAVencer90;
+  const totalEmDia = totalDocumentos - totalVencidos - totalAVencer90;
+  const compliance = totalDocumentos > 0 ? ((totalDocumentos - totalVencidos) / totalDocumentos * 100) : 100;
+
+  // ── STATUS POR CATEGORIA (para gráfico empilhado) ──
+  const statusPorCategoria = [
+    { categoria: 'ASO', vencidos: asoVencidos, aVencer30: asoAVencer30, aVencer60: asoAVencer60 - asoAVencer30, aVencer90: asoAVencer90 - asoAVencer60, emDia: asoEmDia },
+    { categoria: 'Treinamentos', vencidos: treinVencidos, aVencer30: treinAVencer30, aVencer60: treinAVencer60 - treinAVencer30, aVencer90: treinAVencer90 - treinAVencer60, emDia: treinEmDia },
+    { categoria: 'Docs Pessoais', vencidos: docVencidos, aVencer30: docAVencer30, aVencer60: docAVencer60 - docAVencer30, aVencer90: docAVencer90 - docAVencer60, emDia: docComValidade.length - docVencidos - docAVencer90 },
+    { categoria: 'CNH', vencidos: cnhVencidas, aVencer30: cnhAVencer30, aVencer60: cnhAVencer60 - cnhAVencer30, aVencer90: cnhAVencer90 - cnhAVencer60, emDia: cnhAtivos.length - cnhVencidas - cnhAVencer90 },
+  ];
+
+  // ── TIMELINE DE VENCIMENTOS (próximos 90 dias, agrupados por semana) ──
+  const timeline: { semana: string; asos: number; treinamentos: number; docs: number; cnhs: number }[] = [];
+  for (let i = 0; i < 13; i++) {
+    const weekStart = new Date(Date.now() + i * 7 * 86400000);
+    const weekEnd = new Date(Date.now() + (i + 1) * 7 * 86400000);
+    const ws = weekStart.toISOString().slice(0, 10);
+    const we = weekEnd.toISOString().slice(0, 10);
+    const label = weekStart.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    timeline.push({
+      semana: label,
+      asos: allAsos.filter(a => a.dataValidade && a.dataValidade >= ws && a.dataValidade < we).length,
+      treinamentos: allTrein.filter(t => t.dataValidade && t.dataValidade >= ws && t.dataValidade < we).length,
+      docs: docComValidade.filter(d => d.dataValidade! >= ws && d.dataValidade! < we).length,
+      cnhs: cnhAtivos.filter(e => e.validadeCnh! >= ws && e.validadeCnh! < we).length,
+    });
+  }
+
+  // ── LISTA CONSOLIDADA DE VENCIDOS + A VENCER (para tabela) ──
+  const empMap = new Map(ativosRows.map(e => [e.id, e]));
+  type AlertaDoc = {
+    id: number; employeeId: number; funcionarioNome: string; cpf: string;
+    funcao: string; setor: string; obraId: number | null; obraNome: string;
+    categoria: string; tipo: string; dataValidade: string;
+    diasParaVencer: number; status: 'vencido' | 'critico' | 'alerta' | 'atencao';
+  };
+  const alertas: AlertaDoc[] = [];
+  const calcDias = (dv: string) => Math.ceil((new Date(dv + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000);
+  const getStatus = (dias: number): 'vencido' | 'critico' | 'alerta' | 'atencao' => {
+    if (dias < 0) return 'vencido';
+    if (dias <= 30) return 'critico';
+    if (dias <= 60) return 'alerta';
+    return 'atencao';
+  };
+  const getObraNome = (empId: number) => {
+    const obraId = empObraMap.get(empId);
+    if (!obraId) return '—';
+    return obrasRows.find(o => o.id === obraId)?.nome || '—';
+  };
+
+  // ASOs vencidos/a vencer
+  for (const a of allAsos) {
+    if (!a.dataValidade || a.dataValidade > d90) continue;
+    const emp = empMap.get(a.employeeId);
+    if (!emp) continue;
+    const dias = calcDias(a.dataValidade);
+    alertas.push({
+      id: a.id, employeeId: a.employeeId, funcionarioNome: emp.nomeCompleto, cpf: emp.cpf || '',
+      funcao: emp.funcao || '', setor: emp.setor || '', obraId: empObraMap.get(a.employeeId) ?? null,
+      obraNome: getObraNome(a.employeeId), categoria: 'ASO', tipo: a.tipo,
+      dataValidade: a.dataValidade, diasParaVencer: dias, status: getStatus(dias),
+    });
+  }
+
+  // Treinamentos vencidos/a vencer
+  for (const t of allTrein) {
+    if (!t.dataValidade || t.dataValidade > d90) continue;
+    const emp = empMap.get(t.employeeId);
+    if (!emp) continue;
+    const dias = calcDias(t.dataValidade);
+    alertas.push({
+      id: t.id, employeeId: t.employeeId, funcionarioNome: emp.nomeCompleto, cpf: emp.cpf || '',
+      funcao: emp.funcao || '', setor: emp.setor || '', obraId: empObraMap.get(t.employeeId) ?? null,
+      obraNome: getObraNome(t.employeeId), categoria: 'Treinamento', tipo: t.norma || t.nome,
+      dataValidade: t.dataValidade, diasParaVencer: dias, status: getStatus(dias),
+    });
+  }
+
+  // Docs pessoais vencidos/a vencer
+  for (const d of docComValidade) {
+    if (d.dataValidade! > d90) continue;
+    const emp = empMap.get(d.employeeId);
+    if (!emp) continue;
+    const dias = calcDias(d.dataValidade!);
+    alertas.push({
+      id: d.id, employeeId: d.employeeId, funcionarioNome: emp.nomeCompleto, cpf: emp.cpf || '',
+      funcao: emp.funcao || '', setor: emp.setor || '', obraId: empObraMap.get(d.employeeId) ?? null,
+      obraNome: getObraNome(d.employeeId), categoria: 'Doc. Pessoal', tipo: d.tipo.toUpperCase(),
+      dataValidade: d.dataValidade!, diasParaVencer: dias, status: getStatus(dias),
+    });
+  }
+
+  // CNH vencidas/a vencer
+  for (const e of cnhAtivos) {
+    if (e.validadeCnh! > d90) continue;
+    const dias = calcDias(e.validadeCnh!);
+    alertas.push({
+      id: e.id, employeeId: e.id, funcionarioNome: e.nomeCompleto, cpf: e.cpf || '',
+      funcao: e.funcao || '', setor: e.setor || '', obraId: empObraMap.get(e.id) ?? null,
+      obraNome: getObraNome(e.id), categoria: 'CNH', tipo: 'CNH',
+      dataValidade: e.validadeCnh!, diasParaVencer: dias, status: getStatus(dias),
+    });
+  }
+
+  // Ordenar por dias para vencer (mais urgente primeiro)
+  alertas.sort((a, b) => a.diasParaVencer - b.diasParaVencer);
+
+  // ── FUNCIONÁRIOS COM DOCUMENTAÇÃO INCOMPLETA ──
+  type FuncIncompleto = {
+    employeeId: number; funcionarioNome: string; cpf: string;
+    funcao: string; setor: string; obraNome: string;
+    semAso: boolean; asoVencido: boolean;
+    treinVencidos: number; docsVencidos: number; cnhVencida: boolean;
+    totalPendencias: number;
+  };
+  const funcIncompletos: FuncIncompleto[] = [];
+  for (const emp of ativosRows) {
+    const lastAso = lastAsoMap.get(emp.id);
+    const semAso = !lastAso;
+    const asoVenc = lastAso ? (lastAso.dataValidade ? lastAso.dataValidade < today : false) : false;
+    const treinVenc = allTrein.filter(t => t.employeeId === emp.id && t.dataValidade && t.dataValidade < today).length;
+    const docsVenc = docComValidade.filter(d => d.employeeId === emp.id && d.dataValidade! < today).length;
+    const cnhVenc = emp.validadeCnh ? emp.validadeCnh < today : false;
+    const totalPend = (semAso ? 1 : 0) + (asoVenc ? 1 : 0) + treinVenc + docsVenc + (cnhVenc ? 1 : 0);
+    if (totalPend > 0) {
+      funcIncompletos.push({
+        employeeId: emp.id, funcionarioNome: emp.nomeCompleto, cpf: emp.cpf || '',
+        funcao: emp.funcao || '', setor: emp.setor || '', obraNome: getObraNome(emp.id),
+        semAso, asoVencido: asoVenc, treinVencidos: treinVenc, docsVencidos: docsVenc,
+        cnhVencida: cnhVenc, totalPendencias: totalPend,
+      });
+    }
+  }
+  funcIncompletos.sort((a, b) => b.totalPendencias - a.totalPendencias);
+
+  // ── TREINAMENTOS POR NORMA (top 10 mais realizados) ──
+  const treinPorNormaMap = new Map<string, { total: number; vencidos: number }>(); 
+  for (const t of allTrein) {
+    const key = t.norma || t.nome;
+    const existing = treinPorNormaMap.get(key) || { total: 0, vencidos: 0 };
+    existing.total++;
+    if (t.dataValidade && t.dataValidade < today) existing.vencidos++;
+    treinPorNormaMap.set(key, existing);
+  }
+  const treinPorNorma = Array.from(treinPorNormaMap.entries())
+    .map(([norma, v]) => ({ norma, ...v }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  return {
+    totalAtivos,
+    totalDocumentos,
+    totalVencidos,
+    totalAVencer30,
+    totalAVencer90,
+    totalEmDia,
+    compliance: Math.round(compliance * 10) / 10,
+    // ASOs
+    asoTotal, asoVencidos, asoAVencer30, asoAVencer90, asoEmDia,
+    funcSemAso: funcSemAso.length,
+    // Treinamentos
+    treinTotal, treinVencidos, treinAVencer30, treinAVencer90, treinEmDia,
+    treinPorNorma,
+    // Docs pessoais
+    docTotal, docVencidos, docAVencer30, docAVencer90, docPorTipo,
+    // CNH
+    cnhTotal: cnhAtivos.length, cnhVencidas, cnhAVencer30, cnhAVencer90,
+    // Gráficos
+    statusPorCategoria,
+    timeline,
+    // Tabelas
+    alertas,
+    funcIncompletos,
+    // Obras (para filtro)
+    obras: obrasRows,
+  };
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 export const dashboardsRouter = router({
@@ -2143,4 +2574,6 @@ export const dashboardsRouter = router({
   ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano)),
   perfilTempoCasa: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashPerfilTempoCasa(input.companyId)),
   analiseIAPerfil: protectedProcedure.input(z.object({ companyId: z.number() })).mutation(({ input }) => getAnaliseIAPerfil(input.companyId)),
+  documentos: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashDocumentos(input.companyId)),
+  controleDocumentos: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashControleDocumentos(input.companyId)),
 });

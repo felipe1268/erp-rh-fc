@@ -25,10 +25,10 @@ describe("Dashboards Router", () => {
     expect(procedures).toContain("analiseIAPerfil");
   });
 
-  it("should have 9 dashboard procedures total", async () => {
+  it("should have 12 dashboard procedures total", async () => {
     const { dashboardsRouter } = await import("./routers/dashboards");
     const procedures = Object.keys(dashboardsRouter._def.procedures);
-    expect(procedures.length).toBe(11);
+    expect(procedures.length).toBe(13);
   });
 });
 

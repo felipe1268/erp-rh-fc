@@ -337,7 +337,8 @@ export default function DashAvisoPrevio() {
                 type="bar"
                 labels={data.evolucaoMensal.map((r: any) => {
                   const [y, m] = r.mes.split("-");
-                  return `${m}/${y.slice(2)}`;
+                  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+                  return `${meses[parseInt(m) - 1]}/${y.slice(2)}`;
                 })}
                 datasets={[
                   {

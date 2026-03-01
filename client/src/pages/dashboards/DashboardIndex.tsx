@@ -4,7 +4,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { useEffect, useState } from "react";
 import {
   Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
-  ArrowRight, Eye, Activity, ChevronRight, Building2,
+  ArrowRight, Eye, Activity, ChevronRight, Building2, ShieldCheck,
 } from "lucide-react";
 
 /* ─── Data ─── */
@@ -125,6 +125,18 @@ const dashboards = [
     borderColor: "border-orange-200",
     hoverBg: "hover:bg-orange-50/80",
     stats: "Alocação & Efetivo",
+  },
+  {
+    path: "/dashboards/controle-documentos",
+    title: "Controle de Documentos",
+    desc: "Compliance documental: ASOs, treinamentos, CNH e documentos pessoais. Alertas de vencimento e funcionários com pendências.",
+    icon: ShieldCheck,
+    color: "#0EA5E9",
+    bgLight: "bg-sky-50",
+    textColor: "text-sky-600",
+    borderColor: "border-sky-200",
+    hoverBg: "hover:bg-sky-50/80",
+    stats: "Compliance & Validade",
   },
 ];
 

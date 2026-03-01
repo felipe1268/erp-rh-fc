@@ -3729,3 +3729,24 @@
 - [x] Cores do gráfico: Azul=Ativo, Vermelho claro=Aviso Prévio, Laranja=Férias, Amarelo=Afastado, Roxo=Licença, Cinza=Recluso
 - [x] Legenda completa com todos os status prontos
 - [x] Impressão só da tela visível (não imprime tudo, só o que está na viewport)
+
+## Rev. 134 - Dashboard Controle de Documentos
+- [x] Backend: endpoint getDashControleDocumentos com dados completos (ASOs, treinamentos, docs pessoais, CNH)
+- [x] KPIs: Total documentos, vencidos, a vencer 30d, compliance %, funcionários sem ASO
+- [x] Gráfico: Status geral por categoria (ASO, Treinamento, CNH, Docs Pessoais)
+- [x] Gráfico: Timeline de vencimentos próximos 90 dias
+- [x] Gráfico: Distribuição por tipo de documento
+- [x] Tabela: Documentos vencidos/a vencer com nome do funcionário, tipo, data validade
+- [x] Tabela: Funcionários com documentação incompleta
+- [x] Filtros: Por tipo de documento, por status (vencido/a vencer/em dia)
+- [x] Alertas visuais: Cards com cores de urgência
+- [x] Nome do funcionário clicável abre Raio-X
+- [x] Botões Imprimir e PDF com layout A4 + logo + rodapé LGPD
+- [x] Rota /dashboards/controle-documentos no App.tsx
+- [x] Menu lateral: item na seção Dashboards
+- [x] Card no DashboardIndex para o novo dashboard
+
+## Rev. 134 - Bug Fix: Gráfico Evolução Mensal Avisos Prévios
+- [x] Gráfico mostra apenas meses com dados, faltando continuidade (pula meses sem aviso)
+- [x] Corrigir para mostrar todos os 12 meses do ano selecionado (meses sem dados = 0)
+- [x] Melhorar formato do eixo X (ex: "Fev/25" ao invés de "02/25")

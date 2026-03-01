@@ -30,7 +30,7 @@ import {
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
   ClipboardList, ClipboardCheck, UserSearch, UserCheck, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
-  CalendarDays, TrendingUp, FileSpreadsheet, BookOpen,
+  CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -124,6 +124,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Palmtree, label: "Férias", path: "/dashboards/ferias" },
       { icon: Building2, label: "Efetivo por Obra", path: "/dashboards/efetivo-obra" },
       { icon: UserSearch, label: "Perfil por Tempo de Casa", path: "/dashboards/perfil-tempo-casa" },
+      { icon: ShieldCheck, label: "Controle de Documentos", path: "/dashboards/controle-documentos" },
     ],
   },
   {
