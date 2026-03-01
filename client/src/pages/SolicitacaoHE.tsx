@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { trpc } from "@/lib/trpc";
@@ -8,13 +9,14 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
-  Calendar, Users, Building2, FileText, Loader2,
+  Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -43,6 +45,10 @@ export default function SolicitacaoHE() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [detailSolId, setDetailSolId] = useState<number | null>(null);
+  const [adminObs, setAdminObs] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectForm, setShowRejectForm] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -94,20 +100,35 @@ export default function SolicitacaoHE() {
     onError: (err) => toast.error(err.message),
   });
 
+  // Query para detalhes da solicitação selecionada
+  const detailQuery = trpc.heSolicitacoes.getById.useQuery(
+    { id: detailSolId! },
+    { enabled: !!detailSolId }
+  );
+
   const approveMut = trpc.heSolicitacoes.approve.useMutation({
-    onSuccess: () => {
-      toast.success("Solicitação aprovada!");
+    onSuccess: (res) => {
+      toast.success(res.reversao ? "Solicitação revertida para APROVADA!" : "Solicitação aprovada!");
       utils.heSolicitacoes.list.invalidate();
       utils.heSolicitacoes.counts.invalidate();
+      utils.heSolicitacoes.getById.invalidate();
+      setDetailSolId(null);
+      setAdminObs("");
+      setShowRejectForm(false);
     },
     onError: (err) => toast.error(err.message),
   });
 
   const rejectMut = trpc.heSolicitacoes.reject.useMutation({
-    onSuccess: () => {
-      toast.success("Solicitação rejeitada.");
+    onSuccess: (res) => {
+      toast.success(res.reversao ? "Solicitação revertida para REJEITADA!" : "Solicitação rejeitada.");
       utils.heSolicitacoes.list.invalidate();
       utils.heSolicitacoes.counts.invalidate();
+      utils.heSolicitacoes.getById.invalidate();
+      setDetailSolId(null);
+      setAdminObs("");
+      setRejectReason("");
+      setShowRejectForm(false);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -167,15 +188,25 @@ export default function SolicitacaoHE() {
     });
   }
 
-  function handleApprove(id: number) {
-    if (!confirm("Confirma a aprovação desta solicitação de HE?")) return;
-    approveMut.mutate({ id });
+  function handleApproveFromDialog() {
+    if (!detailSolId) return;
+    approveMut.mutate({ id: detailSolId, observacaoAdmin: adminObs || undefined });
   }
 
-  function handleReject(id: number) {
-    const motivo = prompt("Informe o motivo da rejeição:");
-    if (!motivo || motivo.length < 5) { toast.error("Motivo obrigatório (mínimo 5 caracteres)"); return; }
-    rejectMut.mutate({ id, motivoRejeicao: motivo });
+  function handleRejectFromDialog() {
+    if (!detailSolId) return;
+    if (!rejectReason || rejectReason.length < 5) {
+      toast.error("Motivo da rejeição obrigatório (mínimo 5 caracteres)");
+      return;
+    }
+    rejectMut.mutate({ id: detailSolId, motivoRejeicao: rejectReason, observacaoAdmin: adminObs || undefined });
+  }
+
+  function openDetail(solId: number) {
+    setDetailSolId(solId);
+    setAdminObs("");
+    setRejectReason("");
+    setShowRejectForm(false);
   }
 
   function handleCancel(id: number) {
@@ -472,27 +503,16 @@ export default function SolicitacaoHE() {
                               ))}
                             </div>
                           </div>
-                          {isAdminMaster && (
-                            <div className="flex gap-2 shrink-0">
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-xs md:text-sm"
-                                onClick={() => handleApprove(sol.id)}
-                                disabled={approveMut.isPending}
-                              >
-                                <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                className="text-xs md:text-sm"
-                                onClick={() => handleReject(sol.id)}
-                                disabled={rejectMut.isPending}
-                              >
-                                <XCircle className="h-3.5 w-3.5 mr-1" /> Rejeitar
-                              </Button>
-                            </div>
-                          )}
+                          <div className="flex gap-2 shrink-0">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs md:text-sm"
+                              onClick={() => openDetail(sol.id)}
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Analisar
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -588,23 +608,21 @@ export default function SolicitacaoHE() {
                               ))}
                             </div>
                           </div>
-                          {sol.status === "pendente" && (
-                            <div className="flex gap-2 shrink-0">
-                              {isAdminMaster && (
-                                <>
-                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-xs md:text-sm" onClick={() => handleApprove(sol.id)}>
-                                    <CheckCircle className="h-3 w-3 mr-1" /> Aprovar
-                                  </Button>
-                                  <Button size="sm" variant="destructive" className="text-xs md:text-sm" onClick={() => handleReject(sol.id)}>
-                                    <XCircle className="h-3 w-3 mr-1" /> Rejeitar
-                                  </Button>
-                                </>
-                              )}
-                              <Button size="sm" variant="outline" className="text-xs md:text-sm" onClick={() => handleCancel(sol.id)}>
+                          <div className="flex gap-2 shrink-0">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs md:text-sm"
+                              onClick={() => openDetail(sol.id)}
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Detalhes
+                            </Button>
+                            {sol.status === "pendente" && (
+                              <Button size="sm" variant="outline" className="text-xs md:text-sm text-red-600" onClick={() => handleCancel(sol.id)}>
                                 Cancelar
                               </Button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -615,6 +633,213 @@ export default function SolicitacaoHE() {
           )}
         </div>
       </div>
+      {/* ========== FULLSCREEN DIALOG: ANÁLISE DETALHADA ========== */}
+      <FullScreenDialog
+        open={!!detailSolId}
+        onClose={() => { setDetailSolId(null); setAdminObs(""); setRejectReason(""); setShowRejectForm(false); }}
+        title={`Análise da Solicitação #${detailSolId || ""}`}
+      >
+        {detailQuery.isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+        ) : detailQuery.data ? (() => {
+          const sol = detailQuery.data;
+          const canApprove = isAdminMaster && sol.status !== "aprovada" && sol.status !== "cancelada";
+          const canReject = isAdminMaster && sol.status !== "rejeitada" && sol.status !== "cancelada";
+          return (
+            <div className="space-y-6 max-w-4xl mx-auto">
+              {/* Status Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b">
+                <div className="flex items-center gap-3">
+                  <Badge className={`text-sm px-3 py-1 ${STATUS_COLORS[sol.status] || STATUS_COLORS.pendente}`}>
+                    {STATUS_LABELS[sol.status] || sol.status}
+                  </Badge>
+                  <span className="text-lg font-semibold">Solicitação #{sol.id}</span>
+                </div>
+                {sol.status !== "pendente" && sol.status !== "cancelada" && isAdminMaster && (
+                  <Badge variant="outline" className="text-xs flex items-center gap-1">
+                    <RotateCcw className="h-3 w-3" /> Reversível
+                  </Badge>
+                )}
+              </div>
+
+              {/* Info Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-muted-foreground mb-1">Data da HE</p>
+                  <p className="font-semibold flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+                  </p>
+                </div>
+                {sol.obraNome && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-1">Obra</p>
+                    <p className="font-semibold flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-blue-600" />
+                      {sol.obraNome}
+                    </p>
+                  </div>
+                )}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-muted-foreground mb-1">Horário Previsto</p>
+                  <p className="font-semibold flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-blue-600" />
+                    {sol.horaInicio && sol.horaFim ? `${sol.horaInicio} — ${sol.horaFim}` : "Não informado"}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4 sm:col-span-2 lg:col-span-3">
+                  <p className="text-xs text-muted-foreground mb-1">Motivo</p>
+                  <p className="font-semibold">{sol.motivo}</p>
+                </div>
+                {sol.observacoes && (
+                  <div className="bg-gray-50 rounded-lg p-4 sm:col-span-2 lg:col-span-3">
+                    <p className="text-xs text-muted-foreground mb-1">Observações do Solicitante</p>
+                    <p className="text-sm">{sol.observacoes}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Solicitante */}
+              <div className="text-xs text-muted-foreground">
+                Solicitado por: <strong>{sol.solicitadoPor}</strong> em {new Date(sol.createdAt).toLocaleString("pt-BR")}
+              </div>
+
+              {/* Funcionários */}
+              <div>
+                <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Funcionários ({(sol.funcionarios || []).length})
+                </h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-2 text-left">#</th>
+                          <th className="p-2 text-left">Nome</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(sol.funcionarios || []).map((f: any, i: number) => (
+                          <tr key={f.employeeId} className="border-t hover:bg-blue-50">
+                            <td className="p-2 text-muted-foreground">{i + 1}</td>
+                            <td className="p-2">
+                              <span
+                                className="text-blue-700 font-medium cursor-pointer hover:underline"
+                                onClick={() => setRaioXEmployeeId(f.employeeId)}
+                              >
+                                {f.employeeName || `ID ${f.employeeId}`}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Histórico de decisão (se já teve) */}
+              {sol.aprovadoPor && (
+                <div className={`rounded-lg p-4 ${sol.status === "aprovada" ? "bg-green-50 border border-green-200" : sol.status === "rejeitada" ? "bg-red-50 border border-red-200" : "bg-gray-50 border"}`}>
+                  <p className="text-sm font-semibold mb-1">
+                    {sol.status === "aprovada" ? "✅ Aprovada" : sol.status === "rejeitada" ? "❌ Rejeitada" : "Decisão"} por {sol.aprovadoPor}
+                  </p>
+                  {sol.aprovadoEm && (
+                    <p className="text-xs text-muted-foreground">Em {new Date(sol.aprovadoEm).toLocaleString("pt-BR")}</p>
+                  )}
+                  {sol.motivoRejeicao && (
+                    <p className="text-sm mt-2"><strong>Motivo da rejeição:</strong> {sol.motivoRejeicao}</p>
+                  )}
+                  {sol.observacaoAdmin && (
+                    <p className="text-sm mt-2"><strong>Observação do Admin:</strong> {sol.observacaoAdmin}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Área de ação do Admin */}
+              {isAdminMaster && sol.status !== "cancelada" && (
+                <div className="border-t pt-6 space-y-4">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Ação do Administrador
+                  </h3>
+
+                  {/* Campo de observação */}
+                  <div>
+                    <Label className="text-sm">Observações do Admin (opcional)</Label>
+                    <Textarea
+                      value={adminObs}
+                      onChange={e => setAdminObs(e.target.value)}
+                      placeholder="Registre suas observações sobre esta solicitação..."
+                      className="mt-1"
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Formulário de rejeição (aparece ao clicar Rejeitar) */}
+                  {showRejectForm && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                      <Label className="text-sm font-semibold text-red-700">Motivo da Rejeição *</Label>
+                      <Textarea
+                        value={rejectReason}
+                        onChange={e => setRejectReason(e.target.value)}
+                        placeholder="Informe o motivo da rejeição (mínimo 5 caracteres)..."
+                        className="border-red-300"
+                        rows={2}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={handleRejectFromDialog}
+                          disabled={rejectMut.isPending}
+                        >
+                          {rejectMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+                          Confirmar Rejeição
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => { setShowRejectForm(false); setRejectReason(""); }}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botões de ação */}
+                  {!showRejectForm && (
+                    <div className="flex flex-wrap gap-3">
+                      {canApprove && (
+                        <Button
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={handleApproveFromDialog}
+                          disabled={approveMut.isPending}
+                        >
+                          {approveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                          {sol.status === "rejeitada" ? "Reverter → Aprovar" : "Aprovar Solicitação"}
+                        </Button>
+                      )}
+                      {canReject && (
+                        <Button
+                          variant="destructive"
+                          onClick={() => setShowRejectForm(true)}
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          {sol.status === "aprovada" ? "Reverter → Rejeitar" : "Rejeitar Solicitação"}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })() : (
+          <div className="text-center py-12 text-muted-foreground">Solicitação não encontrada</div>
+        )}
+      </FullScreenDialog>
+
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     <PrintFooterLGPD />
     </DashboardLayout>

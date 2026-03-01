@@ -3771,3 +3771,11 @@
 - [x] Badges de resumo (críticos, alertas, atenção)
 - [x] Raio-X clicável no nome do funcionário
 - [x] Responsivo (mobile/desktop)
+
+## Rev. 138 - Melhoria Fluxo de Aprovação HE + Botão Voltar Alertas SST
+- [x] FullScreenDialog ao clicar na solicitação para análise detalhada
+- [x] Campo de observações do admin na aprovação/rejeição
+- [x] Permitir reverter decisão: reprovar após aprovar e aprovar após reprovar
+- [x] Histórico mostra observações do admin e permite editar decisão
+- [x] Schema: adicionado campo observacaoAdmin na tabela heSolicitacoes
+- [x] Fix: Botão Voltar no FullScreenDialog de Alertas SST agora visível (header escuro)

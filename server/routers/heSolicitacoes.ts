@@ -153,11 +153,11 @@ export const heSolicitacoesRouter = router({
   }),
 
   // ===================== APROVAR SOLICITAÇÃO (Admin Master) =====================
+  // Permite aprovar pendentes OU reverter rejeitadas
   approve: protectedProcedure.input(z.object({
     id: z.number(),
-    observacoes: z.string().optional(),
+    observacaoAdmin: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
-    // Verificar permissão
     if (ctx.user.role !== "admin_master") {
       throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode aprovar solicitações de HE" });
     }
@@ -167,16 +167,21 @@ export const heSolicitacoesRouter = router({
 
     const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
-    if (sol.status !== "pendente") {
-      throw new TRPCError({ code: "BAD_REQUEST", message: `Solicitação já está com status: ${sol.status}` });
+    if (sol.status === "aprovada") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação já está aprovada" });
     }
+    if (sol.status === "cancelada") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível aprovar uma solicitação cancelada" });
+    }
+
+    const isReversao = sol.status === "rejeitada";
 
     await db.update(heSolicitacoes).set({
       status: "aprovada",
       aprovadoPor: ctx.user.name || "Admin",
       aprovadoPorId: ctx.user.id,
       aprovadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
-      observacoes: input.observacoes ? `${sol.observacoes || ""}\n[Aprovação] ${input.observacoes}`.trim() : sol.observacoes,
+      observacaoAdmin: input.observacaoAdmin || sol.observacaoAdmin || null,
     }).where(eq(heSolicitacoes.id, input.id));
 
     await createAuditLog({
@@ -187,16 +192,20 @@ export const heSolicitacoesRouter = router({
       module: "he_solicitacoes",
       entityType: "he_solicitacao",
       entityId: input.id,
-      details: `Solicitação de HE #${input.id} aprovada para ${sol.dataSolicitacao}`,
+      details: isReversao
+        ? `Solicitação de HE #${input.id} REVERTIDA de rejeitada → aprovada para ${sol.dataSolicitacao}`
+        : `Solicitação de HE #${input.id} aprovada para ${sol.dataSolicitacao}`,
     });
 
-    return { success: true };
+    return { success: true, reversao: isReversao };
   }),
 
   // ===================== REJEITAR SOLICITAÇÃO (Admin Master) =====================
+  // Permite rejeitar pendentes OU reverter aprovadas
   reject: protectedProcedure.input(z.object({
     id: z.number(),
     motivoRejeicao: z.string().min(5, "Informe o motivo da rejeição"),
+    observacaoAdmin: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     if (ctx.user.role !== "admin_master") {
       throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode rejeitar solicitações de HE" });
@@ -207,9 +216,14 @@ export const heSolicitacoesRouter = router({
 
     const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
-    if (sol.status !== "pendente") {
-      throw new TRPCError({ code: "BAD_REQUEST", message: `Solicitação já está com status: ${sol.status}` });
+    if (sol.status === "rejeitada") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação já está rejeitada" });
     }
+    if (sol.status === "cancelada") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível rejeitar uma solicitação cancelada" });
+    }
+
+    const isReversao = sol.status === "aprovada";
 
     await db.update(heSolicitacoes).set({
       status: "rejeitada",
@@ -217,6 +231,7 @@ export const heSolicitacoesRouter = router({
       aprovadoPorId: ctx.user.id,
       aprovadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
       motivoRejeicao: input.motivoRejeicao,
+      observacaoAdmin: input.observacaoAdmin || sol.observacaoAdmin || null,
     }).where(eq(heSolicitacoes.id, input.id));
 
     await createAuditLog({
@@ -227,10 +242,12 @@ export const heSolicitacoesRouter = router({
       module: "he_solicitacoes",
       entityType: "he_solicitacao",
       entityId: input.id,
-      details: `Solicitação de HE #${input.id} rejeitada: ${input.motivoRejeicao}`,
+      details: isReversao
+        ? `Solicitação de HE #${input.id} REVERTIDA de aprovada → rejeitada: ${input.motivoRejeicao}`
+        : `Solicitação de HE #${input.id} rejeitada: ${input.motivoRejeicao}`,
     });
 
-    return { success: true };
+    return { success: true, reversao: isReversao };
   }),
 
   // ===================== CANCELAR SOLICITAÇÃO (pelo solicitante) =====================

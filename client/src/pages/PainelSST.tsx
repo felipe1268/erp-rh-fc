@@ -304,8 +304,8 @@ export default function PainelSST() {
         onClose={() => setShowAlertasDialog(false)}
         title={`Alertas de SST (${allAlerts.length})`}
         subtitle="Saúde e Segurança do Trabalho — Todos os alertas ativos"
-        icon={<AlertTriangle className="h-5 w-5 text-red-600" />}
-        headerColor="bg-red-50"
+        icon={<AlertTriangle className="h-5 w-5 text-white" />}
+        headerColor="bg-gradient-to-r from-red-700 to-red-900"
       >
         <div className="p-4 md:p-6 space-y-4">
           {/* Filtros */}

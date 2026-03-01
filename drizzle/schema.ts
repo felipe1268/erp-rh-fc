@@ -1903,8 +1903,9 @@ export const heSolicitacoes = mysqlTable("he_solicitacoes", {
 	aprovadoPor: varchar({ length: 255 }), // Nome do admin que aprovou/rejeitou
 	aprovadoPorId: int(), // ID do admin
 	aprovadoEm: timestamp({ mode: 'string' }),
-	motivoRejeicao: text(),
-	observacoes: text(),
+  motivoRejeicao: text(),
+  observacaoAdmin: text(), // Observação do admin ao aprovar/rejeitar
+  observacoes: text(),
 	createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
