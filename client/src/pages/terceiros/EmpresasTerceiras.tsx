@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Building2, Plus, Search, Edit, Trash2, Eye, Upload, FileText, CheckCircle, XCircle, Clock, Phone, Mail, MapPin } from "lucide-react";
+import { Building2, Plus, Search, Edit, Trash2, Eye, Upload, FileText, CheckCircle, XCircle, Clock, Phone, Mail, MapPin, Loader2 } from "lucide-react";
 
 const ESTADOS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
@@ -26,6 +26,37 @@ export default function EmpresasTerceiras() {
   const [viewId, setViewId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"dados" | "documentos" | "bancario">("dados");
   const [form, setForm] = useState<any>({});
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+
+  const buscarCNPJ = async (cnpj: string) => {
+    const clean = cnpj.replace(/\D/g, "");
+    if (clean.length !== 14) return;
+    setCnpjLoading(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`);
+      if (!res.ok) throw new Error("CNPJ não encontrado");
+      const d = await res.json();
+      setForm((prev: any) => ({
+        ...prev,
+        razaoSocial: d.razao_social || prev.razaoSocial,
+        nomeFantasia: d.nome_fantasia || prev.nomeFantasia,
+        cep: d.cep?.replace(/\D/g, "") || prev.cep,
+        logradouro: d.logradouro || prev.logradouro,
+        numero: d.numero || prev.numero,
+        complemento: d.complemento || prev.complemento,
+        bairro: d.bairro || prev.bairro,
+        cidade: d.municipio || prev.cidade,
+        estado: d.uf || prev.estado,
+        telefone: d.ddd_telefone_1 || prev.telefone,
+        email: d.email || prev.email,
+      }));
+      toast.success("Dados do CNPJ preenchidos automaticamente!");
+    } catch {
+      toast.error("Não foi possível buscar dados do CNPJ");
+    } finally {
+      setCnpjLoading(false);
+    }
+  };
 
   const { data: empresas = [], refetch } = trpc.terceiros.empresas.list.useQuery(
     { companyId: companyId ?? 0 },
@@ -195,7 +226,7 @@ export default function EmpresasTerceiras() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><Label>Razão Social *</Label><Input value={form.razaoSocial || ""} onChange={(e) => setForm({ ...form, razaoSocial: e.target.value })} /></div>
                   <div><Label>Nome Fantasia</Label><Input value={form.nomeFantasia || ""} onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })} /></div>
-                  <div><Label>CNPJ *</Label><Input value={form.cnpj || ""} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} /></div>
+                  <div><Label>CNPJ *</Label><div className="flex gap-2"><Input value={form.cnpj || ""} onChange={(e) => { setForm({ ...form, cnpj: e.target.value }); }} onBlur={(e) => buscarCNPJ(e.target.value)} className="flex-1" />{cnpjLoading && <Loader2 className="h-5 w-5 animate-spin text-blue-500 self-center" />}</div></div>
                   <div><Label>Tipo de Serviço</Label><Input placeholder="Ex: Elétrica, Hidráulica, Gesso..." value={form.tipoServico || ""} onChange={(e) => setForm({ ...form, tipoServico: e.target.value })} /></div>
                   <div><Label>Inscrição Estadual</Label><Input value={form.inscricaoEstadual || ""} onChange={(e) => setForm({ ...form, inscricaoEstadual: e.target.value })} /></div>
                   <div><Label>Inscrição Municipal</Label><Input value={form.inscricaoMunicipal || ""} onChange={(e) => setForm({ ...form, inscricaoMunicipal: e.target.value })} /></div>

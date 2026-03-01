@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useModule, ModuleId } from "@/contexts/ModuleContext";
+import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import { APP_VERSION } from "../../../shared/version";
 import { trpc } from "@/lib/trpc";
 import {
@@ -320,8 +321,15 @@ export default function ModuleHub() {
     return null;
   }
 
-  const activeModules = MODULES.filter(m => m.active);
-  const futureModules = MODULES.filter(m => !m.active);
+  const { isModuleEnabled } = useModuleConfig();
+  // Mapeia module id do hub para module_key do banco
+  const hubToConfigKey: Record<string, string> = {
+    "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
+    "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
+  };
+  const activeModules = MODULES.filter(m => m.active && isModuleEnabled(hubToConfigKey[m.id] ?? m.id));
+  const disabledModules = MODULES.filter(m => m.active && !isModuleEnabled(hubToConfigKey[m.id] ?? m.id));
+  const futureModules = [...MODULES.filter(m => !m.active), ...disabledModules.map(m => ({ ...m, active: false }))];
 
   return (
     <>

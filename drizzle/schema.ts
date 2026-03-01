@@ -2983,3 +2983,19 @@ export const pagamentosParceiros = mysqlTable("pagamentos_parceiros", {
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
+
+
+// ========== CONFIGURAÇÃO DE MÓDULOS POR EMPRESA ==========
+export const moduleConfig = mysqlTable("module_config", {
+  id: int().primaryKey().autoincrement(),
+  companyId: int("company_id").notNull(),
+  moduleKey: varchar("module_key", { length: 50 }).notNull(), // rh, sst, juridico, avaliacao, terceiros, parceiros
+  enabled: tinyint("enabled").default(1).notNull(), // 1 = habilitado, 0 = desabilitado
+  enabledAt: timestamp("enabled_at", { mode: "string" }).defaultNow(),
+  disabledAt: timestamp("disabled_at", { mode: "string" }),
+  updatedBy: varchar("updated_by", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("mc_company_module").on(table.companyId, table.moduleKey),
+]);

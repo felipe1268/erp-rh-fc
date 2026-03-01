@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
 import { ModuleProvider } from "./contexts/ModuleContext";
+import { ModuleConfigProvider } from "./contexts/ModuleConfigContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
 import ModuleHub from "./pages/ModuleHub";
 import Home from "./pages/Home";
@@ -179,12 +180,14 @@ function App() {
         <TooltipProvider>
           <Toaster position="bottom-left" />
           <CompanyProvider>
-            <PermissionsProvider>
-              <ModuleProvider>
-                <Router />
-                <AssistenteIAFloat />
-              </ModuleProvider>
-            </PermissionsProvider>
+            <ModuleConfigProvider>
+              <PermissionsProvider>
+                <ModuleProvider>
+                  <Router />
+                  <AssistenteIAFloat />
+                </ModuleProvider>
+              </PermissionsProvider>
+            </ModuleConfigProvider>
           </CompanyProvider>
         </TooltipProvider>
       </ThemeProvider>

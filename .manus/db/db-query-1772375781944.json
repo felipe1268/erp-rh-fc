@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS module_config (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  company_id INT NOT NULL,\n  module_key VARCHAR(50) NOT NULL,\n  enabled TINYINT NOT NULL DEFAULT 1,\n  enabled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  disabled_at TIMESTAMP NULL,\n  updated_by VARCHAR(255),\n  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  INDEX mc_company_module (company_id, module_key)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS module_config (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  company_id INT NOT NULL,\n  module_key VARCHAR(50) NOT NULL,\n  enabled TINYINT NOT NULL DEFAULT 1,\n  enabled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  disabled_at TIMESTAMP NULL,\n  updated_by VARCHAR(255),\n  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  INDEX mc_company_module (company_id, module_key)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 244
+}

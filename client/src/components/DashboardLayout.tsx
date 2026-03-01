@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useModule, ModuleId, MODULE_LABELS } from "@/contexts/ModuleContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import { MODULE_DEFINITIONS, type ActiveModuleId } from "../../../shared/modules";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -444,6 +445,12 @@ function DashboardLayoutContent({
   const { state, toggleSidebar } = useSidebar();
   const { selectedCompany } = useCompany();
   const { activeModule, setActiveModule } = useModule();
+  const { isModuleEnabled } = useModuleConfig();
+  const hubToConfigKey: Record<string, string> = {
+    "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
+    "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
+  };
+  const isModEnabled = (modId: string) => isModuleEnabled(hubToConfigKey[modId] ?? modId);
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -642,7 +649,7 @@ function DashboardLayoutContent({
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  {(permIsAdminMaster || canAccessModule("rh-dp")) && (
+                  {(permIsAdminMaster || canAccessModule("rh-dp")) && isModEnabled("rh-dp") && (
                     <SelectItem value="rh-dp">
                       <div className="flex items-center gap-2">
                         <div className="h-5 w-5 rounded bg-blue-500/20 flex items-center justify-center">
@@ -652,7 +659,7 @@ function DashboardLayoutContent({
                       </div>
                     </SelectItem>
                   )}
-                  {(permIsAdminMaster || canAccessModule("sst")) && (
+                  {(permIsAdminMaster || canAccessModule("sst")) && isModEnabled("sst") && (
                     <SelectItem value="sst">
                       <div className="flex items-center gap-2">
                         <div className="h-5 w-5 rounded bg-emerald-500/20 flex items-center justify-center">
@@ -662,7 +669,7 @@ function DashboardLayoutContent({
                       </div>
                     </SelectItem>
                   )}
-                  {(permIsAdminMaster || canAccessModule("juridico")) && (
+                  {(permIsAdminMaster || canAccessModule("juridico")) && isModEnabled("juridico") && (
                     <SelectItem value="juridico">
                       <div className="flex items-center gap-2">
                         <div className="h-5 w-5 rounded bg-slate-400/20 flex items-center justify-center">
@@ -672,30 +679,30 @@ function DashboardLayoutContent({
                       </div>
                     </SelectItem>
                   )}
-                  <SelectItem value="avaliacao">
+                  {isModEnabled("avaliacao") && <SelectItem value="avaliacao">
                     <div className="flex items-center gap-2">
                       <div className="h-5 w-5 rounded bg-amber-500/20 flex items-center justify-center">
                         <Star className="h-3 w-3 text-amber-400" />
                       </div>
                       Avaliação
                     </div>
-                  </SelectItem>
-                  <SelectItem value="terceiros">
+                  </SelectItem>}
+                  {isModEnabled("terceiros") && <SelectItem value="terceiros">
                     <div className="flex items-center gap-2">
                       <div className="h-5 w-5 rounded bg-orange-500/20 flex items-center justify-center">
                         <HardHat className="h-3 w-3 text-orange-400" />
                       </div>
                       Terceiros
                     </div>
-                  </SelectItem>
-                  <SelectItem value="parceiros">
+                  </SelectItem>}
+                  {isModEnabled("parceiros") && <SelectItem value="parceiros">
                     <div className="flex items-center gap-2">
                       <div className="h-5 w-5 rounded bg-purple-500/20 flex items-center justify-center">
                         <Handshake className="h-3 w-3 text-purple-400" />
                       </div>
                       Parceiros
                     </div>
-                  </SelectItem>
+                  </SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -712,30 +719,36 @@ function DashboardLayoutContent({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="start">
-                  {(permIsAdminMaster || canAccessModule("rh-dp")) && (
+                  {(permIsAdminMaster || canAccessModule("rh-dp")) && isModEnabled("rh-dp") && (
                     <DropdownMenuItem onClick={() => { setActiveModule("rh-dp"); setLocation("/painel/rh"); }} className="cursor-pointer">
                       <Users className="mr-2 h-4 w-4 text-blue-400" /> RH & DP
                     </DropdownMenuItem>
                   )}
-                  {(permIsAdminMaster || canAccessModule("sst")) && (
+                  {(permIsAdminMaster || canAccessModule("sst")) && isModEnabled("sst") && (
                     <DropdownMenuItem onClick={() => { setActiveModule("sst"); setLocation("/painel/sst"); }} className="cursor-pointer">
                       <Shield className="mr-2 h-4 w-4 text-emerald-400" /> SST
                     </DropdownMenuItem>
                   )}
-                  {(permIsAdminMaster || canAccessModule("juridico")) && (
+                  {(permIsAdminMaster || canAccessModule("juridico")) && isModEnabled("juridico") && (
                     <DropdownMenuItem onClick={() => { setActiveModule("juridico"); setLocation("/painel/juridico"); }} className="cursor-pointer">
                       <Gavel className="mr-2 h-4 w-4 text-slate-300" /> Jurídico
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={() => { setActiveModule("avaliacao"); setLocation("/avaliacao-desempenho"); }} className="cursor-pointer">
-                    <Star className="mr-2 h-4 w-4 text-amber-400" /> Avaliação
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setActiveModule("terceiros" as ModuleId); setLocation("/terceiros/painel"); }} className="cursor-pointer">
-                    <HardHat className="mr-2 h-4 w-4 text-orange-400" /> Terceiros
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setActiveModule("parceiros" as ModuleId); setLocation("/parceiros/painel"); }} className="cursor-pointer">
-                    <Handshake className="mr-2 h-4 w-4 text-purple-400" /> Parceiros
-                  </DropdownMenuItem>
+                  {isModEnabled("avaliacao") && (
+                    <DropdownMenuItem onClick={() => { setActiveModule("avaliacao"); setLocation("/avaliacao-desempenho"); }} className="cursor-pointer">
+                      <Star className="mr-2 h-4 w-4 text-amber-400" /> Avaliação
+                    </DropdownMenuItem>
+                  )}
+                  {isModEnabled("terceiros") && (
+                    <DropdownMenuItem onClick={() => { setActiveModule("terceiros" as ModuleId); setLocation("/terceiros/painel"); }} className="cursor-pointer">
+                      <HardHat className="mr-2 h-4 w-4 text-orange-400" /> Terceiros
+                    </DropdownMenuItem>
+                  )}
+                  {isModEnabled("parceiros") && (
+                    <DropdownMenuItem onClick={() => { setActiveModule("parceiros" as ModuleId); setLocation("/parceiros/painel"); }} className="cursor-pointer">
+                      <Handshake className="mr-2 h-4 w-4 text-purple-400" /> Parceiros
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

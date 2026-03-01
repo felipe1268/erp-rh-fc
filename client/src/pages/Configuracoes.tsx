@@ -12,10 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -66,9 +67,18 @@ const CATEGORIAS = [
   { key: "epi", label: "EPIs / Segurança", icon: HardHat, color: "text-emerald-600", bgColor: "bg-emerald-50", borderColor: "border-emerald-200" },
   { key: "atestados", label: "Atestados", icon: ClipboardList, color: "text-violet-600", bgColor: "bg-violet-50", borderColor: "border-violet-200" },
   { key: "dissidio", label: "Dissídio Coletivo", icon: TrendingUp, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200" },
+  { key: "terceiros", label: "Terceiros", icon: Building2, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200" },
+  { key: "parceiros", label: "Parceiros / Convênios", icon: Handshake, color: "text-purple-600", bgColor: "bg-purple-50", borderColor: "border-purple-200" },
+  { key: "juridico", label: "Jurídico", icon: Gavel, color: "text-slate-600", bgColor: "bg-slate-50", borderColor: "border-slate-200" },
+  { key: "sst", label: "SST / Segurança", icon: Shield, color: "text-emerald-600", bgColor: "bg-emerald-50", borderColor: "border-emerald-200" },
+  { key: "avaliacao", label: "Avaliação de Desempenho", icon: Star, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200" },
+  { key: "crachas", label: "Crachás", icon: BadgeCheck, color: "text-sky-600", bgColor: "bg-sky-50", borderColor: "border-sky-200" },
+  { key: "convencao", label: "Convenção Coletiva", icon: BookOpen, color: "text-rose-600", bgColor: "bg-rose-50", borderColor: "border-rose-200" },
+  { key: "cadastro", label: "Cadastro", icon: Users, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200" },
+  { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao";
+type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -270,6 +280,7 @@ export default function Configuracoes() {
   };
 
   const allTabs = [
+    { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin" },
     { key: "painel" as TabKey, label: "Painel de Controle", icon: LayoutDashboard, minRole: "user" },
     { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin" },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin" },
@@ -406,6 +417,11 @@ export default function Configuracoes() {
             </button>
           ))}
         </div>
+
+        {/* TAB: Módulos do Sistema */}
+        {activeTab === "modulos" && (
+          <ModulosTab companyId={companyId} isMaster={isMaster} />
+        )}
 
         {/* TAB: Painel de Controle (Menu Configurável) */}
         {activeTab === "painel" && (
@@ -1928,5 +1944,93 @@ function RefreshCaepiButton({ onSuccess }: { onSuccess: () => void }) {
       {refreshMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
       {refreshMutation.isPending ? "Atualizando..." : "Atualizar Base CAEPI"}
     </Button>
+  );
+}
+
+
+/* ═══════════ MÓDULOS DO SISTEMA ═══════════ */
+function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
+  const { modules, isLoading, refetch } = useModuleConfig();
+  const toggleMut = trpc.moduleConfig.toggle.useMutation({
+    onSuccess: () => { refetch(); toast.success("Módulo atualizado com sucesso!"); },
+    onError: (e: any) => toast.error(e.message || "Erro ao atualizar módulo"),
+  });
+
+  const MODULE_INFO: Record<string, { label: string; subtitle: string; icon: any; color: string; bgColor: string; borderColor: string; description: string }> = {
+    rh: { label: "RH & DP", subtitle: "Recursos Humanos e Departamento Pessoal", icon: Users, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200", description: "Colaboradores, folha de pagamento, ponto eletrônico, férias, benefícios, advertências, rescisão e documentação trabalhista." },
+    sst: { label: "SST", subtitle: "Segurança e Saúde do Trabalho", icon: Shield, color: "text-emerald-600", bgColor: "bg-emerald-50", borderColor: "border-emerald-200", description: "EPIs, ASOs, CIPA, treinamentos de segurança, DDS, desvios, planos de ação e conformidade com normas regulamentadoras." },
+    juridico: { label: "Jurídico", subtitle: "Gestão Jurídica Trabalhista", icon: Scale, color: "text-slate-600", bgColor: "bg-slate-50", borderColor: "border-slate-200", description: "Processos trabalhistas, audiências, provisões, análise de risco jurídico e integração DataJud." },
+    avaliacao: { label: "Avaliação", subtitle: "Avaliação de Desempenho", icon: ClipboardList, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200", description: "Questionários personalizáveis, ciclos de avaliação, ranking de desempenho, pesquisas e clima organizacional." },
+    terceiros: { label: "Terceiros", subtitle: "Gestão de Empresas Terceirizadas", icon: HardHat, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "Cadastro, documentação, obrigações mensais, aptidão, conformidade e portal externo para terceiros." },
+    parceiros: { label: "Parceiros", subtitle: "Portal de Convênios", icon: Coffee, color: "text-purple-600", bgColor: "bg-purple-50", borderColor: "border-purple-200", description: "Farmácia, posto, restaurante e outros convênios com lançamentos, aprovações e guia de descontos." },
+  };
+
+  if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800">Módulos do Sistema</h2>
+          <p className="text-sm text-gray-500 mt-1">Habilite ou desabilite módulos para controlar o acesso. Módulos desabilitados ficam ocultos na navegação e na tela inicial.</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <ToggleRight className="h-4 w-4" />
+          <span>Apenas Admin pode alterar</span>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        {modules.map((mod: any) => {
+          const info = MODULE_INFO[mod.moduleKey];
+          if (!info) return null;
+          const Icon = info.icon;
+          return (
+            <div key={mod.moduleKey} className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${mod.enabled ? `${info.borderColor} ${info.bgColor}` : "border-gray-200 bg-gray-50 opacity-60"}`}>
+              <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${mod.enabled ? info.bgColor : "bg-gray-100"}`}>
+                <Icon className={`h-6 w-6 ${mod.enabled ? info.color : "text-gray-400"}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className={`font-semibold ${mod.enabled ? "text-gray-900" : "text-gray-500"}`}>{info.label}</h3>
+                  <span className="text-xs text-gray-400">{info.subtitle}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{info.description}</p>
+                {mod.updatedBy && (
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Última alteração por {mod.updatedBy} {mod.updatedAt ? `em ${new Date(mod.updatedAt).toLocaleDateString("pt-BR")}` : ""}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${mod.enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                  {mod.enabled ? "Habilitado" : "Desabilitado"}
+                </span>
+                <Switch
+                  checked={mod.enabled}
+                  onCheckedChange={(checked: boolean) => toggleMut.mutate({ companyId, moduleKey: mod.moduleKey, enabled: checked })}
+                  disabled={toggleMut.isPending}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+        <div className="flex items-start gap-3">
+          <Info className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+          <div>
+            <h4 className="text-sm font-semibold text-blue-800">Como funciona</h4>
+            <ul className="text-xs text-blue-700 mt-1 space-y-1">
+              <li>• Módulos <strong>desabilitados</strong> ficam ocultos na tela inicial e na barra lateral para todos os usuários.</li>
+              <li>• Os dados do módulo desabilitado são <strong>preservados</strong> — nada é excluído.</li>
+              <li>• Ao reabilitar, tudo volta ao normal imediatamente.</li>
+              <li>• Ideal para controlar quais funcionalidades cada empresa contratante pode acessar.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

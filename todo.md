@@ -3861,3 +3861,10 @@
 
 ## Melhorias de UX
 - [x] Diálogos/modais redimensionáveis (arrastar bordas laterais com mouse para ajustar largura)
+- [x] Expandir aba Sistema em Configurações com parâmetros de TODOS os módulos (Terceiros, Parceiros, Jurídico, Avaliação, SST, etc.)
+- [x] Busca automática de dados por CNPJ no cadastro de Parceiros e Terceiros (BrasilAPI)
+- [x] Sistema de habilitação/desabilitação de módulos por empresa (Admin Master)
+- [x] Tabela module_config no banco para controlar módulos habilitados por empresa
+- [x] Painel de controle de módulos nas Configurações (toggle ON/OFF por módulo)
+- [x] Módulos desabilitados ficam ocultos na Home e sidebar para todos os usuários
+- [x] Preparado para venda futura - cada empresa com módulos independentes

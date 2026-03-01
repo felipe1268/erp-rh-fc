@@ -1385,6 +1385,59 @@ export const appRouter = router({
         // RECONTRATAÇÃO
         { categoria: "cadastro", chave: "cadastro_permitir_recontratacao", valor: "1", descricao: "Permitir recontratação de funcionário desligado com mesmo CPF (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "cadastro", chave: "cadastro_recontratacao_carencia_dias", valor: "90", descricao: "Carência mínima em dias para recontratação", valorPadraoClt: "90", unidade: "dias" },
+        // TERCEIROS
+        { categoria: "terceiros", chave: "terceiros_prazo_docs_dias", valor: "10", descricao: "Prazo em dias para envio de documentos mensais", valorPadraoClt: "10", unidade: "dias" },
+        { categoria: "terceiros", chave: "terceiros_alerta_vencimento_dias", valor: "10", descricao: "Dias antes do vencimento para enviar alerta", valorPadraoClt: "10", unidade: "dias" },
+        { categoria: "terceiros", chave: "terceiros_alerta_segundo_dias", valor: "5", descricao: "Dias antes do vencimento para segundo alerta", valorPadraoClt: "5", unidade: "dias" },
+        { categoria: "terceiros", chave: "terceiros_bloquear_medicao_pendencia", valor: "1", descricao: "Bloquear medição se há documentos pendentes (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "terceiros", chave: "terceiros_exigir_cnd", valor: "1", descricao: "Exigir CND para liberação de medição (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "terceiros", chave: "terceiros_exigir_fgts", valor: "1", descricao: "Exigir comprovante FGTS mensal (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "terceiros", chave: "terceiros_exigir_inss", valor: "1", descricao: "Exigir comprovante INSS mensal (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "terceiros", chave: "terceiros_exigir_folha", valor: "1", descricao: "Exigir folha de pagamento mensal (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "terceiros", chave: "terceiros_validacao_ia_auto", valor: "0", descricao: "Validar documentos automaticamente com IA ao receber (0=Não, 1=Sim)", valorPadraoClt: "0", unidade: "bool" },
+        { categoria: "terceiros", chave: "terceiros_portal_expiracao_link_dias", valor: "30", descricao: "Dias de validade do link do portal externo", valorPadraoClt: "30", unidade: "dias" },
+        // PARCEIROS CONVENIADOS
+        { categoria: "parceiros", chave: "parceiros_limite_desconto_folha_pct", valor: "30", descricao: "Limite máximo de desconto em folha por convênios (%)", valorPadraoClt: "30", unidade: "%" },
+        { categoria: "parceiros", chave: "parceiros_aprovacao_obrigatoria", valor: "1", descricao: "Exigir aprovação do RH para lançamentos (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "parceiros", chave: "parceiros_prazo_fechamento_dia", valor: "25", descricao: "Dia do mês para fechamento dos lançamentos", valorPadraoClt: "25", unidade: "dia" },
+        { categoria: "parceiros", chave: "parceiros_prazo_pagamento_dias", valor: "30", descricao: "Prazo em dias para pagamento ao parceiro após fechamento", valorPadraoClt: "30", unidade: "dias" },
+        { categoria: "parceiros", chave: "parceiros_comprovante_obrigatorio", valor: "1", descricao: "Exigir comprovante/nota fiscal do parceiro (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "parceiros", chave: "parceiros_portal_expiracao_link_dias", valor: "30", descricao: "Dias de validade do link do portal do parceiro", valorPadraoClt: "30", unidade: "dias" },
+        // JURÍDICO TRABALHISTA
+        { categoria: "juridico", chave: "juridico_provisao_automatica", valor: "1", descricao: "Calcular provisão automaticamente ao cadastrar processo (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "juridico", chave: "juridico_alerta_audiencia_dias", valor: "7", descricao: "Dias antes da audiência para enviar alerta", valorPadraoClt: "7", unidade: "dias" },
+        { categoria: "juridico", chave: "juridico_alerta_prazo_dias", valor: "5", descricao: "Dias antes do prazo judicial para enviar alerta", valorPadraoClt: "5", unidade: "dias" },
+        { categoria: "juridico", chave: "juridico_risco_alto_provisao_pct", valor: "100", descricao: "Percentual de provisão para risco ALTO (%)", valorPadraoClt: "100", unidade: "%" },
+        { categoria: "juridico", chave: "juridico_risco_medio_provisao_pct", valor: "50", descricao: "Percentual de provisão para risco MÉDIO (%)", valorPadraoClt: "50", unidade: "%" },
+        { categoria: "juridico", chave: "juridico_risco_baixo_provisao_pct", valor: "25", descricao: "Percentual de provisão para risco BAIXO (%)", valorPadraoClt: "25", unidade: "%" },
+        // SST - SEGURANÇA E SAÚDE DO TRABALHO
+        { categoria: "sst", chave: "sst_aso_alerta_vencimento_dias", valor: "30", descricao: "Dias antes do vencimento do ASO para alertar", valorPadraoClt: "30", unidade: "dias" },
+        { categoria: "sst", chave: "sst_treinamento_alerta_vencimento_dias", valor: "30", descricao: "Dias antes do vencimento do treinamento para alertar", valorPadraoClt: "30", unidade: "dias" },
+        { categoria: "sst", chave: "sst_ca_alerta_vencimento_dias", valor: "60", descricao: "Dias antes do vencimento do CA para alertar", valorPadraoClt: "60", unidade: "dias" },
+        { categoria: "sst", chave: "sst_estoque_minimo_epi", valor: "5", descricao: "Quantidade mínima de estoque para alerta de EPI", valorPadraoClt: "5", unidade: "qtd" },
+        { categoria: "sst", chave: "sst_bloquear_obra_sem_aso", valor: "0", descricao: "Bloquear alocação em obra sem ASO válido (0=Não, 1=Sim)", valorPadraoClt: "0", unidade: "bool" },
+        { categoria: "sst", chave: "sst_cipa_renovacao_alerta_dias", valor: "60", descricao: "Dias antes do fim do mandato CIPA para alertar renovação", valorPadraoClt: "60", unidade: "dias" },
+        // AVALIAÇÃO DE DESEMPENHO
+        { categoria: "avaliacao", chave: "avaliacao_nota_minima_aprovacao", valor: "6", descricao: "Nota mínima para aprovação na avaliação (0-10)", valorPadraoClt: "6", unidade: "nota" },
+        { categoria: "avaliacao", chave: "avaliacao_ciclo_padrao_meses", valor: "3", descricao: "Intervalo padrão entre ciclos de avaliação (meses)", valorPadraoClt: "3", unidade: "meses" },
+        { categoria: "avaliacao", chave: "avaliacao_autoavaliacao", valor: "1", descricao: "Permitir autoavaliação do colaborador (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "avaliacao", chave: "avaliacao_peso_pilar1", valor: "33.33", descricao: "Peso do Pilar 1 - Postura e Disciplina (%)", valorPadraoClt: "33.33", unidade: "%" },
+        { categoria: "avaliacao", chave: "avaliacao_peso_pilar2", valor: "33.33", descricao: "Peso do Pilar 2 - Desempenho Técnico (%)", valorPadraoClt: "33.33", unidade: "%" },
+        { categoria: "avaliacao", chave: "avaliacao_peso_pilar3", valor: "33.34", descricao: "Peso do Pilar 3 - Atitude e Crescimento (%)", valorPadraoClt: "33.34", unidade: "%" },
+        { categoria: "avaliacao", chave: "avaliacao_clima_anonimo", valor: "1", descricao: "Pesquisa de clima anônima por padrão (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        // CRACHÁS
+        { categoria: "crachas", chave: "crachas_cor_clt", valor: "#1B4F72", descricao: "Cor do crachá para funcionários CLT (hex)", valorPadraoClt: "#1B4F72", unidade: "cor" },
+        { categoria: "crachas", chave: "crachas_cor_pj", valor: "#196F3D", descricao: "Cor do crachá para PJ (hex)", valorPadraoClt: "#196F3D", unidade: "cor" },
+        { categoria: "crachas", chave: "crachas_cor_terceiro", valor: "#D35400", descricao: "Cor do crachá para terceiros (hex)", valorPadraoClt: "#D35400", unidade: "cor" },
+        { categoria: "crachas", chave: "crachas_validade_dias", valor: "365", descricao: "Validade do crachá em dias", valorPadraoClt: "365", unidade: "dias" },
+        { categoria: "crachas", chave: "crachas_qrcode_dados", valor: "nome,cpf,funcao,empresa", descricao: "Dados incluídos no QR Code (separados por vírgula)", valorPadraoClt: "nome,cpf,funcao,empresa", unidade: "lista" },
+        // NOTIFICAÇÕES E ALERTAS GERAIS
+        { categoria: "notificacoes", chave: "notif_email_ativo", valor: "1", descricao: "Enviar notificações por e-mail (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "notificacoes", chave: "notif_resumo_diario", valor: "1", descricao: "Enviar resumo diário ao administrador (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
+        { categoria: "notificacoes", chave: "notif_horario_envio", valor: "08:00", descricao: "Horário padrão para envio de notificações", valorPadraoClt: "08:00", unidade: "hora" },
+        // CONVENÇÃO COLETIVA
+        { categoria: "convencao", chave: "convencao_alerta_vencimento_dias", valor: "60", descricao: "Dias antes do vencimento da convenção para alertar", valorPadraoClt: "60", unidade: "dias" },
+        { categoria: "convencao", chave: "convencao_aplicar_local_sobre_matriz", valor: "1", descricao: "Aplicar convenção local quando mais vantajosa que a matriz (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
       ];
 
       const toInsert = defaults.filter(d => !existingChaves.has(d.chave));
@@ -1667,6 +1720,64 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso restrito ao Admin Master' });
       await deleteRevision(input.id);
+      return { success: true };
+    }),
+  }),
+  // ===================== CONFIGURAÇÃO DE MÓDULOS =====================
+  moduleConfig: router({
+    list: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input, ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { moduleConfig } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const rows = await db.select().from(moduleConfig).where(eq(moduleConfig.companyId, input.companyId));
+      // Módulos padrão - todos habilitados por default
+      const ALL_MODULES = ["rh", "sst", "juridico", "avaliacao", "terceiros", "parceiros"];
+      const moduleMap: Record<string, any> = {};
+      for (const row of rows) moduleMap[row.moduleKey] = row;
+      return ALL_MODULES.map(key => ({
+        moduleKey: key,
+        enabled: moduleMap[key] ? moduleMap[key].enabled === 1 : true,
+        id: moduleMap[key]?.id ?? null,
+        updatedBy: moduleMap[key]?.updatedBy ?? null,
+        updatedAt: moduleMap[key]?.updatedAt ?? null,
+      }));
+    }),
+    toggle: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      moduleKey: z.string(),
+      enabled: z.boolean(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin pode alterar módulos" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { moduleConfig } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const existing = await db.select().from(moduleConfig).where(
+        and(eq(moduleConfig.companyId, input.companyId), eq(moduleConfig.moduleKey, input.moduleKey))
+      );
+      if (existing.length > 0) {
+        await db.update(moduleConfig).set({
+          enabled: input.enabled ? 1 : 0,
+          enabledAt: input.enabled ? new Date().toISOString().slice(0, 19).replace('T', ' ') : existing[0].enabledAt,
+          disabledAt: !input.enabled ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
+          updatedBy: ctx.user.name ?? "Sistema",
+        }).where(eq(moduleConfig.id, existing[0].id));
+      } else {
+        await db.insert(moduleConfig).values({
+          companyId: input.companyId,
+          moduleKey: input.moduleKey,
+          enabled: input.enabled ? 1 : 0,
+          enabledAt: input.enabled ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
+          disabledAt: !input.enabled ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
+          updatedBy: ctx.user.name ?? "Sistema",
+        });
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "module_config", entityId: input.companyId, details: `Módulo ${input.moduleKey} ${input.enabled ? 'HABILITADO' : 'DESABILITADO'}` });
       return { success: true };
     }),
   }),

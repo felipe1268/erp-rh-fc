@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Store, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, Phone, Mail, MapPin, CreditCard } from "lucide-react";
+import { Store, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, Phone, Mail, MapPin, CreditCard, RefreshCw, Loader2 } from "lucide-react";
 
 const ESTADOS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 const TIPO_CONVENIO_LABELS: Record<string, string> = {
@@ -39,6 +39,47 @@ export default function CadastroParceiros() {
   const updateMut = trpc.parceiros.cadastro.update.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Parceiro atualizado!"); } });
   const deleteMut = trpc.parceiros.cadastro.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Parceiro excluído!"); } });
   const uploadMut = trpc.parceiros.cadastro.uploadDoc.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
+
+  // ========== BUSCA AUTOMÁTICA CNPJ ==========
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [cnpjResult, setCnpjResult] = useState<{ success?: boolean; razaoSocial?: string; nomeFantasia?: string; error?: string } | null>(null);
+
+  const buscarCnpj = useCallback((cnpjDigits: string) => {
+    if (cnpjDigits.length !== 14) return;
+    setCnpjLoading(true);
+    setCnpjResult(null);
+    fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjDigits}`)
+      .then(r => r.ok ? r.json() : Promise.reject('not found'))
+      .then(data => {
+        const tel = data.ddd_telefone_1 ? `(${data.ddd_telefone_1.substring(0, 2)}) ${data.ddd_telefone_1.substring(2)}` : "";
+        setForm((f: any) => ({
+          ...f,
+          razaoSocial: data.razao_social || f.razaoSocial || "",
+          nomeFantasia: data.nome_fantasia || f.nomeFantasia || "",
+          logradouro: data.logradouro || f.logradouro || "",
+          numero: data.numero || f.numero || "",
+          complemento: data.complemento || f.complemento || "",
+          bairro: data.bairro || f.bairro || "",
+          cidade: data.municipio || f.cidade || "",
+          estado: data.uf || f.estado || "",
+          cep: data.cep ? data.cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2") : f.cep || "",
+          telefone: tel || f.telefone || "",
+          emailPrincipal: data.email || f.emailPrincipal || "",
+        }));
+        setCnpjResult({ success: true, razaoSocial: data.razao_social, nomeFantasia: data.nome_fantasia });
+        toast.success(`Dados de "${data.razao_social}" preenchidos automaticamente!`);
+      })
+      .catch(() => {
+        setCnpjResult({ error: "CNPJ não encontrado na base da Receita Federal" });
+        toast.error("CNPJ não encontrado");
+      })
+      .finally(() => setCnpjLoading(false));
+  }, []);
+
+  const formatCnpj = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 14);
+    return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  };
 
   const filtered = useMemo(() => {
     if (!search) return parceiros;
@@ -199,7 +240,36 @@ export default function CadastroParceiros() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><Label>Razão Social *</Label><Input value={form.razaoSocial || ""} onChange={(e) => setForm({ ...form, razaoSocial: e.target.value })} /></div>
                   <div><Label>Nome Fantasia</Label><Input value={form.nomeFantasia || ""} onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })} /></div>
-                  <div><Label>CNPJ *</Label><Input value={form.cnpj || ""} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} /></div>
+                  <div>
+                    <Label>CNPJ *</Label>
+                    <div className="flex gap-1">
+                      <Input
+                        value={form.cnpj || ""}
+                        onChange={(e) => {
+                          const formatted = formatCnpj(e.target.value);
+                          setForm({ ...form, cnpj: formatted });
+                          const digits = formatted.replace(/\D/g, "");
+                          if (digits.length === 14) {
+                            buscarCnpj(digits);
+                          } else {
+                            setCnpjResult(null);
+                          }
+                        }}
+                        placeholder="00.000.000/0000-00"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button" size="icon" variant="outline"
+                        disabled={cnpjLoading || (form.cnpj || "").replace(/\D/g, "").length !== 14}
+                        onClick={() => buscarCnpj((form.cnpj || "").replace(/\D/g, ""))}
+                        title="Buscar dados do CNPJ"
+                      >
+                        {cnpjLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {cnpjResult?.success && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> {cnpjResult.razaoSocial} {cnpjResult.nomeFantasia ? `(${cnpjResult.nomeFantasia})` : ''}</p>}
+                    {cnpjResult?.error && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><XCircle className="h-3 w-3" /> {cnpjResult.error}</p>}
+                  </div>
                   <div>
                     <Label>Tipo de Convênio *</Label>
                     <Select value={form.tipoConvenio || "farmacia"} onValueChange={(v) => setForm({ ...form, tipoConvenio: v })}>
