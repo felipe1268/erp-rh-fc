@@ -329,6 +329,41 @@ export const heSolicitacoesRouter = router({
     return { authorized: false, solicitacao: null };
   }),
 
+  // ===================== EXCLUIR SOLICITAÇÃO (Admin Master) =====================
+  delete: protectedProcedure.input(z.object({
+    id: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    // Verificar se é admin
+    if (ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode excluir solicitações" });
+    }
+
+    // Buscar a solicitação
+    const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
+    if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    // Excluir funcionários vinculados primeiro
+    await db.delete(heSolicitacaoFuncionarios).where(eq(heSolicitacaoFuncionarios.solicitacaoId, input.id));
+    // Excluir a solicitação
+    await db.delete(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
+
+    await createAuditLog({
+      userId: ctx.user.id,
+      userName: ctx.user.name || "Sistema",
+      companyId: sol.companyId,
+      action: "DELETE",
+      module: "he_solicitacoes",
+      entityType: "he_solicitacao",
+      entityId: input.id,
+      details: `Excluiu solicitação HE #${input.id} (${sol.motivo}) - status: ${sol.status}`,
+    });
+
+    return { success: true };
+  }),
+
   // ===================== BULK CHECK - Verificar HE autorizada para múltiplos funcionários/data =====================
   bulkCheckAuthorized: protectedProcedure.input(z.object({
     companyId: z.number(),

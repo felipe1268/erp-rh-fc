@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
-  Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare,
+  Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2,
 } from "lucide-react";
 
 type TabType = "solicitar" | "aprovacoes" | "historico";
@@ -141,6 +141,18 @@ export default function SolicitacaoHE() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const deleteMut = trpc.heSolicitacoes.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Solicitação excluída permanentemente.");
+      utils.heSolicitacoes.list.invalidate();
+      utils.heSolicitacoes.counts.invalidate();
+      setDetailSolId(null);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const activeEmployees = useMemo(() => {
     return (employeesQuery.data || []).filter((e: any) => e.status === "Ativo" && !e.deletedAt);
@@ -621,9 +633,25 @@ export default function SolicitacaoHE() {
                                 )}
                               </div>
                             </div>
-                            <Button size="sm" variant="outline" className="text-xs md:text-sm shrink-0" onClick={() => openDetail(sol.id)}>
-                              <Eye className="h-3.5 w-3.5 mr-1" /> Detalhes
-                            </Button>
+                            <div className="flex flex-wrap gap-2 shrink-0">
+                              <Button size="sm" variant="outline" className="text-xs md:text-sm" onClick={() => openDetail(sol.id)}>
+                                <Eye className="h-3.5 w-3.5 mr-1" /> Detalhes
+                              </Button>
+                              {isAdminMaster && (
+                                confirmDeleteId === sol.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button size="sm" variant="destructive" className="text-xs" onClick={() => { deleteMut.mutate({ id: sol.id }); setConfirmDeleteId(null); }} disabled={deleteMut.isPending}>
+                                      {deleteMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sim"}
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="text-xs" onClick={() => setConfirmDeleteId(null)}>Não</Button>
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" className="text-xs md:text-sm text-red-600 border-red-300" onClick={() => setConfirmDeleteId(sol.id)}>
+                                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+                                  </Button>
+                                )
+                              )}
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -721,7 +749,7 @@ export default function SolicitacaoHE() {
                               ))}
                             </div>
                           </div>
-                          <div className="flex gap-2 shrink-0">
+                          <div className="flex flex-wrap gap-2 shrink-0">
                             <Button
                               size="sm"
                               variant="outline"
@@ -734,6 +762,20 @@ export default function SolicitacaoHE() {
                               <Button size="sm" variant="outline" className="text-xs md:text-sm text-red-600" onClick={() => handleCancel(sol.id)}>
                                 Cancelar
                               </Button>
+                            )}
+                            {isAdminMaster && (
+                              confirmDeleteId === sol.id ? (
+                                <div className="flex items-center gap-1">
+                                  <Button size="sm" variant="destructive" className="text-xs" onClick={() => { deleteMut.mutate({ id: sol.id }); setConfirmDeleteId(null); }} disabled={deleteMut.isPending}>
+                                    {deleteMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sim"}
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="text-xs" onClick={() => setConfirmDeleteId(null)}>Não</Button>
+                                </div>
+                              ) : (
+                                <Button size="sm" variant="outline" className="text-xs md:text-sm text-red-600 border-red-300" onClick={() => setConfirmDeleteId(sol.id)}>
+                                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+                                </Button>
+                              )
                             )}
                           </div>
                         </div>
@@ -940,6 +982,30 @@ export default function SolicitacaoHE() {
                         >
                           <XCircle className="h-4 w-4 mr-2" />
                           {sol.status === "aprovada" ? "Reverter → Rejeitar" : "Rejeitar Solicitação"}
+                        </Button>
+                      )}
+                      {/* Botão Excluir - Admin Master */}
+                      {confirmDeleteId === sol.id ? (
+                        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                          <span className="text-sm text-red-700 font-medium">Excluir permanentemente?</span>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => { deleteMut.mutate({ id: sol.id }); setConfirmDeleteId(null); }}
+                            disabled={deleteMut.isPending}
+                          >
+                            {deleteMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Sim, excluir"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setConfirmDeleteId(null)}>Não</Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                          onClick={() => setConfirmDeleteId(sol.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Excluir
                         </Button>
                       )}
                     </div>

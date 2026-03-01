@@ -3786,3 +3786,13 @@
 - [x] Filtros por mês e status na aba Aprovações
 - [x] Mini resumo com badges (pendentes, aprovadas, rejeitadas)
 - [x] Cards e tabs responsivos (grid 2x2 em mobile, textos menores)
+
+## Rev. 140 - Excluir Solicitação HE + Fix Filtro Mês
+- [x] Backend: endpoint delete para excluir solicitação HE (Admin Master only)
+- [x] Frontend: botão Excluir na listagem (Histórico e Aprovações) e no FullScreenDialog com confirmação inline
+- [x] Fix: filtro de mês agora inclui opção "Todos os meses" para evitar solicitações desaparecendo
+- [x] Fix: mês padrão agora é o mês atual (março 2026) ao invés de ficar em mês anterior
+- [x] Confirmação inline (Sim/Não) ao invés de dialog separado para melhor UX mobile
+- [x] Apenas Admin Master pode excluir solicitações (verificação backend + frontend)
+- [x] Toast de sucesso/erro ao excluir
+- [x] Invalidação automática de queries após exclusão
