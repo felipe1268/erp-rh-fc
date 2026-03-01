@@ -746,6 +746,8 @@ export const appRouter = router({
       valorContrato: z.string().optional(),
       observacoes: z.string().optional(),
       sns: z.array(z.object({ sn: z.string(), apelido: z.string().optional() })).optional(),
+      usarConvencaoMatriz: z.number().optional(),
+      convencaoId: z.number().nullable().optional(),
     })).mutation(async ({ input }) => {
       const { sns, ...obraData } = input;
       const result = await createObra(obraData as any);
@@ -780,6 +782,9 @@ export const appRouter = router({
       valorContrato: z.string().optional(),
       observacoes: z.string().optional(),
       isActive: z.boolean().optional(),
+      usarConvencaoMatriz: z.number().optional(),
+      convencaoId: z.number().nullable().optional(),
+      convencaoDivergencias: z.string().nullable().optional(),
     })).mutation(async ({ input }) => {
       const { id, ...data } = input;
       // Se status mudou para Concluída/Paralisada/Cancelada, liberar SNs

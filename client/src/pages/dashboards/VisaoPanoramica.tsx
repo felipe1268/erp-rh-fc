@@ -14,6 +14,7 @@ import {
   ChevronDown, ChevronUp, Zap, Eye, DollarSign, Percent, X, Info,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import FullScreenDialog from "@/components/FullScreenDialog";
 
 // ── Helpers ──
 function fmt(v: number | undefined | null): string {
@@ -73,14 +74,8 @@ function ScoreDetailDialog({ open, onClose, analise }: { open: boolean; onClose:
   const pontosFracos = analise.pontosFracos?.length || 0;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-blue-500" />
-            Detalhamento da Pontuação de Saúde
-          </DialogTitle>
-        </DialogHeader>
+    <FullScreenDialog open={open} onClose={onClose} title="Detalhamento da Pontuação de Saúde" icon={<Activity className="h-5 w-5 text-blue-500" />}>
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
 
         {/* Score Visual */}
         <div className="flex flex-col items-center py-4">
@@ -237,8 +232,8 @@ function ScoreDetailDialog({ open, onClose, analise }: { open: boolean; onClose:
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </FullScreenDialog>
   );
 }
 

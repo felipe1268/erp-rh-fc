@@ -3869,3 +3869,10 @@
 - [x] Módulos desabilitados ficam ocultos na Home e sidebar para todos os usuários
 - [x] Preparado para venda futura - cada empresa com módulos independentes
 - [x] BUG: React Hooks order error in ModuleHub - useModuleConfig chamado após early return (movido para antes dos returns)
+- [ ] Seção de Convenção Coletiva na tela Editar Obra (adotar matriz ou selecionar outra)
+- [ ] Comparação com IA entre convenção da obra e da matriz com registro de divergências
+- [ ] Seção de Convenção Coletiva na tela Editar Obra (adotar matriz ou selecionar outra)
+- [ ] Comparação com IA entre convenção da obra e da matriz com registro de divergências
+- [ ] Controle de acesso por módulo por usuário (definir quais módulos cada usuário pode acessar)
+- [x] Detalhamento da Pontuação de Saúde em tela cheia (FullScreenDialog) com botão de voltar
+- [ ] Upload de arquivo da convenção coletiva na Editar Obra quando diferente da matriz

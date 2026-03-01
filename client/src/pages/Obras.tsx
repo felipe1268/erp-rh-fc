@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
@@ -30,12 +30,14 @@ type ObraForm = {
   nome: string; numOrcamento: string;
   status: string; cep: string; endereco: string;
   dataInicio: string; dataPrevisaoFim: string; observacoes: string;
+  usarConvencaoMatriz: number; convencaoId: number | null;
 };
 
 const emptyForm: ObraForm = {
   nome: "", numOrcamento: "",
   status: "Planejamento", cep: "", endereco: "",
   dataInicio: "", dataPrevisaoFim: "", observacoes: "",
+  usarConvencaoMatriz: 1, convencaoId: null,
 };
 
 export default function Obras() {
@@ -114,6 +116,8 @@ export default function Obras() {
       cep: obra.cep || "", endereco: obra.endereco || "",
       dataInicio: obra.dataInicio || "", dataPrevisaoFim: obra.dataPrevisaoFim || "",
       observacoes: obra.observacoes || "",
+      usarConvencaoMatriz: obra.usarConvencaoMatriz ?? 1,
+      convencaoId: obra.convencaoId ?? null,
     });
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false });
     setDialogOpen(true);
@@ -546,6 +550,17 @@ export default function Obras() {
 
 
           </div>
+
+          {/* ═══════════ CONVENÇÃO COLETIVA ═══════════ */}
+          <ConvencaoSection
+            companyId={companyId}
+            obraId={editingId}
+            usarMatriz={form.usarConvencaoMatriz}
+            convencaoId={form.convencaoId}
+            onChangeMatriz={(v) => setForm(f => ({ ...f, usarConvencaoMatriz: v, convencaoId: v === 1 ? null : f.convencaoId }))}
+            onChangeConvencao={(id) => setForm(f => ({ ...f, convencaoId: id }))}
+          />
+
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
@@ -556,5 +571,188 @@ export default function Obras() {
       </FullScreenDialog>
           <PrintFooterLGPD />
     </DashboardLayout>
+  );
+}
+
+
+// ═══════════ CONVENÇÃO COLETIVA SECTION ═══════════
+function ConvencaoSection({ companyId, obraId, usarMatriz, convencaoId, onChangeMatriz, onChangeConvencao }: {
+  companyId: number; obraId: number | null;
+  usarMatriz: number; convencaoId: number | null;
+  onChangeMatriz: (v: number) => void;
+  onChangeConvencao: (id: number | null) => void;
+}) {
+  const [comparando, setComparando] = useState(false);
+  const [divergencias, setDivergencias] = useState<string | null>(null);
+  const [showDivergencias, setShowDivergencias] = useState(false);
+
+  // Buscar todas as convenções da empresa
+  const convencoes = trpc.sprint1.convencao.listAll.useQuery({ companyId }, { enabled: !!companyId });
+  const convencaoMatriz = (convencoes.data ?? []).find((c: any) => c.isMatriz === 1);
+  const convencaoSelecionada = (convencoes.data ?? []).find((c: any) => c.id === convencaoId);
+
+  // AI comparison
+  const compararIA = trpc.sprint1.convencao.compararIA.useMutation({
+    onSuccess: (data: any) => {
+      setDivergencias(data.analise);
+      setShowDivergencias(true);
+      toast.success("Comparação concluída!");
+    },
+    onError: () => toast.error("Erro ao comparar convenções"),
+  });
+
+  const handleComparar = () => {
+    if (!convencaoMatriz || !convencaoSelecionada) {
+      toast.error("É necessário ter a convenção da matriz e uma convenção selecionada para comparar");
+      return;
+    }
+    setComparando(true);
+    compararIA.mutate({
+      convencaoMatrizId: convencaoMatriz.id,
+      convencaoLocalId: convencaoSelecionada.id,
+    }, { onSettled: () => setComparando(false) });
+  };
+
+  // Salvar divergências na obra
+  const updateObraMut = trpc.obras.update.useMutation({
+    onSuccess: () => toast.success("Divergências registradas na obra!"),
+  });
+
+  const salvarDivergencias = () => {
+    if (!obraId || !divergencias) return;
+    updateObraMut.mutate({ id: obraId, convencaoDivergencias: divergencias } as any);
+  };
+
+  return (
+    <div className="border-t pt-5 mt-4">
+      <div className="flex items-center gap-2 mb-4">
+        <BookOpen className="h-5 w-5 text-[#D4A843]" />
+        <h3 className="text-base font-semibold">Convenção Coletiva</h3>
+      </div>
+
+      {/* Toggle: Usar Matriz ou Outra */}
+      <div className="space-y-3">
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => onChangeMatriz(1)}
+            className={`flex-1 p-3 rounded-lg border-2 text-left transition-all ${
+              usarMatriz === 1
+                ? "border-[#D4A843] bg-amber-50"
+                : "border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${usarMatriz === 1 ? "border-[#D4A843]" : "border-gray-300"}`}>
+                {usarMatriz === 1 && <div className="w-2 h-2 rounded-full bg-[#D4A843]" />}
+              </div>
+              <span className="font-medium text-sm">Adotar Convenção da Matriz</span>
+            </div>
+            {convencaoMatriz && (
+              <p className="text-xs text-muted-foreground mt-1 ml-6">
+                {convencaoMatriz.nome} — {convencaoMatriz.sindicato || "Sindicato não informado"}
+                {convencaoMatriz.vigenciaFim && <span className="ml-1">(até {convencaoMatriz.vigenciaFim})</span>}
+              </p>
+            )}
+            {!convencaoMatriz && (
+              <p className="text-xs text-red-500 mt-1 ml-6">Nenhuma convenção marcada como matriz. Cadastre em Empresas → Convenção Coletiva.</p>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeMatriz(0)}
+            className={`flex-1 p-3 rounded-lg border-2 text-left transition-all ${
+              usarMatriz === 0
+                ? "border-[#D4A843] bg-amber-50"
+                : "border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${usarMatriz === 0 ? "border-[#D4A843]" : "border-gray-300"}`}>
+                {usarMatriz === 0 && <div className="w-2 h-2 rounded-full bg-[#D4A843]" />}
+              </div>
+              <span className="font-medium text-sm">Usar Outra Convenção</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 ml-6">Selecione uma convenção específica para esta obra</p>
+          </button>
+        </div>
+
+        {/* Seletor de convenção quando não usa matriz */}
+        {usarMatriz === 0 && (
+          <div className="ml-1 space-y-3">
+            <div>
+              <Label className="text-sm">Convenção Coletiva da Obra</Label>
+              <Select
+                value={convencaoId?.toString() || ""}
+                onValueChange={(v) => onChangeConvencao(v ? parseInt(v) : null)}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Selecione uma convenção..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(convencoes.data ?? []).filter((c: any) => c.isMatriz !== 1).map((c: any) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>
+                      {c.nome} {c.sindicato ? `(${c.sindicato})` : ""} {c.status === "vigente" ? "✓" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Detalhes da convenção selecionada */}
+            {convencaoSelecionada && (
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm space-y-1">
+                <p className="font-medium text-blue-900">{convencaoSelecionada.nome}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-blue-800 text-xs">
+                  {convencaoSelecionada.sindicato && <p>Sindicato: {convencaoSelecionada.sindicato}</p>}
+                  {convencaoSelecionada.pisoSalarial && <p>Piso: R$ {convencaoSelecionada.pisoSalarial}</p>}
+                  {convencaoSelecionada.percentualReajuste && <p>Reajuste: {convencaoSelecionada.percentualReajuste}%</p>}
+                  {convencaoSelecionada.vigenciaInicio && <p>Vigência: {convencaoSelecionada.vigenciaInicio} a {convencaoSelecionada.vigenciaFim}</p>}
+                </div>
+              </div>
+            )}
+
+            {/* Botão de comparar com IA */}
+            {convencaoSelecionada && convencaoMatriz && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleComparar}
+                disabled={comparando}
+                className="w-full border-purple-300 text-purple-700 hover:bg-purple-50"
+              >
+                {comparando ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Comparando com IA...</>
+                ) : (
+                  <><Brain className="h-4 w-4 mr-2" /> Comparar com Convenção da Matriz (IA)</>
+                )}
+              </Button>
+            )}
+
+            {/* Resultado da comparação */}
+            {showDivergencias && divergencias && (
+              <div className="p-4 rounded-lg bg-purple-50 border border-purple-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-purple-900 flex items-center gap-2">
+                    <Brain className="h-4 w-4" /> Análise de Divergências (IA)
+                  </h4>
+                  {obraId && (
+                    <Button size="sm" variant="outline" onClick={salvarDivergencias}
+                      disabled={updateObraMut.isPending}
+                      className="text-xs border-purple-300 text-purple-700 hover:bg-purple-100">
+                      {updateObraMut.isPending ? "Salvando..." : "Registrar na Obra"}
+                    </Button>
+                  )}
+                </div>
+                <div className="text-sm text-purple-900 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+                  {divergencias}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

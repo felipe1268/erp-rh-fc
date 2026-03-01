@@ -1932,6 +1932,9 @@ export const obras = mysqlTable("obras", {
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
+	usarConvencaoMatriz: tinyint().default(1).notNull(),
+	convencaoId: int(),
+	convencaoDivergencias: text(),
 });
 
 export const payroll = mysqlTable("payroll", {
