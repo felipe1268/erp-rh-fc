@@ -3907,3 +3907,4 @@
 - [x] BUG: QR Code do crachá corrigido - agora abre página pública de verificação de aptidão
 - [x] Criar página pública de verificação de aptidão (QR Code → mostra se funcionário está apto/inapto)
 - [x] Adicionar opção de Crachás na sidebar do módulo RH/DP
+- [x] BUG: Gerar Acesso Portal corrigido - colunas da tabela renomeadas para alinhar com Drizzle schema (tipo_portal→tipo, parceiro_conveniado_id→parceiro_id, ultimo_acesso→ultimo_login)
