@@ -9,7 +9,7 @@ import {
   Gavel, UserSearch, BarChart3, Lock, FileText, Settings, Star,
   ClipboardList, GripVertical, Eye, EyeOff,
   RotateCcw, Save, Loader2, ChevronDown, ChevronRight, Pencil, Check, X,
-  CalendarDays, TrendingUp, FileSpreadsheet,
+  CalendarDays, TrendingUp, FileSpreadsheet, CreditCard,
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -25,6 +25,7 @@ const ICON_MAP: Record<string, any> = {
   "Auditoria do Sistema": FileText, "Configurações": Settings,
   "Avaliação de Desempenho": Star,
   "Solicitação de Hora Extra": Clock,
+  "Crachás": CreditCard,
   "Feriados": CalendarDays,
   "Dissídio": TrendingUp,
   "PJ Medições": FileSpreadsheet,
@@ -66,6 +67,7 @@ const DEFAULT_MENU = [
     { label: "Vale Alimentação", path: "/vale-alimentacao", visible: true },
     { label: "Controle de EPIs", path: "/epis", visible: true },
     { label: "Solicitação de Hora Extra", path: "/solicitacao-he", visible: true },
+    { label: "Crachás", path: "/terceiros/crachas", visible: true },
   ]},
   { title: "Gestão de Pessoas", items: [
     { label: "Aviso Prévio", path: "/aviso-previo", visible: true },

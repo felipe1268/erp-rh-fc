@@ -3913,3 +3913,4 @@
 - [x] Senha padrão do portal: usar "mudar123" em vez de senha aleatória
 - [x] Fix erro cadastro funcionário terceiro: colunas inexistentes no banco (nome_completo, aso_doc_url, nr35_doc_url, etc.)
 - [x] Formulário Novo Funcionário do portal: tornar full screen
+- [x] Adicionar link de Crachás na seção OPERACIONAL do menu lateral (mesmo link do módulo Terceiros)

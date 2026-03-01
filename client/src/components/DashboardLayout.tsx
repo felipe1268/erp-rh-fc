@@ -97,6 +97,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
+      { icon: CreditCard, label: "Crachás", path: "/terceiros/crachas" },
     ],
   },
   {
