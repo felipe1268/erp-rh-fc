@@ -3928,3 +3928,4 @@
 - [x] Botão "Gerar Acesso" no Portal Externo do Parceiro (substituir link com token)
 - [x] Corrigir rota Crachás: mover para módulo RH&DP (não redirecionar para Terceiros)
 - [x] BUG URGENTE: Obras cadastradas sumiram da tela - corrigido mismatch de colunas no schema (usar_convencao_matriz, convencao_id, convencao_divergencias)
+- [x] BUG: Botão Voltar da tela Validação IA de Documentos deixa tela branca - corrigido para navegar de volta ao painel terceiros

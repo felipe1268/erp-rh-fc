@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Button } from "@/components/ui/button";
+import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -36,6 +37,7 @@ type ValidationResult = {
 };
 
 export default function ValidacaoIA() {
+  const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
   const [open, setOpen] = useState(true);
@@ -134,7 +136,7 @@ export default function ValidacaoIA() {
   return (
     <FullScreenDialog
       open={open}
-      onClose={() => setOpen(false)}
+      onClose={() => { setOpen(false); navigate("/terceiros/painel"); }}
       title="Validação IA de Documentos"
       icon={<Brain className="h-5 w-5 text-white" />}
       headerColor="bg-gradient-to-r from-violet-700 to-purple-500"
