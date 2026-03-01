@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   CheckCircle, XCircle, AlertTriangle, Search, Clock, Eye,
   ThumbsUp, ThumbsDown, Receipt, DollarSign, User, Calendar,
-  Store, Filter, FileText, ShoppingCart
+  Store, Filter, FileText, ShoppingCart, RotateCcw, MessageSquare
 } from "lucide-react";
 
 export default function AprovacoesParceiros() {
@@ -25,6 +26,8 @@ export default function AprovacoesParceiros() {
   const [filtroParceiroId, setFiltroParceiroId] = useState<string>("todos");
   const [selectedLancamento, setSelectedLancamento] = useState<any>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
+  const [cancelarLancamento, setCancelarLancamento] = useState<any>(null);
+  const [comentarioCancelar, setComentarioCancelar] = useState("");
   const [competencia, setCompetencia] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -48,6 +51,11 @@ export default function AprovacoesParceiros() {
   const aprovarMutation = trpc.parceiros.lancamentos.aprovar.useMutation({
     onSuccess: () => { toast.success("Lançamento processado com sucesso"); refetch(); setSelectedLancamento(null); setMotivoRejeicao(""); },
     onError: () => toast.error("Erro ao processar lançamento"),
+  });
+
+  const cancelarMutation = trpc.parceiros.lancamentos.cancelarAprovacao.useMutation({
+    onSuccess: () => { toast.success("Status cancelado - lançamento voltou para pendente"); refetch(); setCancelarLancamento(null); setComentarioCancelar(""); },
+    onError: () => toast.error("Erro ao cancelar status"),
   });
 
   const parceiros = parceirosData || [];
@@ -76,8 +84,8 @@ export default function AprovacoesParceiros() {
     ? (lancamentos as any[]).filter((l: any) => l.status === "pendente").reduce((sum: number, l: any) => sum + parseFloat(l.valor || "0"), 0)
     : 0;
 
-  const handleAprovar = (id: number) => {
-    aprovarMutation.mutate({ id, aprovado: true });
+  const handleAprovar = (id: number, comentario?: string) => {
+    aprovarMutation.mutate({ id, aprovado: true, comentarioAdmin: comentario || undefined });
   };
 
   const handleRejeitar = (id: number) => {
@@ -85,7 +93,15 @@ export default function AprovacoesParceiros() {
       toast.error("Informe o motivo da rejeição");
       return;
     }
-    aprovarMutation.mutate({ id, aprovado: false, motivoRejeicao });
+    aprovarMutation.mutate({ id, aprovado: false, motivoRejeicao, comentarioAdmin: motivoRejeicao });
+  };
+
+  const handleCancelar = () => {
+    if (!cancelarLancamento) return;
+    cancelarMutation.mutate({
+      id: cancelarLancamento.id,
+      comentarioAdmin: comentarioCancelar || undefined,
+    });
   };
 
   const formatCurrency = (value: number | string) => {
@@ -226,8 +242,13 @@ export default function AprovacoesParceiros() {
                         Motivo: {lancamento.motivoRejeicao}
                       </p>
                     )}
+                    {lancamento.comentarioAdmin && (
+                      <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> Comentário: {lancamento.comentarioAdmin}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-2 shrink-0 flex-wrap">
                     {lancamento.comprovanteUrl && (
                       <a href={lancamento.comprovanteUrl} target="_blank" rel="noopener noreferrer">
                         <Button variant="outline" size="sm">
@@ -244,6 +265,12 @@ export default function AprovacoesParceiros() {
                           <ThumbsDown className="w-4 h-4 mr-1" /> Rejeitar
                         </Button>
                       </>
+                    )}
+                    {(lancamento.status === "aprovado" || lancamento.status === "rejeitado") && (
+                      <Button size="sm" variant="outline" className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                        onClick={() => { setCancelarLancamento(lancamento); setComentarioCancelar(""); }}>
+                        <RotateCcw className="w-4 h-4 mr-1" /> Cancelar {lancamento.status === "aprovado" ? "Aprovação" : "Rejeição"}
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -263,7 +290,6 @@ export default function AprovacoesParceiros() {
         >
           {selectedLancamento && (
             <div className="p-4 sm:p-6 space-y-6 max-w-2xl mx-auto">
-              {/* Lancamento Details */}
               <div className="bg-card border rounded-lg p-4 space-y-3">
                 <h3 className="font-semibold text-foreground">Detalhes do Lançamento</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -292,13 +318,12 @@ export default function AprovacoesParceiros() {
                 )}
               </div>
 
-              {/* Motivo */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Motivo da Rejeição *</label>
+                <label className="text-sm font-medium text-foreground mb-1 block">Motivo da Rejeição / Comentário para o Fornecedor *</label>
                 <Textarea
                   value={motivoRejeicao}
                   onChange={(e) => setMotivoRejeicao(e.target.value)}
-                  placeholder="Informe o motivo da rejeição..."
+                  placeholder="Informe o motivo da rejeição. Este comentário será visível para o parceiro..."
                   rows={4}
                 />
               </div>
@@ -314,6 +339,43 @@ export default function AprovacoesParceiros() {
             </div>
           )}
         </FullScreenDialog>
+
+        {/* Cancelar Aprovação/Rejeição Dialog */}
+        <Dialog open={!!cancelarLancamento} onOpenChange={(o) => { if (!o) { setCancelarLancamento(null); setComentarioCancelar(""); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-orange-500" />
+                Cancelar {cancelarLancamento?.status === "aprovado" ? "Aprovação" : "Rejeição"}
+              </DialogTitle>
+            </DialogHeader>
+            {cancelarLancamento && (
+              <div className="space-y-4">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <p className="text-sm text-orange-800">
+                    O lançamento de <strong>{cancelarLancamento.employeeNome}</strong> no valor de <strong>{formatCurrency(cancelarLancamento.valor)}</strong> será
+                    retornado para o status <strong>Pendente</strong>.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Comentário para o Fornecedor (opcional)</label>
+                  <Textarea
+                    value={comentarioCancelar}
+                    onChange={(e) => setComentarioCancelar(e.target.value)}
+                    placeholder="Informe o motivo do cancelamento. Este comentário será visível para o parceiro..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setCancelarLancamento(null); setComentarioCancelar(""); }}>Voltar</Button>
+              <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={cancelarMutation.isPending} onClick={handleCancelar}>
+                <RotateCcw className="w-4 h-4 mr-1" /> {cancelarMutation.isPending ? "Processando..." : "Confirmar Cancelamento"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

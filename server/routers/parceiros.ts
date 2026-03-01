@@ -193,7 +193,7 @@ export const parceirosRouter = router({
       }),
 
     aprovar: protectedProcedure
-      .input(z.object({ id: z.number(), aprovado: z.boolean(), motivoRejeicao: z.string().optional() }))
+      .input(z.object({ id: z.number(), aprovado: z.boolean(), motivoRejeicao: z.string().optional(), comentarioAdmin: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const updateData: any = {
@@ -202,7 +202,52 @@ export const parceirosRouter = router({
           aprovadoEm: new Date().toISOString(),
         };
         if (!input.aprovado && input.motivoRejeicao) updateData.motivoRejeicao = input.motivoRejeicao;
+        if (input.comentarioAdmin) updateData.comentarioAdmin = input.comentarioAdmin;
         await db.update(lancamentosParceiros).set(updateData).where(eq(lancamentosParceiros.id, input.id));
+        return { success: true };
+      }),
+
+    cancelarAprovacao: protectedProcedure
+      .input(z.object({ id: z.number(), comentario: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await db.update(lancamentosParceiros).set({
+          status: "pendente",
+          aprovadoPor: null,
+          aprovadoEm: null,
+          motivoRejeicao: null,
+          comentarioAdmin: input.comentario || null,
+        }).where(eq(lancamentosParceiros.id, input.id));
+        return { success: true };
+      }),
+
+    editarLancamento: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        employeeId: z.number().optional(),
+        employeeNome: z.string().optional(),
+        dataCompra: z.string().optional(),
+        descricaoItens: z.string().optional(),
+        valor: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const { id, ...data } = input;
+        const updateData: any = {};
+        if (data.employeeId) updateData.employeeId = data.employeeId;
+        if (data.employeeNome) updateData.employeeNome = data.employeeNome;
+        if (data.dataCompra) updateData.dataCompra = data.dataCompra;
+        if (data.descricaoItens !== undefined) updateData.descricaoItens = data.descricaoItens;
+        if (data.valor) updateData.valor = data.valor;
+        await db.update(lancamentosParceiros).set(updateData).where(eq(lancamentosParceiros.id, id));
+        return { success: true };
+      }),
+
+    excluirLancamento: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.delete(lancamentosParceiros).where(eq(lancamentosParceiros.id, input.id));
         return { success: true };
       }),
 

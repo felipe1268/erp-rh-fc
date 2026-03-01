@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
-  Globe, Store, Link2, Copy, ExternalLink, Shield, ShoppingCart,
-  Upload, Search, Building2, DollarSign, Calendar, User, FileText,
-  Plus, Send, Eye, CheckCircle, Clock, XCircle
+  Globe, Store, Search, Building2, DollarSign, Calendar, User, FileText,
+  Plus, Send, Eye, CheckCircle, Clock, XCircle, Upload, ShoppingCart,
+  Shield, Key, Pencil, Trash2, AlertTriangle
 } from "lucide-react";
 
 export default function PortalParceiro() {
@@ -23,6 +24,8 @@ export default function PortalParceiro() {
   const [search, setSearch] = useState("");
   const [simulacaoOpen, setSimulacaoOpen] = useState(false);
   const [simulacaoParceiro, setSimulacaoParceiro] = useState<any>(null);
+  const [editLancamento, setEditLancamento] = useState<any>(null);
+  const [deleteLancamento, setDeleteLancamento] = useState<any>(null);
   const [novoLancamento, setNovoLancamento] = useState({
     employeeId: 0,
     employeeNome: "",
@@ -50,6 +53,11 @@ export default function PortalParceiro() {
     { enabled: !!companyId }
   );
 
+  const { data: acessosData, refetch: refetchAcessos } = trpc.portalExterno.admin.listarAcessos.useQuery(
+    { companyId: companyId ?? 0, tipo: "parceiro" },
+    { enabled: !!companyId }
+  );
+
   const createMutation = trpc.parceiros.lancamentos.create.useMutation({
     onSuccess: () => {
       toast.success("Lançamento registrado com sucesso");
@@ -57,6 +65,24 @@ export default function PortalParceiro() {
       setNovoLancamento({ employeeId: 0, employeeNome: "", dataCompra: new Date().toISOString().split("T")[0], descricaoItens: "", valor: "" });
     },
     onError: () => toast.error("Erro ao registrar lançamento"),
+  });
+
+  const gerarAcessoMutation = trpc.portalExterno.admin.gerarAcesso.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Acesso gerado! Login: ${data.cnpj} | Senha: ${data.senhaTemporaria}`);
+      refetchAcessos();
+    },
+    onError: () => toast.error("Erro ao gerar acesso"),
+  });
+
+  const editMutation = trpc.parceiros.lancamentos.editarLancamento.useMutation({
+    onSuccess: () => { toast.success("Lançamento atualizado"); refetchLancamentos(); setEditLancamento(null); },
+    onError: () => toast.error("Erro ao atualizar"),
+  });
+
+  const deleteMutation = trpc.parceiros.lancamentos.excluirLancamento.useMutation({
+    onSuccess: () => { toast.success("Lançamento excluído"); refetchLancamentos(); setDeleteLancamento(null); },
+    onError: () => toast.error("Erro ao excluir"),
   });
 
   const uploadMutation = trpc.parceiros.lancamentos.uploadComprovante.useMutation({
@@ -84,14 +110,22 @@ export default function PortalParceiro() {
     return (lancamentosData as any[]).filter((l: any) => l.parceiroId === parceiroId);
   };
 
-  const generatePortalLink = (parceiro: any) => {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/portal-parceiro/${parceiro.id}?token=${btoa(`${parceiro.id}-${parceiro.cnpj}`)}`;
+  const getAcessoParceiro = (parceiroId: number) => {
+    if (!acessosData) return null;
+    return (acessosData as any[]).find((a: any) => a.parceiroId === parceiroId && a.ativo);
   };
 
-  const copyLink = (link: string) => {
-    navigator.clipboard.writeText(link);
-    toast.success("Link copiado para a área de transferência");
+  const handleGerarAcesso = (parceiro: any) => {
+    if (!companyId) return;
+    gerarAcessoMutation.mutate({
+      tipo: "parceiro",
+      parceiroId: parceiro.id,
+      companyId,
+      cnpj: parceiro.cnpj,
+      emailResponsavel: parceiro.emailPrincipal || undefined,
+      nomeResponsavel: parceiro.responsavelNome || undefined,
+      nomeEmpresa: parceiro.nomeFantasia || parceiro.razaoSocial,
+    });
   };
 
   const handleCriarLancamento = (parceiroId: number) => {
@@ -115,24 +149,13 @@ export default function PortalParceiro() {
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = (reader.result as string).split(",")[1];
-      uploadMutation.mutate({
-        lancamentoId,
-        fileName: file.name,
-        fileBase64: base64,
-        contentType: file.type,
-      });
+      uploadMutation.mutate({ lancamentoId, fileName: file.name, fileBase64: base64, contentType: file.type });
     };
     reader.readAsDataURL(file);
   };
 
   const tipoLabel = (tipo: string) => {
-    const map: Record<string, string> = {
-      farmacia: "Farmácia",
-      posto_combustivel: "Posto de Combustível",
-      restaurante: "Restaurante",
-      mercado: "Mercado",
-      outros: "Outros",
-    };
+    const map: Record<string, string> = { farmacia: "Farmácia", posto_combustivel: "Posto de Combustível", restaurante: "Restaurante", mercado: "Mercado", outros: "Outros" };
     return map[tipo] || tipo;
   };
 
@@ -164,8 +187,8 @@ export default function PortalParceiro() {
           <div>
             <p className="text-sm font-medium text-purple-800">Portal de Acesso para Parceiros</p>
             <p className="text-xs text-purple-600 mt-1">
-              Cada parceiro conveniado (farmácia, posto, restaurante) recebe um link exclusivo para registrar consumo dos colaboradores.
-              O lançamento é enviado para aprovação do RH antes de ser incluído na guia de descontos.
+              Cada parceiro conveniado acessa o portal com CNPJ e senha. A senha inicial é <strong>mudar123</strong> e deve ser alterada no primeiro acesso.
+              Clique em "Gerar Acesso" para criar ou resetar as credenciais do parceiro.
             </p>
           </div>
         </div>
@@ -193,7 +216,7 @@ export default function PortalParceiro() {
               const lancamentos = getLancamentosParceiro(parceiro.id);
               const totalMes = lancamentos.reduce((sum: number, l: any) => sum + parseFloat(l.valor || "0"), 0);
               const pendentes = lancamentos.filter((l: any) => l.status === "pendente").length;
-              const portalLink = generatePortalLink(parceiro);
+              const acesso = getAcessoParceiro(parceiro.id);
 
               return (
                 <div key={parceiro.id} className="bg-card border rounded-lg p-4">
@@ -224,20 +247,36 @@ export default function PortalParceiro() {
                         )}
                       </div>
 
-                      {/* Portal Link */}
-                      <div className="mt-3 flex items-center gap-2 flex-wrap">
-                        <div className="flex items-center gap-1 bg-background border rounded-md px-3 py-1.5 text-xs max-w-md truncate">
-                          <Link2 className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                          <span className="truncate">{portalLink}</span>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => copyLink(portalLink)}>
-                          <Copy className="w-3.5 h-3.5 mr-1" /> Copiar
-                        </Button>
+                      {/* Acesso Info */}
+                      <div className="mt-3">
+                        {acesso ? (
+                          <div className="flex items-center gap-2 text-xs">
+                            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">
+                              <Key className="w-3 h-3 mr-1" /> Acesso Ativo
+                            </Badge>
+                            <span className="text-muted-foreground">Login: {acesso.cnpj}</span>
+                            {acesso.ultimoLogin && (
+                              <span className="text-muted-foreground">| Último acesso: {new Date(acesso.ultimoLogin).toLocaleDateString("pt-BR")}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">
+                            <XCircle className="w-3 h-3 mr-1" /> Sem acesso ao portal
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGerarAcesso(parceiro)}
+                        disabled={gerarAcessoMutation.isPending}
+                      >
+                        <Key className="w-4 h-4 mr-1" /> {acesso ? "Resetar Acesso" : "Gerar Acesso"}
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => { setSimulacaoParceiro(parceiro); setSimulacaoOpen(true); }}>
-                        <ExternalLink className="w-4 h-4 mr-1" /> Simular Portal
+                        <Eye className="w-4 h-4 mr-1" /> Simular Portal
                       </Button>
                     </div>
                   </div>
@@ -298,37 +337,19 @@ export default function PortalParceiro() {
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Data da Compra *</label>
-                    <Input
-                      type="date"
-                      value={novoLancamento.dataCompra}
-                      onChange={(e) => setNovoLancamento({ ...novoLancamento, dataCompra: e.target.value })}
-                    />
+                    <Input type="date" value={novoLancamento.dataCompra} onChange={(e) => setNovoLancamento({ ...novoLancamento, dataCompra: e.target.value })} />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Valor (R$) *</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0,00"
-                      value={novoLancamento.valor}
-                      onChange={(e) => setNovoLancamento({ ...novoLancamento, valor: e.target.value })}
-                    />
+                    <Input type="number" step="0.01" placeholder="0,00" value={novoLancamento.valor} onChange={(e) => setNovoLancamento({ ...novoLancamento, valor: e.target.value })} />
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Descrição dos Itens</label>
-                    <Input
-                      placeholder="Ex: Medicamentos, combustível..."
-                      value={novoLancamento.descricaoItens}
-                      onChange={(e) => setNovoLancamento({ ...novoLancamento, descricaoItens: e.target.value })}
-                    />
+                    <Input placeholder="Ex: Medicamentos, combustível..." value={novoLancamento.descricaoItens} onChange={(e) => setNovoLancamento({ ...novoLancamento, descricaoItens: e.target.value })} />
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button
-                    className="bg-purple-600 hover:bg-purple-700"
-                    onClick={() => handleCriarLancamento(simulacaoParceiro.id)}
-                    disabled={createMutation.isPending}
-                  >
+                  <Button className="bg-purple-600 hover:bg-purple-700" onClick={() => handleCriarLancamento(simulacaoParceiro.id)} disabled={createMutation.isPending}>
                     <Send className="w-4 h-4 mr-1" /> {createMutation.isPending ? "Enviando..." : "Registrar Consumo"}
                   </Button>
                 </div>
@@ -342,9 +363,7 @@ export default function PortalParceiro() {
                 {(() => {
                   const lancamentos = getLancamentosParceiro(simulacaoParceiro.id);
                   if (lancamentos.length === 0) {
-                    return (
-                      <p className="text-center text-sm text-muted-foreground py-6">Nenhum lançamento registrado neste mês</p>
-                    );
+                    return <p className="text-center text-sm text-muted-foreground py-6">Nenhum lançamento registrado neste mês</p>;
                   }
                   const total = lancamentos.reduce((sum: number, l: any) => sum + parseFloat(l.valor || "0"), 0);
                   return (
@@ -358,10 +377,8 @@ export default function PortalParceiro() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-sm">{l.employeeNome}</span>
-                              <Badge variant={
-                                l.status === "aprovado" ? "default" :
-                                l.status === "rejeitado" ? "destructive" : "secondary"
-                              } className={`text-xs ${l.status === "aprovado" ? "bg-green-100 text-green-700" : ""}`}>
+                              <Badge variant={l.status === "aprovado" ? "default" : l.status === "rejeitado" ? "destructive" : "secondary"}
+                                className={`text-xs ${l.status === "aprovado" ? "bg-green-100 text-green-700" : ""}`}>
                                 {l.status === "aprovado" ? "Aprovado" : l.status === "rejeitado" ? "Rejeitado" : "Pendente"}
                               </Badge>
                             </div>
@@ -369,9 +386,22 @@ export default function PortalParceiro() {
                               {l.dataCompra ? new Date(l.dataCompra).toLocaleDateString("pt-BR") : ""}
                               {l.descricaoItens ? ` — ${l.descricaoItens}` : ""}
                             </p>
+                            {l.comentarioAdmin && (
+                              <p className="text-xs text-blue-600 mt-0.5">Comentário RH: {l.comentarioAdmin}</p>
+                            )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-purple-600">{formatCurrency(l.valor)}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-bold text-purple-600 mr-2">{formatCurrency(l.valor)}</span>
+                            {l.status === "pendente" && (
+                              <>
+                                <Button variant="ghost" size="sm" onClick={() => setEditLancamento(l)} title="Editar">
+                                  <Pencil className="w-4 h-4 text-blue-500" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setDeleteLancamento(l)} title="Excluir">
+                                  <Trash2 className="w-4 h-4 text-red-500" />
+                                </Button>
+                              </>
+                            )}
                             {l.comprovanteUrl ? (
                               <a href={l.comprovanteUrl} target="_blank" rel="noopener noreferrer">
                                 <Button variant="ghost" size="sm"><Eye className="w-4 h-4" /></Button>
@@ -401,37 +431,76 @@ export default function PortalParceiro() {
                   <Building2 className="w-5 h-5 text-purple-500" /> Dados do Parceiro
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Razão Social:</span>
-                    <p className="font-medium">{simulacaoParceiro.razaoSocial}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">CNPJ:</span>
-                    <p className="font-medium">{simulacaoParceiro.cnpj}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Tipo:</span>
-                    <p className="font-medium">{tipoLabel(simulacaoParceiro.tipoConvenio)}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Dia de Fechamento:</span>
-                    <p className="font-medium">{simulacaoParceiro.diaFechamento || "Não definido"}</p>
-                  </div>
+                  <div><span className="text-muted-foreground">Razão Social:</span><p className="font-medium">{simulacaoParceiro.razaoSocial}</p></div>
+                  <div><span className="text-muted-foreground">CNPJ:</span><p className="font-medium">{simulacaoParceiro.cnpj}</p></div>
+                  <div><span className="text-muted-foreground">Tipo:</span><p className="font-medium">{tipoLabel(simulacaoParceiro.tipoConvenio)}</p></div>
+                  <div><span className="text-muted-foreground">Dia de Fechamento:</span><p className="font-medium">{simulacaoParceiro.diaFechamento || "Não definido"}</p></div>
                   {simulacaoParceiro.limiteMensalPorColaborador && (
-                    <div>
-                      <span className="text-muted-foreground">Limite Mensal/Colaborador:</span>
-                      <p className="font-medium">{formatCurrency(simulacaoParceiro.limiteMensalPorColaborador)}</p>
-                    </div>
+                    <div><span className="text-muted-foreground">Limite Mensal/Colaborador:</span><p className="font-medium">{formatCurrency(simulacaoParceiro.limiteMensalPorColaborador)}</p></div>
                   )}
-                  <div>
-                    <span className="text-muted-foreground">Contato:</span>
-                    <p className="font-medium">{simulacaoParceiro.responsavelNome || "—"} | {simulacaoParceiro.telefone || "—"}</p>
-                  </div>
+                  <div><span className="text-muted-foreground">Contato:</span><p className="font-medium">{simulacaoParceiro.responsavelNome || "—"} | {simulacaoParceiro.telefone || "—"}</p></div>
                 </div>
               </div>
             </div>
           )}
         </FullScreenDialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={!!editLancamento} onOpenChange={(o) => !o && setEditLancamento(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Editar Lançamento</DialogTitle></DialogHeader>
+            {editLancamento && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Colaborador</label>
+                  <Input value={editLancamento.employeeNome || ""} onChange={(e) => setEditLancamento({ ...editLancamento, employeeNome: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Data da Compra</label>
+                  <Input type="date" value={editLancamento.dataCompra?.split("T")[0] || ""} onChange={(e) => setEditLancamento({ ...editLancamento, dataCompra: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Valor (R$)</label>
+                  <Input type="number" step="0.01" value={editLancamento.valor || ""} onChange={(e) => setEditLancamento({ ...editLancamento, valor: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Descrição</label>
+                  <Input value={editLancamento.descricaoItens || ""} onChange={(e) => setEditLancamento({ ...editLancamento, descricaoItens: e.target.value })} />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditLancamento(null)}>Cancelar</Button>
+              <Button className="bg-purple-600 hover:bg-purple-700" disabled={editMutation.isPending}
+                onClick={() => editMutation.mutate({
+                  id: editLancamento.id,
+                  employeeNome: editLancamento.employeeNome,
+                  dataCompra: editLancamento.dataCompra?.split("T")[0],
+                  valor: editLancamento.valor,
+                  descricaoItens: editLancamento.descricaoItens,
+                })}>
+                {editMutation.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={!!deleteLancamento} onOpenChange={(o) => !o && setDeleteLancamento(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-500" /> Excluir Lançamento</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Tem certeza que deseja excluir o lançamento de <strong>{deleteLancamento?.employeeNome}</strong> no valor de <strong>{deleteLancamento ? formatCurrency(deleteLancamento.valor) : ""}</strong>?
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteLancamento(null)}>Cancelar</Button>
+              <Button variant="destructive" disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate({ id: deleteLancamento.id })}>
+                {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

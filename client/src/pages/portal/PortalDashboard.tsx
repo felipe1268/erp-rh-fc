@@ -6,10 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Building2, Users, Plus, LogOut, FileText, Upload, CheckCircle, XCircle,
   Clock, Edit, ChevronDown, ChevronUp, AlertTriangle, User, UserPlus,
-  Store, Send, Eye, Search, ShoppingCart, DollarSign, Receipt, Camera
+  Store, Send, Eye, Search, ShoppingCart, DollarSign, Receipt, Camera,
+  Trash2, Pencil, MessageSquare
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 
@@ -36,6 +38,9 @@ export default function PortalDashboard() {
     observacoes: "",
   });
   const [notaFile, setNotaFile] = useState<File | null>(null);
+  const [editingLancamento, setEditingLancamento] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ valor: "", descricaoItens: "", observacoes: "" });
+  const [deletingLancamento, setDeletingLancamento] = useState<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Verify token
@@ -98,6 +103,14 @@ export default function PortalDashboard() {
   const uploadNotaMut = trpc.portalExterno.parceiro.uploadNotaFiscal.useMutation({
     onSuccess: () => { toast.success("Nota fiscal enviada!"); parceiroLancamentos.refetch(); },
     onError: (e) => toast.error("Erro ao enviar nota: " + e.message),
+  });
+  const editarLancamentoMut = trpc.portalExterno.parceiro.editarLancamento.useMutation({
+    onSuccess: () => { toast.success("Lançamento atualizado!"); setEditingLancamento(null); parceiroLancamentos.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirLancamentoMut = trpc.portalExterno.parceiro.excluirLancamento.useMutation({
+    onSuccess: () => { toast.success("Lançamento excluído!"); setDeletingLancamento(null); parceiroLancamentos.refetch(); },
+    onError: (e) => toast.error(e.message),
   });
 
   // ========== HANDLERS ==========
@@ -481,6 +494,24 @@ export default function PortalDashboard() {
                             </Button>
                           </label>
                         )}
+                        {l.status === "pendente" && (
+                          <>
+                            <Button variant="ghost" size="sm" title="Editar" onClick={() => {
+                              setEditingLancamento(l);
+                              setEditForm({ valor: String(l.valor || ""), descricaoItens: l.descricaoItens || "", observacoes: l.observacoes || "" });
+                            }}>
+                              <Pencil className="w-4 h-4 text-blue-500" />
+                            </Button>
+                            <Button variant="ghost" size="sm" title="Excluir" onClick={() => setDeletingLancamento(l)}>
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </>
+                        )}
+                        {l.comentarioAdmin && (
+                          <span title={`Comentário do RH: ${l.comentarioAdmin}`}>
+                            <MessageSquare className="w-4 h-4 text-blue-400" />
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -531,6 +562,75 @@ export default function PortalDashboard() {
             </ul>
           </div>
         </div>
+
+        {/* Editar Lançamento Dialog */}
+        <Dialog open={!!editingLancamento} onOpenChange={(o) => { if (!o) setEditingLancamento(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-purple-500" /> Editar Lançamento
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Colaborador</Label>
+                <p className="text-sm text-muted-foreground mt-1">{editingLancamento?.employeeNome}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Valor (R$) *</Label>
+                <Input type="number" step="0.01" value={editForm.valor} onChange={(e) => setEditForm({ ...editForm, valor: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Descrição dos Itens</Label>
+                <Input value={editForm.descricaoItens} onChange={(e) => setEditForm({ ...editForm, descricaoItens: e.target.value })} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Observações</Label>
+                <Input value={editForm.observacoes} onChange={(e) => setEditForm({ ...editForm, observacoes: e.target.value })} className="mt-1" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingLancamento(null)}>Cancelar</Button>
+              <Button className="bg-purple-600 hover:bg-purple-700" disabled={editarLancamentoMut.isPending}
+                onClick={() => {
+                  if (!editForm.valor || parseFloat(editForm.valor) <= 0) { toast.error("Informe o valor"); return; }
+                  editarLancamentoMut.mutate({
+                    token,
+                    lancamentoId: editingLancamento.id,
+                    valor: editForm.valor,
+                    descricaoItens: editForm.descricaoItens || undefined,
+                    observacoes: editForm.observacoes || undefined,
+                  });
+                }}>
+                {editarLancamentoMut.isPending ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Excluir Lançamento Dialog */}
+        <Dialog open={!!deletingLancamento} onOpenChange={(o) => { if (!o) setDeletingLancamento(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <Trash2 className="w-5 h-5" /> Excluir Lançamento
+              </DialogTitle>
+            </DialogHeader>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-800">
+                Deseja realmente excluir o lançamento de <strong>{deletingLancamento?.employeeNome}</strong> no valor de <strong>{deletingLancamento ? formatCurrency(deletingLancamento.valor) : ""}</strong>?
+              </p>
+              <p className="text-xs text-red-600 mt-1">Esta ação não pode ser desfeita.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeletingLancamento(null)}>Cancelar</Button>
+              <Button variant="destructive" disabled={excluirLancamentoMut.isPending}
+                onClick={() => excluirLancamentoMut.mutate({ token, lancamentoId: deletingLancamento.id })}>
+                {excluirLancamentoMut.isPending ? "Excluindo..." : "Confirmar Exclusão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

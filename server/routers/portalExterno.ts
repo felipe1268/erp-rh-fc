@@ -414,6 +414,50 @@ export const portalExternoRouter = router({
       return { url, success: true };
     }),
 
+    editarLancamento: publicProcedure.input(z.object({
+      token: z.string(),
+      lancamentoId: z.number(),
+      employeeId: z.number().optional(),
+      employeeNome: z.string().optional(),
+      dataCompra: z.string().optional(),
+      descricaoItens: z.string().optional(),
+      valor: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      // Only allow editing own lancamentos that are pendente
+      const [lanc] = await db.select().from(lancamentosParceiros).where(and(eq(lancamentosParceiros.id, input.lancamentoId), eq(lancamentosParceiros.parceiroId, decoded.parceiroId)));
+      if (!lanc) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
+      if (lanc.status !== "pendente") throw new TRPCError({ code: "FORBIDDEN", message: "Só é possível editar lançamentos pendentes" });
+      const updateData: any = {};
+      if (input.employeeId) updateData.employeeId = input.employeeId;
+      if (input.employeeNome) updateData.employeeNome = input.employeeNome;
+      if (input.dataCompra) updateData.dataCompra = input.dataCompra;
+      if (input.descricaoItens !== undefined) updateData.descricaoItens = input.descricaoItens;
+      if (input.valor) updateData.valor = input.valor;
+      await db.update(lancamentosParceiros).set(updateData).where(eq(lancamentosParceiros.id, input.lancamentoId));
+      return { success: true };
+    }),
+
+    excluirLancamento: publicProcedure.input(z.object({
+      token: z.string(),
+      lancamentoId: z.number(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "parceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      const [lanc] = await db.select().from(lancamentosParceiros).where(and(eq(lancamentosParceiros.id, input.lancamentoId), eq(lancamentosParceiros.parceiroId, decoded.parceiroId)));
+      if (!lanc) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
+      if (lanc.status !== "pendente") throw new TRPCError({ code: "FORBIDDEN", message: "Só é possível excluir lançamentos pendentes" });
+      await db.delete(lancamentosParceiros).where(eq(lancamentosParceiros.id, input.lancamentoId));
+      return { success: true };
+    }),
+
     buscarFuncionarios: publicProcedure.input(z.object({
       token: z.string(),
       busca: z.string().optional(),

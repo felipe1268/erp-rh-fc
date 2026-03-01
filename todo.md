@@ -3921,6 +3921,10 @@
 - [x] Login do parceiro com CNPJ + senha padrão "mudar123" e troca obrigatória no primeiro acesso
 - [x] Remover "Avaliação de Desempenho" da seção Gestão de Pessoas na sidebar RH&DP (módulo desabilitado)
 - [x] Remover Crachás do módulo Terceiros (manter apenas no módulo RH & DP seção Operacional)
-- [ ] Botões de editar e excluir lançamento do parceiro (simulação PortalParceiro + portal externo PortalDashboard)
-- [ ] Cancelar aprovação/rejeição de lançamento parceiro com campo de comentário para o fornecedor
+- [x] Botões de editar e excluir lançamento do parceiro (simulação PortalParceiro + portal externo PortalDashboard)
+- [x] Cancelar aprovação/rejeição de lançamento parceiro com campo de comentário para o fornecedor
 - [ ] Botão editar/excluir lançamento na tela de Aprovações de Parceiros (para aprovados e rejeitados)
+- [x] Reformular Portal Parceiro: login CNPJ+mudar123 com troca obrigatória (igual terceiro)
+- [x] Botão "Gerar Acesso" no Portal Externo do Parceiro (substituir link com token)
+- [x] Corrigir rota Crachás: mover para módulo RH&DP (não redirecionar para Terceiros)
+- [x] BUG URGENTE: Obras cadastradas sumiram da tela - corrigido mismatch de colunas no schema (usar_convencao_matriz, convencao_id, convencao_divergencias)

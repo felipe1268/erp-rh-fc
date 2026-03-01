@@ -159,6 +159,7 @@ function Router() {
       <Route path="/terceiros/aprovacao" component={AprovacaoPortal} />
       <Route path="/terceiros/portal" component={PortalTerceiro} />
       <Route path="/terceiros/crachas" component={Crachas} />
+      <Route path="/crachas" component={Crachas} />
       <Route path="/terceiros/validacao-ia" component={ValidacaoIA} />
       <Route path="/terceiros/painel" component={PainelTerceiros} />
       {/* Parceiros */}
