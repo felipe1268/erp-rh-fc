@@ -187,6 +187,21 @@ export const portalExternoRouter = router({
       return { success: true };
     }),
 
+    excluirFuncionario: publicProcedure.input(z.object({
+      token: z.string(),
+      id: z.number(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "terceiro") throw new TRPCError({ code: "FORBIDDEN" });
+      await db.delete(funcionariosTerceiros).where(
+        and(eq(funcionariosTerceiros.id, input.id), eq(funcionariosTerceiros.empresaTerceiraId, decoded.empresaTerceiraId))
+      );
+      return { success: true };
+    }),
+
     uploadDocumento: publicProcedure.input(z.object({
       token: z.string(),
       funcionarioId: z.number(),

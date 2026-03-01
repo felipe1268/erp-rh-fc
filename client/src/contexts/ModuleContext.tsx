@@ -28,6 +28,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/controle-documentos": "rh-dp",
   "/vale-alimentacao": "rh-dp",
   "/relogios-ponto": "rh-dp",
+  "/convencoes-coletivas": "rh-dp",
   "/aviso-previo": "rh-dp",
   "/ferias": "rh-dp",
   "/modulo-pj": "rh-dp",

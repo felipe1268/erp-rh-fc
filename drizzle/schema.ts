@@ -2838,7 +2838,7 @@ export const funcionariosTerceiros = mysqlTable("funcionarios_terceiros", {
   dataAprovacao: timestamp("data_aprovacao", { mode: "string" }),
   cadastradoPor: varchar("cadastrado_por", { length: 50 }).default("rh"),
   // Controle
-  status: mysqlEnum("status_func_terceiro", ["ativo", "inativo", "afastado"]).default("ativo").notNull(),
+  status: mysqlEnum("status_func_terceiro", ["ativo", "inativo", "afastado", "desligado"]).default("ativo").notNull(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
   deletedAt: timestamp("deleted_at", { mode: "string" }),

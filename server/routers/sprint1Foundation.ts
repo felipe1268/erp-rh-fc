@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { getDb, createAuditLog } from "../db";
-import { companyDocuments, convencaoColetiva, employeeAptidao, employees, asos, trainings } from "../../drizzle/schema";
+import { companyDocuments, convencaoColetiva, employeeAptidao, employees, asos, trainings, companies, obras } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 
@@ -180,6 +180,20 @@ const convencaoRouter = router({
     return db.select().from(convencaoColetiva)
       .where(eq(convencaoColetiva.companyId, input.companyId))
       .orderBy(desc(convencaoColetiva.createdAt));
+  }),
+
+  listGlobal: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const convs = await db.select().from(convencaoColetiva).orderBy(desc(convencaoColetiva.createdAt));
+    // Enrich with company and obra names
+    const companyIds = [...new Set(convs.map((c: any) => c.companyId))];
+    const obraIds = [...new Set(convs.filter((c: any) => c.obraId).map((c: any) => c.obraId!))];
+    const allCompanies = companyIds.length > 0 ? await db.select({ id: companies.id, nomeFantasia: companies.nomeFantasia, razaoSocial: companies.razaoSocial }).from(companies) : [];
+    const allObras = obraIds.length > 0 ? await db.select({ id: obras.id, nome: obras.nome }).from(obras) : [];
+    const companyMap = Object.fromEntries(allCompanies.map((c: any) => [c.id, c.nomeFantasia || c.razaoSocial]));
+    const obraMap = Object.fromEntries(allObras.map((o: any) => [o.id, o.nome]));
+    return convs.map((c: any) => ({ ...c, nomeEmpresa: companyMap[c.companyId] || "N/A", nomeObra: c.obraId ? (obraMap[c.obraId] || null) : null }));
   }),
 
   create: protectedProcedure.input(z.object({

@@ -119,6 +119,7 @@ type ConvForm = {
   isMatriz: boolean;
   status: string;
   observacoes: string;
+  obraId: number | null;
 };
 
 const emptyConvForm: ConvForm = {
@@ -129,7 +130,7 @@ const emptyConvForm: ConvForm = {
   valeRefeicao: "", valeAlimentacao: "", valeTransporte: "", cestaBasica: "",
   auxilioFarmacia: "", planoSaude: "", seguroVida: "",
   outrosBeneficios: "", clausulasEspeciais: "",
-  isMatriz: false, status: "vigente", observacoes: "",
+  isMatriz: false, status: "vigente", observacoes: "", obraId: null,
 };
 
 export default function Empresas() {
@@ -192,6 +193,12 @@ export default function Empresas() {
     onSuccess: () => { utils.sprint1.companyDocs.list.invalidate(); toast.success("Documento excluído!"); },
     onError: (e: any) => toast.error("Erro: " + e.message),
   });
+
+  // Obras query for convencao obra selector
+  const { data: obrasEmpresa } = trpc.obras.listActive.useQuery(
+    { companyId: editingId! },
+    { enabled: !!editingId && dialogOpen }
+  );
 
   // Convencao queries
   const { data: convencoes } = trpc.sprint1.convencao.list.useQuery(
@@ -365,9 +372,11 @@ export default function Empresas() {
       toast.error("Nome da convenção é obrigatório.");
       return;
     }
+    const { obraId, ...convFormRest } = convForm;
     const payload: any = {
       companyId: editingId!,
-      ...convForm,
+      ...convFormRest,
+      obraId: obraId && obraId > 0 ? obraId : undefined,
     };
     if (convFile) {
       payload.documentoBase64 = convFile.base64;
@@ -426,6 +435,7 @@ export default function Empresas() {
       isMatriz: !!conv.isMatriz,
       status: conv.status ?? "vigente",
       observacoes: conv.observacoes ?? "",
+      obraId: conv.obraId ?? null,
     });
     setConvFile(null);
     setConvDialogOpen(true);
@@ -770,60 +780,94 @@ export default function Empresas() {
                 </Button>
               </div>
 
-              {convencoes && convencoes.length > 0 ? (
-                <div className="space-y-2">
-                  {convencoes.map((conv: any) => (
-                    <div key={conv.id} className="p-4 bg-muted/30 rounded-lg border border-border group">
-                      <div className="flex items-start justify-between">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold">{conv.nome}</p>
-                            {conv.isMatriz ? (
-                              <span className="px-2 py-0.5 text-[10px] font-bold bg-primary/10 text-primary rounded-full">MATRIZ</span>
-                            ) : null}
-                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                              conv.status === 'vigente' ? 'bg-green-100 text-green-700' :
-                              conv.status === 'vencida' ? 'bg-red-100 text-red-700' :
-                              'bg-amber-100 text-amber-700'
-                            }`}>
-                              {conv.status === 'vigente' ? 'Vigente' : conv.status === 'vencida' ? 'Vencida' : 'Em Negociação'}
-                            </span>
-                          </div>
-                          {conv.sindicato && <p className="text-xs text-muted-foreground mt-1">{conv.sindicato}</p>}
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                            {conv.vigenciaInicio && conv.vigenciaFim && (
-                              <span>Vigência: {new Date(conv.vigenciaInicio + "T12:00:00").toLocaleDateString("pt-BR")} a {new Date(conv.vigenciaFim + "T12:00:00").toLocaleDateString("pt-BR")}</span>
-                            )}
-                            {conv.pisoSalarial && <span>Piso: R$ {conv.pisoSalarial}</span>}
-                            {conv.percentualReajuste && <span>Reajuste: {conv.percentualReajuste}%</span>}
-                          </div>
+              {(() => {
+                const renderConvCard = (conv: any, obraNome: string | null) => (
+                  <div key={conv.id} className="p-4 bg-muted/30 rounded-lg border border-border group mb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold">{conv.nome}</p>
+                          {!conv.obraId ? (
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full">SEDE</span>
+                          ) : null}
+                          {conv.isMatriz ? (
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-primary/10 text-primary rounded-full">MATRIZ</span>
+                          ) : null}
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                            conv.status === 'vigente' ? 'bg-green-100 text-green-700' :
+                            conv.status === 'vencida' ? 'bg-red-100 text-red-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {conv.status === 'vigente' ? 'Vigente' : conv.status === 'vencida' ? 'Vencida' : 'Em Negociação'}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          {conv.documentoUrl && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(conv.documentoUrl, "_blank")}>
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => openConvEdit(conv)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100" onClick={() => {
-                            if (confirm("Excluir esta convenção?")) deleteConvMut.mutate({ id: conv.id });
-                          }}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                        {obraNome ? <p className="text-xs text-orange-600 font-medium mt-1">Obra: {obraNome}</p> : null}
+                        {conv.sindicato ? <p className="text-xs text-muted-foreground mt-1">{conv.sindicato}</p> : null}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
+                          {conv.vigenciaInicio && conv.vigenciaFim ? (
+                            <span>Vigência: {new Date(conv.vigenciaInicio + "T12:00:00").toLocaleDateString("pt-BR")} a {new Date(conv.vigenciaFim + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                          ) : null}
+                          {conv.pisoSalarial ? <span>Piso: R$ {conv.pisoSalarial}</span> : null}
+                          {conv.percentualReajuste ? <span>Reajuste: {conv.percentualReajuste}%</span> : null}
                         </div>
                       </div>
+                      <div className="flex items-center gap-1">
+                        {conv.documentoUrl ? (
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(conv.documentoUrl, "_blank")}>
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : null}
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => openConvEdit(conv)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100" onClick={() => {
+                          if (confirm("Excluir esta convenção?")) deleteConvMut.mutate({ id: conv.id });
+                        }}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Landmark className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Nenhuma convenção coletiva cadastrada.</p>
-                  <p className="text-xs mt-1">Cadastre a convenção matriz e as convenções locais das obras.</p>
-                </div>
-              )}
+                  </div>
+                );
+                const obraMap = Object.fromEntries((obrasEmpresa || []).map((o: any) => [o.id, o.nome]));
+                if (!convencoes || convencoes.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Landmark className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Nenhuma convenção coletiva cadastrada.</p>
+                      <p className="text-xs mt-1">Cadastre a convenção padrão (sede) e as convenções das obras em outras regiões.</p>
+                    </div>
+                  );
+                }
+                const sede = convencoes.filter((c: any) => !c.obraId);
+                const porObra = convencoes.filter((c: any) => !!c.obraId);
+                return (
+                  <div className="space-y-4">
+                    {sede.length > 0 ? (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Building2 className="h-4 w-4 text-blue-600" />
+                          <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">Padrão (Sede da Empresa)</span>
+                        </div>
+                        {sede.map((conv: any) => renderConvCard(conv, null))}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                        <p className="text-xs text-blue-700">Nenhuma convenção padrão (sede) definida. Cadastre uma convenção sem vincular a obra.</p>
+                      </div>
+                    )}
+                    {porObra.length > 0 ? (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Landmark className="h-4 w-4 text-orange-600" />
+                          <span className="text-xs font-bold text-orange-700 uppercase tracking-wide">Por Obra / Região</span>
+                        </div>
+                        {porObra.map((conv: any) => renderConvCard(conv, obraMap[conv.obraId] || `Obra #${conv.obraId}`))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -1043,10 +1087,48 @@ export default function Empresas() {
                 <Label>Observações</Label>
                 <Textarea value={convForm.observacoes} onChange={e => setConv("observacoes", e.target.value)} placeholder="Observações gerais..." className="bg-input" rows={2} />
               </div>
+              {/* Abrangência: Sede vs Obra */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Building2 className="h-4 w-4" /> Abrangência
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Tipo de Abrangência</Label>
+                    <Select value={convForm.obraId !== null ? "obra" : "sede"} onValueChange={v => {
+                      if (v === "sede") { setConv("obraId", null); }
+                      else { setConv("obraId", 0 as any); }
+                    }}>
+                      <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sede">Padrão (Sede da Empresa)</SelectItem>
+                        <SelectItem value="obra">Específica por Obra</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {!convForm.obraId ? "Convenção da região onde a empresa está situada" : "Convenção específica para obra em outra região"}
+                    </p>
+                  </div>
+                  {convForm.obraId !== null ? (
+                    <div>
+                      <Label>Obra *</Label>
+                      <Select value={convForm.obraId && convForm.obraId > 0 ? String(convForm.obraId) : "none"} onValueChange={v => setConv("obraId", v === "none" ? 0 as any : parseInt(v))}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione a obra</SelectItem>
+                          {(obrasEmpresa || []).map((o: any) => (
+                            <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={convForm.isMatriz} onChange={e => setConv("isMatriz", e.target.checked)} className="rounded" />
-                  <span className="text-sm font-medium">Convenção Matriz (referência principal)</span>
+                  <span className="text-sm font-medium">Convenção Matriz (referência principal para comparação IA)</span>
                 </label>
               </div>
               <div>

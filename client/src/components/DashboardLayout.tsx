@@ -81,6 +81,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Layers, label: "Setores", path: "/setores" },
       { icon: Briefcase, label: "Funções", path: "/funcoes" },
       { icon: Wifi, label: "Relógios de Ponto", path: "/relogios-ponto" },
+      { icon: Scale, label: "Convenções Coletivas", path: "/convencoes-coletivas" },
     ],
   },
   {
@@ -348,6 +349,7 @@ const ICON_MAP: Record<string, any> = {
   "Feriados": CalendarDays,
   "Dissídio": TrendingUp,
   "PJ Medições": FileSpreadsheet,
+  "Convenções Coletivas": Scale,
 };
 
 // Map each module to its initial/home route

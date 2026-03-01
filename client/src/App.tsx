@@ -26,6 +26,7 @@ import Setores from "./pages/Setores";
 import Funcoes from "./pages/Funcoes";
 import ContasBancarias from "./pages/ContasBancarias";
 import RelogiosPonto from "./pages/RelogiosPonto";
+import ConvencoesColetivas from "./pages/ConvencoesColetivas";
 import ProcessosTrabalhistas from "./pages/ProcessosTrabalhistas";
 import Epis from "./pages/Epis";
 // Relatórios
@@ -108,6 +109,7 @@ function Router() {
       <Route path={"/funcoes"} component={Funcoes} />
       <Route path={"/contas-bancarias"} component={ContasBancarias} />
       <Route path={"/relogios-ponto"} component={RelogiosPonto} />
+      <Route path={"/convencoes-coletivas"} component={ConvencoesColetivas} />
       <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
       <Route path={"/epis"} component={Epis} />
       <Route path={"/usuarios"} component={Usuarios} />
