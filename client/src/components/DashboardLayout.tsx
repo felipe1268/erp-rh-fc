@@ -31,7 +31,7 @@ import {
   ClipboardList, ClipboardCheck, UserSearch, UserCheck, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
-  Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon,
+  Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -255,6 +255,7 @@ const menuSectionsTerceiros: MenuSection[] = [
   {
     title: "Operacional",
     items: [
+      { icon: Globe, label: "Portal Externo", path: "/terceiros/portal" },
       { icon: CreditCard, label: "Crachás", path: "/terceiros/crachas" },
     ],
   },

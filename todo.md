@@ -3815,9 +3815,10 @@
 - [x] 2.4 Obrigações mensais da empresa terceira (FGTS, INSS, folha, comprovantes) com checklist e upload
 
 ## Sprint 3 - Módulo Terceiros: Acesso Externo e Alertas (Prioridade 2 cont.)
-- [ ] 2.5 Acesso externo para empresa terceira enviar documentos mensais
-- [ ] 2.6 Alertas automáticos por e-mail para terceiros (10 dias, 5 dias, vencimento, pós-vencimento)
-- [ ] 2.7 Painel de Conformidade para Medição (visão consolidada por fornecedor/obra)
+- [x] 2.5 Acesso externo para empresa terceira enviar documentos mensais (Portal Externo do Terceiro)
+- [x] 2.6 Alertas automáticos por e-mail para terceiros (Alertas e Cobranças com escalonamento)
+- [x] 2.7 Painel de Conformidade para Medição (visão consolidada por fornecedor/obra)
+- [x] 2.8 Aprovações de Parceiros (workflow de aprovação de lançamentos)
 
 ## Sprint 4 - Crachás (Prioridade 3)
 - [ ] 3.1 Emissão de crachá para colaboradores (azul CLT, verde PJ) com foto, dados, QR Code

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   empresasTerceiras,
@@ -369,7 +370,69 @@ export const terceirosRouter = router({
         }).where(eq(alertasTerceiros.id, input.id));
         return { success: true };
       }),
+    enviar: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        empresaTerceiraId: z.number(),
+        tipo: z.string(),
+        titulo: z.string(),
+        descricao: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const [result] = await db.insert(alertasTerceiros).values({
+          companyId: input.companyId,
+          empresaTerceiraId: input.empresaTerceiraId,
+          tipo: input.tipo as any,
+          titulo: input.titulo,
+          descricao: input.descricao || "",
+        });
+        return { success: true, id: result.insertId };
+      }),
   }),
+  // ============================================================
+  // CONFORMIDADE / MEDIÇÃO
+  // ============================================================
+  conformidade: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const empresas = await db.select().from(empresasTerceiras)
+        .where(and(eq(empresasTerceiras.companyId, input.companyId), isNull(empresasTerceiras.deletedAt)));
+      const funcs = await db.select().from(funcionariosTerceiros)
+        .where(and(eq(funcionariosTerceiros.companyId, input.companyId), isNull(funcionariosTerceiros.deletedAt)));
+      const now = new Date();
+      const competenciaAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const obrigacoes = await db.select().from(obrigacoesMensaisTerceiros)
+        .where(and(eq(obrigacoesMensaisTerceiros.companyId, input.companyId), eq(obrigacoesMensaisTerceiros.competencia, competenciaAtual)));
+      const obrasList = await db.select().from(obras)
+        .where(and(eq(obras.companyId, input.companyId), isNull(obras.deletedAt)));
+      // Build conformidade per empresa
+      const resultado = empresas.map((emp: any) => {
+        const funcsDaEmpresa = funcs.filter((f: any) => f.empresaTerceiraId === emp.id);
+        const obrigDaEmpresa = obrigacoes.filter((o: any) => o.empresaTerceiraId === emp.id);
+        const docsEmpresa = {
+          pgr: { url: emp.pgrUrl, validade: emp.pgrValidade, status: emp.pgrUrl ? (emp.pgrValidade && new Date(emp.pgrValidade) < now ? "vencido" : "ok") : "pendente" },
+          pcmso: { url: emp.pcmsoUrl, validade: emp.pcmsoValidade, status: emp.pcmsoUrl ? (emp.pcmsoValidade && new Date(emp.pcmsoValidade) < now ? "vencido" : "ok") : "pendente" },
+          contratoSocial: { url: emp.contratoSocialUrl, status: emp.contratoSocialUrl ? "ok" : "pendente" },
+          alvara: { url: emp.alvaraUrl, validade: emp.alvaraValidade, status: emp.alvaraUrl ? (emp.alvaraValidade && new Date(emp.alvaraValidade) < now ? "vencido" : "ok") : "pendente" },
+        };
+        const docsOk = Object.values(docsEmpresa).filter((d: any) => d.status === "ok").length;
+        const docsTotal = Object.keys(docsEmpresa).length;
+        const funcsAptos = funcsDaEmpresa.filter((f: any) => f.statusAptidaoTerceiro === "apto").length;
+        const obrigCompleta = obrigDaEmpresa.length > 0 && obrigDaEmpresa.every((o: any) => o.statusGeral === "completo");
+        const conformeGeral = docsOk === docsTotal && funcsAptos === funcsDaEmpresa.length && obrigCompleta;
+        return {
+          empresa: { id: emp.id, razaoSocial: emp.razaoSocial, cnpj: emp.cnpj, status: emp.status },
+          documentos: docsEmpresa,
+          docsOk, docsTotal,
+          funcionarios: { total: funcsDaEmpresa.length, aptos: funcsAptos },
+          obrigacaoMensal: obrigDaEmpresa[0] || null,
+          conformeGeral,
+        };
+      });
+      return { empresas: resultado, obras: obrasList };
+    }),
 
   // ============================================================
   // PAINEL / DASHBOARD

@@ -51,6 +51,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/terceiros/conformidade": "terceiros" as ModuleId,
   "/terceiros/alertas": "terceiros" as ModuleId,
   "/terceiros/crachas": "terceiros" as ModuleId,
+  "/terceiros/portal": "terceiros" as ModuleId,
   // Parceiros routes
   "/parceiros/painel": "parceiros" as ModuleId,
   "/parceiros/cadastro": "parceiros" as ModuleId,

@@ -66,12 +66,16 @@ import PainelTerceiros from "./pages/terceiros/PainelTerceiros";
 import EmpresasTerceiras from "./pages/terceiros/EmpresasTerceiras";
 import FuncionariosTerceiros from "./pages/terceiros/FuncionariosTerceiros";
 import ObrigacoesMensais from "./pages/terceiros/ObrigacoesMensais";
+import PainelConformidade from "./pages/terceiros/PainelConformidade";
+import AlertasCobrancas from "./pages/terceiros/AlertasCobranças";
+import PortalTerceiro from "./pages/terceiros/PortalTerceiro";
 // Parceiros
 import PainelParceiros from "./pages/parceiros/PainelParceiros";
 import CadastroParceiros from "./pages/parceiros/CadastroParceiros";
 import LancamentosParceiros from "./pages/parceiros/LancamentosParceiros";
 import GuiaDescontos from "./pages/parceiros/GuiaDescontos";
 import PagamentosParceiros from "./pages/parceiros/PagamentosParceiros";
+import AprovacoesParceiros from "./pages/parceiros/AprovacoesParceiros";
 
 function Router() {
   return (
@@ -137,12 +141,19 @@ function Router() {
       <Route path="/terceiros/empresas" component={EmpresasTerceiras} />
       <Route path="/terceiros/funcionarios" component={FuncionariosTerceiros} />
       <Route path="/terceiros/obrigacoes-mensais" component={ObrigacoesMensais} />
+      <Route path="/terceiros/obrigacoes" component={ObrigacoesMensais} />
+      <Route path="/terceiros/conformidade" component={PainelConformidade} />
+      <Route path="/terceiros/alertas" component={AlertasCobrancas} />
+      <Route path="/terceiros/portal" component={PortalTerceiro} />
+      <Route path="/terceiros/painel" component={PainelTerceiros} />
       {/* Parceiros */}
       <Route path="/parceiros" component={PainelParceiros} />
       <Route path="/parceiros/cadastro" component={CadastroParceiros} />
       <Route path="/parceiros/lancamentos" component={LancamentosParceiros} />
       <Route path="/parceiros/guia-descontos" component={GuiaDescontos} />
       <Route path="/parceiros/pagamentos" component={PagamentosParceiros} />
+      <Route path="/parceiros/aprovacoes" component={AprovacoesParceiros} />
+      <Route path="/parceiros/painel" component={PainelParceiros} />
       <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
       <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
       <Route path={"404"} component={NotFound} />
