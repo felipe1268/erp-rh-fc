@@ -3947,3 +3947,5 @@
 - [x] BUG: Calendário de férias aparece vazio - corrigido case sensitivity dataAlteradaPeloRH -> dataAlteradaPeloRh em avisoPrevioFerias.ts e dashboards.ts
 - [ ] Upload de PDF da convenção coletiva com extração automática por IA
 - [x] Dialog Detalhamento do Fluxo de Caixa de Férias em fullscreen
+- [x] BUG: Consulta automática de CNPJ do sindicato - reimplementado com formatação, lookup BrasilAPI e loading state
+- [x] BUG: Erro ao salvar convenção coletiva - companyId enviado como string em vez de number

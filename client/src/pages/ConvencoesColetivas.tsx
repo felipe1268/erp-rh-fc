@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Scale, Search, Building2, Landmark, Eye, Plus, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Scale, Search, Building2, Landmark, Eye, Plus, ChevronDown, ChevronUp, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
 import { toast } from "sonner";
@@ -80,6 +80,50 @@ export default function ConvencoesColetivas() {
     onError: (e) => toast.error(e.message),
   });
 
+  // CNPJ lookup
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+
+  const formatCnpj = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 14);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0,2)}.${digits.slice(2)}`;
+    if (digits.length <= 8) return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5)}`;
+    if (digits.length <= 12) return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8)}`;
+    return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12)}`;
+  };
+
+  const lookupCnpj = useCallback(async (cnpj: string) => {
+    const digits = cnpj.replace(/\D/g, "");
+    if (digits.length !== 14) return;
+    setBuscandoCnpj(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+      if (res.ok) {
+        const data = await res.json();
+        const nome = data.razao_social || data.nome_fantasia || "";
+        if (nome) {
+          setForm(prev => ({ ...prev, sindicato: nome }));
+          toast.success(`Sindicato encontrado: ${nome}`);
+        }
+      } else {
+        toast.error("CNPJ não encontrado na base da Receita Federal");
+      }
+    } catch {
+      toast.error("Erro ao consultar CNPJ");
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  }, []);
+
+  const handleCnpjChange = (value: string) => {
+    const formatted = formatCnpj(value);
+    setField("cnpjSindicato", formatted);
+    const digits = formatted.replace(/\D/g, "");
+    if (digits.length === 14) {
+      lookupCnpj(formatted);
+    }
+  };
+
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingId(null);
@@ -133,7 +177,7 @@ export default function ConvencoesColetivas() {
     if (!form.nome.trim()) { toast.error("Nome da convenção é obrigatório"); return; }
 
     const payload: any = {
-      companyId: form.companyId,
+      companyId: Number(form.companyId),
       nome: form.nome,
       sindicato: form.sindicato || undefined,
       cnpjSindicato: form.cnpjSindicato || undefined,
@@ -160,7 +204,7 @@ export default function ConvencoesColetivas() {
       isMatriz: form.isMatriz,
       status: form.status as any,
       observacoes: form.observacoes || undefined,
-      obraId: form.abrangencia === "obra" && form.obraId > 0 ? form.obraId : undefined,
+      obraId: form.abrangencia === "obra" && form.obraId > 0 ? Number(form.obraId) : undefined,
     };
 
     if (editingId) {
@@ -485,12 +529,15 @@ export default function ConvencoesColetivas() {
                   <Input value={form.nome} onChange={e => setField("nome", e.target.value)} placeholder="Ex: CCT Construção Civil 2024/2025" />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label className="text-xs font-semibold">Sindicato</Label>
-                  <Input value={form.sindicato} onChange={e => setField("sindicato", e.target.value)} placeholder="Nome do sindicato" />
+                  <Label className="text-xs font-semibold">Sindicato {buscandoCnpj && <span className="text-blue-500 text-[10px]">(buscando...)</span>}</Label>
+                  <Input value={form.sindicato} onChange={e => setField("sindicato", e.target.value)} placeholder="Nome do sindicato" className={buscandoCnpj ? "animate-pulse bg-blue-50" : ""} />
                 </div>
                 <div>
                   <Label className="text-xs font-semibold">CNPJ do Sindicato</Label>
-                  <Input value={form.cnpjSindicato} onChange={e => setField("cnpjSindicato", e.target.value)} placeholder="00.000.000/0000-00" />
+                  <div className="relative">
+                    <Input value={form.cnpjSindicato} onChange={e => handleCnpjChange(e.target.value)} placeholder="00.000.000/0000-00" />
+                    {buscandoCnpj && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-blue-500" />}
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs font-semibold">Data Base</Label>
