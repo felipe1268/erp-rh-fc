@@ -3868,3 +3868,4 @@
 - [x] Painel de controle de módulos nas Configurações (toggle ON/OFF por módulo)
 - [x] Módulos desabilitados ficam ocultos na Home e sidebar para todos os usuários
 - [x] Preparado para venda futura - cada empresa com módulos independentes
+- [x] BUG: React Hooks order error in ModuleHub - useModuleConfig chamado após early return (movido para antes dos returns)

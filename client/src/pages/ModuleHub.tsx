@@ -294,6 +294,7 @@ export default function ModuleHub() {
   const [, navigate] = useLocation();
   const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany } = useCompany();
   const { setActiveModule } = useModule();
+  const { isModuleEnabled } = useModuleConfig();
   const [mounted, setMounted] = useState(false);
 
   const greeting = useMemo(() => getGreeting(), []);
@@ -321,7 +322,6 @@ export default function ModuleHub() {
     return null;
   }
 
-  const { isModuleEnabled } = useModuleConfig();
   // Mapeia module id do hub para module_key do banco
   const hubToConfigKey: Record<string, string> = {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
