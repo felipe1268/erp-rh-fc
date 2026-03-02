@@ -4003,3 +4003,12 @@
 - [x] Backend: Criar procedure que calcula rescisão nos dois cenários (trabalhado e indenizado) para um mesmo funcionário
 - [x] Frontend: Criar aba/seção de comparativo no dialog de Cálculos da Rescisão com layout lado a lado
 - [x] Mostrar diferença financeira e recomendação baseada no menor custo
+
+## Rev. 149 - Dialog Cálculos da Rescisão Fullscreen
+- [x] Converter dialog para FullScreenDialog com layout otimizado para tela cheia
+
+## Rev. 150 - Correção Permissões de Módulos na Sidebar
+- [x] BUG: Sidebar mostrando todos os itens mesmo para usuários com permissões restritas (ex: Rodney)
+- [x] Filtrar itens do menu com base nos módulos/funcionalidades habilitados para o usuário
+- [x] Mapear todas as rotas extras (dashboards, convenções, relatórios) para features
+- [x] Alterar default de 'return true' para 'return false' (segurança por padrão)

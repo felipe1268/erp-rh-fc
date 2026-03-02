@@ -487,6 +487,32 @@ function DashboardLayoutContent({
         map.set(feat.route, { moduleId: mod.id, featureKey: feat.key });
       }
     }
+    // Rotas extras que não estão em MODULE_DEFINITIONS mas pertencem a features
+    // RH-DP extras
+    map.set('/convencoes-coletivas', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/relatorios/raio-x', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/comparativo-convencoes', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/crachas', { moduleId: 'rh-dp', featureKey: 'crachas-rh' });
+    map.set('/pj-medicoes', { moduleId: 'rh-dp', featureKey: 'modulo-pj' });
+    // Dashboards mapeados para features correspondentes
+    map.set('/dashboards/funcionarios', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/dashboards/cartao-ponto', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
+    map.set('/dashboards/folha-pagamento', { moduleId: 'rh-dp', featureKey: 'folha-pagamento' });
+    map.set('/dashboards/horas-extras', { moduleId: 'rh-dp', featureKey: 'solicitacao-he' });
+    map.set('/dashboards/aviso-previo', { moduleId: 'rh-dp', featureKey: 'aviso-previo' });
+    map.set('/dashboards/ferias', { moduleId: 'rh-dp', featureKey: 'ferias' });
+    map.set('/dashboards/efetivo-obra', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/dashboards/perfil-tempo-casa', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/dashboards/controle-documentos', { moduleId: 'rh-dp', featureKey: 'controle-documentos' });
+    // SST dashboards
+    map.set('/dashboards/epis', { moduleId: 'sst', featureKey: 'epis' });
+    // Jurídico dashboards
+    map.set('/dashboards/juridico', { moduleId: 'juridico', featureKey: 'processos-trabalhistas' });
+    // Terceiros extras
+    map.set('/terceiros/validacao-ia', { moduleId: 'terceiros', featureKey: 'terceiros-empresas' });
+    map.set('/terceiros/aprovacao', { moduleId: 'terceiros', featureKey: 'terceiros-aprovacao' });
+    // Parceiros extras
+    map.set('/parceiros/portal', { moduleId: 'parceiros', featureKey: 'parceiros-painel' });
     return map;
   }, []);
 
@@ -519,18 +545,20 @@ function DashboardLayoutContent({
           if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
           // Painel sempre visível
           if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
+          // Ajuda/Biblioteca sempre visível
+          if (item.path === '/ajuda') return true;
           // Shared features (empresas, obras, setores, funcoes) - visíveis se tem acesso ao módulo
           const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes'];
           if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
-          // Dashboard paths - visíveis se tem acesso ao módulo
-          if (item.path.startsWith('/dashboards')) return true;
-          // Verificar permissão granular pela rota
+          // "Todos os Dashboards" - visível se tem acesso a pelo menos um módulo
+          if (item.path === '/dashboards') return accessibleModules.length > 0;
+          // Verificar permissão granular pela rota (inclui dashboards individuais)
           const featureInfo = routeToFeatureKey.get(item.path);
           if (featureInfo) {
             return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
           }
-          // Default: mostrar
-          return true;
+          // Default: NEGAR acesso (segurança por padrão)
+          return false;
         }),
       }));
     }
