@@ -258,7 +258,7 @@ export default function ConvencoesColetivas() {
       seguroVida: conv.seguroVida || "",
       outrosBeneficios: conv.outrosBeneficios || "",
       clausulasEspeciais: conv.clausulasEspeciais || "",
-      isMatriz: conv.isMatriz || false,
+      isMatriz: !!conv.isMatriz,
       status: conv.status || "vigente",
       observacoes: conv.observacoes || "",
     });

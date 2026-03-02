@@ -3984,3 +3984,6 @@
 
 ## Rev. 143 - Dialog Cálculos da Rescisão Fullscreen
 - [x] Alterar dialog "Cálculos da Rescisão" para tela cheia (FullScreenDialog)
+
+## Rev. 144 - Erro ao editar Convenção Coletiva Matriz
+- [x] BUG: "Invalid input: expected boolean, received number" ao atualizar convenção coletiva
