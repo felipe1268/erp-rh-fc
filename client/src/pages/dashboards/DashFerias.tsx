@@ -61,7 +61,7 @@ export default function DashFerias() {
       return f.status === statusFilter;
     });
     const labels: Record<string, string> = {
-      pendente: "Pendentes", agendada: "Agendadas", vencida: "Vencidas",
+      pendente: "Férias a Vencer", agendada: "Agendadas", vencida: "Vencidas",
       em_gozo: "Em Gozo", concluida: "Concluídas", cancelada: "Canceladas",
     };
     setDrillDialog({ title: `Férias — ${labels[statusFilter] || statusFilter}`, items });
@@ -78,7 +78,7 @@ export default function DashFerias() {
         break;
       case "a_pagar":
         items = data.feriasLista.filter((f: any) => f.status === "pendente" || f.status === "agendada");
-        title = "A Pagar — Pendentes + Agendadas";
+        title = "A Pagar — A Vencer + Agendadas";
         break;
       case "vencidas":
         items = data.feriasLista.filter((f: any) => f.status === "vencida" || f.vencida === 1);
@@ -99,7 +99,7 @@ export default function DashFerias() {
 
     if (chartType === "status") {
       const statusMap: Record<string, string> = {
-        "Pendentes": "pendente", "Agendadas": "agendada", "Vencidas": "vencida",
+        "Férias a Vencer": "pendente", "Agendadas": "agendada", "Vencidas": "vencida",
         "Em Gozo": "em_gozo", "Concluídas": "concluida",
       };
       const st = statusMap[info.label] || "";
@@ -226,7 +226,7 @@ export default function DashFerias() {
           <DashKpi label="TOTAL" value={kpis.total} color="slate" icon={CalendarDays} />
         </div>
         <div className="cursor-pointer" onClick={() => drillByStatus("pendente")}>
-          <DashKpi label="PENDENTES" value={kpis.pendentes} color="amber" icon={Clock} />
+          <DashKpi label="A VENCER" value={kpis.pendentes} color="amber" icon={Clock} />
         </div>
         <div className="cursor-pointer" onClick={() => drillByStatus("agendada")}>
           <DashKpi label="AGENDADAS" value={kpis.agendadas} color="blue" icon={CalendarCheck} />
@@ -407,7 +407,7 @@ export default function DashFerias() {
             datasets={[
               { label: "Total", data: feriasObra.map(o => o.total), backgroundColor: CHART_PALETTE[0] },
               { label: "Vencidas", data: feriasObra.map(o => o.vencidas), backgroundColor: "#EF4444" },
-              { label: "Pendentes", data: feriasObra.map(o => o.pendentes), backgroundColor: "#F59E0B" },
+              { label: "A Vencer", data: feriasObra.map(o => o.pendentes), backgroundColor: "#F59E0B" },
             ]}
             height={280}
             onChartClick={(info) => drillByChart(info, "obra")}
@@ -532,7 +532,7 @@ export default function DashFerias() {
                     <th className="text-left py-2 text-xs font-medium text-[#64748B]">Setor</th>
                     <th className="text-center py-2 text-xs font-medium text-[#64748B]">Total</th>
                     <th className="text-center py-2 text-xs font-medium text-[#64748B]">Vencidas</th>
-                    <th className="text-center py-2 text-xs font-medium text-[#64748B]">Pendentes</th>
+                    <th className="text-center py-2 text-xs font-medium text-[#64748B]">A Vencer</th>
                   </tr>
                 </thead>
                 <tbody>

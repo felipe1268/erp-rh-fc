@@ -1666,7 +1666,7 @@ async function getDashFerias(companyId: number, ano?: number) {
 
   // Distribuição por status (donut)
   const statusDist = [
-    { label: 'Pendentes', value: pendentes, color: '#F59E0B' },
+    { label: 'Férias a Vencer', value: pendentes, color: '#F59E0B' },
     { label: 'Agendadas', value: agendadas, color: '#3B82F6' },
     { label: 'Vencidas', value: vencidas, color: '#EF4444' },
     { label: 'Em Gozo', value: emGozo, color: '#10B981' },

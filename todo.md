@@ -3977,3 +3977,7 @@
 - [x] Atualizar mutation revertConcluido para setar flag revertidoManualmente = 1
 - [x] Criar testes unitários para validar a correção (6 testes passando)
 - [x] Atualizar versão para Rev. 141
+
+## Rev. 142 - Correção Férias Dashboard
+- [x] BUG: Valores dos cards do dashboard alterando ao clicar nos filtros (Vencidos/Pendentes)
+- [x] Renomear "Pendentes" para "Férias a Vencer" no card e onde aplicável

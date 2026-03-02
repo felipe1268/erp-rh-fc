@@ -31,7 +31,7 @@ function formatDate(d: string | null | undefined) {
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  pendente: { label: "Pendente", color: "text-amber-700", bg: "bg-amber-100" },
+  pendente: { label: "A Vencer", color: "text-amber-700", bg: "bg-amber-100" },
   agendada: { label: "Agendada", color: "text-blue-700", bg: "bg-blue-100" },
   em_gozo: { label: "Em Gozo", color: "text-green-700", bg: "bg-green-100" },
   concluida: { label: "Concluída", color: "text-gray-700", bg: "bg-gray-100" },
@@ -65,7 +65,7 @@ function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirDa
   });
 
   const STATUS_BADGE: Record<string, { label: string; variant: string; className: string }> = {
-    pendente: { label: "Pendente", variant: "outline", className: "border-amber-400 text-amber-700 bg-amber-50" },
+    pendente: { label: "A Vencer", variant: "outline", className: "border-amber-400 text-amber-700 bg-amber-50" },
     agendada: { label: "Agendada", variant: "outline", className: "border-blue-400 text-blue-700 bg-blue-50" },
     em_gozo: { label: "Em Gozo", variant: "outline", className: "border-green-400 text-green-700 bg-green-50" },
     concluida: { label: "Concluída", variant: "outline", className: "border-gray-400 text-gray-700 bg-gray-100" },
@@ -255,7 +255,7 @@ function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirDa
                           <td className="p-2 text-right font-bold">{formatMoeda(parseFloat(p.valorEstimado || '0'))}</td>
                           <td className="p-2 text-center">
                             <Badge variant={p.vencida ? 'destructive' : 'outline'} className="text-[10px]">
-                              {p.vencida ? 'Vencida' : 'Pendente'}
+                              {p.vencida ? 'Vencida' : 'A Vencer'}
                             </Badge>
                           </td>
                         </tr>
@@ -315,6 +315,11 @@ export default function Ferias() {
   const [definirForm, setDefinirForm] = useState<any>({});
 
   // Queries
+  // Query SEPARADA para stats (sem filtro) — garante que os cards nunca mudem ao clicar filtros
+  const { data: allFeriasList = [] } = trpc.avisoPrevio.ferias.list.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
   const { data: feriasList = [], refetch } = trpc.avisoPrevio.ferias.list.useQuery(
     { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
     { enabled: !!companyId }
@@ -414,9 +419,9 @@ export default function Ferias() {
     });
   }, [feriasList, search]);
 
-  // Stats
+  // Stats — calculados a partir da lista COMPLETA (sem filtro) para não mudar ao clicar nos cards
   const stats = useMemo(() => {
-    const list = feriasList as any[];
+    const list = allFeriasList as any[];
     return {
       total: list.length,
       pendentes: list.filter(a => a.status === "pendente").length,
@@ -424,7 +429,7 @@ export default function Ferias() {
       vencidas: list.filter(a => a.status === "vencida" || a.vencida).length,
       emGozo: list.filter(a => a.status === "em_gozo").length,
     };
-  }, [feriasList]);
+  }, [allFeriasList]);
 
   // Calendar data grouped by employee
   const calendarioAgrupado = useMemo(() => {
@@ -548,7 +553,7 @@ export default function Ferias() {
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-amber-500" onClick={() => setStatusFilter("pendente")}>
             <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground uppercase">Pendentes</p>
+              <p className="text-xs text-muted-foreground uppercase">Férias a Vencer</p>
               <p className="text-2xl font-bold text-amber-600">{stats.pendentes}</p>
             </CardContent>
           </Card>
@@ -633,7 +638,7 @@ export default function Ferias() {
                 <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="pendente">A Vencer</SelectItem>
                   <SelectItem value="agendada">Agendada</SelectItem>
                   <SelectItem value="em_gozo">Em Gozo</SelectItem>
                   <SelectItem value="concluida">Concluída</SelectItem>
