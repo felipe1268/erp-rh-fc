@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -714,15 +715,7 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
   };
 
   return (
-    <Dialog open={!!avisoId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Scale className="h-5 w-5 text-red-600" />
-            Cálculos da Rescisão
-          </DialogTitle>
-        </DialogHeader>
-
+    <FullScreenDialog open={!!avisoId} onClose={onClose} title="Cálculos da Rescisão" icon={<Scale className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-red-700 to-red-900">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" />
@@ -730,7 +723,7 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
         ) : !aviso ? (
           <p className="text-sm text-muted-foreground py-8 text-center">Aviso prévio não encontrado.</p>
         ) : (
-          <div className="space-y-4">
+          <div className="w-full max-w-3xl mx-auto space-y-4">
             {/* Info Geral */}
             <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3">
               <div>
@@ -897,7 +890,6 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </FullScreenDialog>
   );
 }

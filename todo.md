@@ -3981,3 +3981,6 @@
 ## Rev. 142 - Correção Férias Dashboard
 - [x] BUG: Valores dos cards do dashboard alterando ao clicar nos filtros (Vencidos/Pendentes)
 - [x] Renomear "Pendentes" para "Férias a Vencer" no card e onde aplicável
+
+## Rev. 143 - Dialog Cálculos da Rescisão Fullscreen
+- [x] Alterar dialog "Cálculos da Rescisão" para tela cheia (FullScreenDialog)
