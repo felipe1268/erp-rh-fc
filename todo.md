@@ -3964,3 +3964,5 @@
 - [x] Ao clicar no nome do funcionário no Vale Alimentação, abrir histórico de recebíveis dele
 - [x] Opção de reverter status de Concluído no Aviso Prévio (apenas Admin e Admin Master)
 - [x] Dashboard Funcionários: remover card Total Geral, mostrar apenas Ativos como destaque principal
+- [x] Liberar botão de reverter status do aviso prévio para todos os usuários
+- [x] Atualizar controle de revisões (está desatualizado)

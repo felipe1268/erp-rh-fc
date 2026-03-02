@@ -424,7 +424,7 @@ export default function AvisoPrevio() {
                                 </Button>
                               </>
                             )}
-                            {a.status === "concluido" && (user?.role === 'admin' || user?.role === 'admin_master') && (
+                            {a.status === "concluido" && (
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Reverter para Em Andamento" onClick={() => {
                                 if (confirm('Tem certeza que deseja reverter o status de Concluído para Em Andamento?')) {
                                   revertConcluido.mutate({ id: a.id });

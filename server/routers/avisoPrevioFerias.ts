@@ -991,15 +991,10 @@ export const avisoPrevioFeriasRouter = router({
         return { recalculados, erros, total: avisos.length };
       }),
 
-    /** Reverter status de Concluído para Em Andamento (somente Admin/Admin Master) */
+    /** Reverter status de Concluído para Em Andamento */
     revertConcluido: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        // Verificar se o usuário é Admin ou Admin Master
-        const userRole = (ctx.user as any).role;
-        if (userRole !== 'admin' && userRole !== 'admin_master') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin e Admin Master podem reverter o status de concluído' });
-        }
         const db = (await getDb())!;
         const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
         if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
