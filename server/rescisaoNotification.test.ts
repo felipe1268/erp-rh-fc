@@ -70,8 +70,8 @@ describe("Recálculo em Tempo Real", () => {
 });
 
 describe("Version Update", () => {
-  it("should be at revision 145", async () => {
+  it("should be at revision 146", async () => {
     const { APP_VERSION_NUMBER } = await import("../shared/version");
-    expect(APP_VERSION_NUMBER).toBe(145);
+    expect(APP_VERSION_NUMBER).toBe(146);
   });
 });

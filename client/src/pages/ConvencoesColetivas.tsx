@@ -294,11 +294,23 @@ export default function ConvencoesColetivas() {
       seguroVida: form.seguroVida || undefined,
       outrosBeneficios: form.outrosBeneficios || undefined,
       clausulasEspeciais: form.clausulasEspeciais || undefined,
-      isMatriz: form.isMatriz,
+      isMatriz: Boolean(form.isMatriz),
       status: form.status as any,
-      observacoes: form.observacoes || undefined,
+      observacoes: form.observacoes ? String(form.observacoes) : undefined,
       obraId: form.abrangencia === "obra" && form.obraId > 0 ? Number(form.obraId) : undefined,
     };
+
+    // Defensive: ensure all string fields are actually strings (not numbers/booleans from AI extraction)
+    const stringFields = ['nome','sindicato','cnpjSindicato','dataBase','vigenciaInicio','vigenciaFim',
+      'pisoSalarial','percentualReajuste','adicionalInsalubridade','adicionalPericulosidade',
+      'horaExtraDiurna','horaExtraNoturna','horaExtraDomingo','adicionalNoturno',
+      'valeRefeicao','valeAlimentacao','valeTransporte','cestaBasica','auxilioFarmacia',
+      'planoSaude','seguroVida','outrosBeneficios','clausulasEspeciais','observacoes'] as const;
+    for (const key of stringFields) {
+      if (payload[key] !== undefined && typeof payload[key] !== 'string') {
+        payload[key] = String(payload[key]);
+      }
+    }
 
     // Include PDF data if uploaded
     if (pdfBase64 && pdfMimeType) {

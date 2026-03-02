@@ -3992,3 +3992,6 @@
 - [x] Adicionar nome do funcionário no header do dialog
 - [x] Exibir todos os valores pertinentes (VR, 13º, Aviso Prévio Indenizado, 1/3 férias vencidas, descontos, data limite pgto)
 - [x] Voltar para dialog normal (não fullscreen) com layout claro e bem dimensionado
+
+## Rev. 146 - Erro persistente ao salvar Convenção Coletiva
+- [x] BUG: Erro ao clicar "Atualizar" na Convenção Coletiva - investigar todos os campos com tipo incompatível
