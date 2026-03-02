@@ -15,7 +15,7 @@ import {
   ArrowUpRight, ArrowDownRight, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, ExternalLink,
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
-  Bell, FileText, CheckCircle2, XCircle
+  Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -692,9 +692,14 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
     { enabled: !!avisoId }
   );
 
-  const formatBRL = (v: string | number | null | undefined) => {
+  const fmt = (v: string | number | null | undefined) => {
     const num = parseFloat(String(v || '0'));
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const fmtDate = (d: string | null | undefined) => {
+    if (!d) return '-';
+    return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
   };
 
   const previsao = aviso?.previsaoRescisao ? (() => {
@@ -714,182 +719,226 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
     return 'Nenhuma';
   };
 
+  // Build proventos rows
+  const proventos: { label: string; value: string }[] = [];
+  const descontos: { label: string; value: string }[] = [];
+  if (previsao) {
+    if (parseFloat(previsao.saldoSalario || '0') > 0)
+      proventos.push({ label: `Saldo de Salário (${previsao.diasTrabalhadosMes || '?'} dias)`, value: previsao.saldoSalario });
+    if (parseFloat(previsao.feriasProporcional || '0') > 0)
+      proventos.push({ label: `Férias Proporcionais (${previsao.mesesFerias || '?'}/12 avos)`, value: previsao.feriasProporcional });
+    if (parseFloat(previsao.tercoConstitucional || '0') > 0)
+      proventos.push({ label: '1/3 Constitucional (Férias Proporcionais)', value: previsao.tercoConstitucional });
+    if (parseFloat(previsao.feriasVencidas || '0') > 0)
+      proventos.push({ label: `Férias Vencidas${previsao.periodosVencidos ? ` (${previsao.periodosVencidos} período${previsao.periodosVencidos > 1 ? 's' : ''})` : ''}`, value: previsao.feriasVencidas });
+    if (parseFloat(previsao.tercoFeriasVencidas || '0') > 0)
+      proventos.push({ label: '1/3 Constitucional (Férias Vencidas)', value: previsao.tercoFeriasVencidas });
+    if (parseFloat(previsao.decimoTerceiroProporcional || previsao.decimoTerceiro || '0') > 0)
+      proventos.push({ label: `13º Salário Proporcional (${previsao.meses13o || previsao.meses13 || '?'}/12 avos)`, value: previsao.decimoTerceiroProporcional || previsao.decimoTerceiro });
+    if (parseFloat(previsao.avisoPrevioIndenizado || '0') > 0)
+      proventos.push({ label: `Aviso Prévio Indenizado (${previsao.diasAvisoTotal || previsao.diasExtrasAviso || '?'} dias)`, value: previsao.avisoPrevioIndenizado });
+    if (parseFloat(previsao.multaFGTS || '0') > 0)
+      proventos.push({ label: 'Multa 40% FGTS', value: previsao.multaFGTS });
+    if (parseFloat(previsao.vrProporcional || '0') > 0)
+      proventos.push({ label: `VR/VA Proporcional (${previsao.diasTrabalhadosMes || '?'} dias × R$ ${fmt(previsao.vrDiario)})`, value: previsao.vrProporcional });
+    // Descontos
+    if (parseFloat(previsao.inssDesconto || '0') > 0)
+      descontos.push({ label: `INSS${previsao.inssFaixa ? ` (${previsao.inssFaixa})` : ''}`, value: previsao.inssDesconto });
+    if (parseFloat(previsao.irrfDesconto || '0') > 0)
+      descontos.push({ label: `IRRF${previsao.irrfFaixa ? ` (${previsao.irrfFaixa})` : ''}`, value: previsao.irrfDesconto });
+    if (parseFloat(previsao.adiantamentoDesconto || '0') > 0)
+      descontos.push({ label: 'Adiantamento Salarial', value: previsao.adiantamentoDesconto });
+  }
+
+  const totalProventos = proventos.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
+  const totalDescontos = descontos.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
+
   return (
-    <FullScreenDialog open={!!avisoId} onClose={onClose} title="Cálculos da Rescisão" icon={<Scale className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-red-700 to-red-900">
+    <Dialog open={!!avisoId} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" />
           </div>
         ) : !aviso ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">Aviso prévio não encontrado.</p>
+          <div className="p-8 text-center">
+            <p className="text-sm text-muted-foreground">Aviso prévio não encontrado.</p>
+          </div>
         ) : (
-          <div className="w-full max-w-3xl mx-auto space-y-4">
-            {/* Info Geral */}
-            <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3">
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-medium">Tipo</p>
-                <p className="text-xs font-semibold">{tipoLabel(aviso.tipo)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-medium">Redução de Jornada</p>
-                <p className="text-xs font-semibold">{reducaoLabel(aviso.reducaoJornada)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-medium">Início</p>
-                <p className="text-xs font-semibold">{aviso.dataInicio ? new Date(aviso.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-medium">Término</p>
-                <p className="text-xs font-semibold">{aviso.dataFim ? new Date(aviso.dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-medium">Dias de Aviso</p>
-                <p className="text-xs font-semibold">{aviso.diasAviso} dias</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-medium">Salário Base</p>
-                <p className="text-xs font-semibold">R$ {formatBRL(aviso.salarioBase)}</p>
+          <>
+            {/* Header com nome do funcionário */}
+            <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a] text-white px-6 py-4 rounded-t-lg">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2.5 rounded-full">
+                  <User className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-lg font-bold">{(aviso as any).employeeName || 'Funcionário'}</h2>
+                  <div className="flex items-center gap-4 text-sm text-white/80 mt-0.5">
+                    {(aviso as any).employeeCargo && <span>{(aviso as any).employeeCargo}</span>}
+                    {(aviso as any).employeeCpf && (aviso as any).employeeCpf !== '-' && <span>CPF: {(aviso as any).employeeCpf}</span>}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-white/60 uppercase">Cálculos da Rescisão</p>
+                  <Scale className="h-5 w-5 mt-1 text-white/80 ml-auto" />
+                </div>
               </div>
             </div>
 
-            {/* Verbas Rescisórias */}
-            {previsao ? (
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  Verbas Rescisórias (Proventos)
-                </h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <tbody>
-                      {previsao.saldoSalario && parseFloat(previsao.saldoSalario) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">Saldo de Salário {previsao.diasTrabalhadosMes ? `(${previsao.diasTrabalhadosMes} dias)` : ''}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.saldoSalario)}</td>
-                        </tr>
-                      )}
-                      {previsao.feriasProporcional && parseFloat(previsao.feriasProporcional) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">Férias Proporcionais {previsao.mesesFerias ? `(${previsao.mesesFerias}/12 avos)` : ''}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.feriasProporcional)}</td>
-                        </tr>
-                      )}
-                      {previsao.tercoConstitucional && parseFloat(previsao.tercoConstitucional) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">1/3 Constitucional</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.tercoConstitucional)}</td>
-                        </tr>
-                      )}
-                      {previsao.feriasVencidas && parseFloat(previsao.feriasVencidas) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">Férias Vencidas</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.feriasVencidas)}</td>
-                        </tr>
-                      )}
-                      {previsao.tercoFeriasVencidas && parseFloat(previsao.tercoFeriasVencidas) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">1/3 Férias Vencidas</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.tercoFeriasVencidas)}</td>
-                        </tr>
-                      )}
-                      {previsao.decimoTerceiro && parseFloat(previsao.decimoTerceiro) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">13º Proporcional {previsao.meses13 ? `(${previsao.meses13}/12 avos)` : ''}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.decimoTerceiro)}</td>
-                        </tr>
-                      )}
-                      {previsao.multaFGTS && parseFloat(previsao.multaFGTS) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">Multa 40% FGTS</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.multaFGTS)}</td>
-                        </tr>
-                      )}
-                      {previsao.vrProporcional && parseFloat(previsao.vrProporcional) > 0 && (
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">VR/VA Proporcional</td>
-                          <td className="px-3 py-2 text-right font-semibold text-green-700">R$ {formatBRL(previsao.vrProporcional)}</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Descontos */}
-                {((previsao.inssDesconto && parseFloat(previsao.inssDesconto) > 0) || 
-                  (previsao.irrfDesconto && parseFloat(previsao.irrfDesconto) > 0) ||
-                  (previsao.adiantamentoDesconto && parseFloat(previsao.adiantamentoDesconto) > 0)) && (
-                  <>
-                    <h4 className="text-xs font-bold text-foreground flex items-center gap-2 mt-3">
-                      <ArrowDownRight className="h-4 w-4 text-red-600" />
-                      Descontos
-                    </h4>
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-xs">
-                        <tbody>
-                          {previsao.inssDesconto && parseFloat(previsao.inssDesconto) > 0 && (
-                            <tr className="border-b">
-                              <td className="px-3 py-2 text-muted-foreground">INSS {previsao.inssFaixa ? `(${previsao.inssFaixa})` : ''}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-red-600">- R$ {formatBRL(previsao.inssDesconto)}</td>
-                            </tr>
-                          )}
-                          {previsao.irrfDesconto && parseFloat(previsao.irrfDesconto) > 0 && (
-                            <tr className="border-b">
-                              <td className="px-3 py-2 text-muted-foreground">IRRF {previsao.irrfFaixa ? `(${previsao.irrfFaixa})` : ''}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-red-600">- R$ {formatBRL(previsao.irrfDesconto)}</td>
-                            </tr>
-                          )}
-                          {previsao.adiantamentoDesconto && parseFloat(previsao.adiantamentoDesconto) > 0 && (
-                            <tr className="border-b">
-                              <td className="px-3 py-2 text-muted-foreground">Adiantamento Salarial</td>
-                              <td className="px-3 py-2 text-right font-semibold text-red-600">- R$ {formatBRL(previsao.adiantamentoDesconto)}</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-
-                {/* Total */}
-                <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-4 border-2 border-red-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-foreground">TOTAL ESTIMADO DA RESCISÃO</span>
-                    <span className="text-lg font-extrabold text-red-700">R$ {formatBRL(aviso.valorEstimadoTotal)}</span>
+            <div className="px-6 py-5 space-y-5">
+              {/* Dados do Aviso Prévio */}
+              <div>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Info className="h-3.5 w-3.5" /> Dados do Aviso Prévio
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Tipo</p>
+                    <p className="text-xs font-semibold">{tipoLabel(aviso.tipo)}</p>
                   </div>
-                  {previsao.fgtsEstimado && parseFloat(previsao.fgtsEstimado) > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-1">FGTS estimado no período: R$ {formatBRL(previsao.fgtsEstimado)}</p>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Redução de Jornada</p>
+                    <p className="text-xs font-semibold">{reducaoLabel(aviso.reducaoJornada)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Salário Base</p>
+                    <p className="text-xs font-bold text-blue-700">R$ {fmt(aviso.salarioBase)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Início do Aviso</p>
+                    <p className="text-xs font-semibold">{fmtDate(aviso.dataInicio)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Término do Aviso</p>
+                    <p className="text-xs font-semibold">{fmtDate(aviso.dataFim)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Dias de Aviso</p>
+                    <p className="text-xs font-semibold">{aviso.diasAviso} dias</p>
+                  </div>
+                  {previsao?.dataAdmissao && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Data Admissão</p>
+                      <p className="text-xs font-semibold">{fmtDate(previsao.dataAdmissao)}</p>
+                    </div>
+                  )}
+                  {previsao?.anosServico !== undefined && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Tempo de Serviço</p>
+                      <p className="text-xs font-semibold">{previsao.anosServico} ano{previsao.anosServico !== 1 ? 's' : ''}</p>
+                    </div>
+                  )}
+                  {previsao?.dataSaida && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Data de Saída</p>
+                      <p className="text-xs font-semibold">{fmtDate(previsao.dataSaida)}</p>
+                    </div>
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="text-center py-6 space-y-2">
-                <p className="text-sm text-muted-foreground">Detalhamento da rescisão não disponível para este aviso.</p>
-                <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-4 border-2 border-red-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-foreground">VALOR TOTAL ESTIMADO</span>
-                    <span className="text-lg font-extrabold text-red-700">R$ {formatBRL(aviso.valorEstimadoTotal)}</span>
+
+              {/* Separador */}
+              <hr className="border-gray-200" />
+
+              {/* Verbas Rescisórias (Proventos) */}
+              {proventos.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <DollarSign className="h-3.5 w-3.5" /> Verbas Rescisórias (Proventos)
+                  </h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-xs">
+                      <tbody>
+                        {proventos.map((row, i) => (
+                          <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
+                            <td className="px-3 py-2.5 text-foreground">{row.label}</td>
+                            <td className="px-3 py-2.5 text-right font-semibold text-green-700 whitespace-nowrap">R$ {fmt(row.value)}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-green-50 font-bold">
+                          <td className="px-3 py-2.5 text-green-800">SUBTOTAL PROVENTOS</td>
+                          <td className="px-3 py-2.5 text-right text-green-800 whitespace-nowrap">R$ {fmt(totalProventos)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Observações */}
-            {aviso.observacoes && (
-              <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-                <p className="text-[10px] text-muted-foreground uppercase font-medium mb-1">Observações</p>
-                <p className="text-xs text-foreground">{aviso.observacoes}</p>
-              </div>
-            )}
+              {/* Descontos */}
+              {descontos.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold text-red-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <TrendingDown className="h-3.5 w-3.5" /> Descontos
+                  </h3>
+                  <div className="border border-red-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-xs">
+                      <tbody>
+                        {descontos.map((row, i) => (
+                          <tr key={i} className="border-b last:border-b-0 hover:bg-red-50/50">
+                            <td className="px-3 py-2.5 text-foreground">{row.label}</td>
+                            <td className="px-3 py-2.5 text-right font-semibold text-red-600 whitespace-nowrap">- R$ {fmt(row.value)}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-red-50 font-bold">
+                          <td className="px-3 py-2.5 text-red-800">SUBTOTAL DESCONTOS</td>
+                          <td className="px-3 py-2.5 text-right text-red-800 whitespace-nowrap">- R$ {fmt(totalDescontos)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
-            {/* Botão para ir à página completa */}
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" size="sm" className="text-xs" onClick={() => { onClose(); window.location.href = '/aviso-previo'; }}>
-                <ExternalLink className="h-3 w-3 mr-1" />
-                Ver na página de Aviso Prévio
-              </Button>
+              {/* Total da Rescisão */}
+              <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-5 border-2 border-red-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">TOTAL ESTIMADO DA RESCISÃO</p>
+                    {previsao?.dataLimitePagamento && (
+                      <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Prazo de pagamento (Art. 477 §6º CLT): <span className="font-bold text-red-700">{fmtDate(previsao.dataLimitePagamento)}</span>
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-2xl font-extrabold text-red-700">R$ {fmt(aviso.valorEstimadoTotal)}</span>
+                </div>
+              </div>
+
+              {/* FGTS Informativo */}
+              {previsao?.fgtsEstimado && parseFloat(previsao.fgtsEstimado) > 0 && (
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-blue-800">FGTS Estimado no Período</p>
+                      <p className="text-[10px] text-blue-600 mt-0.5">{previsao.mesesTotais} meses de serviço × 8% sobre salário base</p>
+                    </div>
+                    <span className="text-sm font-bold text-blue-800">R$ {fmt(previsao.fgtsEstimado)}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Observações */}
+              {aviso.observacoes && (
+                <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                  <p className="text-[10px] text-muted-foreground uppercase font-medium mb-1">Observações</p>
+                  <p className="text-xs text-foreground">{aviso.observacoes}</p>
+                </div>
+              )}
+
+              {/* Botão para ir à página completa */}
+              <div className="flex justify-end pt-1 pb-2">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => { onClose(); window.location.href = '/aviso-previo'; }}>
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Ver na página de Aviso Prévio
+                </Button>
+              </div>
             </div>
-          </div>
+          </>
         )}
-    </FullScreenDialog>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -3987,3 +3987,8 @@
 
 ## Rev. 144 - Erro ao editar Convenção Coletiva Matriz
 - [x] BUG: "Invalid input: expected boolean, received number" ao atualizar convenção coletiva
+
+## Rev. 145 - Melhoria Dialog Cálculos da Rescisão
+- [x] Adicionar nome do funcionário no header do dialog
+- [x] Exibir todos os valores pertinentes (VR, 13º, Aviso Prévio Indenizado, 1/3 férias vencidas, descontos, data limite pgto)
+- [x] Voltar para dialog normal (não fullscreen) com layout claro e bem dimensionado
