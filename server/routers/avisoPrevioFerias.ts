@@ -677,6 +677,187 @@ export const avisoPrevioFeriasRouter = router({
         };
       }),
 
+    /** Comparativo de custos: Aviso Trabalhado vs Indenizado */
+    comparativo: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        dataDesligamento: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
+        if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+        const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
+        const salarioBase = parseBRL(emp.salarioBase);
+        const anosServico = calcularAnosServico(dataAdmissao, input.dataDesligamento);
+
+        // ============================================================
+        // VR: buscar da config de benefícios da obra do funcionário
+        // ============================================================
+        let vrDiario = 0;
+        try {
+          const obraId = (emp as any).obraAtualId;
+          let cfgRows: any[] = [];
+          if (obraId) {
+            const [rows] = await db.execute(
+              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId = ${obraId} AND ativo = 1 LIMIT 1`
+            ) as any[];
+            cfgRows = rows || [];
+          }
+          if (cfgRows.length === 0) {
+            const [rows] = await db.execute(
+              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
+            ) as any[];
+            cfgRows = rows || [];
+          }
+          if (cfgRows.length > 0) {
+            const cfg = cfgRows[0];
+            const cafe = parseBRL(cfg.cafeManhaDia);
+            const lanche = parseBRL(cfg.lancheTardeDia);
+            const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+            const diasUteis = cfg.diasUteisRef || 22;
+            const cafeAtivo = cfg.cafeAtivo === 1 || cfg.cafeAtivo === true;
+            const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
+            const totalVAMensal = (cafeAtivo ? cafe * diasUteis : 0) + (lancheAtivo ? lanche * diasUteis : 0) + vaMes;
+            vrDiario = totalVAMensal / 30;
+          }
+        } catch { vrDiario = 0; }
+
+        // ============================================================
+        // DESCONTOS (compartilhados entre os dois cenários)
+        // ============================================================
+        const descontos: Array<{ descricao: string; valor: number; tipo: string }> = [];
+        try {
+          const [advRows] = await db.execute(
+            sql`SELECT mesReferencia, valorAdiantamento FROM advances WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND aprovado = 'Aprovado' ORDER BY mesReferencia DESC`
+          ) as any[];
+          if (advRows && advRows.length > 0) {
+            const val = parseBRL(advRows[0].valorAdiantamento);
+            if (val > 0) descontos.push({ descricao: `Adiantamento (${advRows[0].mesReferencia})`, valor: val, tipo: 'adiantamento' });
+          }
+        } catch {}
+        try {
+          const [epiRows] = await db.execute(
+            sql`SELECT descricao, valorDesconto FROM epi_discount_alerts WHERE employeeId = ${input.employeeId} AND companyId = ${emp.companyId} AND status = 'pendente'`
+          ) as any[];
+          if (epiRows) {
+            for (const epi of epiRows) {
+              const val = parseBRL(epi.valorDesconto);
+              if (val > 0) descontos.push({ descricao: `EPI: ${epi.descricao || 'Desconto EPI'}`, valor: val, tipo: 'epi' });
+            }
+          }
+        } catch {}
+        const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
+
+        // ============================================================
+        // CENÁRIO 1: AVISO TRABALHADO
+        // ============================================================
+        const diasAvisoTrab = 30; // sempre 30 dias trabalhados
+        const dataInicioTrab = calcularDataInicioAviso(input.dataDesligamento);
+        const dataFimTrab = calcularDataFim(dataInicioTrab, diasAvisoTrab);
+        const dtFimTrab = new Date(dataFimTrab + 'T00:00:00');
+        const dtSaidaTrab = new Date(dtFimTrab); dtSaidaTrab.setDate(dtSaidaTrab.getDate() + 1);
+        const diasTrabMesTrab = dtSaidaTrab.getDate();
+
+        const prevTrab = calcularRescisaoCompleta({
+          salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
+          dataFimAviso: dataFimTrab, tipo: 'empregador_trabalhado',
+          vrDiario, diasTrabalhadosMes: diasTrabMesTrab,
+        });
+        const totalBrutoTrab = parseFloat(prevTrab.total);
+        const totalLiquidoTrab = totalBrutoTrab - totalDescontos;
+
+        // Custo total para empresa no trabalhado:
+        // Verbas rescisórias + salário dos 30 dias trabalhados (já incluso no saldo)
+        // + encargos sobre o período trabalhado (INSS patronal ~28.8%, FGTS 8%)
+        const custoSalarioTrab = salarioBase; // 30 dias de trabalho = 1 salário
+        const encargosPatronaisTrab = custoSalarioTrab * 0.368; // ~36.8% (INSS 28.8% + FGTS 8%)
+        const custoTotalEmpresaTrab = totalBrutoTrab + encargosPatronaisTrab;
+
+        // ============================================================
+        // CENÁRIO 2: AVISO INDENIZADO
+        // ============================================================
+        const diasAvisoInd = calcularDiasAvisoTotal(anosServico);
+        const dataInicioInd = calcularDataInicioAviso(input.dataDesligamento);
+        const dataFimInd = calcularDataFim(dataInicioInd, diasAvisoInd);
+        const dtFimInd = new Date(dataFimInd + 'T00:00:00');
+        const dtSaidaInd = new Date(dtFimInd); dtSaidaInd.setDate(dtSaidaInd.getDate() + 1);
+        const diasTrabMesInd = dtSaidaInd.getDate();
+
+        const prevInd = calcularRescisaoCompleta({
+          salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
+          dataFimAviso: dataFimInd, tipo: 'empregador_indenizado',
+          vrDiario, diasTrabalhadosMes: diasTrabMesInd,
+        });
+        const totalBrutoInd = parseFloat(prevInd.total);
+        const totalLiquidoInd = totalBrutoInd - totalDescontos;
+
+        // Custo total para empresa no indenizado:
+        // Verbas rescisórias (já inclui aviso indenizado)
+        // Não há encargos patronais sobre o período (funcionário não trabalha)
+        const custoTotalEmpresaInd = totalBrutoInd;
+
+        // ============================================================
+        // DIFERENÇA E RECOMENDAÇÃO
+        // ============================================================
+        const diferencaBruta = totalBrutoInd - totalBrutoTrab;
+        const diferencaCustoEmpresa = custoTotalEmpresaInd - custoTotalEmpresaTrab;
+        const maisEconomico = custoTotalEmpresaInd <= custoTotalEmpresaTrab ? 'indenizado' : 'trabalhado';
+
+        return {
+          funcionario: {
+            nome: emp.nomeCompleto,
+            cargo: emp.cargo || (emp as any).funcao || '',
+            cpf: emp.cpf,
+            salarioBase: salarioBase.toFixed(2),
+            dataAdmissao,
+            anosServico,
+          },
+          trabalhado: {
+            tipo: 'empregador_trabalhado',
+            diasAviso: diasAvisoTrab,
+            diasExtras: calcularDiasExtrasAviso(anosServico),
+            dataInicio: dataInicioTrab,
+            dataFim: dataFimTrab,
+            dataSaida: prevTrab.dataSaida,
+            dataLimitePagamento: prevTrab.dataLimitePagamento,
+            previsao: prevTrab,
+            totalBruto: totalBrutoTrab.toFixed(2),
+            totalLiquido: totalLiquidoTrab.toFixed(2),
+            custoTotalEmpresa: custoTotalEmpresaTrab.toFixed(2),
+            encargosPatronais: encargosPatronaisTrab.toFixed(2),
+            observacao: `Funcionário trabalha 30 dias. Dias extras (${calcularDiasExtrasAviso(anosServico)}d) são indenizados separadamente. Empresa arca com encargos patronais (~36,8%) sobre o salário do período trabalhado.`,
+          },
+          indenizado: {
+            tipo: 'empregador_indenizado',
+            diasAviso: diasAvisoInd,
+            diasExtras: 0,
+            dataInicio: dataInicioInd,
+            dataFim: dataFimInd,
+            dataSaida: prevInd.dataSaida,
+            dataLimitePagamento: prevInd.dataLimitePagamento,
+            previsao: prevInd,
+            totalBruto: totalBrutoInd.toFixed(2),
+            totalLiquido: totalLiquidoInd.toFixed(2),
+            custoTotalEmpresa: custoTotalEmpresaInd.toFixed(2),
+            encargosPatronais: '0.00',
+            observacao: `Funcionário é dispensado imediatamente. Todo o período de aviso (${diasAvisoInd} dias) é pago como indenização. Sem encargos patronais sobre o período.`,
+          },
+          descontos: descontos.map(d => ({ ...d, valor: d.valor.toFixed(2) })),
+          totalDescontos: totalDescontos.toFixed(2),
+          analise: {
+            diferencaBruta: diferencaBruta.toFixed(2),
+            diferencaCustoEmpresa: diferencaCustoEmpresa.toFixed(2),
+            maisEconomico,
+            economiaEstimada: Math.abs(diferencaCustoEmpresa).toFixed(2),
+            resumo: maisEconomico === 'indenizado'
+              ? `O aviso INDENIZADO é mais econômico para a empresa, com economia estimada de R$ ${Math.abs(diferencaCustoEmpresa).toFixed(2)} considerando encargos patronais.`
+              : `O aviso TRABALHADO é mais econômico para a empresa, com economia estimada de R$ ${Math.abs(diferencaCustoEmpresa).toFixed(2)}. Porém, considere que o funcionário permanece 30 dias na empresa.`,
+          },
+        };
+      }),
+
     /** Buscar configuração de benefícios de alimentação */
     getMealBenefitConfig: protectedProcedure
       .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))

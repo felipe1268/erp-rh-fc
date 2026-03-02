@@ -15,7 +15,8 @@ import {
   ArrowUpRight, ArrowDownRight, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, ExternalLink,
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
-  Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info
+  Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
+  BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -687,9 +688,16 @@ function KpiCard({ title, value, icon: Icon, color, onClick, badge, badgeColor, 
 
 
 function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState<'detalhes' | 'comparativo'>('detalhes');
   const { data: aviso, isLoading } = trpc.avisoPrevio.avisoPrevio.getById.useQuery(
     { id: avisoId! },
     { enabled: !!avisoId }
+  );
+
+  // Comparativo query - uses employeeId and dataInicio from the aviso
+  const { data: comparativo, isLoading: isLoadingComp } = trpc.avisoPrevio.avisoPrevio.comparativo.useQuery(
+    { employeeId: aviso?.employeeId!, dataDesligamento: aviso?.dataInicio! },
+    { enabled: !!aviso?.employeeId && !!aviso?.dataInicio && activeTab === 'comparativo' }
   );
 
   const fmt = (v: string | number | null | undefined) => {
@@ -753,6 +761,28 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
   const totalProventos = proventos.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
   const totalDescontos = descontos.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
 
+  // Helper to build proventos list from a previsao object (for comparativo)
+  const buildProventosFromPrevisao = (prev: any) => {
+    const items: { label: string; value: string }[] = [];
+    if (parseFloat(prev.saldoSalario || '0') > 0)
+      items.push({ label: `Saldo de Salário (${prev.diasTrabalhadosMes || '?'}d)`, value: prev.saldoSalario });
+    if (parseFloat(prev.feriasProporcional || '0') > 0)
+      items.push({ label: `Férias Prop. (${prev.mesesFerias}/12)`, value: prev.feriasProporcional });
+    if (parseFloat(prev.tercoConstitucional || '0') > 0)
+      items.push({ label: '1/3 Constitucional', value: prev.tercoConstitucional });
+    if (parseFloat(prev.feriasVencidas || '0') > 0)
+      items.push({ label: 'Férias Vencidas', value: prev.feriasVencidas });
+    if (parseFloat(prev.decimoTerceiroProporcional || '0') > 0)
+      items.push({ label: `13º Prop. (${prev.meses13o}/12)`, value: prev.decimoTerceiroProporcional });
+    if (parseFloat(prev.avisoPrevioIndenizado || '0') > 0)
+      items.push({ label: `Aviso Indenizado (${prev.diasAvisoTotal || prev.diasExtrasAviso || '?'}d)`, value: prev.avisoPrevioIndenizado });
+    if (parseFloat(prev.multaFGTS || '0') > 0)
+      items.push({ label: 'Multa 40% FGTS', value: prev.multaFGTS });
+    if (parseFloat(prev.vrProporcional || '0') > 0)
+      items.push({ label: 'VR/VA Proporcional', value: prev.vrProporcional });
+    return items;
+  };
+
   return (
     <Dialog open={!!avisoId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto p-0">
@@ -786,6 +816,36 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
               </div>
             </div>
 
+            {/* Tabs: Detalhes | Comparativo */}
+            <div className="border-b px-6">
+              <div className="flex gap-0">
+                <button
+                  onClick={() => setActiveTab('detalhes')}
+                  className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+                    activeTab === 'detalhes'
+                      ? 'border-[#1B2A4A] text-[#1B2A4A]'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Scale className="h-3.5 w-3.5 inline mr-1.5" />
+                  Detalhes da Rescisão
+                </button>
+                <button
+                  onClick={() => setActiveTab('comparativo')}
+                  className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+                    activeTab === 'comparativo'
+                      ? 'border-[#1B2A4A] text-[#1B2A4A]'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <GitCompareArrows className="h-3.5 w-3.5 inline mr-1.5" />
+                  Comparativo: Trabalhado vs Indenizado
+                </button>
+              </div>
+            </div>
+
+            {/* Tab: Detalhes */}
+            {activeTab === 'detalhes' && (
             <div className="px-6 py-4 space-y-4">
               {/* Dados do Aviso Prévio */}
               <div>
@@ -951,6 +1011,190 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                 </Button>
               </div>
             </div>
+            )}
+
+            {/* Tab: Comparativo */}
+            {activeTab === 'comparativo' && (
+            <div className="px-6 py-4">
+              {isLoadingComp ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1B2A4A]" />
+                  <span className="ml-3 text-sm text-muted-foreground">Calculando cenários...</span>
+                </div>
+              ) : !comparativo ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">Não foi possível calcular o comparativo.</div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Dados do Funcionário */}
+                  <div className="bg-gray-50 rounded-lg p-3 border">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div><span className="text-muted-foreground">Salário Base:</span> <span className="font-semibold">R$ {fmt(comparativo.funcionario.salarioBase)}</span></div>
+                      <div><span className="text-muted-foreground">Admissão:</span> <span className="font-semibold">{fmtDate(comparativo.funcionario.dataAdmissao)}</span></div>
+                      <div><span className="text-muted-foreground">Tempo de Serviço:</span> <span className="font-semibold">{comparativo.funcionario.anosServico} ano(s)</span></div>
+                      <div><span className="text-muted-foreground">Desligamento:</span> <span className="font-semibold">{fmtDate(aviso.dataInicio)}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Cards lado a lado */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* TRABALHADO */}
+                    <div className={`border-2 rounded-lg overflow-hidden ${comparativo.analise.maisEconomico === 'trabalhado' ? 'border-green-400' : 'border-gray-200'}`}>
+                      <div className={`px-4 py-2.5 ${comparativo.analise.maisEconomico === 'trabalhado' ? 'bg-green-600 text-white' : 'bg-gray-100 text-foreground'}`}>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold flex items-center gap-2">
+                            <Briefcase className="h-4 w-4" />
+                            Aviso Trabalhado
+                          </h4>
+                          {comparativo.analise.maisEconomico === 'trabalhado' && (
+                            <Badge className="bg-white text-green-700 text-[10px]">MAIS ECONÔMICO</Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] mt-0.5 opacity-80">{comparativo.trabalhado.diasAviso} dias trabalhados + {comparativo.trabalhado.diasExtras}d extras indenizados</p>
+                      </div>
+                      <div className="p-3 space-y-2">
+                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <div><span className="text-muted-foreground">Início:</span> <span className="font-medium">{fmtDate(comparativo.trabalhado.dataInicio)}</span></div>
+                          <div><span className="text-muted-foreground">Término:</span> <span className="font-medium">{fmtDate(comparativo.trabalhado.dataFim)}</span></div>
+                          <div><span className="text-muted-foreground">Saída:</span> <span className="font-medium">{fmtDate(comparativo.trabalhado.dataSaida)}</span></div>
+                          <div><span className="text-muted-foreground">Prazo Pgto:</span> <span className="font-medium text-red-600">{fmtDate(comparativo.trabalhado.dataLimitePagamento)}</span></div>
+                        </div>
+                        <hr />
+                        <div className="space-y-1">
+                          {buildProventosFromPrevisao(comparativo.trabalhado.previsao).map((item, i) => (
+                            <div key={i} className="flex justify-between text-[11px]">
+                              <span className="text-muted-foreground">{item.label}</span>
+                              <span className="font-medium text-green-700">R$ {fmt(item.value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <hr />
+                        <div className="flex justify-between text-xs font-bold">
+                          <span>Total Verbas</span>
+                          <span className="text-green-700">R$ {fmt(comparativo.trabalhado.totalBruto)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-muted-foreground">Encargos Patronais (~36,8%)</span>
+                          <span className="font-medium text-orange-600">+ R$ {fmt(comparativo.trabalhado.encargosPatronais)}</span>
+                        </div>
+                        <div className="bg-amber-50 rounded p-2 border border-amber-200">
+                          <div className="flex justify-between text-xs font-bold">
+                            <span>Custo Total Empresa</span>
+                            <span className="text-amber-800">R$ {fmt(comparativo.trabalhado.custoTotalEmpresa)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* INDENIZADO */}
+                    <div className={`border-2 rounded-lg overflow-hidden ${comparativo.analise.maisEconomico === 'indenizado' ? 'border-green-400' : 'border-gray-200'}`}>
+                      <div className={`px-4 py-2.5 ${comparativo.analise.maisEconomico === 'indenizado' ? 'bg-green-600 text-white' : 'bg-gray-100 text-foreground'}`}>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold flex items-center gap-2">
+                            <DollarSign className="h-4 w-4" />
+                            Aviso Indenizado
+                          </h4>
+                          {comparativo.analise.maisEconomico === 'indenizado' && (
+                            <Badge className="bg-white text-green-700 text-[10px]">MAIS ECONÔMICO</Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] mt-0.5 opacity-80">{comparativo.indenizado.diasAviso} dias indenizados (dispensa imediata)</p>
+                      </div>
+                      <div className="p-3 space-y-2">
+                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <div><span className="text-muted-foreground">Início:</span> <span className="font-medium">{fmtDate(comparativo.indenizado.dataInicio)}</span></div>
+                          <div><span className="text-muted-foreground">Término:</span> <span className="font-medium">{fmtDate(comparativo.indenizado.dataFim)}</span></div>
+                          <div><span className="text-muted-foreground">Saída:</span> <span className="font-medium">{fmtDate(comparativo.indenizado.dataSaida)}</span></div>
+                          <div><span className="text-muted-foreground">Prazo Pgto:</span> <span className="font-medium text-red-600">{fmtDate(comparativo.indenizado.dataLimitePagamento)}</span></div>
+                        </div>
+                        <hr />
+                        <div className="space-y-1">
+                          {buildProventosFromPrevisao(comparativo.indenizado.previsao).map((item, i) => (
+                            <div key={i} className="flex justify-between text-[11px]">
+                              <span className="text-muted-foreground">{item.label}</span>
+                              <span className="font-medium text-green-700">R$ {fmt(item.value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <hr />
+                        <div className="flex justify-between text-xs font-bold">
+                          <span>Total Verbas</span>
+                          <span className="text-green-700">R$ {fmt(comparativo.indenizado.totalBruto)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-muted-foreground">Encargos Patronais</span>
+                          <span className="font-medium text-gray-500">R$ 0,00</span>
+                        </div>
+                        <div className="bg-amber-50 rounded p-2 border border-amber-200">
+                          <div className="flex justify-between text-xs font-bold">
+                            <span>Custo Total Empresa</span>
+                            <span className="text-amber-800">R$ {fmt(comparativo.indenizado.custoTotalEmpresa)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Descontos comuns */}
+                  {comparativo.descontos.length > 0 && (
+                    <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                      <h4 className="text-xs font-bold text-red-700 mb-2">Descontos (aplicados em ambos os cenários)</h4>
+                      <div className="space-y-1">
+                        {comparativo.descontos.map((d: any, i: number) => (
+                          <div key={i} className="flex justify-between text-[11px]">
+                            <span>{d.descricao}</span>
+                            <span className="font-medium text-red-600">- R$ {fmt(d.valor)}</span>
+                          </div>
+                        ))}
+                        <hr className="border-red-200" />
+                        <div className="flex justify-between text-xs font-bold text-red-800">
+                          <span>Total Descontos</span>
+                          <span>- R$ {fmt(comparativo.totalDescontos)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Análise / Recomendação */}
+                  <div className={`rounded-lg p-4 border-2 ${
+                    comparativo.analise.maisEconomico === 'indenizado'
+                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-400'
+                      : 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-400'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-full ${comparativo.analise.maisEconomico === 'indenizado' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                        <TrendingDown className={`h-5 w-5 ${comparativo.analise.maisEconomico === 'indenizado' ? 'text-green-700' : 'text-blue-700'}`} />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-bold text-foreground">Análise de Custo</h4>
+                        <p className="text-xs text-muted-foreground mt-1">{comparativo.analise.resumo}</p>
+                        <div className="grid grid-cols-3 gap-3 mt-3">
+                          <div className="text-center">
+                            <p className="text-[10px] text-muted-foreground">Custo Trabalhado</p>
+                            <p className="text-sm font-bold">R$ {fmt(comparativo.trabalhado.custoTotalEmpresa)}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] text-muted-foreground">Custo Indenizado</p>
+                            <p className="text-sm font-bold">R$ {fmt(comparativo.indenizado.custoTotalEmpresa)}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] text-muted-foreground">Economia Estimada</p>
+                            <p className="text-sm font-extrabold text-green-700">R$ {fmt(comparativo.analise.economiaEstimada)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Observações legais */}
+                  <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                    <p className="text-[10px] text-yellow-800">
+                      <strong>Nota:</strong> Os valores são estimativas baseadas nos dados cadastrados. Encargos patronais (~36,8%) incluem INSS patronal (~28,8%) e FGTS (8%) sobre o período trabalhado. No aviso indenizado, não há encargos patronais pois o funcionário não presta serviços. Consulte o departamento contábil para valores definitivos.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            )}
           </>
         )}
       </DialogContent>

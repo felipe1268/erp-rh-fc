@@ -3998,3 +3998,8 @@
 
 ## Rev. 147 - Aumentar tamanho do dialog Cálculos da Rescisão
 - [x] Aumentar dialog para caber todo conteúdo sem barra de rolagem
+
+## Rev. 148 - Comparativo de Custos: Aviso Trabalhado vs Indenizado
+- [x] Backend: Criar procedure que calcula rescisão nos dois cenários (trabalhado e indenizado) para um mesmo funcionário
+- [x] Frontend: Criar aba/seção de comparativo no dialog de Cálculos da Rescisão com layout lado a lado
+- [x] Mostrar diferença financeira e recomendação baseada no menor custo
