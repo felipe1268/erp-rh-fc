@@ -18,7 +18,7 @@ import { removeAccents } from "@/lib/searchUtils";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
-  CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw,
+  CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw, RotateCcw,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
@@ -94,6 +94,10 @@ export default function AvisoPrevio() {
   });
   const deleteAviso = trpc.avisoPrevio.avisoPrevio.delete.useMutation({
     onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Aviso prévio excluído!"); },
+  });
+  const revertConcluido = trpc.avisoPrevio.avisoPrevio.revertConcluido.useMutation({
+    onSuccess: () => { refetch(); utils.obras.efetivoPorObra.invalidate(); toast.success("Status revertido para Em Andamento!"); },
+    onError: (err) => { toast.error(err.message || "Erro ao reverter status"); },
   });
 
   // Cálculo automático via useEffect
@@ -419,6 +423,15 @@ export default function AvisoPrevio() {
                                   <XCircle className="h-3.5 w-3.5" />
                                 </Button>
                               </>
+                            )}
+                            {a.status === "concluido" && (user?.role === 'admin' || user?.role === 'admin_master') && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Reverter para Em Andamento" onClick={() => {
+                                if (confirm('Tem certeza que deseja reverter o status de Concluído para Em Andamento?')) {
+                                  revertConcluido.mutate({ id: a.id });
+                                }
+                              }}>
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
                             )}
                             <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir este aviso prévio?")) deleteAviso.mutate({ id: a.id }); }}>
                               <Trash2 className="h-3.5 w-3.5" />

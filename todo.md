@@ -3962,3 +3962,4 @@
 - [x] BUG: Atualizar convenção coletiva não salva as alterações (dados não persistem)
 - [x] BUG: PDF do upload na edição não fica disponível para visualização futura (ícone do olho)
 - [x] Ao clicar no nome do funcionário no Vale Alimentação, abrir histórico de recebíveis dele
+- [x] Opção de reverter status de Concluído no Aviso Prévio (apenas Admin e Admin Master)

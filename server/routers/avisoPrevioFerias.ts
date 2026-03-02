@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb } from "../db";
+import { getDb, createAuditLog } from "../db";
 import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -989,6 +989,39 @@ export const avisoPrevioFeriasRouter = router({
         }
 
         return { recalculados, erros, total: avisos.length };
+      }),
+
+    /** Reverter status de Concluído para Em Andamento (somente Admin/Admin Master) */
+    revertConcluido: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        // Verificar se o usuário é Admin ou Admin Master
+        const userRole = (ctx.user as any).role;
+        if (userRole !== 'admin' && userRole !== 'admin_master') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin e Admin Master podem reverter o status de concluído' });
+        }
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+        if (aviso.status !== 'concluido') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos com status Concluído podem ser revertidos' });
+        
+        await db.update(terminationNotices).set({
+          status: 'em_andamento',
+          dataConclusao: null,
+          updatedAt: sql`NOW()`,
+        } as any).where(eq(terminationNotices.id, input.id));
+        
+        // Registrar auditoria
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'REVERT_AVISO_PREVIO',
+          entity: 'terminationNotices',
+          entityId: input.id,
+          details: `Status revertido de Concluído para Em Andamento por ${ctx.user.name}`,
+        });
+        
+        return { success: true };
       }),
 
     /** Gerar dados para PDF do Aviso Prévio */
