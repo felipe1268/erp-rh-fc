@@ -813,6 +813,7 @@ export const avisoPrevioFeriasRouter = router({
             salarioBase: salarioBase.toFixed(2),
             dataAdmissao,
             anosServico,
+            mesesServico: calcularMesesServico(dataAdmissao, input.dataDesligamento),
           },
           trabalhado: {
             tipo: 'empregador_trabalhado',

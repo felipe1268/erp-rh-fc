@@ -4012,3 +4012,8 @@
 - [x] Filtrar itens do menu com base nos módulos/funcionalidades habilitados para o usuário
 - [x] Mapear todas as rotas extras (dashboards, convenções, relatórios) para features
 - [x] Alterar default de 'return true' para 'return false' (segurança por padrão)
+
+## Rev. 151 - Melhoria Dialog Cálculos da Rescisão
+- [x] Aumentar largura do dialog para max-w-7xl para ver tudo sem scroll
+- [x] Tempo de serviço em formato "X anos e Y meses" ao invés de apenas anos
+- [x] Backend: adicionado mesesServico no retorno do comparativo

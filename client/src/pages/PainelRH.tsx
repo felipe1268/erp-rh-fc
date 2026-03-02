@@ -876,7 +876,32 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                   {previsao?.anosServico !== undefined && (
                     <div>
                       <p className="text-xs text-muted-foreground uppercase">Tempo de Serviço</p>
-                      <p className="text-sm font-semibold">{previsao.anosServico} ano{previsao.anosServico !== 1 ? 's' : ''}</p>
+                      <p className="text-sm font-semibold">
+                        {(() => {
+                          const anos = previsao.anosServico || 0;
+                          const mesesServico = previsao.mesesServico || previsao.mesesTotais || 0;
+                          const mesesResto = mesesServico % 12;
+                          if (anos === 0 && mesesResto === 0) {
+                            // Calcular a partir das datas se disponíveis
+                            if (previsao.dataAdmissao && previsao.dataSaida) {
+                              const adm = new Date(previsao.dataAdmissao + 'T00:00:00');
+                              const saida = new Date(previsao.dataSaida + 'T00:00:00');
+                              const diffMs = saida.getTime() - adm.getTime();
+                              const totalMeses = Math.round(diffMs / (1000 * 60 * 60 * 24 * 30.44));
+                              const a = Math.floor(totalMeses / 12);
+                              const m = totalMeses % 12;
+                              if (a > 0 && m > 0) return `${a} ano${a > 1 ? 's' : ''} e ${m} ${m > 1 ? 'meses' : 'mês'}`;
+                              if (a > 0) return `${a} ano${a > 1 ? 's' : ''}`;
+                              if (m > 0) return `${m} ${m > 1 ? 'meses' : 'mês'}`;
+                              return 'Menos de 1 mês';
+                            }
+                            return 'Menos de 1 mês';
+                          }
+                          if (anos > 0 && mesesResto > 0) return `${anos} ano${anos > 1 ? 's' : ''} e ${mesesResto} ${mesesResto > 1 ? 'meses' : 'mês'}`;
+                          if (anos > 0) return `${anos} ano${anos > 1 ? 's' : ''}`;
+                          return `${mesesResto} ${mesesResto > 1 ? 'meses' : 'mês'}`;
+                        })()}
+                      </p>
                     </div>
                   )}
                   {previsao?.dataSaida && (
@@ -1011,7 +1036,28 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                       <div><span className="text-muted-foreground">Salário Base:</span> <span className="font-semibold">R$ {fmt(comparativo.funcionario.salarioBase)}</span></div>
                       <div><span className="text-muted-foreground">Admissão:</span> <span className="font-semibold">{fmtDate(comparativo.funcionario.dataAdmissao)}</span></div>
-                      <div><span className="text-muted-foreground">Tempo de Serviço:</span> <span className="font-semibold">{comparativo.funcionario.anosServico} ano(s)</span></div>
+                      <div><span className="text-muted-foreground">Tempo de Serviço:</span> <span className="font-semibold">
+                        {(() => {
+                          const anos = comparativo.funcionario.anosServico || 0;
+                          const meses = comparativo.funcionario.mesesServico || 0;
+                          const mesesResto = meses % 12;
+                          if (anos > 0 && mesesResto > 0) return `${anos} ano${anos > 1 ? 's' : ''} e ${mesesResto} ${mesesResto > 1 ? 'meses' : 'mês'}`;
+                          if (anos > 0) return `${anos} ano${anos > 1 ? 's' : ''}`;
+                          if (mesesResto > 0) return `${mesesResto} ${mesesResto > 1 ? 'meses' : 'mês'}`;
+                          // Fallback: calculate from dates
+                          if (comparativo.funcionario.dataAdmissao) {
+                            const adm = new Date(comparativo.funcionario.dataAdmissao + 'T00:00:00');
+                            const hoje = new Date();
+                            const totalM = Math.round((hoje.getTime() - adm.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+                            const a = Math.floor(totalM / 12);
+                            const m = totalM % 12;
+                            if (a > 0 && m > 0) return `${a} ano${a > 1 ? 's' : ''} e ${m} ${m > 1 ? 'meses' : 'mês'}`;
+                            if (a > 0) return `${a} ano${a > 1 ? 's' : ''}`;
+                            if (m > 0) return `${m} ${m > 1 ? 'meses' : 'mês'}`;
+                          }
+                          return 'Menos de 1 mês';
+                        })()}
+                      </span></div>
                       <div><span className="text-muted-foreground">Desligamento:</span> <span className="font-semibold">{fmtDate(aviso.dataInicio)}</span></div>
                     </div>
                   </div>
