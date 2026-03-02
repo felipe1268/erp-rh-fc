@@ -755,7 +755,7 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
 
   return (
     <Dialog open={!!avisoId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto p-0">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" />
@@ -786,13 +786,13 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
               </div>
             </div>
 
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-6 py-4 space-y-4">
               {/* Dados do Aviso Prévio */}
               <div>
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
                   <Info className="h-3.5 w-3.5" /> Dados do Aviso Prévio
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-2">
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase">Tipo</p>
                     <p className="text-xs font-semibold">{tipoLabel(aviso.tipo)}</p>
@@ -841,95 +841,110 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
               {/* Separador */}
               <hr className="border-gray-200" />
 
-              {/* Verbas Rescisórias (Proventos) */}
-              {proventos.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-2">
-                    <DollarSign className="h-3.5 w-3.5" /> Verbas Rescisórias (Proventos)
-                  </h3>
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full text-xs">
-                      <tbody>
-                        {proventos.map((row, i) => (
-                          <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
-                            <td className="px-3 py-2.5 text-foreground">{row.label}</td>
-                            <td className="px-3 py-2.5 text-right font-semibold text-green-700 whitespace-nowrap">R$ {fmt(row.value)}</td>
-                          </tr>
-                        ))}
-                        <tr className="bg-green-50 font-bold">
-                          <td className="px-3 py-2.5 text-green-800">SUBTOTAL PROVENTOS</td>
-                          <td className="px-3 py-2.5 text-right text-green-800 whitespace-nowrap">R$ {fmt(totalProventos)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Descontos */}
-              {descontos.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-red-700 uppercase tracking-wider mb-2 flex items-center gap-2">
-                    <TrendingDown className="h-3.5 w-3.5" /> Descontos
-                  </h3>
-                  <div className="border border-red-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-xs">
-                      <tbody>
-                        {descontos.map((row, i) => (
-                          <tr key={i} className="border-b last:border-b-0 hover:bg-red-50/50">
-                            <td className="px-3 py-2.5 text-foreground">{row.label}</td>
-                            <td className="px-3 py-2.5 text-right font-semibold text-red-600 whitespace-nowrap">- R$ {fmt(row.value)}</td>
-                          </tr>
-                        ))}
-                        <tr className="bg-red-50 font-bold">
-                          <td className="px-3 py-2.5 text-red-800">SUBTOTAL DESCONTOS</td>
-                          <td className="px-3 py-2.5 text-right text-red-800 whitespace-nowrap">- R$ {fmt(totalDescontos)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Total da Rescisão */}
-              <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-5 border-2 border-red-300">
-                <div className="flex items-center justify-between">
+              {/* Proventos e Descontos lado a lado */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Verbas Rescisórias (Proventos) */}
+                {proventos.length > 0 && (
                   <div>
-                    <p className="text-sm font-bold text-foreground">TOTAL ESTIMADO DA RESCISÃO</p>
-                    {previsao?.dataLimitePagamento && (
-                      <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        Prazo de pagamento (Art. 477 §6º CLT): <span className="font-bold text-red-700">{fmtDate(previsao.dataLimitePagamento)}</span>
-                      </p>
-                    )}
+                    <h3 className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <DollarSign className="h-3.5 w-3.5" /> Verbas Rescisórias (Proventos)
+                    </h3>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <tbody>
+                          {proventos.map((row, i) => (
+                            <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
+                              <td className="px-3 py-2 text-foreground">{row.label}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-green-700 whitespace-nowrap">R$ {fmt(row.value)}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-green-50 font-bold">
+                            <td className="px-3 py-2 text-green-800">SUBTOTAL PROVENTOS</td>
+                            <td className="px-3 py-2 text-right text-green-800 whitespace-nowrap">R$ {fmt(totalProventos)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <span className="text-2xl font-extrabold text-red-700">R$ {fmt(aviso.valorEstimadoTotal)}</span>
+                )}
+
+                {/* Descontos */}
+                <div>
+                  {descontos.length > 0 ? (
+                    <>
+                      <h3 className="text-xs font-bold text-red-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <TrendingDown className="h-3.5 w-3.5" /> Descontos
+                      </h3>
+                      <div className="border border-red-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs">
+                          <tbody>
+                            {descontos.map((row, i) => (
+                              <tr key={i} className="border-b last:border-b-0 hover:bg-red-50/50">
+                                <td className="px-3 py-2 text-foreground">{row.label}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-red-600 whitespace-nowrap">- R$ {fmt(row.value)}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-red-50 font-bold">
+                              <td className="px-3 py-2 text-red-800">SUBTOTAL DESCONTOS</td>
+                              <td className="px-3 py-2 text-right text-red-800 whitespace-nowrap">- R$ {fmt(totalDescontos)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <TrendingDown className="h-3.5 w-3.5" /> Descontos
+                      </h3>
+                      <div className="border rounded-lg p-4 text-center text-xs text-muted-foreground">
+                        Nenhum desconto aplicável
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* FGTS Informativo */}
-              {previsao?.fgtsEstimado && parseFloat(previsao.fgtsEstimado) > 0 && (
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-semibold text-blue-800">FGTS Estimado no Período</p>
-                      <p className="text-[10px] text-blue-600 mt-0.5">{previsao.mesesTotais} meses de serviço × 8% sobre salário base</p>
-                    </div>
-                    <span className="text-sm font-bold text-blue-800">R$ {fmt(previsao.fgtsEstimado)}</span>
-                  </div>
+              {/* Total + FGTS + Observações lado a lado */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Total da Rescisão */}
+                <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-4 border-2 border-red-300">
+                  <p className="text-sm font-bold text-foreground">TOTAL ESTIMADO DA RESCISÃO</p>
+                  <span className="text-2xl font-extrabold text-red-700 block mt-1">R$ {fmt(aviso.valorEstimadoTotal)}</span>
+                  {previsao?.dataLimitePagamento && (
+                    <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Prazo pgto (Art. 477 §6º CLT): <span className="font-bold text-red-700">{fmtDate(previsao.dataLimitePagamento)}</span>
+                    </p>
+                  )}
                 </div>
-              )}
 
-              {/* Observações */}
-              {aviso.observacoes && (
-                <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-                  <p className="text-[10px] text-muted-foreground uppercase font-medium mb-1">Observações</p>
-                  <p className="text-xs text-foreground">{aviso.observacoes}</p>
+                <div className="space-y-3">
+                  {/* FGTS Informativo */}
+                  {previsao?.fgtsEstimado && parseFloat(previsao.fgtsEstimado) > 0 && (
+                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-blue-800">FGTS Estimado no Período</p>
+                          <p className="text-[10px] text-blue-600 mt-0.5">{previsao.mesesTotais} meses × 8% sobre salário base</p>
+                        </div>
+                        <span className="text-sm font-bold text-blue-800">R$ {fmt(previsao.fgtsEstimado)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Observações */}
+                  {aviso.observacoes && (
+                    <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                      <p className="text-[10px] text-muted-foreground uppercase font-medium mb-1">Observações</p>
+                      <p className="text-xs text-foreground">{aviso.observacoes}</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Botão para ir à página completa */}
-              <div className="flex justify-end pt-1 pb-2">
+              <div className="flex justify-end pb-2">
                 <Button variant="outline" size="sm" className="text-xs" onClick={() => { onClose(); window.location.href = '/aviso-previo'; }}>
                   <ExternalLink className="h-3 w-3 mr-1" />
                   Ver na página de Aviso Prévio

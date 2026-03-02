@@ -3995,3 +3995,6 @@
 
 ## Rev. 146 - Erro persistente ao salvar Convenção Coletiva
 - [x] BUG: Erro ao clicar "Atualizar" na Convenção Coletiva - investigar todos os campos com tipo incompatível
+
+## Rev. 147 - Aumentar tamanho do dialog Cálculos da Rescisão
+- [x] Aumentar dialog para caber todo conteúdo sem barra de rolagem
