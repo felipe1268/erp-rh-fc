@@ -1314,6 +1314,7 @@ async function getDashAvisoPrevio(companyId: number, ano?: number) {
   const anoRef = ano || new Date().getFullYear();
 
   // Auto-conclude: mark as 'concluido' any aviso where dataFim < today and status is still 'em_andamento'
+  // SKIP avisos that were manually reverted (revertidoManualmente = 1)
   const today = new Date().toISOString().split('T')[0];
   await db.update(terminationNotices)
     .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
@@ -1321,7 +1322,8 @@ async function getDashAvisoPrevio(companyId: number, ano?: number) {
       eq(terminationNotices.companyId, companyId),
       eq(terminationNotices.status, 'em_andamento'),
       isNull(terminationNotices.deletedAt),
-      sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`
+      sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`,
+      sql`(${terminationNotices.revertidoManualmente} = 0 OR ${terminationNotices.revertidoManualmente} IS NULL)`
     ));
 
   const allNotices = await db.select({

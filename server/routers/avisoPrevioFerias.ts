@@ -348,6 +348,7 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
 
         // Auto-conclude: mark as 'concluido' any aviso where dataFim < today and status is still 'em_andamento'
+        // SKIP avisos that were manually reverted (revertidoManualmente = 1)
         const today = new Date().toISOString().split('T')[0];
         await db.update(terminationNotices)
           .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
@@ -355,7 +356,8 @@ export const avisoPrevioFeriasRouter = router({
             eq(terminationNotices.companyId, input.companyId),
             eq(terminationNotices.status, 'em_andamento'),
             isNull(terminationNotices.deletedAt),
-            sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`
+            sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`,
+            sql`(${terminationNotices.revertidoManualmente} = 0 OR ${terminationNotices.revertidoManualmente} IS NULL)`
           ));
 
         const conditions = [
@@ -1003,6 +1005,7 @@ export const avisoPrevioFeriasRouter = router({
         await db.update(terminationNotices).set({
           status: 'em_andamento',
           dataConclusao: null,
+          revertidoManualmente: 1,
           updatedAt: sql`NOW()`,
         } as any).where(eq(terminationNotices.id, input.id));
         

@@ -2416,6 +2416,7 @@ export const terminationNotices = mysqlTable("termination_notices", {
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
+	revertidoManualmente: tinyint().default(0),
 },
 (table) => [
 	index("tn_company").on(table.companyId),

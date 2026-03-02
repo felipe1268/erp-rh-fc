@@ -3966,3 +3966,14 @@
 - [x] Dashboard Funcionários: remover card Total Geral, mostrar apenas Ativos como destaque principal
 - [x] Liberar botão de reverter status do aviso prévio para todos os usuários
 - [x] Atualizar controle de revisões (está desatualizado)
+- [ ] BUG: Dashboard Aviso Prévio mostrando dados desatualizados (não reflete reversões de status)
+
+## Rev. 141 - Correção Divergência Dashboard Aviso Prévio
+- [x] Investigar divergência de dados nos cards do Dashboard Aviso Prévio (Total, Em Andamento, Concluídos)
+- [x] Identificar causa raiz: auto-conclude re-concluía avisos revertidos manualmente
+- [x] Adicionar campo revertidoManualmente na tabela termination_notices
+- [x] Corrigir auto-conclude em avisoPrevioFerias.ts para ignorar avisos revertidos
+- [x] Corrigir auto-conclude em dashboards.ts para ignorar avisos revertidos
+- [x] Atualizar mutation revertConcluido para setar flag revertidoManualmente = 1
+- [x] Criar testes unitários para validar a correção (6 testes passando)
+- [x] Atualizar versão para Rev. 141

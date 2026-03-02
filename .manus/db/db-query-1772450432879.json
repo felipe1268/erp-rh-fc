@@ -1,0 +1,290 @@
+{
+  "query": "SELECT id, status, revertidoManualmente, dataFim, dataConclusao FROM termination_notices WHERE deletedAt IS NULL ORDER BY id DESC LIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, status, revertidoManualmente, dataFim, dataConclusao FROM termination_notices WHERE deletedAt IS NULL ORDER BY id DESC LIMIT 50;",
+  "rows": [
+    {
+      "id": "150017",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-16",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150016",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-29",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150015",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-13",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150014",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-18",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150013",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150012",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150009",
+      "status": "concluido",
+      "revertidoManualmente": "0",
+      "dataFim": "2025-03-14",
+      "dataConclusao": "2026-02-27"
+    },
+    {
+      "id": "150008",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-26",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150007",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-21",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150006",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-21",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150005",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-21",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150004",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-21",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150003",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-21",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150002",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-21",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "150001",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-21",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120013",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120012",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120011",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120010",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120009",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120008",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120006",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-20",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120005",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120004",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120003",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120002",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "120001",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90014",
+      "status": "concluido",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-02-21",
+      "dataConclusao": "2026-02-27"
+    },
+    {
+      "id": "90013",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90012",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90011",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90010",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90009",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90008",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90007",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90006",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90005",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90004",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90003",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-15",
+      "dataConclusao": "NULL"
+    },
+    {
+      "id": "90001",
+      "status": "em_andamento",
+      "revertidoManualmente": "0",
+      "dataFim": "2026-03-14",
+      "dataConclusao": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tstatus\trevertidoManualmente\tdataFim\tdataConclusao\n150017\tem_andamento\t0\t2026-03-16\tNULL\n150016\tem_andamento\t0\t2026-03-29\tNULL\n150015\tem_andamento\t0\t2026-03-13\tNULL\n150014\tem_andamento\t0\t2026-03-18\tNULL\n150013\tem_andamento\t0\t2026-03-14\tNULL\n150012\tem_andamento\t0\t2026-03-15\tNULL\n150009\tconcluido\t0\t2025-03-14\t2026-02-27\n150008\tem_andamento\t0\t2026-03-26\tNULL\n150007\tem_andamento\t0\t2026-03-21\tNULL\n150006\tem_andamento\t0\t2026-03-21\tNULL\n150005\tem_andamento\t0\t2026-03-21\tNULL\n150004\tem_andamento\t0\t2026-03-21\tNULL\n150003\tem_andamento\t0\t2026-03-21\tNULL\n150002\tem_andamento\t0\t2026-03-21\tNULL\n150001\tem_andamento\t0\t2026-03-21\tNULL\n120013\tem_andamento\t0\t2026-03-15\tNULL\n120012\tem_andamento\t0\t2026-03-15\tNULL\n120011\tem_andamento\t0\t2026-03-15\tNULL\n120010\tem_andamento\t0\t2026-03-15\tNULL\n120009\tem_andamento\t0\t2026-03-15\tNULL\n120008\tem_andamento\t0\t2026-03-15\tNULL\n120006\tem_andamento\t0\t2026-03-20\tNULL\n120005\tem_andamento\t0\t2026-03-15\tNULL\n120004\tem_andamento\t0\t2026-03-15\tNULL\n120003\tem_andamento\t0\t2026-03-15\tNULL\n120002\tem_andamento\t0\t2026-03-15\tNULL\n120001\tem_andamento\t0\t2026-03-14\tNULL\n90014\tconcluido\t0\t2026-02-21\t2026-02-27\n90013\tem_andamento\t0\t2026-03-14\tNULL\n90012\tem_andamento\t0\t2026-03-14\tNULL\n90011\tem_andamento\t0\t2026-03-15\tNULL\n90010\tem_andamento\t0\t2026-03-15\tNULL\n90009\tem_andamento\t0\t2026-03-14\tNULL\n90008\tem_andamento\t0\t2026-03-14\tNULL\n90007\tem_andamento\t0\t2026-03-14\tNULL\n90006\tem_andamento\t0\t2026-03-14\tNULL\n90005\tem_andamento\t0\t2026-03-15\tNULL\n90004\tem_andamento\t0\t2026-03-15\tNULL\n90003\tem_andamento\t0\t2026-03-15\tNULL\n90001\tem_andamento\t0\t2026-03-14\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 423
+}
