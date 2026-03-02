@@ -96,10 +96,10 @@ export default function DashFuncionarios() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <DashKpi label="Total Geral" value={data.resumo.totalGeral} icon={Users} color="blue" />
           <DashKpi label="Ativos" value={data.resumo.totalAtivos} icon={UserCheck} color="green" />
-          <DashKpi label="Advertências" value={data.rankingAdvertencias.reduce((s, r) => s + r.total, 0)} icon={AlertTriangle} color="red" />
-          <DashKpi label="Atestados" value={data.rankingAtestados.reduce((s, r) => s + r.totalAtestados, 0)} icon={Calendar} color="orange" />
+          <DashKpi label="Desligados" value={data.resumo.totalGeral - data.resumo.totalAtivos} icon={UserX} color="red" />
+          <DashKpi label="Advertências" value={data.rankingAdvertencias.reduce((s, r) => s + r.total, 0)} icon={AlertTriangle} color="orange" />
+          <DashKpi label="Atestados" value={data.rankingAtestados.reduce((s, r) => s + r.totalAtestados, 0)} icon={Calendar} color="blue" />
         </div>
 
         {/* Destaques */}
