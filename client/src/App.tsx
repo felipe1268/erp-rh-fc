@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 import Empresas from "./pages/Empresas";
 import Colaboradores from "./pages/Colaboradores";
 import Usuarios from "./pages/Usuarios";
+import GruposUsuarios from "./pages/GruposUsuarios";
 import Auditoria from "./pages/Auditoria";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
@@ -113,6 +114,7 @@ function Router() {
       <Route path={"/processos-trabalhistas"} component={ProcessosTrabalhistas} />
       <Route path={"/epis"} component={Epis} />
       <Route path={"/usuarios"} component={Usuarios} />
+      <Route path={"/grupos-usuarios"} component={GruposUsuarios} />
       <Route path={"/auditoria"} component={Auditoria} />
       <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
       <Route path={"/folha-pagamento"} component={FolhaPagamento} />

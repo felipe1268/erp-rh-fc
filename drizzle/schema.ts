@@ -3032,3 +3032,48 @@ export const portalCredentials = mysqlTable("portal_credentials", {
   index("pc_tipo_empresa").on(table.tipo, table.empresaTerceiraId),
   index("pc_tipo_parceiro").on(table.tipo, table.parceiroId),
 ]);
+
+
+// ============================================================
+// GRUPOS DE USUÁRIOS - Sistema de permissões por grupo
+// ============================================================
+export const userGroups = mysqlTable("user_groups", {
+	id: int().autoincrement().notNull(),
+	nome: varchar({ length: 100 }).notNull(),
+	descricao: varchar({ length: 255 }),
+	cor: varchar({ length: 20 }).default('#6b7280'),
+	icone: varchar({ length: 50 }).default('Users'),
+	ativo: tinyint().default(1).notNull(),
+	somenteVisualizacao: tinyint("somente_visualizacao").default(1).notNull(),
+	ocultarDadosSensiveis: tinyint("ocultar_dados_sensiveis").default(1).notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("ug_nome").on(table.nome),
+]);
+
+export const userGroupPermissions = mysqlTable("user_group_permissions", {
+	id: int().autoincrement().notNull(),
+	groupId: int("group_id").notNull(),
+	rota: varchar({ length: 200 }).notNull(),
+	canView: tinyint("can_view").default(1).notNull(),
+	canEdit: tinyint("can_edit").default(0).notNull(),
+	canCreate: tinyint("can_create").default(0).notNull(),
+	canDelete: tinyint("can_delete").default(0).notNull(),
+	ocultarValores: tinyint("ocultar_valores").default(0).notNull(),
+	ocultarDocumentos: tinyint("ocultar_documentos").default(0).notNull(),
+}, (table) => [
+	index("ugp_group").on(table.groupId),
+	index("ugp_group_rota").on(table.groupId, table.rota),
+]);
+
+export const userGroupMembers = mysqlTable("user_group_members", {
+	id: int().autoincrement().notNull(),
+	groupId: int("group_id").notNull(),
+	userId: int("user_id").notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("ugm_group").on(table.groupId),
+	index("ugm_user").on(table.userId),
+	index("ugm_group_user").on(table.groupId, table.userId),
+]);

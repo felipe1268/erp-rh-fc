@@ -1,0 +1,9 @@
+{
+  "query": "\nINSERT INTO `user_groups` (`nome`, `descricao`, `cor`, `icone`, `somente_visualizacao`, `ocultar_dados_sensiveis`) VALUES\n('RH', 'Recursos Humanos - Acesso completo ao módulo RH & DP com visualização de valores e documentos', '#ef4444', 'Users', 0, 0);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \nINSERT INTO `user_groups` (`nome`, `descricao`, `cor`, `icone`, `somente_visualizacao`, `ocultar_dados_sensiveis`) VALUES\n('RH', 'Recursos Humanos - Acesso completo ao módulo RH & DP com visualização de valores e documentos', '#ef4444', 'Users', 0, 0);\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 386
+}

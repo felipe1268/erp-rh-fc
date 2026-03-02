@@ -2,6 +2,30 @@ import { createContext, useContext, ReactNode, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { MODULE_DEFINITIONS, SHARED_FEATURES, ADMIN_FEATURES, type ActiveModuleId } from "../../../shared/modules";
 
+interface GroupRoutePermission {
+  rota: string;
+  canView: boolean;
+  canEdit: boolean;
+  canCreate: boolean;
+  canDelete: boolean;
+  ocultarValores: boolean;
+  ocultarDocumentos: boolean;
+}
+
+interface GroupInfo {
+  id: number;
+  nome: string;
+  cor: string | null;
+  icone: string | null;
+}
+
+interface GroupPermissions {
+  groups: GroupInfo[];
+  routes: GroupRoutePermission[];
+  somenteVisualizacao: boolean;
+  ocultarDadosSensiveis: boolean;
+}
+
 interface PermissionsContextType {
   isAdminMaster: boolean;
   isLoading: boolean;
@@ -15,6 +39,26 @@ interface PermissionsContextType {
   accessibleModules: ActiveModuleId[];
   // Retorna as features de um módulo que o usuário pode acessar
   getAccessibleFeatures: (moduleId: ActiveModuleId) => string[];
+  // ====== GRUPO ======
+  // Dados do grupo do usuário
+  groupPermissions: GroupPermissions | null;
+  // Verifica se o grupo pode acessar uma rota
+  groupCanAccessRoute: (route: string) => boolean;
+  // Verifica se o grupo pode editar na rota
+  groupCanEdit: (route: string) => boolean;
+  // Verifica se o grupo pode criar na rota
+  groupCanCreate: (route: string) => boolean;
+  // Verifica se o grupo pode excluir na rota
+  groupCanDelete: (route: string) => boolean;
+  // Verifica se deve ocultar valores na rota
+  groupOcultarValores: (route: string) => boolean;
+  // Verifica se deve ocultar documentos na rota
+  groupOcultarDocumentos: (route: string) => boolean;
+  // Flags globais do grupo
+  isSomenteVisualizacao: boolean;
+  isOcultarDadosSensiveis: boolean;
+  // Verifica se o usuário pertence a algum grupo
+  hasGroup: boolean;
 }
 
 const PermissionsContext = createContext<PermissionsContextType>({
@@ -25,6 +69,16 @@ const PermissionsContext = createContext<PermissionsContextType>({
   canAccessRoute: () => false,
   accessibleModules: [],
   getAccessibleFeatures: () => [],
+  groupPermissions: null,
+  groupCanAccessRoute: () => false,
+  groupCanEdit: () => false,
+  groupCanCreate: () => false,
+  groupCanDelete: () => false,
+  groupOcultarValores: () => false,
+  groupOcultarDocumentos: () => false,
+  isSomenteVisualizacao: false,
+  isOcultarDadosSensiveis: false,
+  hasGroup: false,
 });
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
@@ -35,6 +89,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const isAdminMaster = data?.isAdminMaster ?? false;
   const permissions = data?.permissions ?? [];
+  const groupPermissions = (data?.groupPermissions as GroupPermissions | null | undefined) ?? null;
 
   // Construir mapa de permissões para lookup rápido
   const permMap = useMemo(() => {
@@ -44,6 +99,19 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
     return map;
   }, [permissions]);
+
+  // Construir mapa de permissões de grupo por rota
+  const groupRouteMap = useMemo(() => {
+    const map = new Map<string, GroupRoutePermission>();
+    if (groupPermissions?.routes) {
+      for (const r of groupPermissions.routes) {
+        map.set(r.rota, r);
+      }
+    }
+    return map;
+  }, [groupPermissions]);
+
+  const hasGroup = !!groupPermissions && groupPermissions.groups.length > 0;
 
   const canAccessModule = (moduleId: ActiveModuleId): boolean => {
     if (isAdminMaster) return true;
@@ -96,6 +164,56 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return mod.features.filter(f => permMap.get(`${moduleId}:${f.key}`) === true).map(f => f.key);
   };
 
+  // ====== FUNÇÕES DE GRUPO ======
+  const groupCanAccessRoute = (route: string): boolean => {
+    if (isAdminMaster) return true;
+    if (!hasGroup) return true; // Se não tem grupo, acesso controlado pelas permissões individuais
+    return groupRouteMap.has(route) && !!groupRouteMap.get(route)?.canView;
+  };
+
+  const groupCanEdit = (route: string): boolean => {
+    if (isAdminMaster) return true;
+    if (!hasGroup) return true;
+    const perm = groupRouteMap.get(route);
+    if (!perm) return !groupPermissions!.somenteVisualizacao;
+    return perm.canEdit;
+  };
+
+  const groupCanCreate = (route: string): boolean => {
+    if (isAdminMaster) return true;
+    if (!hasGroup) return true;
+    const perm = groupRouteMap.get(route);
+    if (!perm) return !groupPermissions!.somenteVisualizacao;
+    return perm.canCreate;
+  };
+
+  const groupCanDelete = (route: string): boolean => {
+    if (isAdminMaster) return true;
+    if (!hasGroup) return true;
+    const perm = groupRouteMap.get(route);
+    if (!perm) return !groupPermissions!.somenteVisualizacao;
+    return perm.canDelete;
+  };
+
+  const groupOcultarValores = (route: string): boolean => {
+    if (isAdminMaster) return false;
+    if (!hasGroup) return false;
+    const perm = groupRouteMap.get(route);
+    if (perm) return perm.ocultarValores;
+    return groupPermissions!.ocultarDadosSensiveis;
+  };
+
+  const groupOcultarDocumentos = (route: string): boolean => {
+    if (isAdminMaster) return false;
+    if (!hasGroup) return false;
+    const perm = groupRouteMap.get(route);
+    if (perm) return perm.ocultarDocumentos;
+    return false;
+  };
+
+  const isSomenteVisualizacao = !isAdminMaster && hasGroup && !!groupPermissions?.somenteVisualizacao;
+  const isOcultarDadosSensiveis = !isAdminMaster && hasGroup && !!groupPermissions?.ocultarDadosSensiveis;
+
   return (
     <PermissionsContext.Provider
       value={{
@@ -106,6 +224,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         canAccessRoute,
         accessibleModules,
         getAccessibleFeatures,
+        groupPermissions,
+        groupCanAccessRoute,
+        groupCanEdit,
+        groupCanCreate,
+        groupCanDelete,
+        groupOcultarValores,
+        groupOcultarDocumentos,
+        isSomenteVisualizacao,
+        isOcultarDadosSensiveis,
+        hasGroup,
       }}
     >
       {children}

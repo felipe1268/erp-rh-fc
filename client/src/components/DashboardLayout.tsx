@@ -197,6 +197,7 @@ const adminSections: MenuSection[] = [
     title: "Administração",
     items: [
       { icon: Lock, label: "Usuários e Permissões", path: "/usuarios" },
+      { icon: Users, label: "Grupos de Usuários", path: "/grupos-usuarios" },
       { icon: FileText, label: "Auditoria do Sistema", path: "/auditoria" },
       { icon: Settings, label: "Configurações", path: "/configuracoes" },
       { icon: GitBranch, label: "Revisões do Sistema", path: "/revisoes", adminMasterOnly: true },
@@ -474,7 +475,7 @@ function DashboardLayoutContent({
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'admin_master';
   const isMasterUser = user?.role === 'admin_master';
-  const { isAdminMaster: permIsAdminMaster, canAccessFeature, canAccessModule, accessibleModules } = usePermissions();
+  const { isAdminMaster: permIsAdminMaster, canAccessFeature, canAccessModule, accessibleModules, hasGroup, groupCanAccessRoute } = usePermissions();
 
   // Paths restritos por nível de acesso
   const adminOnlyPaths = ['/usuarios', '/auditoria', '/configuracoes', '/lixeira'];
@@ -562,8 +563,21 @@ function DashboardLayoutContent({
         }),
       }));
     }
+    // Filtrar por permissões de grupo (se o usuário pertence a um grupo)
+    if (hasGroup && !permIsAdminMaster) {
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.filter(item => {
+          // Admin paths e ajuda são controlados pelo role, não pelo grupo
+          if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes' || item.path === '/ajuda') return true;
+          if (item.path === '/grupos-usuarios') return true;
+          // Verificar se o grupo permite acesso a esta rota
+          return groupCanAccessRoute(item.path);
+        }),
+      }));
+    }
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules]);
+  }, [activeModule, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute]);
 
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => s.items));

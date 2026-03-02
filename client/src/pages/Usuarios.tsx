@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Plus, Shield, Key, Pencil, Users, UserPlus, Trash2, Building2, Save, ChevronRight, Search, X, ArrowLeft, CheckCircle2, XCircle, Mail, User, Lock, Eye, EyeOff } from "lucide-react";
+import { Plus, Shield, Key, Pencil, Users, UserPlus, Trash2, Building2, Save, ChevronRight, Search, X, ArrowLeft, CheckCircle2, XCircle, Mail, User, Lock, Eye, EyeOff, UsersRound } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useEffect, useMemo } from "react";
@@ -56,6 +56,7 @@ export default function Usuarios() {
   const [newPassword, setNewPassword] = useState("");
   const [newCompanyIds, setNewCompanyIds] = useState<number[]>([]);
   const [newModulePerms, setNewModulePerms] = useState<Record<string, Record<string, boolean>>>({});
+  const [newGroupId, setNewGroupId] = useState<number | null>(null);
 
   // Edit user form
   const [editName, setEditName] = useState("");
@@ -66,12 +67,16 @@ export default function Usuarios() {
   const [editCompanyIds, setEditCompanyIds] = useState<number[]>([]);
   const [editModulePerms, setEditModulePerms] = useState<Record<string, Record<string, boolean>>>({});
   const [editPermsLoaded, setEditPermsLoaded] = useState(false);
+  const [editGroupId, setEditGroupId] = useState<number | null>(null);
+  const [editOriginalGroupId, setEditOriginalGroupId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
 
   // Queries
   const usersQuery = trpc.userManagement.listUsers.useQuery();
   const allCompaniesQuery = trpc.companies.list.useQuery();
+  const groupsQuery = trpc.userGroups.list.useQuery();
+  const allGroupMembersQuery = trpc.userGroups.listAllMembers.useQuery();
 
   // Load user permissions when selecting a user
   const editUserPermsQuery = trpc.userManagement.getUserPermissions.useQuery(
@@ -150,6 +155,15 @@ export default function Usuarios() {
     onError: (e) => toast.error("Erro ao salvar permissões: " + e.message),
   });
 
+  const addMemberMut = trpc.userGroups.addMember.useMutation({
+    onSuccess: () => { utils.userGroups.listAllMembers.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const removeMemberMut = trpc.userGroups.removeMember.useMutation({
+    onSuccess: () => { utils.userGroups.listAllMembers.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   // Helpers
   const toggleModulePerm = (perms: Record<string, Record<string, boolean>>, setPerms: (v: Record<string, Record<string, boolean>>) => void, moduleId: string, featureKey: string) => {
     const current = perms[moduleId]?.[featureKey] ?? false;
@@ -182,7 +196,7 @@ export default function Usuarios() {
   };
 
   const resetNewUserForm = () => {
-    setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewCompanyIds([]); setNewModulePerms({});
+    setNewUsername(""); setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("user"); setNewCompanyIds([]); setNewModulePerms({}); setNewGroupId(null);
   };
 
   const handleCreateUser = () => {
@@ -192,6 +206,12 @@ export default function Usuarios() {
       email: newEmail || undefined, role: newRole,
       password: newPassword || undefined,
       companyIds: newCompanyIds.length > 0 ? newCompanyIds : undefined,
+    }, {
+      onSuccess: (data) => {
+        if (newGroupId) {
+          addMemberMut.mutate({ groupId: newGroupId, userId: data.id });
+        }
+      },
     });
   };
 
@@ -206,6 +226,10 @@ export default function Usuarios() {
     setEditModulePerms({});
     setEditPermsLoaded(false);
     setShowPassword(false);
+    // Find user's group
+    const memberEntry = (allGroupMembersQuery.data || []).find((m: any) => m.userId === u.id);
+    setEditGroupId(memberEntry?.groupId ?? null);
+    setEditOriginalGroupId(memberEntry?.groupId ?? null);
   };
 
   const handleSaveUser = () => {
@@ -228,6 +252,16 @@ export default function Usuarios() {
 
     if (editRole !== 'admin_master' && Object.keys(editModulePerms).length > 0) {
       saveUserPermsFromState(selectedUser.id, editModulePerms);
+    }
+
+    // Save group membership
+    if (editGroupId !== editOriginalGroupId) {
+      if (editOriginalGroupId) {
+        removeMemberMut.mutate({ groupId: editOriginalGroupId, userId: selectedUser.id });
+      }
+      if (editGroupId) {
+        addMemberMut.mutate({ groupId: editGroupId, userId: selectedUser.id });
+      }
     }
   };
 
@@ -411,10 +445,11 @@ export default function Usuarios() {
           {filteredUsers.map((u: any) => {
             const moduleCount = (() => {
               if (u.role === 'admin_master') return MODULE_DEFINITIONS.length;
-              // Count from permissions if loaded
-              return 0; // Will be shown differently
+              return 0;
             })();
             const companyCount = u.role === 'admin_master' ? (allCompaniesQuery.data?.length || 0) : (u.companyIds?.length || 0);
+            const userGroupMember = (allGroupMembersQuery.data || []).find((m: any) => m.userId === u.id);
+            const userGroup = userGroupMember ? (groupsQuery.data || []).find((g: any) => g.id === userGroupMember.groupId) : null;
 
             return (
               <Card
@@ -442,6 +477,11 @@ export default function Usuarios() {
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${u.loginMethod === "local" ? "bg-blue-50 text-blue-600" : u.loginMethod === "apple" ? "bg-gray-100 text-gray-600" : "bg-purple-50 text-purple-600"}`}>
                             {u.loginMethod === "local" ? "local" : u.loginMethod === "apple" ? "apple" : "OAuth"}
                           </span>
+                          {userGroup && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${userGroup.cor}15`, color: userGroup.cor, borderColor: `${userGroup.cor}40` }}>
+                              {userGroup.nome}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                           {u.username && <span>@{u.username}</span>}
@@ -539,6 +579,42 @@ export default function Usuarios() {
                   {isMaster && <SelectItem value="admin_master">Admin Master — Acesso total ao sistema</SelectItem>}
                 </SelectContent>
               </Select>
+            </CardContent>
+          </Card>
+
+          {/* Grupo de Usuário */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <UsersRound className="h-4 w-4" />
+                Grupo de Usuário
+              </CardTitle>
+              <CardDescription>Vincule a um grupo para herdar permissões de telas automaticamente</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {newRole === 'admin_master' ? (
+                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <Shield className="h-4 w-4 text-purple-600 shrink-0" />
+                  <span className="text-sm text-purple-700">Admin Master não precisa de grupo.</span>
+                </div>
+              ) : (
+                <Select value={newGroupId?.toString() || "none"} onValueChange={(v) => setNewGroupId(v === "none" ? null : parseInt(v))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um grupo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum grupo</SelectItem>
+                    {(groupsQuery.data || []).map((g: any) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: g.cor || '#6b7280' }} />
+                          {g.nome}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </CardContent>
           </Card>
 
@@ -712,6 +788,55 @@ export default function Usuarios() {
                     {selectedUser.id === user?.id && (
                       <span className="text-xs text-muted-foreground">(Você não pode alterar seu próprio perfil)</span>
                     )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Grupo de Usuário */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <UsersRound className="h-4 w-4" />
+                  Grupo de Usuário
+                </CardTitle>
+                <CardDescription>Vincule este usuário a um grupo para herdar permissões de telas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {editRole === 'admin_master' ? (
+                  <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                    <Shield className="h-4 w-4 text-purple-600 shrink-0" />
+                    <span className="text-sm text-purple-700">Admin Master não precisa de grupo — tem acesso total.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <Select value={editGroupId?.toString() || "none"} onValueChange={(v) => setEditGroupId(v === "none" ? null : parseInt(v))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um grupo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum grupo</SelectItem>
+                        {(groupsQuery.data || []).map((g: any) => (
+                          <SelectItem key={g.id} value={g.id.toString()}>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: g.cor || '#6b7280' }} />
+                              {g.nome}
+                              {g.somenteVisualizacao && <span className="text-[10px] text-amber-600">(somente vis.)</span>}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {editGroupId && (() => {
+                      const g = (groupsQuery.data || []).find((g: any) => g.id === editGroupId);
+                      if (!g) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.somenteVisualizacao && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Somente Visualização</span>}
+                          {g.ocultarDadosSensiveis && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">Oculta Dados Sensíveis</span>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </CardContent>

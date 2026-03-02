@@ -1,21 +1,34 @@
 import { eq, and, like, or, desc, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
-  InsertUser, users,
-  companies, InsertCompany,
-  employees, InsertEmployee,
-  employeeHistory, InsertEmployeeHistory,
-  userProfiles, InsertUserProfile,
-  permissions, InsertPermission,
-  auditLogs, InsertAuditLog,
+  users,
+  companies,
+  employees,
+  employeeHistory,
+  userProfiles,
+  permissions,
+  auditLogs,
   trainingDocuments, payrollUploads, dixiDevices,
-  obras, InsertObra, obraFuncionarios, obraHorasRateio, obraSns, employeeSiteHistory, obraPontoInconsistencies,
+  obras, obraFuncionarios, obraHorasRateio, obraSns, employeeSiteHistory, obraPontoInconsistencies,
   terminationNotices, vacationPeriods,
-  sectors, InsertSector, jobFunctions, InsertJobFunction,
+  sectors, jobFunctions,
   systemRevisions,
   userCompanies,
   userPermissions,
+  userGroups, userGroupPermissions, userGroupMembers,
 } from "../drizzle/schema";
+
+// Type aliases (schema doesn't export Insert types)
+type InsertUser = typeof users.$inferInsert;
+type InsertCompany = typeof companies.$inferInsert;
+type InsertEmployee = typeof employees.$inferInsert;
+type InsertEmployeeHistory = typeof employeeHistory.$inferInsert;
+type InsertUserProfile = typeof userProfiles.$inferInsert;
+type InsertPermission = typeof permissions.$inferInsert;
+type InsertAuditLog = typeof auditLogs.$inferInsert;
+type InsertObra = typeof obras.$inferInsert;
+type InsertSector = typeof sectors.$inferInsert;
+type InsertJobFunction = typeof jobFunctions.$inferInsert;
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -2229,5 +2242,155 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
       diasTrabalhados: p.diasTrabalhados,
     })),
     semObra: activeEmps.length,
+  };
+}
+
+
+// ============================================================
+// GRUPOS DE USUÁRIOS
+// ============================================================
+
+export async function listUserGroups() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userGroups).orderBy(userGroups.nome);
+}
+
+export async function getUserGroupById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(userGroups).where(eq(userGroups.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  const result = await db.insert(userGroups).values({
+    nome: data.nome,
+    descricao: data.descricao ?? null,
+    cor: data.cor ?? '#6b7280',
+    icone: data.icone ?? 'Users',
+    somenteVisualizacao: data.somenteVisualizacao ?? 1,
+    ocultarDadosSensiveis: data.ocultarDadosSensiveis ?? 1,
+  });
+  return { id: Number(result[0].insertId) };
+}
+
+export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; ativo?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  await db.update(userGroups).set(data).where(eq(userGroups.id, id));
+}
+
+export async function deleteUserGroup(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  // Remove membros e permissões do grupo
+  await db.delete(userGroupMembers).where(eq(userGroupMembers.groupId, id));
+  await db.delete(userGroupPermissions).where(eq(userGroupPermissions.groupId, id));
+  await db.delete(userGroups).where(eq(userGroups.id, id));
+}
+
+// Permissões do grupo
+export async function getGroupPermissions(groupId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userGroupPermissions).where(eq(userGroupPermissions.groupId, groupId));
+}
+
+export async function setGroupPermissions(groupId: number, perms: { rota: string; canView: number; canEdit: number; canCreate: number; canDelete: number; ocultarValores: number; ocultarDocumentos: number }[]) {
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  await db.delete(userGroupPermissions).where(eq(userGroupPermissions.groupId, groupId));
+  if (perms.length > 0) {
+    await db.insert(userGroupPermissions).values(perms.map(p => ({ ...p, groupId })));
+  }
+}
+
+// Membros do grupo
+export async function getGroupMembers(groupId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userGroupMembers).where(eq(userGroupMembers.groupId, groupId));
+}
+
+export async function getUserGroupMemberships(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userGroupMembers).where(eq(userGroupMembers.userId, userId));
+}
+
+export async function addUserToGroup(groupId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  // Verificar se já existe
+  const existing = await db.select().from(userGroupMembers).where(
+    and(eq(userGroupMembers.groupId, groupId), eq(userGroupMembers.userId, userId))
+  );
+  if (existing.length > 0) return;
+  await db.insert(userGroupMembers).values({ groupId, userId });
+}
+
+export async function removeUserFromGroup(groupId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  await db.delete(userGroupMembers).where(
+    and(eq(userGroupMembers.groupId, groupId), eq(userGroupMembers.userId, userId))
+  );
+}
+
+export async function setUserGroups(userId: number, groupIds: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("DB indisponível");
+  await db.delete(userGroupMembers).where(eq(userGroupMembers.userId, userId));
+  if (groupIds.length > 0) {
+    await db.insert(userGroupMembers).values(groupIds.map(groupId => ({ groupId, userId })));
+  }
+}
+
+// Obter permissões efetivas do usuário baseado nos grupos
+export async function getUserEffectiveGroupPermissions(userId: number) {
+  const db = await getDb();
+  if (!db) return { groups: [] as any[], permissions: [] as any[], somenteVisualizacao: true, ocultarDadosSensiveis: true };
+  
+  // Buscar grupos do usuário
+  const memberships = await db.select().from(userGroupMembers).where(eq(userGroupMembers.userId, userId));
+  if (memberships.length === 0) return { groups: [], permissions: [], somenteVisualizacao: true, ocultarDadosSensiveis: true };
+  
+  const groupIds = memberships.map(m => m.groupId);
+  
+  // Buscar dados dos grupos
+  const groups = await db.select().from(userGroups).where(sql`${userGroups.id} IN (${sql.join(groupIds.map(id => sql`${id}`), sql`, `)})`);
+  
+  // Buscar permissões de todos os grupos (merge: se qualquer grupo permite, permite)
+  const allPerms = await db.select().from(userGroupPermissions).where(sql`${userGroupPermissions.groupId} IN (${sql.join(groupIds.map(id => sql`${id}`), sql`, `)})`);
+  
+  // Merge permissões: para cada rota, pegar o mais permissivo de todos os grupos
+  const permMap = new Map<string, { rota: string; canView: number; canEdit: number; canCreate: number; canDelete: number; ocultarValores: number; ocultarDocumentos: number }>();
+  for (const p of allPerms) {
+    const existing = permMap.get(p.rota);
+    if (existing) {
+      existing.canView = Math.max(existing.canView, p.canView);
+      existing.canEdit = Math.max(existing.canEdit, p.canEdit);
+      existing.canCreate = Math.max(existing.canCreate, p.canCreate);
+      existing.canDelete = Math.max(existing.canDelete, p.canDelete);
+      // Para ocultar, se qualquer grupo NÃO oculta, não oculta (min)
+      existing.ocultarValores = Math.min(existing.ocultarValores, p.ocultarValores);
+      existing.ocultarDocumentos = Math.min(existing.ocultarDocumentos, p.ocultarDocumentos);
+    } else {
+      permMap.set(p.rota, { ...p });
+    }
+  }
+  
+  // Merge flags globais dos grupos: se qualquer grupo NÃO é somente visualização, não é
+  const somenteVisualizacao = groups.every(g => !!g.somenteVisualizacao);
+  const ocultarDadosSensiveis = groups.every(g => !!g.ocultarDadosSensiveis);
+  
+  return {
+    groups: groups.map(g => ({ id: g.id, nome: g.nome, cor: g.cor, icone: g.icone })),
+    permissions: Array.from(permMap.values()),
+    somenteVisualizacao,
+    ocultarDadosSensiveis,
   };
 }

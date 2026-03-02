@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,19 @@ import { useCompany } from "@/contexts/CompanyContext";
 
 export default function PainelRH() {
   const { user } = useAuth();
+  const { isAdminMaster, hasGroup, groupCanAccessRoute, groupOcultarValores, isSomenteVisualizacao, isOcultarDadosSensiveis } = usePermissions();
+  // Flags de visibilidade baseadas no grupo
+  const canSeeValues = isAdminMaster || !isOcultarDadosSensiveis;
+  const canSeeAvisoPrevio = isAdminMaster || !hasGroup || groupCanAccessRoute('/aviso-previo');
+  const canSeeFerias = isAdminMaster || !hasGroup || groupCanAccessRoute('/ferias');
+  const canSeeFolha = isAdminMaster || !hasGroup || groupCanAccessRoute('/folha-pagamento');
+  const canSeeColaboradores = isAdminMaster || !hasGroup || groupCanAccessRoute('/colaboradores');
+  const canSeeObras = isAdminMaster || !hasGroup || groupCanAccessRoute('/obras');
+  const canSeeDocumentos = isAdminMaster || !hasGroup || groupCanAccessRoute('/controle-documentos');
+  const canSeePonto = isAdminMaster || !hasGroup || groupCanAccessRoute('/fechamento-ponto');
+  const canSeeExperiencia = canSeeColaboradores;
+  const canSeeAuditoria = isAdminMaster || user?.role === 'admin';
+  const canEditExperiencia = isAdminMaster || !isSomenteVisualizacao;
   const [selectedAvisoId, setSelectedAvisoId] = useState<number | null>(null);
   const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
@@ -129,6 +143,7 @@ export default function PainelRH() {
           ) : (
             <>
               {/* KPI Cards - Colaboradores */}
+              {canSeeColaboradores && (
               <div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quadro de Pessoal</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -140,20 +155,21 @@ export default function PainelRH() {
                   <KpiCard title="Desligados" value={s?.desligados ?? 0} icon={UserX} color="red" onClick={() => navigate("/colaboradores")} />
                 </div>
               </div>
+              )}
 
               {/* KPI Cards - Operacional RH */}
               <div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Indicadores RH</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiCard title="Obras Ativas" value={s?.obrasAtivas ?? 0} icon={Landmark} color="teal" onClick={() => navigate("/obras")} />
-                  <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} />
-                  <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} />
-                  <KpiCard title="Férias a Vencer" value={s?.feriasAlerta ?? 0} icon={CalendarClock} color="yellow" onClick={() => navigate("/ferias")} />
+                  {canSeeObras && <KpiCard title="Obras Ativas" value={s?.obrasAtivas ?? 0} icon={Landmark} color="teal" onClick={() => navigate("/obras")} />}
+                  {canSeeDocumentos && <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} />}
+                  {canSeeDocumentos && <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} />}
+                  {canSeeFerias && <KpiCard title="Férias a Vencer" value={s?.feriasAlerta ?? 0} icon={CalendarClock} color="yellow" onClick={() => navigate("/ferias")} />}
                 </div>
               </div>
 
               {/* Contratos de Experiência */}
-              {(homeData?.experiencias?.length ?? 0) > 0 ? (
+              {canSeeExperiencia && (homeData?.experiencias?.length ?? 0) > 0 ? (
                 <Card className="border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
@@ -189,6 +205,7 @@ export default function PainelRH() {
                               <span className={`text-xs font-mono ${urgTextColors[exp.urgencia] || ''}`}>
                                 {exp.diasRestantes < 0 ? `Vencido há ${Math.abs(exp.diasRestantes)}d` : exp.diasRestantes === 0 ? 'VENCE HOJE' : `${exp.diasRestantes}d restantes`}
                               </span>
+                              {canEditExperiencia && (<>
                               {exp.status === 'em_experiencia' ? (
                                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setExpAction({ type: 'prorrogar', emp: exp }); setExpObs(''); }}>
                                   <RefreshCw className="h-3 w-3" /> Prorrogar
@@ -200,6 +217,7 @@ export default function PainelRH() {
                               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => { setExpAction({ type: 'desligar', emp: exp }); setExpMotivo(''); setExpObs(''); }}>
                                 <Ban className="h-3 w-3" /> Desligar
                               </Button>
+                              </>)}
                             </div>
                           </div>
                         );
@@ -247,7 +265,7 @@ export default function PainelRH() {
               </Dialog>
 
               {/* Card de Avisos Prévios em Andamento */}
-              {(homeData?.avisosPrevios?.length ?? 0) > 0 && (() => {
+              {canSeeAvisoPrevio && (homeData?.avisosPrevios?.length ?? 0) > 0 && (() => {
                 const avisosValidos = homeData!.avisosPrevios.filter((a: any) => a.nome && a.nome !== 'Funcionário' && a.nome !== 'Funcionário excluído');
                 const totalValorEstimado = homeData!.avisosPrevios.reduce((acc: number, a: any) => acc + (parseFloat(a.valorEstimado) || 0), 0);
                 return avisosValidos.length > 0 && (
@@ -262,7 +280,7 @@ export default function PainelRH() {
                       </CardTitle>
                       <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate('/aviso-previo')}>Ver todos <ChevronRight className="h-3 w-3 ml-1" /></Button>
                     </div>
-                    {totalValorEstimado > 0 && (
+                    {canSeeValues && totalValorEstimado > 0 && (
                       <div className="mt-2 flex items-center gap-2 bg-red-100/60 rounded-lg px-3 py-2">
                         <DollarSign className="h-4 w-4 text-red-600" />
                         <span className="text-xs text-red-700">Valor total estimado:</span>
@@ -295,7 +313,7 @@ export default function PainelRH() {
                             <p className="text-[10px] text-muted-foreground">{a.funcao} · {tipoLabel}</p>
                             <div className="flex items-center justify-between mt-1">
                               <span className="text-[10px] text-muted-foreground">Término: {new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                              {a.valorEstimado && <span className="text-[10px] font-bold text-red-600">R$ {parseFloat(a.valorEstimado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+                              {canSeeValues && a.valorEstimado && <span className="text-[10px] font-bold text-red-600">R$ {parseFloat(a.valorEstimado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                             </div>
                           </div>
                         );
@@ -343,7 +361,7 @@ export default function PainelRH() {
                   </Card>
 
                   {/* Férias Painel Rápido */}
-                  <Card>
+                  {canSeeFerias && <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
                         <Plane className="h-4 w-4 text-blue-500" />
@@ -383,19 +401,19 @@ export default function PainelRH() {
                       ) : (
                         (homeData?.feriasDashboard?.emAndamento?.length ?? 0) === 0 ? <p className="text-xs text-muted-foreground">Nenhuma férias agendada nos próximos 60 dias</p> : null
                       )}
-                      {(homeData?.feriasDashboard?.custoProximo90Dias ?? 0) > 0 ? (
+                      {canSeeValues && (homeData?.feriasDashboard?.custoProximo90Dias ?? 0) > 0 ? (
                         <div className="mt-2 pt-2 border-t flex items-center justify-between">
                           <span className="text-[10px] text-muted-foreground flex items-center gap-1"><DollarSign className="h-3 w-3" /> Custo próx. 90 dias</span>
                           <span className="text-xs font-bold text-orange-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(homeData!.feriasDashboard.custoProximo90Dias)}</span>
                         </div>
                       ) : null}
                     </CardContent>
-                  </Card>
+                  </Card>}
                 </div>
 
                 {/* Coluna 2: ASOs + Férias Período Aquisitivo */}
                 <div className="space-y-4">
-                  <Card>
+                  {canSeeDocumentos && <Card>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -429,9 +447,9 @@ export default function PainelRH() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
 
-                  <Card>
+                  {canSeeFerias && <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
                         <CalendarClock className="h-4 w-4 text-amber-500" />
@@ -458,7 +476,7 @@ export default function PainelRH() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
                 </div>
 
                 {/* Coluna 3: Movimentações + Atividade + Advertências */}
@@ -492,7 +510,7 @@ export default function PainelRH() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  {canSeeAuditoria && <Card>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -519,7 +537,7 @@ export default function PainelRH() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
 
                   {(homeData?.advertenciasRecentes?.length ?? 0) > 0 ? (
                     <Card>
@@ -552,13 +570,13 @@ export default function PainelRH() {
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                   {[
-                    { label: "Colaboradores", icon: Users, path: "/colaboradores", color: "text-blue-600" },
-                    { label: "Obras", icon: Landmark, path: "/obras", color: "text-teal-600" },
-                    { label: "Fechamento Ponto", icon: Clock, path: "/fechamento-ponto", color: "text-indigo-600" },
-                    { label: "Folha Pagamento", icon: Briefcase, path: "/folha-pagamento", color: "text-emerald-600" },
-                    { label: "Documentos", icon: FileWarning, path: "/controle-documentos", color: "text-amber-600" },
-                    { label: "Dashboards", icon: BarChart3, path: "/dashboards", color: "text-purple-600" },
-                  ].map(item => (
+                    { label: "Colaboradores", icon: Users, path: "/colaboradores", color: "text-blue-600", show: canSeeColaboradores },
+                    { label: "Obras", icon: Landmark, path: "/obras", color: "text-teal-600", show: canSeeObras },
+                    { label: "Fechamento Ponto", icon: Clock, path: "/fechamento-ponto", color: "text-indigo-600", show: canSeePonto },
+                    { label: "Folha Pagamento", icon: Briefcase, path: "/folha-pagamento", color: "text-emerald-600", show: canSeeFolha },
+                    { label: "Documentos", icon: FileWarning, path: "/controle-documentos", color: "text-amber-600", show: canSeeDocumentos },
+                    { label: "Dashboards", icon: BarChart3, path: "/dashboards", color: "text-purple-600", show: true },
+                  ].filter(item => item.show).map(item => (
                     <button key={item.path} onClick={() => navigate(item.path)} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border hover:bg-accent/50 hover:shadow-sm transition-all text-left">
                       <item.icon className={`h-4 w-4 ${item.color} shrink-0`} />
                       <span className="text-xs font-medium">{item.label}</span>

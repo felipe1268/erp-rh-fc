@@ -4017,3 +4017,27 @@
 - [x] Aumentar largura do dialog para max-w-7xl para ver tudo sem scroll
 - [x] Tempo de serviço em formato "X anos e Y meses" ao invés de apenas anos
 - [x] Backend: adicionado mesesServico no retorno do comparativo
+
+## Rev. 152 - Sistema de Permissões Granulares + Perfil Campo/Obra
+- [ ] Schema: Adicionar sub-permissões granulares (verValores, verDocumentos, editar, excluir, verDadosPessoais)
+- [ ] Schema: Criar perfil padrão "Campo/Obra" com permissões restritas
+- [ ] Backend: Filtrar dados sensíveis (salários, CPF, RG, dados bancários) baseado nas permissões
+- [ ] Frontend: Ocultar colunas de valores e dados pessoais para usuários sem permissão
+- [ ] Admin UI: Tela de gestão de permissões granulares por usuário (checkboxes detalhados)
+- [ ] Férias: Ocultar coluna "Valor Total" e "Pagamento" para perfil Campo/Obra
+- [ ] Colaboradores: Ocultar dados sensíveis (CPF, RG, CTPS, dados bancários, salário) para Campo/Obra
+
+## Rev. 152 - Sistema de Grupos de Usuários
+- [x] Schema: Criar tabelas user_groups, user_group_permissions, user_group_members
+- [x] Grupos pré-definidos: TST, Gestor de Obras, Auxiliar de Engenharia, Encarregado, RH
+- [x] Backend: CRUD de grupos (criar, editar, excluir, listar)
+- [x] Backend: Vincular/desvincular usuários a grupos
+- [x] Backend: getMyPermissions retornar permissões do grupo do usuário
+- [x] Frontend: Tela de gestão de Grupos com permissões granulares por rota
+- [x] Frontend: Botão "Criar Grupo" para admin_master criar novos grupos
+- [x] Frontend: Vincular usuário a grupo na tela de Usuários
+- [x] Sidebar: Filtrar itens baseado nas permissões do grupo do usuário
+- [x] Painel RH: Filtrar seções por permissões do grupo (ocultar valores, seções sem acesso)
+- [x] Painel RH: Ocultar "Valor total estimado" e valores individuais para grupos sem permissão
+- [x] Dashboards: Mostrar apenas dashboards pertinentes ao grupo do usuário
+- [x] Telas de cadastro: Somente visualização para grupos restritos (sem botões criar/editar/excluir)

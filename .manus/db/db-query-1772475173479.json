@@ -1,0 +1,9 @@
+{
+  "query": "\nINSERT INTO `user_groups` (`nome`, `descricao`, `cor`, `icone`, `somente_visualizacao`, `ocultar_dados_sensiveis`) VALUES\n('TST', 'Técnico de Segurança do Trabalho - Acesso a EPIs, CIPA, ASOs e dashboards de SST', '#10b981', 'Shield', 0, 1),\n('Gestor de Obras', 'Gestor de Obras - Acesso a Obras, Efetivo, HE e dashboards pertinentes', '#3b82f6', 'HardHat', 1, 1),\n('Auxiliar de Engenharia', 'Auxiliar de Engenharia - Visualização de cadastros e documentos básicos', '#8b5cf6', 'FileText', 1, 1),\n('Encarregado', 'Encarregado de Obra - Efetivo, Solicitação de HE, Férias (sem valores)', '#f59e0b', 'Users', 1, 1);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \nINSERT INTO `user_groups` (`nome`, `descricao`, `cor`, `icone`, `somente_visualizacao`, `ocultar_dados_sensiveis`) VALUES\n('TST', 'Técnico de Segurança do Trabalho - Acesso a EPIs, CIPA, ASOs e dashboards de SST', '#10b981', 'Shield', 0, 1),\n('Gestor de Obras', 'Gestor de Obras - Acesso a Obras, Efetivo, HE e dashboards pertinentes', '#3b82f6', 'HardHat', 1, 1),\n('Auxiliar de Engenharia', 'Auxiliar de Engenharia - Visualização de cadastros e documentos básicos', '#8b5cf6', 'FileText', 1, 1),\n('Encarregado', 'Encarregado de Obra - Efetivo, Solicitação de HE, Férias (sem valores)', '#f59e0b', 'Users', 1, 1);\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 383
+}

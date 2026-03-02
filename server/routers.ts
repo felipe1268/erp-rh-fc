@@ -32,6 +32,10 @@ import {
   listJobFunctions, createJobFunction, updateJobFunction, deleteJobFunction, restoreJobFunction,
   // Revisões
   getRevisions, getLatestRevision, createRevision, deleteRevision,
+  // Grupos de Usuários
+  listUserGroups, getUserGroupById, createUserGroup, updateUserGroup, deleteUserGroup,
+  getGroupPermissions, setGroupPermissions, getGroupMembers, getUserGroupMemberships,
+  addUserToGroup, removeUserFromGroup, setUserGroups, getUserEffectiveGroupPermissions,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
@@ -948,12 +952,28 @@ export const appRouter = router({
     getMyPermissions: protectedProcedure.query(async ({ ctx }) => {
       // Admin Master tem acesso total
       if (ctx.user.role === 'admin_master') {
-        return { isAdminMaster: true, permissions: [] };
+        return { isAdminMaster: true, permissions: [], groupPermissions: null };
       }
       const perms = await getUserPermissions(ctx.user.id);
+      // Buscar permissões de grupo do usuário
+      const groupPerms = await getUserEffectiveGroupPermissions(ctx.user.id);
       return {
         isAdminMaster: false,
         permissions: perms.map((p: any) => ({ moduleId: p.moduleId, featureKey: p.featureKey, canAccess: !!p.canAccess })),
+        groupPermissions: groupPerms.groups.length > 0 ? {
+          groups: groupPerms.groups,
+          routes: groupPerms.permissions.map((p: any) => ({
+            rota: p.rota,
+            canView: !!p.canView,
+            canEdit: !!p.canEdit,
+            canCreate: !!p.canCreate,
+            canDelete: !!p.canDelete,
+            ocultarValores: !!p.ocultarValores,
+            ocultarDocumentos: !!p.ocultarDocumentos,
+          })),
+          somenteVisualizacao: groupPerms.somenteVisualizacao,
+          ocultarDadosSensiveis: groupPerms.ocultarDadosSensiveis,
+        } : null,
       };
     }),
     createLocalUser: protectedProcedure.input(z.object({
@@ -1727,6 +1747,147 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso restrito ao Admin Master' });
       await deleteRevision(input.id);
+      return { success: true };
+    }),
+  }),
+  // ===================== GRUPOS DE USUÁRIOS =====================
+  userGroups: router({
+    list: protectedProcedure.query(async () => {
+      const groups = await listUserGroups();
+      return groups.map((g: any) => ({
+        ...g,
+        ativo: !!g.ativo,
+        somenteVisualizacao: !!g.somenteVisualizacao,
+        ocultarDadosSensiveis: !!g.ocultarDadosSensiveis,
+      }));
+    }),
+    getById: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const g = await getUserGroupById(input.id);
+      if (!g) return null;
+      return { ...g, ativo: !!g.ativo, somenteVisualizacao: !!g.somenteVisualizacao, ocultarDadosSensiveis: !!g.ocultarDadosSensiveis };
+    }),
+    create: protectedProcedure.input(z.object({
+      nome: z.string().min(1),
+      descricao: z.string().optional(),
+      cor: z.string().optional(),
+      icone: z.string().optional(),
+      somenteVisualizacao: z.boolean().optional(),
+      ocultarDadosSensiveis: z.boolean().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode criar grupos' });
+      const result = await createUserGroup({
+        nome: input.nome,
+        descricao: input.descricao,
+        cor: input.cor,
+        icone: input.icone,
+        somenteVisualizacao: input.somenteVisualizacao === false ? 0 : 1,
+        ocultarDadosSensiveis: input.ocultarDadosSensiveis === false ? 0 : 1,
+      });
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'CREATE', module: 'usuarios', entityType: 'user_group', entityId: result.id, details: `Grupo '${input.nome}' criado` });
+      return result;
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      nome: z.string().optional(),
+      descricao: z.string().optional(),
+      cor: z.string().optional(),
+      icone: z.string().optional(),
+      somenteVisualizacao: z.boolean().optional(),
+      ocultarDadosSensiveis: z.boolean().optional(),
+      ativo: z.boolean().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode editar grupos' });
+      const updateData: any = {};
+      if (input.nome !== undefined) updateData.nome = input.nome;
+      if (input.descricao !== undefined) updateData.descricao = input.descricao;
+      if (input.cor !== undefined) updateData.cor = input.cor;
+      if (input.icone !== undefined) updateData.icone = input.icone;
+      if (input.somenteVisualizacao !== undefined) updateData.somenteVisualizacao = input.somenteVisualizacao ? 1 : 0;
+      if (input.ocultarDadosSensiveis !== undefined) updateData.ocultarDadosSensiveis = input.ocultarDadosSensiveis ? 1 : 0;
+      if (input.ativo !== undefined) updateData.ativo = input.ativo ? 1 : 0;
+      await updateUserGroup(input.id, updateData);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_group', entityId: input.id, details: `Grupo atualizado` });
+      return { success: true };
+    }),
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode excluir grupos' });
+      await deleteUserGroup(input.id);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'DELETE', module: 'usuarios', entityType: 'user_group', entityId: input.id, details: `Grupo excluído` });
+      return { success: true };
+    }),
+    // Permissões do grupo
+    getPermissions: protectedProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
+      const perms = await getGroupPermissions(input.groupId);
+      return perms.map((p: any) => ({
+        rota: p.rota,
+        canView: !!p.canView,
+        canEdit: !!p.canEdit,
+        canCreate: !!p.canCreate,
+        canDelete: !!p.canDelete,
+        ocultarValores: !!p.ocultarValores,
+        ocultarDocumentos: !!p.ocultarDocumentos,
+      }));
+    }),
+    setPermissions: protectedProcedure.input(z.object({
+      groupId: z.number(),
+      permissions: z.array(z.object({
+        rota: z.string(),
+        canView: z.boolean(),
+        canEdit: z.boolean(),
+        canCreate: z.boolean(),
+        canDelete: z.boolean(),
+        ocultarValores: z.boolean(),
+        ocultarDocumentos: z.boolean(),
+      })),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode configurar permissões de grupo' });
+      await setGroupPermissions(input.groupId, input.permissions.map(p => ({
+        rota: p.rota,
+        canView: p.canView ? 1 : 0,
+        canEdit: p.canEdit ? 1 : 0,
+        canCreate: p.canCreate ? 1 : 0,
+        canDelete: p.canDelete ? 1 : 0,
+        ocultarValores: p.ocultarValores ? 1 : 0,
+        ocultarDocumentos: p.ocultarDocumentos ? 1 : 0,
+      })));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_group_permissions', entityId: input.groupId, details: `Permissões do grupo atualizadas: ${input.permissions.filter(p => p.canView).length} rotas habilitadas` });
+      return { success: true };
+    }),
+    // Membros do grupo
+    getMembers: protectedProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
+      return getGroupMembers(input.groupId);
+    }),
+    addMember: protectedProcedure.input(z.object({ groupId: z.number(), userId: z.number() })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar membros de grupo' });
+      await addUserToGroup(input.groupId, input.userId);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'CREATE', module: 'usuarios', entityType: 'user_group_member', entityId: input.groupId, details: `Usuário ${input.userId} adicionado ao grupo` });
+      return { success: true };
+    }),
+    removeMember: protectedProcedure.input(z.object({ groupId: z.number(), userId: z.number() })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar membros de grupo' });
+      await removeUserFromGroup(input.groupId, input.userId);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'DELETE', module: 'usuarios', entityType: 'user_group_member', entityId: input.groupId, details: `Usuário ${input.userId} removido do grupo` });
+      return { success: true };
+    }),
+    // Listar todos os membros de todos os grupos
+    listAllMembers: protectedProcedure.query(async () => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db.execute(sql`SELECT group_id as groupId, user_id as userId FROM user_group_members`);
+      return (rows as any).rows || rows;
+    }),
+    // Grupos de um usuário
+    getUserGroups: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+      return getUserGroupMemberships(input.userId);
+    }),
+    setUserGroups: protectedProcedure.input(z.object({
+      userId: z.number(),
+      groupIds: z.array(z.number()),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar grupos de usuários' });
+      await setUserGroups(input.userId, input.groupIds);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_groups', entityId: input.userId, details: `Grupos do usuário atualizados: [${input.groupIds.join(', ')}]` });
       return { success: true };
     }),
   }),
