@@ -833,7 +833,12 @@ function DashboardLayoutContent({
                                 toast("Em breve", { description: `O módulo ${item.label} está em desenvolvimento.` });
                                 return;
                               }
-                              setLocation(item.path);
+                              if (item.path.includes('?')) {
+                                // wouter doesn't support query params, use native navigation
+                                window.location.href = window.location.origin + item.path;
+                              } else {
+                                setLocation(item.path);
+                              }
                             }}
                             tooltip={item.label}
                             className={`h-9 transition-all font-normal ${item.soon ? "opacity-50" : ""}`}

@@ -606,7 +606,7 @@ export default function ControleDocumentos() {
   const [atestForm, setAtestForm] = useState<any>({});
   const [advForm, setAdvForm] = useState<any>({});
 
-  // ============ PRE-FILL FROM FECHAMENTO DE PONTO ============
+  // ============ PRE-FILL FROM URL PARAMS (sidebar shortcuts) ============
   useEffect(() => {
     if (advPreFillApplied) return;
     const params = new URLSearchParams(window.location.search);
@@ -632,12 +632,17 @@ export default function ControleDocumentos() {
             sessionStorage.removeItem("advPreFill");
             toast.info(`Advertência para ${preFill.employeeName || "colaborador"} — preencha o tipo e confirme.`, { duration: 6000 });
           } catch { /* ignore parse errors */ }
-        } else {
-          // Just open new adv dialog without pre-fill
-          setEditingAdvId(null);
-          setAdvForm({});
-          setShowAdvDialog(true);
         }
+      }
+      // Clean URL params without reload
+      window.history.replaceState({}, "", window.location.pathname);
+      setAdvPreFillApplied(true);
+    } else if (tab === "atestados") {
+      setActiveTab("atestados");
+      if (action === "nova") {
+        setEditingAtestId(null);
+        setAtestForm({});
+        setShowAtestDialog(true);
       }
       // Clean URL params without reload
       window.history.replaceState({}, "", window.location.pathname);

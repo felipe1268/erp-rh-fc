@@ -4071,3 +4071,7 @@
 - [x] Corrigir bug onde desmarcar checkbox "Ver" fazia o item sumir da lista de permissões do grupo
 - [x] Remover filtro que escondia rotas sem canView na renderização
 - [x] Sempre exibir todas as rotas de cada seção independente do estado do checkbox
+
+## Rev. 158 - Correção Atalhos Sidebar (Advertências e Atestados)
+- [x] Corrigir atalho "Advertências" no sidebar para abrir diretamente na aba de advertências
+- [x] Corrigir atalho "Lançar Atestados" no sidebar para abrir diretamente na aba de atestados
