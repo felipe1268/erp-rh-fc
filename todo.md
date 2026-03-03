@@ -4413,3 +4413,7 @@
 - [x] Testar fluxo completo no navegador
 - [x] Corrigir mapeamento de campos Vale: valorAdiantamento, valorHE, valorTotalVale
 - [x] Corrigir mapeamento de campos Pagamento: descontoAdiantamento, descontoInss, salarioLiquido, descontoFgts
+
+## Fase 82: Reorganizar Folha de Pagamento — Cálculo Interno em cima
+- [x] Mover seção Cálculo Interno para cima dos cards de Vale/Pagamento
+- [x] Mover cards de Importação da Contabilidade para baixo

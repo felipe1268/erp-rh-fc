@@ -1583,7 +1583,98 @@ export default function FolhaPagamento() {
           <span className="text-sm font-semibold text-[#1B2A4A]">{formatMesAno(mesAno)}</span>
         </div>
 
-        {/* CARDS VALE + PAGAMENTO */}
+        {/* ===== CÁLCULO INTERNO (PayrollEngine) ===== */}
+        <Card className="border-2 border-[#1B2A4A]/20 bg-gradient-to-r from-blue-50/50 to-indigo-50/50">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-[#1B2A4A] flex items-center justify-center">
+                  <Calculator className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-base text-[#1B2A4A]">Cálculo Interno</p>
+                  <p className="text-xs text-muted-foreground">Simulação automática a partir do ponto {statusMes.data?.pontoConsolidado ? <Badge className="bg-green-100 text-green-700 text-[10px] ml-1"><CheckCircle className="h-3 w-3 mr-0.5" /> Ponto Consolidado</Badge> : <Badge className="bg-amber-100 text-amber-700 text-[10px] ml-1"><AlertTriangle className="h-3 w-3 mr-0.5" /> Ponto Não Consolidado</Badge>}</p>
+                </div>
+              </div>
+              {payrollPeriod.data && (
+                <Badge className="bg-blue-100 text-blue-700 text-xs">
+                  Status: {String(payrollPeriod.data.status).replace(/_/g, ' ')}
+                </Badge>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* CALCULAR VALE */}
+              <div className="bg-white rounded-lg border border-orange-200 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CreditCard className="h-4 w-4 text-orange-600" />
+                  <span className="font-semibold text-sm">Calcular Vale</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">40% do salário + horas extras do ponto real (15 a 15)</p>
+                <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700"
+                  disabled={gerarValeMut.isPending}
+                  onClick={() => gerarValeMut.mutate({ companyId, mesReferencia: mesAno })}>
+                  {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
+                </Button>
+                {valeResult && (
+                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-orange-700" onClick={() => setViewMode("calculo_vale")}>
+                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(valeResult.totalVale)})
+                  </Button>
+                )}
+              </div>
+
+              {/* SIMULAR PAGAMENTO */}
+              <div className="bg-white rounded-lg border border-green-200 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <span className="font-semibold text-sm">Simular Pagamento</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">100% salário − adiantamento − faltas − INSS − descontos</p>
+                <Button size="sm" className="w-full bg-green-600 hover:bg-green-700"
+                  disabled={simularPagamentoMut.isPending}
+                  onClick={() => simularPagamentoMut.mutate({ companyId, mesReferencia: mesAno })}>
+                  {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
+                </Button>
+                {pagamentoResult && (
+                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-green-700" onClick={() => setViewMode("calculo_pagamento")}>
+                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(pagamentoResult.totalLiquido)})
+                  </Button>
+                )}
+              </div>
+
+              {/* AFERIR ESCURO */}
+              <div className="bg-white rounded-lg border border-purple-200 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Moon className="h-4 w-4 text-purple-600" />
+                  <span className="font-semibold text-sm">Aferir Escuro</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">Compara o escuro do mês anterior com o ponto real importado</p>
+                <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700"
+                  disabled={afericaoMut.isPending}
+                  onClick={() => afericaoMut.mutate({ companyId, mesReferencia: mesAno })}>
+                  {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
+                </Button>
+                {afericaoResult && (
+                  <div className="mt-2 text-xs text-center">
+                    <span className="text-purple-700 font-medium">{afericaoResult.totalAferidos} dias aferidos</span>
+                    {afericaoResult.divergencias > 0 && (
+                      <span className="text-red-600 font-bold ml-2">{afericaoResult.divergencias} divergências</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {!statusMes.data?.pontoConsolidado && (
+              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">O ponto deste mês ainda não foi consolidado. Os cálculos podem não refletir todos os registros. Consolide o ponto no módulo <strong>Fechamento de Ponto</strong> para resultados precisos.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* CARDS VALE + PAGAMENTO (Importação da Contabilidade) */}
         <div className="grid gap-4 md:grid-cols-2">
           {/* VALE */}
           <Card className={`border-2 ${vale ? "border-orange-200" : "border-dashed border-gray-300"}`}>
@@ -1995,97 +2086,6 @@ export default function FolhaPagamento() {
             )}
           </div>
         )}
-
-        {/* ===== CÁLCULO INTERNO (PayrollEngine) ===== */}
-        <Card className="border-2 border-[#1B2A4A]/20 bg-gradient-to-r from-blue-50/50 to-indigo-50/50">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-[#1B2A4A] flex items-center justify-center">
-                  <Calculator className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="font-bold text-base text-[#1B2A4A]">Cálculo Interno</p>
-                  <p className="text-xs text-muted-foreground">Simulação automática a partir do ponto {statusMes.data?.pontoConsolidado ? <Badge className="bg-green-100 text-green-700 text-[10px] ml-1"><CheckCircle className="h-3 w-3 mr-0.5" /> Ponto Consolidado</Badge> : <Badge className="bg-amber-100 text-amber-700 text-[10px] ml-1"><AlertTriangle className="h-3 w-3 mr-0.5" /> Ponto Não Consolidado</Badge>}</p>
-                </div>
-              </div>
-              {payrollPeriod.data && (
-                <Badge className="bg-blue-100 text-blue-700 text-xs">
-                  Status: {String(payrollPeriod.data.status).replace(/_/g, ' ')}
-                </Badge>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* CALCULAR VALE */}
-              <div className="bg-white rounded-lg border border-orange-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CreditCard className="h-4 w-4 text-orange-600" />
-                  <span className="font-semibold text-sm">Calcular Vale</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">40% do salário + horas extras do ponto real (15 a 15)</p>
-                <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700"
-                  disabled={gerarValeMut.isPending}
-                  onClick={() => gerarValeMut.mutate({ companyId, mesReferencia: mesAno })}>
-                  {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
-                </Button>
-                {valeResult && (
-                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-orange-700" onClick={() => setViewMode("calculo_vale")}>
-                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(valeResult.totalVale)})
-                  </Button>
-                )}
-              </div>
-
-              {/* SIMULAR PAGAMENTO */}
-              <div className="bg-white rounded-lg border border-green-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="font-semibold text-sm">Simular Pagamento</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">100% salário − adiantamento − faltas − INSS − descontos</p>
-                <Button size="sm" className="w-full bg-green-600 hover:bg-green-700"
-                  disabled={simularPagamentoMut.isPending}
-                  onClick={() => simularPagamentoMut.mutate({ companyId, mesReferencia: mesAno })}>
-                  {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
-                </Button>
-                {pagamentoResult && (
-                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-green-700" onClick={() => setViewMode("calculo_pagamento")}>
-                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(pagamentoResult.totalLiquido)})
-                  </Button>
-                )}
-              </div>
-
-              {/* AFERIR ESCURO */}
-              <div className="bg-white rounded-lg border border-purple-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Moon className="h-4 w-4 text-purple-600" />
-                  <span className="font-semibold text-sm">Aferir Escuro</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">Compara o escuro do mês anterior com o ponto real importado</p>
-                <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700"
-                  disabled={afericaoMut.isPending}
-                  onClick={() => afericaoMut.mutate({ companyId, mesReferencia: mesAno })}>
-                  {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
-                </Button>
-                {afericaoResult && (
-                  <div className="mt-2 text-xs text-center">
-                    <span className="text-purple-700 font-medium">{afericaoResult.totalAferidos} dias aferidos</span>
-                    {afericaoResult.divergencias > 0 && (
-                      <span className="text-red-600 font-bold ml-2">{afericaoResult.divergencias} divergências</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {!statusMes.data?.pontoConsolidado && (
-              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800">O ponto deste mês ainda não foi consolidado. Os cálculos podem não refletir todos os registros. Consolide o ponto no módulo <strong>Fechamento de Ponto</strong> para resultados precisos.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* RESUMO GERAL DO MÊS - formato tabela profissional */}
         {(vale || pagamento || decimoTerceiro1 || decimoTerceiro2) && (() => {
