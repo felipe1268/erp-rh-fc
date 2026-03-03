@@ -32,7 +32,7 @@ import {
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
-  FileSearch, Brain, Scale,
+  FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -99,6 +99,8 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
       { icon: CreditCard, label: "Crachás", path: "/crachas" },
+      { icon: ClipboardPlus, label: "Lançar Atestados", path: "/controle-documentos?tab=atestados&action=nova" },
+      { icon: ShieldAlert, label: "Advertências", path: "/controle-documentos?tab=advertencias" },
     ],
   },
   {
@@ -554,7 +556,8 @@ function DashboardLayoutContent({
           // "Todos os Dashboards" - visível se tem acesso a pelo menos um módulo
           if (item.path === '/dashboards') return accessibleModules.length > 0;
           // Verificar permissão granular pela rota (inclui dashboards individuais)
-          const featureInfo = routeToFeatureKey.get(item.path);
+          const itemBasePath = item.path.split('?')[0];
+          const featureInfo = routeToFeatureKey.get(itemBasePath);
           if (featureInfo) {
             return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
           }

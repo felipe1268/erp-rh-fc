@@ -174,7 +174,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanAccessRoute = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true; // Se não tem grupo, acesso controlado pelas permissões individuais
-    return groupRouteMap.has(route) && !!groupRouteMap.get(route)?.canView;
+    // Extrair path base sem query params
+    const basePath = route.split('?')[0];
+    return groupRouteMap.has(basePath) && !!groupRouteMap.get(basePath)?.canView;
   };
 
   const groupCanEdit = (route: string): boolean => {

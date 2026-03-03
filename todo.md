@@ -4062,3 +4062,7 @@
 ## Rev. 155 - Ocultar Quadro de Pessoal para TST
 - [ ] Ocultar seção "Quadro de Pessoal" no Painel RH para grupos sem acesso a /colaboradores
 - [x] Remover card "Total Colaboradores" do Quadro de Pessoal (manter apenas Ativos, Férias, Afastados, Licença, Desligados)
+
+## Rev. 156 - Atalhos Sidebar Operacional
+- [x] Adicionar "Lançar Atestados" na seção Operacional do sidebar
+- [x] Adicionar "Advertências" na seção Operacional do sidebar
