@@ -4370,3 +4370,13 @@
 - [x] Adicionar filtros (por funcionário, por tipo de inconsistência, por obra)
 - [x] Adicionar abas/seções: Resumo | Inconsistências | Ponto Detalhado | Sobreposições
 - [x] Bloquear avanço para próxima etapa se houver inconsistências não resolvidas
+
+### Bug - Load failed ao importar arquivos DIXI
+- [x] Investigar erro "Load failed" ao clicar "Importar Arquivos" na Etapa 2 - Safari aborta payloads grandes
+- [x] Corrigir o bug de upload DIXI - upload sequencial (1 arquivo por vez) + timeout 5min no fetch
+
+### Análise - Arquivos DIXI reais do usuário
+- [ ] Analisar estrutura dos 4 arquivos DIXI (Marcações e RegistroOriginal)
+- [ ] Verificar se o parser atual lê corretamente esses formatos
+- [ ] Corrigir parser se necessário
+- [ ] Garantir que Etapa 2 processa e exibe dados corretamente

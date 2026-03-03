@@ -241,17 +241,7 @@ export default function PayrollCompetencias() {
   const [dixiValidation, setDixiValidation] = useState<any>(null);
   const [dixiUploading, setDixiUploading] = useState(false);
   const [dixiValidating, setDixiValidating] = useState(false);
-  const uploadDixi = trpc.fechamentoPonto.uploadDixi.useMutation({
-    onSuccess: (data: any) => {
-      toast.success(`${data.totalImported} registros importados de ${data.fileResults?.length || 0} arquivo(s)`);
-      if (data.totalInconsistencies > 0) toast.warning(`${data.totalInconsistencies} inconsistência(s) detectada(s)`);
-      setDixiFiles([]);
-      setDixiValidation(null);
-      setDixiUploading(false);
-      invalidateAll();
-    },
-    onError: (e: any) => { setDixiUploading(false); toast.error("Erro no upload: " + e.message); },
-  });
+  const uploadDixi = trpc.fechamentoPonto.uploadDixi.useMutation();
   const validateSN = trpc.fechamentoPonto.validateSN.useMutation({
     onSuccess: (data: any) => { setDixiValidation(data); setDixiValidating(false); },
     onError: (e: any) => { setDixiValidating(false); toast.error("Erro na validação: " + e.message); },
@@ -275,13 +265,28 @@ export default function PayrollCompetencias() {
     if (dixiValidation && !dixiValidation.allValid) return toast.error("Corrija os problemas de SN antes de importar");
     setDixiUploading(true);
     try {
-      const filesData = await Promise.all(dixiFiles.map(async (f) => {
+      let totalImported = 0;
+      let totalInconsistencies = 0;
+      // Upload files one by one to avoid large payloads that fail on mobile Safari
+      for (let i = 0; i < dixiFiles.length; i++) {
+        const f = dixiFiles[i];
+        toast.info(`Importando arquivo ${i + 1} de ${dixiFiles.length}: ${f.name}...`);
         const buffer = await f.arrayBuffer();
         const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
-        return { fileName: f.name, fileBase64: base64 };
-      }));
-      uploadDixi.mutate({ companyId, files: filesData });
-    } catch { setDixiUploading(false); }
+        const result = await uploadDixi.mutateAsync({ companyId, files: [{ fileName: f.name, fileBase64: base64 }] });
+        totalImported += result.totalImported || 0;
+        totalInconsistencies += result.totalInconsistencies || 0;
+      }
+      toast.success(`${totalImported} registros importados de ${dixiFiles.length} arquivo(s)`);
+      if (totalInconsistencies > 0) toast.warning(`${totalInconsistencies} inconsistência(s) detectada(s)`);
+      setDixiFiles([]);
+      setDixiValidation(null);
+      setDixiUploading(false);
+      invalidateAll();
+    } catch (e: any) {
+      setDixiUploading(false);
+      toast.error("Erro no upload: " + (e?.message || "Falha na conexão. Tente novamente."));
+    }
   };
 
   const analisarIA = trpc.payrollEngine.analisarInconsistenciaIA.useMutation({

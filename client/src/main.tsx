@@ -59,11 +59,15 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      maxURLLength: 2048,
       fetch(input, init) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
-        });
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeoutId));
       },
     }),
   ],
