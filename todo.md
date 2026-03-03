@@ -4205,3 +4205,7 @@
 - [x] Testes de bloqueio de vale, desconto VR/VT, acerto escuro
 - [x] Testes de fluxo completo (Fev/2026 como exemplo)
 - [x] Testes de eventos financeiros
+
+## Rev. 168: Atualizar Controle de Revisões
+- [x] Adicionar revisões 143 a 167 no Controle de Revisões
+- [x] Verificar que todas as revisões aparecem corretamente na página
