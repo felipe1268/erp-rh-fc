@@ -4058,3 +4058,7 @@
 - [x] BUG: canAccessModule agora usa TODAS as rotas do grupo (não apenas exclusivas)
 - [x] BUG: Movimentações (30 dias) já estava com canSee('/colaboradores') — verificado
 - [x] BUG: canAccessModule agora usa groupRouteMap com rotas exclusivas quando usuário tem grupo
+
+## Rev. 155 - Ocultar Quadro de Pessoal para TST
+- [ ] Ocultar seção "Quadro de Pessoal" no Painel RH para grupos sem acesso a /colaboradores
+- [x] Remover card "Total Colaboradores" do Quadro de Pessoal (manter apenas Ativos, Férias, Afastados, Licença, Desligados)

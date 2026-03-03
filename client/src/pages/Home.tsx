@@ -112,14 +112,7 @@ export default function Home() {
               {/* KPI Cards Row 1 - Funcionários */}
               {canSee('/colaboradores') && <div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recursos Humanos</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  <KpiCard
-                    title="Total Colaboradores"
-                    value={s?.totalFuncionarios ?? 0}
-                    icon={Users}
-                    color="blue"
-                    onClick={() => navigate("/colaboradores")}
-                  />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                   <KpiCard
                     title="Ativos"
                     value={s?.ativos ?? 0}
