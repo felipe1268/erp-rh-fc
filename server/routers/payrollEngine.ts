@@ -1977,15 +1977,23 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const config = etapaMap[etapa];
       if (!config) throw new TRPCError({ code: "BAD_REQUEST", message: "Etapa inválida" });
 
-      // Delete data from related tables
-      for (const table of config.tables) {
-        if (table === "payroll_adjustments") {
-          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      // Delete data from related tables (each table has different column names)
+      const deleteFromTable = async (table: string) => {
+        if (table === "timecard_daily") {
+          await db.execute(sql`DELETE FROM timecard_daily WHERE companyId = ${companyId} AND mesCompetencia = ${mesReferencia}`);
+        } else if (table === "payroll_adjustments") {
+          await db.execute(sql`DELETE FROM payroll_adjustments WHERE companyId = ${companyId} AND (mesOrigem = ${mesReferencia} OR mesDesconto = ${mesReferencia})`);
         } else if (table === "payroll_uploads") {
-          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+          await db.execute(sql`DELETE FROM payroll_uploads WHERE companyId = ${companyId} AND month = ${mesReferencia}`);
+        } else if (table === "time_records") {
+          await db.execute(sql`DELETE FROM time_records WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
         } else {
           await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
         }
+      };
+
+      for (const table of config.tables) {
+        await deleteFromTable(table);
       }
 
       // Also clear downstream data (cascade)
@@ -1994,7 +2002,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       for (let i = etapaIdx + 1; i < etapaOrder.length; i++) {
         const downstream = etapaMap[etapaOrder[i]];
         for (const table of downstream.tables) {
-          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+          await deleteFromTable(table);
         }
       }
 
@@ -2033,15 +2041,19 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       const periodId = periods[0].id;
 
-      // Delete ALL data for this competência
-      const tables = [
-        "timecard_daily", "time_records", "time_inconsistencies",
-        "payroll_uploads", "payroll_adjustments", "payroll_advances",
-        "payroll_payments", "payroll_alerts",
-      ];
-      for (const table of tables) {
-        await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
-      }
+      // Delete ALL data for this competência (each table has different column names)
+      await db.execute(sql`DELETE FROM timecard_daily WHERE companyId = ${companyId} AND mesCompetencia = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM time_records WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM time_inconsistencies WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_uploads WHERE companyId = ${companyId} AND month = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_adjustments WHERE companyId = ${companyId} AND (mesOrigem = ${mesReferencia} OR mesDesconto = ${mesReferencia})`);
+      await db.execute(sql`DELETE FROM payroll_advances WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_payments WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      await db.execute(sql`DELETE FROM payroll_alerts WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      // Also delete financial_events related to this competência
+      await db.execute(sql`DELETE FROM financial_events WHERE companyId = ${companyId} AND mesCompetencia = ${mesReferencia} AND origemTipo IN ('payroll_advance', 'payroll_payment')`);
+      // Delete folha_lancamentos if any
+      await db.execute(sql`DELETE FROM folha_lancamentos WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
 
       // Reset period to "aberta" and clear all timestamps
       await db.execute(sql`

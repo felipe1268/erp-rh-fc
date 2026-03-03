@@ -4358,3 +4358,7 @@
 - [x] Verificar pagamento: saldo no 5º dia útil do mês subsequente - OK
 - [x] Verificar que funcionários registrados após dia 10 não recebem vale - OK
 - [x] Documentar gaps encontrados e corrigir - FEITO
+
+### Bug - DELETE FROM timecard_daily falha
+- [x] Investigar erro "Failed query: DELETE FROM timecard_daily WHERE companyId = ? AND mesReferencia = ?" ao processar ponto
+- [x] Corrigir o bug - timecard_daily usa mesCompetencia, payroll_uploads usa month, payroll_adjustments usa mesOrigem/mesDesconto
