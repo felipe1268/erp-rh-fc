@@ -4099,3 +4099,13 @@
 - [x] Lançar Atestados deve abrir aba Atestados SEM abrir formulário automaticamente (remover action=nova)
 - [x] Sidebar não deve colapsar seções ao clicar nos atalhos (usar sessionStorage + setLocation ao invés de window.location.href)
 - [x] Suporte a re-clique no atalho quando já está na mesma página (evento customizado navParamsUpdated)
+
+## Rev. 163 - Reimplementar Drag-and-Drop com @dnd-kit
+- [x] Instalar @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
+- [x] Reimplementar MenuConfigPanel usando @dnd-kit para drag-and-drop confiável
+- [x] Permitir arrastar itens entre seções (ex: mover Crachás de Operacional para Gestão de Pessoas)
+- [x] Permitir reordenar itens dentro da mesma seção
+- [x] Auto-expandir todas as seções ao iniciar arraste
+- [x] Overlay visual durante o arraste com feedback "Solte aqui"
+- [x] Corrigir atalho Lançar Atestados para não abrir formulário automaticamente
+- [x] Corrigir sidebar que colapsava ao clicar nos atalhos (usar sessionStorage + setLocation)

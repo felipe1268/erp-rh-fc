@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -11,6 +11,25 @@ import {
   RotateCcw, Save, Loader2, ChevronDown, ChevronRight, Pencil, Check, X,
   CalendarDays, TrendingUp, FileSpreadsheet, CreditCard,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  DragStartEvent,
+  DragOverEvent,
+  DragEndEvent,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const ICON_MAP: Record<string, any> = {
   "Painel": LayoutDashboard, "Empresas": Building2, "Colaboradores": Users,
@@ -102,11 +121,231 @@ const DEFAULT_MENU = [
 type MenuItem = { label: string; path: string; visible: boolean; originalLabel?: string };
 type MenuSection = { title: string; items: MenuItem[] };
 
-// Drag data types
-type DragItem = { type: "item"; sectionIdx: number; itemIdx: number };
-type DragSection = { type: "section"; sectionIdx: number };
-type DragData = DragItem | DragSection;
+// Unique ID helpers: sections use "sec-{idx}", items use "item-{sectionIdx}-{itemIdx}"
+function secId(idx: number) { return `sec-${idx}`; }
+function itemId(sIdx: number, iIdx: number) { return `item-${sIdx}-${iIdx}`; }
+function parseItemId(id: string): { sIdx: number; iIdx: number } | null {
+  const m = id.match(/^item-(\d+)-(\d+)$/);
+  return m ? { sIdx: parseInt(m[1]), iIdx: parseInt(m[2]) } : null;
+}
+function parseSecId(id: string): number | null {
+  const m = id.match(/^sec-(\d+)$/);
+  return m ? parseInt(m[1]) : null;
+}
 
+// ======================== SORTABLE ITEM ========================
+function SortableItem({
+  id, item, sIdx, iIdx, isMaster,
+  editingItem, editingLabel, setEditingLabel, editInputRef,
+  startEditItem, confirmEditItem, cancelEditItem,
+  toggleItemVisibility,
+}: {
+  id: string; item: MenuItem; sIdx: number; iIdx: number; isMaster: boolean;
+  editingItem: { sectionIdx: number; itemIdx: number } | null;
+  editingLabel: string; setEditingLabel: (v: string) => void;
+  editInputRef: React.RefObject<HTMLInputElement | null>;
+  startEditItem: (s: number, i: number) => void;
+  confirmEditItem: () => void; cancelEditItem: () => void;
+  toggleItemVisibility: (s: number, i: number) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    data: { type: "item", sIdx, iIdx },
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  };
+
+  const IconComp = ICON_MAP[item.label] || ICON_MAP[item.originalLabel || ""] || PATH_ICON_MAP[item.path] || LayoutDashboard;
+  const isEditing = editingItem?.sectionIdx === sIdx && editingItem?.itemIdx === iIdx;
+
+  return (
+    <div ref={setNodeRef} style={style} className={`flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors ${
+      item.visible !== false ? "bg-gray-50 hover:bg-gray-100" : "bg-gray-50/50 opacity-50"
+    }`}>
+      <div className="flex items-center gap-3">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200 touch-none">
+          <GripVertical className="h-3.5 w-3.5 text-gray-300" />
+        </div>
+        <IconComp className={`h-4 w-4 ${item.visible !== false ? "text-gray-600" : "text-gray-400"}`} />
+        {isEditing ? (
+          <div className="flex items-center gap-1">
+            <input
+              ref={editInputRef}
+              className="text-sm font-medium text-gray-800 bg-white border border-blue-300 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              value={editingLabel}
+              onChange={(e) => setEditingLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") confirmEditItem(); if (e.key === "Escape") cancelEditItem(); }}
+            />
+            <button onClick={confirmEditItem} className="p-0.5 rounded hover:bg-green-100 text-green-600"><Check className="h-3.5 w-3.5" /></button>
+            <button onClick={cancelEditItem} className="p-0.5 rounded hover:bg-red-100 text-red-600"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        ) : (
+          <span
+            className={`text-sm ${item.visible !== false ? "text-gray-800 font-medium" : "text-gray-400 line-through"} ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
+            onDoubleClick={() => startEditItem(sIdx, iIdx)}
+            title={isMaster ? "Duplo clique para renomear" : ""}
+          >
+            {item.label}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-0.5">
+        {isMaster && !isEditing && (
+          <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0"
+            onClick={() => startEditItem(sIdx, iIdx)} title="Renomear">
+            <Pencil className="h-3 w-3 text-gray-400 hover:text-blue-500" />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0"
+          onClick={() => toggleItemVisibility(sIdx, iIdx)}
+          title={item.visible ? "Ocultar" : "Mostrar"}>
+          {item.visible ? <Eye className="h-3.5 w-3.5 text-green-600" /> : <EyeOff className="h-3.5 w-3.5 text-gray-400" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ======================== DROPPABLE SECTION ========================
+function DroppableSection({
+  id, section, sIdx, isExpanded, isMaster, isDraggingItem,
+  toggleSection,
+  editingSection, editingSectionTitle, setEditingSectionTitle, editInputRef,
+  startEditSection, confirmEditSection, cancelEditSection,
+  editingItem, editingLabel, setEditingLabel,
+  startEditItem, confirmEditItem, cancelEditItem,
+  toggleItemVisibility, isOverThis,
+}: {
+  id: string; section: MenuSection; sIdx: number; isExpanded: boolean; isMaster: boolean;
+  isDraggingItem: boolean;
+  toggleSection: (title: string) => void;
+  editingSection: number | null; editingSectionTitle: string;
+  setEditingSectionTitle: (v: string) => void;
+  editInputRef: React.RefObject<HTMLInputElement | null>;
+  startEditSection: (s: number) => void;
+  confirmEditSection: () => void; cancelEditSection: () => void;
+  editingItem: { sectionIdx: number; itemIdx: number } | null;
+  editingLabel: string; setEditingLabel: (v: string) => void;
+  startEditItem: (s: number, i: number) => void;
+  confirmEditItem: () => void; cancelEditItem: () => void;
+  toggleItemVisibility: (s: number, i: number) => void;
+  isOverThis: boolean;
+}) {
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `drop-${sIdx}`,
+    data: { type: "section-drop", sIdx },
+  });
+
+  const visibleCount = section.items.filter(i => i.visible).length;
+  const itemIds = section.items.map((_, iIdx) => itemId(sIdx, iIdx));
+  const showHighlight = isOverThis || isOver;
+
+  return (
+    <div className={`border rounded-xl transition-all duration-200 ${
+      showHighlight && isDraggingItem
+        ? "border-blue-400 bg-blue-50/80 shadow-md ring-2 ring-blue-200"
+        : "border-gray-200 bg-white hover:border-gray-300"
+    }`}>
+      {/* Section Header */}
+      <div
+        className="flex items-center justify-between py-3 px-4 cursor-pointer select-none"
+        onClick={() => toggleSection(section.title)}
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-1 -m-1 rounded hover:bg-gray-100">
+            <GripVertical className="h-4 w-4 text-gray-400" />
+          </div>
+          {editingSection === sIdx ? (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <input
+                ref={editInputRef}
+                className="text-sm font-bold uppercase tracking-wider text-gray-800 bg-white border border-blue-300 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                value={editingSectionTitle}
+                onChange={(e) => setEditingSectionTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") confirmEditSection(); if (e.key === "Escape") cancelEditSection(); }}
+              />
+              <button onClick={(e) => { e.stopPropagation(); confirmEditSection(); }} className="p-0.5 rounded hover:bg-green-100 text-green-600"><Check className="h-3.5 w-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); cancelEditSection(); }} className="p-0.5 rounded hover:bg-red-100 text-red-600"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ) : (
+            <span
+              className={`text-sm font-bold uppercase tracking-wider text-gray-600 ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
+              onDoubleClick={(e) => { e.stopPropagation(); startEditSection(sIdx); }}
+              title={isMaster ? "Duplo clique para renomear" : ""}
+            >
+              {section.title}
+            </span>
+          )}
+          <span className="text-xs text-gray-400 font-normal">
+            {visibleCount}/{section.items.length} visíveis
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          {showHighlight && isDraggingItem && (
+            <span className="text-xs text-blue-600 font-medium mr-2 animate-pulse">Solte aqui</span>
+          )}
+          {isMaster && editingSection !== sIdx && (
+            <button
+              onClick={(e) => { e.stopPropagation(); startEditSection(sIdx); }}
+              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500"
+              title="Renomear categoria"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          {isExpanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+        </div>
+      </div>
+
+      {/* Section Items */}
+      {isExpanded && (
+        <div ref={setDropRef} className="px-4 pb-3 space-y-0.5" style={{ minHeight: isDraggingItem ? 40 : undefined }}>
+          {section.items.length === 0 && (
+            <div className={`py-6 text-center text-sm rounded-lg border-2 border-dashed transition-all ${
+              showHighlight ? "border-blue-400 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-400"
+            }`}>
+              {showHighlight ? "Solte o item aqui" : "Categoria vazia — arraste itens para cá"}
+            </div>
+          )}
+          <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+            {section.items.map((item, iIdx) => (
+              <SortableItem
+                key={itemId(sIdx, iIdx)}
+                id={itemId(sIdx, iIdx)}
+                item={item}
+                sIdx={sIdx}
+                iIdx={iIdx}
+                isMaster={isMaster}
+                editingItem={editingItem}
+                editingLabel={editingLabel}
+                setEditingLabel={setEditingLabel}
+                editInputRef={editInputRef}
+                startEditItem={startEditItem}
+                confirmEditItem={confirmEditItem}
+                cancelEditItem={cancelEditItem}
+                toggleItemVisibility={toggleItemVisibility}
+              />
+            ))}
+          </SortableContext>
+          {/* Drop zone at bottom */}
+          {isDraggingItem && section.items.length > 0 && (
+            <div className={`py-3 mt-1 text-center text-xs rounded-lg border-2 border-dashed transition-all ${
+              showHighlight ? "border-blue-400 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-400"
+            }`}>
+              {showHighlight ? "Solte aqui para adicionar" : "Solte aqui"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ======================== MAIN COMPONENT ========================
 export default function MenuConfigPanel() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
@@ -118,6 +357,17 @@ export default function MenuConfigPanel() {
   const [editingSection, setEditingSection] = useState<number | null>(null);
   const [editingSectionTitle, setEditingSectionTitle] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Active drag state
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeData, setActiveData] = useState<{ type: "item"; item: MenuItem } | null>(null);
+  const [overSectionIdx, setOverSectionIdx] = useState<number | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    })
+  );
 
   const startEditItem = (sectionIdx: number, itemIdx: number) => {
     if (!isMaster) return;
@@ -159,24 +409,14 @@ export default function MenuConfigPanel() {
 
   const cancelEditSection = () => setEditingSection(null);
 
-  // ===================== DRAG STATE =====================
-  const dragDataRef = useRef<DragData | null>(null);
-  const [dragType, setDragType] = useState<"item" | "section" | null>(null);
-  const [dropTarget, setDropTarget] = useState<{
-    type: "item" | "section" | "section-zone";
-    sectionIdx: number;
-    itemIdx?: number;
-    position: "before" | "after" | "inside";
-  } | null>(null);
-
   const configQuery = trpc.menuConfig.get.useQuery();
   const saveMut = trpc.menuConfig.save.useMutation({
     onSuccess: () => { toast.success("Configuração do menu salva!"); setHasChanges(false); configQuery.refetch(); },
-    onError: (e) => toast.error("Erro ao salvar: " + e.message),
+    onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
   });
   const resetMut = trpc.menuConfig.reset.useMutation({
     onSuccess: () => { setMenuConfig(DEFAULT_MENU); setHasChanges(false); toast.success("Menu restaurado!"); configQuery.refetch(); },
-    onError: (e) => toast.error("Erro: " + e.message),
+    onError: (e: any) => toast.error("Erro: " + e.message),
   });
 
   useEffect(() => {
@@ -184,7 +424,6 @@ export default function MenuConfigPanel() {
       const saved = configQuery.data as MenuSection[];
       const allSavedPaths = new Set(saved.flatMap(s => s.items.map(i => i.path)));
       const merged = saved.map(s => ({ ...s, items: [...s.items] }));
-      
       for (const defSection of DEFAULT_MENU) {
         const existingSection = merged.find(s => s.title === defSection.title);
         for (const defItem of defSection.items) {
@@ -225,184 +464,110 @@ export default function MenuConfigPanel() {
     setHasChanges(true);
   }, []);
 
-  // ===================== DRAG & DROP HANDLERS =====================
+  // =================== DND-KIT HANDLERS ===================
 
-  // --- ITEM DRAG ---
-  const handleItemDragStart = (e: React.DragEvent, sectionIdx: number, itemIdx: number) => {
-    e.stopPropagation();
-    const data: DragItem = { type: "item", sectionIdx, itemIdx };
-    dragDataRef.current = data;
-    setDragType("item");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", JSON.stringify(data));
-    const el = e.currentTarget as HTMLElement;
-    requestAnimationFrame(() => el.style.opacity = "0.4");
-  };
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const id = active.id as string;
+    setActiveId(id);
 
-  const handleItemDragEnd = (e: React.DragEvent) => {
-    (e.currentTarget as HTMLElement).style.opacity = "";
-    dragDataRef.current = null;
-    setDragType(null);
-    setDropTarget(null);
-  };
-
-  // --- SECTION DRAG (only from grip handle) ---
-  const handleSectionGripDragStart = (e: React.DragEvent, sectionIdx: number) => {
-    e.stopPropagation();
-    const data: DragSection = { type: "section", sectionIdx };
-    dragDataRef.current = data;
-    setDragType("section");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", JSON.stringify(data));
-    // Find the section container (parent of the grip)
-    const sectionEl = (e.currentTarget as HTMLElement).closest("[data-section-idx]") as HTMLElement;
-    if (sectionEl) requestAnimationFrame(() => sectionEl.style.opacity = "0.4");
-  };
-
-  const handleSectionDragEnd = (e: React.DragEvent) => {
-    // Restore opacity on the section container
-    const sectionEl = (e.currentTarget as HTMLElement).closest("[data-section-idx]") as HTMLElement;
-    if (sectionEl) sectionEl.style.opacity = "";
-    // Also try the current target itself
-    (e.currentTarget as HTMLElement).style.opacity = "";
-    dragDataRef.current = null;
-    setDragType(null);
-    setDropTarget(null);
-  };
-
-  // Section header drag over (for both section reorder and item-to-section drop)
-  const handleSectionHeaderDragOver = (e: React.DragEvent, sectionIdx: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const dd = dragDataRef.current;
-    if (!dd) return;
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const midpoint = rect.height / 2;
-
-    if (dd.type === "section") {
-      setDropTarget({
-        type: "section",
-        sectionIdx,
-        position: y < midpoint ? "before" : "after",
-      });
-    } else if (dd.type === "item") {
-      // Dropping item onto a section header = move to end of that section
-      setDropTarget({
-        type: "section-zone",
-        sectionIdx,
-        position: "inside",
-      });
+    const parsed = parseItemId(id);
+    if (parsed) {
+      const item = menuConfig[parsed.sIdx]?.items[parsed.iIdx];
+      if (item) {
+        setActiveData({ type: "item", item: { ...item } });
+        // Auto-expand all sections so user can drop anywhere
+        setExpandedSections(new Set(menuConfig.map(s => s.title)));
+      }
     }
   };
 
-  // Item drag over
-  const handleItemDragOver = (e: React.DragEvent, sectionIdx: number, itemIdx: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const dd = dragDataRef.current;
-    if (!dd || dd.type !== "item") return;
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) { setOverSectionIdx(null); return; }
 
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const midpoint = rect.height / 2;
+    const overId = over.id as string;
 
-    setDropTarget({
-      type: "item",
-      sectionIdx,
-      itemIdx,
-      position: y < midpoint ? "before" : "after",
-    });
-  };
-
-  // Empty zone drag over (bottom of expanded section)
-  const handleZoneDragOver = (e: React.DragEvent, sectionIdx: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDropTarget({ type: "section-zone", sectionIdx, position: "inside" });
-  };
-
-  // Handle drop
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const dd = dragDataRef.current;
-    if (!dd || !dropTarget) {
-      dragDataRef.current = null;
-      setDragType(null);
-      setDropTarget(null);
+    // Check if over a droppable section zone
+    if (overId.startsWith("drop-")) {
+      const sIdx = parseInt(overId.replace("drop-", ""));
+      setOverSectionIdx(sIdx);
       return;
     }
 
-    if (dd.type === "section" && dropTarget.type === "section") {
-      const fromIdx = dd.sectionIdx;
-      let toIdx = dropTarget.sectionIdx;
-      if (dropTarget.position === "after") toIdx++;
-      if (fromIdx === toIdx || fromIdx + 1 === toIdx) {
-        dragDataRef.current = null; setDragType(null); setDropTarget(null); return;
-      }
+    // Check if over an item
+    const parsedOver = parseItemId(overId);
+    if (parsedOver) {
+      setOverSectionIdx(parsedOver.sIdx);
+      return;
+    }
+
+    setOverSectionIdx(null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    setActiveData(null);
+    setOverSectionIdx(null);
+
+    if (!over) return;
+
+    const activeIdStr = active.id as string;
+    const overIdStr = over.id as string;
+
+    const parsedActive = parseItemId(activeIdStr);
+    if (!parsedActive) return; // Only items are draggable for now
+
+    const fromSIdx = parsedActive.sIdx;
+    const fromIIdx = parsedActive.iIdx;
+
+    // Dropped on a section drop zone
+    if (overIdStr.startsWith("drop-")) {
+      const toSIdx = parseInt(overIdStr.replace("drop-", ""));
+      if (fromSIdx === toSIdx) return; // Same section, no move needed
+
       setMenuConfig(prev => {
-        const arr = [...prev];
-        const [moved] = arr.splice(fromIdx, 1);
-        const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
-        arr.splice(insertIdx, 0, moved);
+        const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
+        const [movedItem] = arr[fromSIdx].items.splice(fromIIdx, 1);
+        arr[toSIdx].items.push(movedItem);
         return arr;
       });
       setHasChanges(true);
-    } else if (dd.type === "item") {
-      const fromSection = dd.sectionIdx;
-      const fromItem = dd.itemIdx;
-
-      if (dropTarget.type === "item" && dropTarget.itemIdx !== undefined) {
-        let toSection = dropTarget.sectionIdx;
-        let toItem = dropTarget.itemIdx;
-        if (dropTarget.position === "after") toItem++;
-
-        if (fromSection === toSection && (fromItem === toItem || fromItem + 1 === toItem)) {
-          dragDataRef.current = null; setDragType(null); setDropTarget(null); return;
-        }
-
-        setMenuConfig(prev => {
-          const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
-          const [item] = arr[fromSection].items.splice(fromItem, 1);
-          const adjustedToItem = fromSection === toSection && fromItem < toItem ? toItem - 1 : toItem;
-          arr[toSection].items.splice(adjustedToItem, 0, item);
-          return arr;
-        });
-        setHasChanges(true);
-      } else if (dropTarget.type === "section-zone") {
-        const toSection = dropTarget.sectionIdx;
-
-        setMenuConfig(prev => {
-          const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
-          const [item] = arr[fromSection].items.splice(fromItem, 1);
-          arr[toSection].items.push(item);
-          return arr;
-        });
-        setHasChanges(true);
-        // Auto-expand the target section
-        setExpandedSections(prev => {
-          const next = new Set(prev);
-          next.add(menuConfig[toSection].title);
-          return next;
-        });
-      }
+      toast.success(`Movido para ${menuConfig[toSIdx].title}`);
+      return;
     }
 
-    dragDataRef.current = null;
-    setDragType(null);
-    setDropTarget(null);
+    // Dropped on another item
+    const parsedOver = parseItemId(overIdStr);
+    if (!parsedOver) return;
+
+    const toSIdx = parsedOver.sIdx;
+    const toIIdx = parsedOver.iIdx;
+
+    if (fromSIdx === toSIdx) {
+      // Same section: reorder
+      if (fromIIdx === toIIdx) return;
+      setMenuConfig(prev => {
+        const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
+        arr[fromSIdx].items = arrayMove(arr[fromSIdx].items, fromIIdx, toIIdx);
+        return arr;
+      });
+      setHasChanges(true);
+    } else {
+      // Different section: move item
+      setMenuConfig(prev => {
+        const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
+        const [movedItem] = arr[fromSIdx].items.splice(fromIIdx, 1);
+        arr[toSIdx].items.splice(toIIdx, 0, movedItem);
+        return arr;
+      });
+      setHasChanges(true);
+      toast.success(`Movido para ${menuConfig[toSIdx].title}`);
+    }
   };
 
-  const isDropTargetSection = (sIdx: number, pos: "before" | "after") =>
-    dropTarget?.type === "section" && dropTarget.sectionIdx === sIdx && dropTarget.position === pos;
-
-  const isDropTargetSectionZone = (sIdx: number) =>
-    dropTarget?.type === "section-zone" && dropTarget.sectionIdx === sIdx;
-
-  const isDropTargetItem = (sIdx: number, iIdx: number, pos: "before" | "after") =>
-    dropTarget?.type === "item" && dropTarget.sectionIdx === sIdx && dropTarget.itemIdx === iIdx && dropTarget.position === pos;
+  const isDraggingItem = activeId !== null;
 
   return (
     <div className="space-y-4">
@@ -437,235 +602,74 @@ export default function MenuConfigPanel() {
       )}
 
       {/* Dica de uso */}
-      {!dragType && (
+      {!isDraggingItem && (
         <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-xs text-blue-700 flex items-center gap-2">
           <GripVertical className="h-4 w-4 text-blue-400 flex-shrink-0" />
-          <span><strong>Dica:</strong> Segure o ícone <GripVertical className="h-3 w-3 inline" /> e arraste para mover categorias ou itens. Solte sobre outra categoria para mover entre elas.</span>
+          <span><strong>Dica:</strong> Segure o ícone <GripVertical className="h-3 w-3 inline" /> e arraste para mover itens. Solte sobre outra categoria para mover entre elas.</span>
         </div>
       )}
 
-      {/* Sections */}
-      <div className="space-y-2" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
-        {menuConfig.map((section, sIdx) => {
-          const isExpanded = expandedSections.has(section.title);
-          const visibleCount = section.items.filter(i => i.visible).length;
-          const isDraggingSection = dragType === "section";
-          const isDraggingItem = dragType === "item";
-          const isSectionDropZone = isDropTargetSectionZone(sIdx);
-          const isSectionBeingDragged = isDraggingSection && dragDataRef.current?.type === "section" && dragDataRef.current.sectionIdx === sIdx;
+      {/* Sections with DndContext */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="space-y-2">
+          {menuConfig.map((section, sIdx) => {
+            const isExpanded = expandedSections.has(section.title);
 
-          return (
-            <div key={section.title + sIdx}>
-              {/* Drop indicator BEFORE section */}
-              {isDropTargetSection(sIdx, "before") && (
-                <div className="h-1 bg-blue-500 rounded-full mx-2 mb-1 transition-all" />
-              )}
+            return (
+              <DroppableSection
+                key={section.title + sIdx}
+                id={secId(sIdx)}
+                section={section}
+                sIdx={sIdx}
+                isExpanded={isExpanded}
+                isMaster={isMaster}
+                isDraggingItem={isDraggingItem}
+                toggleSection={toggleSection}
+                editingSection={editingSection}
+                editingSectionTitle={editingSectionTitle}
+                setEditingSectionTitle={setEditingSectionTitle}
+                editInputRef={editInputRef}
+                startEditSection={startEditSection}
+                confirmEditSection={confirmEditSection}
+                cancelEditSection={cancelEditSection}
+                editingItem={editingItem}
+                editingLabel={editingLabel}
+                setEditingLabel={setEditingLabel}
+                startEditItem={startEditItem}
+                confirmEditItem={confirmEditItem}
+                cancelEditItem={cancelEditItem}
+                toggleItemVisibility={toggleItemVisibility}
+                isOverThis={overSectionIdx === sIdx}
+              />
+            );
+          })}
+        </div>
 
-              <div
-                data-section-idx={sIdx}
-                className={`border rounded-xl transition-all duration-200 ${
-                  isSectionDropZone
-                    ? "border-blue-400 bg-blue-50/80 shadow-md ring-2 ring-blue-200"
-                    : isSectionBeingDragged
-                    ? "opacity-40"
-                    : "border-gray-200 bg-white hover:border-gray-300"
-                }`}
-              >
-                {/* Section Header */}
-                <div
-                  className="flex items-center justify-between py-3 px-4 cursor-pointer select-none"
-                  onClick={() => { if (!isDraggingItem && !isDraggingSection) toggleSection(section.title); }}
-                  onDragOver={(e) => handleSectionHeaderDragOver(e, sIdx)}
-                  onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
-                >
-                  <div className="flex items-center gap-3">
-                    {/* Section grip handle - ONLY this is draggable for sections */}
-                    <div
-                      className="cursor-grab active:cursor-grabbing p-1 -m-1 rounded hover:bg-gray-100"
-                      draggable={true}
-                      onDragStart={(e) => handleSectionGripDragStart(e, sIdx)}
-                      onDragEnd={handleSectionDragEnd}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <GripVertical className="h-4 w-4 text-gray-400" />
-                    </div>
-                    {editingSection === sIdx ? (
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          ref={editInputRef}
-                          className="text-sm font-bold uppercase tracking-wider text-gray-800 bg-white border border-blue-300 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                          value={editingSectionTitle}
-                          onChange={(e) => setEditingSectionTitle(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") confirmEditSection(); if (e.key === "Escape") cancelEditSection(); }}
-                        />
-                        <button onClick={confirmEditSection} className="p-0.5 rounded hover:bg-green-100 text-green-600"><Check className="h-3.5 w-3.5" /></button>
-                        <button onClick={cancelEditSection} className="p-0.5 rounded hover:bg-red-100 text-red-600"><X className="h-3.5 w-3.5" /></button>
-                      </div>
-                    ) : (
-                      <span
-                        className={`text-sm font-bold uppercase tracking-wider text-gray-600 ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
-                        onDoubleClick={(e) => { e.stopPropagation(); startEditSection(sIdx); }}
-                        title={isMaster ? "Duplo clique para renomear" : ""}
-                      >
-                        {section.title}
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-400 font-normal">
-                      {visibleCount}/{section.items.length} visíveis
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {isSectionDropZone && isDraggingItem && (
-                      <span className="text-xs text-blue-600 font-medium mr-2 animate-pulse">Solte aqui</span>
-                    )}
-                    {isMaster && editingSection !== sIdx && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); startEditSection(sIdx); }}
-                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500"
-                        title="Renomear categoria"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                    )}
-                    {isExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Section Items */}
-                {isExpanded && (
-                  <div className="px-4 pb-3 space-y-0.5">
-                    {section.items.length === 0 && (
-                      <div
-                        className={`py-6 text-center text-sm rounded-lg border-2 border-dashed transition-all ${
-                          isSectionDropZone ? "border-blue-400 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-400"
-                        }`}
-                        onDragOver={(e) => handleZoneDragOver(e, sIdx)}
-                        onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
-                      >
-                        {isSectionDropZone ? "Solte o item aqui" : "Categoria vazia — arraste itens para cá"}
-                      </div>
-                    )}
-                    {section.items.map((item, iIdx) => {
-                      const IconComp = ICON_MAP[item.label] || ICON_MAP[item.originalLabel || ""] || PATH_ICON_MAP[item.path] || LayoutDashboard;
-                      const isDraggingThis = isDraggingItem && dragDataRef.current?.type === "item" && dragDataRef.current.sectionIdx === sIdx && dragDataRef.current.itemIdx === iIdx;
-
-                      return (
-                        <div key={item.path + iIdx}>
-                          {/* Drop indicator BEFORE item */}
-                          {isDropTargetItem(sIdx, iIdx, "before") && (
-                            <div className="h-0.5 bg-blue-500 rounded-full mx-6 transition-all" />
-                          )}
-
-                          <div
-                            className={`flex items-center justify-between py-2.5 px-3 rounded-lg transition-all duration-150 ${
-                              isDraggingThis
-                                ? "opacity-30 scale-95"
-                                : item.visible !== false
-                                ? "bg-gray-50 hover:bg-gray-100"
-                                : "bg-gray-50/50 opacity-50"
-                            }`}
-                            draggable={true}
-                            onDragStart={(e) => handleItemDragStart(e, sIdx, iIdx)}
-                            onDragEnd={handleItemDragEnd}
-                            onDragOver={(e) => handleItemDragOver(e, sIdx, iIdx)}
-                            onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200">
-                                <GripVertical className="h-3.5 w-3.5 text-gray-300" />
-                              </div>
-                              <IconComp className={`h-4 w-4 ${item.visible !== false ? "text-gray-600" : "text-gray-400"}`} />
-                              {editingItem?.sectionIdx === sIdx && editingItem?.itemIdx === iIdx ? (
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    ref={editInputRef}
-                                    className="text-sm font-medium text-gray-800 bg-white border border-blue-300 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                    value={editingLabel}
-                                    onChange={(e) => setEditingLabel(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === "Enter") confirmEditItem(); if (e.key === "Escape") cancelEditItem(); }}
-                                  />
-                                  <button onClick={confirmEditItem} className="p-0.5 rounded hover:bg-green-100 text-green-600"><Check className="h-3.5 w-3.5" /></button>
-                                  <button onClick={cancelEditItem} className="p-0.5 rounded hover:bg-red-100 text-red-600"><X className="h-3.5 w-3.5" /></button>
-                                </div>
-                              ) : (
-                                <span
-                                  className={`text-sm ${item.visible !== false ? "text-gray-800 font-medium" : "text-gray-400 line-through"} ${isMaster ? "cursor-pointer hover:text-blue-600" : ""}`}
-                                  onDoubleClick={(e) => { e.stopPropagation(); startEditItem(sIdx, iIdx); }}
-                                  title={isMaster ? "Duplo clique para renomear" : ""}
-                                >
-                                  {item.label}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-0.5">
-                              {isMaster && !(editingItem?.sectionIdx === sIdx && editingItem?.itemIdx === iIdx) && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 flex-shrink-0"
-                                  onClick={(e) => { e.stopPropagation(); startEditItem(sIdx, iIdx); }}
-                                  title="Renomear"
-                                >
-                                  <Pencil className="h-3 w-3 text-gray-400 hover:text-blue-500" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 flex-shrink-0"
-                                onClick={(e) => { e.stopPropagation(); toggleItemVisibility(sIdx, iIdx); }}
-                                title={item.visible ? "Ocultar" : "Mostrar"}
-                              >
-                                {item.visible ? (
-                                  <Eye className="h-3.5 w-3.5 text-green-600" />
-                                ) : (
-                                  <EyeOff className="h-3.5 w-3.5 text-gray-400" />
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Drop indicator AFTER item */}
-                          {isDropTargetItem(sIdx, iIdx, "after") && (
-                            <div className="h-0.5 bg-blue-500 rounded-full mx-6 transition-all" />
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Empty drop zone at bottom of section when dragging items */}
-                    {isDraggingItem && section.items.length > 0 && (
-                      <div
-                        className={`py-3 mt-1 text-center text-xs rounded-lg border-2 border-dashed transition-all ${
-                          isSectionDropZone ? "border-blue-400 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-400"
-                        }`}
-                        onDragOver={(e) => handleZoneDragOver(e, sIdx)}
-                        onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
-                      >
-                        {isSectionDropZone ? "Solte aqui para adicionar" : "Solte aqui"}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Drop indicator AFTER section */}
-              {isDropTargetSection(sIdx, "after") && (
-                <div className="h-1 bg-blue-500 rounded-full mx-2 mt-1 transition-all" />
-              )}
+        {/* Drag Overlay */}
+        <DragOverlay>
+          {activeData?.type === "item" && activeData.item && (
+            <div className="flex items-center gap-3 py-2.5 px-4 rounded-lg bg-white border-2 border-blue-400 shadow-xl">
+              <GripVertical className="h-3.5 w-3.5 text-blue-400" />
+              {(() => {
+                const IconComp = ICON_MAP[activeData.item.label] || PATH_ICON_MAP[activeData.item.path] || LayoutDashboard;
+                return <IconComp className="h-4 w-4 text-blue-600" />;
+              })()}
+              <span className="text-sm font-medium text-gray-800">{activeData.item.label}</span>
             </div>
-          );
-        })}
-      </div>
+          )}
+        </DragOverlay>
+      </DndContext>
 
-      {/* Dragging overlay hint */}
-      {dragType && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg z-50 pointer-events-none animate-in fade-in">
-          {dragType === "section" ? "Arrastando categoria..." : "Arrastando item... Solte sobre outra categoria para mover"}
+      {/* Dragging hint */}
+      {isDraggingItem && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg z-50 pointer-events-none">
+          Arrastando item... Solte sobre outra categoria para mover
         </div>
       )}
     </div>
