@@ -8,7 +8,7 @@ import {
   DollarSign, CreditCard, AlertTriangle, CheckCircle, FileText, Users,
   Clock, BarChart3, ShieldCheck,
   ArrowRight, Printer, Ban, Zap, Scale, AlertCircle, XCircle, Wallet,
-  Wrench, FileWarning, Check
+  Wrench, FileWarning, Check, Sparkles, Bot, Loader2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -111,6 +111,8 @@ export default function PayrollCompetencias() {
   const [resolveForm, setResolveForm] = useState({ tipo: "ajustar_horario", novaEntrada1: "", novaSaida1: "", novaEntrada2: "", novaSaida2: "", observacao: "" });
   const [showContracheque, setShowContracheque] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [iaAnalysis, setIaAnalysis] = useState<any>(null);
+  const [iaLoading, setIaLoading] = useState(false);
 
   // ============================================================
   // QUERIES
@@ -203,6 +205,30 @@ export default function PayrollCompetencias() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const analisarIA = trpc.payrollEngine.analisarInconsistenciaIA.useMutation({
+    onSuccess: (data: any) => {
+      setIaAnalysis(data);
+      setIaLoading(false);
+      // Auto-fill form with IA suggestions
+      setResolveForm(prev => ({
+        ...prev,
+        tipo: data.resolucaoSugerida || prev.tipo,
+        novaEntrada1: data.horariosCorrigidos?.entrada1 || prev.novaEntrada1,
+        novaSaida1: data.horariosCorrigidos?.saida1 || prev.novaSaida1,
+        novaEntrada2: data.horariosCorrigidos?.entrada2 || prev.novaEntrada2,
+        novaSaida2: data.horariosCorrigidos?.saida2 || prev.novaSaida2,
+        observacao: data.observacaoSugerida || prev.observacao,
+      }));
+      toast.success("Análise IA concluída");
+    },
+    onError: (e: any) => { setIaLoading(false); toast.error("Erro na análise IA: " + e.message); },
+  });
+  const handlePedirIA = () => {
+    if (!resolveDialog.record) return;
+    setIaLoading(true);
+    setIaAnalysis(null);
+    analisarIA.mutate({ companyId, timecardDailyId: resolveDialog.record.id, mesReferencia: mesRef });
+  };
 
   // ============================================================
   // DERIVED STATE
@@ -398,7 +424,7 @@ export default function PayrollCompetencias() {
       </Dialog>
 
       {/* RESOLVE INCONSISTENCY DIALOG */}
-      <Dialog open={resolveDialog.open} onOpenChange={(o) => setResolveDialog({ ...resolveDialog, open: o })}>
+      <Dialog open={resolveDialog.open} onOpenChange={(o) => { if (!o) { setIaAnalysis(null); setIaLoading(false); } setResolveDialog({ ...resolveDialog, open: o }); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -414,6 +440,44 @@ export default function PayrollCompetencias() {
               )}
             </DialogDescription>
           </DialogHeader>
+          {/* IA Assistant Button */}
+          <div className="flex items-center gap-2 mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePedirIA}
+              disabled={iaLoading}
+              className="border-purple-300 text-purple-700 hover:bg-purple-50"
+            >
+              {iaLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}
+              {iaLoading ? "Analisando..." : "Pedir Sugestão da IA"}
+            </Button>
+            {iaAnalysis && (
+              <Badge className={`text-xs ${
+                iaAnalysis.confianca === 'alta' ? 'bg-green-100 text-green-700' :
+                iaAnalysis.confianca === 'media' ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                Confiança: {iaAnalysis.confianca}
+              </Badge>
+            )}
+          </div>
+          {/* IA Analysis Result */}
+          {iaAnalysis && (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg mb-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-semibold text-purple-800">Análise da IA</span>
+              </div>
+              <p className="text-sm text-purple-900">{iaAnalysis.explicacao}</p>
+              {iaAnalysis.alertas && (
+                <div className="flex items-start gap-2 p-2 bg-amber-50 rounded text-xs text-amber-800">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>{iaAnalysis.alertas}</span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">Tipo de Resolução</label>

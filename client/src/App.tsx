@@ -33,6 +33,10 @@ import ProcessosTrabalhistas from "./pages/ProcessosTrabalhistas";
 import Epis from "./pages/Epis";
 // Relatórios
 import RaioXPage from "./pages/relatorios/RaioXPage";
+import RelatorioPonto from "./pages/relatorios/RelatorioPonto";
+import RelatorioFolha from "./pages/relatorios/RelatorioFolha";
+import RelatorioDivergencias from "./pages/relatorios/RelatorioDivergencias";
+import RelatorioCustoObra from "./pages/relatorios/RelatorioCustoObra";
 // Dashboards
 import DashboardIndex from "./pages/dashboards/DashboardIndex";
 import DashFuncionarios from "./pages/dashboards/DashFuncionarios";
@@ -140,6 +144,10 @@ function Router() {
       <Route path={"/ajuda"} component={BibliotecaConhecimento} />
       {/* Relatórios */}
       <Route path={"/relatorios/raio-x"} component={RaioXPage} />
+      <Route path={"/relatorios/ponto"} component={RelatorioPonto} />
+      <Route path={"/relatorios/folha"} component={RelatorioFolha} />
+      <Route path={"/relatorios/divergencias"} component={RelatorioDivergencias} />
+      <Route path={"/relatorios/custo-obra"} component={RelatorioCustoObra} />
       {/* Dashboards */}
       <Route path={"/dashboards"} component={DashboardIndex} />
       <Route path={"/dashboards/funcionarios"} component={DashFuncionarios} />

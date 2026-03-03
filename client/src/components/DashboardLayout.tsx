@@ -33,6 +33,7 @@ import {
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
+  FileBarChart, DollarSign, Construction,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -93,8 +94,6 @@ const menuSectionsRHDP: MenuSection[] = [
   {
     title: "Operacional",
     items: [
-      { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
-      { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: CalendarDays, label: "Gestão de Competências", path: "/gestao-competencias" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
@@ -117,6 +116,10 @@ const menuSectionsRHDP: MenuSection[] = [
     title: "Relatórios",
     items: [
       { icon: UserSearch, label: "Raio-X do Funcionário", path: "/relatorios/raio-x" },
+      { icon: Clock, label: "Relatório de Ponto", path: "/relatorios/ponto" },
+      { icon: Wallet, label: "Relatório de Folha", path: "/relatorios/folha" },
+      { icon: AlertTriangle, label: "Relatório de Divergências", path: "/relatorios/divergencias" },
+      { icon: Construction, label: "Custo por Obra", path: "/relatorios/custo-obra" },
     ],
   },
   {
@@ -355,6 +358,10 @@ const ICON_MAP: Record<string, any> = {
   "Dissídio": TrendingUp,
   "PJ Medições": FileSpreadsheet,
   "Convenções Coletivas": Scale,
+  "Relatório de Ponto": Clock,
+  "Relatório de Folha": Wallet,
+  "Relatório de Divergências": AlertTriangle,
+  "Custo por Obra": Construction,
 };
 
 // Map each module to its initial/home route
@@ -496,6 +503,10 @@ function DashboardLayoutContent({
     // RH-DP extras
     map.set('/convencoes-coletivas', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
     map.set('/relatorios/raio-x', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/relatorios/ponto', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
+    map.set('/relatorios/folha', { moduleId: 'rh-dp', featureKey: 'folha-pagamento' });
+    map.set('/relatorios/divergencias', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
+    map.set('/relatorios/custo-obra', { moduleId: 'rh-dp', featureKey: 'folha-pagamento' });
     map.set('/comparativo-convencoes', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
     map.set('/crachas', { moduleId: 'rh-dp', featureKey: 'crachas-rh' });
     map.set('/pj-medicoes', { moduleId: 'rh-dp', featureKey: 'modulo-pj' });

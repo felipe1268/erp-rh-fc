@@ -4258,6 +4258,34 @@
 - [x] Tracking de origem: DIXI / Manual / Rateado / Escuro / Aferido
 
 ### Sidebar e Relatórios
-- [ ] Remover Cartão de Ponto e Folha de Pagamento do sidebar (viram relatórios)
-- [ ] Criar seção de Relatórios: Ponto, Folha, Divergências, Custo por Obra
-- [ ] Todos os relatórios com PrintHeader e PrintFooterLGPD
+- [x] Remover Cartão de Ponto e Folha de Pagamento do sidebar (viram relatórios)
+- [x] Criar seção de Relatórios: Ponto, Folha, Divergências, Custo por Obra
+- [x] Todos os relatórios com PrintHeader e PrintFooterLGPD
+
+## Rev. 170 - Relatórios, Multi-DIXI e Assistente IA
+
+### 1. Reestruturar Sidebar e Relatórios
+- [x] Remover "Cartão de Ponto" do sidebar (absorvido pela Gestão de Competências)
+- [x] Remover "Folha de Pagamento" do sidebar (absorvido pela Gestão de Competências)
+- [x] Criar seção "Relatórios" no sidebar com ícone dedicado
+- [x] Criar página Relatório de Ponto (substituindo Cartão de Ponto)
+- [x] Criar página Relatório de Folha (substituindo Folha de Pagamento)
+- [x] Criar página Relatório de Divergências (inconsistências e atrasos)
+- [x] Criar página Relatório de Custo por Obra (rateio de custos)
+- [x] Todos os relatórios com PrintHeader e PrintFooterLGPD
+- [x] Filtros por mês, obra e funcionário em cada relatório
+
+### 2. Suporte a Múltiplos DIXI com Rateio
+- [x] Backend: aceitar múltiplos arquivos DIXI no processarPonto (um por relógio/obra) — já suporta via time_records multi-obra
+- [x] Backend: identificar obra de origem pelo relógio/arquivo — via obraId no time_records
+- [x] Backend: rateio proporcional automático quando funcionário transita entre obras no mesmo dia
+- [ ] Backend: campos rateáveis (VA, VT, Seguro, FGTS, INSS, etc.) conforme regras da empresa
+- [ ] Frontend: upload de múltiplos arquivos no Step 2 do wizard
+
+### 3. Assistente IA de Inconsistências
+- [x] Backend: procedure analisarInconsistenciaIA que envia contexto ao LLM
+- [x] Backend: LLM recebe dados do funcionário, tipo de inconsistência, histórico recente, regras de ouro
+- [x] Backend: LLM retorna sugestão didática com confiança, horários corrigidos, alertas trabalhistas
+- [x] Frontend: botão "Pedir Sugestão da IA" no dialog de resolução
+- [x] Frontend: painel roxo com explicação, badge de confiança e alertas
+- [x] Frontend: auto-preenchimento do formulário com sugestão da IA

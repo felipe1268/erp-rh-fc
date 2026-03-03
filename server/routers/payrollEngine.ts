@@ -1667,11 +1667,157 @@ export const payrollEngineRouter = router({
         },
         mesReferencia: input.mesReferencia,
         periodo: period,
-        contracheques,
-      };
+        contracheques,      };
+    }),
+  // ============================================================
+  // 20. ASSISTENTE IA DE INCONSISTÊNCIAS
+  // ============================================================
+  analisarInconsistenciaIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      timecardDailyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      // Get the inconsistent record with employee details
+      const [rows] = await db.execute(sql`
+        SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, e.dataAdmissao, e.status as empStatus,
+          o.nome as obraNome
+        FROM timecard_daily td
+        LEFT JOIN employees e ON td.employeeId = e.id
+        LEFT JOIN obras o ON td.obraId = o.id
+        WHERE td.id = ${input.timecardDailyId}
+        LIMIT 1
+      `) as any[];
+      const record = rows[0];
+      if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado" });
+      // Get recent history for this employee (last 30 days)
+      const [histRows] = await db.execute(sql`
+        SELECT data, statusDia, isFalta, isAtraso, is_inconsistente, inconsistencia_tipo,
+          entrada1, saida1, entrada2, saida2, horasTrabalhadas
+        FROM timecard_daily
+        WHERE employeeId = ${record.employeeId} AND companyId = ${input.companyId}
+          AND mesCompetencia = ${input.mesReferencia}
+        ORDER BY data DESC LIMIT 30
+      `) as any[];
+      // Get golden rules for context
+      const [rulesRows] = await db.execute(sql`
+        SELECT titulo, descricao, categoria FROM golden_rules
+        WHERE companyId = ${input.companyId} AND deletedAt IS NULL
+        AND categoria IN ('rh', 'operacional', 'geral')
+        ORDER BY prioridade LIMIT 10
+      `) as any[];
+      // Get criteria
+      const criteria = await getPayrollCriteria(db, input.companyId);
+      // Build context for LLM
+      const historicoStr = (histRows || []).map((h: any) =>
+        `${h.data}: ${h.statusDia} | E1:${h.entrada1||'-'} S1:${h.saida1||'-'} E2:${h.entrada2||'-'} S2:${h.saida2||'-'} | Horas:${h.horasTrabalhadas} | Falta:${h.isFalta} Atraso:${h.isAtraso} Incon:${h.is_inconsistente}(${h.inconsistencia_tipo||'-'})`
+      ).join('\n');
+      const regrasStr = (rulesRows || []).map((r: any) => `[${r.categoria}] ${r.titulo}: ${r.descricao}`).join('\n');
+      const prompt = `Você é um assistente de RH especialista em ponto eletrônico e legislação trabalhista brasileira (CLT).
+
+ANALISE esta inconsistência de ponto e sugira a melhor resolução:
+
+## Funcionário
+- Nome: ${record.nomeCompleto}
+- Função: ${record.funcao}
+- Código: ${record.codigoInterno}
+- Admissão: ${record.dataAdmissao}
+- Obra: ${record.obraNome || 'N/A'}
+
+## Registro com Inconsistência
+- Data: ${record.data}
+- Tipo: ${record.inconsistencia_tipo}
+- Entrada 1: ${record.entrada1 || 'AUSENTE'}
+- Saída 1: ${record.saida1 || 'AUSENTE'}
+- Entrada 2: ${record.entrada2 || 'AUSENTE'}
+- Saída 2: ${record.saida2 || 'AUSENTE'}
+- Batidas: ${record.num_batidas}
+- Horas: ${record.horasTrabalhadas}
+- Tipo dia: ${record.tipoDia}
+
+## Critérios do Sistema
+- Jornada diária: ${criteria.cargaHorariaDiaria}h
+- Tolerância atraso: ${criteria.pontoToleranciaAtraso} min
+- Falta após atraso: ${criteria.pontoFaltaAposAtraso} min
+
+## Histórico Recente (últimos 30 dias)
+${historicoStr || 'Sem histórico'}
+
+## Regras de Ouro da Empresa
+${regrasStr || 'Nenhuma regra cadastrada'}
+
+Responda EXATAMENTE no formato JSON abaixo:`;
+      const { invokeLLM } = await import('../_core/llm');
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "Você é um assistente de RH brasileiro especialista em ponto eletrônico, CLT e resolução de inconsistências. Responda sempre em JSON válido e em português." },
+          { role: "user", content: prompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "ia_inconsistencia",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                resolucaoSugerida: {
+                  type: "string",
+                  description: "Tipo de resolução sugerida: ajustar_horario, atestado, advertencia, justificar ou abonar",
+                },
+                confianca: {
+                  type: "string",
+                  description: "Nível de confiança: alta, media ou baixa",
+                },
+                explicacao: {
+                  type: "string",
+                  description: "Explicação didática de por que essa resolução é a mais adequada, citando legislação quando aplicável",
+                },
+                horariosCorrigidos: {
+                  type: "object",
+                  properties: {
+                    entrada1: { type: "string", description: "Horário de entrada 1 sugerido (HH:MM) ou vazio" },
+                    saida1: { type: "string", description: "Horário de saída 1 sugerido (HH:MM) ou vazio" },
+                    entrada2: { type: "string", description: "Horário de entrada 2 sugerido (HH:MM) ou vazio" },
+                    saida2: { type: "string", description: "Horário de saída 2 sugerido (HH:MM) ou vazio" },
+                  },
+                  required: ["entrada1", "saida1", "entrada2", "saida2"],
+                  additionalProperties: false,
+                },
+                observacaoSugerida: {
+                  type: "string",
+                  description: "Texto sugerido para o campo de observação da resolução",
+                },
+                alertas: {
+                  type: "string",
+                  description: "Alertas ou riscos trabalhistas que o RH deve considerar",
+                },
+              },
+              required: ["resolucaoSugerida", "confianca", "explicacao", "horariosCorrigidos", "observacaoSugerida", "alertas"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+      const content = response.choices?.[0]?.message?.content as string;
+      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou resposta" });
+      try {
+        return JSON.parse(content);
+      } catch {
+        return {
+          resolucaoSugerida: "justificar",
+          confianca: "baixa",
+          explicacao: content,
+          horariosCorrigidos: { entrada1: "", saida1: "", entrada2: "", saida2: "" },
+          observacaoSugerida: "Análise IA indisponível",
+          alertas: "Não foi possível analisar automaticamente. Resolva manualmente.",
+        };
+      }
     }),
 });
-
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
