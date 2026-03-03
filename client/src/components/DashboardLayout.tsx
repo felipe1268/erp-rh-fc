@@ -847,11 +847,15 @@ function DashboardLayoutContent({
                                 // wouter doesn't support query params - store params in sessionStorage and navigate with setLocation
                                 const [basePath, queryString] = item.path.split('?');
                                 sessionStorage.setItem('_navParams', queryString);
-                                // If already on the same base path, force re-read by dispatching a custom event
                                 if (location === basePath) {
+                                  // Already on the same page - dispatch event to force re-read
                                   window.dispatchEvent(new Event('navParamsUpdated'));
                                 } else {
+                                  // Navigate to the page, then dispatch event after a short delay to ensure component is mounted
                                   setLocation(basePath);
+                                  setTimeout(() => {
+                                    window.dispatchEvent(new Event('navParamsUpdated'));
+                                  }, 100);
                                 }
                               } else {
                                 setLocation(item.path);

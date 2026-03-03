@@ -4109,3 +4109,9 @@
 - [x] Overlay visual durante o arraste com feedback "Solte aqui"
 - [x] Corrigir atalho Lançar Atestados para não abrir formulário automaticamente
 - [x] Corrigir sidebar que colapsava ao clicar nos atalhos (usar sessionStorage + setLocation)
+
+## Rev. 164 - Correção Definitiva: Atalho Lançar Atestados
+- [x] Corrigir atalho "Lançar Atestados" no sidebar para abrir diretamente na aba de Atestados
+- [x] Corrigir atalho "Advertências" no sidebar para abrir diretamente na aba de Advertências
+- [x] Garantir que o mecanismo funcione mesmo quando já está na página de Controle de Documentos
+- [x] Usar setTimeout + evento navParamsUpdated para garantir que o componente leia os params após montar
