@@ -4080,3 +4080,9 @@
 - [x] Garantir que atalhos Advertências e Lançar Atestados no sidebar estejam mapeados no sistema de permissões
 - [x] Sidebar deve ocultar itens que o usuário não tem permissão de ver (canView)
 - [x] Todas as rotas/atalhos do sidebar devem ter correspondência no sistema de permissões
+
+## Rev. 160 - Correção Drag-and-Drop na Tela de Configurações
+- [x] Corrigir bug onde arrastar item fica cinza e trava a tela
+- [x] Permitir arrastar itens entre seções diferentes (ex: mover Crachás de Operacional para Gestão de Pessoas)
+- [x] Permitir reordenar itens dentro da mesma seção
+- [x] Garantir que o drag-and-drop funcione de forma fluida e intuitiva

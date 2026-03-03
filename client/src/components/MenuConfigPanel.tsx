@@ -49,6 +49,7 @@ const PATH_ICON_MAP: Record<string, any> = {
   "/dissidio": TrendingUp,
   "/pj-medicoes": FileSpreadsheet,
 };
+
 const DEFAULT_MENU = [
   { title: "Principal", items: [{ label: "Painel", path: "/", visible: true }] },
   { title: "Cadastro", items: [
@@ -96,7 +97,6 @@ const DEFAULT_MENU = [
     { label: "Auditoria do Sistema", path: "/auditoria", visible: true },
     { label: "Configurações", path: "/configuracoes", visible: true },
   ]},
-
 ];
 
 type MenuItem = { label: string; path: string; visible: boolean; originalLabel?: string };
@@ -159,8 +159,9 @@ export default function MenuConfigPanel() {
 
   const cancelEditSection = () => setEditingSection(null);
 
-  // Drag state
-  const [dragData, setDragData] = useState<DragData | null>(null);
+  // ===================== DRAG STATE =====================
+  const dragDataRef = useRef<DragData | null>(null);
+  const [dragType, setDragType] = useState<"item" | "section" | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     type: "item" | "section" | "section-zone";
     sectionIdx: number;
@@ -180,7 +181,6 @@ export default function MenuConfigPanel() {
 
   useEffect(() => {
     if (configQuery.data) {
-      // Merge saved config with DEFAULT_MENU to include new items added after save
       const saved = configQuery.data as MenuSection[];
       const allSavedPaths = new Set(saved.flatMap(s => s.items.map(i => i.path)));
       const merged = saved.map(s => ({ ...s, items: [...s.items] }));
@@ -192,15 +192,13 @@ export default function MenuConfigPanel() {
             if (existingSection) {
               existingSection.items.push({ ...defItem });
             } else {
-              // Section doesn't exist in saved config, add entire section
               merged.push({ title: defSection.title, items: defSection.items.map(i => ({ ...i })) });
-              break; // Already added all items from this section
+              break;
             }
             allSavedPaths.add(defItem.path);
           }
         }
       }
-      // Also add entirely new sections that don't exist in saved config
       for (const defSection of DEFAULT_MENU) {
         if (!merged.find(s => s.title === defSection.title)) {
           merged.push({ title: defSection.title, items: defSection.items.map(i => ({ ...i })) });
@@ -229,41 +227,68 @@ export default function MenuConfigPanel() {
 
   // ===================== DRAG & DROP HANDLERS =====================
 
-  const handleDragStart = (e: React.DragEvent, data: DragData) => {
-    setDragData(data);
+  // --- ITEM DRAG ---
+  const handleItemDragStart = (e: React.DragEvent, sectionIdx: number, itemIdx: number) => {
+    e.stopPropagation();
+    const data: DragItem = { type: "item", sectionIdx, itemIdx };
+    dragDataRef.current = data;
+    setDragType("item");
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", JSON.stringify(data));
-    // Style the dragged element
     const el = e.currentTarget as HTMLElement;
-    setTimeout(() => el.classList.add("opacity-40"), 0);
+    requestAnimationFrame(() => el.style.opacity = "0.4");
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    const el = e.currentTarget as HTMLElement;
-    el.classList.remove("opacity-40");
-    setDragData(null);
+  const handleItemDragEnd = (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).style.opacity = "";
+    dragDataRef.current = null;
+    setDragType(null);
     setDropTarget(null);
   };
 
-  // Section drag over
-  const handleSectionDragOver = (e: React.DragEvent, sectionIdx: number) => {
+  // --- SECTION DRAG (only from grip handle) ---
+  const handleSectionGripDragStart = (e: React.DragEvent, sectionIdx: number) => {
+    e.stopPropagation();
+    const data: DragSection = { type: "section", sectionIdx };
+    dragDataRef.current = data;
+    setDragType("section");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", JSON.stringify(data));
+    // Find the section container (parent of the grip)
+    const sectionEl = (e.currentTarget as HTMLElement).closest("[data-section-idx]") as HTMLElement;
+    if (sectionEl) requestAnimationFrame(() => sectionEl.style.opacity = "0.4");
+  };
+
+  const handleSectionDragEnd = (e: React.DragEvent) => {
+    // Restore opacity on the section container
+    const sectionEl = (e.currentTarget as HTMLElement).closest("[data-section-idx]") as HTMLElement;
+    if (sectionEl) sectionEl.style.opacity = "";
+    // Also try the current target itself
+    (e.currentTarget as HTMLElement).style.opacity = "";
+    dragDataRef.current = null;
+    setDragType(null);
+    setDropTarget(null);
+  };
+
+  // Section header drag over (for both section reorder and item-to-section drop)
+  const handleSectionHeaderDragOver = (e: React.DragEvent, sectionIdx: number) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!dragData) return;
+    const dd = dragDataRef.current;
+    if (!dd) return;
 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const y = e.clientY - rect.top;
     const midpoint = rect.height / 2;
 
-    if (dragData.type === "section") {
-      // Dragging a section: show before/after indicator
+    if (dd.type === "section") {
       setDropTarget({
         type: "section",
         sectionIdx,
         position: y < midpoint ? "before" : "after",
       });
-    } else if (dragData.type === "item") {
-      // Dragging an item over a section header = drop into this section
+    } else if (dd.type === "item") {
+      // Dropping item onto a section header = move to end of that section
       setDropTarget({
         type: "section-zone",
         sectionIdx,
@@ -276,7 +301,8 @@ export default function MenuConfigPanel() {
   const handleItemDragOver = (e: React.DragEvent, sectionIdx: number, itemIdx: number) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!dragData || dragData.type !== "item") return;
+    const dd = dragDataRef.current;
+    if (!dd || dd.type !== "item") return;
 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const y = e.clientY - rect.top;
@@ -290,19 +316,32 @@ export default function MenuConfigPanel() {
     });
   };
 
+  // Empty zone drag over (bottom of expanded section)
+  const handleZoneDragOver = (e: React.DragEvent, sectionIdx: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTarget({ type: "section-zone", sectionIdx, position: "inside" });
+  };
+
   // Handle drop
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!dragData || !dropTarget) { setDragData(null); setDropTarget(null); return; }
+    const dd = dragDataRef.current;
+    if (!dd || !dropTarget) {
+      dragDataRef.current = null;
+      setDragType(null);
+      setDropTarget(null);
+      return;
+    }
 
-    if (dragData.type === "section" && dropTarget.type === "section") {
-      // Reorder sections
-      const fromIdx = dragData.sectionIdx;
+    if (dd.type === "section" && dropTarget.type === "section") {
+      const fromIdx = dd.sectionIdx;
       let toIdx = dropTarget.sectionIdx;
       if (dropTarget.position === "after") toIdx++;
-      if (fromIdx === toIdx || fromIdx + 1 === toIdx) { setDragData(null); setDropTarget(null); return; }
-
+      if (fromIdx === toIdx || fromIdx + 1 === toIdx) {
+        dragDataRef.current = null; setDragType(null); setDropTarget(null); return;
+      }
       setMenuConfig(prev => {
         const arr = [...prev];
         const [moved] = arr.splice(fromIdx, 1);
@@ -311,34 +350,29 @@ export default function MenuConfigPanel() {
         return arr;
       });
       setHasChanges(true);
-    } else if (dragData.type === "item") {
-      const fromSection = dragData.sectionIdx;
-      const fromItem = dragData.itemIdx;
+    } else if (dd.type === "item") {
+      const fromSection = dd.sectionIdx;
+      const fromItem = dd.itemIdx;
 
       if (dropTarget.type === "item" && dropTarget.itemIdx !== undefined) {
-        // Move item to specific position
         let toSection = dropTarget.sectionIdx;
         let toItem = dropTarget.itemIdx;
         if (dropTarget.position === "after") toItem++;
 
-        // Same section, same position
         if (fromSection === toSection && (fromItem === toItem || fromItem + 1 === toItem)) {
-          setDragData(null); setDropTarget(null); return;
+          dragDataRef.current = null; setDragType(null); setDropTarget(null); return;
         }
 
         setMenuConfig(prev => {
           const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
           const [item] = arr[fromSection].items.splice(fromItem, 1);
-          // Adjust index if same section and removing before insert point
           const adjustedToItem = fromSection === toSection && fromItem < toItem ? toItem - 1 : toItem;
           arr[toSection].items.splice(adjustedToItem, 0, item);
           return arr;
         });
         setHasChanges(true);
       } else if (dropTarget.type === "section-zone") {
-        // Move item to end of target section
         const toSection = dropTarget.sectionIdx;
-        if (fromSection === toSection) { setDragData(null); setDropTarget(null); return; }
 
         setMenuConfig(prev => {
           const arr = prev.map(s => ({ ...s, items: [...s.items.map(i => ({ ...i }))] }));
@@ -356,7 +390,8 @@ export default function MenuConfigPanel() {
       }
     }
 
-    setDragData(null);
+    dragDataRef.current = null;
+    setDragType(null);
     setDropTarget(null);
   };
 
@@ -402,7 +437,7 @@ export default function MenuConfigPanel() {
       )}
 
       {/* Dica de uso */}
-      {!dragData && (
+      {!dragType && (
         <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-xs text-blue-700 flex items-center gap-2">
           <GripVertical className="h-4 w-4 text-blue-400 flex-shrink-0" />
           <span><strong>Dica:</strong> Segure o ícone <GripVertical className="h-3 w-3 inline" /> e arraste para mover categorias ou itens. Solte sobre outra categoria para mover entre elas.</span>
@@ -414,9 +449,10 @@ export default function MenuConfigPanel() {
         {menuConfig.map((section, sIdx) => {
           const isExpanded = expandedSections.has(section.title);
           const visibleCount = section.items.filter(i => i.visible).length;
-          const isDraggingSection = dragData?.type === "section";
-          const isDraggingItem = dragData?.type === "item";
+          const isDraggingSection = dragType === "section";
+          const isDraggingItem = dragType === "item";
           const isSectionDropZone = isDropTargetSectionZone(sIdx);
+          const isSectionBeingDragged = isDraggingSection && dragDataRef.current?.type === "section" && dragDataRef.current.sectionIdx === sIdx;
 
           return (
             <div key={section.title + sIdx}>
@@ -426,27 +462,31 @@ export default function MenuConfigPanel() {
               )}
 
               <div
+                data-section-idx={sIdx}
                 className={`border rounded-xl transition-all duration-200 ${
                   isSectionDropZone
                     ? "border-blue-400 bg-blue-50/80 shadow-md ring-2 ring-blue-200"
-                    : dragData?.type === "section" && dragData.sectionIdx === sIdx
+                    : isSectionBeingDragged
                     ? "opacity-40"
                     : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
-                draggable={true}
-                onDragStart={(e) => handleDragStart(e, { type: "section", sectionIdx: sIdx })}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => handleSectionDragOver(e, sIdx)}
-                onDrop={handleDrop}
               >
                 {/* Section Header */}
                 <div
                   className="flex items-center justify-between py-3 px-4 cursor-pointer select-none"
-                  onClick={() => toggleSection(section.title)}
+                  onClick={() => { if (!isDraggingItem && !isDraggingSection) toggleSection(section.title); }}
+                  onDragOver={(e) => handleSectionHeaderDragOver(e, sIdx)}
+                  onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="cursor-grab active:cursor-grabbing p-1 -m-1 rounded hover:bg-gray-100"
-                      onClick={(e) => e.stopPropagation()}>
+                    {/* Section grip handle - ONLY this is draggable for sections */}
+                    <div
+                      className="cursor-grab active:cursor-grabbing p-1 -m-1 rounded hover:bg-gray-100"
+                      draggable={true}
+                      onDragStart={(e) => handleSectionGripDragStart(e, sIdx)}
+                      onDragEnd={handleSectionDragEnd}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <GripVertical className="h-4 w-4 text-gray-400" />
                     </div>
                     {editingSection === sIdx ? (
@@ -499,15 +539,19 @@ export default function MenuConfigPanel() {
                 {isExpanded && (
                   <div className="px-4 pb-3 space-y-0.5">
                     {section.items.length === 0 && (
-                      <div className={`py-6 text-center text-sm rounded-lg border-2 border-dashed transition-all ${
-                        isSectionDropZone ? "border-blue-400 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-400"
-                      }`}>
+                      <div
+                        className={`py-6 text-center text-sm rounded-lg border-2 border-dashed transition-all ${
+                          isSectionDropZone ? "border-blue-400 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-400"
+                        }`}
+                        onDragOver={(e) => handleZoneDragOver(e, sIdx)}
+                        onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
+                      >
                         {isSectionDropZone ? "Solte o item aqui" : "Categoria vazia — arraste itens para cá"}
                       </div>
                     )}
                     {section.items.map((item, iIdx) => {
                       const IconComp = ICON_MAP[item.label] || ICON_MAP[item.originalLabel || ""] || PATH_ICON_MAP[item.path] || LayoutDashboard;
-                      const isDraggingThis = dragData?.type === "item" && dragData.sectionIdx === sIdx && dragData.itemIdx === iIdx;
+                      const isDraggingThis = isDraggingItem && dragDataRef.current?.type === "item" && dragDataRef.current.sectionIdx === sIdx && dragDataRef.current.itemIdx === iIdx;
 
                       return (
                         <div key={item.path + iIdx}>
@@ -525,11 +569,8 @@ export default function MenuConfigPanel() {
                                 : "bg-gray-50/50 opacity-50"
                             }`}
                             draggable={true}
-                            onDragStart={(e) => {
-                              e.stopPropagation();
-                              handleDragStart(e, { type: "item", sectionIdx: sIdx, itemIdx: iIdx });
-                            }}
-                            onDragEnd={handleDragEnd}
+                            onDragStart={(e) => handleItemDragStart(e, sIdx, iIdx)}
+                            onDragEnd={handleItemDragEnd}
                             onDragOver={(e) => handleItemDragOver(e, sIdx, iIdx)}
                             onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
                           >
@@ -602,11 +643,7 @@ export default function MenuConfigPanel() {
                         className={`py-3 mt-1 text-center text-xs rounded-lg border-2 border-dashed transition-all ${
                           isSectionDropZone ? "border-blue-400 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-400"
                         }`}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDropTarget({ type: "section-zone", sectionIdx: sIdx, position: "inside" });
-                        }}
+                        onDragOver={(e) => handleZoneDragOver(e, sIdx)}
                         onDrop={(e) => { e.stopPropagation(); handleDrop(e); }}
                       >
                         {isSectionDropZone ? "Solte aqui para adicionar" : "Solte aqui"}
@@ -626,9 +663,9 @@ export default function MenuConfigPanel() {
       </div>
 
       {/* Dragging overlay hint */}
-      {dragData && (
+      {dragType && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg z-50 pointer-events-none animate-in fade-in">
-          {dragData.type === "section" ? "Arrastando categoria..." : "Arrastando item... Solte sobre outra categoria para mover"}
+          {dragType === "section" ? "Arrastando categoria..." : "Arrastando item... Solte sobre outra categoria para mover"}
         </div>
       )}
     </div>
