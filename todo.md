@@ -4086,3 +4086,11 @@
 - [x] Permitir arrastar itens entre seções diferentes (ex: mover Crachás de Operacional para Gestão de Pessoas)
 - [x] Permitir reordenar itens dentro da mesma seção
 - [x] Garantir que o drag-and-drop funcione de forma fluida e intuitiva
+
+## Rev. 161 - Atualizar Fases do Processo Trabalhista (Jurídico)
+- [x] Atualizar fases para: Conhecimento, Instrução, Decisória (Sentença), Recursal (Opcional), Execução (Cumprimento de Sentença), Encerrado
+- [x] Atualizar schema do banco de dados com as novas fases
+- [x] Atualizar frontend (select de Fase) com as novas opções
+- [x] Atualizar validação Zod no backend (criar e atualizar processo)
+- [x] Atualizar PainelJuridico.tsx com as novas fases
+- [x] Atualizar datajud.ts para inferir fases corretas (instrução, decisória)

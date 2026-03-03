@@ -2296,7 +2296,7 @@ export const processosTrabalhistas = mysqlTable("processos_trabalhistas", {
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataEncerramento: date({ mode: 'string' }),
 	status: mysqlEnum(['em_andamento','aguardando_audiencia','aguardando_pericia','acordo','sentenca','recurso','execucao','arquivado','encerrado']).default('em_andamento').notNull(),
-	fase: mysqlEnum(['conhecimento','recursal','execucao','encerrado']).default('conhecimento').notNull(),
+	fase: mysqlEnum(['conhecimento','instrucao','decisoria','recursal','execucao','encerrado']).default('conhecimento').notNull(),
 	risco: mysqlEnum(['baixo','medio','alto','critico']).default('medio').notNull(),
 	pedidos: json(),
 	observacoes: text(),

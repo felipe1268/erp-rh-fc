@@ -269,7 +269,7 @@ export function inferirSituacao(movimentos: DatajudMovimento[]): {
     if (nomes.some(n => n.includes("recurso") || n.includes("agravo"))) {
       return { status: "recurso", fase: "recursal", ultimaMovimentacao: ultima };
     }
-    return { status: "sentenca", fase: "conhecimento", ultimaMovimentacao: ultima };
+    return { status: "sentenca", fase: "decisoria", ultimaMovimentacao: ultima };
   }
 
   // Verifica recurso
@@ -284,12 +284,12 @@ export function inferirSituacao(movimentos: DatajudMovimento[]): {
 
   // Verifica perícia
   if (nomes.some(n => n.includes("perícia") || n.includes("perito"))) {
-    return { status: "aguardando_pericia", fase: "conhecimento", ultimaMovimentacao: ultima };
+    return { status: "aguardando_pericia", fase: "instrucao", ultimaMovimentacao: ultima };
   }
 
   // Verifica audiência
   if (nomes.some(n => n.includes("audiência") || n.includes("designa"))) {
-    return { status: "aguardando_audiencia", fase: "conhecimento", ultimaMovimentacao: ultima };
+    return { status: "aguardando_audiencia", fase: "instrucao", ultimaMovimentacao: ultima };
   }
 
   return { status: "em_andamento", fase: "conhecimento", ultimaMovimentacao: ultima };

@@ -53,8 +53,10 @@ const TIPO_ACAO_LABELS: Record<string, string> = {
 
 const FASE_LABELS: Record<string, string> = {
   conhecimento: "Conhecimento",
-  recursal: "Recursal",
-  execucao: "Execução",
+  instrucao: "Instrução",
+  decisoria: "Decisória (Sentença)",
+  recursal: "Recursal (Opcional)",
+  execucao: "Execução (Cumprimento de Sentença)",
   encerrado: "Encerrado",
 };
 

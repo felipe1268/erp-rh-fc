@@ -1,0 +1,25 @@
+{
+  "query": "SHOW TABLES LIKE '%processo%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW TABLES LIKE '%processo%';",
+  "rows": [
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (%processo%)": "processo_analises"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (%processo%)": "processo_aprendizado"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (%processo%)": "processo_documentos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (%processo%)": "processos_andamentos"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (%processo%)": "processos_trabalhistas"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_W4MM458SKqYRWRGGQrfw8A (%processo%)\nprocesso_analises\nprocesso_aprendizado\nprocesso_documentos\nprocessos_andamentos\nprocessos_trabalhistas\n",
+  "stderr": "",
+  "execution_time_ms": 366
+}
