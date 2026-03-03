@@ -2556,6 +2556,145 @@ async function getDashControleDocumentos(companyId: number) {
 // ============================================================
 // ROUTER
 // ============================================================
+// ============================================================
+// DASHBOARD COMPETÊNCIAS ANUAL
+// ============================================================
+async function getDashCompetenciasAnual(companyId: number, ano?: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const year = ano || new Date().getFullYear();
+
+  // All periods for the year
+  const [periods] = await db.execute(sql`
+    SELECT * FROM payroll_periods 
+    WHERE companyId = ${companyId} AND mesReferencia LIKE ${year + '%'}
+    ORDER BY mesReferencia ASC
+  `) as any[];
+
+  // Monthly payment summaries
+  const [monthlySums] = await db.execute(sql`
+    SELECT mesReferencia,
+      COUNT(*) as totalFuncionarios,
+      SUM(CAST(salarioBrutoMes AS DECIMAL(12,2))) as totalBruto,
+      SUM(CAST(horasExtrasValor AS DECIMAL(12,2))) as totalHE,
+      SUM(CAST(totalDescontos AS DECIMAL(12,2))) as totalDescontos,
+      SUM(CAST(salarioLiquido AS DECIMAL(12,2))) as totalLiquido,
+      SUM(CAST(COALESCE(vaValor,'0') AS DECIMAL(12,2))) as totalVA,
+      SUM(CAST(COALESCE(vtValor,'0') AS DECIMAL(12,2))) as totalVT,
+      SUM(CAST(COALESCE(vrValor,'0') AS DECIMAL(12,2))) as totalVR,
+      SUM(CAST(COALESCE(fgtsValor,'0') AS DECIMAL(12,2))) as totalFGTS,
+      SUM(CAST(COALESCE(inssValor,'0') AS DECIMAL(12,2))) as totalINSS,
+      SUM(CAST(COALESCE(seguroVidaValor,'0') AS DECIMAL(12,2))) as totalSeguro,
+      SUM(CAST(descontoAdiantamento AS DECIMAL(12,2))) as totalAdiantamento,
+      SUM(CAST(descontoFaltas AS DECIMAL(12,2))) as totalDescontoFaltas,
+      SUM(descontoFaltasQtd) as totalFaltasQtd
+    FROM payroll_payments
+    WHERE companyId = ${companyId} AND mesReferencia LIKE ${year + '%'}
+    GROUP BY mesReferencia
+    ORDER BY mesReferencia ASC
+  `) as any[];
+
+  // Inconsistencies summary per month
+  const [inconsistencias] = await db.execute(sql`
+    SELECT mesCompetencia,
+      COUNT(*) as total,
+      SUM(CASE WHEN isInconsistente = 1 THEN 1 ELSE 0 END) as inconsistentes,
+      SUM(CASE WHEN inconsistenciaResolvida = 1 THEN 1 ELSE 0 END) as resolvidas
+    FROM timecard_daily
+    WHERE companyId = ${companyId} AND mesCompetencia LIKE ${year + '%'}
+    GROUP BY mesCompetencia
+    ORDER BY mesCompetencia ASC
+  `) as any[];
+
+  // Cost per obra (annual)
+  const [custoObra] = await db.execute(sql`
+    SELECT o.nome as obraNome, o.id as obraId,
+      COUNT(DISTINCT td.employeeId) as funcionarios,
+      COUNT(DISTINCT td.data) as diasTrabalhados,
+      SUM(CAST(COALESCE(td.totalHorasNormais,'0') AS DECIMAL(10,2))) as horasNormais,
+      SUM(CAST(COALESCE(td.totalHorasExtras,'0') AS DECIMAL(10,2))) as horasExtras
+    FROM timecard_daily td
+    LEFT JOIN obras o ON td.obraId = o.id
+    WHERE td.companyId = ${companyId} AND td.mesCompetencia LIKE ${year + '%'}
+    AND td.obraId IS NOT NULL
+    GROUP BY o.id, o.nome
+    ORDER BY horasNormais DESC
+  `) as any[];
+
+  // Totals
+  const totalBrutoAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalBruto || 0), 0);
+  const totalLiquidoAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalLiquido || 0), 0);
+  const totalDescontosAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalDescontos || 0), 0);
+  const totalFGTSAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalFGTS || 0), 0);
+  const totalINSSAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalINSS || 0), 0);
+  const totalVAAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalVA || 0), 0);
+  const totalVTAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalVT || 0), 0);
+  const totalVRAnual = (monthlySums || []).reduce((s: number, r: any) => s + Number(r.totalVR || 0), 0);
+
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  return {
+    ano: year,
+    kpis: {
+      totalBrutoAnual,
+      totalLiquidoAnual,
+      totalDescontosAnual,
+      totalFGTSAnual,
+      totalINSSAnual,
+      totalBeneficiosAnual: totalVAAnual + totalVTAnual + totalVRAnual,
+      competenciasAbertas: (periods || []).filter((p: any) => !['travada','consolidada'].includes(p.status)).length,
+      competenciasFechadas: (periods || []).filter((p: any) => ['travada','consolidada'].includes(p.status)).length,
+    },
+    periodos: (periods || []).map((p: any) => {
+      const [, m] = (p.mesReferencia || '').split('-');
+      return {
+        mesReferencia: p.mesReferencia,
+        mesLabel: meses[parseInt(m) - 1] || m,
+        status: p.status,
+        totalFuncionarios: p.totalFuncionarios,
+        totalBruto: p.totalSalarioBruto,
+        totalLiquido: p.totalLiquido,
+        totalDescontos: p.totalDescontos,
+      };
+    }),
+    evolucaoMensal: (monthlySums || []).map((r: any) => {
+      const [, m] = (r.mesReferencia || '').split('-');
+      return {
+        mes: meses[parseInt(m) - 1] || m,
+        mesRef: r.mesReferencia,
+        bruto: Number(r.totalBruto || 0),
+        liquido: Number(r.totalLiquido || 0),
+        descontos: Number(r.totalDescontos || 0),
+        he: Number(r.totalHE || 0),
+        fgts: Number(r.totalFGTS || 0),
+        inss: Number(r.totalINSS || 0),
+        va: Number(r.totalVA || 0),
+        vt: Number(r.totalVT || 0),
+        vr: Number(r.totalVR || 0),
+        funcionarios: Number(r.totalFuncionarios || 0),
+        faltasQtd: Number(r.totalFaltasQtd || 0),
+      };
+    }),
+    inconsistencias: (inconsistencias || []).map((r: any) => {
+      const [, m] = (r.mesCompetencia || '').split('-');
+      return {
+        mes: meses[parseInt(m) - 1] || m,
+        total: Number(r.total || 0),
+        inconsistentes: Number(r.inconsistentes || 0),
+        resolvidas: Number(r.resolvidas || 0),
+      };
+    }),
+    custoObra: (custoObra || []).map((r: any) => ({
+      obraId: r.obraId,
+      obraNome: r.obraNome || 'Sem nome',
+      funcionarios: Number(r.funcionarios || 0),
+      diasTrabalhados: Number(r.diasTrabalhados || 0),
+      horasNormais: Number(r.horasNormais || 0),
+      horasExtras: Number(r.horasExtras || 0),
+    })),
+  };
+}
+
 export const dashboardsRouter = router({
   funcionarios: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashFuncionarios(input.companyId)),
   drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue)),
@@ -2578,4 +2717,5 @@ export const dashboardsRouter = router({
   analiseIAPerfil: protectedProcedure.input(z.object({ companyId: z.number() })).mutation(({ input }) => getAnaliseIAPerfil(input.companyId)),
   documentos: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashDocumentos(input.companyId)),
   controleDocumentos: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashControleDocumentos(input.companyId)),
+  competenciasAnual: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashCompetenciasAnual(input.companyId, input.ano)),
 });

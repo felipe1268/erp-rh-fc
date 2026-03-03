@@ -1,3 +1,4 @@
+import React from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import {
   DollarSign, CreditCard, AlertTriangle, CheckCircle, FileText, Users,
   Clock, BarChart3, ShieldCheck,
   ArrowRight, Printer, Ban, Zap, Scale, AlertCircle, XCircle, Wallet,
-  Wrench, FileWarning, Check, Sparkles, Bot, Loader2
+  Wrench, FileWarning, Check, Sparkles, Bot, Loader2, Upload, FolderUp, X
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -205,6 +206,54 @@ export default function PayrollCompetencias() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+  // DIXI Upload mutations
+  const [dixiFiles, setDixiFiles] = useState<File[]>([]);
+  const [dixiValidation, setDixiValidation] = useState<any>(null);
+  const [dixiUploading, setDixiUploading] = useState(false);
+  const [dixiValidating, setDixiValidating] = useState(false);
+  const uploadDixi = trpc.fechamentoPonto.uploadDixi.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`${data.totalImported} registros importados de ${data.fileResults?.length || 0} arquivo(s)`);
+      if (data.totalInconsistencies > 0) toast.warning(`${data.totalInconsistencies} inconsistência(s) detectada(s)`);
+      setDixiFiles([]);
+      setDixiValidation(null);
+      setDixiUploading(false);
+      invalidateAll();
+    },
+    onError: (e: any) => { setDixiUploading(false); toast.error("Erro no upload: " + e.message); },
+  });
+  const validateSN = trpc.fechamentoPonto.validateSN.useMutation({
+    onSuccess: (data: any) => { setDixiValidation(data); setDixiValidating(false); },
+    onError: (e: any) => { setDixiValidating(false); toast.error("Erro na validação: " + e.message); },
+  });
+  const handleDixiFilesSelected = async (files: File[]) => {
+    setDixiFiles(files);
+    setDixiValidation(null);
+    if (files.length === 0) return;
+    setDixiValidating(true);
+    try {
+      const filesData = await Promise.all(files.map(async (f) => {
+        const buffer = await f.arrayBuffer();
+        const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
+        return { fileName: f.name, fileBase64: base64 };
+      }));
+      validateSN.mutate({ companyId, files: filesData });
+    } catch { setDixiValidating(false); }
+  };
+  const handleDixiUpload = async () => {
+    if (dixiFiles.length === 0) return toast.error("Selecione pelo menos um arquivo DIXI");
+    if (dixiValidation && !dixiValidation.allValid) return toast.error("Corrija os problemas de SN antes de importar");
+    setDixiUploading(true);
+    try {
+      const filesData = await Promise.all(dixiFiles.map(async (f) => {
+        const buffer = await f.arrayBuffer();
+        const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
+        return { fileName: f.name, fileBase64: base64 };
+      }));
+      uploadDixi.mutate({ companyId, files: filesData });
+    } catch { setDixiUploading(false); }
+  };
+
   const analisarIA = trpc.payrollEngine.analisarInconsistenciaIA.useMutation({
     onSuccess: (data: any) => {
       setIaAnalysis(data);
@@ -350,6 +399,13 @@ export default function PayrollCompetencias() {
               isLoading={processarPonto.isPending}
               pendingInconsistencias={pendingInconsistencias}
               onNext={() => setActiveStep(2)}
+              dixiFiles={dixiFiles}
+              dixiValidation={dixiValidation}
+              dixiUploading={dixiUploading}
+              dixiValidating={dixiValidating}
+              onDixiFilesSelected={handleDixiFilesSelected}
+              onDixiUpload={handleDixiUpload}
+              onDixiRemoveFile={(idx: number) => { const nf = [...dixiFiles]; nf.splice(idx, 1); setDixiFiles(nf); setDixiValidation(null); }}
             />
           )}
           {activeStep === 2 && (
@@ -669,13 +725,24 @@ function StepAbrirCompetencia({ currentStatus, mesAtual, anoAtual, mesRef, resum
   );
 }
 
-function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoIncon, searchTerm, setSearchTerm, onProcessar, onResolverInconsistencia, isLoading, pendingInconsistencias, onNext }: any) {
+function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoIncon, searchTerm, setSearchTerm, onProcessar, onResolverInconsistencia, isLoading, pendingInconsistencias, onNext, dixiFiles, dixiValidation, dixiUploading, dixiValidating, onDixiFilesSelected, onDixiUpload, onDixiRemoveFile }: any) {
   const isProcessed = STATUS_TO_STEP[currentStatus] >= 2;
   const [showAll, setShowAll] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const filteredInconsistencias = (inconsistencias || []).filter((r: any) =>
     !searchTerm || r.nomeCompleto?.toLowerCase().includes(searchTerm.toLowerCase())
   );
   const ri = resumoIncon as any;
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.xls') || f.name.endsWith('.xlsx'));
+    if (files.length > 0) onDixiFilesSelected(files);
+  };
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) onDixiFilesSelected(files);
+    e.target.value = '';
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -698,6 +765,79 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
               </Button>
             )}
           </div>
+
+          {/* DIXI Upload Area */}
+          {!isProcessed && currentStatus === "aberta" && (
+            <div className="mb-6 space-y-4">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+                  dragOver ? 'border-cyan-500 bg-cyan-50' : 'border-gray-300 hover:border-cyan-400 hover:bg-gray-50'
+                }`}
+                onClick={() => document.getElementById('dixi-file-input')?.click()}
+              >
+                <input id="dixi-file-input" type="file" multiple accept=".xls,.xlsx" onChange={handleFileInput} className="hidden" />
+                <FolderUp className={`w-10 h-10 mx-auto mb-3 ${dragOver ? 'text-cyan-500' : 'text-gray-400'}`} />
+                <p className="font-medium text-gray-700">Arraste arquivos DIXI aqui ou clique para selecionar</p>
+                <p className="text-xs text-muted-foreground mt-1">Aceita múltiplos arquivos .xls/.xlsx (um por relógio/obra)</p>
+              </div>
+
+              {/* File List */}
+              {dixiFiles && dixiFiles.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    {dixiFiles.length} arquivo(s) selecionado(s)
+                  </h4>
+                  {dixiFiles.map((f: File, idx: number) => {
+                    const val = dixiValidation?.results?.[idx];
+                    return (
+                      <div key={idx} className={`flex items-center justify-between p-3 rounded-lg border ${
+                        val ? (val.valid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200 bg-gray-50'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-4 h-4 text-gray-500" />
+                          <div>
+                            <span className="text-sm font-medium">{f.name}</span>
+                            {val && (
+                              <div className="text-xs mt-0.5">
+                                {val.valid ? (
+                                  <span className="text-green-600">SN: {val.deviceSerial} → {val.obraNome} ({val.totalRecords} registros)</span>
+                                ) : (
+                                  <span className="text-red-600">{val.error || 'SN não reconhecido'}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDixiRemoveFile(idx); }}>
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  {dixiValidating && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Validando SN dos equipamentos...
+                    </div>
+                  )}
+                  {dixiValidation && (
+                    <div className="flex items-center gap-3">
+                      <Badge className={dixiValidation.allValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                        {dixiValidation.allValid ? 'Todos os SN válidos' : 'Problemas de SN detectados'}
+                      </Badge>
+                      <Button onClick={onDixiUpload} disabled={dixiUploading || !dixiValidation.allValid} size="sm">
+                        <Upload className="w-4 h-4 mr-1.5" />
+                        {dixiUploading ? 'Importando...' : 'Importar Arquivos'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {isProcessed && (
             <>
@@ -989,6 +1129,7 @@ function StepGerarVale({ currentStatus, vales, resumo, searchTerm, setSearchTerm
 function StepSimularPagamento({ currentStatus, pagamentos, resumo, searchTerm, setSearchTerm, onSimular, isLoading, onContracheque, onNext }: any) {
   const isSimulado = STATUS_TO_STEP[currentStatus] >= 5;
   const r = resumo as any;
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const filteredPag = (pagamentos || []).filter((p: any) =>
     !searchTerm || p.nomeCompleto?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -1046,20 +1187,81 @@ function StepSimularPagamento({ currentStatus, pagamentos, resumo, searchTerm, s
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredPag.map((p: any) => (
-                      <tr key={p.id} className="border-t">
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{p.nomeCompleto}</div>
-                          <div className="text-xs text-muted-foreground">{p.codigoInterno} — {p.funcao}</div>
-                        </td>
-                        <td className="px-3 py-2 text-right">{formatBRL(p.salarioBrutoMes)}</td>
-                        <td className="px-3 py-2 text-right">{formatBRL(p.horasExtrasValor)}</td>
-                        <td className="px-3 py-2 text-right text-red-600">-{formatBRL(p.descontoAdiantamento)}</td>
-                        <td className="px-3 py-2 text-right text-red-600">-{formatBRL(p.descontoFaltas)}</td>
-                        <td className="px-3 py-2 text-right text-red-600 font-medium">-{formatBRL(p.totalDescontos)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-blue-700">{formatBRL(p.salarioLiquido)}</td>
-                      </tr>
-                    ))}
+                    {filteredPag.map((p: any) => {
+                      const rateio = typeof p.rateioPorObra === 'string' ? JSON.parse(p.rateioPorObra || '[]') : (p.rateioPorObra || []);
+                      const isExpanded = expandedId === p.id;
+                      return (
+                        <React.Fragment key={p.id}>
+                          <tr className="border-t cursor-pointer hover:bg-gray-50" onClick={() => setExpandedId(isExpanded ? null : p.id)}>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-1">
+                                <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                <div>
+                                  <div className="font-medium">{p.nomeCompleto}</div>
+                                  <div className="text-xs text-muted-foreground">{p.codigoInterno} — {p.funcao}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-right">{formatBRL(p.salarioBrutoMes)}</td>
+                            <td className="px-3 py-2 text-right">{formatBRL(p.horasExtrasValor)}</td>
+                            <td className="px-3 py-2 text-right text-red-600">-{formatBRL(p.descontoAdiantamento)}</td>
+                            <td className="px-3 py-2 text-right text-red-600">-{formatBRL(p.descontoFaltas)}</td>
+                            <td className="px-3 py-2 text-right text-red-600 font-medium">-{formatBRL(p.totalDescontos)}</td>
+                            <td className="px-3 py-2 text-right font-bold text-blue-700">{formatBRL(p.salarioLiquido)}</td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-gray-50">
+                              <td colSpan={7} className="px-4 py-3">
+                                <div className="grid grid-cols-2 gap-4">
+                                  {/* Detalhamento de Beneficios e Encargos */}
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Benefícios & Encargos</h4>
+                                    <div className="grid grid-cols-2 gap-1 text-xs">
+                                      <span className="text-muted-foreground">VA:</span><span>{formatBRL(p.vaValor)}</span>
+                                      <span className="text-muted-foreground">VT:</span><span>{formatBRL(p.vtValor)}</span>
+                                      <span className="text-muted-foreground">VR:</span><span>{formatBRL(p.vrValor)}</span>
+                                      <span className="text-muted-foreground">Seguro Vida:</span><span>{formatBRL(p.seguroVidaValor)}</span>
+                                      <span className="text-muted-foreground">FGTS:</span><span>{formatBRL(p.descontoFgts || p.fgtsValor)}</span>
+                                      <span className="text-muted-foreground">INSS:</span><span>{formatBRL(p.descontoInss || p.inssValor)}</span>
+                                      <span className="text-muted-foreground">Pensão:</span><span>{formatBRL(p.descontoPensao)}</span>
+                                      <span className="text-muted-foreground">Desc. VR Faltas:</span><span className="text-red-600">-{formatBRL(p.descontoVrFaltas)}</span>
+                                      <span className="text-muted-foreground">Desc. VT Faltas:</span><span className="text-red-600">-{formatBRL(p.descontoVtFaltas)}</span>
+                                      <span className="text-muted-foreground">Acerto Escuro:</span><span className="text-red-600">-{formatBRL(p.acertoEscuroValor)}</span>
+                                    </div>
+                                  </div>
+                                  {/* Rateio por Obra */}
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Rateio por Obra</h4>
+                                    {rateio.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {rateio.map((ro: any, i: number) => (
+                                          <div key={i} className="text-xs p-2 bg-white rounded border">
+                                            <div className="flex justify-between font-medium">
+                                              <span>{ro.obraNome}</span>
+                                              <span>{ro.dias} dias ({Math.round(ro.proporcao * 100)}%)</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-1 mt-1 text-muted-foreground">
+                                              <span>Sal: {formatBRL(ro.salario)}</span>
+                                              <span>FGTS: {formatBRL(ro.fgts)}</span>
+                                              <span>INSS: {formatBRL(ro.inss)}</span>
+                                              <span>VA: {formatBRL(ro.va)}</span>
+                                              <span>VT: {formatBRL(ro.vt)}</span>
+                                              <span>VR: {formatBRL(ro.vr)}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground">Sem dados de rateio disponíveis</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

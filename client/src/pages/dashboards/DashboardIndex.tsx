@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import {
   Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
-  ArrowRight, Eye, Activity, ChevronRight, Building2, ShieldCheck,
+  ArrowRight, Eye, Activity, ChevronRight, Building2, ShieldCheck, CalendarDays,
 } from "lucide-react";
 
 /* ─── Data ─── */
@@ -139,6 +139,18 @@ const dashboards = [
     hoverBg: "hover:bg-sky-50/80",
     stats: "Compliance & Validade",
   },
+  {
+    path: "/dashboards/competencias",
+    title: "Competências",
+    desc: "Visão consolidada anual: evolução salarial, encargos, benefícios, inconsistências e custo por obra.",
+    icon: CalendarDays,
+    color: "#6366F1",
+    bgLight: "bg-indigo-50",
+    textColor: "text-indigo-600",
+    borderColor: "border-indigo-200",
+    hoverBg: "hover:bg-indigo-50/80",
+    stats: "Anual & Rateio",
+  },
 ];
 
 // Map dashboard paths to the main route they relate to
@@ -153,6 +165,7 @@ const DASH_TO_ROUTE: Record<string, string> = {
   "/dashboards/ferias": "/ferias",
   "/dashboards/efetivo-obra": "/efetivo-obra",
   "/dashboards/controle-documentos": "/controle-documentos",
+  "/dashboards/competencias": "/gestao-competencias",
   "/dashboards/visao-panoramica": "/dashboards",
 };
 

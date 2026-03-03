@@ -4289,3 +4289,27 @@
 - [x] Frontend: botão "Pedir Sugestão da IA" no dialog de resolução
 - [x] Frontend: painel roxo com explicação, badge de confiança e alertas
 - [x] Frontend: auto-preenchimento do formulário com sugestão da IA
+
+### Bug Fix - Sidebar não atualizado para empresas existentes
+- [x] Remover "Fechamento de Ponto" e "Folha de Pagamento" do menu salvo no banco para todas as empresas
+- [x] Garantir que o DEFAULT_MENU e o menu salvo fiquem sincronizados (via DEPRECATED_PATHS filter)
+
+## Rev. 171 - Upload DIXI no Wizard, Campos Rateáveis, Dashboard Competências
+
+### 1. Upload Múltiplos DIXI no Step 2 do Wizard
+- [x] Área de drag & drop no Step 2 para upload de arquivos DIXI
+- [x] Validação de SN antes do upload (reutilizar validateDixi existente)
+- [x] Upload e processamento integrado ao wizard (uploadDixi + processarPonto)
+- [x] Feedback visual de progresso e resultado por arquivo
+
+### 2. Campos Rateáveis por Obra na Simulação
+- [x] Incluir VA, VT, Seguro de Vida, FGTS, INSS, Dissídio, Contribuição Sindical, Pensão, DDS
+- [x] VR puxado da configuração de benefícios da obra
+- [x] Considerar descontos do colaborador (adiantamento, EPI)
+- [x] Rateio proporcional por dias trabalhados em cada obra
+
+### 3. Dashboard de Competências
+- [x] Página com visão consolidada de todas as competências do ano
+- [x] Cards por mês com status, totais e indicadores
+- [x] Gráficos de evolução (custo, horas extras, faltas)
+- [x] Filtros por ano e obra

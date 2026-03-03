@@ -956,6 +956,12 @@ export const payrollEngineRouter = router({
         pensaoTipo: employees.pensaoTipo,
         pensaoPercentual: employees.pensaoPercentual,
         vtValorDiario: employees.vtValorDiario,
+        seguroVida: employees.seguroVida,
+        fgtsPercentual: employees.fgtsPercentual,
+        inssPercentual: employees.inssPercentual,
+        vaRecebe: employees.vaRecebe,
+        vaValor: employees.vaValor,
+        obraAtualId: employees.obraAtualId,
       }).from(employees).where(
         and(
           eq(employees.companyId, input.companyId),
@@ -1076,21 +1082,67 @@ export const payrollEngineRouter = router({
           descricao: a.descricao,
         }));
 
-        const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVtFaltas + descontoPensao + acertoEscuroValor;
+        // ===== CAMPOS RATEÁVEIS POR OBRA =====
+        // VA (Vale Alimentação) - do cadastro do funcionário
+        const vaValor = (emp.vaRecebe === '1' || emp.vaRecebe === 'Sim') ? parseBRL(emp.vaValor) : 0;
+        // VT (Vale Transporte) - valor total mensal (diário * dias úteis)
+        const vtValorMensal = vtDiario * diasUteis;
+        // VR (Vale Refeição) - valor total mensal (diário * dias úteis)
+        const vrValorMensal = vrDiario * diasUteis;
+        // Seguro de Vida
+        const seguroVidaValor = parseBRL(emp.seguroVida);
+        // FGTS (8% padrão ou percentual do funcionário)
+        const fgtsPerc = parseBRL(emp.fgtsPercentual) || 8;
+        const fgtsValor = salarioBruto * (fgtsPerc / 100);
+        // INSS (percentual do funcionário ou tabela progressiva simplificada)
+        const inssPerc = parseBRL(emp.inssPercentual) || 0;
+        const inssValor = inssPerc > 0 ? salarioBruto * (inssPerc / 100) : 0;
+
+        // Rateio por obra: buscar dias trabalhados por obra no mês
+        const [obraDiasRows] = await db.execute(sql`
+          SELECT obraId, COUNT(*) as dias, o.nome as obraNome
+          FROM timecard_daily td
+          LEFT JOIN obras o ON td.obraId = o.id
+          WHERE td.employeeId = ${emp.id} AND td.companyId = ${input.companyId}
+          AND td.mesCompetencia = ${input.mesReferencia} AND td.statusDia = 'registrado'
+          AND td.obraId IS NOT NULL
+          GROUP BY td.obraId, o.nome
+        `) as any[];
+        const totalDiasObra = (obraDiasRows || []).reduce((s: number, r: any) => s + Number(r.dias), 0) || diasUteis;
+        const rateioPorObra = (obraDiasRows || []).map((r: any) => {
+          const proporcao = Number(r.dias) / totalDiasObra;
+          return {
+            obraId: r.obraId,
+            obraNome: r.obraNome || 'Sem obra',
+            dias: Number(r.dias),
+            proporcao: Math.round(proporcao * 10000) / 10000,
+            salario: Math.round(salarioBruto * proporcao * 100) / 100,
+            va: Math.round(vaValor * proporcao * 100) / 100,
+            vt: Math.round(vtValorMensal * proporcao * 100) / 100,
+            vr: Math.round(vrValorMensal * proporcao * 100) / 100,
+            seguro: Math.round(seguroVidaValor * proporcao * 100) / 100,
+            fgts: Math.round(fgtsValor * proporcao * 100) / 100,
+            inss: Math.round(inssValor * proporcao * 100) / 100,
+          };
+        });
+
+        const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor;
         const salarioLiquido = totalProventos - totalDescontos;
 
         await db.execute(sql`
           INSERT INTO payroll_payments (companyId, employeeId, mesReferencia, valorHora, cargaHorariaDiaria, diasUteisNoMes,
             salarioBrutoMes, horasExtrasValor, totalProventos,
             descontoAdiantamento, descontoFaltas, descontoFaltasQtd, descontoAtrasos, descontoAtrasosMinutos,
-            descontoVrFaltas, descontoVtFaltas, descontoPensao, descontoOutros,
+            descontoVrFaltas, descontoVtFaltas, descontoPensao, descontoInss, descontoFgts, descontoOutros,
             totalDescontos, acertoEscuroValor, acertoEscuroDetalhes, salarioLiquido,
+            vaValor, vtValor, vrValor, seguroVidaValor, fgtsValor, inssValor, rateioPorObra,
             status, dataPagamentoPrevista)
           VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis},
             ${formatMoney(salarioBruto)}, ${formatMoney(valorHE)}, ${formatMoney(totalProventos)},
             ${formatMoney(descontoAdiantamento)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
-            ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, '0',
+            ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(inssValor)}, ${formatMoney(fgtsValor)}, '0',
             ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
+            ${formatMoney(vaValor)}, ${formatMoney(vtValorMensal)}, ${formatMoney(vrValorMensal)}, ${formatMoney(seguroVidaValor)}, ${formatMoney(fgtsValor)}, ${formatMoney(inssValor)}, ${JSON.stringify(rateioPorObra)},
             'simulado', ${dataPagamentoPrevista})
         `);
 
@@ -1113,10 +1165,17 @@ export const payrollEngineRouter = router({
           descontoVrFaltas,
           descontoVtFaltas,
           descontoPensao,
+          descontoInss: inssValor,
+          descontoFgts: fgtsValor,
           acertoEscuroValor,
           totalDescontos,
           salarioLiquido,
           dataPagamentoPrevista,
+          vaValor,
+          vtValor: vtValorMensal,
+          vrValor: vrValorMensal,
+          seguroVidaValor,
+          rateioPorObra,
         });
       }
 

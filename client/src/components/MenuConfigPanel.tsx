@@ -106,8 +106,7 @@ const DEFAULT_MENU = [
     { label: "Contas Bancárias", path: "/contas-bancarias", visible: true },
   ]},
   { title: "Operacional", items: [
-    { label: "Fechamento de Ponto", path: "/fechamento-ponto", visible: true },
-    { label: "Folha de Pagamento", path: "/folha-pagamento", visible: true },
+    { label: "Gestão de Competências", path: "/gestao-competencias", visible: true },
     { label: "Controle de Documentos", path: "/controle-documentos", visible: true },
     { label: "Vale Alimentação", path: "/vale-alimentacao", visible: true },
     { label: "Solicitação de Hora Extra", path: "/solicitacao-he", visible: true },
@@ -123,6 +122,10 @@ const DEFAULT_MENU = [
   ]},
   { title: "Relatórios", items: [
     { label: "Raio-X do Funcionário", path: "/relatorios/raio-x", visible: true },
+    { label: "Relatório de Ponto", path: "/relatorios/ponto", visible: true },
+    { label: "Relatório de Folha", path: "/relatorios/folha", visible: true },
+    { label: "Relatório de Divergências", path: "/relatorios/divergencias", visible: true },
+    { label: "Custo por Obra", path: "/relatorios/custo-obra", visible: true },
   ]},
   { title: "Dashboards", items: [
     { label: "Todos os Dashboards", path: "/dashboards", visible: true },

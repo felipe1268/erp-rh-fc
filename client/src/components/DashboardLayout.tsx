@@ -537,6 +537,11 @@ function DashboardLayoutContent({
   const savedMenuConfig = menuConfigQuery.data as Array<{ title: string; items: Array<{ label: string; path: string; visible: boolean; originalLabel?: string }> }> | null;
 
   // Build the effective sections based on active module + permissions + saved config
+  // Paths that were removed from the codebase and should be stripped from any saved menu config
+  const DEPRECATED_PATHS = new Set([
+    '/fechamento-ponto',
+    '/folha-pagamento',
+  ]);
   const effectiveSections = useMemo(() => {
     const moduleSections = MODULE_SECTIONS[activeModule] || MODULE_SECTIONS["rh-dp"];
     // Combine module sections + admin sections
@@ -559,6 +564,8 @@ function DashboardLayoutContent({
         for (const savedItem of savedSection.items) {
           if (!savedItem.visible) continue; // Hide invisible items
           const original = allItemsByPath.get(savedItem.path);
+          // Skip deprecated paths that were removed from the codebase
+          if (DEPRECATED_PATHS.has(savedItem.path)) continue;
           if (original) {
             items.push({
               ...original,
