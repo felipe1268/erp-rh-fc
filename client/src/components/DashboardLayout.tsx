@@ -95,6 +95,7 @@ const menuSectionsRHDP: MenuSection[] = [
     items: [
       { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
+      { icon: CalendarDays, label: "Gestão de Competências", path: "/gestao-competencias" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
@@ -326,6 +327,7 @@ const ICON_MAP: Record<string, any> = {
   "Contas Bancárias": ClipboardList,
   "Fechamento de Ponto": Clock,
   "Folha de Pagamento": Wallet,
+  "Gestão de Competências": CalendarDays,
   "Controle de Documentos": FolderOpen,
   "Vale Alimentação": UtensilsCrossed,
   "Controle de EPIs": HardHat,

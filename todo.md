@@ -4124,8 +4124,8 @@
 - [x] Atualizar ICON_MAP e PATH_ICON_MAP com todos os ícones e paths
 
 ## Rev. 166 - Sidebar não atualiza após salvar Painel de Controle
-- [ ] Investigar por que o sidebar não reflete as alterações salvas no Painel de Controle
-- [ ] Corrigir para que o sidebar atualize automaticamente após salvar configurações do menu
+- [x] Investigar por que o sidebar não reflete as alterações salvas no Painel de Controle
+- [x] Corrigir para que o sidebar atualize automaticamente após salvar configurações do menu
 
 ## Rev. 166: Sidebar lê configuração salva do Menu
 - [x] Adicionar trpc.menuConfig.get.useQuery() no DashboardLayoutContent
@@ -4136,3 +4136,72 @@
 - [x] Adicionar itens novos do código que não existem na configuração salva
 - [x] Invalidar cache do menuConfig.get ao salvar/resetar no MenuConfigPanel
 - [x] Sidebar atualiza imediatamente após salvar no Painel de Controle (sem refresh)
+
+## Rev. 167: Módulo Completo de Gestão de Competências (Ponto e Folha)
+
+### Schema / Banco de Dados
+- [x] Criar tabela payroll_periods (competências com status: nao_aberta, aberta, ponto_importado, aferida, vale_gerado, pagamento_simulado, consolidada, travada)
+- [x] Criar tabela timecard_daily (registro diário por funcionário com status: registrado, fechado_no_escuro, aferido)
+- [x] Criar tabela payroll_advances (vales/adiantamentos com cálculo automático 40%)
+- [x] Criar tabela payroll_payments (pagamentos com todos os descontos detalhados)
+- [x] Criar tabela payroll_adjustments (acertos do período no escuro)
+- [x] Criar tabela payroll_alerts (alertas automáticos de prazos e divergências)
+- [x] Criar tabela financial_events (ponte para futuro módulo financeiro)
+
+### Backend - Router payrollEngine
+- [x] Procedure abrirCompetencia (cria período com datas calculadas)
+- [x] Procedure processarPonto (importa dados DIXI e gera timecard diário)
+- [x] Procedure realizarAfericao (cruza ponto com período no escuro do mês anterior)
+- [x] Procedure gerarVale (40% salário + HE, bloqueio se >5 faltas)
+- [x] Procedure simularPagamento (calcula todos os descontos e proventos)
+- [x] Procedure consolidarPagamento (confirma e gera eventos financeiros)
+- [x] Procedure travarCompetencia (bloqueia alterações)
+- [x] Procedure getCriterios / salvarCriterios (critérios configuráveis por empresa)
+- [x] Procedure listarVales / listarPagamentos / listarDivergencias
+- [x] Procedure listarEventosFinanceiros / previsaoFinanceira
+- [x] Procedure custoPorObra (custo de mão de obra por obra)
+- [x] Procedure listarAlertas
+- [x] Procedure resumoCompetencia (dashboard da competência)
+- [x] Procedure gerarContracheque (dados para contracheque individual)
+
+### Frontend - Página Gestão de Competências
+- [x] Pipeline visual de 7 etapas com status colorido (verde=done, azul=current, cinza=pending)
+- [x] Seletor de mês/ano com navegação por setas
+- [x] Cards de resumo: Registros Ponto, Vales, Pagamentos, Divergências, Eventos Financeiros, Custo por Obra
+- [x] View Cartão de Ponto Diário (timecard com timeline visual e status por dia)
+- [x] View Vale/Adiantamento (tabela com totais, status bloqueado/liberado)
+- [x] View Pagamento (tabela com todos os descontos, linhas expandíveis, botão contracheque)
+- [x] View Divergências (relatório automático de divergências na aferição)
+- [x] View Alertas (cards coloridos por tipo: info, warning, error)
+- [x] View Eventos Financeiros (tabela com totais por tipo)
+- [x] View Custo por Obra (tabelas de pagamentos e ponto por obra)
+- [x] View Critérios Configuráveis (9 critérios editáveis)
+- [x] Diálogo de Contracheque individual com PrintHeader/PrintFooterLGPD
+- [x] PrintHeader e PrintFooterLGPD em todas as views imprimíveis
+
+### Critérios Configuráveis
+- [x] Dia de Corte do Ponto (padrão: 15)
+- [x] Percentual do Adiantamento (padrão: 40%)
+- [x] Dia do Adiantamento (padrão: 20)
+- [x] Dia Útil do Pagamento (padrão: 5º dia útil)
+- [x] Máx. Faltas para Vale (padrão: 5)
+- [x] Carga Horária Diária (padrão: 8h)
+- [x] Fechar no Escuro (sim/não)
+- [x] Descontar VR por Falta (sim/não)
+- [x] Descontar VT por Falta (sim/não)
+
+### Lógica de Negócio
+- [x] Ciclo do ponto 15 a 15 com "fechar no escuro"
+- [x] Aferição automática ao importar próximo ponto
+- [x] Bloqueio de vale se >5 faltas no período 15 a 15
+- [x] Desconto VR/VT proporcional por dia de falta (CLT)
+- [x] Acerto do escuro: descontos do período no escuro do mês anterior
+- [x] Eventos financeiros gerados automaticamente na consolidação
+- [x] Trava de competência impede alterações após fechamento
+
+### Testes
+- [x] 47 testes unitários para lógica de cálculo (salário, vale, pagamento, períodos, status)
+- [x] Testes de dias úteis, período do ponto, período no escuro
+- [x] Testes de bloqueio de vale, desconto VR/VT, acerto escuro
+- [x] Testes de fluxo completo (Fev/2026 como exemplo)
+- [x] Testes de eventos financeiros

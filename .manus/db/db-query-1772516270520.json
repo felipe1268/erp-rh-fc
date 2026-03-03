@@ -1,0 +1,94 @@
+{
+  "query": "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'financial_events' AND TABLE_SCHEMA = DATABASE() ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'financial_events' AND TABLE_SCHEMA = DATABASE() ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "companyId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "tipo",
+      "DATA_TYPE": "enum"
+    },
+    {
+      "COLUMN_NAME": "categoria",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "subcategoria",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "mesCompetencia",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "dataPrevista",
+      "DATA_TYPE": "date"
+    },
+    {
+      "COLUMN_NAME": "dataEfetiva",
+      "DATA_TYPE": "date"
+    },
+    {
+      "COLUMN_NAME": "valor",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "status",
+      "DATA_TYPE": "enum"
+    },
+    {
+      "COLUMN_NAME": "employeeId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "employeeName",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "obraId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "obraNome",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "descricao",
+      "DATA_TYPE": "text"
+    },
+    {
+      "COLUMN_NAME": "origemTipo",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "origemId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "criadoPor",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "atualizadoPor",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "createdAt",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "updatedAt",
+      "DATA_TYPE": "timestamp"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\tDATA_TYPE\nid\tint\ncompanyId\tint\ntipo\tenum\ncategoria\tvarchar\nsubcategoria\tvarchar\nmesCompetencia\tvarchar\ndataPrevista\tdate\ndataEfetiva\tdate\nvalor\tvarchar\nstatus\tenum\nemployeeId\tint\nemployeeName\tvarchar\nobraId\tint\nobraNome\tvarchar\ndescricao\ttext\norigemTipo\tvarchar\norigemId\tint\ncriadoPor\tvarchar\natualizadoPor\tvarchar\ncreatedAt\ttimestamp\nupdatedAt\ttimestamp\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

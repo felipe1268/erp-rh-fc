@@ -76,6 +76,7 @@ import { sprint1Router } from "./routers/sprint1Foundation";
 import { terceirosRouter } from "./routers/terceiros";
 import { parceirosRouter } from "./routers/parceiros";
 import { portalExternoRouter } from "./routers/portalExterno";
+import { payrollEngineRouter } from "./routers/payrollEngine";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -110,6 +111,7 @@ export const appRouter = router({
   terceiros: terceirosRouter,
   parceiros: parceirosRouter,
   portalExterno: portalExternoRouter,
+  payrollEngine: payrollEngineRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

@@ -21,6 +21,7 @@ import Obras from "./pages/Obras";
 import ObraEfetivo from "./pages/ObraEfetivo";
 import FechamentoPonto from "./pages/FechamentoPonto";
 import FolhaPagamento from "./pages/FolhaPagamento";
+import PayrollCompetencias from "./pages/PayrollCompetencias";
 import ControleDocumentos from "./pages/ControleDocumentos";
 import ValeAlimentacao from "./pages/ValeAlimentacao";
 import Setores from "./pages/Setores";
@@ -118,6 +119,7 @@ function Router() {
       <Route path={"/auditoria"} component={Auditoria} />
       <Route path={"/fechamento-ponto"} component={FechamentoPonto} />
       <Route path={"/folha-pagamento"} component={FolhaPagamento} />
+      <Route path={"/gestao-competencias"} component={PayrollCompetencias} />
       <Route path={"/controle-documentos"} component={ControleDocumentos} />
       <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
       <Route path={"/configuracoes"} component={Configuracoes} />

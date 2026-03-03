@@ -1,0 +1,53 @@
+{
+  "query": "SHOW CREATE TABLE payroll_periods;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW CREATE TABLE payroll_periods;",
+  "rows": [
+    {
+      "Table": "payroll_periods",
+      "Create Table": "CREATE TABLE `payroll_periods` ("
+    }
+  ],
+  "messages": [
+    "  `id` int NOT NULL AUTO_INCREMENT,",
+    "  `companyId` int NOT NULL,",
+    "  `mesReferencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `pontoInicio` date DEFAULT NULL,",
+    "  `pontoFim` date DEFAULT NULL,",
+    "  `escuroInicio` date DEFAULT NULL,",
+    "  `escuroFim` date DEFAULT NULL,",
+    "  `status` enum('aberta','ponto_importado','vale_gerado','pagamento_simulado','consolidada','travada') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'aberta',",
+    "  `pontoImportadoEm` timestamp NULL DEFAULT NULL,",
+    "  `pontoImportadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `valeGeradoEm` timestamp NULL DEFAULT NULL,",
+    "  `valeGeradoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `pagamentoSimuladoEm` timestamp NULL DEFAULT NULL,",
+    "  `pagamentoSimuladoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `consolidadoEm` timestamp NULL DEFAULT NULL,",
+    "  `consolidadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `travadoEm` timestamp NULL DEFAULT NULL,",
+    "  `travadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `afericaoRealizada` tinyint NOT NULL DEFAULT '0',",
+    "  `afericaoEm` timestamp NULL DEFAULT NULL,",
+    "  `afericaoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `totalDivergenciasAferidas` int DEFAULT '0',",
+    "  `retificadoEm` timestamp NULL DEFAULT NULL,",
+    "  `retificadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `motivoRetificacao` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `totalFuncionarios` int DEFAULT '0',",
+    "  `totalSalarioBruto` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',",
+    "  `totalVale` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',",
+    "  `totalHorasExtras` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',",
+    "  `totalDescontos` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',",
+    "  `totalLiquido` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',",
+    "  `observacoes` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,",
+    "  KEY `pp_company_mes` (`companyId`,`mesReferencia`),",
+    "  KEY `pp_status` (`status`)",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=30001"
+  ],
+  "stdout": "Table\tCreate Table\npayroll_periods\tCREATE TABLE `payroll_periods` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `companyId` int NOT NULL,\n  `mesReferencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `pontoInicio` date DEFAULT NULL,\n  `pontoFim` date DEFAULT NULL,\n  `escuroInicio` date DEFAULT NULL,\n  `escuroFim` date DEFAULT NULL,\n  `status` enum('aberta','ponto_importado','vale_gerado','pagamento_simulado','consolidada','travada') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'aberta',\n  `pontoImportadoEm` timestamp NULL DEFAULT NULL,\n  `pontoImportadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `valeGeradoEm` timestamp NULL DEFAULT NULL,\n  `valeGeradoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `pagamentoSimuladoEm` timestamp NULL DEFAULT NULL,\n  `pagamentoSimuladoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `consolidadoEm` timestamp NULL DEFAULT NULL,\n  `consolidadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `travadoEm` timestamp NULL DEFAULT NULL,\n  `travadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `afericaoRealizada` tinyint NOT NULL DEFAULT '0',\n  `afericaoEm` timestamp NULL DEFAULT NULL,\n  `afericaoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `totalDivergenciasAferidas` int DEFAULT '0',\n  `retificadoEm` timestamp NULL DEFAULT NULL,\n  `retificadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `motivoRetificacao` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `totalFuncionarios` int DEFAULT '0',\n  `totalSalarioBruto` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',\n  `totalVale` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',\n  `totalHorasExtras` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',\n  `totalDescontos` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',\n  `totalLiquido` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '0',\n  `observacoes` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,\n  KEY `pp_company_mes` (`companyId`,`mesReferencia`),\n  KEY `pp_status` (`status`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=30001\n",
+  "stderr": "",
+  "execution_time_ms": 133
+}
