@@ -377,6 +377,8 @@ export const appRouter = router({
         employeeData.listaNegraPor = ctx.user.name ?? 'Sistema';
         employeeData.listaNegraUserId = ctx.user.id;
         employeeData.dataListaNegra = new Date().toISOString().split('T')[0];
+        // Automaticamente mudar status para Lista_Negra
+        employeeData.status = 'Lista_Negra';
       }
       
       // === REATIVAÇÃO DE BLACKLIST: REQUER APROVAÇÃO DUPLA ===
@@ -393,6 +395,10 @@ export const appRouter = router({
           if (approvedReqs.length === 0) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '🚫 REATIVAÇÃO BLOQUEADA!\n\nEste funcionário está na Blacklist.\nPara removê-lo da Blacklist, é necessária a aprovação de 2 diretores da empresa.\n\nSolicite a reativação pelo menu "Blacklist" e aguarde as aprovações.' });
           }
+        }
+        // Ao remover da blacklist, voltar status para Desligado (pode ser recontratado)
+        if (employeeData.status === 'Lista_Negra') {
+          employeeData.status = 'Desligado';
         }
       }
       

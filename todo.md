@@ -4380,3 +4380,7 @@
 - [x] Verificar se o parser atual lê corretamente esses formatos
 - [x] Corrigir parser: sheet "Marcações" reconhecida, formato YYYY/MM/DD suportado, nomes vazios tratados
 - [x] Upload sequencial (1 arquivo por vez) para evitar Load failed no Safari
+
+### Bug - Blacklist não filtra no Raio-X do Funcionário
+- [x] Investigar por que o filtro Blacklist mostra 0 - status era "Desligado" com listaNegra=1, mas filtro procura status="Lista_Negra"
+- [x] Corrigir: atualizados 14 registros no banco + auto-setar status='Lista_Negra' ao incluir na blacklist + reverter para 'Desligado' ao remover
