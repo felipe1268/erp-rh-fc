@@ -296,6 +296,7 @@ export default function GruposUsuarios() {
 
   const savePermissions = () => {
     if (!selectedGroup) return;
+    // Only save routes with canView=true to keep the database clean
     const perms = Object.values(routePerms).filter(p => p.canView);
     setPermsMut.mutate({ groupId: selectedGroup.id, permissions: perms });
   };
@@ -326,8 +327,13 @@ export default function GruposUsuarios() {
   };
 
   // When perms query loads, populate state
-  if (groupPermsQuery.data && showPermissions && Object.keys(routePerms).length === 0 && groupPermsQuery.data.length > 0) {
-    loadPermsIntoState();
+  // Note: we also need to handle the case where groupPermsQuery.data is empty (new group with no permissions)
+  if (groupPermsQuery.data && showPermissions && Object.keys(routePerms).length === 0) {
+    if (groupPermsQuery.data.length > 0) {
+      loadPermsIntoState();
+    }
+    // For groups with no permissions yet, routePerms stays empty which is correct
+    // The toggleRoutePerm function creates entries on demand
   }
 
   // Members data
@@ -653,9 +659,8 @@ export default function GruposUsuarios() {
                         </span>
                       </div>
 
-                      {/* Routes */}
-                      {someViewed && (
-                        <div className="p-3 space-y-1">
+                      {/* Routes - always show so user can toggle checkboxes */}
+                      <div className="p-3 space-y-1">
                           {/* Column headers */}
                           <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider pb-1 border-b mb-1">
                             <div className="col-span-4">Tela</div>
@@ -668,7 +673,6 @@ export default function GruposUsuarios() {
                           </div>
                           {section.routes.map(route => {
                             const perm = routePerms[route.path];
-                            if (!perm?.canView) return null;
                             return (
                               <div key={route.path} className="grid grid-cols-12 gap-2 items-center py-1 hover:bg-secondary/20 rounded px-1">
                                 <div className="col-span-4 text-xs font-medium truncate">{route.label}</div>
@@ -693,8 +697,7 @@ export default function GruposUsuarios() {
                               </div>
                             );
                           })}
-                        </div>
-                      )}
+                      </div>
                     </div>
                   );
                 })}

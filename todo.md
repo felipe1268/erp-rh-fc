@@ -4066,3 +4066,8 @@
 ## Rev. 156 - Atalhos Sidebar Operacional
 - [x] Adicionar "Lançar Atestados" na seção Operacional do sidebar
 - [x] Adicionar "Advertências" na seção Operacional do sidebar
+
+## Rev. 157 - Correção Bug Checkboxes Permissões
+- [x] Corrigir bug onde desmarcar checkbox "Ver" fazia o item sumir da lista de permissões do grupo
+- [x] Remover filtro que escondia rotas sem canView na renderização
+- [x] Sempre exibir todas as rotas de cada seção independente do estado do checkbox
