@@ -4075,3 +4075,8 @@
 ## Rev. 158 - Correção Atalhos Sidebar (Advertências e Atestados)
 - [x] Corrigir atalho "Advertências" no sidebar para abrir diretamente na aba de advertências
 - [x] Corrigir atalho "Lançar Atestados" no sidebar para abrir diretamente na aba de atestados
+
+## Rev. 159 - Permissões: Atalhos Sidebar devem respeitar permissões do grupo
+- [x] Garantir que atalhos Advertências e Lançar Atestados no sidebar estejam mapeados no sistema de permissões
+- [x] Sidebar deve ocultar itens que o usuário não tem permissão de ver (canView)
+- [x] Todas as rotas/atalhos do sidebar devem ter correspondência no sistema de permissões

@@ -57,6 +57,8 @@ const ALL_ROUTES = [
       { path: "/fechamento-ponto", label: "Fechamento de Ponto", icon: "Clock" },
       { path: "/folha-pagamento", label: "Folha de Pagamento", icon: "Wallet" },
       { path: "/controle-documentos", label: "Controle de Documentos", icon: "FolderOpen" },
+      { path: "/controle-documentos?tab=atestados", label: "Lançar Atestados", icon: "ClipboardPlus" },
+      { path: "/controle-documentos?tab=advertencias", label: "Advertências", icon: "ShieldAlert" },
       { path: "/vale-alimentacao", label: "Vale Alimentação", icon: "UtensilsCrossed" },
       { path: "/solicitacao-he", label: "Solicitação de Hora Extra", icon: "Clock" },
       { path: "/crachas", label: "Crachás", icon: "CreditCard" },

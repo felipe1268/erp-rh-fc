@@ -174,15 +174,28 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanAccessRoute = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true; // Se não tem grupo, acesso controlado pelas permissões individuais
-    // Extrair path base sem query params
+    // Primeiro verificar rota completa (com query params, ex: /controle-documentos?tab=advertencias)
+    if (groupRouteMap.has(route)) {
+      return !!groupRouteMap.get(route)?.canView;
+    }
+    // Fallback: verificar path base sem query params
     const basePath = route.split('?')[0];
     return groupRouteMap.has(basePath) && !!groupRouteMap.get(basePath)?.canView;
+  };
+
+  // Helper para buscar permissão de grupo: primeiro tenta rota completa, depois base path
+  const getGroupPerm = (route: string) => {
+    let perm = groupRouteMap.get(route);
+    if (!perm && route.includes('?')) {
+      perm = groupRouteMap.get(route.split('?')[0]);
+    }
+    return perm;
   };
 
   const groupCanEdit = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
-    const perm = groupRouteMap.get(route);
+    const perm = getGroupPerm(route);
     if (!perm) return !groupPermissions!.somenteVisualizacao;
     return perm.canEdit;
   };
@@ -190,7 +203,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanCreate = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
-    const perm = groupRouteMap.get(route);
+    const perm = getGroupPerm(route);
     if (!perm) return !groupPermissions!.somenteVisualizacao;
     return perm.canCreate;
   };
@@ -198,7 +211,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupCanDelete = (route: string): boolean => {
     if (isAdminMaster) return true;
     if (!hasGroup) return true;
-    const perm = groupRouteMap.get(route);
+    const perm = getGroupPerm(route);
     if (!perm) return !groupPermissions!.somenteVisualizacao;
     return perm.canDelete;
   };
@@ -206,7 +219,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupOcultarValores = (route: string): boolean => {
     if (isAdminMaster) return false;
     if (!hasGroup) return false;
-    const perm = groupRouteMap.get(route);
+    const perm = getGroupPerm(route);
     if (perm) return perm.ocultarValores;
     return groupPermissions!.ocultarDadosSensiveis;
   };
@@ -214,7 +227,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const groupOcultarDocumentos = (route: string): boolean => {
     if (isAdminMaster) return false;
     if (!hasGroup) return false;
-    const perm = groupRouteMap.get(route);
+    const perm = getGroupPerm(route);
     if (perm) return perm.ocultarDocumentos;
     return false;
   };

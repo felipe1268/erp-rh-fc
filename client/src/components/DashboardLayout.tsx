@@ -561,6 +561,14 @@ function DashboardLayoutContent({
           if (featureInfo) {
             return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
           }
+          // Para rotas com query params (ex: /controle-documentos?tab=advertencias),
+          // verificar se a rota base tem permissão (o controle fino é feito pelo grupo)
+          if (item.path.includes('?')) {
+            const baseFeatureInfo = routeToFeatureKey.get(itemBasePath);
+            if (baseFeatureInfo) {
+              return canAccessFeature(baseFeatureInfo.moduleId, baseFeatureInfo.featureKey);
+            }
+          }
           // Default: NEGAR acesso (segurança por padrão)
           return false;
         }),
