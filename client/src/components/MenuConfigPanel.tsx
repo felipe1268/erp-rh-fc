@@ -448,12 +448,13 @@ export default function MenuConfigPanel() {
   const cancelEditSection = () => setEditingSection(null);
 
   const configQuery = trpc.menuConfig.get.useQuery();
+  const utils = trpc.useUtils();
   const saveMut = trpc.menuConfig.save.useMutation({
-    onSuccess: () => { toast.success("Configuração do menu salva!"); setHasChanges(false); configQuery.refetch(); },
+    onSuccess: () => { toast.success("Configuração do menu salva!"); setHasChanges(false); configQuery.refetch(); utils.menuConfig.get.invalidate(); },
     onError: (e: any) => toast.error("Erro ao salvar: " + e.message),
   });
   const resetMut = trpc.menuConfig.reset.useMutation({
-    onSuccess: () => { setMenuConfig(DEFAULT_MENU); setHasChanges(false); toast.success("Menu restaurado!"); configQuery.refetch(); },
+    onSuccess: () => { setMenuConfig(DEFAULT_MENU); setHasChanges(false); toast.success("Menu restaurado!"); configQuery.refetch(); utils.menuConfig.get.invalidate(); },
     onError: (e: any) => toast.error("Erro: " + e.message),
   });
 

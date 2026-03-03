@@ -4122,3 +4122,17 @@
 - [x] Atualizar DEFAULT_MENU com todos os itens do sidebar (Efetivo por Obra, Convenções Coletivas, Dashboards extras, IA, Admin completo, Ajuda)
 - [x] Corrigir path de Crachás (/terceiros/crachas → /crachas)
 - [x] Atualizar ICON_MAP e PATH_ICON_MAP com todos os ícones e paths
+
+## Rev. 166 - Sidebar não atualiza após salvar Painel de Controle
+- [ ] Investigar por que o sidebar não reflete as alterações salvas no Painel de Controle
+- [ ] Corrigir para que o sidebar atualize automaticamente após salvar configurações do menu
+
+## Rev. 166: Sidebar lê configuração salva do Menu
+- [x] Adicionar trpc.menuConfig.get.useQuery() no DashboardLayoutContent
+- [x] Aplicar configuração salva para reorganizar effectiveSections no sidebar
+- [x] Manter ícones corretos ao aplicar configuração salva (lookup por path no allItemsByPath)
+- [x] Suportar labels customizados (renomeados no Painel de Controle)
+- [x] Ocultar itens marcados como invisible na configuração salva
+- [x] Adicionar itens novos do código que não existem na configuração salva
+- [x] Invalidar cache do menuConfig.get ao salvar/resetar no MenuConfigPanel
+- [x] Sidebar atualiza imediatamente após salvar no Painel de Controle (sem refresh)

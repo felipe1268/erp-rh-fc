@@ -519,11 +519,70 @@ function DashboardLayoutContent({
     return map;
   }, []);
 
-  // Build the effective sections based on active module + permissions
+  // Fetch saved menu config from database
+  const menuConfigQuery = trpc.menuConfig.get.useQuery();
+  const savedMenuConfig = menuConfigQuery.data as Array<{ title: string; items: Array<{ label: string; path: string; visible: boolean; originalLabel?: string }> }> | null;
+
+  // Build the effective sections based on active module + permissions + saved config
   const effectiveSections = useMemo(() => {
     const moduleSections = MODULE_SECTIONS[activeModule] || MODULE_SECTIONS["rh-dp"];
     // Combine module sections + admin sections
     let sections: MenuSection[] = [...moduleSections, ...adminSections];
+
+    // Apply saved menu config if available (only for rh-dp module which is the main one)
+    if (savedMenuConfig && activeModule === 'rh-dp') {
+      // Build a map of all available items by path for icon lookup
+      const allItemsByPath = new Map<string, MenuItem>();
+      for (const sec of sections) {
+        for (const item of sec.items) {
+          allItemsByPath.set(item.path, item);
+        }
+      }
+
+      // Reconstruct sections from saved config
+      const customSections: MenuSection[] = [];
+      for (const savedSection of savedMenuConfig) {
+        const items: MenuItem[] = [];
+        for (const savedItem of savedSection.items) {
+          if (!savedItem.visible) continue; // Hide invisible items
+          const original = allItemsByPath.get(savedItem.path);
+          if (original) {
+            items.push({
+              ...original,
+              label: savedItem.label || original.label, // Use custom label if set
+            });
+          } else {
+            // Item exists in saved config but not in code (e.g. new path)
+            // Try to find icon from ICON_MAP
+            const iconFromMap = ICON_MAP[savedItem.label] || ICON_MAP[savedItem.originalLabel || ''] || Grid2X2;
+            items.push({
+              icon: iconFromMap,
+              label: savedItem.label,
+              path: savedItem.path,
+            });
+          }
+        }
+        if (items.length > 0) {
+          customSections.push({ title: savedSection.title, items });
+        }
+      }
+
+      // Add any sections/items from code that are NOT in saved config (new items added after save)
+      const savedPaths = new Set(savedMenuConfig.flatMap(s => s.items.map(i => i.path)));
+      for (const sec of sections) {
+        const missingItems = sec.items.filter(item => !savedPaths.has(item.path));
+        if (missingItems.length > 0) {
+          const existingSection = customSections.find(s => s.title === sec.title);
+          if (existingSection) {
+            existingSection.items.push(...missingItems);
+          } else {
+            customSections.push({ title: sec.title, items: missingItems });
+          }
+        }
+      }
+
+      sections = customSections;
+    }
 
     // Filter admin-only paths for non-admin users
     if (!isAdminUser) {
@@ -588,7 +647,7 @@ function DashboardLayoutContent({
       }));
     }
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute]);
+  }, [activeModule, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, savedMenuConfig]);
 
   const allEffectiveItems = effectiveSections.flatMap(s => s.items);
   const allModuleItems = Object.values(MODULE_SECTIONS).flatMap(sections => sections.flatMap(s => s.items));
