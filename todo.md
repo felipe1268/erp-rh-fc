@@ -4362,3 +4362,11 @@
 ### Bug - DELETE FROM timecard_daily falha
 - [x] Investigar erro "Failed query: DELETE FROM timecard_daily WHERE companyId = ? AND mesReferencia = ?" ao processar ponto
 - [x] Corrigir o bug - timecard_daily usa mesCompetencia, payroll_uploads usa month, payroll_adjustments usa mesOrigem/mesDesconto
+
+### Melhoria - Etapa 2 (Processar Ponto) - Tela Completa de Revisão
+- [x] Mostrar tabela de inconsistências com ações (ajustar horário, atestado, abonar, advertir)
+- [x] Mostrar resumo por funcionário (faltas, atrasos, horas trabalhadas, HE)
+- [x] Mostrar sobreposições de obras no mesmo dia
+- [x] Adicionar filtros (por funcionário, por tipo de inconsistência, por obra)
+- [x] Adicionar abas/seções: Resumo | Inconsistências | Ponto Detalhado | Sobreposições
+- [x] Bloquear avanço para próxima etapa se houver inconsistências não resolvidas

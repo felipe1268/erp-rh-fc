@@ -1345,18 +1345,20 @@ export const payrollEngineRouter = router({
       let baseQuery;
       if (input.employeeId) {
         baseQuery = sql`
-          SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno
+          SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, o.nome as obraNome
           FROM timecard_daily td
           LEFT JOIN employees e ON td.employeeId = e.id
+          LEFT JOIN obras o ON td.obraId = o.id
           WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
           AND td.employeeId = ${input.employeeId}
           ORDER BY td.data, e.nomeCompleto
         `;
       } else {
         baseQuery = sql`
-          SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno
+          SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, o.nome as obraNome
           FROM timecard_daily td
           LEFT JOIN employees e ON td.employeeId = e.id
+          LEFT JOIN obras o ON td.obraId = o.id
           WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
           ORDER BY td.data, e.nomeCompleto
         `;
