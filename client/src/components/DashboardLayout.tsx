@@ -94,7 +94,8 @@ const menuSectionsRHDP: MenuSection[] = [
   {
     title: "Operacional",
     items: [
-      { icon: CalendarDays, label: "Gestão de Competências", path: "/gestao-competencias" },
+      { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
+      { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
@@ -539,8 +540,7 @@ function DashboardLayoutContent({
   // Build the effective sections based on active module + permissions + saved config
   // Paths that were removed from the codebase and should be stripped from any saved menu config
   const DEPRECATED_PATHS = new Set([
-    '/fechamento-ponto',
-    '/folha-pagamento',
+    '/gestao-competencias',
   ]);
   const effectiveSections = useMemo(() => {
     const moduleSections = MODULE_SECTIONS[activeModule] || MODULE_SECTIONS["rh-dp"];

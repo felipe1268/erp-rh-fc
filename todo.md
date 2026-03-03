@@ -4395,3 +4395,9 @@
 - [x] Corrigir inconsistências: usar is_inconsistente + inconsistencia_resolvida ao invés de status
 - [x] Adicionar label falta_batida nas inconsistências
 - [ ] Testar fluxo completo com upload DIXI real e reprocessamento
+
+## Fase 80: Reverter para Cartão de Ponto e Folha de Pagamento separados
+- [x] Identificar checkpoint anterior à Gestão de Competências
+- [x] Restaurar Fechamento de Ponto e Folha de Pagamento no sidebar (sem rollback destrutivo)
+- [x] Verificar que Cartão de Ponto e Folha de Pagamento funcionam corretamente
+- [x] Remover Gestão de Competências do menu (movida para DEPRECATED_PATHS)
