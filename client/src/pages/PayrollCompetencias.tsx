@@ -9,9 +9,10 @@ import {
   DollarSign, CreditCard, AlertTriangle, CheckCircle, FileText, Users,
   Clock, BarChart3, ShieldCheck,
   ArrowRight, Printer, Ban, Zap, Scale, AlertCircle, XCircle, Wallet,
-  Wrench, FileWarning, Check, Sparkles, Bot, Loader2, Upload, FolderUp, X
+  Wrench, FileWarning, Check, Sparkles, Bot, Loader2, Upload, FolderUp, X, Trash2, RotateCcw
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
@@ -48,9 +49,18 @@ const WIZARD_STEPS = [
 ];
 
 function formatBRL(val: string | number | null | undefined): string {
-  if (!val) return "R$ 0,00";
+  if (!val && val !== 0) return "R$ 0,00";
   if (typeof val === "number") return `R$ ${val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const num = parseFloat(String(val).replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", "."));
+  const str = String(val).replace(/[R$\s]/g, "").trim();
+  if (!str) return "R$ 0,00";
+  let num: number;
+  // If contains comma, it's BRL format (e.g. "2.774,20")
+  if (str.includes(",")) {
+    num = parseFloat(str.replace(/\./g, "").replace(",", "."));
+  } else {
+    // Otherwise it's decimal format from DB (e.g. "2421.12")
+    num = parseFloat(str);
+  }
   if (isNaN(num)) return "R$ 0,00";
   return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -114,6 +124,7 @@ export default function PayrollCompetencias() {
   const [searchTerm, setSearchTerm] = useState("");
   const [iaAnalysis, setIaAnalysis] = useState<any>(null);
   const [iaLoading, setIaLoading] = useState(false);
+  const [limparDialog, setLimparDialog] = useState<{ open: boolean; tipo: "etapa" | "competencia"; etapa?: string; etapaLabel?: string }>({ open: false, tipo: "etapa" });
 
   // ============================================================
   // QUERIES
@@ -196,6 +207,24 @@ export default function PayrollCompetencias() {
   });
   const travarCompetencia = trpc.payrollEngine.travarCompetencia.useMutation({
     onSuccess: () => { toast.success("Competência travada"); invalidateAll(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const resetarEtapa = trpc.payrollEngine.resetarEtapa.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Etapa limpa com sucesso. Novo status: ${STATUS_LABELS[data.newStatus] || data.newStatus}`);
+      invalidateAll();
+      setLimparDialog({ open: false, tipo: "etapa" });
+      setActiveStep(STATUS_TO_STEP[data.newStatus] ?? 0);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const resetarCompetencia = trpc.payrollEngine.resetarCompetencia.useMutation({
+    onSuccess: () => {
+      toast.success("Competência limpa com sucesso. Todos os dados foram removidos.");
+      invalidateAll();
+      setLimparDialog({ open: false, tipo: "competencia" });
+      setActiveStep(0);
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const resolverInconsistencia = trpc.payrollEngine.resolverInconsistencia.useMutation({
@@ -302,6 +331,34 @@ export default function PayrollCompetencias() {
     setConfirmDialog({ open: true, step: stepLabel, action });
   };
 
+  const ETAPA_MAP: Record<number, { key: string; label: string }> = {
+    1: { key: "ponto", label: "Processar Ponto" },
+    2: { key: "escuro", label: "Aferir Escuro" },
+    3: { key: "vale", label: "Gerar Vale" },
+    4: { key: "pagamento", label: "Simular Pagamento" },
+    5: { key: "consolidacao", label: "Consolidar" },
+  };
+
+  const handleLimparEtapa = (stepIdx: number) => {
+    const etapa = ETAPA_MAP[stepIdx];
+    if (!etapa) return;
+    setLimparDialog({ open: true, tipo: "etapa", etapa: etapa.key, etapaLabel: etapa.label });
+  };
+
+  const handleLimparCompetencia = () => {
+    setLimparDialog({ open: true, tipo: "competencia" });
+  };
+
+  const executarLimpar = () => {
+    if (limparDialog.tipo === "competencia") {
+      resetarCompetencia.mutate({ companyId, mesReferencia: mesRef });
+    } else if (limparDialog.etapa) {
+      resetarEtapa.mutate({ companyId, mesReferencia: mesRef, etapa: limparDialog.etapa as any });
+    }
+  };
+
+  const canLimpar = currentStatus !== "nao_aberta" && currentStatus !== "travada";
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -319,6 +376,17 @@ export default function PayrollCompetencias() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {canLimpar && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLimparCompetencia}
+                  className="text-red-200 hover:text-white hover:bg-red-500/30 text-xs gap-1.5"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Limpar Competência
+                </Button>
+              )}
               <Button variant="ghost" size="icon" onClick={prevMonth} className="text-white hover:bg-white/10">
                 <ChevronLeft className="w-5 h-5" />
               </Button>
@@ -406,6 +474,8 @@ export default function PayrollCompetencias() {
               onDixiFilesSelected={handleDixiFilesSelected}
               onDixiUpload={handleDixiUpload}
               onDixiRemoveFile={(idx: number) => { const nf = [...dixiFiles]; nf.splice(idx, 1); setDixiFiles(nf); setDixiValidation(null); }}
+              onLimparEtapa={() => handleLimparEtapa(1)}
+              canLimpar={canLimpar && currentStepFromStatus >= 2}
             />
           )}
           {activeStep === 2 && (
@@ -415,6 +485,8 @@ export default function PayrollCompetencias() {
               onAferir={() => confirmAction("Aferir Escuro", () => realizarAfericao.mutate({ companyId, mesReferencia: mesRef }))}
               isLoading={realizarAfericao.isPending}
               onNext={() => setActiveStep(3)}
+              onLimparEtapa={() => handleLimparEtapa(2)}
+              canLimpar={canLimpar && currentStepFromStatus >= 3}
             />
           )}
           {activeStep === 3 && (
@@ -427,6 +499,8 @@ export default function PayrollCompetencias() {
               onGerar={() => confirmAction("Gerar Vale", () => gerarVale.mutate({ companyId, mesReferencia: mesRef }))}
               isLoading={gerarVale.isPending}
               onNext={() => setActiveStep(4)}
+              onLimparEtapa={() => handleLimparEtapa(3)}
+              canLimpar={canLimpar && currentStepFromStatus >= 4}
             />
           )}
           {activeStep === 4 && (
@@ -440,6 +514,8 @@ export default function PayrollCompetencias() {
               isLoading={simularPagamento.isPending}
               onContracheque={() => setShowContracheque(true)}
               onNext={() => setActiveStep(5)}
+              onLimparEtapa={() => handleLimparEtapa(4)}
+              canLimpar={canLimpar && currentStepFromStatus >= 5}
             />
           )}
           {activeStep === 5 && (
@@ -449,6 +525,8 @@ export default function PayrollCompetencias() {
               onConsolidar={() => confirmAction("Consolidar Pagamento", () => consolidarPagamento.mutate({ companyId, mesReferencia: mesRef }))}
               isLoading={consolidarPagamento.isPending}
               onNext={() => setActiveStep(6)}
+              onLimparEtapa={() => handleLimparEtapa(5)}
+              canLimpar={canLimpar && currentStepFromStatus >= 6}
             />
           )}
           {activeStep === 6 && (
@@ -601,6 +679,41 @@ export default function PayrollCompetencias() {
         </DialogContent>
       </Dialog>
 
+      {/* LIMPAR DIALOG */}
+      <AlertDialog open={limparDialog.open} onOpenChange={(o) => !o && setLimparDialog({ ...limparDialog, open: false })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {limparDialog.tipo === "competencia" ? (
+                <><RotateCcw className="w-5 h-5 text-red-500" /> Limpar Competência Inteira</>
+              ) : (
+                <><Trash2 className="w-5 h-5 text-amber-500" /> Limpar Etapa: {limparDialog.etapaLabel}</>
+              )}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {limparDialog.tipo === "competencia" ? (
+                <>Todos os dados desta competência serão apagados (ponto, aferição, vale, pagamento, consolidação). A competência voltará ao status "Aberta". <strong>Esta ação não pode ser desfeita.</strong></>
+              ) : (
+                <>Os dados da etapa <strong>{limparDialog.etapaLabel}</strong> e de todas as etapas posteriores serão apagados. <strong>Esta ação não pode ser desfeita.</strong></>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executarLimpar}
+              className={limparDialog.tipo === "competencia" ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"}
+            >
+              {(resetarEtapa.isPending || resetarCompetencia.isPending) ? (
+                <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Limpando...</>
+              ) : (
+                limparDialog.tipo === "competencia" ? "Limpar Tudo" : "Limpar Etapa"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* CONTRACHEQUE DIALOG */}
       {showContracheque && (
         <FullScreenDialog
@@ -666,6 +779,24 @@ export default function PayrollCompetencias() {
 }
 
 // ============================================================
+// LIMPAR ETAPA BUTTON (reusable)
+// ============================================================
+function LimparEtapaButton({ onLimpar, canLimpar }: { onLimpar: () => void; canLimpar: boolean }) {
+  if (!canLimpar) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={onLimpar}
+      className="text-amber-600 hover:text-amber-800 hover:bg-amber-50 text-xs gap-1.5"
+    >
+      <Trash2 className="w-3.5 h-3.5" />
+      Limpar Etapa
+    </Button>
+  );
+}
+
+// ============================================================
 // STEP COMPONENTS
 // ============================================================
 
@@ -725,7 +856,7 @@ function StepAbrirCompetencia({ currentStatus, mesAtual, anoAtual, mesRef, resum
   );
 }
 
-function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoIncon, searchTerm, setSearchTerm, onProcessar, onResolverInconsistencia, isLoading, pendingInconsistencias, onNext, dixiFiles, dixiValidation, dixiUploading, dixiValidating, onDixiFilesSelected, onDixiUpload, onDixiRemoveFile }: any) {
+function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoIncon, searchTerm, setSearchTerm, onProcessar, onResolverInconsistencia, isLoading, pendingInconsistencias, onNext, dixiFiles, dixiValidation, dixiUploading, dixiValidating, onDixiFilesSelected, onDixiUpload, onDixiRemoveFile, onLimparEtapa, canLimpar }: any) {
   const isProcessed = STATUS_TO_STEP[currentStatus] >= 2;
   const [showAll, setShowAll] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -758,12 +889,15 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
                 <p className="text-sm text-muted-foreground">Importar registros DIXI e gerar timecard diário</p>
               </div>
             </div>
-            {!isProcessed && (
-              <Button onClick={onProcessar} disabled={isLoading || currentStatus === "nao_aberta"} size="lg">
-                <Zap className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : "Processar Ponto"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              <LimparEtapaButton onLimpar={onLimparEtapa} canLimpar={canLimpar} />
+              {!isProcessed && (
+                <Button onClick={onProcessar} disabled={isLoading || currentStatus === "nao_aberta"} size="lg">
+                  <Zap className="w-5 h-5 mr-2" />
+                  {isLoading ? "Processando..." : "Processar Ponto"}
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* DIXI Upload Area */}
@@ -976,7 +1110,7 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
   );
 }
 
-function StepAferirEscuro({ currentStatus, resumo, onAferir, isLoading, onNext }: any) {
+function StepAferirEscuro({ currentStatus, resumo, onAferir, isLoading, onNext, onLimparEtapa, canLimpar }: any) {
   const isAferido = STATUS_TO_STEP[currentStatus] >= 3;
   const r = resumo as any;
   return (
@@ -993,12 +1127,15 @@ function StepAferirEscuro({ currentStatus, resumo, onAferir, isLoading, onNext }
                 <p className="text-sm text-muted-foreground">Cruzar ponto real com período "no escuro" do mês anterior</p>
               </div>
             </div>
-            {!isAferido && (
-              <Button onClick={onAferir} disabled={isLoading || STATUS_TO_STEP[currentStatus] < 2} size="lg">
-                <Eye className="w-5 h-5 mr-2" />
-                {isLoading ? "Aferindo..." : "Realizar Aferição"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              <LimparEtapaButton onLimpar={onLimparEtapa} canLimpar={canLimpar} />
+              {!isAferido && (
+                <Button onClick={onAferir} disabled={isLoading || STATUS_TO_STEP[currentStatus] < 2} size="lg">
+                  <Eye className="w-5 h-5 mr-2" />
+                  {isLoading ? "Aferindo..." : "Realizar Aferição"}
+                </Button>
+              )}
+            </div>
           </div>
           {isAferido ? (
             <div className="space-y-4">
@@ -1030,7 +1167,7 @@ function StepAferirEscuro({ currentStatus, resumo, onAferir, isLoading, onNext }
   );
 }
 
-function StepGerarVale({ currentStatus, vales, resumo, searchTerm, setSearchTerm, onGerar, isLoading, onNext }: any) {
+function StepGerarVale({ currentStatus, vales, resumo, searchTerm, setSearchTerm, onGerar, isLoading, onNext, onLimparEtapa, canLimpar }: any) {
   const isGerado = STATUS_TO_STEP[currentStatus] >= 4;
   const r = resumo as any;
   const filteredVales = (vales || []).filter((v: any) =>
@@ -1050,12 +1187,15 @@ function StepGerarVale({ currentStatus, vales, resumo, searchTerm, setSearchTerm
                 <p className="text-sm text-muted-foreground">Calcular adiantamento salarial com base nos critérios</p>
               </div>
             </div>
-            {!isGerado && (
-              <Button onClick={onGerar} disabled={isLoading || STATUS_TO_STEP[currentStatus] < 3} size="lg">
-                <DollarSign className="w-5 h-5 mr-2" />
-                {isLoading ? "Gerando..." : "Gerar Vale"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              <LimparEtapaButton onLimpar={onLimparEtapa} canLimpar={canLimpar} />
+              {!isGerado && (
+                <Button onClick={onGerar} disabled={isLoading || STATUS_TO_STEP[currentStatus] < 3} size="lg">
+                  <DollarSign className="w-5 h-5 mr-2" />
+                  {isLoading ? "Gerando..." : "Gerar Vale"}
+                </Button>
+              )}
+            </div>
           </div>
 
           {isGerado && filteredVales.length > 0 && (
@@ -1126,7 +1266,7 @@ function StepGerarVale({ currentStatus, vales, resumo, searchTerm, setSearchTerm
   );
 }
 
-function StepSimularPagamento({ currentStatus, pagamentos, resumo, searchTerm, setSearchTerm, onSimular, isLoading, onContracheque, onNext }: any) {
+function StepSimularPagamento({ currentStatus, pagamentos, resumo, searchTerm, setSearchTerm, onSimular, isLoading, onContracheque, onNext, onLimparEtapa, canLimpar }: any) {
   const isSimulado = STATUS_TO_STEP[currentStatus] >= 5;
   const r = resumo as any;
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -1147,7 +1287,8 @@ function StepSimularPagamento({ currentStatus, pagamentos, resumo, searchTerm, s
                 <p className="text-sm text-muted-foreground">Preview completo da folha com todos os descontos</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <LimparEtapaButton onLimpar={onLimparEtapa} canLimpar={canLimpar} />
               {isSimulado && (
                 <Button variant="outline" onClick={onContracheque}>
                   <Printer className="w-4 h-4 mr-2" /> Contracheques
@@ -1286,7 +1427,7 @@ function StepSimularPagamento({ currentStatus, pagamentos, resumo, searchTerm, s
   );
 }
 
-function StepConsolidar({ currentStatus, resumo, onConsolidar, isLoading, onNext }: any) {
+function StepConsolidar({ currentStatus, resumo, onConsolidar, isLoading, onNext, onLimparEtapa, canLimpar }: any) {
   const isConsolidado = STATUS_TO_STEP[currentStatus] >= 6;
   const r = resumo as any;
   return (
@@ -1299,6 +1440,7 @@ function StepConsolidar({ currentStatus, resumo, onConsolidar, isLoading, onNext
             </div>
             <h2 className="text-2xl font-bold">Etapa 6: Consolidar Pagamento</h2>
             <p className="text-muted-foreground mt-2">Confirmar todos os valores e gerar eventos financeiros</p>
+            {canLimpar && <div className="mt-2"><LimparEtapaButton onLimpar={onLimparEtapa} canLimpar={canLimpar} /></div>}
           </div>
           {!isConsolidado ? (
             <div className="space-y-6">

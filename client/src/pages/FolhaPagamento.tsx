@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
+import { formatBRL } from "@/lib/formatBRL";
 import {
   Upload, CalendarDays, DollarSign, CreditCard, ChevronLeft, ChevronRight,
   AlertTriangle, CheckCircle, FileText, Users, Lock, Unlock, Search,
@@ -30,20 +31,17 @@ function formatMesAno(mesAno: string): string {
   return `${MESES[parseInt(mes, 10) - 1]} ${ano}`;
 }
 
-function formatBRL(val: string | number | null | undefined): string {
-  if (!val) return "R$ 0,00";
-  if (typeof val === "number") return `R$ ${val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (val.includes(",")) return `R$ ${val}`;
-  const num = parseFloat(val);
-  if (isNaN(num)) return "R$ 0,00";
-  return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+// formatBRL imported from @/lib/formatBRL
 
 function parseBRLNum(val: string | number | null | undefined): number {
-  if (!val) return 0;
+  if (!val && val !== 0) return 0;
   if (typeof val === "number") return val;
-  const clean = val.replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
-  return parseFloat(clean) || 0;
+  const str = String(val).replace(/[R$\s]/g, "").trim();
+  if (!str) return 0;
+  if (str.includes(",")) {
+    return parseFloat(str.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+  return parseFloat(str) || 0;
 }
 
 type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi";

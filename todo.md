@@ -4313,3 +4313,39 @@
 - [x] Cards por mês com status, totais e indicadores
 - [x] Gráficos de evolução (custo, horas extras, faltas)
 - [x] Filtros por ano e obra
+
+### Bug Fix - Processar Ponto travado em "Processando..."
+- [ ] Investigar logs do servidor para identificar erro no processarPonto
+- [ ] Corrigir o bug que trava o processamento
+
+### Bug Fix - Valor do Vale totalmente errado
+- [ ] Investigar cálculo do gerarVale - salários parecem estar em centavos (R$ 242.112 para um funcionário)
+- [ ] Corrigir cálculo para usar valores corretos
+- [ ] Verificar se todos os 139 estão bloqueados corretamente
+
+### Bug Fix - formatBRL exibindo valores errados (centavos)
+- [x] Corrigir formatBRL em PayrollCompetencias, FolhaPagamento, RelatorioCustoObra, RelatorioFolha
+- [x] Criar lib/formatBRL.ts compartilhado
+
+### Feature - Botão Limpar Lançamento em todas as etapas
+- [x] Backend: criar procedure resetarCompetencia (limpa ponto, vale, pagamento, ajustes)
+- [x] Frontend: botão "Limpar Lançamento" visível em todas as etapas do wizard
+- [x] Confirmação com dialog antes de limpar
+- [x] Após limpar, voltar para Etapa 1 com status "aberta"
+
+### Feature - Botões Limpar Etapa e Limpar Competência
+- [x] Backend: procedure resetarEtapa (limpa dados de uma etapa específica: ponto, escuro, vale, pagamento)
+- [x] Backend: procedure resetarCompetencia (limpa TODOS os dados do mês, volta status para "aberta")
+- [x] Frontend: botão "Limpar Etapa" em cada etapa do wizard com confirmação
+- [x] Frontend: botão "Limpar Competência" no header do wizard com confirmação
+
+### Feature - Critério "Gestão de Competências" nos Critérios do Sistema
+- [x] Adicionar categoria "Gestão de Competências" com parâmetros: dia corte ponto, dia limite vale, % adiantamento, bloqueio por faltas, tolerância atraso, etc.
+- [x] Inserir no banco via seed/migration os critérios padrão
+- [x] Exibir na tela de Critérios do Sistema
+
+### Bug Fix - Processar Ponto travado
+- [x] Adicionar validação de status antes de processar ponto (deve ser "aberta" ou "ponto_importado")
+- [x] Adicionar try/catch com mensagem de erro clara
+- [x] Converter function declarations para arrow functions dentro do try block (fix TS strict mode)
+- [x] 79 testes passando no payrollEngine.test.ts (32 novos testes adicionados)

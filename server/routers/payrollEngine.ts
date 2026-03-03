@@ -219,6 +219,17 @@ export const payrollEngineRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Validate period exists and is in correct status
+      const [periods] = await db.execute(
+        sql`SELECT id, status FROM payroll_periods WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} LIMIT 1`
+      ) as any[];
+      if (!periods[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Competência não encontrada. Abra a competência primeiro." });
+      if (periods[0].status !== "aberta" && periods[0].status !== "ponto_importado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Competência está no status '${periods[0].status}'. Para reprocessar o ponto, limpe a etapa primeiro.` });
+      }
+
+      try {
       const criteria = await getPayrollCriteria(db, input.companyId);
       const { year, month } = parseMesRef(input.mesReferencia);
       const prevMonth = month === 1 ? 12 : month - 1;
@@ -271,7 +282,7 @@ export const payrollEngineRouter = router({
       let totalInconsistencias = 0;
 
       // Helper: count punches in a record
-      function countPunches(rec: any): number {
+      const countPunches = (rec: any): number => {
         let count = 0;
         if (rec.entrada1) count++;
         if (rec.saida1) count++;
@@ -280,10 +291,10 @@ export const payrollEngineRouter = router({
         if (rec.entrada3) count++;
         if (rec.saida3) count++;
         return count;
-      }
+      };
 
       // Helper: detect inconsistency type
-      function detectInconsistency(rec: any, numBatidas: number): { isInconsistente: number; tipo: string | null } {
+      const detectInconsistency = (rec: any, numBatidas: number): { isInconsistente: number; tipo: string | null } => {
         if (numBatidas > 0 && numBatidas % 2 !== 0) {
           return { isInconsistente: 1, tipo: "batida_impar" };
         }
@@ -294,7 +305,7 @@ export const payrollEngineRouter = router({
           return { isInconsistente: 1, tipo: "saida_faltando" };
         }
         return { isInconsistente: 0, tipo: null };
-      }
+      };
 
       // Process each employee
       for (const emp of empList) {
@@ -453,6 +464,11 @@ export const payrollEngineRouter = router({
         totalInconsistencias,
         message: `Ponto processado: ${empList.length} funcionários, ${totalInserted} registros, ${totalInconsistencias} inconsistências`,
       };
+      } catch (err: any) {
+        console.error("[processarPonto] Error:", err);
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Erro ao processar ponto: ${err.message || "Erro desconhecido"}` });
+      }
     }),
 
   // ============================================================
@@ -1875,6 +1891,143 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           alertas: "Não foi possível analisar automaticamente. Resolva manualmente.",
         };
       }
+    }),
+
+  // ============================================================
+  // LIMPAR ETAPA / LIMPAR COMPETÊNCIA
+  // ============================================================
+  resetarEtapa: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      etapa: z.enum(["ponto", "escuro", "vale", "pagamento", "consolidacao"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { companyId, mesReferencia, etapa } = input;
+
+      // Check period exists and is not travada
+      const [periods] = await db.execute(
+        sql`SELECT id, status FROM payroll_periods WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia} LIMIT 1`
+      ) as any[];
+      if (!periods[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Competência não encontrada" });
+      if (periods[0].status === "travada") throw new TRPCError({ code: "FORBIDDEN", message: "Competência travada. Não é possível limpar." });
+
+      const periodId = periods[0].id;
+
+      // Map etapa to tables and new status
+      const etapaMap: Record<string, { tables: string[]; newStatus: string; clearFields: string[] }> = {
+        ponto: {
+          tables: ["timecard_daily", "time_records", "time_inconsistencies", "payroll_uploads"],
+          newStatus: "aberta",
+          clearFields: ["pontoImportadoEm", "pontoImportadoPor", "afericaoRealizada", "afericaoEm", "afericaoPor"],
+        },
+        escuro: {
+          tables: ["payroll_adjustments"],
+          newStatus: "ponto_importado",
+          clearFields: ["afericaoRealizada", "afericaoEm", "afericaoPor"],
+        },
+        vale: {
+          tables: ["payroll_advances"],
+          newStatus: "aferida",
+          clearFields: ["valeGeradoEm", "valeGeradoPor"],
+        },
+        pagamento: {
+          tables: ["payroll_payments"],
+          newStatus: "vale_gerado",
+          clearFields: ["pagamentoSimuladoEm", "pagamentoSimuladoPor"],
+        },
+        consolidacao: {
+          tables: [],
+          newStatus: "pagamento_simulado",
+          clearFields: ["consolidadoEm", "consolidadoPor"],
+        },
+      };
+
+      const config = etapaMap[etapa];
+      if (!config) throw new TRPCError({ code: "BAD_REQUEST", message: "Etapa inválida" });
+
+      // Delete data from related tables
+      for (const table of config.tables) {
+        if (table === "payroll_adjustments") {
+          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+        } else if (table === "payroll_uploads") {
+          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+        } else {
+          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+        }
+      }
+
+      // Also clear downstream data (cascade)
+      const etapaOrder = ["ponto", "escuro", "vale", "pagamento", "consolidacao"];
+      const etapaIdx = etapaOrder.indexOf(etapa);
+      for (let i = etapaIdx + 1; i < etapaOrder.length; i++) {
+        const downstream = etapaMap[etapaOrder[i]];
+        for (const table of downstream.tables) {
+          await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+        }
+      }
+
+      // Update period status and clear timestamp fields
+      const clearSets = config.clearFields.map(f => `${f} = NULL`).join(", ");
+      // Also clear downstream fields
+      const allClearFields = new Set(config.clearFields);
+      for (let i = etapaIdx + 1; i < etapaOrder.length; i++) {
+        for (const f of etapaMap[etapaOrder[i]].clearFields) allClearFields.add(f);
+      }
+      const allClearSets = Array.from(allClearFields).map(f => `${f} = NULL`).join(", ");
+
+      await db.execute(
+        sql`UPDATE payroll_periods SET status = ${config.newStatus}, ${sql.raw(allClearSets)} WHERE id = ${periodId}`
+      );
+
+      return { success: true, newStatus: config.newStatus, etapaLimpa: etapa };
+    }),
+
+  resetarCompetencia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { companyId, mesReferencia } = input;
+
+      // Check period exists and is not travada
+      const [periods] = await db.execute(
+        sql`SELECT id, status FROM payroll_periods WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia} LIMIT 1`
+      ) as any[];
+      if (!periods[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Competência não encontrada" });
+      if (periods[0].status === "travada") throw new TRPCError({ code: "FORBIDDEN", message: "Competência travada. Não é possível limpar." });
+
+      const periodId = periods[0].id;
+
+      // Delete ALL data for this competência
+      const tables = [
+        "timecard_daily", "time_records", "time_inconsistencies",
+        "payroll_uploads", "payroll_adjustments", "payroll_advances",
+        "payroll_payments", "payroll_alerts",
+      ];
+      for (const table of tables) {
+        await db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE companyId = ${companyId} AND mesReferencia = ${mesReferencia}`);
+      }
+
+      // Reset period to "aberta" and clear all timestamps
+      await db.execute(sql`
+        UPDATE payroll_periods SET 
+          status = 'aberta',
+          pontoImportadoEm = NULL, pontoImportadoPor = NULL,
+          afericaoRealizada = 0, afericaoEm = NULL, afericaoPor = NULL,
+          valeGeradoEm = NULL, valeGeradoPor = NULL,
+          pagamentoSimuladoEm = NULL, pagamentoSimuladoPor = NULL,
+          consolidadoEm = NULL, consolidadoPor = NULL,
+          totalDivergenciasAferidas = 0, retificadoEm = NULL
+        WHERE id = ${periodId}
+      `);
+
+      return { success: true, newStatus: "aberta" };
     }),
 });
 // ============================================================

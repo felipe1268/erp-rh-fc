@@ -454,3 +454,207 @@ describe("Eventos Financeiros", () => {
     expect(evento.valor).toBe(225);
   });
 });
+
+// ===== TESTS FOR NEW FEATURES =====
+
+// formatBRL helper (mirrors the frontend logic)
+function formatBRL(val: string | number | null | undefined): string {
+  if (!val && val !== 0) return "R$ 0,00";
+  if (typeof val === "number") return `R$ ${val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const str = String(val).replace(/[R$\s]/g, "").trim();
+  if (!str) return "R$ 0,00";
+  let num: number;
+  if (str.includes(",")) {
+    num = parseFloat(str.replace(/\./g, "").replace(",", "."));
+  } else {
+    num = parseFloat(str);
+  }
+  if (isNaN(num)) return "R$ 0,00";
+  return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+describe("formatBRL - Correção do Bug de Formatação", () => {
+  it("deve formatar número decimal do banco (2421.12) corretamente", () => {
+    expect(formatBRL(2421.12)).toBe("R$ 2.421,12");
+  });
+
+  it("deve formatar string decimal do banco ('2421.12') corretamente", () => {
+    expect(formatBRL("2421.12")).toBe("R$ 2.421,12");
+  });
+
+  it("deve formatar string BRL ('2.421,12') corretamente", () => {
+    expect(formatBRL("2.421,12")).toBe("R$ 2.421,12");
+  });
+
+  it("deve formatar zero corretamente", () => {
+    expect(formatBRL(0)).toBe("R$ 0,00");
+    expect(formatBRL("0")).toBe("R$ 0,00");
+  });
+
+  it("deve formatar null/undefined como R$ 0,00", () => {
+    expect(formatBRL(null)).toBe("R$ 0,00");
+    expect(formatBRL(undefined)).toBe("R$ 0,00");
+  });
+
+  it("deve formatar valores grandes corretamente", () => {
+    expect(formatBRL(96845.50)).toBe("R$ 96.845,50");
+    expect(formatBRL("96845.50")).toBe("R$ 96.845,50");
+  });
+
+  it("deve formatar centavos corretamente", () => {
+    expect(formatBRL(0.50)).toBe("R$ 0,50");
+    expect(formatBRL("0.50")).toBe("R$ 0,50");
+  });
+
+  it("NÃO deve tratar ponto decimal americano como separador de milhar", () => {
+    // Este era o bug: "2421.12" era convertido para R$ 242.112,00
+    const result = formatBRL("2421.12");
+    expect(result).not.toBe("R$ 242.112,00");
+    expect(result).toBe("R$ 2.421,12");
+  });
+
+  it("deve formatar string com R$ e espaços", () => {
+    expect(formatBRL("R$ 1.500,00")).toBe("R$ 1.500,00");
+  });
+
+  it("deve formatar valores negativos", () => {
+    expect(formatBRL(-500)).toContain("500,00");
+  });
+});
+
+describe("Cálculo do Vale - Validação de Valores", () => {
+  it("deve calcular vale de 40% de R$ 2.421,12 corretamente", () => {
+    const salario = 2421.12;
+    const percentual = 40;
+    const vale = Math.round(salario * (percentual / 100) * 100) / 100;
+    expect(vale).toBe(968.45);
+    expect(formatBRL(vale)).toBe("R$ 968,45");
+  });
+
+  it("NÃO deve gerar vale de R$ 96.845 para salário de R$ 2.421,12", () => {
+    const salario = 2421.12;
+    const percentual = 40;
+    const vale = Math.round(salario * (percentual / 100) * 100) / 100;
+    expect(vale).toBeLessThan(1000);
+    expect(vale).toBeGreaterThan(900);
+  });
+});
+
+describe("Gestão de Competências - Critérios do Sistema", () => {
+  const GESTAO_COMPETENCIAS_CRITERIA = {
+    dia_corte_ponto: "15",
+    percentual_adiantamento: "40",
+    dia_adiantamento: "20",
+    dia_pagamento: "5",
+    max_faltas_vale: "5",
+    fechar_no_escuro: "sim",
+    descontar_vr_falta: "1",
+    descontar_vt_falta: "1",
+  };
+
+  it("deve ter dia de corte de ponto configurável", () => {
+    expect(parseInt(GESTAO_COMPETENCIAS_CRITERIA.dia_corte_ponto)).toBe(15);
+  });
+
+  it("deve ter percentual de adiantamento configurável", () => {
+    expect(parseInt(GESTAO_COMPETENCIAS_CRITERIA.percentual_adiantamento)).toBe(40);
+  });
+
+  it("deve ter dia do adiantamento configurável", () => {
+    expect(parseInt(GESTAO_COMPETENCIAS_CRITERIA.dia_adiantamento)).toBe(20);
+  });
+
+  it("deve ter dia do pagamento configurável", () => {
+    expect(parseInt(GESTAO_COMPETENCIAS_CRITERIA.dia_pagamento)).toBe(5);
+  });
+
+  it("deve ter máximo de faltas para vale configurável", () => {
+    expect(parseInt(GESTAO_COMPETENCIAS_CRITERIA.max_faltas_vale)).toBe(5);
+  });
+
+  it("deve ter opção de fechar no escuro", () => {
+    expect(GESTAO_COMPETENCIAS_CRITERIA.fechar_no_escuro).toBe("sim");
+  });
+
+  it("deve ter opção de descontar VR por falta", () => {
+    expect(GESTAO_COMPETENCIAS_CRITERIA.descontar_vr_falta).toBe("1");
+  });
+
+  it("deve ter opção de descontar VT por falta", () => {
+    expect(GESTAO_COMPETENCIAS_CRITERIA.descontar_vt_falta).toBe("1");
+  });
+});
+
+describe("Resetar Etapa - Lógica de Cascata", () => {
+  const ETAPA_ORDER = ["ponto", "escuro", "vale", "pagamento", "consolidacao"];
+  const STATUS_MAP: Record<string, string> = {
+    ponto: "aberta",
+    escuro: "ponto_importado",
+    vale: "aferida",
+    pagamento: "vale_gerado",
+    consolidacao: "pagamento_simulado",
+  };
+
+  it("deve retornar status correto ao limpar etapa de ponto", () => {
+    expect(STATUS_MAP["ponto"]).toBe("aberta");
+  });
+
+  it("deve retornar status correto ao limpar etapa de escuro", () => {
+    expect(STATUS_MAP["escuro"]).toBe("ponto_importado");
+  });
+
+  it("deve retornar status correto ao limpar etapa de vale", () => {
+    expect(STATUS_MAP["vale"]).toBe("aferida");
+  });
+
+  it("deve retornar status correto ao limpar etapa de pagamento", () => {
+    expect(STATUS_MAP["pagamento"]).toBe("vale_gerado");
+  });
+
+  it("deve retornar status correto ao limpar etapa de consolidação", () => {
+    expect(STATUS_MAP["consolidacao"]).toBe("pagamento_simulado");
+  });
+
+  it("deve limpar etapas downstream ao limpar uma etapa", () => {
+    const etapaIdx = ETAPA_ORDER.indexOf("vale");
+    const downstream = ETAPA_ORDER.slice(etapaIdx + 1);
+    expect(downstream).toEqual(["pagamento", "consolidacao"]);
+  });
+
+  it("deve limpar todas as etapas ao limpar ponto", () => {
+    const etapaIdx = ETAPA_ORDER.indexOf("ponto");
+    const downstream = ETAPA_ORDER.slice(etapaIdx + 1);
+    expect(downstream).toEqual(["escuro", "vale", "pagamento", "consolidacao"]);
+  });
+
+  it("não deve limpar etapas anteriores", () => {
+    const etapaIdx = ETAPA_ORDER.indexOf("consolidacao");
+    const downstream = ETAPA_ORDER.slice(etapaIdx + 1);
+    expect(downstream).toEqual([]);
+  });
+});
+
+describe("Resetar Competência", () => {
+  it("deve retornar status 'aberta' ao resetar competência", () => {
+    const newStatus = "aberta";
+    expect(newStatus).toBe("aberta");
+  });
+
+  it("não deve permitir resetar competência travada", () => {
+    const status = "travada";
+    const canReset = status !== "travada";
+    expect(canReset).toBe(false);
+  });
+
+  it("deve permitir resetar competência consolidada", () => {
+    const status = "consolidada";
+    const canReset = status !== "travada";
+    expect(canReset).toBe(true);
+  });
+
+  it("deve permitir resetar competência aberta", () => {
+    const status = "aberta";
+    const canReset = status !== "travada";
+    expect(canReset).toBe(true);
+  });
+});

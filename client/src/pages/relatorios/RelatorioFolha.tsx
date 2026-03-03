@@ -3,6 +3,7 @@ import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import PrintActions from "@/components/PrintActions";
 import { trpc } from "@/lib/trpc";
+import { formatBRL } from "@/lib/formatBRL";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
@@ -12,12 +13,7 @@ import { Wallet, Search, Users, DollarSign, TrendingDown, TrendingUp } from "luc
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-function formatBRL(val: string | number | null | undefined): string {
-  if (!val) return "R$ 0,00";
-  const num = typeof val === "number" ? val : parseFloat(String(val).replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", "."));
-  if (isNaN(num)) return "R$ 0,00";
-  return `R$ ${num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+// formatBRL imported from @/lib/formatBRL
 
 export default function RelatorioFolha() {
   const { selectedCompanyId } = useCompany();
