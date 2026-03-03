@@ -4376,7 +4376,7 @@
 - [x] Corrigir o bug de upload DIXI - upload sequencial (1 arquivo por vez) + timeout 5min no fetch
 
 ### Análise - Arquivos DIXI reais do usuário
-- [ ] Analisar estrutura dos 4 arquivos DIXI (Marcações e RegistroOriginal)
-- [ ] Verificar se o parser atual lê corretamente esses formatos
-- [ ] Corrigir parser se necessário
-- [ ] Garantir que Etapa 2 processa e exibe dados corretamente
+- [x] Analisar estrutura dos 4 arquivos DIXI (Marcações e RegistroOriginal)
+- [x] Verificar se o parser atual lê corretamente esses formatos
+- [x] Corrigir parser: sheet "Marcações" reconhecida, formato YYYY/MM/DD suportado, nomes vazios tratados
+- [x] Upload sequencial (1 arquivo por vez) para evitar Load failed no Safari

@@ -182,7 +182,7 @@ function parseDixiXLS(buffer: Buffer): {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
 
   const sheetName = workbook.SheetNames.find((n: string) =>
-    n.includes("Registro") || n.includes("Original")
+    n.includes("Registro") || n.includes("Original") || n.includes("Marca")
   ) || workbook.SheetNames[0];
 
   const sheet = workbook.Sheets[sheetName];

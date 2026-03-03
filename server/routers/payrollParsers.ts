@@ -47,9 +47,9 @@ function parseDixiXLS(buffer: Buffer): {
   const XLSX = require("xlsx");
   const workbook = XLSX.read(buffer, { type: "buffer" });
   
-  // Try "Registro Original" sheet first, then first sheet
+  // Try "Registro Original" or "Marcações" sheet first, then first sheet
   const sheetName = workbook.SheetNames.find((n: string) => 
-    n.includes("Registro") || n.includes("Original")
+    n.includes("Registro") || n.includes("Original") || n.includes("Marca")
   ) || workbook.SheetNames[0];
   
   const sheet = workbook.Sheets[sheetName];
@@ -63,8 +63,11 @@ function parseDixiXLS(buffer: Buffer): {
     const row = rows[i];
     if (!row || row.length < 3) continue;
     
+    const dixiId = String(row[0] || "").trim();
     const nome = String(row[1] || "").trim();
-    if (!nome) continue;
+    // Se nome vazio, usar dixiId como identificador
+    const nomeOuId = nome || dixiId;
+    if (!nomeOuId) continue;
     
     // Parse datetime - could be Excel serial number or string
     let dataStr = "";
@@ -78,11 +81,18 @@ function parseDixiXLS(buffer: Buffer): {
       horaStr = `${String(dt.H).padStart(2, "0")}:${String(dt.M).padStart(2, "0")}`;
     } else {
       const dtStr = String(rawDate);
-      // Try to parse "DD/MM/YYYY HH:MM" or similar
-      const match = dtStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})/);
+      // Try DD/MM/YYYY HH:MM:SS first
+      let match = dtStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
       if (match) {
         dataStr = `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
-        horaStr = `${match[4].padStart(2, "0")}:${match[5]}`;
+        horaStr = `${match[4].padStart(2, "0")}:${match[5]}:${(match[6] || "00").padStart(2, "0")}`;
+      } else {
+        // Try YYYY/MM/DD HH:MM:SS
+        match = dtStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
+        if (match) {
+          dataStr = `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+          horaStr = `${match[4].padStart(2, "0")}:${match[5]}:${(match[6] || "00").padStart(2, "0")}`;
+        }
       }
     }
     
@@ -90,8 +100,8 @@ function parseDixiXLS(buffer: Buffer): {
     const sn = String(row[7] || row[6] || "").trim();
     if (sn && !deviceSerial) deviceSerial = sn;
     
-    if (dataStr && nome) {
-      records.push({ nome, data: dataStr, hora: horaStr, inout, serialDispositivo: sn });
+    if (dataStr && nomeOuId) {
+      records.push({ nome: nomeOuId, data: dataStr, hora: horaStr, inout, serialDispositivo: sn });
     }
   }
   
