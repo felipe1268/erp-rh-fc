@@ -115,9 +115,20 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const canAccessModule = (moduleId: ActiveModuleId): boolean => {
     if (isAdminMaster) return true;
-    // Se não tem nenhuma permissão definida, sem acesso
+    // Se o usuário pertence a um grupo, usar rotas do grupo para determinar acesso ao módulo
+    if (hasGroup) {
+      const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
+      if (!mod) return false;
+      // Verificar se o grupo tem acesso a pelo menos uma rota EXCLUSIVA deste módulo
+      // (rotas que existem em SHARED_FEATURES são ignoradas para evitar falsos positivos)
+      const sharedRoutes = new Set(SHARED_FEATURES.map(f => f.route));
+      return mod.features.some(f => {
+        if (sharedRoutes.has(f.route)) return false; // Ignorar rotas compartilhadas
+        return groupRouteMap.has(f.route) && !!groupRouteMap.get(f.route)?.canView;
+      });
+    }
+    // Sem grupo: usar permissões individuais
     if (permissions.length === 0) return false;
-    // Verifica se tem pelo menos uma feature habilitada no módulo
     const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
     if (!mod) return false;
     return mod.features.some(f => permMap.get(`${moduleId}:${f.key}`) === true);
@@ -152,7 +163,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const accessibleModules = useMemo(() => {
     if (isAdminMaster) return MODULE_DEFINITIONS.map(m => m.id);
     return MODULE_DEFINITIONS.filter(m => canAccessModule(m.id)).map(m => m.id);
-  }, [isAdminMaster, permMap]);
+  }, [isAdminMaster, permMap, groupRouteMap, hasGroup]);
 
   const getAccessibleFeatures = (moduleId: ActiveModuleId): string[] => {
     if (isAdminMaster) {

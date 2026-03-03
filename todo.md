@@ -4052,3 +4052,9 @@
 - [x] BUG: Sidebar permite acesso a telas fora do grupo — corrigido com effectiveSections group filter
 - [x] BUG: PainelSST mostra Atividade Recente e Total Colaboradores para TST — corrigido
 - [x] BUG: DashboardIndex mostra dashboards não autorizados para grupo — corrigido com filtro por grupo
+
+## Rev. 154 - Correção Sidebar Seletor de Módulos
+- [x] BUG: Seletor de módulos no sidebar mostra RH & DP para TST — corrigido canAccessModule para usar grupo
+- [x] BUG: Solicitação de Hora Extra aparece no sidebar para TST — corrigido com rotas exclusivas
+- [x] BUG: Movimentações (30 dias) já estava com canSee('/colaboradores') — verificado
+- [x] BUG: canAccessModule agora usa groupRouteMap com rotas exclusivas quando usuário tem grupo
