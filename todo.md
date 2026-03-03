@@ -4041,3 +4041,14 @@
 - [x] Painel RH: Ocultar "Valor total estimado" e valores individuais para grupos sem permissão
 - [x] Dashboards: Mostrar apenas dashboards pertinentes ao grupo do usuário
 - [x] Telas de cadastro: Somente visualização para grupos restritos (sem botões criar/editar/excluir)
+
+## Rev. 153 - Correção de Bugs de Permissões de Grupo
+- [x] BUG: Home.tsx mostra módulos (Jurídico, etc.) que o grupo não tem acesso — corrigido com rotas exclusivas por módulo
+- [x] BUG: Painel RH mostra Movimentações, Aniversariantes para TST — corrigido com canSee() por rota
+- [x] BUG: EPI mostra Valor Inventário R$ e coluna Valor (R$) para TST — corrigido com hideEpiValues
+- [x] BUG: EPI mostra botão "+ Novo EPI" para grupos somente visualização — corrigido com readOnly
+- [x] BUG: Acesso Rápido mostra "Dashboards" genérico sem filtrar por grupo — corrigido com canSee() filter
+- [x] BUG: Permissões de grupo sobrescrevem permissões individuais — sidebar filtra por groupCanAccessRoute
+- [x] BUG: Sidebar permite acesso a telas fora do grupo — corrigido com effectiveSections group filter
+- [x] BUG: PainelSST mostra Atividade Recente e Total Colaboradores para TST — corrigido
+- [x] BUG: DashboardIndex mostra dashboards não autorizados para grupo — corrigido com filtro por grupo

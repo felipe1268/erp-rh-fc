@@ -18,6 +18,7 @@ import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 const RISCO_COLORS: Record<string, string> = {
   baixo: "bg-green-100 text-green-700",
@@ -30,6 +31,11 @@ export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
+  const { hasGroup, groupCanAccessRoute, groupOcultarValores, isAdminMaster, isSomenteVisualizacao, isOcultarDadosSensiveis } = usePermissions();
+
+  // Helper: verifica se o usuário pode ver uma rota (considerando grupo)
+  const canSee = (route: string) => isAdminMaster || !hasGroup || groupCanAccessRoute(route);
+  const hideValues = (route: string) => !isAdminMaster && hasGroup && groupOcultarValores(route);
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
   const [alertasOpen, setAlertasOpen] = useState(false);
   const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);
@@ -104,7 +110,7 @@ export default function Home() {
           ) : (
             <>
               {/* KPI Cards Row 1 - Funcionários */}
-              <div>
+              {canSee('/colaboradores') && <div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recursos Humanos</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                   <KpiCard
@@ -150,20 +156,20 @@ export default function Home() {
                     onClick={() => navigate("/colaboradores")}
                   />
                 </div>
-              </div>
+              </div>}
 
               {/* KPI Cards Row 2 - Operacional */}
-              <div>
+              {(canSee('/obras') || canSee('/processos-trabalhistas') || canSee('/controle-documentos')) && <div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Operacional & Jurídico</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiCard
+                  {canSee('/obras') && <KpiCard
                     title="Obras Ativas"
                     value={s?.obrasAtivas ?? 0}
                     icon={Landmark}
                     color="teal"
                     onClick={() => navigate("/obras")}
-                  />
-                  <KpiCard
+                  />}
+                  {canSee('/processos-trabalhistas') && <KpiCard
                     title="Processos Ativos"
                     value={s?.processosAtivos ?? 0}
                     icon={Gavel}
@@ -171,27 +177,27 @@ export default function Home() {
                     onClick={() => navigate("/processos-trabalhistas")}
                     badge={s?.processosRiscoAlto ? `${s.processosRiscoAlto} risco alto` : undefined}
                     badgeColor="red"
-                  />
-                  <KpiCard
+                  />}
+                  {canSee('/controle-documentos') && <KpiCard
                     title="ASOs Vencidos"
                     value={s?.asosVencidos ?? 0}
                     icon={FileWarning}
                     color="red"
                     onClick={() => navigate("/controle-documentos")}
                     alert={!!s?.asosVencidos}
-                  />
-                  <KpiCard
+                  />}
+                  {canSee('/controle-documentos') && <KpiCard
                     title="ASOs Vencendo (60d)"
                     value={s?.asosVencendo ?? 0}
                     icon={HeartPulse}
                     color="orange"
                     onClick={() => navigate("/controle-documentos")}
-                  />
+                  />}
                 </div>
-              </div>
+              </div>}
 
               {/* Contratos de Experiência - Card Destaque */}
-              {(homeData?.experiencias?.length ?? 0) > 0 && (
+              {canSee('/colaboradores') && (homeData?.experiencias?.length ?? 0) > 0 && (
                 <Card className="border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
@@ -322,7 +328,7 @@ export default function Home() {
                 {/* Coluna 1: Alertas Prioritários */}
                 <div className="space-y-4">
                   {/* Aniversariantes */}
-                  <Card>
+                  {canSee('/colaboradores') && <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
                         <Cake className="h-4 w-4 text-pink-500" />
@@ -358,10 +364,9 @@ export default function Home() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
-
+                  </Card>}
                   {/* Próximas Audiências */}
-                  <Card>
+                  {canSee('/processos-trabalhistas') && <Card>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -399,13 +404,13 @@ export default function Home() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
                 </div>
 
                 {/* Coluna 2: ASOs e Férias */}
                 <div className="space-y-4">
                   {/* ASOs com Alerta */}
-                  <Card>
+                  {canSee('/controle-documentos') && <Card>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -456,10 +461,10 @@ export default function Home() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
 
                   {/* Alertas de Férias */}
-                  <Card>
+                  {canSee('/ferias') && <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
                         <CalendarClock className="h-4 w-4 text-amber-500" />
@@ -491,10 +496,10 @@ export default function Home() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
 
                   {/* Dashboard de Férias - Agendadas e Em Andamento */}
-                  <Card>
+                  {canSee('/ferias') && <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
                         <Plane className="h-4 w-4 text-blue-500" />
@@ -541,7 +546,7 @@ export default function Home() {
                         )
                       )}
                       {/* Custo próximo */}
-                      {(homeData?.feriasDashboard?.custoProximo90Dias ?? 0) > 0 && (
+                      {!hideValues('/ferias') && (homeData?.feriasDashboard?.custoProximo90Dias ?? 0) > 0 && (
                         <div className="mt-2 pt-2 border-t flex items-center justify-between">
                           <span className="text-[10px] text-muted-foreground flex items-center gap-1"><DollarSign className="h-3 w-3" /> Custo próx. 90 dias</span>
                           <span className="text-xs font-bold text-orange-600">
@@ -550,13 +555,13 @@ export default function Home() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
                 </div>
 
                 {/* Coluna 3: Movimentações e Atividade */}
                 <div className="space-y-4">
                   {/* Movimentações Recentes */}
-                  <Card>
+                  {canSee('/colaboradores') && <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
                         <Activity className="h-4 w-4 text-blue-500" />
@@ -589,10 +594,10 @@ export default function Home() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
 
                   {/* Atividade Recente do Sistema */}
-                  <Card>
+                  {(isAdminMaster || (!hasGroup && user?.role === 'admin')) && <Card>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -623,10 +628,10 @@ export default function Home() {
                         </div>
                       )}
                     </CardContent>
-                  </Card>
+                  </Card>}
 
                   {/* Advertências Recentes */}
-                  {(homeData?.advertenciasRecentes?.length ?? 0) > 0 && (
+                  {canSee('/colaboradores') && (homeData?.advertenciasRecentes?.length ?? 0) > 0 && (
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -665,7 +670,7 @@ export default function Home() {
                     { label: "Folha Pagamento", icon: Briefcase, path: "/folha-pagamento", color: "text-emerald-600" },
                     { label: "Documentos", icon: FileWarning, path: "/controle-documentos", color: "text-amber-600" },
                     { label: "Dashboards", icon: BarChart3, path: "/dashboards", color: "text-purple-600" },
-                  ].map(item => (
+                  ].filter(item => canSee(item.path)).map(item => (
                     <button
                       key={item.path}
                       onClick={() => navigate(item.path)}

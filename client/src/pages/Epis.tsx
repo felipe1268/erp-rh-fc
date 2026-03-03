@@ -24,6 +24,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi";
 
@@ -113,6 +114,9 @@ export default function Epis() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
+  const { hasGroup, groupOcultarValores, isAdminMaster, isSomenteVisualizacao } = usePermissions();
+  const hideEpiValues = !isAdminMaster && hasGroup && groupOcultarValores('/epis');
+  const readOnly = !isAdminMaster && hasGroup && isSomenteVisualizacao;
 
   const [viewMode, setViewMode] = useState<ViewMode>("catalogo");
   const [search, setSearch] = useState("");
@@ -1345,12 +1349,12 @@ export default function Epis() {
                     <Trash2 className="h-4 w-4 mr-1" /> Excluir {selectedEpis.size}
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setShowFornecedorList(true)}>
+                {!readOnly && <Button size="sm" variant="outline" onClick={() => setShowFornecedorList(true)}>
                   <Package className="h-4 w-4 mr-1" /> Fornecedores
-                </Button>
-                <Button size="sm" onClick={() => setViewMode("novo_epi")} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                </Button>}
+                {!readOnly && <Button size="sm" onClick={() => setViewMode("novo_epi")} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   <Plus className="h-4 w-4 mr-1" /> Novo EPI
-                </Button>
+                </Button>}
               </>
             )}
             {viewMode === "entregas" && (
@@ -1400,14 +1404,14 @@ export default function Epis() {
                 <p className="text-lg font-bold">{stats.entregasMes}</p>
               </CardContent>
             </Card>
-            <Card className="border-l-4 border-l-emerald-500">
+            {!hideEpiValues && <Card className="border-l-4 border-l-emerald-500">
               <CardContent className="p-3">
                 <p className="text-xs text-muted-foreground whitespace-nowrap">Valor Inventário</p>
                 <p className="text-lg font-bold text-emerald-700">
                   {stats.valorTotalInventario > 0 ? stats.valorTotalInventario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
                 </p>
               </CardContent>
-            </Card>
+            </Card>}
           </div>
         )}
 
@@ -1495,7 +1499,7 @@ export default function Epis() {
                         <th className="p-3 text-center font-medium">CA</th>
                         <th className="p-3 text-center font-medium">Validade CA</th>
                         <th className="p-3 text-center font-medium">Estoque</th>
-                        <th className="p-3 text-center font-medium">Valor (R$)</th>
+                        {!hideEpiValues && <th className="p-3 text-center font-medium">Valor (R$)</th>}
                         <th className="p-3 text-center font-medium">Vida Útil</th>
                         <th className="p-3 text-center font-medium">Ações</th>
                       </tr>
@@ -1557,22 +1561,22 @@ export default function Epis() {
                                 {epi.quantidadeEstoque ?? 0}
                               </Badge>
                             </td>
-                            <td className="p-3 text-center text-xs">
+                            {!hideEpiValues && <td className="p-3 text-center text-xs">
                               {epi.valorProduto ? parseFloat(String(epi.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
-                            </td>
+                            </td>}
                             <td className="p-3 text-center text-xs">
                               {epi.tempoMinimoTroca ? `${epi.tempoMinimoTroca} dias` : "—"}
                             </td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1">
-                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar"
+                                {!readOnly && <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar"
                                   onClick={() => { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode("editar_epi"); }}>
                                   <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir"
+                                </Button>}
+                                {!readOnly && <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir"
                                   onClick={() => { if (confirm("Excluir este EPI?")) deleteEpiMut.mutate({ id: epi.id }); }}>
                                   <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                </Button>}
                               </div>
                             </td>
                           </tr>

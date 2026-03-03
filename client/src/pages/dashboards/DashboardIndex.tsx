@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { useEffect, useState } from "react";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import {
   Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
   ArrowRight, Eye, Activity, ChevronRight, Building2, ShieldCheck,
@@ -140,8 +141,24 @@ const dashboards = [
   },
 ];
 
+// Map dashboard paths to the main route they relate to
+const DASH_TO_ROUTE: Record<string, string> = {
+  "/dashboards/funcionarios": "/colaboradores",
+  "/dashboards/cartao-ponto": "/fechamento-ponto",
+  "/dashboards/folha-pagamento": "/folha-pagamento",
+  "/dashboards/horas-extras": "/solicitacao-he",
+  "/dashboards/epis": "/epis",
+  "/dashboards/juridico": "/processos-trabalhistas",
+  "/dashboards/aviso-previo": "/aviso-previo",
+  "/dashboards/ferias": "/ferias",
+  "/dashboards/efetivo-obra": "/efetivo-obra",
+  "/dashboards/controle-documentos": "/controle-documentos",
+  "/dashboards/visao-panoramica": "/dashboards",
+};
+
 export default function DashboardIndex() {
   const [time, setTime] = useState(new Date());
+  const { hasGroup, groupCanAccessRoute, isAdminMaster } = usePermissions();
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -177,7 +194,7 @@ export default function DashboardIndex() {
         </div>
 
         {/* ─── HERO: VISÃO PANORÂMICA ─── */}
-        <Link href={panoramica.path}>
+        {(isAdminMaster || !hasGroup) && <Link href={panoramica.path}>
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 cursor-pointer group transition-all duration-300 hover:shadow-xl hover:shadow-blue-200/50">
             {/* Subtle pattern */}
             <div className="absolute inset-0 opacity-10"
@@ -229,7 +246,7 @@ export default function DashboardIndex() {
               </div>
             </div>
           </div>
-        </Link>
+        </Link>}
 
         {/* ─── SECTION DIVIDER ─── */}
         <div className="flex items-center gap-3">
@@ -240,7 +257,11 @@ export default function DashboardIndex() {
 
         {/* ─── DASHBOARD GRID ─── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {dashboards.map((d) => {
+          {dashboards.filter(d => {
+            if (isAdminMaster || !hasGroup) return true;
+            const mainRoute = DASH_TO_ROUTE[d.path];
+            return mainRoute ? groupCanAccessRoute(mainRoute) : false;
+          }).map((d) => {
             const Icon = d.icon;
             return (
               <Link key={d.path} href={d.path}>

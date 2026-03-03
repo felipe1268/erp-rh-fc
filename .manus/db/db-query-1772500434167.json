@@ -1,0 +1,14 @@
+{
+  "query": "SELECT ugm.user_id, ug.nome as grupo FROM user_group_members ugm JOIN user_groups ug ON ug.id = ugm.group_id",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT ugm.user_id, ug.nome as grupo FROM user_group_members ugm JOIN user_groups ug ON ug.id = ugm.group_id",
+  "rows": [
+    {
+      "user_id": "2700796",
+      "grupo": "TST"
+    }
+  ],
+  "messages": [],
+  "stdout": "user_id\tgrupo\n2700796\tTST\n",
+  "stderr": "",
+  "execution_time_ms": 376
+}

@@ -19,9 +19,12 @@ import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
 import { removeAccents } from "@/lib/searchUtils";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 export default function PainelSST() {
   const { user } = useAuth();
+  const { hasGroup, groupCanAccessRoute, isAdminMaster } = usePermissions();
+  const canSee = (route: string) => isAdminMaster || !hasGroup || groupCanAccessRoute(route);
   const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
@@ -163,7 +166,7 @@ export default function PainelSST() {
                   <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} />
                   <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} />
                   <KpiCard title="Sem ASO" value={s?.semAso ?? 0} icon={AlertTriangle} color="yellow" onClick={() => navigate("/controle-documentos")} />
-                  <KpiCard title="Total Colaboradores" value={s?.totalFuncionarios ?? 0} icon={Users} color="blue" onClick={() => navigate("/colaboradores")} />
+                  {canSee('/colaboradores') && <KpiCard title="Total Colaboradores" value={s?.totalFuncionarios ?? 0} icon={Users} color="blue" onClick={() => navigate("/colaboradores")} />}
                 </div>
               </div>
 
@@ -240,8 +243,8 @@ export default function PainelSST() {
                 </Card>
               </div>
 
-              {/* Atividade Recente */}
-              <Card>
+              {/* Atividade Recente - apenas para admins */}
+              {(isAdminMaster || user?.role === 'admin') && <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm flex items-center gap-2">
@@ -267,9 +270,9 @@ export default function PainelSST() {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </Card>}
 
-              {/* Acesso Rápido SST */}
+              {/* Acesso Rápido SST - filtrado por permissões do grupo */}
               <div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido - SST</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -278,7 +281,7 @@ export default function PainelSST() {
                     { label: "ASOs / Documentos", icon: HeartPulse, path: "/controle-documentos", color: "text-red-600" },
                     { label: "CIPA", icon: ShieldCheck, path: "/cipa", color: "text-blue-600" },
                     { label: "Dashboards", icon: BarChart3, path: "/dashboards/epis", color: "text-purple-600" },
-                  ].map(item => (
+                  ].filter(item => canSee(item.path)).map(item => (
                     <button key={item.path} onClick={() => navigate(item.path)} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border hover:bg-accent/50 hover:shadow-sm transition-all text-left">
                       <item.icon className={`h-4 w-4 ${item.color} shrink-0`} />
                       <span className="text-xs font-medium">{item.label}</span>

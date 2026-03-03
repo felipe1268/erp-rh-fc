@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE user_group_permissions SET ocultar_valores = 1 WHERE group_id = (SELECT id FROM user_groups WHERE nome = 'TST') AND rota = '/epis';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute UPDATE user_group_permissions SET ocultar_valores = 1 WHERE group_id = (SELECT id FROM user_groups WHERE nome = 'TST') AND rota = '/epis';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 356
+}

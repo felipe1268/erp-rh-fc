@@ -1,0 +1,52 @@
+{
+  "query": "SELECT ugp.rota, ugp.can_view, ugp.can_edit, ugp.ocultar_valores, ug.nome FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.group_id WHERE ug.nome = 'TST' ORDER BY ugp.rota",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT ugp.rota, ugp.can_view, ugp.can_edit, ugp.ocultar_valores, ug.nome FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.group_id WHERE ug.nome = 'TST' ORDER BY ugp.rota",
+  "rows": [
+    {
+      "rota": "/cipa",
+      "can_view": "1",
+      "can_edit": "1",
+      "ocultar_valores": "0",
+      "nome": "TST"
+    },
+    {
+      "rota": "/controle-documentos",
+      "can_view": "1",
+      "can_edit": "0",
+      "ocultar_valores": "0",
+      "nome": "TST"
+    },
+    {
+      "rota": "/dashboards/epis",
+      "can_view": "1",
+      "can_edit": "1",
+      "ocultar_valores": "0",
+      "nome": "TST"
+    },
+    {
+      "rota": "/epis",
+      "can_view": "1",
+      "can_edit": "1",
+      "ocultar_valores": "0",
+      "nome": "TST"
+    },
+    {
+      "rota": "/painel/sst",
+      "can_view": "1",
+      "can_edit": "1",
+      "ocultar_valores": "0",
+      "nome": "TST"
+    },
+    {
+      "rota": "/solicitacao-he",
+      "can_view": "1",
+      "can_edit": "0",
+      "ocultar_valores": "0",
+      "nome": "TST"
+    }
+  ],
+  "messages": [],
+  "stdout": "rota\tcan_view\tcan_edit\tocultar_valores\tnome\n/cipa\t1\t1\t0\tTST\n/controle-documentos\t1\t0\t0\tTST\n/dashboards/epis\t1\t1\t0\tTST\n/epis\t1\t1\t0\tTST\n/painel/sst\t1\t1\t0\tTST\n/solicitacao-he\t1\t0\t0\tTST\n",
+  "stderr": "",
+  "execution_time_ms": 367
+}
