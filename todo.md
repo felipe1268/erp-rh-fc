@@ -4115,3 +4115,10 @@
 - [x] Corrigir atalho "Advertências" no sidebar para abrir diretamente na aba de Advertências
 - [x] Garantir que o mecanismo funcione mesmo quando já está na página de Controle de Documentos
 - [x] Usar setTimeout + evento navParamsUpdated para garantir que o componente leia os params após montar
+
+## Rev. 165 - Sincronizar Painel de Controle com Sidebar
+- [x] Garantir que o Painel de Controle (Configurações) tenha exatamente os mesmos itens do sidebar
+- [x] Adicionar "Lançar Atestados" e "Advertências" no Painel de Controle
+- [x] Atualizar DEFAULT_MENU com todos os itens do sidebar (Efetivo por Obra, Convenções Coletivas, Dashboards extras, IA, Admin completo, Ajuda)
+- [x] Corrigir path de Crachás (/terceiros/crachas → /crachas)
+- [x] Atualizar ICON_MAP e PATH_ICON_MAP com todos os ícones e paths
