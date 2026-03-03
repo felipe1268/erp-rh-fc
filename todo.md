@@ -4054,7 +4054,7 @@
 - [x] BUG: DashboardIndex mostra dashboards não autorizados para grupo — corrigido com filtro por grupo
 
 ## Rev. 154 - Correção Sidebar Seletor de Módulos
-- [x] BUG: Seletor de módulos no sidebar mostra RH & DP para TST — corrigido canAccessModule para usar grupo
-- [x] BUG: Solicitação de Hora Extra aparece no sidebar para TST — corrigido com rotas exclusivas
+- [x] BUG: Seletor de módulos no sidebar mostra RH & DP para TST — REVERTIDO: TST deve ver RH & DP (tem rotas liberadas lá)
+- [x] BUG: canAccessModule agora usa TODAS as rotas do grupo (não apenas exclusivas)
 - [x] BUG: Movimentações (30 dias) já estava com canSee('/colaboradores') — verificado
 - [x] BUG: canAccessModule agora usa groupRouteMap com rotas exclusivas quando usuário tem grupo

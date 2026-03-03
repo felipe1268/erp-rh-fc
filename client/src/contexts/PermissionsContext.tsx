@@ -119,13 +119,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (hasGroup) {
       const mod = MODULE_DEFINITIONS.find(m => m.id === moduleId);
       if (!mod) return false;
-      // Verificar se o grupo tem acesso a pelo menos uma rota EXCLUSIVA deste módulo
-      // (rotas que existem em SHARED_FEATURES são ignoradas para evitar falsos positivos)
-      const sharedRoutes = new Set(SHARED_FEATURES.map(f => f.route));
-      return mod.features.some(f => {
-        if (sharedRoutes.has(f.route)) return false; // Ignorar rotas compartilhadas
-        return groupRouteMap.has(f.route) && !!groupRouteMap.get(f.route)?.canView;
-      });
+      // Verificar se o grupo tem acesso a pelo menos uma rota deste módulo (qualquer rota, incluindo compartilhadas)
+      return mod.features.some(f => groupRouteMap.has(f.route) && !!groupRouteMap.get(f.route)?.canView);
     }
     // Sem grupo: usar permissões individuais
     if (permissions.length === 0) return false;

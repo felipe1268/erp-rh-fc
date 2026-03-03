@@ -330,33 +330,17 @@ export default function ModuleHub() {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
   };
-  // Rotas que são exclusivas de cada módulo (não compartilhadas entre módulos)
-  // Usadas para determinar se o grupo deve ver o módulo no hub
-  const MODULE_EXCLUSIVE_ROUTES: Record<string, string[]> = {
-    "rh-dp": ["/colaboradores", "/fechamento-ponto", "/folha-pagamento", "/aviso-previo", "/ferias", "/vale-alimentacao", "/dissidio", "/dixi-ponto", "/modulo-pj", "/contas-bancarias", "/feriados", "/relogios-ponto"],
-    "sst": ["/epis", "/cipa", "/painel/sst", "/dashboards/epis"],
-    "juridico": ["/processos-trabalhistas"],
-    "terceiros": ["/terceiros/painel", "/terceiros/empresas", "/terceiros/funcionarios", "/terceiros/obrigacoes", "/terceiros/conformidade", "/terceiros/alertas", "/terceiros/aprovacao", "/terceiros/portal", "/terceiros/crachas"],
-    "parceiros": ["/parceiros/painel", "/parceiros/cadastro", "/parceiros/lancamentos", "/parceiros/aprovacoes", "/parceiros/guia-descontos", "/parceiros/pagamentos"],
-  };
   // Filtrar módulos: habilitados no config E acessíveis pelo grupo do usuário
   const activeModules = MODULES.filter(m => {
     if (!m.active) return false;
     if (!isModuleEnabled(hubToConfigKey[m.id] ?? m.id)) return false;
     // Se o usuário pertence a um grupo (e não é admin_master), filtrar por permissões do grupo
     if (hasGroup && !isAdminMaster) {
-      // Usar rotas exclusivas do módulo para determinar visibilidade
-      const exclusiveRoutes = MODULE_EXCLUSIVE_ROUTES[m.id];
-      if (exclusiveRoutes) {
-        const hasAnyExclusiveRoute = exclusiveRoutes.some(r => groupCanAccessRoute(r));
-        if (!hasAnyExclusiveRoute) return false;
-      } else {
-        // Fallback: usar MODULE_DEFINITIONS
-        const modDef = MODULE_DEFINITIONS.find(md => md.id === m.id);
-        if (modDef) {
-          const hasAnyRoute = modDef.features.some(f => groupCanAccessRoute(f.route));
-          if (!hasAnyRoute) return false;
-        }
+      // Verificar se o grupo tem acesso a pelo menos uma rota deste módulo
+      const modDef = MODULE_DEFINITIONS.find(md => md.id === m.id);
+      if (modDef) {
+        const hasAnyRoute = modDef.features.some(f => groupCanAccessRoute(f.route));
+        if (!hasAnyRoute) return false;
       }
     }
     return true;
