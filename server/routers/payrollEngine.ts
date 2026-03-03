@@ -87,28 +87,52 @@ function getNextMesRef(mesRef: string): string {
 }
 
 // Get payroll criteria from systemCriteria table
+// Maps the actual DB keys (system_criteria.chave) to the engine's internal names
 async function getPayrollCriteria(db: any, companyId: number) {
   const rows = await db.select().from(systemCriteria).where(eq(systemCriteria.companyId, companyId));
   const map: Record<string, string> = {};
   for (const r of rows) map[r.chave] = r.valor;
   return {
+    // Ponto
     diaCorte: parseInt(map["ponto_dia_corte"] || "15"),
-    percentualAdiantamento: parseInt(map["adiantamento_percentual"] || "40"),
-    diaAdiantamento: parseInt(map["adiantamento_dia"] || "20"),
-    diaPagamento: parseInt(map["pagamento_dia_util"] || "5"),
-    maxFaltasVale: parseInt(map["adiantamento_max_faltas"] || "5"),
-    cargaHorariaDiaria: parseInt(map["jornada_horas_diarias"] || "8"),
-    fecharNoEscuro: map["fechar_no_escuro"] !== "nao",
-    descontoVrFalta: map["desconto_vr_falta"] !== "nao",
-    descontoVtFalta: map["desconto_vt_falta"] !== "nao",
     pontoToleranciaAtraso: parseInt(map["ponto_tolerancia_atraso"] || "10"),
+    pontoToleranciaSaida: parseInt(map["ponto_tolerancia_saida"] || "10"),
+    pontoBatidaImparTolerancia: parseInt(map["ponto_batida_impar_tolerancia"] || "30"),
     pontoFaltaAposAtraso: parseInt(map["ponto_falta_apos_atraso"] || "120"),
+    pontoHoraNoturnaReduzida: map["ponto_hora_noturna_reduzida"] || "52:30",
+    // Folha
+    percentualAdiantamento: parseInt(map["folha_percentual_adiantamento"] || "40"),
+    diaAdiantamento: parseInt(map["folha_dia_vale"] || "20"),
+    diaPagamento: parseInt(map["folha_dia_pagamento"] || "5"),
+    descontoVrFalta: map["folha_desconto_vr_faltas"] !== "0",
+    descontoVtFalta: map["folha_desconto_vt_faltas"] !== "0",
+    bloquearConsolidacaoInconsistencias: map["folha_bloquear_consolidacao_inconsistencias"] === "1",
+    // Jornada
+    cargaHorariaDiaria: parseInt(map["jornada_horas_diarias"] || "8"),
     jornadaHorasSemanais: parseInt(map["jornada_horas_semanais"] || "44"),
     jornadaIntervaloAlmoco: parseInt(map["jornada_intervalo_almoco"] || "60"),
     jornadaSabadoTipo: map["jornada_sabado_tipo"] || "compensado",
-    hePercentualDiurna: parseFloat(map["he_percentual_diurna"] || "50"),
-    hePercentualNoturna: parseFloat(map["he_percentual_noturna"] || "70"),
-    hePercentualDomingo: parseFloat(map["he_percentual_domingo"] || "100"),
+    jornadaDescansoSemanal: parseInt(map["jornada_descanso_semanal"] || "1"),
+    // Horas Extras
+    hePercentualDiurna: parseFloat(map["he_dias_uteis"] || "60"),
+    hePercentualNoturna: parseFloat(map["he_adicional_noturno"] || "20"),
+    hePercentualDomingo: parseFloat(map["he_domingos_feriados"] || "100"),
+    heInterjornada: parseFloat(map["he_interjornada"] || "50"),
+    heLimiteMensal: parseInt(map["he_limite_mensal"] || "44"),
+    heBancoHoras: map["he_banco_horas"] === "1",
+    heNoturnoInicio: map["he_noturno_inicio"] || "22:00",
+    heNoturnoFim: map["he_noturno_fim"] || "05:00",
+    // Benefícios
+    vtPercentualDesconto: parseFloat(map["ben_vt_percentual_desconto"] || "6"),
+    diasUteisPadraoMes: parseInt(map["ben_dias_uteis_mes"] || "22"),
+    vrValorDiario: parseFloat(map["ben_vr_valor_diario"] || "0"),
+    // Advertências
+    advValidadeMeses: parseInt(map["adv_validade_meses"] || "6"),
+    advQtdParaSuspensao: parseInt(map["adv_qtd_para_suspensao"] || "3"),
+    advDiasSuspensao: parseInt(map["adv_dias_suspensao"] || "3"),
+    // Controle
+    maxFaltasVale: parseInt(map["adiantamento_max_faltas"] || "5"),
+    fecharNoEscuro: map["fechar_no_escuro"] !== "nao",
   };
 }
 
@@ -219,7 +243,7 @@ export const payrollEngineRouter = router({
         )
       );
 
-      // Get time_records for the ponto period
+      // Get time_records for the ponto period (may include multiple clocks/obras)
       const records = await db.select().from(timeRecords).where(
         and(
           eq(timeRecords.companyId, input.companyId),
@@ -228,11 +252,12 @@ export const payrollEngineRouter = router({
         )
       );
 
-      // Build a map: employeeId -> date -> record
-      const recordMap = new Map<string, any>();
+      // Build a map: employeeId-date -> record[] (multiple records = multiple clocks)
+      const recordMap = new Map<string, any[]>();
       for (const r of records) {
         const key = `${r.employeeId}-${r.data}`;
-        recordMap.set(key, r);
+        if (!recordMap.has(key)) recordMap.set(key, []);
+        recordMap.get(key)!.push(r);
       }
 
       // Clear existing timecard_daily for this competencia
@@ -243,52 +268,120 @@ export const payrollEngineRouter = router({
       let totalInserted = 0;
       let totalFaltas = 0;
       let totalAtrasos = 0;
+      let totalInconsistencias = 0;
+
+      // Helper: count punches in a record
+      function countPunches(rec: any): number {
+        let count = 0;
+        if (rec.entrada1) count++;
+        if (rec.saida1) count++;
+        if (rec.entrada2) count++;
+        if (rec.saida2) count++;
+        if (rec.entrada3) count++;
+        if (rec.saida3) count++;
+        return count;
+      }
+
+      // Helper: detect inconsistency type
+      function detectInconsistency(rec: any, numBatidas: number): { isInconsistente: number; tipo: string | null } {
+        if (numBatidas > 0 && numBatidas % 2 !== 0) {
+          return { isInconsistente: 1, tipo: "batida_impar" };
+        }
+        if (!rec.entrada1 && rec.saida1) {
+          return { isInconsistente: 1, tipo: "entrada_faltando" };
+        }
+        if (rec.entrada1 && !rec.saida1 && numBatidas === 1) {
+          return { isInconsistente: 1, tipo: "saida_faltando" };
+        }
+        return { isInconsistente: 0, tipo: null };
+      }
 
       // Process each employee
       for (const emp of empList) {
-        // PART 1: Days from ponto (15 prev to 15 current) - status: registrado
+        // PART 1: Days from ponto period - status: registrado
         const pontoDates = getDateRange(pontoInicio, pontoFim);
         for (const dateStr of pontoDates) {
           const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
           if (dow === 0) continue; // Skip Sundays
-
           const key = `${emp.id}-${dateStr}`;
-          const rec = recordMap.get(key);
+          const recs = recordMap.get(key) || [];
           let tipoDia: string = "util";
           if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === "compensado" ? "compensado" : "sabado";
 
           let isFalta = 0, isAtraso = 0, isSaidaAntecipada = 0;
           let minutosAtraso = 0, minutosSaidaAntecipada = 0;
           let horasTrabalhadas = "0:00", horasExtras = "0:00", horasNoturnas = "0:00";
+          let origemRegistro = "dixi";
+          let numBatidas = 0;
+          let isInconsistente = 0;
+          let inconsistenciaTipo: string | null = null;
+          let obraId: number | null = null;
+          let obraSecundariaId: number | null = null;
+          let rateioPercentual: number | null = null;
+          let timeRecordId: number | null = null;
 
-          if (rec) {
+          if (recs.length > 0) {
+            const rec = recs[0];
+            timeRecordId = rec.id;
+            obraId = rec.obraId || null;
             horasTrabalhadas = rec.horasTrabalhadas || "0:00";
             horasExtras = rec.horasExtras || "0:00";
             horasNoturnas = rec.horasNoturnas || "0:00";
-            // Check for absence
-            if (!rec.entrada1 && !rec.saida1 && !rec.entrada2 && !rec.saida2) {
-              if (tipoDia === "util") {
-                isFalta = 1;
-                totalFaltas++;
+            numBatidas = countPunches(rec);
+
+            // Multi-obra detection
+            if (recs.length > 1) {
+              obraSecundariaId = recs[1].obraId || null;
+              if (rec.entrada1 && recs[1].entrada1 && rec.entrada1 === recs[1].entrada1) {
+                isInconsistente = 1;
+                inconsistenciaTipo = "sobreposicao_horario";
+                totalInconsistencias++;
+              } else {
+                const totalMinsPrimary = parseTime(rec.horasTrabalhadas) || 0;
+                const totalMinsSecondary = parseTime(recs[1].horasTrabalhadas) || 0;
+                const totalMins = totalMinsPrimary + totalMinsSecondary;
+                rateioPercentual = totalMins > 0 ? Math.round((totalMinsPrimary / totalMins) * 100) : 50;
+                origemRegistro = "rateado";
+                horasTrabalhadas = minutesToHHMM(totalMins);
+                const totalHEMins = (parseTime(rec.horasExtras) || 0) + (parseTime(recs[1].horasExtras) || 0);
+                horasExtras = minutesToHHMM(totalHEMins);
               }
+            }
+
+            // Inconsistency detection
+            if (!isInconsistente) {
+              const incon = detectInconsistency(rec, numBatidas);
+              isInconsistente = incon.isInconsistente;
+              inconsistenciaTipo = incon.tipo;
+              if (isInconsistente) totalInconsistencias++;
+            }
+
+            // Check for absence
+            if (numBatidas === 0) {
+              if (tipoDia === "util") { isFalta = 1; totalFaltas++; }
             }
             // Check for tardiness
             const entrada = parseTime(rec.entrada1);
             if (entrada !== null && tipoDia === "util") {
-              const jornadaEntrada = 7 * 60; // 07:00 default
+              const jornadaEntrada = 7 * 60;
               const atraso = entrada - jornadaEntrada;
-              if (atraso > criteria.pontoToleranciaAtraso) {
-                isAtraso = 1;
-                minutosAtraso = atraso;
-                totalAtrasos++;
+              if (atraso > criteria.pontoFaltaAposAtraso) {
+                isFalta = 1; totalFaltas++;
+              } else if (atraso > criteria.pontoToleranciaAtraso) {
+                isAtraso = 1; minutosAtraso = atraso; totalAtrasos++;
+              }
+            }
+            // Check for early departure
+            const saida = parseTime(rec.saida2 || rec.saida1);
+            if (saida !== null && tipoDia === "util") {
+              const jornadaSaida = (7 + criteria.cargaHorariaDiaria + 1) * 60;
+              const saidaAntecipada = jornadaSaida - saida;
+              if (saidaAntecipada > criteria.pontoToleranciaSaida) {
+                isSaidaAntecipada = 1; minutosSaidaAntecipada = saidaAntecipada;
               }
             }
           } else {
-            // No record for this day - it's a falta if it's a working day
-            if (tipoDia === "util") {
-              isFalta = 1;
-              totalFaltas++;
-            }
+            if (tipoDia === "util") { isFalta = 1; totalFaltas++; }
           }
 
           await db.execute(sql`
@@ -296,40 +389,52 @@ export const payrollEngineRouter = router({
               entrada1, saida1, entrada2, saida2, entrada3, saida3,
               horasTrabalhadas, horasExtras, horasNoturnas,
               isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
-              tipoDia, timeRecordId, obraId)
+              tipoDia, timeRecordId, obraId,
+              origem_registro, num_batidas, is_inconsistente, inconsistencia_tipo,
+              obra_secundaria_id, rateio_percentual)
             VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'registrado',
-              ${rec?.entrada1 || null}, ${rec?.saida1 || null}, ${rec?.entrada2 || null}, ${rec?.saida2 || null}, ${rec?.entrada3 || null}, ${rec?.saida3 || null},
+              ${recs[0]?.entrada1 || null}, ${recs[0]?.saida1 || null}, ${recs[0]?.entrada2 || null}, ${recs[0]?.saida2 || null}, ${recs[0]?.entrada3 || null}, ${recs[0]?.saida3 || null},
               ${horasTrabalhadas}, ${horasExtras}, ${horasNoturnas},
               ${isFalta}, ${isAtraso}, ${isSaidaAntecipada}, ${minutosAtraso}, ${minutosSaidaAntecipada},
-              ${tipoDia}, ${rec?.id || null}, ${rec?.obraId || null})
+              ${tipoDia}, ${timeRecordId}, ${obraId},
+              ${origemRegistro}, ${numBatidas}, ${isInconsistente}, ${inconsistenciaTipo},
+              ${obraSecundariaId}, ${rateioPercentual})
           `);
           totalInserted++;
         }
 
-        // PART 2: Days "no escuro" (16 to end of month) - status: escuro
+        // PART 2: Days "no escuro" (after diaCorte to end of month) - status: escuro
         if (criteria.fecharNoEscuro) {
           for (let d = diaCorte + 1; d <= lastDay; d++) {
             const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
             const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
-            if (dow === 0) continue; // Skip Sundays
-
+            if (dow === 0) continue;
             let tipoDia = "util";
             if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === "compensado" ? "compensado" : "sabado";
-
-            // "No escuro" - presume normal work
             await db.execute(sql`
               INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
                 horasTrabalhadas, horasExtras, horasNoturnas,
                 isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
-                tipoDia)
+                tipoDia, origem_registro, num_batidas, is_inconsistente)
               VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'escuro',
                 ${minutesToHHMM(criteria.cargaHorariaDiaria * 60)}, '0:00', '0:00',
                 0, 0, 0, 0, 0,
-                ${tipoDia})
+                ${tipoDia}, 'escuro', 0, 0)
             `);
             totalInserted++;
           }
         }
+      }
+
+      // Create alerts for inconsistencies
+      if (totalInconsistencias > 0) {
+        await db.execute(sql`
+          INSERT INTO payroll_alerts (companyId, mesReferencia, tipo, titulo, descricao, prioridade)
+          VALUES (${input.companyId}, ${input.mesReferencia}, 'inconsistencias_ponto',
+            ${`${totalInconsistencias} inconsistência(s) detectada(s) no ponto`},
+            ${`Foram encontradas ${totalInconsistencias} inconsistências que precisam ser resolvidas antes de avançar.`},
+            ${totalInconsistencias > 10 ? "alta" : "media"})
+        `);
       }
 
       // Update period status
@@ -340,14 +445,131 @@ export const payrollEngineRouter = router({
           pontoImportadoPor = ${ctx.user.name || "Sistema"}
         WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
       `);
-
       return {
         totalFuncionarios: empList.length,
         totalRegistros: totalInserted,
         totalFaltas,
         totalAtrasos,
-        message: `Ponto processado: ${empList.length} funcionários, ${totalInserted} registros diários criados`,
+        totalInconsistencias,
+        message: `Ponto processado: ${empList.length} funcionários, ${totalInserted} registros, ${totalInconsistencias} inconsistências`,
       };
+    }),
+
+  // ============================================================
+  // 2.1 LISTAR INCONSISTÊNCIAS DO PONTO
+  // ============================================================
+  listarInconsistencias: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [rows] = await db.execute(sql`
+        SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, o.nome as obraNome
+        FROM timecard_daily td
+        LEFT JOIN employees e ON td.employeeId = e.id
+        LEFT JOIN obras o ON td.obraId = o.id
+        WHERE td.companyId = ${input.companyId} 
+        AND td.mesCompetencia = ${input.mesReferencia}
+        AND td.is_inconsistente = 1
+        ORDER BY td.data, e.nomeCompleto
+      `) as any[];
+      return rows || [];
+    }),
+
+  // ============================================================
+  // 2.2 RESOLVER INCONSISTÊNCIA (Ajustar Horário / Atestado / Advertência / Justificar)
+  // ============================================================
+  resolverInconsistencia: protectedProcedure
+    .input(z.object({
+      timecardDailyId: z.number(),
+      resolucaoTipo: z.enum(["ajustar_horario", "atestado", "advertencia", "justificar", "abonar"]),
+      novaEntrada1: z.string().optional(),
+      novaSaida1: z.string().optional(),
+      novaEntrada2: z.string().optional(),
+      novaSaida2: z.string().optional(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      if (input.resolucaoTipo === "ajustar_horario") {
+        // Update the timecard_daily with corrected times
+        await db.execute(sql`
+          UPDATE timecard_daily SET 
+            entrada1 = COALESCE(${input.novaEntrada1 || null}, entrada1),
+            saida1 = COALESCE(${input.novaSaida1 || null}, saida1),
+            entrada2 = COALESCE(${input.novaEntrada2 || null}, entrada2),
+            saida2 = COALESCE(${input.novaSaida2 || null}, saida2),
+            is_inconsistente = 0,
+            inconsistencia_resolvida = 1,
+            inconsistencia_resolucao = 'ajustar_horario',
+            inconsistencia_obs = ${input.observacao || "Horário ajustado manualmente"},
+            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
+            inconsistencia_resolvida_em = NOW(),
+            origem_registro = 'manual'
+          WHERE id = ${input.timecardDailyId}
+        `);
+      } else if (input.resolucaoTipo === "atestado") {
+        await db.execute(sql`
+          UPDATE timecard_daily SET 
+            is_inconsistente = 0,
+            inconsistencia_resolvida = 1,
+            inconsistencia_resolucao = 'atestado',
+            inconsistencia_obs = ${input.observacao || "Justificado por atestado médico"},
+            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
+            inconsistencia_resolvida_em = NOW(),
+            isFalta = 0
+          WHERE id = ${input.timecardDailyId}
+        `);
+      } else if (input.resolucaoTipo === "advertencia") {
+        await db.execute(sql`
+          UPDATE timecard_daily SET 
+            is_inconsistente = 0,
+            inconsistencia_resolvida = 1,
+            inconsistencia_resolucao = 'advertencia',
+            inconsistencia_obs = ${input.observacao || "Advertência emitida"},
+            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
+            inconsistencia_resolvida_em = NOW()
+          WHERE id = ${input.timecardDailyId}
+        `);
+      } else if (input.resolucaoTipo === "justificar" || input.resolucaoTipo === "abonar") {
+        await db.execute(sql`
+          UPDATE timecard_daily SET 
+            is_inconsistente = 0,
+            inconsistencia_resolvida = 1,
+            inconsistencia_resolucao = ${input.resolucaoTipo},
+            inconsistencia_obs = ${input.observacao || "Justificado pelo gestor"},
+            inconsistencia_resolvida_por = ${ctx.user.name || "Sistema"},
+            inconsistencia_resolvida_em = NOW(),
+            isFalta = 0
+          WHERE id = ${input.timecardDailyId}
+        `);
+      }
+
+      return { success: true, message: `Inconsistência resolvida: ${input.resolucaoTipo}` };
+    }),
+
+  // ============================================================
+  // 2.3 RESUMO DE INCONSISTÊNCIAS (para o wizard)
+  // ============================================================
+  resumoInconsistencias: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [rows] = await db.execute(sql`
+        SELECT 
+          SUM(CASE WHEN is_inconsistente = 1 THEN 1 ELSE 0 END) as pendentes,
+          SUM(CASE WHEN inconsistencia_resolvida = 1 THEN 1 ELSE 0 END) as resolvidas,
+          SUM(CASE WHEN inconsistencia_tipo = 'batida_impar' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as batidasImpares,
+          SUM(CASE WHEN inconsistencia_tipo = 'sobreposicao_horario' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as sobreposicoes,
+          SUM(CASE WHEN inconsistencia_tipo = 'entrada_faltando' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as entradasFaltando,
+          SUM(CASE WHEN inconsistencia_tipo = 'saida_faltando' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as saidasFaltando
+        FROM timecard_daily 
+        WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}
+      `) as any[];
+      return rows[0] || { pendentes: 0, resolvidas: 0, batidasImpares: 0, sobreposicoes: 0, entradasFaltando: 0, saidasFaltando: 0 };
     }),
 
   // ============================================================

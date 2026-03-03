@@ -4209,3 +4209,55 @@
 ## Rev. 168: Atualizar Controle de Revisões
 - [x] Adicionar revisões 143 a 167 no Controle de Revisões
 - [x] Verificar que todas as revisões aparecem corretamente na página
+
+## Rev. 169: Refazer Gestão de Competências como Wizard + Relatórios + Remover telas obsoletas
+- [x] Refazer PayrollCompetencias como wizard passo a passo fullscreen
+- [x] Cada passo ocupa tela inteira, barra de progresso no topo
+- [x] Sistema mostra automaticamente o passo atual, avança sozinho
+- [ ] Passo 2: suporte a múltiplos arquivos DIXI (um por relógio/obra)
+- [x] Passo 2: detecção automática de inconsistências (batidas incompletas)
+- [x] Passo 2: ações inline por inconsistência (Ajustar / Atestado / Advertência / Justificar)
+- [x] Passo 2: detecção de horários sobrepostos em obras diferentes (alerta crítico)
+- [ ] Passo 2: rateio automático entre obras quando funcionário transita no mesmo dia
+- [x] Passo 2: controle de origem (DIXI / Manual / Rateio / Escuro / Aferido)
+- [x] Passo 2: bloqueio de avanço enquanto houver inconsistências não resolvidas
+- [x] Passos 3-7 no formato wizard fullscreen com detalhes máximos
+- [ ] Remover Cartão de Ponto do sidebar (absorvido pela Gestão de Competências)
+- [ ] Remover Folha de Pagamento do sidebar (absorvido pela Gestão de Competências)
+- [ ] Criar Relatório de Ponto (substitui Cartão de Ponto)
+- [ ] Criar Relatório de Folha (substitui Folha de Pagamento)
+- [ ] Criar Relatório de Divergências
+- [ ] Criar Relatório de Custo por Obra
+- [ ] Todos os relatórios com PrintHeader (logo FC) e PrintFooterLGPD
+- [ ] Verificar permissões de acesso e atualizar sidebar
+- [ ] Subir revisão no Controle de Revisões
+
+## Rev. 169 - Redesign Gestão de Competências (Wizard Fullscreen)
+
+### Backend - Correções e Melhorias
+- [x] Corrigir mapeamento getPayrollCriteria para usar chaves corretas do system_criteria
+- [x] Adicionar detecção de inconsistências no processarPonto (batidas ímpares, sobreposição, multi-obra)
+- [x] Adicionar colunas novas no INSERT do processarPonto (origemRegistro, numBatidas, isInconsistente, etc.)
+- [x] Criar procedure resolverInconsistencia (Ajustar Horário / Upload Atestado / Emitir Advertência / Justificar)
+- [x] Criar procedure listarInconsistencias para o wizard
+- [ ] Adicionar suporte a múltiplos relógios/obras no processamento
+- [ ] Adicionar rateio proporcional automático para multi-obra
+- [x] Adicionar alerta crítico para sobreposição de horários impossível
+
+### Frontend - Wizard Fullscreen
+- [x] Refazer PayrollCompetencias como wizard vertical fullscreen (step-by-step)
+- [x] Barra de progresso "Etapa X de 7" com cores (Verde=concluído, Azul=atual, Cinza=pendente)
+- [x] Step 1: Abrir Competência - tela grande com datas e informações
+- [x] Step 2: Processar Ponto - importação com detecção de inconsistências e ações inline
+- [x] Step 3: Aferir Escuro - cruzamento com verificação visual
+- [x] Step 4: Gerar Vale - cálculo com bloqueio por faltas
+- [x] Step 5: Simular Pagamento - preview completo com contracheques
+- [x] Step 6: Consolidar - confirmação final
+- [x] Step 7: Travar Competência - bloqueio definitivo
+- [x] Ações inline por inconsistência: Ajustar Horário / Upload Atestado / Emitir Advertência / Justificar
+- [x] Tracking de origem: DIXI / Manual / Rateado / Escuro / Aferido
+
+### Sidebar e Relatórios
+- [ ] Remover Cartão de Ponto e Folha de Pagamento do sidebar (viram relatórios)
+- [ ] Criar seção de Relatórios: Ponto, Folha, Divergências, Custo por Obra
+- [ ] Todos os relatórios com PrintHeader e PrintFooterLGPD

@@ -367,7 +367,7 @@ export async function dispararNotificacao(
     .from(notificationRecipients)
     .where(and(
       eq(notificationRecipients.companyId, companyId),
-      eq(notificationRecipients.ativo, true),
+      eq(notificationRecipients.ativo, 1),
     ));
 
   // Filtrar por tipo de notificação
