@@ -725,18 +725,47 @@ export const payrollEngineRouter = router({
         }
         // If no actual record found but was escuro, keep as "ok" (presume worked)
 
-        // Update the timecard_daily record
-        await db.execute(sql`
-          UPDATE timecard_daily SET 
-            statusDia = 'aferido',
-            statusAnterior = 'escuro',
-            afericaoResultado = ${resultado},
-            afericaoObs = ${obs || null},
-            afericaoEm = NOW(),
-            isFalta = ${resultado === "falta" ? 1 : 0},
-            isAtraso = ${resultado === "atraso" ? 1 : 0}
-          WHERE id = ${escuro.id}
-        `);
+        // Update the timecard_daily record - sobrepor com dados reais do ponto
+        if (actual) {
+          // Sobrescrever o registro "escuro" com os dados reais do ponto
+          await db.execute(sql`
+            UPDATE timecard_daily SET 
+              statusDia = 'aferido',
+              statusAnterior = 'escuro',
+              afericaoResultado = ${resultado},
+              afericaoObs = ${obs || null},
+              afericaoEm = NOW(),
+              entrada1 = ${actual.entrada1 || null},
+              saida1 = ${actual.saida1 || null},
+              entrada2 = ${actual.entrada2 || null},
+              saida2 = ${actual.saida2 || null},
+              entrada3 = ${actual.entrada3 || null},
+              saida3 = ${actual.saida3 || null},
+              horasTrabalhadas = ${actual.horasTrabalhadas || '0:00'},
+              horasExtras = ${actual.horasExtras || '0:00'},
+              horasNoturnas = ${actual.horasNoturnas || '0:00'},
+              timeRecordId = ${actual.id || null},
+              obraId = ${actual.obraId || null},
+              origem_registro = 'aferido',
+              num_batidas = ${[actual.entrada1, actual.saida1, actual.entrada2, actual.saida2, actual.entrada3, actual.saida3].filter(Boolean).length},
+              isFalta = ${resultado === "falta" ? 1 : 0},
+              isAtraso = ${resultado === "atraso" ? 1 : 0}
+            WHERE id = ${escuro.id}
+          `);
+        } else {
+          // Sem registro real → manter como estava (presume que trabalhou)
+          await db.execute(sql`
+            UPDATE timecard_daily SET 
+              statusDia = 'aferido',
+              statusAnterior = 'escuro',
+              afericaoResultado = ${resultado},
+              afericaoObs = ${obs || 'Sem registro de ponto real - mantido como trabalhado'},
+              afericaoEm = NOW(),
+              isFalta = 0,
+              isAtraso = 0
+            WHERE id = ${escuro.id}
+          `);
+        }
         totalAferidos++;
       }
 

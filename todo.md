@@ -4349,3 +4349,12 @@
 - [x] Adicionar try/catch com mensagem de erro clara
 - [x] Converter function declarations para arrow functions dentro do try block (fix TS strict mode)
 - [x] 79 testes passando no payrollEngine.test.ts (32 novos testes adicionados)
+
+### Auditoria - Regras de Fechamento de Ponto e Folha
+- [x] Verificar lógica do dia de corte (15 a 15) no processarPonto - OK
+- [x] Verificar período "no escuro" (16 a fim do mês) - preenchimento automático sem descontos - OK
+- [x] Verificar aferição: sobreposição do ponto real sobre o escuro do mês anterior - CORRIGIDO (agora copia horários reais)
+- [x] Verificar vale: 40% do salário bruto no dia 20 - OK
+- [x] Verificar pagamento: saldo no 5º dia útil do mês subsequente - OK
+- [x] Verificar que funcionários registrados após dia 10 não recebem vale - OK
+- [x] Documentar gaps encontrados e corrigir - FEITO
