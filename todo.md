@@ -4384,3 +4384,14 @@
 ### Bug - Blacklist não filtra no Raio-X do Funcionário
 - [x] Investigar por que o filtro Blacklist mostra 0 - status era "Desligado" com listaNegra=1, mas filtro procura status="Lista_Negra"
 - [x] Corrigir: atualizados 14 registros no banco + auto-setar status='Lista_Negra' ao incluir na blacklist + reverter para 'Desligado' ao remover
+
+### Refatoração - Etapa 2 Gestão de Competências (replicar Cartão de Ponto)
+- [x] Estudar módulo Cartão de Ponto existente (frontend + backend)
+- [x] Mapear lógica de espelho de ponto (entrada1/saída1/entrada2/saída2)
+- [x] Mapear lógica de sobreposições multi-obra
+- [x] Corrigir backend resumoPontoPorFuncionario: aliases totalFaltas, horasTrabalhadas, horasExtras, employeeCode, employeeRole
+- [x] Corrigir frontend StepProcessarPonto: upload DIXI sempre visível, botão Reprocessar Ponto
+- [x] Corrigir espelho de ponto: cálculo de totais HH:MM, formatação de horas
+- [x] Corrigir inconsistências: usar is_inconsistente + inconsistencia_resolvida ao invés de status
+- [x] Adicionar label falta_batida nas inconsistências
+- [ ] Testar fluxo completo com upload DIXI real e reprocessamento

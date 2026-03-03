@@ -2072,6 +2072,107 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       return { success: true, newStatus: "aberta" };
     }),
+
+  // ============================================================
+  // RESUMO DO PONTO POR FUNCIONÁRIO (para Etapa 2 do wizard)
+  // ============================================================
+  resumoPontoPorFuncionario: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [rows] = await db.execute(sql`
+        SELECT 
+          td.employeeId,
+          e.nomeCompleto as employeeName,
+          e.cpf as employeeCpf,
+          e.funcao as employeeFuncao,
+          e.funcao as employeeRole,
+          e.codigoInterno,
+          e.codigoInterno as employeeCode,
+          COUNT(DISTINCT td.data) as totalDias,
+          SUM(CASE WHEN td.isFalta = 1 AND td.tipoDia = 'util' THEN 1 ELSE 0 END) as totalFaltas,
+          SUM(CASE WHEN td.isAtraso = 1 THEN 1 ELSE 0 END) as totalAtrasos,
+          SUM(td.minutosAtraso) as totalMinutosAtraso,
+          SUM(CASE WHEN td.isSaidaAntecipada = 1 THEN 1 ELSE 0 END) as saidasAntecipadas,
+          SUM(CASE WHEN td.is_inconsistente = 1 AND td.inconsistencia_resolvida = 0 THEN 1 ELSE 0 END) as inconsistenciasPendentes,
+          SUM(CASE WHEN td.is_inconsistente = 1 THEN 1 ELSE 0 END) as totalInconsistencias,
+          SUM(CASE WHEN td.statusDia = 'escuro' THEN 1 ELSE 0 END) as diasEscuro,
+          SUM(CASE WHEN td.statusDia = 'registrado' THEN 1 ELSE 0 END) as diasRegistrados,
+          SEC_TO_TIME(SUM(TIME_TO_SEC(CONCAT(td.horasTrabalhadas, ':00')))) as horasTrabalhadas,
+          SEC_TO_TIME(SUM(TIME_TO_SEC(CONCAT(td.horasExtras, ':00')))) as horasExtras,
+          GROUP_CONCAT(DISTINCT td.obraId) as obraIds,
+          GROUP_CONCAT(DISTINCT o.nome) as obraNomes
+        FROM timecard_daily td
+        LEFT JOIN employees e ON td.employeeId = e.id
+        LEFT JOIN obras o ON td.obraId = o.id
+        WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
+        GROUP BY td.employeeId, e.nomeCompleto, e.cpf, e.funcao, e.codigoInterno, e.funcao, e.codigoInterno
+        ORDER BY e.nomeCompleto
+      `) as any[];
+      
+      // Parse the GROUP_CONCAT fields
+      return (rows || []).map((r: any) => ({
+        ...r,
+        obraIds: r.obraIds ? r.obraIds.split(',').map(Number).filter((n: number) => !isNaN(n)) : [],
+        obraNomes: r.obraNomes ? r.obraNomes.split(',').filter(Boolean) : [],
+        multiplasObras: r.obraIds ? new Set(r.obraIds.split(',')).size > 1 : false,
+      }));
+    }),
+
+  // ============================================================
+  // ESPELHO DE PONTO POR FUNCIONÁRIO (para Etapa 2 do wizard)
+  // ============================================================
+  espelhoPontoFuncionario: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string(), employeeId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [rows] = await db.execute(sql`
+        SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, e.cpf, e.salarioBase,
+               o.nome as obraNome
+        FROM timecard_daily td
+        LEFT JOIN employees e ON td.employeeId = e.id
+        LEFT JOIN obras o ON td.obraId = o.id
+        WHERE td.companyId = ${input.companyId} 
+          AND td.mesCompetencia = ${input.mesReferencia}
+          AND td.employeeId = ${input.employeeId}
+        ORDER BY td.data ASC
+      `) as any[];
+      return rows || [];
+    }),
+
+  // ============================================================
+  // CONFLITOS DE OBRA (funcionário em 2+ obras no mesmo dia)
+  // ============================================================
+  conflitosObra: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [rows] = await db.execute(sql`
+        SELECT 
+          td.employeeId,
+          e.nomeCompleto as employeeName,
+          td.data,
+          GROUP_CONCAT(DISTINCT td.obraId) as obraIds,
+          GROUP_CONCAT(DISTINCT o.nome) as obraNomes,
+          GROUP_CONCAT(CONCAT(COALESCE(td.entrada1,''), '|', COALESCE(td.saida1,''), '|', COALESCE(o.nome,''))) as detalhes
+        FROM timecard_daily td
+        LEFT JOIN employees e ON td.employeeId = e.id
+        LEFT JOIN obras o ON td.obraId = o.id
+        WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
+          AND td.obraId IS NOT NULL
+        GROUP BY td.employeeId, e.nomeCompleto, td.data
+        HAVING COUNT(DISTINCT td.obraId) > 1
+        ORDER BY td.data, e.nomeCompleto
+      `) as any[];
+      return (rows || []).map((r: any) => ({
+        ...r,
+        obraIds: r.obraIds ? r.obraIds.split(',').map(Number) : [],
+        obraNomes: r.obraNomes ? r.obraNomes.split(',') : [],
+      }));
+    }),
 });
 // ============================================================
 // HELPER FUNCTIONS

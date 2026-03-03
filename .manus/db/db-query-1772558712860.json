@@ -1,0 +1,378 @@
+{
+  "query": "SHOW COLUMNS FROM timecard_daily",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW COLUMNS FROM timecard_daily",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "companyId",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "employeeId",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "data",
+      "Type": "date",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "mesCompetencia",
+      "Type": "varchar(7)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "statusDia",
+      "Type": "enum('registrado','escuro','aferido')",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "registrado",
+      "Extra": ""
+    },
+    {
+      "Field": "entrada1",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "saida1",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "entrada2",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "saida2",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "entrada3",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "saida3",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "horasTrabalhadas",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "horasExtras",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "horasNoturnas",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "isFalta",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "isAtraso",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "isSaidaAntecipada",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "minutosAtraso",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "minutosSaidaAntecipada",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "tipoDia",
+      "Type": "enum('util','sabado','domingo','feriado','compensado')",
+      "Null": "NO",
+      "Key": "",
+      "Default": "util",
+      "Extra": ""
+    },
+    {
+      "Field": "timeRecordId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "obraId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "origem_registro",
+      "Type": "varchar(20)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "dixi",
+      "Extra": ""
+    },
+    {
+      "Field": "num_batidas",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "is_inconsistente",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "inconsistencia_tipo",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "resolucao_tipo",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "resolucao_obs",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "resolucao_em",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "resolucao_por",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "atestado_id",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "advertencia_id",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "obra_secundaria_id",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "rateio_percentual",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "statusAnterior",
+      "Type": "enum('registrado','escuro','aferido')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "afericaoResultado",
+      "Type": "enum('ok','falta','atraso','saida_antecipada','divergencia')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "afericaoObs",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "afericaoEm",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "createdAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "updatedAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    },
+    {
+      "Field": "inconsistencia_resolvida",
+      "Type": "tinyint",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "inconsistencia_resolucao",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "inconsistencia_obs",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "inconsistencia_resolvida_por",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "inconsistencia_resolvida_em",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint\tNO\tPRI\tNULL\tauto_increment\ncompanyId\tint\tNO\tMUL\tNULL\t\nemployeeId\tint\tNO\tMUL\tNULL\t\ndata\tdate\tNO\t\tNULL\t\nmesCompetencia\tvarchar(7)\tNO\t\tNULL\t\nstatusDia\tenum('registrado','escuro','aferido')\tNO\tMUL\tregistrado\t\nentrada1\tvarchar(10)\tYES\t\tNULL\t\nsaida1\tvarchar(10)\tYES\t\tNULL\t\nentrada2\tvarchar(10)\tYES\t\tNULL\t\nsaida2\tvarchar(10)\tYES\t\tNULL\t\nentrada3\tvarchar(10)\tYES\t\tNULL\t\nsaida3\tvarchar(10)\tYES\t\tNULL\t\nhorasTrabalhadas\tvarchar(10)\tYES\t\tNULL\t\nhorasExtras\tvarchar(10)\tYES\t\tNULL\t\nhorasNoturnas\tvarchar(10)\tYES\t\tNULL\t\nisFalta\ttinyint\tNO\t\t0\t\nisAtraso\ttinyint\tNO\t\t0\t\nisSaidaAntecipada\ttinyint\tNO\t\t0\t\nminutosAtraso\tint\tYES\t\t0\t\nminutosSaidaAntecipada\tint\tYES\t\t0\t\ntipoDia\tenum('util','sabado','domingo','feriado','compensado')\tNO\t\tutil\t\ntimeRecordId\tint\tYES\t\tNULL\t\nobraId\tint\tYES\t\tNULL\t\norigem_registro\tvarchar(20)\tNO\t\tdixi\t\nnum_batidas\tint\tYES\t\t0\t\nis_inconsistente\ttinyint\tNO\t\t0\t\ninconsistencia_tipo\tvarchar(50)\tYES\t\tNULL\t\nresolucao_tipo\tvarchar(50)\tYES\t\tNULL\t\nresolucao_obs\ttext\tYES\t\tNULL\t\nresolucao_em\ttimestamp\tYES\t\tNULL\t\nresolucao_por\tvarchar(255)\tYES\t\tNULL\t\natestado_id\tint\tYES\t\tNULL\t\nadvertencia_id\tint\tYES\t\tNULL\t\nobra_secundaria_id\tint\tYES\t\tNULL\t\nrateio_percentual\tint\tYES\t\tNULL\t\nstatusAnterior\tenum('registrado','escuro','aferido')\tYES\t\tNULL\t\nafericaoResultado\tenum('ok','falta','atraso','saida_antecipada','divergencia')\tYES\t\tNULL\t\nafericaoObs\ttext\tYES\t\tNULL\t\nafericaoEm\ttimestamp\tYES\t\tNULL\t\ncreatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\nupdatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\tDEFAULT_GENERATED on update CURRENT_TIMESTAMP\ninconsistencia_resolvida\ttinyint\tYES\t\t0\t\ninconsistencia_resolucao\tvarchar(50)\tYES\t\tNULL\t\ninconsistencia_obs\ttext\tYES\t\tNULL\t\ninconsistencia_resolvida_por\tvarchar(100)\tYES\t\tNULL\t\ninconsistencia_resolvida_em\ttimestamp\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 114
+}

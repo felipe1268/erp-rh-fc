@@ -1,7 +1,7 @@
 import React from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import {
@@ -9,7 +9,8 @@ import {
   DollarSign, CreditCard, AlertTriangle, CheckCircle, FileText, Users,
   Clock, BarChart3, ShieldCheck,
   ArrowRight, Printer, Ban, Zap, Scale, AlertCircle, XCircle, Wallet,
-  Wrench, FileWarning, Check, Sparkles, Bot, Loader2, Upload, FolderUp, X, Trash2, RotateCcw
+  Wrench, FileWarning, Check, Sparkles, Bot, Loader2, Upload, FolderUp, X, Trash2, RotateCcw,
+  Building2, MapPin, Search, PenLine, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -68,6 +69,7 @@ function formatBRL(val: string | number | null | undefined): string {
 
 const INCONSISTENCIA_LABELS: Record<string, string> = {
   batida_impar: "Batida Ímpar",
+  falta_batida: "Falta de Batida",
   sobreposicao_horario: "Sobreposição de Horário",
   entrada_faltando: "Entrada Faltando",
   saida_faltando: "Saída Faltando",
@@ -162,6 +164,20 @@ export default function PayrollCompetencias() {
     { companyId, mesReferencia: mesRef },
     { enabled: companyId > 0 && showContracheque }
   );
+  // --- Fechamento de Ponto queries (reutilizados na Etapa 2) ---
+  const pontoSummary = trpc.payrollEngine.resumoPontoPorFuncionario.useQuery(
+    { companyId, mesReferencia: mesRef },
+    { enabled: companyId > 0 && activeStep >= 1 }
+  );
+  const pontoConflitos = trpc.payrollEngine.conflitosObra.useQuery(
+    { companyId, mesReferencia: mesRef },
+    { enabled: companyId > 0 && activeStep >= 1 }
+  );
+  const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
+  const pontoEspelho = trpc.payrollEngine.espelhoPontoFuncionario.useQuery(
+    { companyId, employeeId: selectedEmpId!, mesReferencia: mesRef },
+    { enabled: companyId > 0 && selectedEmpId !== null }
+  );
 
   // ============================================================
   // MUTATIONS
@@ -174,7 +190,10 @@ export default function PayrollCompetencias() {
     utils.payrollEngine.listarTimecardDaily.invalidate();
     utils.payrollEngine.listarInconsistencias.invalidate();
     utils.payrollEngine.resumoInconsistencias.invalidate();
-  }, [utils]);
+    utils.payrollEngine.resumoPontoPorFuncionario.invalidate();
+    utils.payrollEngine.conflitosObra.invalidate();
+    if (selectedEmpId) utils.payrollEngine.espelhoPontoFuncionario.invalidate();
+  }, [utils, selectedEmpId]);
 
   const openPeriod = trpc.payrollEngine.openPeriod.useMutation({
     onSuccess: () => { toast.success("Competência aberta com sucesso"); invalidateAll(); },
@@ -460,18 +479,8 @@ export default function PayrollCompetencias() {
           {activeStep === 1 && (
             <StepProcessarPonto
               currentStatus={currentStatus}
-              timecards={timecards.data as any[] || []}
-              inconsistencias={inconsistencias.data as any[] || []}
-              resumoIncon={resumoIncon.data}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
               onProcessar={() => confirmAction("Processar Ponto", () => processarPonto.mutate({ companyId, mesReferencia: mesRef }))}
-              onResolverInconsistencia={(record: any) => {
-                setResolveForm({ tipo: "ajustar_horario", novaEntrada1: record.entrada1 || "", novaSaida1: record.saida1 || "", novaEntrada2: record.entrada2 || "", novaSaida2: record.saida2 || "", observacao: "" });
-                setResolveDialog({ open: true, record });
-              }}
               isLoading={processarPonto.isPending}
-              pendingInconsistencias={pendingInconsistencias}
               onNext={() => setActiveStep(2)}
               dixiFiles={dixiFiles}
               dixiValidation={dixiValidation}
@@ -482,6 +491,19 @@ export default function PayrollCompetencias() {
               onDixiRemoveFile={(idx: number) => { const nf = [...dixiFiles]; nf.splice(idx, 1); setDixiFiles(nf); setDixiValidation(null); }}
               onLimparEtapa={() => handleLimparEtapa(1)}
               canLimpar={canLimpar && currentStepFromStatus >= 2}
+              pontoSummary={pontoSummary.data || []}
+              pontoSummaryLoading={pontoSummary.isLoading}
+              pontoConflitos={pontoConflitos.data || []}
+              selectedEmpId={selectedEmpId}
+              setSelectedEmpId={setSelectedEmpId}
+              pontoEspelho={pontoEspelho.data || []}
+              pontoEspelhoLoading={pontoEspelho.isLoading}
+              inconsistencias={inconsistencias.data || []}
+              resumoIncon={resumoIncon.data}
+              onResolverInconsistencia={(record: any) => {
+                setResolveForm({ tipo: "ajustar_horario", novaEntrada1: record.entrada1 || "", novaSaida1: record.saida1 || "", novaEntrada2: record.entrada2 || "", novaSaida2: record.saida2 || "", observacao: "" });
+                setResolveDialog({ open: true, record });
+              }}
             />
           )}
           {activeStep === 2 && (
@@ -862,17 +884,55 @@ function StepAbrirCompetencia({ currentStatus, mesAtual, anoAtual, mesRef, resum
   );
 }
 
-function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoIncon, searchTerm, setSearchTerm, onProcessar, onResolverInconsistencia, isLoading, pendingInconsistencias, onNext, dixiFiles, dixiValidation, dixiUploading, dixiValidating, onDixiFilesSelected, onDixiUpload, onDixiRemoveFile, onLimparEtapa, canLimpar }: any) {
+function StepProcessarPonto({ currentStatus, onProcessar, onResolverInconsistencia, isLoading, onNext, dixiFiles, dixiValidation, dixiUploading, dixiValidating, onDixiFilesSelected, onDixiUpload, onDixiRemoveFile, onLimparEtapa, canLimpar, pontoSummary, pontoSummaryLoading, pontoConflitos, selectedEmpId, setSelectedEmpId, pontoEspelho, pontoEspelhoLoading, inconsistencias, resumoIncon }: any) {
   const isProcessed = STATUS_TO_STEP[currentStatus] >= 2;
   const [showAll, setShowAll] = useState(false);
-  const [showAllPonto, setShowAllPonto] = useState(false);
-  const [pontoFilter, setPontoFilter] = useState("");
-  const [pontoTipoFilter, setPontoTipoFilter] = useState("todos");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [viewMode, setViewMode] = useState<"resumo" | "inconsistencias" | "conflitos" | "detalhe">("resumo");
+  const [filterObra, setFilterObra] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [dragOver, setDragOver] = useState(false);
-  const filteredInconsistencias = (inconsistencias || []).filter((r: any) =>
-    !searchTerm || r.nomeCompleto?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const ri = resumoIncon as any;
+
+  const dayOfWeek = (dateStr: string) => {
+    if (!dateStr) return "-";
+    const d = new Date(dateStr + "T12:00:00");
+    return ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
+  };
+  const formatCPF = (cpf: string) => {
+    if (!cpf) return "-";
+    const c = cpf.replace(/\D/g, "").padStart(11, "0");
+    return `${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`;
+  };
+
+  // Derived data from payrollEngine procedures
+  const summaryData = pontoSummary || [];
+  const inconsistencies = inconsistencias || [];
+  const conflitos = pontoConflitos || [];
+  const pendingInconsistencias = inconsistencies.filter((i: any) => Number(i.is_inconsistente) === 1 && Number(i.inconsistencia_resolvida) !== 1).length;
+  const totalFaltas = summaryData.reduce((acc: number, e: any) => acc + (Number(e.totalFaltas) || 0), 0);
+  const totalAtrasos = summaryData.reduce((acc: number, e: any) => acc + (Number(e.totalAtrasos) || 0), 0);
+  const totalRegistros = summaryData.reduce((acc: number, e: any) => acc + (Number(e.totalDias) || 0), 0);
+
+  // Filtered summary
+  const filteredSummary = summaryData.filter((emp: any) => {
+    const matchName = !searchFilter || emp.employeeName?.toLowerCase().includes(searchFilter.toLowerCase()) || emp.employeeCpf?.includes(searchFilter);
+    const matchObra = filterObra === "all" || (emp.obraIds || []).includes(Number(filterObra));
+    if (statusFilter === "conforme") return matchName && matchObra && !emp.multiplasObras && !(conflitos || []).some((c: any) => c.employeeId === emp.employeeId);
+    if (statusFilter === "problema") return matchName && matchObra && (emp.multiplasObras || (conflitos || []).some((c: any) => c.employeeId === emp.employeeId));
+    return matchName && matchObra;
+  });
+
+  // Get unique obras from summary
+  const obrasList = React.useMemo(() => {
+    const map = new Map<number, string>();
+    summaryData.forEach((emp: any) => {
+      (emp.obraIds || []).forEach((id: number, idx: number) => {
+        if (!map.has(id)) map.set(id, emp.obraNomes?.[idx] || `Obra ${id}`);
+      });
+    });
+    return Array.from(map.entries()).map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [summaryData]);
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
     const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.xls') || f.name.endsWith('.xlsx'));
@@ -884,76 +944,7 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
     e.target.value = '';
   };
 
-  // Build employee summary from timecards
-  const employeeSummary = React.useMemo(() => {
-    const map = new Map<number, { id: number; nome: string; funcao: string; codigo: string; dias: number; faltas: number; atrasos: number; he: string; horasTrab: string; inconsistencias: number; escuro: number; obras: Set<string> }>();
-    for (const tc of (timecards || [])) {
-      if (!map.has(tc.employeeId)) {
-        map.set(tc.employeeId, { id: tc.employeeId, nome: tc.nomeCompleto || "—", funcao: tc.funcao || "—", codigo: tc.codigoInterno || "—", dias: 0, faltas: 0, atrasos: 0, he: "0:00", horasTrab: "0:00", inconsistencias: 0, escuro: 0, obras: new Set() });
-      }
-      const emp = map.get(tc.employeeId)!;
-      emp.dias++;
-      if (Number(tc.isFalta)) emp.faltas++;
-      if (Number(tc.isAtraso)) emp.atrasos++;
-      if (tc.is_inconsistente && Number(tc.is_inconsistente)) emp.inconsistencias++;
-      if (tc.statusDia === "escuro") emp.escuro++;
-      if (tc.obraId && tc.obraNome) emp.obras.add(tc.obraNome);
-      // Sum hours
-      if (tc.horasTrabalhadas && tc.horasTrabalhadas !== "0:00") {
-        const [h, m] = tc.horasTrabalhadas.split(":").map(Number);
-        const [ch, cm] = emp.horasTrab.split(":").map(Number);
-        const totalMin = (ch * 60 + cm) + (h * 60 + (m || 0));
-        emp.horasTrab = `${Math.floor(totalMin / 60)}:${String(totalMin % 60).padStart(2, "0")}`;
-      }
-      if (tc.horasExtras && tc.horasExtras !== "0:00") {
-        const [h, m] = tc.horasExtras.split(":").map(Number);
-        const [ch, cm] = emp.he.split(":").map(Number);
-        const totalMin = (ch * 60 + cm) + (h * 60 + (m || 0));
-        emp.he = `${Math.floor(totalMin / 60)}:${String(totalMin % 60).padStart(2, "0")}`;
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [timecards]);
-
-  // Build sobreposicoes (same employee, same day, different obras)
-  const sobreposicoes = React.useMemo(() => {
-    const dayMap = new Map<string, any[]>();
-    for (const tc of (timecards || [])) {
-      if (!tc.obraId || tc.statusDia === "escuro") continue;
-      const key = `${tc.employeeId}-${tc.data}`;
-      if (!dayMap.has(key)) dayMap.set(key, []);
-      dayMap.get(key)!.push(tc);
-    }
-    const result: any[] = [];
-    dayMap.forEach((records) => {
-      const obraIds = new Set(records.map((r: any) => r.obraId));
-      if (obraIds.size > 1) {
-        result.push({
-          employeeId: records[0].employeeId,
-          nome: records[0].nomeCompleto,
-          funcao: records[0].funcao,
-          data: records[0].data,
-          obras: records.map((r: any) => ({ obraId: r.obraId, obraNome: r.obraNome || `Obra ${r.obraId}`, entrada1: r.entrada1, saida1: r.saida1, entrada2: r.entrada2, saida2: r.saida2 })),
-        });
-      }
-    });
-    return result.sort((a, b) => a.data.localeCompare(b.data) || a.nome.localeCompare(b.nome));
-  }, [timecards]);
-
-  // Filtered employee summary
-  const filteredEmployees = employeeSummary.filter((e) => {
-    const matchName = !pontoFilter || e.nome.toLowerCase().includes(pontoFilter.toLowerCase());
-    if (pontoTipoFilter === "faltas") return matchName && e.faltas > 0;
-    if (pontoTipoFilter === "atrasos") return matchName && e.atrasos > 0;
-    if (pontoTipoFilter === "inconsistencias") return matchName && e.inconsistencias > 0;
-    if (pontoTipoFilter === "he") return matchName && e.he !== "0:00";
-    return matchName;
-  });
-
-  // Stats
-  const totalFaltas = employeeSummary.reduce((s, e) => s + e.faltas, 0);
-  const totalAtrasos = employeeSummary.reduce((s, e) => s + e.atrasos, 0);
-  const totalHE = employeeSummary.filter(e => e.he !== "0:00").length;
+  // All data now comes from fechamentoPonto procedures via props (pontoSummary, pontoStats, etc.)
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -971,17 +962,15 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
             </div>
             <div className="flex items-center gap-2">
               <LimparEtapaButton onLimpar={onLimparEtapa} canLimpar={canLimpar} />
-              {!isProcessed && (
-                <Button onClick={onProcessar} disabled={isLoading || currentStatus === "nao_aberta"} size="lg">
-                  <Zap className="w-5 h-5 mr-2" />
-                  {isLoading ? "Processando..." : "Processar Ponto"}
-                </Button>
-              )}
+              <Button onClick={onProcessar} disabled={isLoading || currentStatus === "nao_aberta"} size="lg" variant={isProcessed ? "outline" : "default"}>
+                <Zap className="w-5 h-5 mr-2" />
+                {isLoading ? "Processando..." : isProcessed ? "Reprocessar Ponto" : "Processar Ponto"}
+              </Button>
             </div>
           </div>
 
-          {/* DIXI Upload Area */}
-          {!isProcessed && currentStatus === "aberta" && (
+          {/* DIXI Upload Area - always visible when step is active */}
+          {currentStatus !== "nao_aberta" && (
             <div className="mb-6 space-y-4">
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -1053,59 +1042,176 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
             </div>
           )}
 
-          {isProcessed && (
+          {isProcessed && viewMode === "detalhe" && selectedEmpId && (
+            <>
+              {/* ESPELHO DE PONTO - Employee Detail */}
+              <div className="mb-4">
+                <Button variant="ghost" size="sm" onClick={() => { setViewMode("resumo"); setSelectedEmpId(null); }}>
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Voltar ao Resumo
+                </Button>
+              </div>
+              {pontoEspelhoLoading ? (
+                <div className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" /><p className="text-sm text-muted-foreground mt-2">Carregando espelho de ponto...</p></div>
+              ) : pontoEspelho && pontoEspelho.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Employee Header */}
+                  {(() => {
+                    const emp = summaryData.find((e: any) => e.employeeId === selectedEmpId);
+                    const empFaltas = pontoEspelho.filter((r: any) => Number(r.isFalta)).length;
+                    const empAtrasos = pontoEspelho.filter((r: any) => Number(r.isAtraso)).length;
+                    return emp ? (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold">{emp.employeeName}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {emp.employeeCode} — {emp.employeeRole} — CPF: {formatCPF(emp.employeeCpf)}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge variant="outline" className="text-red-600 border-red-300">Faltas: {empFaltas}</Badge>
+                          <Badge variant="outline" className="text-amber-600 border-amber-300">Atrasos: {empAtrasos}</Badge>
+                          <Badge variant="outline">Dias: {pontoEspelho.length}</Badge>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Group by obra */}
+                  {(() => {
+                    const obraMap = new Map<number, { obraNome: string; records: any[] }>();
+                    pontoEspelho.forEach((r: any) => {
+                      const obraId = r.obraId || 0;
+                      if (!obraMap.has(obraId)) obraMap.set(obraId, { obraNome: r.obraNome || 'Sem Obra', records: [] });
+                      obraMap.get(obraId)!.records.push(r);
+                    });
+                    return Array.from(obraMap.entries()).map(([obraId, grupo]) => (
+                    <Card key={obraId} className="overflow-hidden">
+                      <CardHeader className="py-3 px-4 bg-gray-50">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-emerald-600" />
+                          {grupo.obraNome || `Obra ${obraId}`}
+                          <Badge variant="outline" className="text-xs ml-auto">{grupo.records?.length || 0} dias</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-auto">
+                          <table className="w-full text-xs">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="text-left px-3 py-2 font-medium w-24">Data</th>
+                                <th className="text-center px-2 py-2 font-medium w-12">Dia</th>
+                                <th className="text-center px-2 py-2 font-medium text-emerald-700">Entrada</th>
+                                <th className="text-center px-2 py-2 font-medium text-orange-700">Saída Int.</th>
+                                <th className="text-center px-2 py-2 font-medium text-emerald-700">Retorno</th>
+                                <th className="text-center px-2 py-2 font-medium text-orange-700">Saída</th>
+                                <th className="text-center px-2 py-2 font-medium">Horas</th>
+                                <th className="text-center px-2 py-2 font-medium text-blue-600">H.E.</th>
+                                <th className="text-center px-2 py-2 font-medium">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(grupo.records || []).map((rec: any, idx: number) => {
+                                const isSab = dayOfWeek(rec.data) === "Sáb";
+                                const isDom = dayOfWeek(rec.data) === "Dom";
+                                const isFalta = Number(rec.isFalta);
+                                const isAtraso = Number(rec.isAtraso);
+                                const isEscuro = rec.statusDia === "escuro";
+                                const rowBg = isDom ? "bg-gray-100" : isSab ? "bg-blue-50/30" : isFalta ? "bg-red-50/40" : isEscuro ? "bg-purple-50/30" : idx % 2 === 0 ? "bg-white" : "bg-gray-50/50";
+                                const statusLabel = isEscuro ? "Escuro" : isFalta ? "Falta" : isAtraso ? "Atraso" : "OK";
+                                const statusColor = isEscuro ? "bg-purple-100 text-purple-700" : isFalta ? "bg-red-100 text-red-700" : isAtraso ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700";
+                                return (
+                                  <tr key={idx} className={`border-t ${rowBg}`}>
+                                    <td className="px-3 py-1.5 font-mono whitespace-nowrap">{rec.data}</td>
+                                    <td className={`text-center px-2 py-1.5 font-medium ${isDom ? 'text-red-500' : isSab ? 'text-blue-500' : ''}`}>{dayOfWeek(rec.data)}</td>
+                                    <td className="text-center px-2 py-1.5 font-mono text-emerald-700">{rec.entrada1 || "—"}</td>
+                                    <td className="text-center px-2 py-1.5 font-mono text-orange-700">{rec.saida1 || "—"}</td>
+                                    <td className="text-center px-2 py-1.5 font-mono text-emerald-700">{rec.entrada2 || "—"}</td>
+                                    <td className="text-center px-2 py-1.5 font-mono text-orange-700">{rec.saida2 || "—"}</td>
+                                    <td className="text-center px-2 py-1.5 font-mono font-medium">{rec.horasTrabalhadas || "—"}</td>
+                                    <td className="text-center px-2 py-1.5 font-mono">{rec.horasExtras && rec.horasExtras !== "0:00" ? <span className="text-blue-600 font-medium">{rec.horasExtras}</span> : "—"}</td>
+                                    <td className="text-center px-2 py-1.5"><Badge className={`text-[10px] ${statusColor}`}>{statusLabel}</Badge></td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot className="bg-gray-100 font-medium">
+                              <tr>
+                                <td colSpan={6} className="px-3 py-2 text-right text-xs">Totais da Obra:</td>
+                              <td className="text-center px-2 py-2 font-mono text-xs">{(() => { const totalMin = grupo.records.reduce((a: number, r: any) => { const parts = (r.horasTrabalhadas || '0:00').split(':'); return a + (parseInt(parts[0]||'0') * 60 + parseInt(parts[1]||'0')); }, 0); const hh = Math.floor(totalMin / 60); const mm = totalMin % 60; return `${hh}:${String(mm).padStart(2,'0')}`; })()}</td>
+                                <td className="text-center px-2 py-2 font-mono text-xs text-blue-600">{(() => { const totalMin = grupo.records.reduce((a: number, r: any) => { const parts = (r.horasExtras || '0:00').split(':'); return a + (parseInt(parts[0]||'0') * 60 + parseInt(parts[1]||'0')); }, 0); if (totalMin === 0) return '\u2014'; const hh = Math.floor(totalMin / 60); const mm = totalMin % 60; return `${hh}:${String(mm).padStart(2,'0')}`; })()}</td>
+                                <td className="text-center px-2 py-2 text-xs">
+                                  <span className="text-red-600">{grupo.records.filter((r: any) => Number(r.isFalta)).length}F</span> / <span className="text-amber-600">{grupo.records.filter((r: any) => Number(r.isAtraso)).length}A</span>
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ));
+                  })()}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">Nenhum dado encontrado para este funcionário.</div>
+              )}
+            </>
+          )}
+
+          {isProcessed && viewMode !== "detalhe" && (
             <>
               {/* Summary Stats Row */}
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-                <StatCard label="Total Registros" value={(timecards || []).length} icon={FileText} />
-                <StatCard label="Registrados" value={(timecards || []).filter((t: any) => t.statusDia === "registrado").length} icon={CheckCircle} color="green" />
-                <StatCard label="No Escuro" value={(timecards || []).filter((t: any) => t.statusDia === "escuro").length} icon={Eye} color="purple" />
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                <StatCard label="Funcionários" value={summaryData.length} icon={Users} />
+                <StatCard label="Registros" value={totalRegistros} icon={FileText} color="green" />
                 <StatCard label="Faltas" value={totalFaltas} icon={XCircle} color="red" />
                 <StatCard label="Atrasos" value={totalAtrasos} icon={AlertTriangle} color="amber" />
                 <StatCard label="Inconsistências" value={pendingInconsistencias} icon={AlertCircle} color="amber" />
               </div>
 
-              {/* Tabs for detailed review */}
-              <Tabs defaultValue={pendingInconsistencias > 0 ? "inconsistencias" : "resumo"} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="resumo" className="text-xs sm:text-sm">
-                    <Users className="w-4 h-4 mr-1.5 hidden sm:inline" /> Resumo por Funcionário
-                  </TabsTrigger>
-                  <TabsTrigger value="inconsistencias" className="text-xs sm:text-sm relative">
-                    <FileWarning className="w-4 h-4 mr-1.5 hidden sm:inline" /> Inconsistências
-                    {pendingInconsistencias > 0 && (
-                      <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{pendingInconsistencias}</span>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="sobreposicoes" className="text-xs sm:text-sm relative">
-                    <Scale className="w-4 h-4 mr-1.5 hidden sm:inline" /> Sobreposições
-                    {sobreposicoes.length > 0 && (
-                      <span className="ml-1.5 bg-purple-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{sobreposicoes.length}</span>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="ponto" className="text-xs sm:text-sm">
-                    <Clock className="w-4 h-4 mr-1.5 hidden sm:inline" /> Ponto Detalhado
-                  </TabsTrigger>
-                </TabsList>
+              {/* Navigation buttons */}
+              <div className="flex gap-2 mb-4">
+                <Button variant={viewMode === "resumo" ? "default" : "outline"} size="sm" onClick={() => setViewMode("resumo")}>
+                  <Users className="w-4 h-4 mr-1.5" /> Resumo ({summaryData.length})
+                </Button>
+                <Button variant={viewMode === "inconsistencias" ? "default" : "outline"} size="sm" onClick={() => setViewMode("inconsistencias")} className="relative">
+                  <FileWarning className="w-4 h-4 mr-1.5" /> Inconsistências
+                  {pendingInconsistencias > 0 && <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 inline-flex items-center justify-center">{pendingInconsistencias}</span>}
+                </Button>
+                <Button variant={viewMode === "conflitos" ? "default" : "outline"} size="sm" onClick={() => setViewMode("conflitos")} className="relative">
+                  <Scale className="w-4 h-4 mr-1.5" /> Conflitos de Obras
+                  {conflitos.length > 0 && <span className="ml-1.5 bg-purple-500 text-white text-[10px] font-bold rounded-full w-5 h-5 inline-flex items-center justify-center">{conflitos.length}</span>}
+                </Button>
+              </div>
 
-                {/* TAB: Resumo por Funcionário */}
-                <TabsContent value="resumo" className="mt-4">
+              {/* VIEW: Resumo por Funcionário */}
+              {viewMode === "resumo" && (
+                <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm">Resumo do Ponto por Funcionário ({employeeSummary.length})</h3>
+                    <h3 className="font-semibold text-sm">Resumo do Ponto por Funcionário</h3>
                     <div className="flex items-center gap-2">
-                      <Select value={pontoTipoFilter} onValueChange={setPontoTipoFilter}>
-                        <SelectTrigger className="w-40 h-8 text-xs">
-                          <SelectValue placeholder="Filtrar" />
+                      <Select value={filterObra} onValueChange={setFilterObra}>
+                        <SelectTrigger className="w-48 h-8 text-xs">
+                          <SelectValue placeholder="Filtrar por obra" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="todos">Todos</SelectItem>
-                          <SelectItem value="faltas">Com Faltas</SelectItem>
-                          <SelectItem value="atrasos">Com Atrasos</SelectItem>
-                          <SelectItem value="inconsistencias">Com Inconsistências</SelectItem>
-                          <SelectItem value="he">Com Hora Extra</SelectItem>
+                          <SelectItem value="all">Todas as Obras</SelectItem>
+                          {obrasList.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Input placeholder="Buscar funcionário..." value={pontoFilter} onChange={(e) => setPontoFilter(e.target.value)} className="w-48 h-8 text-xs" />
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-36 h-8 text-xs">
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          <SelectItem value="conforme">Conformes</SelectItem>
+                          <SelectItem value="problema">Com Problemas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-muted-foreground" />
+                        <Input placeholder="Buscar funcionário ou CPF..." value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} className="w-56 h-8 text-xs pl-8" />
+                      </div>
                     </div>
                   </div>
                   <div className="border rounded-lg overflow-auto max-h-[500px]">
@@ -1114,105 +1220,67 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
                         <tr>
                           <th className="text-left px-3 py-2 font-medium">Funcionário</th>
                           <th className="text-center px-2 py-2 font-medium">Dias</th>
-                          <th className="text-center px-2 py-2 font-medium">Horas Trab.</th>
+                          <th className="text-center px-2 py-2 font-medium">Horas</th>
                           <th className="text-center px-2 py-2 font-medium text-red-600">Faltas</th>
                           <th className="text-center px-2 py-2 font-medium text-amber-600">Atrasos</th>
                           <th className="text-center px-2 py-2 font-medium text-blue-600">H.E.</th>
-                          <th className="text-center px-2 py-2 font-medium text-purple-600">Escuro</th>
-                          <th className="text-center px-2 py-2 font-medium">Incons.</th>
                           <th className="text-left px-2 py-2 font-medium">Obras</th>
+                          <th className="text-center px-2 py-2 font-medium">Ação</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredEmployees.map((emp) => (
-                          <tr key={emp.id} className={`border-t hover:bg-gray-50 ${emp.faltas > 0 ? 'bg-red-50/30' : ''} ${emp.inconsistencias > 0 ? 'bg-amber-50/30' : ''}`}>
+                        {filteredSummary.map((emp: any) => (
+                          <tr key={emp.employeeId} className={`border-t hover:bg-gray-50 cursor-pointer ${emp.totalFaltas > 0 ? 'bg-red-50/30' : ''}`} onClick={() => { setSelectedEmpId(emp.employeeId); setViewMode("detalhe"); }}>
                             <td className="px-3 py-2">
-                              <div className="font-medium text-sm">{emp.nome}</div>
-                              <div className="text-xs text-muted-foreground">{emp.codigo} — {emp.funcao}</div>
+                              <div className="font-medium text-sm">{emp.employeeName}</div>
+                              <div className="text-xs text-muted-foreground">{emp.employeeCode} — {emp.employeeRole}</div>
                             </td>
-                            <td className="text-center px-2 py-2">{emp.dias}</td>
-                            <td className="text-center px-2 py-2 font-mono text-xs">{emp.horasTrab}</td>
+                            <td className="text-center px-2 py-2">{emp.totalDias || 0}</td>
+                            <td className="text-center px-2 py-2 font-mono text-xs">{(() => { const ht = emp.horasTrabalhadas || '00:00:00'; const parts = ht.split(':'); return `${parseInt(parts[0]||'0')}:${(parts[1]||'00').padStart(2,'0')}`; })()}</td>
                             <td className="text-center px-2 py-2">
-                              {emp.faltas > 0 ? <Badge variant="outline" className="text-red-600 border-red-300">{emp.faltas}</Badge> : <span className="text-muted-foreground">0</span>}
+                              {(emp.totalFaltas || 0) > 0 ? <Badge variant="outline" className="text-red-600 border-red-300">{emp.totalFaltas}</Badge> : <span className="text-muted-foreground">0</span>}
                             </td>
                             <td className="text-center px-2 py-2">
-                              {emp.atrasos > 0 ? <Badge variant="outline" className="text-amber-600 border-amber-300">{emp.atrasos}</Badge> : <span className="text-muted-foreground">0</span>}
+                              {(emp.totalAtrasos || 0) > 0 ? <Badge variant="outline" className="text-amber-600 border-amber-300">{emp.totalAtrasos}</Badge> : <span className="text-muted-foreground">0</span>}
                             </td>
                             <td className="text-center px-2 py-2 font-mono text-xs">
-                              {emp.he !== "0:00" ? <span className="text-blue-600 font-medium">{emp.he}</span> : <span className="text-muted-foreground">—</span>}
-                            </td>
-                            <td className="text-center px-2 py-2">
-                              {emp.escuro > 0 ? <Badge variant="outline" className="text-purple-600 border-purple-300">{emp.escuro}</Badge> : <span className="text-muted-foreground">0</span>}
-                            </td>
-                            <td className="text-center px-2 py-2">
-                              {emp.inconsistencias > 0 ? <Badge className="bg-amber-100 text-amber-700">{emp.inconsistencias}</Badge> : <span className="text-muted-foreground">0</span>}
+                              {(() => { const he = emp.horasExtras || '00:00:00'; const parts = he.split(':'); const hh = parseInt(parts[0]||'0'); const mm = parts[1]||'00'; return hh > 0 || parseInt(mm) > 0 ? <span className="text-blue-600 font-medium">{hh}:{mm.padStart(2,'0')}</span> : <span className="text-muted-foreground">—</span>; })()}
                             </td>
                             <td className="px-2 py-2">
                               <div className="flex flex-wrap gap-1">
-                                {Array.from(emp.obras).slice(0, 3).map((o, i) => (
-                                  <Badge key={i} variant="outline" className="text-[10px] py-0">{String(o)}</Badge>
+                                {(emp.obraNomes || []).slice(0, 2).map((o: string, i: number) => (
+                                  <Badge key={i} variant="outline" className="text-[10px] py-0">{o}</Badge>
                                 ))}
-                                {emp.obras.size > 3 && <Badge variant="outline" className="text-[10px] py-0">+{emp.obras.size - 3}</Badge>}
+                                {(emp.obraNomes || []).length > 2 && <Badge variant="outline" className="text-[10px] py-0">+{emp.obraNomes.length - 2}</Badge>}
                               </div>
+                            </td>
+                            <td className="text-center px-2 py-2">
+                              <Button size="sm" variant="ghost" className="text-xs" onClick={(e) => { e.stopPropagation(); setSelectedEmpId(emp.employeeId); setViewMode("detalhe"); }}>
+                                <Eye className="w-3.5 h-3.5 mr-1" /> Espelho
+                              </Button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2 flex gap-4">
-                    <span>Total: {filteredEmployees.length} funcionários</span>
-                    <span>Com faltas: {filteredEmployees.filter(e => e.faltas > 0).length}</span>
-                    <span>Com HE: {totalHE}</span>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    {filteredSummary.length} de {summaryData.length} funcionários
                   </div>
-                </TabsContent>
+                </div>
+              )}
 
-                {/* TAB: Inconsistências */}
-                <TabsContent value="inconsistencias" className="mt-4">
-                  {/* Inconsistency Summary */}
-                  {ri && (Number(ri.pendentes) > 0 || Number(ri.resolvidas) > 0) && (
-                    <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                      <div className="flex items-center gap-2 mb-3">
-                        <AlertTriangle className="w-5 h-5 text-amber-600" />
-                        <h3 className="font-semibold text-amber-800">Resumo de Inconsistências</h3>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="text-2xl font-bold text-amber-600">{Number(ri.pendentes) || 0}</div>
-                          <div className="text-xs text-muted-foreground">Pendentes</div>
-                        </div>
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="text-2xl font-bold text-green-600">{Number(ri.resolvidas) || 0}</div>
-                          <div className="text-xs text-muted-foreground">Resolvidas</div>
-                        </div>
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="text-2xl font-bold text-red-600">{Number(ri.batidasImpares) || 0}</div>
-                          <div className="text-xs text-muted-foreground">Batidas Ímpares</div>
-                        </div>
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="text-2xl font-bold text-purple-600">{Number(ri.sobreposicoes) || 0}</div>
-                          <div className="text-xs text-muted-foreground">Sobreposições</div>
-                        </div>
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="text-2xl font-bold text-orange-600">{Number(ri.entradasFaltando) || 0}</div>
-                          <div className="text-xs text-muted-foreground">Entradas Faltando</div>
-                        </div>
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="text-2xl font-bold text-pink-600">{Number(ri.saidasFaltando) || 0}</div>
-                          <div className="text-xs text-muted-foreground">Saídas Faltando</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {filteredInconsistencias.length > 0 ? (
-                    <div>
+              {/* VIEW: Inconsistências */}
+              {viewMode === "inconsistencias" && (
+                <div>
+                  {inconsistencies.length > 0 ? (
+                    <>
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="font-semibold flex items-center gap-2 text-sm">
                           <FileWarning className="w-4 h-4 text-amber-500" />
-                          Inconsistências para Resolver ({filteredInconsistencias.length})
+                          Inconsistências ({inconsistencies.length})
                         </h3>
-                        <Input placeholder="Buscar funcionário..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-64 h-8 text-sm" />
+                        <Input placeholder="Buscar funcionário..." value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} className="w-64 h-8 text-sm" />
                       </div>
                       <div className="border rounded-lg overflow-auto max-h-[500px]">
                         <table className="w-full text-sm">
@@ -1223,52 +1291,51 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
                               <th className="text-left px-3 py-2 font-medium">Tipo</th>
                               <th className="text-left px-3 py-2 font-medium">Batidas</th>
                               <th className="text-left px-3 py-2 font-medium">Obra</th>
-                              <th className="text-left px-3 py-2 font-medium">Origem</th>
+                              <th className="text-center px-3 py-2 font-medium">Status</th>
                               <th className="text-center px-3 py-2 font-medium">Ação</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {filteredInconsistencias.slice(0, showAll ? undefined : 30).map((r: any) => {
-                              const origem = ORIGEM_LABELS[r.origem_registro] || { label: r.origem_registro, color: "bg-gray-100 text-gray-600" };
-                              return (
-                                <tr key={r.id} className="border-t hover:bg-amber-50/50">
-                                  <td className="px-3 py-2">
-                                    <div className="font-medium">{r.nomeCompleto}</div>
-                                    <div className="text-xs text-muted-foreground">{r.codigoInterno} — {r.funcao}</div>
-                                  </td>
-                                  <td className="px-3 py-2 whitespace-nowrap">{r.data}</td>
-                                  <td className="px-3 py-2">
-                                    <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">
-                                      {INCONSISTENCIA_LABELS[r.inconsistencia_tipo] || r.inconsistencia_tipo}
-                                    </Badge>
-                                  </td>
-                                  <td className="px-3 py-2 font-mono text-xs">
-                                    {r.entrada1 || "—"} / {r.saida1 || "—"} / {r.entrada2 || "—"} / {r.saida2 || "—"}
-                                    <div className="text-muted-foreground">{r.num_batidas} batida(s)</div>
-                                  </td>
-                                  <td className="px-3 py-2 text-xs">{r.obraNome || "—"}</td>
-                                  <td className="px-3 py-2">
-                                    <Badge className={`text-xs ${origem.color}`}>{origem.label}</Badge>
-                                  </td>
-                                  <td className="px-3 py-2 text-center">
+                            {inconsistencies.filter((r: any) => !searchFilter || r.nomeCompleto?.toLowerCase().includes(searchFilter.toLowerCase())).slice(0, showAll ? undefined : 30).map((r: any) => (
+                              <tr key={r.id} className="border-t hover:bg-amber-50/50">
+                                <td className="px-3 py-2">
+                                  <div className="font-medium">{r.nomeCompleto}</div>
+                                  <div className="text-xs text-muted-foreground">{r.codigoInterno} — {r.funcao}</div>
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">{r.data}</td>
+                                <td className="px-3 py-2">
+                                  <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">
+                                    {INCONSISTENCIA_LABELS[r.inconsistencia_tipo] || r.inconsistencia_tipo}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 py-2 font-mono text-xs">
+                                  {r.entrada1 || "—"} / {r.saida1 || "—"} / {r.entrada2 || "—"} / {r.saida2 || "—"}
+                                  <div className="text-muted-foreground">{r.num_batidas} batida(s)</div>
+                                </td>
+                                <td className="px-3 py-2 text-xs">{r.obraNome || "—"}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <Badge className={`text-xs ${Number(r.inconsistencia_resolvida) === 1 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {Number(r.inconsistencia_resolvida) === 1 ? 'Resolvida' : 'Pendente'}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {Number(r.inconsistencia_resolvida) !== 1 && (
                                     <Button size="sm" variant="outline" onClick={() => onResolverInconsistencia(r)} className="text-xs">
                                       <Wrench className="w-3.5 h-3.5 mr-1" /> Resolver
                                     </Button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
-                        {filteredInconsistencias.length > 30 && !showAll && (
+                        {inconsistencies.length > 30 && !showAll && (
                           <div className="text-center py-2 border-t">
-                            <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
-                              Ver todos ({filteredInconsistencias.length})
-                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>Ver todos ({inconsistencies.length})</Button>
                           </div>
                         )}
                       </div>
-                    </div>
+                    </>
                   ) : (
                     <div className="text-center py-12 text-muted-foreground">
                       <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
@@ -1276,18 +1343,20 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
                       <p className="text-sm mt-1">Todos os registros de ponto estão consistentes.</p>
                     </div>
                   )}
-                </TabsContent>
+                </div>
+              )}
 
-                {/* TAB: Sobreposições de Obras */}
-                <TabsContent value="sobreposicoes" className="mt-4">
-                  {sobreposicoes.length > 0 ? (
-                    <div>
+              {/* VIEW: Conflitos de Obras */}
+              {viewMode === "conflitos" && (
+                <div>
+                  {conflitos.length > 0 ? (
+                    <>
                       <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
                         <div className="flex items-center gap-2">
                           <Scale className="w-5 h-5 text-purple-600" />
-                          <span className="font-semibold text-purple-800">{sobreposicoes.length} sobreposição(ões) de obras detectada(s)</span>
+                          <span className="font-semibold text-purple-800">{conflitos.length} conflito(s) de obras detectado(s)</span>
                         </div>
-                        <p className="text-xs text-purple-700 mt-1">Funcionários que bateram ponto em mais de uma obra no mesmo dia. Verifique se o rateio está correto.</p>
+                        <p className="text-xs text-purple-700 mt-1">Funcionários que bateram ponto em mais de uma obra no mesmo dia.</p>
                       </div>
                       <div className="border rounded-lg overflow-auto max-h-[500px]">
                         <table className="w-full text-sm">
@@ -1299,16 +1368,16 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
                             </tr>
                           </thead>
                           <tbody>
-                            {sobreposicoes.map((s, idx) => (
+                            {conflitos.map((c: any, idx: number) => (
                               <tr key={idx} className="border-t hover:bg-purple-50/50">
                                 <td className="px-3 py-2">
-                                  <div className="font-medium">{s.nome}</div>
-                                  <div className="text-xs text-muted-foreground">{s.funcao}</div>
+                                  <div className="font-medium">{c.employeeName}</div>
+                                  <div className="text-xs text-muted-foreground">{c.employeeCode}</div>
                                 </td>
-                                <td className="px-3 py-2 whitespace-nowrap">{s.data}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">{c.data} <span className="text-muted-foreground text-xs">({dayOfWeek(c.data)})</span></td>
                                 <td className="px-3 py-2">
                                   <div className="space-y-1">
-                                    {s.obras.map((o: any, i: number) => (
+                                    {(c.obras || []).map((o: any, i: number) => (
                                       <div key={i} className="flex items-center gap-2">
                                         <Badge variant="outline" className="text-xs text-purple-700 border-purple-300">{o.obraNome}</Badge>
                                         <span className="font-mono text-xs text-muted-foreground">
@@ -1323,73 +1392,16 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
                           </tbody>
                         </table>
                       </div>
-                    </div>
+                    </>
                   ) : (
                     <div className="text-center py-12 text-muted-foreground">
                       <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
-                      <p className="font-medium text-green-700">Nenhuma sobreposição de obras</p>
+                      <p className="font-medium text-green-700">Nenhum conflito de obras</p>
                       <p className="text-sm mt-1">Nenhum funcionário bateu ponto em mais de uma obra no mesmo dia.</p>
                     </div>
                   )}
-                </TabsContent>
-
-                {/* TAB: Ponto Detalhado */}
-                <TabsContent value="ponto" className="mt-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-sm">Registros Diários ({(timecards || []).length})</h3>
-                    <Input placeholder="Buscar funcionário..." value={pontoFilter} onChange={(e) => setPontoFilter(e.target.value)} className="w-64 h-8 text-sm" />
-                  </div>
-                  <div className="border rounded-lg overflow-auto max-h-[500px]">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 sticky top-0">
-                        <tr>
-                          <th className="text-left px-2 py-2 font-medium">Funcionário</th>
-                          <th className="text-left px-2 py-2 font-medium">Data</th>
-                          <th className="text-center px-2 py-2 font-medium">Ent.1</th>
-                          <th className="text-center px-2 py-2 font-medium">Saí.1</th>
-                          <th className="text-center px-2 py-2 font-medium">Ent.2</th>
-                          <th className="text-center px-2 py-2 font-medium">Saí.2</th>
-                          <th className="text-center px-2 py-2 font-medium">Horas</th>
-                          <th className="text-center px-2 py-2 font-medium">HE</th>
-                          <th className="text-center px-2 py-2 font-medium">Status</th>
-                          <th className="text-left px-2 py-2 font-medium">Obra</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(timecards || []).filter((t: any) => !pontoFilter || t.nomeCompleto?.toLowerCase().includes(pontoFilter.toLowerCase())).slice(0, showAllPonto ? undefined : 50).map((tc: any) => {
-                          const statusColor = tc.statusDia === "escuro" ? "bg-purple-100 text-purple-700" : tc.isFalta ? "bg-red-100 text-red-700" : tc.isAtraso ? "bg-amber-100 text-amber-700" : tc.is_inconsistente ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700";
-                          const statusLabel = tc.statusDia === "escuro" ? "Escuro" : Number(tc.isFalta) ? "Falta" : Number(tc.isAtraso) ? "Atraso" : Number(tc.is_inconsistente) ? "Incons." : "OK";
-                          return (
-                            <tr key={tc.id} className={`border-t hover:bg-gray-50 ${Number(tc.isFalta) ? 'bg-red-50/30' : ''} ${tc.statusDia === 'escuro' ? 'bg-purple-50/20' : ''}`}>
-                              <td className="px-2 py-1.5">
-                                <div className="font-medium">{tc.nomeCompleto}</div>
-                              </td>
-                              <td className="px-2 py-1.5 whitespace-nowrap">{tc.data}</td>
-                              <td className="text-center px-2 py-1.5 font-mono">{tc.entrada1 || "—"}</td>
-                              <td className="text-center px-2 py-1.5 font-mono">{tc.saida1 || "—"}</td>
-                              <td className="text-center px-2 py-1.5 font-mono">{tc.entrada2 || "—"}</td>
-                              <td className="text-center px-2 py-1.5 font-mono">{tc.saida2 || "—"}</td>
-                              <td className="text-center px-2 py-1.5 font-mono">{tc.horasTrabalhadas || "—"}</td>
-                              <td className="text-center px-2 py-1.5 font-mono">{tc.horasExtras && tc.horasExtras !== "0:00" ? <span className="text-blue-600">{tc.horasExtras}</span> : "—"}</td>
-                              <td className="text-center px-2 py-1.5">
-                                <Badge className={`text-[10px] ${statusColor}`}>{statusLabel}</Badge>
-                              </td>
-                              <td className="px-2 py-1.5 text-xs">{tc.obraNome || "—"}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {(timecards || []).length > 50 && !showAllPonto && (
-                      <div className="text-center py-2 border-t">
-                        <Button variant="ghost" size="sm" onClick={() => setShowAllPonto(true)}>
-                          Ver todos ({(timecards || []).length} registros)
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
+                </div>
+              )}
 
               {/* Action bar */}
               <div className="text-center pt-6 border-t mt-6">
@@ -1407,10 +1419,10 @@ function StepProcessarPonto({ currentStatus, timecards, inconsistencias, resumoI
             </>
           )}
 
-          {!isProcessed && currentStatus === "aberta" && (
+          {!isProcessed && (
             <div className="text-center py-8 text-muted-foreground">
               <Clock className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>Clique em "Processar Ponto" para importar os registros do período.</p>
+              <p>Importe os arquivos DIXI acima e clique em "Processar Ponto" para gerar os registros do período.</p>
             </div>
           )}
         </CardContent>

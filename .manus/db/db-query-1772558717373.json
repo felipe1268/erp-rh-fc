@@ -1,0 +1,148 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'timecard_daily' ORDER BY ORDINAL_POSITION",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'timecard_daily' ORDER BY ORDINAL_POSITION",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "employeeId"
+    },
+    {
+      "COLUMN_NAME": "data"
+    },
+    {
+      "COLUMN_NAME": "mesCompetencia"
+    },
+    {
+      "COLUMN_NAME": "statusDia"
+    },
+    {
+      "COLUMN_NAME": "entrada1"
+    },
+    {
+      "COLUMN_NAME": "saida1"
+    },
+    {
+      "COLUMN_NAME": "entrada2"
+    },
+    {
+      "COLUMN_NAME": "saida2"
+    },
+    {
+      "COLUMN_NAME": "entrada3"
+    },
+    {
+      "COLUMN_NAME": "saida3"
+    },
+    {
+      "COLUMN_NAME": "horasTrabalhadas"
+    },
+    {
+      "COLUMN_NAME": "horasExtras"
+    },
+    {
+      "COLUMN_NAME": "horasNoturnas"
+    },
+    {
+      "COLUMN_NAME": "isFalta"
+    },
+    {
+      "COLUMN_NAME": "isAtraso"
+    },
+    {
+      "COLUMN_NAME": "isSaidaAntecipada"
+    },
+    {
+      "COLUMN_NAME": "minutosAtraso"
+    },
+    {
+      "COLUMN_NAME": "minutosSaidaAntecipada"
+    },
+    {
+      "COLUMN_NAME": "tipoDia"
+    },
+    {
+      "COLUMN_NAME": "timeRecordId"
+    },
+    {
+      "COLUMN_NAME": "obraId"
+    },
+    {
+      "COLUMN_NAME": "origem_registro"
+    },
+    {
+      "COLUMN_NAME": "num_batidas"
+    },
+    {
+      "COLUMN_NAME": "is_inconsistente"
+    },
+    {
+      "COLUMN_NAME": "inconsistencia_tipo"
+    },
+    {
+      "COLUMN_NAME": "resolucao_tipo"
+    },
+    {
+      "COLUMN_NAME": "resolucao_obs"
+    },
+    {
+      "COLUMN_NAME": "resolucao_em"
+    },
+    {
+      "COLUMN_NAME": "resolucao_por"
+    },
+    {
+      "COLUMN_NAME": "atestado_id"
+    },
+    {
+      "COLUMN_NAME": "advertencia_id"
+    },
+    {
+      "COLUMN_NAME": "obra_secundaria_id"
+    },
+    {
+      "COLUMN_NAME": "rateio_percentual"
+    },
+    {
+      "COLUMN_NAME": "statusAnterior"
+    },
+    {
+      "COLUMN_NAME": "afericaoResultado"
+    },
+    {
+      "COLUMN_NAME": "afericaoObs"
+    },
+    {
+      "COLUMN_NAME": "afericaoEm"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "updatedAt"
+    },
+    {
+      "COLUMN_NAME": "inconsistencia_resolvida"
+    },
+    {
+      "COLUMN_NAME": "inconsistencia_resolucao"
+    },
+    {
+      "COLUMN_NAME": "inconsistencia_obs"
+    },
+    {
+      "COLUMN_NAME": "inconsistencia_resolvida_por"
+    },
+    {
+      "COLUMN_NAME": "inconsistencia_resolvida_em"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncompanyId\nemployeeId\ndata\nmesCompetencia\nstatusDia\nentrada1\nsaida1\nentrada2\nsaida2\nentrada3\nsaida3\nhorasTrabalhadas\nhorasExtras\nhorasNoturnas\nisFalta\nisAtraso\nisSaidaAntecipada\nminutosAtraso\nminutosSaidaAntecipada\ntipoDia\ntimeRecordId\nobraId\norigem_registro\nnum_batidas\nis_inconsistente\ninconsistencia_tipo\nresolucao_tipo\nresolucao_obs\nresolucao_em\nresolucao_por\natestado_id\nadvertencia_id\nobra_secundaria_id\nrateio_percentual\nstatusAnterior\nafericaoResultado\nafericaoObs\nafericaoEm\ncreatedAt\nupdatedAt\ninconsistencia_resolvida\ninconsistencia_resolucao\ninconsistencia_obs\ninconsistencia_resolvida_por\ninconsistencia_resolvida_em\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}
