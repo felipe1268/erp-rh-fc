@@ -4401,3 +4401,15 @@
 - [x] Restaurar Fechamento de Ponto e Folha de Pagamento no sidebar (sem rollback destrutivo)
 - [x] Verificar que Cartão de Ponto e Folha de Pagamento funcionam corretamente
 - [x] Remover Gestão de Competências do menu (movida para DEPRECATED_PATHS)
+
+## Fase 81: Integração Opção A — PayrollEngine + Fechamento de Ponto + Folha de Pagamento
+- [x] Backend: consolidarMes do fechamentoPonto dispara processarPonto do payrollEngine automaticamente
+- [x] Backend: criar/abrir payroll_period automaticamente ao consolidar
+- [x] Frontend Folha: adicionar seção "Cálculo Interno" no topo
+- [x] Frontend Folha: botão "Calcular Vale" (40% + HE do ponto real)
+- [x] Frontend Folha: botão "Simular Pagamento" (100% - descontos)
+- [x] Frontend Folha: botão "Aferir Escuro" (comparar escuro com ponto real do mês seguinte)
+- [ ] Frontend Folha: melhorar verificação cruzada (cálculo interno vs PDF contabilidade, valor por valor) — já funcional, melhoria incremental
+- [x] Testar fluxo completo no navegador
+- [x] Corrigir mapeamento de campos Vale: valorAdiantamento, valorHE, valorTotalVale
+- [x] Corrigir mapeamento de campos Pagamento: descontoAdiantamento, descontoInss, salarioLiquido, descontoFgts

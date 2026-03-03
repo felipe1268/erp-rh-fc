@@ -1515,7 +1515,194 @@ export const fechamentoPontoRouter = router({
           observacoes: input.observacoes || null,
         });
       }
-      return { success: true, consolidadoPor: ctx.user?.name || 'RH', consolidadoEm: now };
+      // After consolidation, auto-trigger payrollEngine processarPonto
+      // This creates/opens the payroll period and generates timecard_daily from time_records
+      let payrollResult = null;
+      try {
+        // 1. Ensure payroll_period exists for this competencia
+        const [existingPeriod] = await db.execute(sql`
+          SELECT id, status FROM payroll_periods 
+          WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} LIMIT 1
+        `) as any[];
+        
+        if (!existingPeriod[0]) {
+          // Create the payroll period with the correct date ranges
+          const [yearStr, monthStr] = input.mesReferencia.split('-');
+          const year = parseInt(yearStr), month = parseInt(monthStr);
+          const prevMonth = month === 1 ? 12 : month - 1;
+          const prevYear = month === 1 ? year - 1 : year;
+          const diaCorte = 15; // default, could read from criteria
+          const pontoInicio = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
+          const pontoFim = `${year}-${String(month).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
+          const lastDay = new Date(year, month, 0).getDate();
+          const escuroInicio = `${year}-${String(month).padStart(2, '0')}-${String(diaCorte + 1).padStart(2, '0')}`;
+          const escuroFim = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+          
+          const [empCount] = await db.execute(sql`
+            SELECT COUNT(*) as total FROM employees 
+            WHERE companyId = ${input.companyId} AND tipoContrato = 'CLT' AND status IN ('Ativo', 'Ferias') AND deletedAt IS NULL
+          `) as any[];
+          
+          await db.execute(sql`
+            INSERT INTO payroll_periods (companyId, mesReferencia, pontoInicio, pontoFim, escuroInicio, escuroFim, status, totalFuncionarios)
+            VALUES (${input.companyId}, ${input.mesReferencia}, ${pontoInicio}, ${pontoFim}, ${escuroInicio}, ${escuroFim}, 'aberta', ${empCount[0]?.total || 0})
+          `);
+        } else if (existingPeriod[0].status !== 'aberta' && existingPeriod[0].status !== 'ponto_importado') {
+          // Period exists but already advanced - don't reprocess
+          console.log(`[consolidarMes] Payroll period already at status '${existingPeriod[0].status}', skipping processarPonto`);
+          return { success: true, consolidadoPor: ctx.user?.name || 'RH', consolidadoEm: now, payrollResult: null };
+        }
+        
+        // 2. Call processarPonto logic inline (reads time_records, generates timecard_daily)
+        // Import the necessary schemas
+        const { timeRecords: trSchema, systemCriteria: scSchema } = await import('../../drizzle/schema');
+        
+        // Get criteria
+        const criteriaRows = await db.select().from(scSchema).where(eq(scSchema.companyId, input.companyId));
+        const criteriaMap: Record<string, string> = {};
+        for (const r of criteriaRows) criteriaMap[r.chave] = r.valor;
+        const diaCorte = parseInt(criteriaMap['ponto_dia_corte'] || '15');
+        const cargaHorariaDiaria = parseInt(criteriaMap['jornada_horas_diarias'] || '8');
+        const toleranciaAtraso = parseInt(criteriaMap['ponto_tolerancia_atraso'] || '10');
+        const faltaAposAtraso = parseInt(criteriaMap['ponto_falta_apos_atraso'] || '120');
+        const toleranciaSaida = parseInt(criteriaMap['ponto_tolerancia_saida'] || '10');
+        const sabadoTipo = criteriaMap['jornada_sabado_tipo'] || 'compensado';
+        const fecharNoEscuro = criteriaMap['fechar_no_escuro'] !== 'nao';
+        
+        const [yearStr2, monthStr2] = input.mesReferencia.split('-');
+        const year2 = parseInt(yearStr2), month2 = parseInt(monthStr2);
+        const prevMonth2 = month2 === 1 ? 12 : month2 - 1;
+        const prevYear2 = month2 === 1 ? year2 - 1 : year2;
+        const pontoInicio2 = `${prevYear2}-${String(prevMonth2).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
+        const pontoFim2 = `${year2}-${String(month2).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
+        const lastDay2 = new Date(year2, month2, 0).getDate();
+        
+        // Get employees
+        const empList = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, valorHora: employees.valorHora, salarioBase: employees.salarioBase })
+          .from(employees)
+          .where(and(eq(employees.companyId, input.companyId), eq(employees.tipoContrato, 'CLT'), sql`${employees.status} IN ('Ativo', 'Ferias')`, sql`${employees.deletedAt} IS NULL`));
+        
+        // Get time_records for ponto period
+        const records = await db.select().from(trSchema)
+          .where(and(eq(trSchema.companyId, input.companyId), sql`${trSchema.data} >= ${pontoInicio2}`, sql`${trSchema.data} <= ${pontoFim2}`));
+        
+        const recordMap = new Map<string, any[]>();
+        for (const r of records) {
+          const key = `${r.employeeId}-${r.data}`;
+          if (!recordMap.has(key)) recordMap.set(key, []);
+          recordMap.get(key)!.push(r);
+        }
+        
+        // Clear existing timecard_daily
+        await db.execute(sql`DELETE FROM timecard_daily WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}`);
+        
+        let totalInserted = 0, totalFaltas = 0, totalAtrasos = 0;
+        const _minutesToHHMM = (mins: number) => { const h = Math.floor(Math.abs(mins) / 60); const m = Math.abs(mins) % 60; return `${mins < 0 ? '-' : ''}${h}:${String(m).padStart(2, '0')}`; };
+        const _parseTime = (str: string | null | undefined): number | null => { if (!str) return null; const parts = str.split(':'); if (parts.length < 2) return null; const h = parseInt(parts[0]), m = parseInt(parts[1]); if (isNaN(h) || isNaN(m)) return null; return h * 60 + m; };
+        const _getDateRange = (start: string, end: string): string[] => { const dates: string[] = []; const s = new Date(start + 'T12:00:00Z'); const e = new Date(end + 'T12:00:00Z'); const c = new Date(s); while (c <= e) { dates.push(c.toISOString().substring(0, 10)); c.setUTCDate(c.getUTCDate() + 1); } return dates; };
+        
+        for (const emp of empList) {
+          const pontoDates = _getDateRange(pontoInicio2, pontoFim2);
+          for (const dateStr of pontoDates) {
+            const dow = new Date(dateStr + 'T12:00:00Z').getUTCDay();
+            if (dow === 0) continue;
+            const key = `${emp.id}-${dateStr}`;
+            const recs = recordMap.get(key) || [];
+            let tipoDia = 'util';
+            if (dow === 6) tipoDia = sabadoTipo === 'compensado' ? 'compensado' : 'sabado';
+            let isFalta = 0, isAtraso = 0, isSaidaAntecipada = 0, minutosAtraso = 0, minutosSaidaAntecipada = 0;
+            let horasTrabalhadas = '0:00', horasExtras = '0:00', horasNoturnas = '0:00';
+            let origemRegistro = 'dixi', numBatidas = 0, isInconsistente = 0;
+            let inconsistenciaTipo: string | null = null, obraId: number | null = null;
+            let obraSecundariaId: number | null = null, rateioPercentual: number | null = null, timeRecordId: number | null = null;
+            
+            if (recs.length > 0) {
+              const rec = recs[0];
+              timeRecordId = rec.id; obraId = rec.obraId || null;
+              horasTrabalhadas = rec.horasTrabalhadas || '0:00'; horasExtras = rec.horasExtras || '0:00'; horasNoturnas = rec.horasNoturnas || '0:00';
+              numBatidas = [rec.entrada1, rec.saida1, rec.entrada2, rec.saida2, rec.entrada3, rec.saida3].filter(Boolean).length;
+              if (recs.length > 1) {
+                obraSecundariaId = recs[1].obraId || null;
+                const totalMinsPrimary = _parseTime(rec.horasTrabalhadas) || 0;
+                const totalMinsSecondary = _parseTime(recs[1].horasTrabalhadas) || 0;
+                const totalMins = totalMinsPrimary + totalMinsSecondary;
+                rateioPercentual = totalMins > 0 ? Math.round((totalMinsPrimary / totalMins) * 100) : 50;
+                origemRegistro = 'rateado';
+                horasTrabalhadas = _minutesToHHMM(totalMins);
+                horasExtras = _minutesToHHMM((_parseTime(rec.horasExtras) || 0) + (_parseTime(recs[1].horasExtras) || 0));
+              }
+              if (numBatidas > 0 && numBatidas % 2 !== 0) { isInconsistente = 1; inconsistenciaTipo = 'batida_impar'; }
+              else if (!rec.entrada1 && rec.saida1) { isInconsistente = 1; inconsistenciaTipo = 'entrada_faltando'; }
+              else if (rec.entrada1 && !rec.saida1 && numBatidas === 1) { isInconsistente = 1; inconsistenciaTipo = 'saida_faltando'; }
+              if (numBatidas === 0 && tipoDia === 'util') { isFalta = 1; totalFaltas++; }
+              const entrada = _parseTime(rec.entrada1);
+              if (entrada !== null && tipoDia === 'util') {
+                const atraso = entrada - 7 * 60;
+                if (atraso > faltaAposAtraso) { isFalta = 1; totalFaltas++; }
+                else if (atraso > toleranciaAtraso) { isAtraso = 1; minutosAtraso = atraso; totalAtrasos++; }
+              }
+              const saida = _parseTime(rec.saida2 || rec.saida1);
+              if (saida !== null && tipoDia === 'util') {
+                const saidaAnt = (7 + cargaHorariaDiaria + 1) * 60 - saida;
+                if (saidaAnt > toleranciaSaida) { isSaidaAntecipada = 1; minutosSaidaAntecipada = saidaAnt; }
+              }
+            } else {
+              if (tipoDia === 'util') { isFalta = 1; totalFaltas++; }
+            }
+            
+            await db.execute(sql`
+              INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
+                entrada1, saida1, entrada2, saida2, entrada3, saida3,
+                horasTrabalhadas, horasExtras, horasNoturnas,
+                isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
+                tipoDia, timeRecordId, obraId, origem_registro, num_batidas, is_inconsistente, inconsistencia_tipo,
+                obra_secundaria_id, rateio_percentual)
+              VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'registrado',
+                ${recs[0]?.entrada1 || null}, ${recs[0]?.saida1 || null}, ${recs[0]?.entrada2 || null}, ${recs[0]?.saida2 || null}, ${recs[0]?.entrada3 || null}, ${recs[0]?.saida3 || null},
+                ${horasTrabalhadas}, ${horasExtras}, ${horasNoturnas},
+                ${isFalta}, ${isAtraso}, ${isSaidaAntecipada}, ${minutosAtraso}, ${minutosSaidaAntecipada},
+                ${tipoDia}, ${timeRecordId}, ${obraId}, ${origemRegistro}, ${numBatidas}, ${isInconsistente}, ${inconsistenciaTipo},
+                ${obraSecundariaId}, ${rateioPercentual})
+            `);
+            totalInserted++;
+          }
+          
+          // Escuro days
+          if (fecharNoEscuro) {
+            for (let d = diaCorte + 1; d <= lastDay2; d++) {
+              const dateStr = `${year2}-${String(month2).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+              const dow = new Date(dateStr + 'T12:00:00Z').getUTCDay();
+              if (dow === 0) continue;
+              let tipoDia = 'util';
+              if (dow === 6) tipoDia = sabadoTipo === 'compensado' ? 'compensado' : 'sabado';
+              await db.execute(sql`
+                INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
+                  horasTrabalhadas, horasExtras, horasNoturnas, isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
+                  tipoDia, origem_registro, num_batidas, is_inconsistente)
+                VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'escuro',
+                  ${_minutesToHHMM(cargaHorariaDiaria * 60)}, '0:00', '0:00', 0, 0, 0, 0, 0,
+                  ${tipoDia}, 'escuro', 0, 0)
+              `);
+              totalInserted++;
+            }
+          }
+        }
+        
+        // Update payroll period status
+        await db.execute(sql`
+          UPDATE payroll_periods SET status = 'ponto_importado', pontoImportadoEm = NOW(), pontoImportadoPor = ${ctx.user?.name || 'Sistema'}
+          WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
+        `);
+        
+        payrollResult = { totalFuncionarios: empList.length, totalRegistros: totalInserted, totalFaltas, totalAtrasos };
+        console.log(`[consolidarMes] PayrollEngine processarPonto: ${empList.length} funcionários, ${totalInserted} registros`);
+      } catch (payrollErr: any) {
+        console.error('[consolidarMes] Erro ao processar ponto no payrollEngine:', payrollErr.message);
+        // Don't fail the consolidation if payroll processing fails
+        payrollResult = { error: payrollErr.message };
+      }
+      
+      return { success: true, consolidadoPor: ctx.user?.name || 'RH', consolidadoEm: now, payrollResult };
     }),
 
   desconsolidarMes: protectedProcedure
