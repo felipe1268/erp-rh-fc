@@ -99,7 +99,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
       { icon: CreditCard, label: "Crachás", path: "/crachas" },
-      { icon: ClipboardPlus, label: "Lançar Atestados", path: "/controle-documentos?tab=atestados&action=nova" },
+      { icon: ClipboardPlus, label: "Lançar Atestados", path: "/controle-documentos?tab=atestados" },
       { icon: ShieldAlert, label: "Advertências", path: "/controle-documentos?tab=advertencias" },
     ],
   },
@@ -831,7 +831,9 @@ function DashboardLayoutContent({
                 {(isCollapsed || expandedSections[section.title]) ? (
                   <SidebarMenu className="px-2 py-0.5">
                     {section.items.map((item: any) => {
-                      const isActive = location === item.path;
+                      const isActive = item.path.includes('?')
+                        ? location === item.path.split('?')[0]
+                        : location === item.path;
                       return (
                         <SidebarMenuItem key={item.path}>
                           <SidebarMenuButton
@@ -842,8 +844,15 @@ function DashboardLayoutContent({
                                 return;
                               }
                               if (item.path.includes('?')) {
-                                // wouter doesn't support query params, use native navigation
-                                window.location.href = window.location.origin + item.path;
+                                // wouter doesn't support query params - store params in sessionStorage and navigate with setLocation
+                                const [basePath, queryString] = item.path.split('?');
+                                sessionStorage.setItem('_navParams', queryString);
+                                // If already on the same base path, force re-read by dispatching a custom event
+                                if (location === basePath) {
+                                  window.dispatchEvent(new Event('navParamsUpdated'));
+                                } else {
+                                  setLocation(basePath);
+                                }
                               } else {
                                 setLocation(item.path);
                               }

@@ -541,7 +541,6 @@ export default function ControleDocumentos() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("aso");
-  const [advPreFillApplied, setAdvPreFillApplied] = useState(false);
 
   // ============ QUERIES ============
   const { data: resumo } = trpc.docs.resumo.useQuery({ companyId }, { enabled: !!companyId });
@@ -606,12 +605,16 @@ export default function ControleDocumentos() {
   const [atestForm, setAtestForm] = useState<any>({});
   const [advForm, setAdvForm] = useState<any>({});
 
-  // ============ PRE-FILL FROM URL PARAMS (sidebar shortcuts) ============
-  useEffect(() => {
-    if (advPreFillApplied) return;
-    const params = new URLSearchParams(window.location.search);
+  // ============ PRE-FILL FROM URL/SESSION PARAMS (sidebar shortcuts) ============
+  const applyNavParams = useCallback(() => {
+    // Check sessionStorage first (from sidebar navigation), then URL params (from direct link)
+    const stored = sessionStorage.getItem('_navParams');
+    const params = stored
+      ? new URLSearchParams(stored)
+      : new URLSearchParams(window.location.search);
     const tab = params.get("tab");
     const action = params.get("action");
+    if (stored) sessionStorage.removeItem('_navParams');
     if (tab === "advertencias") {
       setActiveTab("advertencias");
       if (action === "nova") {
@@ -636,19 +639,24 @@ export default function ControleDocumentos() {
       }
       // Clean URL params without reload
       window.history.replaceState({}, "", window.location.pathname);
-      setAdvPreFillApplied(true);
     } else if (tab === "atestados") {
       setActiveTab("atestados");
-      if (action === "nova") {
-        setEditingAtestId(null);
-        setAtestForm({});
-        setShowAtestDialog(true);
-      }
       // Clean URL params without reload
       window.history.replaceState({}, "", window.location.pathname);
-      setAdvPreFillApplied(true);
     }
-  }, [advPreFillApplied]);
+  }, []);
+
+  // Run on mount
+  useEffect(() => {
+    applyNavParams();
+  }, [applyNavParams]);
+
+  // Listen for sidebar re-clicks when already on this page
+  useEffect(() => {
+    const handler = () => applyNavParams();
+    window.addEventListener('navParamsUpdated', handler);
+    return () => window.removeEventListener('navParamsUpdated', handler);
+  }, [applyNavParams]);
 
   // ============ FILTER ============
   const [statusFilter, setStatusFilter] = useState("todos");

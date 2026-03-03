@@ -4094,3 +4094,8 @@
 - [x] Atualizar validação Zod no backend (criar e atualizar processo)
 - [x] Atualizar PainelJuridico.tsx com as novas fases
 - [x] Atualizar datajud.ts para inferir fases corretas (instrução, decisória)
+
+## Rev. 162 - Correção Atalhos Atestados e Sidebar
+- [x] Lançar Atestados deve abrir aba Atestados SEM abrir formulário automaticamente (remover action=nova)
+- [x] Sidebar não deve colapsar seções ao clicar nos atalhos (usar sessionStorage + setLocation ao invés de window.location.href)
+- [x] Suporte a re-clique no atalho quando já está na mesma página (evento customizado navParamsUpdated)
