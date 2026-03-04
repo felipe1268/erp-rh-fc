@@ -4433,3 +4433,19 @@
 ## Fase 85: Correções Urgentes
 - [x] BUG: Botão Consolidar Mês travado em "Consolidando..." - otimizado com batch inserts (200 por vez)
 - [x] Remover card "Total Colaboradores" do Quadro de Pessoal na tela inicial do Painel RH
+
+## Fase 86: Documentação do Fluxo e Bug Inconsistências
+- [ ] Documentar fluxo completo: Upload DIXI → Inconsistências → Consolidação → Folha → Aferição
+- [ ] BUG: Relatório de inconsistências não aparece ao clicar
+
+## Fase 87b: Correção Aferição + Melhoria Inconsistências + Conferência Contabilidade
+- [x] Backend: aferição gera alerta pendente_decisao quando não há registro real no escuro
+- [x] Backend: procedure decidirAfericao para decisão do usuário (erro relógio vs falta real)
+- [x] Backend: procedure listarAlertasAfericao para buscar alertas pendentes
+- [x] Frontend: tela alertas_afericao com botões Erro Relógio / Falta Real
+- [x] Frontend: card de inconsistências no Fechamento de Ponto (já funcional)
+- [x] Frontend: expansão individual de inconsistências com detalhes (já funcional)
+- [x] Frontend: card de inconsistências na Folha de Pagamento (já funcional)
+- [x] Documento do fluxo atualizado (Rev. 172)
+- [x] Backend: critério configurável folha_conferencia_contabilidade (obrigatoria/recomendada/opcional)
+- [x] Frontend: dialog de conferência com contabilidade no consolidar pagamento

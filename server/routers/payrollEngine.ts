@@ -133,6 +133,8 @@ async function getPayrollCriteria(db: any, companyId: number) {
     // Controle
     maxFaltasVale: parseInt(map["adiantamento_max_faltas"] || "5"),
     fecharNoEscuro: map["fechar_no_escuro"] !== "nao",
+    // Conferência com Contabilidade: obrigatoria | recomendada | opcional
+    conferenciaContabilidade: (map["folha_conferencia_contabilidade"] || "recomendada") as "obrigatoria" | "recomendada" | "opcional",
   };
 }
 
@@ -722,8 +724,42 @@ export const payrollEngineRouter = router({
               resultado = "ok";
             }
           }
+        } else {
+          // Sem registro real no DIXI → ALERTA para o usuário decidir (erro relógio vs falta real)
+          resultado = "sem_registro";
+          obs = `Sem registro de ponto real no DIXI para ${escuro.data}. Possível erro do relógio ou falta.`;
+          divergencias++;
+
+          // Calcular valor potencial do desconto (caso o usuário decida que é falta)
+          const valorHoraEmpSR = await getEmployeeValorHora(db, escuro.employeeId);
+          const valorFaltaSR = valorHoraEmpSR * criteria.cargaHorariaDiaria;
+          let vrDescontoSR = "0", vtDescontoSR = "0";
+          if (criteria.descontoVrFalta) {
+            const vrVal = await getEmployeeVrDiario(db, escuro.employeeId, input.companyId);
+            vrDescontoSR = formatMoney(vrVal);
+          }
+          if (criteria.descontoVtFalta) {
+            const vtVal = await getEmployeeVtDiario(db, escuro.employeeId);
+            vtDescontoSR = formatMoney(vtVal);
+          }
+          const totalDescSR = valorFaltaSR + parseBRL(vrDescontoSR) + parseBRL(vtDescontoSR);
+
+          // Criar adjustment com status 'pendente_decisao' — NÃO aplica desconto automaticamente
+          await db.execute(sql`
+            INSERT INTO payroll_adjustments (companyId, employeeId, mesOrigem, mesDesconto, data, tipo, descricao,
+              valorDesconto, valorVrDesconto, valorVtDesconto, valorTotal, timecardDailyId, status)
+            VALUES (${input.companyId}, ${escuro.employeeId}, ${prevMes}, ${input.mesReferencia}, ${escuro.data}, 
+              'sem_registro', ${`Sem registro de ponto dia ${escuro.data} — Período no escuro de ${prevMes}. Aguardando decisão: erro do relógio ou falta real.`},
+              ${formatMoney(valorFaltaSR)}, ${vrDescontoSR}, ${vtDescontoSR}, ${formatMoney(totalDescSR)}, ${escuro.id}, 'pendente_decisao')
+          `);
+
+          divergenciasList.push({
+            employeeId: escuro.employeeId,
+            data: escuro.data,
+            tipo: "sem_registro",
+            valorDesconto: totalDescSR,
+          });
         }
-        // If no actual record found but was escuro, keep as "ok" (presume worked)
 
         // Update the timecard_daily record - sobrepor com dados reais do ponto
         if (actual) {
@@ -753,13 +789,13 @@ export const payrollEngineRouter = router({
             WHERE id = ${escuro.id}
           `);
         } else {
-          // Sem registro real → manter como estava (presume que trabalhou)
+          // Sem registro real → marcar como pendente de decisão do usuário
           await db.execute(sql`
             UPDATE timecard_daily SET 
-              statusDia = 'aferido',
+              statusDia = 'pendente_decisao',
               statusAnterior = 'escuro',
-              afericaoResultado = ${resultado},
-              afericaoObs = ${obs || 'Sem registro de ponto real - mantido como trabalhado'},
+              afericaoResultado = 'sem_registro',
+              afericaoObs = ${obs},
               afericaoEm = NOW(),
               isFalta = 0,
               isAtraso = 0
@@ -796,7 +832,106 @@ export const payrollEngineRouter = router({
         `);
       }
 
-      return { totalAferidos, divergencias, divergenciasList, message: `Aferição concluída: ${totalAferidos} dias aferidos, ${divergencias} divergências` };
+      return { totalAferidos, divergencias, divergenciasList, semRegistro: divergenciasList.filter((d: any) => d.tipo === 'sem_registro').length, message: `Aferição concluída: ${totalAferidos} dias aferidos, ${divergencias} divergências` };
+    }),
+
+  // ============================================================
+  // 3b. LISTAR ALERTAS DA AFERIÇÃO (pendente_decisao)
+  // ============================================================
+  listarAlertasAfericao: protectedProcedure
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [rows] = await db.execute(sql`
+        SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
+        FROM payroll_adjustments pa
+        LEFT JOIN employees e ON pa.employeeId = e.id
+        WHERE pa.companyId = ${input.companyId} 
+        AND pa.mesDesconto = ${input.mesReferencia}
+        AND pa.status = 'pendente_decisao'
+        ORDER BY e.nomeCompleto, pa.data
+      `) as any[];
+      return rows || [];
+    }),
+
+  // ============================================================
+  // 3c. DECIDIR ALERTA DA AFERIÇÃO (erro relógio vs falta real)
+  // ============================================================
+  decidirAfericao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      decisoes: z.array(z.object({
+        adjustmentId: z.number(),
+        decisao: z.enum(["erro_relogio", "falta_real"]),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      
+      let errosRelogio = 0;
+      let faltasReais = 0;
+      
+      for (const dec of input.decisoes) {
+        if (dec.decisao === "erro_relogio") {
+          // Erro do relógio: manter como trabalhado, cancelar o adjustment
+          await db.execute(sql`
+            UPDATE payroll_adjustments SET 
+              status = 'cancelado',
+              descricao = CONCAT(descricao, ' [DECISÃO: Erro do relógio - mantido como trabalhado por ${ctx.user.name || "Usuário"}]')
+            WHERE id = ${dec.adjustmentId} AND companyId = ${input.companyId}
+          `);
+          // Atualizar timecard_daily para aferido (trabalhado)
+          const [adjRow] = await db.execute(sql`
+            SELECT timecardDailyId FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
+          `) as any[];
+          const tcId = (adjRow as any[])?.[0]?.timecardDailyId;
+          if (tcId) {
+            await db.execute(sql`
+              UPDATE timecard_daily SET 
+                statusDia = 'aferido',
+                afericaoResultado = 'ok',
+                afericaoObs = CONCAT(IFNULL(afericaoObs, ''), ' [Erro do relógio - mantido como trabalhado]'),
+                isFalta = 0, isAtraso = 0
+              WHERE id = ${tcId}
+            `);
+          }
+          errosRelogio++;
+        } else {
+          // Falta real: aplicar o desconto (mudar status para pendente)
+          await db.execute(sql`
+            UPDATE payroll_adjustments SET 
+              status = 'pendente',
+              tipo = 'falta',
+              descricao = CONCAT(descricao, ' [DECISÃO: Falta real confirmada por ${ctx.user.name || "Usuário"}]')
+            WHERE id = ${dec.adjustmentId} AND companyId = ${input.companyId}
+          `);
+          // Atualizar timecard_daily para falta
+          const [adjRow2] = await db.execute(sql`
+            SELECT timecardDailyId FROM payroll_adjustments WHERE id = ${dec.adjustmentId}
+          `) as any[];
+          const tcId2 = (adjRow2 as any[])?.[0]?.timecardDailyId;
+          if (tcId2) {
+            await db.execute(sql`
+              UPDATE timecard_daily SET 
+                statusDia = 'aferido',
+                afericaoResultado = 'falta',
+                afericaoObs = CONCAT(IFNULL(afericaoObs, ''), ' [Falta real confirmada]'),
+                isFalta = 1
+              WHERE id = ${tcId2}
+            `);
+          }
+          faltasReais++;
+        }
+      }
+      
+      return {
+        errosRelogio,
+        faltasReais,
+        message: `Decisão registrada: ${errosRelogio} erro(s) de relógio, ${faltasReais} falta(s) real(is)`,
+      };
     }),
 
   // ============================================================
@@ -1347,10 +1482,28 @@ export const payrollEngineRouter = router({
   // 8. CONSOLIDAR PAGAMENTO
   // ============================================================
   consolidarPagamento: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), mesReferencia: z.string(), ignorarConferencia: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Verificar critério de conferência com contabilidade
+      const criteria = await getPayrollCriteria(db, input.companyId);
+      if (criteria.conferenciaContabilidade !== 'opcional' && !input.ignorarConferencia) {
+        // Verificar se já fez upload de PDF da contabilidade para este mês
+        const [uploads] = await db.execute(sql`
+          SELECT COUNT(*) as total FROM payroll_uploads
+          WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
+        `) as any[];
+        const totalUploads = uploads?.[0]?.total || 0;
+        if (totalUploads === 0) {
+          if (criteria.conferenciaContabilidade === 'obrigatoria') {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Conferência com contabilidade é OBRIGATÓRIA. Faça o upload do PDF da contabilidade e confira os valores antes de consolidar." });
+          }
+          // Se recomendada, retornar aviso para o frontend decidir
+          return { alertaConferencia: true, message: "Conferência com contabilidade recomendada. Nenhum PDF da contabilidade foi enviado para este mês. Deseja consolidar mesmo assim?" };
+        }
+      }
 
       // Update all payments to consolidated
       await db.execute(sql`

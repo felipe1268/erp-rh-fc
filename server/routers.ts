@@ -1470,6 +1470,8 @@ export const appRouter = router({
         { categoria: "notificacoes", chave: "notif_email_ativo", valor: "1", descricao: "Enviar notificações por e-mail (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "notificacoes", chave: "notif_resumo_diario", valor: "1", descricao: "Enviar resumo diário ao administrador (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "notificacoes", chave: "notif_horario_envio", valor: "08:00", descricao: "Horário padrão para envio de notificações", valorPadraoClt: "08:00", unidade: "hora" },
+        // CONFERÊNCIA COM CONTABILIDADE
+        { categoria: "folha", chave: "folha_conferencia_contabilidade", valor: "recomendada", descricao: "Conferência com contabilidade antes de consolidar pagamento (obrigatoria, recomendada, opcional)", valorPadraoClt: "recomendada", unidade: "opcao" },
         // CONVENÇÃO COLETIVA
         { categoria: "convencao", chave: "convencao_alerta_vencimento_dias", valor: "60", descricao: "Dias antes do vencimento da convenção para alertar", valorPadraoClt: "60", unidade: "dias" },
         { categoria: "convencao", chave: "convencao_aplicar_local_sobre_matriz", valor: "1", descricao: "Aplicar convenção local quando mais vantajosa que a matriz (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },

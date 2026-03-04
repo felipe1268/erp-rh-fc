@@ -44,7 +44,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(str) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao";
 
 export default function FolhaPagamento() {
   const { selectedCompanyId } = useCompany();
@@ -142,10 +142,27 @@ export default function FolhaPagamento() {
   const afericaoMut = trpc.payrollEngine.realizarAfericao.useMutation({
     onSuccess: (data) => {
       setAfericaoResult(data);
-      toast.success(data.message);
+      if ((data.semRegistro || 0) > 0) {
+        toast.warning(`Aferição concluída com ${data.semRegistro} dia(s) sem registro de ponto. Decida se foi erro do relógio ou falta real.`);
+        setViewMode("alertas_afericao");
+      } else {
+        toast.success(data.message);
+      }
       payrollPeriod.refetch();
     },
     onError: (err) => toast.error(`Erro na aferição: ${err.message}`),
+  });
+  const alertasAfericao = trpc.payrollEngine.listarAlertasAfericao.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: !!companyId && !!mesAno }
+  );
+  const decidirAfericaoMut = trpc.payrollEngine.decidirAfericao.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      alertasAfericao.refetch();
+      payrollPeriod.refetch();
+    },
+    onError: (err) => toast.error(`Erro na decisão: ${err.message}`),
   });
   const decidirValeMut = trpc.payrollEngine.decidirVale.useMutation({
     onSuccess: (data) => {
@@ -221,13 +238,24 @@ export default function FolhaPagamento() {
   const [showInconsistDialog, setShowInconsistDialog] = useState(false);
   const [inconsistDialogData, setInconsistDialogData] = useState<{message: string, lancId: number} | null>(null);
 
+  const [conferenciaDialog, setConferenciaDialog] = useState<{ show: boolean; lancId: number; message: string }>({ show: false, lancId: 0, message: "" });
   const consolidarMut = trpc.folha.consolidarLancamento.useMutation({
-    onSuccess: () => { toast.success("Lançamento consolidado!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); },
+    onSuccess: (data) => {
+      if (data.alertaConferencia) {
+        // Modo "recomendada" - mostrar dialog para o usuário decidir
+        setConferenciaDialog({ show: true, lancId: (consolidarMut.variables as any)?.folhaLancamentoId || 0, message: data.message || "Conferência com contabilidade recomendada." });
+      } else {
+        toast.success("Lançamento consolidado!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch();
+      }
+    },
     onError: (err) => {
       if (err.message.includes('Consolidação bloqueada') || err.message.includes('inconsistência')) {
         setInconsistDialogData({ message: err.message, lancId: 0 });
         setShowInconsistDialog(true);
       } else if (err.message.includes('sem obra vinculada')) {
+        setInconsistDialogData({ message: err.message, lancId: 0 });
+        setShowInconsistDialog(true);
+      } else if (err.message.includes('OBRIGATÓRIA')) {
         setInconsistDialogData({ message: err.message, lancId: 0 });
         setShowInconsistDialog(true);
       } else {
@@ -1523,6 +1551,121 @@ export default function FolhaPagamento() {
   }
 
   // ===== CÁLCULO PAGAMENTO VIEW =====
+  if (viewMode === "alertas_afericao") {
+    const alertas = (alertasAfericao.data || []) as any[];
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        {fileInputs}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setViewMode("resumo")}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Alertas da Aferição — Sem Registro de Ponto</h1>
+                <p className="text-sm text-muted-foreground">Funcionários que estavam no período "no escuro" mas não tiveram registro de ponto no DIXI. Decida se foi erro do relógio ou falta real.</p>
+              </div>
+            </div>
+          </div>
+
+          {alertasAfericao.isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Carregando alertas...</div>
+          ) : alertas.length === 0 ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+              <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+              <p className="text-green-800 font-medium">Nenhum alerta pendente de decisão.</p>
+              <p className="text-sm text-green-600 mt-1">Todos os registros da aferição já foram resolvidos.</p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-800">{alertas.length} dia(s) sem registro de ponto</p>
+                    <p className="text-sm text-amber-700 mt-1">Esses funcionários estavam no período "no escuro" e não tiveram batida no relógio de ponto. Escolha para cada um:</p>
+                    <ul className="text-sm text-amber-700 mt-1 list-disc ml-4">
+                      <li><strong>Erro do Relógio</strong>: mantém como trabalhado (sem desconto)</li>
+                      <li><strong>Falta Real</strong>: aplica desconto na folha deste mês</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" className="text-green-700 border-green-300"
+                  disabled={decidirAfericaoMut.isPending}
+                  onClick={() => decidirAfericaoMut.mutate({
+                    companyId, mesReferencia: mesAno,
+                    decisoes: alertas.map((a: any) => ({ adjustmentId: a.id, decisao: "erro_relogio" as const }))
+                  })}>
+                  <CheckCircle className="h-3 w-3 mr-1" /> Todos: Erro do Relógio
+                </Button>
+                <Button size="sm" variant="outline" className="text-red-700 border-red-300"
+                  disabled={decidirAfericaoMut.isPending}
+                  onClick={() => decidirAfericaoMut.mutate({
+                    companyId, mesReferencia: mesAno,
+                    decisoes: alertas.map((a: any) => ({ adjustmentId: a.id, decisao: "falta_real" as const }))
+                  })}>
+                  <XCircle className="h-3 w-3 mr-1" /> Todos: Falta Real
+                </Button>
+              </div>
+
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left p-3 font-medium">Funcionário</th>
+                      <th className="text-left p-3 font-medium">Função</th>
+                      <th className="text-center p-3 font-medium">Data</th>
+                      <th className="text-right p-3 font-medium">Valor Desconto</th>
+                      <th className="text-center p-3 font-medium">Decisão</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alertas.map((a: any) => (
+                      <tr key={a.id} className="border-t hover:bg-amber-50/50">
+                        <td className="p-3">
+                          <div className="font-medium">{a.nomeCompleto || `ID ${a.employeeId}`}</div>
+                          <div className="text-xs text-muted-foreground">{a.codigoInterno}</div>
+                        </td>
+                        <td className="p-3 text-muted-foreground">{a.funcao || '-'}</td>
+                        <td className="p-3 text-center">{a.data ? new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+                        <td className="p-3 text-right font-mono text-red-600">{formatBRL(parseBRLNum(a.valorTotal || '0'))}</td>
+                        <td className="p-3 text-center">
+                          <div className="flex gap-1 justify-center">
+                            <Button size="sm" variant="outline" className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50"
+                              disabled={decidirAfericaoMut.isPending}
+                              onClick={() => decidirAfericaoMut.mutate({
+                                companyId, mesReferencia: mesAno,
+                                decisoes: [{ adjustmentId: a.id, decisao: "erro_relogio" }]
+                              })}>
+                              Erro Relógio
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
+                              disabled={decidirAfericaoMut.isPending}
+                              onClick={() => decidirAfericaoMut.mutate({
+                                companyId, mesReferencia: mesAno,
+                                decisoes: [{ adjustmentId: a.id, decisao: "falta_real" }]
+                              })}>
+                              Falta Real
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (viewMode === "calculo_pagamento" && pagamentoResult) {
     return (
       <DashboardLayout>
@@ -1766,11 +1909,25 @@ export default function FolhaPagamento() {
                   {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
                 </Button>
                 {afericaoResult && (
-                  <div className="mt-2 text-xs text-center">
+                  <div className="mt-2 text-xs text-center space-y-1">
                     <span className="text-purple-700 font-medium">{afericaoResult.totalAferidos} dias aferidos</span>
                     {afericaoResult.divergencias > 0 && (
                       <span className="text-red-600 font-bold ml-2">{afericaoResult.divergencias} divergências</span>
                     )}
+                    {afericaoResult.semRegistro > 0 && (
+                      <div>
+                        <Button size="sm" variant="ghost" className="text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
+                          <AlertTriangle className="h-3 w-3 mr-1" /> {afericaoResult.semRegistro} sem registro - Decidir
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(alertasAfericao.data as any[] || []).length > 0 && !afericaoResult && (
+                  <div className="mt-2 text-center">
+                    <Button size="sm" variant="ghost" className="text-amber-700 text-[10px] h-6" onClick={() => setViewMode("alertas_afericao")}>
+                      <AlertTriangle className="h-3 w-3 mr-1" /> {(alertasAfericao.data as any[]).length} pendente(s) de decisão
+                    </Button>
                   </div>
                 )}
               </div>
@@ -2472,6 +2629,39 @@ export default function FolhaPagamento() {
               </Button>
             </div>
         </FullScreenDialog>
+
+        {/* DIALOG: Conferência com Contabilidade Recomendada */}
+        <Dialog open={conferenciaDialog.show} onOpenChange={(open) => setConferenciaDialog(prev => ({ ...prev, show: open }))}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Conferência com Contabilidade
+              </DialogTitle>
+              <DialogDescription>
+                {conferenciaDialog.message}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-2">
+              <p className="text-sm text-amber-800">
+                <strong>Recomendação:</strong> Faça o upload do PDF da contabilidade e confira os valores antes de consolidar. Isso garante que os cálculos internos estão corretos.
+              </p>
+              <p className="text-xs text-amber-600 mt-2">
+                Você pode alterar este comportamento em <strong>Configurações &gt; Critérios do Sistema &gt; Folha de Pagamento</strong>.
+              </p>
+            </div>
+            <DialogFooter className="gap-2 mt-4">
+              <Button variant="outline" onClick={() => setConferenciaDialog({ show: false, lancId: 0, message: "" })}>Cancelar</Button>
+              <Button variant="default" className="bg-amber-600 hover:bg-amber-700" onClick={() => {
+                const lancId = conferenciaDialog.lancId;
+                setConferenciaDialog({ show: false, lancId: 0, message: "" });
+                consolidarMut.mutate({ folhaLancamentoId: lancId, ignorarConferencia: true });
+              }}>
+                Consolidar Mesmo Assim
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
           <PrintFooterLGPD />
     </DashboardLayout>

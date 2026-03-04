@@ -1388,6 +1388,7 @@ export const folhaPagamentoRouter = router({
   consolidarLancamento: protectedProcedure
     .input(z.object({
       folhaLancamentoId: z.number(),
+      ignorarConferencia: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -1426,6 +1427,33 @@ export const folhaPagamentoRouter = router({
               code: 'BAD_REQUEST',
               message: `Consolidação bloqueada: existem ${totalInconsistencias} inconsistência(s) pendentes.\n\n${detalhes.join('\n')}\n\nResolva todas as inconsistências antes de consolidar, ou desative esta verificação em Configurações > Critérios do Sistema > Folha de Pagamento.`,
             });
+          }
+        }
+      }
+
+      // ===== VERIFICAÇÃO DE CONFERÊNCIA COM CONTABILIDADE =====
+      if (lanc.companyId && (lanc.tipo === 'pagamento' || lanc.tipo === 'vale') && !input.ignorarConferencia) {
+        const criterioConf = await db.select().from(systemCriteria)
+          .where(and(
+            eq(systemCriteria.companyId, lanc.companyId),
+            eq(systemCriteria.chave, 'folha_conferencia_contabilidade')
+          )).limit(1);
+        const modoConf = criterioConf.length > 0 ? criterioConf[0].valor : 'recomendada';
+        if (modoConf !== 'opcional') {
+          // Verificar se existe upload de PDF da contabilidade para este mês e tipo
+          const uploadsConf = await db.select().from(folhaLancamentos)
+            .where(and(
+              eq(folhaLancamentos.companyId, lanc.companyId),
+              eq(folhaLancamentos.mesReferencia, lanc.mesReferencia!),
+              eq(folhaLancamentos.tipo, lanc.tipo!),
+              eq(folhaLancamentos.origem, 'contabilidade')
+            ));
+          if (uploadsConf.length === 0) {
+            if (modoConf === 'obrigatoria') {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `Conferência com contabilidade é OBRIGATÓRIA para consolidar o ${lanc.tipo === 'vale' ? 'Vale' : 'Pagamento'}. Faça o upload do PDF da contabilidade e confira os valores antes de consolidar. Altere em Configurações > Critérios do Sistema > Folha de Pagamento.` });
+            }
+            // Recomendada: retornar alerta
+            return { success: false, alertaConferencia: true, message: `Conferência com contabilidade recomendada. Nenhum PDF da contabilidade foi enviado para o ${lanc.tipo === 'vale' ? 'Vale' : 'Pagamento'} de ${lanc.mesReferencia}. Deseja consolidar mesmo assim?` };
           }
         }
       }
