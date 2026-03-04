@@ -1445,8 +1445,8 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
 
   function handleEdit(r: any) {
     setEditId(r.id); setNome(r.nome); setEmail(r.email);
-    setNotifContratacao(r.notificarContratacao); setNotifDemissao(r.notificarDemissao);
-    setNotifTransferencia(r.notificarTransferencia); setNotifAfastamento(r.notificarAfastamento);
+    setNotifContratacao(Boolean(r.notificarContratacao)); setNotifDemissao(Boolean(r.notificarDemissao));
+    setNotifTransferencia(Boolean(r.notificarTransferencia)); setNotifAfastamento(Boolean(r.notificarAfastamento));
     setShowForm(true);
   }
 

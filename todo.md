@@ -4577,3 +4577,4 @@
 - [x] Frontend: tela de estoque por obra com saldo e entregas
 - [x] Integrar fluxo completo: entrada → transferência → entrega → saldo
 - [x] Tornar filtros da tela de Processos Trabalhistas responsivos (busca + selects)
+- [x] BUG: Erro ao atualizar destinatário de notificação - expected boolean, received number
