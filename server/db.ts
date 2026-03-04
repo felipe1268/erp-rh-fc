@@ -267,6 +267,17 @@ export async function getPermissions(profileId: number) {
 // EMPLOYEES
 // ============================================================
 
+// Números proibidos que devem ser pulados na geração de código interno
+const NUMEROS_PROIBIDOS = new Set([13, 17, 22, 24, 69, 171, 666]);
+
+// Avança o número para o próximo válido (que não esteja na lista de proibidos)
+function proximoNumeroValido(num: number): number {
+  while (NUMEROS_PROIBIDOS.has(num)) {
+    num++;
+  }
+  return num;
+}
+
 export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -287,24 +298,43 @@ export async function createEmployee(data: InsertEmployee) {
   ) as any;
   
   const prefixo = companyRows?.[0]?.prefixoCodigo || 'EMP';
-  const num = companyRows?.[0]?.usedNum || 1;
+  let num = companyRows?.[0]?.usedNum || 1;
+  
+  // Pular números proibidos (13, 17, 22, 24, 69, 171, 666)
+  num = proximoNumeroValido(num);
+  
+  // Se o número foi avançado por causa de proibidos, atualizar o contador da empresa
+  const originalNum = companyRows?.[0]?.usedNum || 1;
+  if (num !== originalNum) {
+    await db.execute(
+      sql`UPDATE companies SET nextCodigoInterno = ${num + 1} WHERE id = ${companyId}`
+    );
+  }
+  
   let codigoInterno = prefixo + String(num).padStart(3, '0');
   
   // Retry with incremented number if duplicate (handles stale nextCodigoInterno)
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
     try {
       const result = await db.insert(employees).values({ ...data, codigoInterno });
       return { id: result[0].insertId, codigoInterno };
     } catch (err: any) {
       if (err?.errno === 1062 && err?.sqlMessage?.includes('idx_codigo_interno')) {
-        // Increment and retry
+        // Increment and retry, pulando números proibidos
         await db.execute(
           sql`UPDATE companies SET nextCodigoInterno = nextCodigoInterno + 1 WHERE id = ${companyId}`
         );
         const [retry] = await db.execute(
           sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum FROM companies WHERE id = ${companyId}`
         ) as any;
-        const retryNum = retry?.[0]?.usedNum || (num + attempt + 1);
+        let retryNum = retry?.[0]?.usedNum || (num + attempt + 1);
+        retryNum = proximoNumeroValido(retryNum);
+        // Atualizar contador se pulou proibidos
+        if (retryNum !== (retry?.[0]?.usedNum || 0)) {
+          await db.execute(
+            sql`UPDATE companies SET nextCodigoInterno = ${retryNum + 1} WHERE id = ${companyId}`
+          );
+        }
         codigoInterno = prefixo + String(retryNum).padStart(3, '0');
         continue;
       }
@@ -400,6 +430,13 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   // Sanitizar nomeCompleto: remover tabs, quebras de linha, espaços extras
   if (sanitized.nomeCompleto && typeof sanitized.nomeCompleto === 'string') {
     sanitized.nomeCompleto = sanitized.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  // Validar código interno: não permitir números proibidos
+  if (sanitized.codigoInterno) {
+    const numPart = parseInt(String(sanitized.codigoInterno).replace(/\D/g, ''));
+    if (!isNaN(numPart) && NUMEROS_PROIBIDOS.has(numPart)) {
+      throw new Error(`Número interno ${numPart} não é permitido. Números proibidos: 13, 17, 22, 24, 69, 171, 666`);
+    }
   }
   if (Object.keys(sanitized).length === 0) return;
   await db.update(employees).set(sanitized).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));

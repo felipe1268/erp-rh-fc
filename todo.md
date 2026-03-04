@@ -4699,3 +4699,11 @@
 - [x] Botão "Analisar Estoque" com loading e resultado
 - [x] Visualização das sugestões com mapa de proximidade
 - [x] Aprovar/rejeitar sugestões da IA
+
+## Revisão de Numeração Interna - Números Proibidos
+
+- [x] Verificar funcionários com números proibidos (13, 17, 22, 24, 69, 171, 666) - Nenhum encontrado
+- [x] Reatribuir funcionários com números proibidos para o próximo número disponível - Não necessário
+- [x] Atualizar lógica de geração automática de número interno para pular números proibidos
+- [x] Adicionar lista de números proibidos nas configurações do sistema
+- [x] Testes da nova lógica de numeração (15 testes passando)
