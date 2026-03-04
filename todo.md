@@ -4584,3 +4584,5 @@
 - [x] Adicionar entrada direta de EPI no estoque da obra (TST local pode cadastrar EPIs que já tem) - botão + dialog + backend mutation
 - [x] Tornar tela de EPIs totalmente responsiva (cards, abas, filtros) - grid responsivo, flex-wrap, overflow-x-auto
 - [x] Badge de Entrada Direta no histórico de transferências (tipo entrada_direta com cor emerald)
+- [x] Tornar cards de estatísticas da tela de EPIs responsivos (scroll horizontal mobile, grid 3 cols tablet, 7 cols desktop)
+- [x] Tornar abas (Catálogo, Entregas, Estoque Obra, Transferências) responsivas com scroll horizontal em mobile

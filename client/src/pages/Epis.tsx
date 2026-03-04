@@ -1471,58 +1471,61 @@ export default function Epis() {
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - scroll horizontal em mobile */}
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
-            <Card className="border-l-4 border-l-blue-500">
-              <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground whitespace-nowrap">Total EPIs</p>
-                <p className="text-lg font-bold">{stats.totalItens}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-green-500">
-              <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Total</p>
-                <p className="text-lg font-bold">{stats.estoqueTotal}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-amber-500">
-              <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Baixo</p>
-                <p className="text-lg font-bold text-amber-600">{stats.estoqueBaixo}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-red-500">
-              <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground whitespace-nowrap">CA Vencido</p>
-                <p className="text-lg font-bold text-red-600">{stats.caVencido}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-purple-500">
-              <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground whitespace-nowrap">Total Entregas</p>
-                <p className="text-lg font-bold">{stats.totalEntregas}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-cyan-500">
-              <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground whitespace-nowrap">Entregas/Mês</p>
-                <p className="text-lg font-bold">{stats.entregasMes}</p>
-              </CardContent>
-            </Card>
-            {!hideEpiValues && <Card className="border-l-4 border-l-emerald-500">
-              <CardContent className="p-3">
-                <p className="text-xs text-muted-foreground whitespace-nowrap">Valor Inventário</p>
-                <p className="text-lg font-bold text-emerald-700">
-                  {stats.valorTotalInventario > 0 ? stats.valorTotalInventario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
-                </p>
-              </CardContent>
-            </Card>}
+          <div className="overflow-x-auto -mx-2 px-2 pb-1">
+            <div className="flex gap-2 sm:gap-3 sm:grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+              <Card className="border-l-4 border-l-blue-500 flex-shrink-0 w-[130px] sm:w-auto">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">Total EPIs</p>
+                  <p className="text-lg font-bold">{stats.totalItens}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-green-500 flex-shrink-0 w-[130px] sm:w-auto">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Total</p>
+                  <p className="text-lg font-bold">{stats.estoqueTotal}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-amber-500 flex-shrink-0 w-[130px] sm:w-auto">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Baixo</p>
+                  <p className="text-lg font-bold text-amber-600">{stats.estoqueBaixo}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-red-500 flex-shrink-0 w-[130px] sm:w-auto">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">CA Vencido</p>
+                  <p className="text-lg font-bold text-red-600">{stats.caVencido}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-purple-500 flex-shrink-0 w-[130px] sm:w-auto">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">Total Entregas</p>
+                  <p className="text-lg font-bold">{stats.totalEntregas}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-cyan-500 flex-shrink-0 w-[130px] sm:w-auto">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">Entregas/Mês</p>
+                  <p className="text-lg font-bold">{stats.entregasMes}</p>
+                </CardContent>
+              </Card>
+              {!hideEpiValues && <Card className="border-l-4 border-l-emerald-500 flex-shrink-0 w-[150px] sm:w-auto">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">Valor Inventário</p>
+                  <p className="text-lg font-bold text-emerald-700">
+                    {stats.valorTotalInventario > 0 ? stats.valorTotalInventario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "—"}
+                  </p>
+                </CardContent>
+              </Card>}
+            </div>
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+        {/* Tabs - scroll horizontal em mobile */}
+        <div className="overflow-x-auto -mx-2 px-2">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-max sm:w-full">
           <button onClick={() => setViewMode("catalogo")}
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "catalogo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <Package className="h-3.5 w-3.5 inline mr-1" /> Catálogo
@@ -1539,6 +1542,7 @@ export default function Epis() {
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "transferencias" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <ArrowLeftRight className="h-3.5 w-3.5 inline mr-1" /> Transferências
           </button>
+          </div>
         </div>
 
         {/* Search + Filters */}
