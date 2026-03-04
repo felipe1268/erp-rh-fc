@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE epi_assinaturas \nADD COLUMN IF NOT EXISTS hash_sha256 VARCHAR(64) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS latitude VARCHAR(20) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS longitude VARCHAR(20) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS geo_accuracy VARCHAR(20) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS termo_aceito TINYINT DEFAULT 0,\nADD COLUMN IF NOT EXISTS texto_termo TEXT DEFAULT NULL,\nADD COLUMN IF NOT EXISTS dispositivo_info TEXT DEFAULT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE epi_assinaturas \nADD COLUMN IF NOT EXISTS hash_sha256 VARCHAR(64) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS latitude VARCHAR(20) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS longitude VARCHAR(20) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS geo_accuracy VARCHAR(20) DEFAULT NULL,\nADD COLUMN IF NOT EXISTS termo_aceito TINYINT DEFAULT 0,\nADD COLUMN IF NOT EXISTS texto_termo TEXT DEFAULT NULL,\nADD COLUMN IF NOT EXISTS dispositivo_info TEXT DEFAULT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1221
+}

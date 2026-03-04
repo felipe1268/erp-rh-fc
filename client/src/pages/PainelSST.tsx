@@ -20,11 +20,16 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
 import { removeAccents } from "@/lib/searchUtils";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 
 export default function PainelSST() {
   const { user } = useAuth();
   const { hasGroup, groupCanAccessRoute, isAdminMaster } = usePermissions();
-  const canSee = (route: string) => isAdminMaster || !hasGroup || groupCanAccessRoute(route);
+  const { isMenuItemVisible } = useMenuVisibility();
+  const canSee = (route: string) => {
+    if (!isMenuItemVisible(route)) return false;
+    return isAdminMaster || !hasGroup || groupCanAccessRoute(route);
+  };
   const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;

@@ -9,6 +9,7 @@ interface FullScreenDialogProps {
   subtitle?: string;
   icon?: ReactNode;
   headerColor?: string;
+  headerStyle?: React.CSSProperties;
   children: ReactNode;
   footer?: ReactNode;
   headerActions?: ReactNode;
@@ -21,6 +22,7 @@ export default function FullScreenDialog({
   subtitle,
   icon,
   headerColor = "bg-gradient-to-r from-[#1B2A4A] to-[#2d4a7a]",
+  headerStyle,
   children,
   footer,
   headerActions,
@@ -46,7 +48,7 @@ export default function FullScreenDialog({
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ width: "100vw", height: "100vh" }}>
       {/* HEADER */}
-      <div className={`shrink-0 ${headerColor} text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-lg`}>
+      <div className={`shrink-0 ${headerStyle ? '' : headerColor} text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-lg`} style={headerStyle}>
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20 h-9 w-9 shrink-0" title="Voltar">
             <ArrowLeft className="h-5 w-5" />

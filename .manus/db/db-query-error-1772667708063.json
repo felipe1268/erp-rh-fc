@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE epi_assinaturas \nADD COLUMN hash_sha256 VARCHAR(64) NULL AFTER assinaturaUrl,\nADD COLUMN latitude DECIMAL(10, 8) NULL AFTER hash_sha256,\nADD COLUMN longitude DECIMAL(11, 8) NULL AFTER latitude,\nADD COLUMN geoAccuracy DECIMAL(10, 2) NULL AFTER longitude,\nADD COLUMN termoAceito TINYINT(1) DEFAULT 0 AFTER geoAccuracy,\nADD COLUMN termoTexto TEXT NULL AFTER termoAceito,\nADD COLUMN dispositivoInfo TEXT NULL AFTER termoTexto,\nADD COLUMN integridadeVerificada TINYINT(1) DEFAULT 0 AFTER dispositivoInfo,\nADD COLUMN verificadoEm TIMESTAMP NULL AFTER integridadeVerificada;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE epi_assinaturas \nADD COLUMN hash_sha256 VARCHAR(64) NULL AFTER assinaturaUrl,\nADD COLUMN latitude DECIMAL(10, 8) NULL AFTER hash_sha256,\nADD COLUMN longitude DECIMAL(11, 8) NULL AFTER latitude,\nADD COLUMN geoAccuracy DECIMAL(10, 2) NULL AFTER longitude,\nADD COLUMN termoAceito TINYINT(1) DEFAULT 0 AFTER geoAccuracy,\nADD COLUMN termoTexto TEXT NULL AFTER termoAceito,\nADD COLUMN dispositivoInfo TEXT NULL AFTER termoTexto,\nADD COLUMN integridadeVerificada TINYINT(1) DEFAULT 0 AFTER dispositivoInfo,\nADD COLUMN verificadoEm TIMESTAMP NULL AFTER integridadeVerificada;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'hash_sha256' in 'epi_assinaturas'"
+  ]
+}

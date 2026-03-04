@@ -3,6 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { useEffect, useState } from "react";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 import {
   Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
   ArrowRight, Eye, Activity, ChevronRight, Building2, ShieldCheck, CalendarDays,
@@ -172,6 +173,7 @@ const DASH_TO_ROUTE: Record<string, string> = {
 export default function DashboardIndex() {
   const [time, setTime] = useState(new Date());
   const { hasGroup, groupCanAccessRoute, isAdminMaster } = usePermissions();
+  const { isMenuItemVisible, isDashboardVisible } = useMenuVisibility();
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -198,7 +200,7 @@ export default function DashboardIndex() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
               <Activity className="h-3.5 w-3.5 text-emerald-500" />
-              <span className="text-xs font-medium text-gray-600">{dashboards.length + 1} módulos ativos</span>
+              <span className="text-xs font-medium text-gray-600">Dashboards Disponíveis</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
               <span className="text-xs font-medium text-gray-600">{timeStr}</span>
@@ -207,7 +209,7 @@ export default function DashboardIndex() {
         </div>
 
         {/* ─── HERO: VISÃO PANORÂMICA ─── */}
-        {(isAdminMaster || !hasGroup) && <Link href={panoramica.path}>
+        {(isAdminMaster || !hasGroup) && isMenuItemVisible(panoramica.path) && <Link href={panoramica.path}>
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 cursor-pointer group transition-all duration-300 hover:shadow-xl hover:shadow-blue-200/50">
             {/* Subtle pattern */}
             <div className="absolute inset-0 opacity-10"
@@ -271,8 +273,11 @@ export default function DashboardIndex() {
         {/* ─── DASHBOARD GRID ─── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {dashboards.filter(d => {
-            if (isAdminMaster || !hasGroup) return true;
+            // Verifica visibilidade no Painel de Controle do Menu
             const mainRoute = DASH_TO_ROUTE[d.path];
+            if (!isDashboardVisible(d.path, mainRoute)) return false;
+            // Verifica permissões de grupo
+            if (isAdminMaster || !hasGroup) return true;
             return mainRoute ? groupCanAccessRoute(mainRoute) : false;
           }).map((d) => {
             const Icon = d.icon;

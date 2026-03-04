@@ -148,6 +148,13 @@
       "when": 1772663896346,
       "tag": "0020_hesitant_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1772668427928,
+      "tag": "0021_exotic_calypso",
+      "breakpoints": true
     }
   ]
 }

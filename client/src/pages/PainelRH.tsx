@@ -24,19 +24,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 
 export default function PainelRH() {
   const { user } = useAuth();
   const { isAdminMaster, hasGroup, groupCanAccessRoute, groupOcultarValores, isSomenteVisualizacao, isOcultarDadosSensiveis } = usePermissions();
-  // Flags de visibilidade baseadas no grupo
+  const { isMenuItemVisible } = useMenuVisibility();
+  // Flags de visibilidade baseadas no grupo + Painel de Controle do Menu
   const canSeeValues = isAdminMaster || !isOcultarDadosSensiveis;
-  const canSeeAvisoPrevio = isAdminMaster || !hasGroup || groupCanAccessRoute('/aviso-previo');
-  const canSeeFerias = isAdminMaster || !hasGroup || groupCanAccessRoute('/ferias');
-  const canSeeFolha = isAdminMaster || !hasGroup || groupCanAccessRoute('/folha-pagamento');
-  const canSeeColaboradores = isAdminMaster || !hasGroup || groupCanAccessRoute('/colaboradores');
-  const canSeeObras = isAdminMaster || !hasGroup || groupCanAccessRoute('/obras');
-  const canSeeDocumentos = isAdminMaster || !hasGroup || groupCanAccessRoute('/controle-documentos');
-  const canSeePonto = isAdminMaster || !hasGroup || groupCanAccessRoute('/fechamento-ponto');
+  const canSeeAvisoPrevio = isMenuItemVisible('/aviso-previo') && (isAdminMaster || !hasGroup || groupCanAccessRoute('/aviso-previo'));
+  const canSeeFerias = isMenuItemVisible('/ferias') && (isAdminMaster || !hasGroup || groupCanAccessRoute('/ferias'));
+  const canSeeFolha = isMenuItemVisible('/folha-pagamento') && (isAdminMaster || !hasGroup || groupCanAccessRoute('/folha-pagamento'));
+  const canSeeColaboradores = isMenuItemVisible('/colaboradores') && (isAdminMaster || !hasGroup || groupCanAccessRoute('/colaboradores'));
+  const canSeeObras = isMenuItemVisible('/obras') && (isAdminMaster || !hasGroup || groupCanAccessRoute('/obras'));
+  const canSeeDocumentos = isMenuItemVisible('/controle-documentos') && (isAdminMaster || !hasGroup || groupCanAccessRoute('/controle-documentos'));
+  const canSeePonto = isMenuItemVisible('/fechamento-ponto') && (isAdminMaster || !hasGroup || groupCanAccessRoute('/fechamento-ponto'));
   const canSeeExperiencia = canSeeColaboradores;
   const canSeeAuditoria = isAdminMaster || user?.role === 'admin';
   const canEditExperiencia = isAdminMaster || !isSomenteVisualizacao;

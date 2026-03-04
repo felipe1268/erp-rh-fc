@@ -778,14 +778,25 @@ export const epiAvancadoRouter = router({
       assinaturaBase64: z.string(),
       ipAddress: z.string().optional(),
       userAgent: z.string().optional(),
+      // Campos de auditoria
+      latitude: z.string().optional(),
+      longitude: z.string().optional(),
+      geoAccuracy: z.string().optional(),
+      termoAceito: z.boolean().optional(),
+      textoTermo: z.string().optional(),
+      dispositivoInfo: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const crypto = await import("crypto");
       
       // Upload signature image to S3
       const buffer = Buffer.from(input.assinaturaBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
       const key = `assinaturas-epi/${input.companyId}/${input.employeeId}-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
       const { url } = await storagePut(key, buffer, "image/png");
+
+      // Gerar hash SHA-256 da imagem da assinatura (prova de integridade)
+      const hashSha256 = crypto.createHash("sha256").update(buffer).digest("hex");
 
       await db.insert(epiAssinaturas).values({
         companyId: input.companyId,
@@ -797,6 +808,14 @@ export const epiAvancadoRouter = router({
         userAgent: input.userAgent || null,
         entregadorNome: ctx.user?.name || null,
         entregadorUserId: ctx.user?.id || null,
+        // Campos de auditoria
+        hashSha256,
+        latitude: input.latitude || null,
+        longitude: input.longitude || null,
+        geoAccuracy: input.geoAccuracy || null,
+        termoAceito: input.termoAceito ? 1 : 0,
+        textoTermo: input.textoTermo || null,
+        dispositivoInfo: input.dispositivoInfo || null,
       });
 
       // Also save to delivery record if deliveryId provided
@@ -806,7 +825,7 @@ export const epiAvancadoRouter = router({
         } as any).where(eq(epiDeliveries.id, input.deliveryId));
       }
 
-      return { success: true, url };
+      return { success: true, url, hashSha256 };
     }),
 
   assinaturasDoFuncionario: protectedProcedure
@@ -816,6 +835,84 @@ export const epiAvancadoRouter = router({
       return db.select().from(epiAssinaturas)
         .where(eq(epiAssinaturas.employeeId, input.employeeId))
         .orderBy(desc(epiAssinaturas.createdAt));
+    }),
+
+  // Relatório de auditoria de uma assinatura específica
+  assinaturaAuditoria: protectedProcedure
+    .input(z.object({ assinaturaId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [assinatura] = await db.select().from(epiAssinaturas)
+        .where(eq(epiAssinaturas.id, input.assinaturaId));
+      if (!assinatura) throw new TRPCError({ code: "NOT_FOUND", message: "Assinatura não encontrada" });
+
+      // Buscar dados do funcionário
+      const [emp] = await db.select({
+        nome: employees.nomeCompleto,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        matricula: employees.matricula,
+      }).from(employees).where(eq(employees.id, assinatura.employeeId));
+
+      // Buscar dados da entrega se existir
+      let entrega = null;
+      if (assinatura.deliveryId) {
+        const [del] = await db.select().from(epiDeliveries)
+          .where(eq(epiDeliveries.id, assinatura.deliveryId));
+        if (del) {
+          const [epi] = await db.select({ nome: epis.nome, ca: epis.ca }).from(epis)
+            .where(eq(epis.id, del.epiId));
+          entrega = { ...del, epiNome: epi?.nome, epiCA: epi?.ca };
+        }
+      }
+
+      return {
+        assinatura,
+        funcionario: emp || null,
+        entrega,
+        auditoria: {
+          hashSha256: (assinatura as any).hashSha256 || null,
+          latitude: (assinatura as any).latitude || null,
+          longitude: (assinatura as any).longitude || null,
+          geoAccuracy: (assinatura as any).geoAccuracy || null,
+          termoAceito: (assinatura as any).termoAceito || 0,
+          textoTermo: (assinatura as any).textoTermo || null,
+          dispositivoInfo: (assinatura as any).dispositivoInfo || null,
+          ipAddress: assinatura.ipAddress,
+          userAgent: assinatura.userAgent,
+          entregadorNome: assinatura.entregadorNome,
+          assinadoEm: assinatura.assinadoEm,
+        },
+      };
+    }),
+
+  // Verificar integridade de uma assinatura (comparar hash)
+  verificarIntegridade: protectedProcedure
+    .input(z.object({ assinaturaId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const crypto = await import("crypto");
+      const [assinatura] = await db.select().from(epiAssinaturas)
+        .where(eq(epiAssinaturas.id, input.assinaturaId));
+      if (!assinatura) throw new TRPCError({ code: "NOT_FOUND", message: "Assinatura não encontrada" });
+
+      const hashOriginal = (assinatura as any).hashSha256;
+      if (!hashOriginal) return { integra: false, motivo: "Hash não registrado (assinatura anterior ao sistema de auditoria)" };
+
+      // Baixar imagem do S3 e recalcular hash
+      try {
+        const response = await fetch(assinatura.assinaturaUrl);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const hashAtual = crypto.createHash("sha256").update(buffer).digest("hex");
+        return {
+          integra: hashAtual === hashOriginal,
+          hashOriginal,
+          hashAtual,
+          motivo: hashAtual === hashOriginal ? "Assinatura íntegra — hash confere" : "ALERTA: Hash divergente — possível adulteração",
+        };
+      } catch {
+        return { integra: false, motivo: "Erro ao verificar — imagem não acessível" };
+      }
     }),
 
   // ============================================================

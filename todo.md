@@ -4728,3 +4728,48 @@
 - [x] Cards do dashboard de EPIs clicáveis com tela full screen de dados filtrados
 - [x] Layout responsivo dos cards e telas
 - [x] Assinatura digital na ficha de entrega de EPI existente
+
+## Seletor de Cores nos Crachás
+
+- [x] Adicionar seletor de cores personalizável na tela de Emissão de Crachás
+- [x] Permitir escolher cor para CLT, PJ e Terceiros separadamente
+- [x] Salvar preferência de cores (persistir no sistema)
+- [x] Aplicar cores escolhidas nos crachás gerados
+
+## Auditoria de Assinatura Digital de EPI (Prova Legal)
+
+### Banco de Dados
+- [ ] Criar tabela epi_assinatura_auditoria (hash SHA-256, IP, geolocalização, user-agent, timestamp servidor)
+- [ ] Vincular auditoria à assinatura e entrega de EPI
+
+### Backend
+- [ ] Rota para registrar assinatura com evidências completas (hash, IP, GPS, user-agent)
+- [ ] Gerar hash SHA-256 da imagem da assinatura no servidor
+- [ ] Registrar IP do dispositivo via req.ip
+- [ ] Registrar timestamp do servidor (não do cliente)
+- [ ] Rota para verificar integridade da assinatura (comparar hash)
+- [ ] Rota para gerar relatório de auditoria em PDF
+
+### Frontend
+- [ ] Coletar geolocalização (GPS) do dispositivo antes de assinar
+- [ ] Coletar user-agent do navegador
+- [ ] Exibir termo de aceite legal antes da assinatura (Art. 462 CLT + NR-6)
+- [ ] Checkbox de concordância obrigatório antes de assinar
+- [ ] Enviar todas as evidências junto com a assinatura
+
+### Relatório de Auditoria
+- [ ] PDF com ficha completa + assinatura + todas as evidências
+- [ ] Hash SHA-256 da assinatura no rodapé
+- [ ] Dados do dispositivo (IP, GPS, user-agent)
+- [ ] Timestamp do servidor
+- [ ] Selo de integridade verificável
+
+## Propagação Global de Visibilidade do Menu
+
+- [ ] Analisar como o Painel de Controle do Menu salva/carrega configurações de visibilidade
+- [ ] Criar contexto/hook global de visibilidade de módulos (useMenuVisibility)
+- [ ] Aplicar filtro de visibilidade no DashboardLayout (sidebar)
+- [ ] Aplicar filtro de visibilidade nos Dashboards (cards de navegação)
+- [ ] Aplicar filtro de visibilidade na Home (cards de módulos)
+- [ ] Aplicar filtro de visibilidade em relatórios e filtros de seleção
+- [ ] Garantir que desativar um item no Painel de Controle oculte em TODOS os módulos

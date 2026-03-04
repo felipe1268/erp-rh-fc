@@ -19,6 +19,7 @@ import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 
 const RISCO_COLORS: Record<string, string> = {
   baixo: "bg-green-100 text-green-700",
@@ -33,8 +34,16 @@ export default function Home() {
   const { selectedCompanyId } = useCompany();
   const { hasGroup, groupCanAccessRoute, groupOcultarValores, isAdminMaster, isSomenteVisualizacao, isOcultarDadosSensiveis } = usePermissions();
 
-  // Helper: verifica se o usuário pode ver uma rota (considerando grupo)
-  const canSee = (route: string) => isAdminMaster || !hasGroup || groupCanAccessRoute(route);
+  // Hook de visibilidade do menu (Painel de Controle)
+  const { isMenuItemVisible } = useMenuVisibility();
+
+  // Helper: verifica se o usuário pode ver uma rota (considerando grupo + visibilidade do menu)
+  const canSee = (route: string) => {
+    // Primeiro verifica se o item está visível no Painel de Controle do Menu
+    if (!isMenuItemVisible(route)) return false;
+    // Depois verifica permissões de grupo
+    return isAdminMaster || !hasGroup || groupCanAccessRoute(route);
+  };
   const hideValues = (route: string) => !isAdminMaster && hasGroup && groupOcultarValores(route);
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
   const [alertasOpen, setAlertasOpen] = useState(false);

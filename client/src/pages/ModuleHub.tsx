@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getLoginUrl } from "@/const";
 import { useState, useMemo, useEffect } from "react";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 import { MODULE_DEFINITIONS } from "../../../shared/modules";
 
 /* ─── Robot image URL ─── */
@@ -301,6 +302,7 @@ export default function ModuleHub() {
   const { setActiveModule } = useModule();
   const { isModuleEnabled } = useModuleConfig();
   const { hasGroup, groupCanAccessRoute, isAdminMaster } = usePermissions();
+  const { isMenuItemVisible } = useMenuVisibility();
   const [mounted, setMounted] = useState(false);
 
   const greeting = useMemo(() => getGreeting(), []);
@@ -345,6 +347,12 @@ export default function ModuleHub() {
         const hasAnyRoute = modDef.features.some(f => groupCanAccessRoute(f.route));
         if (!hasAnyRoute) return false;
       }
+    }
+    // Verificar visibilidade no Painel de Controle do Menu
+    const modDef2 = MODULE_DEFINITIONS.find(md => md.id === m.id);
+    if (modDef2) {
+      const hasAnyVisible = modDef2.features.some(f => isMenuItemVisible(f.route));
+      if (!hasAnyVisible) return false;
     }
     return true;
   });

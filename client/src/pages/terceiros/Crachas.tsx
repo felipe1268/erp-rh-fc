@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
@@ -9,21 +9,90 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { toPng } from "html-to-image";
 import {
   CreditCard, Search, Download, Printer, User, Building2, HardHat,
-  Eye, Filter, Users, CheckCircle, AlertTriangle, Camera
+  Eye, Filter, Users, CheckCircle, AlertTriangle, Camera, Palette, RotateCcw
 } from "lucide-react";
 
 type BadgeType = "clt" | "pj" | "terceiro";
 
-const BADGE_COLORS: Record<BadgeType, { bg: string; header: string; accent: string; label: string }> = {
-  clt: { bg: "bg-blue-50", header: "bg-gradient-to-r from-blue-700 to-blue-500", accent: "text-blue-700", label: "CLT" },
-  pj: { bg: "bg-green-50", header: "bg-gradient-to-r from-green-700 to-green-500", accent: "text-green-700", label: "PJ" },
-  terceiro: { bg: "bg-orange-50", header: "bg-gradient-to-r from-orange-600 to-orange-400", accent: "text-orange-700", label: "TERCEIRO" },
+// Cores padrão
+const DEFAULT_COLORS: Record<BadgeType, string> = {
+  clt: "#1d4ed8",
+  pj: "#15803d",
+  terceiro: "#ea580c",
 };
+
+// Paleta de cores pré-definidas para seleção rápida
+const COLOR_PRESETS = [
+  "#1d4ed8", // Azul
+  "#2563eb", // Azul claro
+  "#0ea5e9", // Sky
+  "#06b6d4", // Cyan
+  "#14b8a6", // Teal
+  "#15803d", // Verde
+  "#22c55e", // Verde claro
+  "#84cc16", // Lima
+  "#eab308", // Amarelo
+  "#f97316", // Laranja
+  "#ea580c", // Laranja escuro
+  "#ef4444", // Vermelho
+  "#dc2626", // Vermelho escuro
+  "#e11d48", // Rosa
+  "#d946ef", // Fúcsia
+  "#a855f7", // Roxo
+  "#7c3aed", // Violeta
+  "#6366f1", // Índigo
+  "#1B2A4A", // Azul marinho
+  "#374151", // Cinza escuro
+  "#78350f", // Marrom
+  "#000000", // Preto
+];
+
+// Gerar gradiente a partir de uma cor base
+function makeGradient(hex: string): string {
+  // Clarear a cor para o segundo ponto do gradiente
+  const lighten = (h: string, pct: number) => {
+    let r = parseInt(h.slice(1, 3), 16);
+    let g = parseInt(h.slice(3, 5), 16);
+    let b = parseInt(h.slice(5, 7), 16);
+    r = Math.min(255, Math.round(r + (255 - r) * pct));
+    g = Math.min(255, Math.round(g + (255 - g) * pct));
+    b = Math.min(255, Math.round(b + (255 - b) * pct));
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  };
+  return `linear-gradient(to right, ${hex}, ${lighten(hex, 0.3)})`;
+}
+
+// Gerar cor de fundo clara a partir da cor base
+function makeBgColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, 0.06)`;
+}
+
+// Chave de localStorage para persistir cores
+const STORAGE_KEY = "cracha-colors";
+
+function loadColors(): Record<BadgeType, string> {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...DEFAULT_COLORS, ...parsed };
+    }
+  } catch {}
+  return { ...DEFAULT_COLORS };
+}
+
+function saveColors(colors: Record<BadgeType, string>) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(colors));
+}
 
 interface BadgeData {
   id: number;
@@ -49,7 +118,14 @@ export default function Crachas() {
   const [selectedBadge, setSelectedBadge] = useState<BadgeData | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [printMode, setPrintMode] = useState(false);
+  const [showColorPanel, setShowColorPanel] = useState(false);
+  const [badgeColors, setBadgeColors] = useState<Record<BadgeType, string>>(loadColors);
   const badgeRef = useRef<HTMLDivElement>(null);
+
+  // Salvar cores quando mudam
+  useEffect(() => {
+    saveColors(badgeColors);
+  }, [badgeColors]);
 
   // Fetch employees (CLT + PJ)
   const { data: employeesData, isLoading: loadingEmployees } = trpc.employees.list.useQuery(
@@ -79,6 +155,9 @@ export default function Crachas() {
 
   const companyName = companyObj?.nomeFantasia || companyObj?.razaoSocial || "";
   const companyLogo = companyObj?.logoUrl || "";
+
+  // Labels por tipo
+  const LABELS: Record<BadgeType, string> = { clt: "CLT", pj: "PJ", terceiro: "TERCEIRO" };
 
   // Transform data into BadgeData
   const cltBadges: BadgeData[] = useMemo(() => {
@@ -169,13 +248,16 @@ export default function Crachas() {
     }, 500);
   }, []);
 
-  const generateQRData = (badge: BadgeData) => {
-    // QR Code aponta para página pública de verificação de aptidão
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/verificar/${badge.tipo}/${badge.id}`;
+  const isLoading = loadingEmployees || loadingTerceiros;
+
+  const handleColorChange = (tipo: BadgeType, color: string) => {
+    setBadgeColors((prev) => ({ ...prev, [tipo]: color }));
   };
 
-  const isLoading = loadingEmployees || loadingTerceiros;
+  const resetColors = () => {
+    setBadgeColors({ ...DEFAULT_COLORS });
+    toast.success("Cores restauradas para o padrão!");
+  };
 
   return (
     <DashboardLayout>
@@ -188,20 +270,101 @@ export default function Crachas() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Gere crachás com QR Code para colaboradores CLT, PJ e terceiros</p>
           </div>
+          <Button
+            variant={showColorPanel ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowColorPanel(!showColorPanel)}
+            className={showColorPanel ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white" : ""}
+          >
+            <Palette className="w-4 h-4 mr-2" />
+            {showColorPanel ? "Fechar Cores" : "Personalizar Cores"}
+          </Button>
         </div>
+
+        {/* Color Customization Panel */}
+        {showColorPanel && (
+          <div className="border rounded-xl p-4 bg-gradient-to-r from-gray-50 to-white shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Palette className="w-5 h-5 text-purple-600" />
+                <h3 className="font-semibold text-sm">Personalizar Cores dos Crachás</h3>
+              </div>
+              <Button variant="ghost" size="sm" onClick={resetColors} className="text-xs text-muted-foreground hover:text-foreground">
+                <RotateCcw className="w-3.5 h-3.5 mr-1" /> Restaurar Padrão
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {(["clt", "pj", "terceiro"] as BadgeType[]).map((tipo) => (
+                <div key={tipo} className="border rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">{LABELS[tipo]}</span>
+                    <div
+                      className="w-8 h-8 rounded-lg border-2 border-white shadow-md"
+                      style={{ background: makeGradient(badgeColors[tipo]) }}
+                    />
+                  </div>
+
+                  {/* Color Input */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={badgeColors[tipo]}
+                      onChange={(e) => handleColorChange(tipo, e.target.value)}
+                      className="w-10 h-8 rounded cursor-pointer border-0 p-0"
+                    />
+                    <Input
+                      value={badgeColors[tipo]}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (/^#[0-9a-fA-F]{6}$/.test(v)) handleColorChange(tipo, v);
+                      }}
+                      className="h-8 text-xs font-mono uppercase"
+                      maxLength={7}
+                      placeholder="#000000"
+                    />
+                  </div>
+
+                  {/* Preset Colors */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {COLOR_PRESETS.map((color) => (
+                      <button
+                        key={color}
+                        className={`w-6 h-6 rounded-md border-2 transition-all hover:scale-110 ${
+                          badgeColors[tipo] === color ? "border-foreground ring-2 ring-offset-1 ring-purple-400 scale-110" : "border-transparent"
+                        }`}
+                        style={{ backgroundColor: color }}
+                        onClick={() => handleColorChange(tipo, color)}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Mini Preview */}
+                  <div
+                    className="rounded-lg p-2 text-center text-white text-xs font-bold tracking-wider"
+                    style={{ background: makeGradient(badgeColors[tipo]) }}
+                  >
+                    {LABELS[tipo]} — Preview
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Color Legend */}
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-blue-500"></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: badgeColors.clt }}></div>
             <span className="text-sm">CLT ({cltBadges.length})</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-green-500"></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: badgeColors.pj }}></div>
             <span className="text-sm">PJ ({pjBadges.length})</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-orange-500"></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: badgeColors.terceiro }}></div>
             <span className="text-sm">Terceiros ({terceiroBadges.length})</span>
           </div>
         </div>
@@ -242,7 +405,13 @@ export default function Crachas() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
                   {currentBadges.map((badge) => (
-                    <BadgeCard key={`${badge.tipo}-${badge.id}`} badge={badge} onPreview={() => { setSelectedBadge(badge); setPreviewOpen(true); }} />
+                    <BadgeCard
+                      key={`${badge.tipo}-${badge.id}`}
+                      badge={badge}
+                      color={badgeColors[badge.tipo]}
+                      label={LABELS[badge.tipo]}
+                      onPreview={() => { setSelectedBadge(badge); setPreviewOpen(true); }}
+                    />
                   ))}
                 </div>
               )}
@@ -257,7 +426,8 @@ export default function Crachas() {
           title="Visualizar Crachá"
           subtitle={selectedBadge?.nome || ""}
           icon={<CreditCard className="w-5 h-5" />}
-          headerColor={selectedBadge ? BADGE_COLORS[selectedBadge.tipo].header : undefined}
+          headerColor={selectedBadge ? `bg-gradient-to-r` : undefined}
+          headerStyle={selectedBadge ? { background: makeGradient(badgeColors[selectedBadge.tipo]) } : undefined}
           headerActions={
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleDownload} className="bg-white/10 border-white/30 text-white hover:bg-white/20">
@@ -276,13 +446,27 @@ export default function Crachas() {
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-3 text-center">Frente do Crachá</h3>
                   <div ref={badgeRef}>
-                    <BadgePreview badge={selectedBadge} companyName={companyName} companyLogo={companyLogo} side="front" />
+                    <BadgePreview
+                      badge={selectedBadge}
+                      companyName={companyName}
+                      companyLogo={companyLogo}
+                      side="front"
+                      color={badgeColors[selectedBadge.tipo]}
+                      label={LABELS[selectedBadge.tipo]}
+                    />
                   </div>
                 </div>
                 {/* Badge Preview - Back */}
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-3 text-center">Verso do Crachá</h3>
-                  <BadgePreview badge={selectedBadge} companyName={companyName} companyLogo={companyLogo} side="back" />
+                  <BadgePreview
+                    badge={selectedBadge}
+                    companyName={companyName}
+                    companyLogo={companyLogo}
+                    side="back"
+                    color={badgeColors[selectedBadge.tipo]}
+                    label={LABELS[selectedBadge.tipo]}
+                  />
                 </div>
               </div>
             </div>
@@ -294,18 +478,23 @@ export default function Crachas() {
 }
 
 // Badge Card Component
-function BadgeCard({ badge, onPreview }: { badge: BadgeData; onPreview: () => void }) {
-  const colors = BADGE_COLORS[badge.tipo];
+function BadgeCard({ badge, color, label, onPreview }: { badge: BadgeData; color: string; label: string; onPreview: () => void }) {
   return (
-    <div className={`border rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${colors.bg}`} onClick={onPreview}>
-      <div className={`${colors.header} px-3 py-2 flex items-center justify-between`}>
-        <span className="text-white text-xs font-bold tracking-wider">{colors.label}</span>
+    <div
+      className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+      style={{ backgroundColor: makeBgColor(color) }}
+      onClick={onPreview}
+    >
+      <div className="px-3 py-2 flex items-center justify-between" style={{ background: makeGradient(color) }}>
+        <span className="text-white text-xs font-bold tracking-wider">{label}</span>
         <CreditCard className="w-4 h-4 text-white/70" />
       </div>
       <div className="p-3">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-white border-2 border-current flex items-center justify-center overflow-hidden shrink-0"
-            style={{ borderColor: badge.tipo === "clt" ? "#1d4ed8" : badge.tipo === "pj" ? "#15803d" : "#ea580c" }}>
+          <div
+            className="w-12 h-12 rounded-full bg-white border-2 flex items-center justify-center overflow-hidden shrink-0"
+            style={{ borderColor: color }}
+          >
             {badge.foto ? (
               <img src={badge.foto} alt="" className="w-full h-full object-cover" />
             ) : (
@@ -313,7 +502,7 @@ function BadgeCard({ badge, onPreview }: { badge: BadgeData; onPreview: () => vo
             )}
           </div>
           <div className="min-w-0">
-            <p className={`font-semibold text-sm truncate ${colors.accent}`}>{badge.nome}</p>
+            <p className="font-semibold text-sm truncate" style={{ color }}>{badge.nome}</p>
             <p className="text-xs text-muted-foreground truncate">{badge.funcao || "Sem função"}</p>
             {badge.empresaTerceira && (
               <p className="text-xs text-muted-foreground truncate">{badge.empresaTerceira}</p>
@@ -332,22 +521,24 @@ function BadgeCard({ badge, onPreview }: { badge: BadgeData; onPreview: () => vo
 }
 
 // Badge Preview Component (actual badge design)
-function BadgePreview({ badge, companyName, companyLogo, side }: { badge: BadgeData; companyName: string; companyLogo?: string; side: "front" | "back" }) {
-  const colors = BADGE_COLORS[badge.tipo];
+function BadgePreview({ badge, companyName, companyLogo, side, color, label }: {
+  badge: BadgeData; companyName: string; companyLogo?: string; side: "front" | "back"; color: string; label: string;
+}) {
   const qrData = `${window.location.origin}/verificar/${badge.tipo}/${badge.id}`;
-  const borderColor = badge.tipo === "clt" ? "#1d4ed8" : badge.tipo === "pj" ? "#15803d" : "#ea580c";
+  const gradient = makeGradient(color);
+  const bgColor = makeBgColor(color);
 
   if (side === "back") {
     return (
       <div className="w-[340px] h-[540px] rounded-xl overflow-hidden shadow-xl border-2 mx-auto"
-        style={{ borderColor }}>
-        <div className={`${colors.header} h-16 flex items-center justify-center gap-3 px-4`}>
+        style={{ borderColor: color }}>
+        <div className="h-16 flex items-center justify-center gap-3 px-4" style={{ background: gradient }}>
           {companyLogo && (
             <img src={companyLogo} alt="" className="h-10 w-10 rounded-md object-contain bg-white/20 p-0.5" />
           )}
           <span className="text-white text-sm font-bold tracking-wide text-center">{companyName || "FC ENGENHARIA"}</span>
         </div>
-        <div className={`${colors.bg} flex-1 flex flex-col items-center justify-center p-6`} style={{ height: "calc(100% - 4rem)" }}>
+        <div className="flex-1 flex flex-col items-center justify-center p-6" style={{ backgroundColor: bgColor, height: "calc(100% - 4rem)" }}>
           <div className="bg-white p-4 rounded-xl shadow-md">
             <QRCodeSVG value={qrData} size={180} level="H" includeMargin={true} />
           </div>
@@ -366,9 +557,9 @@ function BadgePreview({ badge, companyName, companyLogo, side }: { badge: BadgeD
 
   return (
     <div className="w-[340px] h-[540px] rounded-xl overflow-hidden shadow-xl border-2 mx-auto"
-      style={{ borderColor }}>
+      style={{ borderColor: color }}>
       {/* Header - Company name centered with logo */}
-      <div className={`${colors.header} px-4 py-3`}>
+      <div className="px-4 py-3" style={{ background: gradient }}>
         <div className="flex items-center justify-center gap-2">
           {companyLogo && (
             <img src={companyLogo} alt="" className="h-9 w-9 rounded-md object-contain bg-white/20 p-0.5" />
@@ -378,16 +569,16 @@ function BadgePreview({ badge, companyName, companyLogo, side }: { badge: BadgeD
             <p className="text-white/70 text-[10px]">Gestão Integrada</p>
           </div>
         </div>
-        <div className="absolute top-3 right-3 bg-white/20 rounded-md px-2 py-0.5" style={{ position: "relative", float: "right", marginTop: "-28px" }}>
-          <span className="text-white text-[10px] font-bold tracking-wider">{colors.label}</span>
+        <div className="bg-white/20 rounded-md px-2 py-0.5" style={{ position: "relative", float: "right", marginTop: "-28px" }}>
+          <span className="text-white text-[10px] font-bold tracking-wider">{label}</span>
         </div>
       </div>
 
       {/* Body */}
-      <div className={`${colors.bg} p-4 flex flex-col items-center`} style={{ height: "calc(100% - 4rem)" }}>
+      <div className="p-4 flex flex-col items-center" style={{ backgroundColor: bgColor, height: "calc(100% - 4rem)" }}>
         {/* Photo */}
         <div className="w-28 h-28 rounded-full bg-white border-4 flex items-center justify-center overflow-hidden mt-1 shadow-md"
-          style={{ borderColor }}>
+          style={{ borderColor: color }}>
           {badge.foto ? (
             <img src={badge.foto} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -396,7 +587,7 @@ function BadgePreview({ badge, companyName, companyLogo, side }: { badge: BadgeD
         </div>
 
         {/* Name */}
-        <h2 className={`text-lg font-bold mt-3 text-center leading-tight ${colors.accent}`}>
+        <h2 className="text-lg font-bold mt-3 text-center leading-tight" style={{ color }}>
           {badge.nome}
         </h2>
 

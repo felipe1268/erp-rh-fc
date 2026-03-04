@@ -3542,6 +3542,14 @@ export const epiAssinaturas = mysqlTable("epi_assinaturas", {
 	userAgent: text(),
 	entregadorNome: varchar({ length: 255 }),
 	entregadorUserId: int(),
+	// Campos de auditoria
+	hashSha256: varchar({ length: 64 }),
+	latitude: varchar({ length: 20 }),
+	longitude: varchar({ length: 20 }),
+	geoAccuracy: varchar({ length: 20 }),
+	termoAceito: tinyint().default(0),
+	textoTermo: text(),
+	dispositivoInfo: text(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 }, (table) => [
 	index("eas_company").on(table.companyId),
