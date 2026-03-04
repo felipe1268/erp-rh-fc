@@ -4564,3 +4564,15 @@
 - [x] Configurar manual chunks no Vite para melhor caching
 - [x] Adicionar índices no banco de dados para queries frequentes
 - [x] Adicionar botões Selecionar/Desmarcar Todos por coluna na tela de permissões de grupo
+
+## Rev. 183: Reestruturação Estoque de EPI
+- [x] Criar schema estoque central (epi_estoque_central) com quantidade por EPI/empresa
+- [x] Criar schema estoque por obra (epi_estoque_obra) com quantidade por EPI/obra
+- [x] Criar schema transferências (epi_transferencias) do escritório para obra
+- [x] Criar rotas tRPC: CRUD estoque central, transferências, consulta estoque obra
+- [x] Ajustar entrega de EPI para descontar do estoque da obra OU do estoque central
+- [x] Opção de entrega pelo escritório central (contratação) e pela obra (dia a dia)
+- [x] Frontend: tela de estoque central com entrada de EPIs
+- [x] Frontend: tela de transferência (escritório → obra)
+- [x] Frontend: tela de estoque por obra com saldo e entregas
+- [x] Integrar fluxo completo: entrada → transferência → entrega → saldo

@@ -1034,7 +1034,16 @@ export const epiDeliveries = mysqlTable("epi_deliveries", {
 	valorCobrado: decimal("valor_cobrado", { precision: 10, scale: 2 }),
 	fichaUrl: text("ficha_url"),
 	fotoEstadoUrl: text("foto_estado_url"),
-});
+	origemEntrega: mysqlEnum("origem_entrega", ['central','obra']).default('central').notNull(),
+	obraId: int("obra_id"),
+},
+(table) => [
+	index("idx_ed_company").on(table.companyId),
+	index("idx_ed_employee").on(table.employeeId),
+	index("idx_ed_epi").on(table.epiId),
+	index("idx_ed_origem").on(table.origemEntrega),
+	index("idx_ed_obra").on(table.obraId),
+]);
 
 export const epiDiscountAlerts = mysqlTable("epi_discount_alerts", {
 	id: int().autoincrement().notNull(),
@@ -1088,6 +1097,45 @@ export const epis = mysqlTable("epis", {
 	corCapacete: varchar("cor_capacete", { length: 30 }),
 	condicao: mysqlEnum(['Novo','Reutilizado']).default('Novo').notNull(),
 });
+
+// Estoque de EPI por Obra
+export const epiEstoqueObra = mysqlTable("epi_estoque_obra", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	epiId: int().notNull(),
+	obraId: int().notNull(),
+	quantidade: int().default(0).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("idx_eeo_company").on(table.companyId),
+	index("idx_eeo_epi").on(table.epiId),
+	index("idx_eeo_obra").on(table.obraId),
+	index("idx_eeo_epi_obra").on(table.epiId, table.obraId),
+]);
+
+// Transferências de EPI (central → obra, obra → obra)
+export const epiTransferencias = mysqlTable("epi_transferencias", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	epiId: int().notNull(),
+	quantidade: int().notNull(),
+	tipoOrigem: mysqlEnum("tipo_origem", ['central','obra']).notNull(),
+	origemObraId: int("origem_obra_id"),
+	destinoObraId: int("destino_obra_id").notNull(),
+	data: date({ mode: 'string' }).notNull(),
+	observacoes: text(),
+	criadoPor: varchar("criado_por", { length: 255 }),
+	criadoPorUserId: int("criado_por_user_id"),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("idx_et_company").on(table.companyId),
+	index("idx_et_epi").on(table.epiId),
+	index("idx_et_destino").on(table.destinoObraId),
+	index("idx_et_data").on(table.companyId, table.data),
+]);
 
 export const equipment = mysqlTable("equipment", {
 	id: int().autoincrement().notNull(),

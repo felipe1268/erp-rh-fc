@@ -15,7 +15,8 @@ import {
   Plus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
-  Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw
+  Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
+  Building2, ArrowLeftRight, Warehouse, TrendingUp
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
@@ -26,7 +27,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/contexts/PermissionsContext";
 
-type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi";
+type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias";
 
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
@@ -140,6 +141,14 @@ export default function Epis() {
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
   const obrasList = obrasQ.data ?? [];
 
+  // Estoque por obra queries
+  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId }, { enabled: !!companyId });
+  const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId }, { enabled: !!companyId });
+  const transferenciasQ = trpc.epis.listarTransferencias.useQuery({ companyId }, { enabled: !!companyId });
+  const estoqueObraList2 = estoqueObraQ.data ?? [];
+  const estoqueResumo = estoqueObraResumoQ.data ?? [];
+  const transferenciasList = transferenciasQ.data ?? [];
+
   const episList = episQ.data ?? [];
   const deliveriesList = deliveriesQ.data ?? [];
   const stats = statsQ.data;
@@ -196,7 +205,16 @@ export default function Epis() {
   const [entregaForm, setEntregaForm] = useState({
     epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0],
     motivo: "", observacoes: "", motivoTroca: "", obraId: "",
+    origemEntrega: "central" as "central" | "obra",
   });
+
+  // Transferência form state
+  const [transForm, setTransForm] = useState({
+    epiId: "", quantidade: 1, tipoOrigem: "central" as "central" | "obra",
+    origemObraId: "", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "",
+  });
+  const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showObraConfirm, setShowObraConfirm] = useState(false);
 
   // BDI config
@@ -289,6 +307,14 @@ export default function Epis() {
     onSuccess: () => { deliveriesQ.refetch(); toast.success("Ficha assinada anexada!"); },
     onError: (err) => toast.error(err.message),
   });
+  const transferirMut = trpc.epis.transferir.useMutation({
+    onSuccess: () => { estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch(); setShowTransferDialog(false); resetTransForm(); toast.success("Transferência realizada com sucesso!"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const entradaEstoqueMut = trpc.epis.entradaEstoque.useMutation({
+    onSuccess: () => { episQ.refetch(); statsQ.refetch(); toast.success("Entrada de estoque registrada!"); },
+    onError: (err) => toast.error(err.message),
+  });
 
   const toggleSelectEpi = (id: number) => {
     setSelectedEpis(prev => {
@@ -331,8 +357,11 @@ export default function Epis() {
   const TAMANHOS_ROUPA = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
   const TAMANHOS_CALCADO = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
   function resetEntregaForm() {
-    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "" });
+    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "", origemEntrega: "central" });
     setFotoEstado({ file: null, preview: "" });
+  }
+  function resetTransForm() {
+    setTransForm({ epiId: "", quantidade: 1, tipoOrigem: "central", origemObraId: "", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "" });
   }
 
   // CA lookup function
@@ -1008,10 +1037,39 @@ export default function Epis() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* ORIGEM DA ENTREGA */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <Label className="text-amber-800 font-semibold flex items-center gap-1.5"><Package className="h-4 w-4" /> Origem da Entrega *</Label>
+                <div className="flex gap-3 mt-2">
+                  <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'central' }))}
+                    className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${
+                      entregaForm.origemEntrega === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                    <Package className={`h-5 w-5 mx-auto mb-1 ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-400'}`} />
+                    <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Escritório Central</p>
+                    <p className="text-[10px] text-muted-foreground">Entrega na contratação</p>
+                  </button>
+                  <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'obra' }))}
+                    className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${
+                      entregaForm.origemEntrega === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                    <HardHat className={`h-5 w-5 mx-auto mb-1 ${entregaForm.origemEntrega === 'obra' ? 'text-[#1B2A4A]' : 'text-gray-400'}`} />
+                    <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'obra' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Obra</p>
+                    <p className="text-[10px] text-muted-foreground">Entrega no canteiro</p>
+                  </button>
+                </div>
+                {entregaForm.origemEntrega === 'central' && entregaForm.epiId && (
+                  <p className="text-xs text-blue-600 mt-2 font-medium">Estoque Central: {episList.find((e: any) => String(e.id) === entregaForm.epiId)?.quantidadeEstoque ?? 0} unid.</p>
+                )}
+                {entregaForm.origemEntrega === 'obra' && entregaForm.epiId && entregaForm.obraId && (
+                  <p className="text-xs text-green-600 mt-2 font-medium">Estoque na Obra: {estoqueObraList2.find((e: any) => e.epiId === parseInt(entregaForm.epiId) && e.obraId === parseInt(entregaForm.obraId))?.quantidade ?? 0} unid.</p>
+                )}
+              </div>
+
               {/* OBRA - pré-preenchida com obra atual do funcionário */}
               {entregaForm.employeeId && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <Label className="text-blue-800 font-semibold">Obra / Local de Trabalho</Label>
+                  <Label className="text-blue-800 font-semibold">Obra / Local de Trabalho {entregaForm.origemEntrega === 'obra' ? '*' : ''}</Label>
                   <Select value={entregaForm.obraId || "sem_obra"} onValueChange={v => setEntregaForm(f => ({ ...f, obraId: v === "sem_obra" ? "" : v }))}>
                     <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                     <SelectContent>
@@ -1144,6 +1202,7 @@ export default function Epis() {
                     fotoBase64 = btoa(binary);
                     fotoFileName = fotoEstado.file.name;
                   }
+                  if (entregaForm.origemEntrega === 'obra' && !entregaForm.obraId) return toast.error("Selecione a obra para entrega pela obra");
                   createDeliveryMut.mutate({
                     companyId,
                     epiId: parseInt(entregaForm.epiId),
@@ -1155,6 +1214,8 @@ export default function Epis() {
                     motivoTroca: entregaForm.motivoTroca || undefined,
                     fotoEstadoBase64: fotoBase64,
                     fotoEstadoFileName: fotoFileName,
+                    origemEntrega: entregaForm.origemEntrega,
+                    obraId: entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined,
                   });
                 }} disabled={createDeliveryMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   {createDeliveryMut.isPending ? "Salvando..." : "Registrar Entrega"}
@@ -1460,6 +1521,14 @@ export default function Epis() {
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "entregas" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
               <ClipboardList className="h-3.5 w-3.5 inline mr-1" /> Entregas
             </button>
+            <button onClick={() => setViewMode("estoque_obra")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "estoque_obra" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              <Warehouse className="h-3.5 w-3.5 inline mr-1" /> Estoque Obra
+            </button>
+            <button onClick={() => setViewMode("transferencias")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "transferencias" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              <ArrowLeftRight className="h-3.5 w-3.5 inline mr-1" /> Transferências
+            </button>
           </div>
           <div className="relative flex-1 min-w-[200px] sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1756,7 +1825,315 @@ export default function Epis() {
             </Card>
           )
         )}
+
+        {/* ============================================================ */}
+        {/* ESTOQUE POR OBRA */}
+        {/* ============================================================ */}
+        {viewMode === "estoque_obra" && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-bold text-[#1B3A5C] flex items-center gap-2">
+                  <Warehouse className="h-5 w-5" /> Estoque por Obra
+                </h2>
+                <Select value={filterObraEstoque} onValueChange={setFilterObraEstoque}>
+                  <SelectTrigger className="w-[220px]"><SelectValue placeholder="Filtrar por obra..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as Obras</SelectItem>
+                    {obrasList.map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button size="sm" onClick={() => setShowTransferDialog(true)} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                <ArrowLeftRight className="h-4 w-4 mr-2" /> Nova Transferência
+              </Button>
+            </div>
+
+            {/* Resumo por obra */}
+            {estoqueResumo.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {estoqueResumo
+                  .filter((r: any) => filterObraEstoque === "todas" || String(r.obraId) === filterObraEstoque)
+                  .map((r: any) => (
+                  <Card key={r.obraId} className="border-l-4 border-l-blue-500">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-semibold text-sm text-[#1B3A5C]">{r.obraNome}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{r.totalItens} tipo(s) de EPI</p>
+                        </div>
+                        <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50">
+                          {r.totalQuantidade} unid.
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Tabela detalhada */}
+            <Card>
+              <CardContent className="p-0">
+                {estoqueObraList2.filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <Warehouse className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <h3 className="font-semibold text-lg">Nenhum estoque em obra</h3>
+                    <p className="text-muted-foreground text-sm mt-1">Faça transferências do escritório central para as obras.</p>
+                    <Button onClick={() => setShowTransferDialog(true)} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
+                      <ArrowLeftRight className="h-4 w-4 mr-2" /> Nova Transferência
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="p-3 text-left font-medium">Obra</th>
+                          <th className="p-3 text-left font-medium">EPI</th>
+                          <th className="p-3 text-center font-medium">CA</th>
+                          <th className="p-3 text-center font-medium">Quantidade</th>
+                          <th className="p-3 text-center font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {estoqueObraList2
+                          .filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque)
+                          .map((e: any) => (
+                          <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30">
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                                <span className="font-medium text-xs">{e.obraNome || 'Obra #' + e.obraId}</span>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                {getEpiIcon(e.epiNome || '', 'h-3.5 w-3.5')}
+                                <span className="text-xs">{e.epiNome || 'EPI #' + e.epiId}</span>
+                              </div>
+                            </td>
+                            <td className="p-3 text-center">
+                              {e.epiCa ? <Badge variant="outline" className="text-[10px]">CA: {e.epiCa}</Badge> : '—'}
+                            </td>
+                            <td className="p-3 text-center font-bold text-lg">{e.quantidade}</td>
+                            <td className="p-3 text-center">
+                              {e.quantidade > 0 ? (
+                                <Badge className="bg-green-100 text-green-700 border-green-300">Disponível</Badge>
+                              ) : (
+                                <Badge variant="destructive">Zerado</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* TRANSFERÊNCIAS */}
+        {/* ============================================================ */}
+        {viewMode === "transferencias" && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-[#1B3A5C] flex items-center gap-2">
+                <ArrowLeftRight className="h-5 w-5" /> Histórico de Transferências
+              </h2>
+              <Button size="sm" onClick={() => setShowTransferDialog(true)} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                <Plus className="h-4 w-4 mr-2" /> Nova Transferência
+              </Button>
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                {transferenciasList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <ArrowLeftRight className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <h3 className="font-semibold text-lg">Nenhuma transferência registrada</h3>
+                    <p className="text-muted-foreground text-sm mt-1">Transfira EPIs do escritório central para as obras.</p>
+                    <Button onClick={() => setShowTransferDialog(true)} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
+                      <Plus className="h-4 w-4 mr-2" /> Nova Transferência
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="p-3 text-left font-medium">Data</th>
+                          <th className="p-3 text-left font-medium">EPI</th>
+                          <th className="p-3 text-center font-medium">Qtd</th>
+                          <th className="p-3 text-left font-medium">Origem</th>
+                          <th className="p-3 text-center font-medium">→</th>
+                          <th className="p-3 text-left font-medium">Destino</th>
+                          <th className="p-3 text-left font-medium">Obs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transferenciasList.map((t: any) => (
+                          <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
+                            <td className="p-3 text-xs">
+                              {t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                {getEpiIcon(t.epiNome || '', 'h-3.5 w-3.5')}
+                                <span className="text-xs">{t.epiNome || 'EPI #' + t.epiId}</span>
+                              </div>
+                            </td>
+                            <td className="p-3 text-center font-bold">{t.quantidade}</td>
+                            <td className="p-3">
+                              <Badge variant="outline" className={t.tipoOrigem === 'central' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-green-50 text-green-700 border-green-300'}>
+                                {t.tipoOrigem === 'central' ? '🏢 Central' : `🏗️ ${t.origemObraNome || 'Obra'}`}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-center"><ArrowRight className="h-4 w-4 text-muted-foreground mx-auto" /></td>
+                            <td className="p-3">
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                                🏗️ {t.destinoObraNome || 'Obra #' + t.destinoObraId}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-xs text-muted-foreground">{t.observacoes || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground">
+                  {transferenciasList.length} transferência{transferenciasList.length !== 1 ? 's' : ''}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
+
+      {/* Dialog de Transferência */}
+      {showTransferDialog && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-[#1B3A5C] flex items-center gap-2">
+                <ArrowLeftRight className="h-5 w-5" /> Nova Transferência
+              </h3>
+              <Button size="sm" variant="ghost" onClick={() => { setShowTransferDialog(false); resetTransForm(); }}>✕</Button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <Label>EPI *</Label>
+                <Select value={transForm.epiId || undefined} onValueChange={v => setTransForm(f => ({ ...f, epiId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o EPI..." /></SelectTrigger>
+                  <SelectContent>
+                    {episList.map((e: any) => (
+                      <SelectItem key={e.id} value={String(e.id)}>
+                        {e.nome} {e.ca ? `(CA: ${e.ca})` : ''} — Estoque Central: {e.quantidadeEstoque ?? 0}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Origem *</Label>
+                <div className="flex gap-2 mt-1">
+                  <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'central', origemObraId: '' }))}
+                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
+                      transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
+                    }`}>
+                    🏢 Escritório Central
+                    {transForm.epiId && <span className="block text-[10px] text-blue-600 mt-0.5">Estoque: {episList.find((e: any) => String(e.id) === transForm.epiId)?.quantidadeEstoque ?? 0}</span>}
+                  </button>
+                  <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'obra' }))}
+                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
+                      transForm.tipoOrigem === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
+                    }`}>
+                    🏗️ Outra Obra
+                  </button>
+                </div>
+              </div>
+
+              {transForm.tipoOrigem === 'obra' && (
+                <div>
+                  <Label>Obra de Origem *</Label>
+                  <Select value={transForm.origemObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, origemObraId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a obra de origem..." /></SelectTrigger>
+                    <SelectContent>
+                      {obrasList.map((o: any) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {transForm.epiId && transForm.origemObraId && (
+                    <p className="text-xs text-green-600 mt-1">Estoque nesta obra: {estoqueObraList2.find((e: any) => e.epiId === parseInt(transForm.epiId) && e.obraId === parseInt(transForm.origemObraId))?.quantidade ?? 0}</p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <Label>Obra de Destino *</Label>
+                <Select value={transForm.destinoObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, destinoObraId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a obra de destino..." /></SelectTrigger>
+                  <SelectContent>
+                    {obrasList.filter((o: any) => String(o.id) !== transForm.origemObraId).map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Quantidade *</Label>
+                  <Input type="number" min={1} value={transForm.quantidade}
+                    onChange={e => setTransForm(f => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} />
+                </div>
+                <div>
+                  <Label>Data</Label>
+                  <Input type="date" value={transForm.data}
+                    onChange={e => setTransForm(f => ({ ...f, data: e.target.value }))} />
+                </div>
+              </div>
+
+              <div>
+                <Label>Observações</Label>
+                <Input value={transForm.observacoes} onChange={e => setTransForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Motivo da transferência..." />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setShowTransferDialog(false); resetTransForm(); }}>Cancelar</Button>
+                <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]" disabled={transferirMut.isPending}
+                  onClick={() => {
+                    if (!transForm.epiId || !transForm.destinoObraId) return toast.error('Selecione EPI e obra de destino');
+                    if (transForm.tipoOrigem === 'obra' && !transForm.origemObraId) return toast.error('Selecione a obra de origem');
+                    if (transForm.tipoOrigem === 'obra' && transForm.origemObraId === transForm.destinoObraId) return toast.error('Origem e destino não podem ser a mesma obra');
+                    transferirMut.mutate({
+                      companyId,
+                      epiId: parseInt(transForm.epiId),
+                      quantidade: transForm.quantidade,
+                      tipoOrigem: transForm.tipoOrigem,
+                      origemObraId: transForm.origemObraId ? parseInt(transForm.origemObraId) : undefined,
+                      destinoObraId: parseInt(transForm.destinoObraId),
+                      data: transForm.data,
+                      observacoes: transForm.observacoes || undefined,
+                    });
+                  }}>
+                  {transferirMut.isPending ? 'Transferindo...' : 'Confirmar Transferência'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dialog para cadastrar/editar fornecedor */}
       {showFornecedorDialog && <FornecedorDialog
         fornecedorForm={fornecedorForm} setFornecedorForm={setFornecedorForm}

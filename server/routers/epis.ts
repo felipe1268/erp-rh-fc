@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi } from "../../drizzle/schema";
+import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, gte } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
@@ -195,6 +195,8 @@ export const episRouter = router({
       motivoTroca: z.string().optional(),
       fotoEstadoBase64: z.string().optional(),
       fotoEstadoFileName: z.string().optional(),
+      origemEntrega: z.enum(['central','obra']).default('central'),
+      obraId: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -238,12 +240,26 @@ export const episRouter = router({
         motivoTroca: input.motivoTroca || null,
         valorCobrado,
         fotoEstadoUrl,
+        origemEntrega: input.origemEntrega,
+        obraId: input.obraId || null,
       } as any);
 
-      // Update stock (decrement)
-      await db.update(epis)
-        .set({ quantidadeEstoque: sql`GREATEST(${epis.quantidadeEstoque} - ${input.quantidade}, 0)` })
-        .where(eq(epis.id, input.epiId));
+      // Update stock based on origin
+      if (input.origemEntrega === 'obra' && input.obraId) {
+        // Descontar do estoque da obra
+        const [estoqueObra] = await db.select().from(epiEstoqueObra)
+          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.obraId)));
+        if (estoqueObra) {
+          await db.update(epiEstoqueObra)
+            .set({ quantidade: sql`GREATEST(${epiEstoqueObra.quantidade} - ${input.quantidade}, 0)` })
+            .where(eq(epiEstoqueObra.id, estoqueObra.id));
+        }
+      } else {
+        // Descontar do estoque central
+        await db.update(epis)
+          .set({ quantidadeEstoque: sql`GREATEST(${epis.quantidadeEstoque} - ${input.quantidade}, 0)` })
+          .where(eq(epis.id, input.epiId));
+      }
 
       // Se motivo é cobrável, criar alerta de desconto automaticamente
       if (valorCobrado && parseFloat(valorCobrado) > 0) {
@@ -1028,6 +1044,192 @@ Exemplos de referência:
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       await db.update(fornecedoresEpi).set({ ativo: 0 }).where(eq(fornecedoresEpi.id, input.id));
+      return { success: true };
+    }),
+
+  // ============================================================
+  // ESTOQUE POR OBRA
+  // ============================================================
+  estoqueObraList: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const conds: any[] = [eq(epiEstoqueObra.companyId, input.companyId)];
+      if (input.obraId) conds.push(eq(epiEstoqueObra.obraId, input.obraId));
+      const rows = await db.select({
+        id: epiEstoqueObra.id,
+        companyId: epiEstoqueObra.companyId,
+        epiId: epiEstoqueObra.epiId,
+        obraId: epiEstoqueObra.obraId,
+        quantidade: epiEstoqueObra.quantidade,
+        nomeEpi: epis.nome,
+        caEpi: epis.ca,
+        categoriaEpi: epis.categoria,
+        valorProdutoEpi: epis.valorProduto,
+        nomeObra: obras.nome,
+      })
+        .from(epiEstoqueObra)
+        .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
+        .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
+        .where(and(...conds))
+        .orderBy(obras.nome, epis.nome);
+      return rows;
+    }),
+
+  // Resumo de estoque por obra (agrupado)
+  estoqueObraResumo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rows = await db.select({
+        obraId: epiEstoqueObra.obraId,
+        nomeObra: obras.nome,
+        totalItens: sql<number>`COUNT(DISTINCT ${epiEstoqueObra.epiId})`,
+        totalUnidades: sql<number>`SUM(${epiEstoqueObra.quantidade})`,
+      })
+        .from(epiEstoqueObra)
+        .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
+        .where(and(eq(epiEstoqueObra.companyId, input.companyId), sql`${epiEstoqueObra.quantidade} > 0`))
+        .groupBy(epiEstoqueObra.obraId, obras.nome)
+        .orderBy(obras.nome);
+      return rows;
+    }),
+
+  // ============================================================
+  // TRANSFERÊNCIAS DE ESTOQUE
+  // ============================================================
+  transferir: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      epiId: z.number(),
+      quantidade: z.number().min(1),
+      tipoOrigem: z.enum(['central','obra']),
+      origemObraId: z.number().optional(),
+      destinoObraId: z.number(),
+      data: z.string(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+
+      // Validar estoque na origem
+      if (input.tipoOrigem === 'central') {
+        const [epi] = await db.select({ quantidadeEstoque: epis.quantidadeEstoque }).from(epis).where(eq(epis.id, input.epiId));
+        if (!epi || (epi.quantidadeEstoque || 0) < input.quantidade) {
+          throw new Error(`Estoque central insuficiente. Disponível: ${epi?.quantidadeEstoque || 0}`);
+        }
+        // Descontar do estoque central
+        await db.update(epis)
+          .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} - ${input.quantidade}` })
+          .where(eq(epis.id, input.epiId));
+      } else {
+        // Origem é outra obra
+        if (!input.origemObraId) throw new Error('Obra de origem é obrigatória para transferência entre obras');
+        const [estoqueOrigem] = await db.select().from(epiEstoqueObra)
+          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.origemObraId)));
+        if (!estoqueOrigem || estoqueOrigem.quantidade < input.quantidade) {
+          throw new Error(`Estoque da obra insuficiente. Disponível: ${estoqueOrigem?.quantidade || 0}`);
+        }
+        // Descontar da obra de origem
+        await db.update(epiEstoqueObra)
+          .set({ quantidade: sql`${epiEstoqueObra.quantidade} - ${input.quantidade}` })
+          .where(eq(epiEstoqueObra.id, estoqueOrigem.id));
+      }
+
+      // Adicionar ao estoque da obra destino
+      const [existente] = await db.select().from(epiEstoqueObra)
+        .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.destinoObraId)));
+      if (existente) {
+        await db.update(epiEstoqueObra)
+          .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
+          .where(eq(epiEstoqueObra.id, existente.id));
+      } else {
+        await db.insert(epiEstoqueObra).values({
+          companyId: input.companyId,
+          epiId: input.epiId,
+          obraId: input.destinoObraId,
+          quantidade: input.quantidade,
+        });
+      }
+
+      // Registrar transferência
+      await db.insert(epiTransferencias).values({
+        companyId: input.companyId,
+        epiId: input.epiId,
+        quantidade: input.quantidade,
+        tipoOrigem: input.tipoOrigem,
+        origemObraId: input.origemObraId || null,
+        destinoObraId: input.destinoObraId,
+        data: input.data,
+        observacoes: input.observacoes || null,
+        criadoPor: ctx.user.name ?? 'Sistema',
+        criadoPorUserId: ctx.user.id,
+      } as any);
+
+      return { success: true };
+    }),
+
+  listarTransferencias: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      epiId: z.number().optional(),
+      obraId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const conds: any[] = [eq(epiTransferencias.companyId, input.companyId)];
+      if (input.epiId) conds.push(eq(epiTransferencias.epiId, input.epiId));
+      if (input.obraId) {
+        conds.push(sql`(${epiTransferencias.origemObraId} = ${input.obraId} OR ${epiTransferencias.destinoObraId} = ${input.obraId})`);
+      }
+      const rows = await db.select({
+        id: epiTransferencias.id,
+        epiId: epiTransferencias.epiId,
+        quantidade: epiTransferencias.quantidade,
+        tipoOrigem: epiTransferencias.tipoOrigem,
+        origemObraId: epiTransferencias.origemObraId,
+        destinoObraId: epiTransferencias.destinoObraId,
+        data: epiTransferencias.data,
+        observacoes: epiTransferencias.observacoes,
+        criadoPor: epiTransferencias.criadoPor,
+        createdAt: epiTransferencias.createdAt,
+        nomeEpi: epis.nome,
+        caEpi: epis.ca,
+      })
+        .from(epiTransferencias)
+        .leftJoin(epis, eq(epiTransferencias.epiId, epis.id))
+        .where(and(...conds))
+        .orderBy(desc(epiTransferencias.createdAt));
+
+      // Enrich with obra names
+      const obraIds = Array.from(new Set([
+        ...rows.filter(r => r.origemObraId).map(r => r.origemObraId!),
+        ...rows.map(r => r.destinoObraId),
+      ]));
+      let obraMap: Record<number, string> = {};
+      if (obraIds.length > 0) {
+        const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
+          .where(sql`${obras.id} IN (${sql.join(obraIds.map(id => sql`${id}`), sql`,`)})`);
+        obraList.forEach(o => { obraMap[o.id] = o.nome; });
+      }
+      return rows.map(r => ({
+        ...r,
+        origemNome: r.tipoOrigem === 'central' ? 'Escritório Central' : (r.origemObraId ? obraMap[r.origemObraId] || 'Obra' : 'Obra'),
+        destinoNome: obraMap[r.destinoObraId] || 'Obra',
+      }));
+    }),
+
+  // Entrada de estoque (compra / recebimento no central)
+  entradaEstoque: protectedProcedure
+    .input(z.object({
+      epiId: z.number(),
+      quantidade: z.number().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.update(epis)
+        .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
+        .where(eq(epis.id, input.epiId));
       return { success: true };
     }),
 });
