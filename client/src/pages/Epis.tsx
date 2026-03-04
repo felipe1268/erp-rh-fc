@@ -137,6 +137,8 @@ export default function Epis() {
   const bdiQ = trpc.epis.getBdi.useQuery({ companyId }, { enabled: !!companyId });
   const formTextQ = trpc.epis.getFormText.useQuery({ companyId }, { enabled: !!companyId });
   const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasList = obrasQ.data ?? [];
 
   const episList = episQ.data ?? [];
   const deliveriesList = deliveriesQ.data ?? [];
@@ -193,8 +195,9 @@ export default function Epis() {
   // Form state - Entrega
   const [entregaForm, setEntregaForm] = useState({
     epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0],
-    motivo: "", observacoes: "", motivoTroca: "",
+    motivo: "", observacoes: "", motivoTroca: "", obraId: "",
   });
+  const [showObraConfirm, setShowObraConfirm] = useState(false);
 
   // BDI config
   const [bdiValue, setBdiValue] = useState("");
@@ -236,6 +239,7 @@ export default function Epis() {
       // Abrir ficha de entrega automaticamente após registro
       const epi = episList.find((e: any) => String(e.id) === entregaForm.epiId);
       const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
+      const obraSel = obrasList.find((o: any) => String(o.id) === entregaForm.obraId);
       setFichaDelivery({
         id: result.id,
         epiId: parseInt(entregaForm.epiId),
@@ -249,6 +253,7 @@ export default function Epis() {
         caEpi: epi?.ca || "",
         nomeFunc: emp?.nomeCompleto || "",
         funcaoFunc: emp?.funcao || "",
+        obraNome: obraSel?.nome || emp?.obraAtualNome || "",
       });
       setViewMode("ficha_epi");
       resetEntregaForm();
@@ -326,7 +331,7 @@ export default function Epis() {
   const TAMANHOS_ROUPA = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
   const TAMANHOS_CALCADO = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
   function resetEntregaForm() {
-    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "" });
+    setEntregaForm({ epiId: "", employeeId: "", quantidade: 1, dataEntrega: new Date().toISOString().split("T")[0], motivo: "", observacoes: "", motivoTroca: "", obraId: "" });
     setFotoEstado({ file: null, preview: "" });
   }
 
@@ -988,7 +993,11 @@ export default function Epis() {
               </div>
               <div>
                 <Label>Funcionário *</Label>
-                <Select value={entregaForm.employeeId || undefined} onValueChange={v => setEntregaForm(f => ({ ...f, employeeId: v }))}>
+                <Select value={entregaForm.employeeId || undefined} onValueChange={v => {
+                  const emp = employeesList.find((e: any) => String(e.id) === v);
+                  const obraId = emp?.obraAtualId ? String(emp.obraAtualId) : "";
+                  setEntregaForm(f => ({ ...f, employeeId: v, obraId }));
+                }}>
                   <SelectTrigger><SelectValue placeholder="Selecione o funcionário..." /></SelectTrigger>
                   <SelectContent>
                     {employeesList.map((e: any) => (
@@ -999,6 +1008,30 @@ export default function Epis() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* OBRA - pré-preenchida com obra atual do funcionário */}
+              {entregaForm.employeeId && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <Label className="text-blue-800 font-semibold">Obra / Local de Trabalho</Label>
+                  <Select value={entregaForm.obraId || "sem_obra"} onValueChange={v => setEntregaForm(f => ({ ...f, obraId: v === "sem_obra" ? "" : v }))}>
+                    <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sem_obra">Sem obra definida</SelectItem>
+                      {obrasList.map((o: any) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {entregaForm.obraId && (() => {
+                    const emp = employeesList.find((e: any) => String(e.id) === entregaForm.employeeId);
+                    const obraDefault = emp?.obraAtualId ? String(emp.obraAtualId) : "";
+                    if (entregaForm.obraId !== obraDefault) {
+                      return <p className="text-xs text-amber-600 mt-1 font-medium">⚠️ Obra diferente da alocação atual do funcionário</p>;
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label>Quantidade *</Label>
@@ -1226,6 +1259,7 @@ export default function Epis() {
                 <div><span className="text-gray-500 text-xs">Função:</span><br/><strong className="text-[#1B2A4A]">{fichaDelivery.funcaoFunc || emp?.funcao || "—"}</strong></div>
                 <div><span className="text-gray-500 text-xs">CPF:</span><br/><strong>{emp?.cpf || "—"}</strong></div>
                 <div><span className="text-gray-500 text-xs">Matrícula:</span><br/><strong>{emp?.codigoInterno || "—"}</strong></div>
+                <div className="sm:col-span-2"><span className="text-gray-500 text-xs">Obra / Local de Trabalho:</span><br/><strong className="text-[#1B2A4A]">{fichaDelivery.obraNome || emp?.obraAtualNome || "—"}</strong></div>
               </div>
             </div>
 

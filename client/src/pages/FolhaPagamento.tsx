@@ -1726,6 +1726,7 @@ export default function FolhaPagamento() {
                       <th className="text-right py-2 px-1 bg-red-50">Pensão</th>
                       <th className="text-right py-2 px-1 bg-red-50">Seguro</th>
                       <th className="text-right py-2 px-1 bg-red-50">Ac. Escuro</th>
+                      <th className="text-right py-2 px-1 bg-purple-50">Conv.</th>
                       <th className="text-right py-2 px-1 bg-red-50 font-bold">Tot. Desc.</th>
                       <th className="text-right py-2 px-1 bg-blue-50 font-bold">Líquido</th>
                       <th className="text-right py-2 px-1 text-[9px] text-muted-foreground">FGTS</th>
@@ -1739,6 +1740,7 @@ export default function FolhaPagamento() {
                       const pensao = f.descontoPensao || 0;
                       const seguro = f.seguroVidaValor || 0;
                       const acertoEsc = f.acertoEscuroValor || 0;
+                      const convenio = f.descontoConvenio || 0;
                       return (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-1.5 px-1 font-medium sticky left-0 bg-white z-10 whitespace-nowrap">{f.nome}</td>
@@ -1754,6 +1756,7 @@ export default function FolhaPagamento() {
                           <td className="text-right py-1.5 px-1 text-red-600">{pensao > 0 ? formatBRL(pensao) : '—'}</td>
                           <td className="text-right py-1.5 px-1 text-red-600">{seguro > 0 ? formatBRL(seguro) : '—'}</td>
                           <td className="text-right py-1.5 px-1 text-red-600">{acertoEsc > 0 ? formatBRL(acertoEsc) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-purple-700">{convenio > 0 ? formatBRL(convenio) : '—'}</td>
                           <td className="text-right py-1.5 px-1 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
                           <td className="text-right py-1.5 px-1 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
                           <td className="text-right py-1.5 px-1 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
@@ -1788,6 +1791,9 @@ export default function FolhaPagamento() {
                       </td>
                       <td className="text-right py-2 px-1 text-red-600">
                         {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.acertoEscuroValor || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-purple-700">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoConvenio || 0), 0) || 0)}
                       </td>
                       <td className="text-right py-2 px-1 text-red-700">{formatBRL(pagamentoResult.totalDescontos)}</td>
                       <td className="text-right py-2 px-1 text-lg text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</td>

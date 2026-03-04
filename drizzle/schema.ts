@@ -3341,3 +3341,4 @@ export const payrollAlerts = mysqlTable("payroll_alerts", {
 	index("pal_tipo").on(table.tipo),
 	index("pal_lido").on(table.lido),
 ]);
+

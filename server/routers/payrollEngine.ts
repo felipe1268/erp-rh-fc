@@ -1421,7 +1421,17 @@ export const payrollEngineRouter = router({
           };
         });
 
-        const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVaTotal + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor;
+        // Convênios (farmácia, posto, etc.) - buscar lançamentos aprovados do mês
+        const [convenioRows] = await db.execute(sql`
+          SELECT COALESCE(SUM(CAST(lp.valor AS DECIMAL(15,2))), 0) as totalConvenio
+          FROM lancamentos_parceiros lp
+          WHERE lp.employee_id = ${emp.id} AND lp.company_id = ${input.companyId}
+          AND lp.competencia_desconto = ${input.mesReferencia}
+          AND lp.status_lancamento_parceiro IN ('pendente', 'aprovado')
+        `) as any[];
+        const descontoConvenio = parseFloat((convenioRows as any[])?.[0]?.totalConvenio || '0');
+
+        const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVaTotal + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor + descontoConvenio;
         const salarioLiquido = totalProventos - totalDescontos;
 
         await db.execute(sql`
@@ -1435,7 +1445,7 @@ export const payrollEngineRouter = router({
           VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis},
             ${formatMoney(salarioBruto)}, ${formatMoney(valorHE)}, ${formatMoney(totalProventos)},
             ${formatMoney(descontoAdiantamento)}, ${formatMoney(descontoFaltas)}, ${faltasQtd}, ${formatMoney(descontoAtrasos)}, ${atrasosMinutos},
-            ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(inssValor)}, ${formatMoney(fgtsValor)}, '0',
+            ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(descontoPensao)}, ${formatMoney(inssValor)}, ${formatMoney(fgtsValor)}, ${formatMoney(descontoConvenio)},
             ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
             ${formatMoney(vaValor)}, ${formatMoney(vtValorMensal)}, ${formatMoney(vrValorMensal)}, ${formatMoney(seguroVidaValor)}, ${formatMoney(fgtsValor)}, ${formatMoney(inssValor)}, ${JSON.stringify(rateioPorObra)},
             'simulado', ${dataPagamentoPrevista})
@@ -1464,6 +1474,7 @@ export const payrollEngineRouter = router({
           descontoInss: inssValor,
           descontoFgts: fgtsValor,
           acertoEscuroValor,
+          descontoConvenio,
           totalDescontos,
           salarioLiquido,
           dataPagamentoPrevista,

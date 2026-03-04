@@ -143,7 +143,7 @@ export const episRouter = router({
       if (input.employeeId) conds.push(eq(epiDeliveries.employeeId, input.employeeId));
       if (input.epiId) conds.push(eq(epiDeliveries.epiId, input.epiId));
 
-      return db.select({
+      const rows = await db.select({
         id: epiDeliveries.id,
         companyId: epiDeliveries.companyId,
         epiId: epiDeliveries.epiId,
@@ -164,12 +164,22 @@ export const episRouter = router({
         tempoMinimoTrocaEpi: epis.tempoMinimoTroca,
         nomeFunc: employees.nomeCompleto,
         funcaoFunc: employees.funcao,
+        obraAtualId: employees.obraAtualId,
       })
         .from(epiDeliveries)
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
         .leftJoin(employees, eq(epiDeliveries.employeeId, employees.id))
         .where(and(...conds))
         .orderBy(desc(epiDeliveries.dataEntrega));
+
+      // Enrich with obra name
+      const obraIds = Array.from(new Set(rows.filter(r => r.obraAtualId).map(r => r.obraAtualId!)));
+      let obraMap: Record<number, string> = {};
+      if (obraIds.length > 0) {
+        const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.join(obraIds.map(id => sql`${id}`), sql`,`)})`);
+        obraList.forEach(o => { obraMap[o.id] = o.nome; });
+      }
+      return rows.map(r => ({ ...r, obraNome: r.obraAtualId ? (obraMap[r.obraAtualId] || null) : null }));
     }),
 
   createDelivery: protectedProcedure

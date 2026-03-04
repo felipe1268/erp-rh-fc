@@ -4471,3 +4471,15 @@
 - [x] Frontend: tabela expandida com 16 colunas (Funcionário, Função, Bruto, H.E., Proventos, Adiant., INSS, VT, VA 5%, Faltas, Pensão, Seguro, Ac.Escuro, Tot.Desc., Líquido, FGTS)
 - [x] Frontend: totais por coluna no rodapé da tabela
 - [x] Frontend: cores diferenciadas (verde=proventos, laranja=adiantamento, vermelho=descontos, azul=líquido)
+
+## Fase 91: VT diário no cadastro + Obra na EPI + Integração Convênios
+- [x] Garantir campo VT diário visível e editável no cadastro de funcionários (já existia na aba Benefícios)
+- [x] Campo Obra na ficha de EPI: seletor de obra no formulário de entrega (pré-preenchido com obra atual)
+- [x] Campo Obra na ficha de EPI: exibição na ficha impressa
+- [x] Campo Obra na ficha de EPI: confirmação do usuário ao registrar entrega
+- [x] Backend EPI: retornar obraNome na listagem de entregas
+- [x] Módulo Convênios: já existia como módulo Parceiros (farmácia, posto, etc.)
+- [x] Integração Convênios com Folha: buscar lançamentos aprovados do mês no simularPagamento
+- [x] Integração Convênios com Folha: descontoConvenio incluído no totalDescontos
+- [x] Integração Convênios com Folha: coluna Conv. (roxo) na tabela de simulação de pagamento
+- [x] Integração Convênios com Folha: descontoOutros agora recebe valor de convênio no INSERT
