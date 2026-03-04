@@ -4590,3 +4590,9 @@
 - [x] Cadastro de Médicos (nome + CRM) com tabela no banco para sugestões automáticas no formulário de ASO
 - [x] Cadastro de Clínicas com tabela no banco para sugestões automáticas no formulário de ASO
 - [x] Autocomplete nos campos Médico, CRM e Clínica do formulário de ASO e Atestados baseado nos registros cadastrados
+- [ ] BUG: Renan (ativo) não recebe e-mail de notificação; Felipe (inativo) pode estar recebendo - investigar lógica de disparo
+- [ ] Implementar envio real de e-mails via Gmail SMTP (Nodemailer) para cada destinatário ativo
+- [ ] Configurar secrets SMTP_EMAIL e SMTP_APP_PASSWORD para Gmail
+- [x] BUG: Ao selecionar médico da lista de sugestões, o nome não é preenchido no campo - corrigido com onSelect callback único
+- [x] Adicionar opção de editar dados do médico na lista de sugestões - ícone de lápis + formulário de edição
+- [x] Adicionar opção de editar dados da clínica na lista de sugestões - ícone de lápis + formulário de edição

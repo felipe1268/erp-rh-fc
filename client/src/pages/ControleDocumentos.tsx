@@ -336,14 +336,16 @@ const EXAMES_PADRAO = [
 ];
 
 // ============ COMPONENTE: AUTOCOMPLETE MÉDICO ============
-function MedicoAutocomplete({ medicoValue, crmValue, onChangeMedico, onChangeCrm, companyId }: {
+function MedicoAutocomplete({ medicoValue, crmValue, onSelect, onChangeMedico, onChangeCrm, companyId }: {
   medicoValue: string; crmValue: string;
+  onSelect: (nome: string, crm: string) => void;
   onChangeMedico: (v: string) => void; onChangeCrm: (v: string) => void;
   companyId: number;
 }) {
   const [medicoSearch, setMedicoSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showNewMedico, setShowNewMedico] = useState(false);
+  const [editingMedico, setEditingMedico] = useState<any>(null);
   const [newMedicoNome, setNewMedicoNome] = useState("");
   const [newMedicoCrm, setNewMedicoCrm] = useState("");
   const [newMedicoEsp, setNewMedicoEsp] = useState("");
@@ -354,6 +356,7 @@ function MedicoAutocomplete({ medicoValue, crmValue, onChangeMedico, onChangeCrm
     { enabled: !!companyId }
   );
   const criarMedico = trpc.medicosClinicas.criarMedico.useMutation();
+  const atualizarMedico = trpc.medicosClinicas.atualizarMedico.useMutation();
   const utils = trpc.useUtils();
 
   const filtered = useMemo(() => {
@@ -364,30 +367,52 @@ function MedicoAutocomplete({ medicoValue, crmValue, onChangeMedico, onChangeCrm
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setShowSuggestions(false);
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const selectMedico = (m: any) => {
-    onChangeMedico(m.nome);
-    onChangeCrm(m.crm);
+    onSelect(m.nome, m.crm);
     setMedicoSearch("");
     setShowSuggestions(false);
   };
 
-  const handleSaveNew = async () => {
+  const openEditMedico = (e: React.MouseEvent, m: any) => {
+    e.stopPropagation();
+    setShowSuggestions(false);
+    setEditingMedico(m);
+    setShowNewMedico(true);
+    setNewMedicoNome(m.nome);
+    setNewMedicoCrm(m.crm);
+    setNewMedicoEsp(m.especialidade || "");
+  };
+
+  const handleSave = async () => {
     if (!newMedicoNome.trim() || !newMedicoCrm.trim()) { toast.error("Nome e CRM são obrigatórios"); return; }
     try {
-      await criarMedico.mutateAsync({ companyId, nome: newMedicoNome.trim(), crm: newMedicoCrm.trim(), especialidade: newMedicoEsp.trim() || undefined });
+      if (editingMedico) {
+        await atualizarMedico.mutateAsync({ id: editingMedico.id, companyId, nome: newMedicoNome.trim(), crm: newMedicoCrm.trim(), especialidade: newMedicoEsp.trim() || undefined });
+        toast.success("Médico atualizado com sucesso!");
+      } else {
+        await criarMedico.mutateAsync({ companyId, nome: newMedicoNome.trim(), crm: newMedicoCrm.trim(), especialidade: newMedicoEsp.trim() || undefined });
+        toast.success("Médico cadastrado com sucesso!");
+      }
       utils.medicosClinicas.listarMedicos.invalidate();
-      onChangeMedico(newMedicoNome.trim());
-      onChangeCrm(newMedicoCrm.trim());
+      onSelect(newMedicoNome.trim(), newMedicoCrm.trim());
       setShowNewMedico(false);
+      setEditingMedico(null);
       setNewMedicoNome(""); setNewMedicoCrm(""); setNewMedicoEsp("");
-      toast.success("Médico cadastrado com sucesso!");
-    } catch { toast.error("Erro ao cadastrar médico"); }
+    } catch { toast.error(editingMedico ? "Erro ao atualizar médico" : "Erro ao cadastrar médico"); }
+  };
+
+  const cancelForm = () => {
+    setShowNewMedico(false);
+    setEditingMedico(null);
+    setNewMedicoNome(""); setNewMedicoCrm(""); setNewMedicoEsp("");
   };
 
   return (
@@ -403,12 +428,17 @@ function MedicoAutocomplete({ medicoValue, crmValue, onChangeMedico, onChangeCrm
         {showSuggestions && (filtered.length > 0 || medicoSearch) && (
           <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
             {filtered.map((m: any) => (
-              <button key={m.id} type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex justify-between items-center" onClick={() => selectMedico(m)}>
-                <span className="font-medium">{m.nome}</span>
-                <span className="text-xs text-muted-foreground">CRM: {m.crm}</span>
-              </button>
+              <div key={m.id} className="flex items-center hover:bg-accent">
+                <button type="button" className="flex-1 text-left px-3 py-2 text-sm flex justify-between items-center" onClick={() => selectMedico(m)}>
+                  <span className="font-medium">{m.nome}</span>
+                  <span className="text-xs text-muted-foreground">CRM: {m.crm}</span>
+                </button>
+                <button type="button" className="px-2 py-2 text-muted-foreground hover:text-blue-600" title="Editar médico" onClick={(e) => openEditMedico(e, m)}>
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </div>
             ))}
-            <button type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm text-blue-600 border-t flex items-center gap-1" onClick={() => { setShowSuggestions(false); setShowNewMedico(true); setNewMedicoNome(medicoSearch); }}>
+            <button type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm text-blue-600 border-t flex items-center gap-1" onClick={() => { setShowSuggestions(false); setEditingMedico(null); setShowNewMedico(true); setNewMedicoNome(medicoSearch); setNewMedicoCrm(""); setNewMedicoEsp(""); }}>
               <Plus className="h-3 w-3" /> Cadastrar novo médico
             </button>
           </div>
@@ -420,15 +450,17 @@ function MedicoAutocomplete({ medicoValue, crmValue, onChangeMedico, onChangeCrm
       </div>
       {showNewMedico && (
         <div className="col-span-1 sm:col-span-2 border rounded-lg p-3 bg-blue-50/50 space-y-2">
-          <p className="text-sm font-medium text-blue-800">Cadastrar Novo Médico</p>
+          <p className="text-sm font-medium text-blue-800">{editingMedico ? "Editar Médico" : "Cadastrar Novo Médico"}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Input placeholder="Nome completo *" value={newMedicoNome} onChange={e => setNewMedicoNome(e.target.value)} />
             <Input placeholder="CRM *" value={newMedicoCrm} onChange={e => setNewMedicoCrm(e.target.value)} />
             <Input placeholder="Especialidade" value={newMedicoEsp} onChange={e => setNewMedicoEsp(e.target.value)} />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowNewMedico(false)}>Cancelar</Button>
-            <Button type="button" size="sm" onClick={handleSaveNew} disabled={criarMedico.isPending}>Salvar Médico</Button>
+            <Button type="button" variant="outline" size="sm" onClick={cancelForm}>Cancelar</Button>
+            <Button type="button" size="sm" onClick={handleSave} disabled={criarMedico.isPending || atualizarMedico.isPending}>
+              {editingMedico ? "Atualizar" : "Salvar"} Médico
+            </Button>
           </div>
         </div>
       )}
@@ -443,6 +475,7 @@ function ClinicaAutocomplete({ value, onChange, companyId }: {
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showNewClinica, setShowNewClinica] = useState(false);
+  const [editingClinica, setEditingClinica] = useState<any>(null);
   const [newClinicaNome, setNewClinicaNome] = useState("");
   const [newClinicaEnd, setNewClinicaEnd] = useState("");
   const [newClinicaTel, setNewClinicaTel] = useState("");
@@ -453,6 +486,7 @@ function ClinicaAutocomplete({ value, onChange, companyId }: {
     { enabled: !!companyId }
   );
   const criarClinica = trpc.medicosClinicas.criarClinica.useMutation();
+  const atualizarClinica = trpc.medicosClinicas.atualizarClinica.useMutation();
   const utils = trpc.useUtils();
 
   const filtered = useMemo(() => {
@@ -469,16 +503,38 @@ function ClinicaAutocomplete({ value, onChange, companyId }: {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSaveNew = async () => {
+  const openEditClinica = (e: React.MouseEvent, c: any) => {
+    e.stopPropagation();
+    setShowSuggestions(false);
+    setEditingClinica(c);
+    setShowNewClinica(true);
+    setNewClinicaNome(c.nome);
+    setNewClinicaEnd(c.endereco || "");
+    setNewClinicaTel(c.telefone || "");
+  };
+
+  const handleSave = async () => {
     if (!newClinicaNome.trim()) { toast.error("Nome da clínica é obrigatório"); return; }
     try {
-      await criarClinica.mutateAsync({ companyId, nome: newClinicaNome.trim(), endereco: newClinicaEnd.trim() || undefined, telefone: newClinicaTel.trim() || undefined });
+      if (editingClinica) {
+        await atualizarClinica.mutateAsync({ id: editingClinica.id, companyId, nome: newClinicaNome.trim(), endereco: newClinicaEnd.trim() || undefined, telefone: newClinicaTel.trim() || undefined });
+        toast.success("Clínica atualizada com sucesso!");
+      } else {
+        await criarClinica.mutateAsync({ companyId, nome: newClinicaNome.trim(), endereco: newClinicaEnd.trim() || undefined, telefone: newClinicaTel.trim() || undefined });
+        toast.success("Clínica cadastrada com sucesso!");
+      }
       utils.medicosClinicas.listarClinicas.invalidate();
       onChange(newClinicaNome.trim());
       setShowNewClinica(false);
+      setEditingClinica(null);
       setNewClinicaNome(""); setNewClinicaEnd(""); setNewClinicaTel("");
-      toast.success("Clínica cadastrada com sucesso!");
-    } catch { toast.error("Erro ao cadastrar clínica"); }
+    } catch { toast.error(editingClinica ? "Erro ao atualizar clínica" : "Erro ao cadastrar clínica"); }
+  };
+
+  const cancelForm = () => {
+    setShowNewClinica(false);
+    setEditingClinica(null);
+    setNewClinicaNome(""); setNewClinicaEnd(""); setNewClinicaTel("");
   };
 
   return (
@@ -494,12 +550,17 @@ function ClinicaAutocomplete({ value, onChange, companyId }: {
         {showSuggestions && (filtered.length > 0 || search) && (
           <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
             {filtered.map((c: any) => (
-              <button key={c.id} type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm" onClick={() => { onChange(c.nome); setSearch(""); setShowSuggestions(false); }}>
-                <span className="font-medium">{c.nome}</span>
-                {c.endereco && <span className="text-xs text-muted-foreground ml-2">{c.endereco}</span>}
-              </button>
+              <div key={c.id} className="flex items-center hover:bg-accent">
+                <button type="button" className="flex-1 text-left px-3 py-2 text-sm" onClick={() => { onChange(c.nome); setSearch(""); setShowSuggestions(false); }}>
+                  <span className="font-medium">{c.nome}</span>
+                  {c.endereco && <span className="text-xs text-muted-foreground ml-2">{c.endereco}</span>}
+                </button>
+                <button type="button" className="px-2 py-2 text-muted-foreground hover:text-blue-600" title="Editar clínica" onClick={(e) => openEditClinica(e, c)}>
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </div>
             ))}
-            <button type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm text-blue-600 border-t flex items-center gap-1" onClick={() => { setShowSuggestions(false); setShowNewClinica(true); setNewClinicaNome(search); }}>
+            <button type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm text-blue-600 border-t flex items-center gap-1" onClick={() => { setShowSuggestions(false); setEditingClinica(null); setShowNewClinica(true); setNewClinicaNome(search); setNewClinicaEnd(""); setNewClinicaTel(""); }}>
               <Plus className="h-3 w-3" /> Cadastrar nova clínica
             </button>
           </div>
@@ -507,15 +568,17 @@ function ClinicaAutocomplete({ value, onChange, companyId }: {
       </div>
       {showNewClinica && (
         <div className="mt-2 border rounded-lg p-3 bg-blue-50/50 space-y-2">
-          <p className="text-sm font-medium text-blue-800">Cadastrar Nova Clínica</p>
+          <p className="text-sm font-medium text-blue-800">{editingClinica ? "Editar Clínica" : "Cadastrar Nova Clínica"}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Input placeholder="Nome da clínica *" value={newClinicaNome} onChange={e => setNewClinicaNome(e.target.value)} />
             <Input placeholder="Endereço" value={newClinicaEnd} onChange={e => setNewClinicaEnd(e.target.value)} />
             <Input placeholder="Telefone" value={newClinicaTel} onChange={e => setNewClinicaTel(e.target.value)} />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowNewClinica(false)}>Cancelar</Button>
-            <Button type="button" size="sm" onClick={handleSaveNew} disabled={criarClinica.isPending}>Salvar Clínica</Button>
+            <Button type="button" variant="outline" size="sm" onClick={cancelForm}>Cancelar</Button>
+            <Button type="button" size="sm" onClick={handleSave} disabled={criarClinica.isPending || atualizarClinica.isPending}>
+              {editingClinica ? "Atualizar" : "Salvar"} Clínica
+            </Button>
           </div>
         </div>
       )}
@@ -1925,8 +1988,9 @@ export default function ControleDocumentos() {
               <MedicoAutocomplete
                 medicoValue={asoForm.medico || ""}
                 crmValue={asoForm.crm || ""}
-                onChangeMedico={v => setAsoForm({ ...asoForm, medico: v })}
-                onChangeCrm={v => setAsoForm({ ...asoForm, crm: v })}
+                onSelect={(nome, crm) => setAsoForm((prev: any) => ({ ...prev, medico: nome, crm }))}
+                onChangeMedico={v => setAsoForm((prev: any) => ({ ...prev, medico: v }))}
+                onChangeCrm={v => setAsoForm((prev: any) => ({ ...prev, crm: v }))}
                 companyId={companyId}
               />
             </div>
@@ -2062,8 +2126,9 @@ export default function ControleDocumentos() {
               <MedicoAutocomplete
                 medicoValue={atestForm.medico || ""}
                 crmValue={atestForm.crm || ""}
-                onChangeMedico={v => setAtestForm({ ...atestForm, medico: v })}
-                onChangeCrm={v => setAtestForm({ ...atestForm, crm: v })}
+                onSelect={(nome, crm) => setAtestForm((prev: any) => ({ ...prev, medico: nome, crm }))}
+                onChangeMedico={v => setAtestForm((prev: any) => ({ ...prev, medico: v }))}
+                onChangeCrm={v => setAtestForm((prev: any) => ({ ...prev, crm: v }))}
                 companyId={companyId}
               />
             </div>
