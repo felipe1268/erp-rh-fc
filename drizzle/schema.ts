@@ -3342,3 +3342,34 @@ export const payrollAlerts = mysqlTable("payroll_alerts", {
 	index("pal_lido").on(table.lido),
 ]);
 
+// ============================================================
+// MÓDULO APONTAMENTOS DE CAMPO
+// ============================================================
+export const fieldNotes = mysqlTable("field_notes", {
+	id: int().autoincrement().primaryKey().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	obraId: int(),
+	data: date({ mode: 'string' }).notNull(),
+	tipoOcorrencia: mysqlEnum(['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'insubordinacao', 'acidente', 'atestado_medico', 'desvio_conduta', 'elogio', 'outro']).notNull(),
+	descricao: text().notNull(),
+	solicitanteNome: varchar({ length: 255 }).notNull(),
+	solicitanteId: varchar({ length: 255 }),
+	evidenciaUrl: varchar({ length: 500 }),
+	prioridade: mysqlEnum(['baixa', 'media', 'alta', 'urgente']).default('media').notNull(),
+	status: mysqlEnum(['pendente', 'em_analise', 'resolvido', 'arquivado']).default('pendente').notNull(),
+	respostaRH: text(),
+	acaoTomada: mysqlEnum(['nenhuma', 'advertencia_verbal', 'advertencia_escrita', 'suspensao', 'desconto_folha', 'ajuste_ponto', 'encaminhamento_medico', 'outro']),
+	resolvidoPor: varchar({ length: 255 }),
+	resolvidoEm: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp({ mode: 'string' }),
+}, (table) => [
+	index("fn_company").on(table.companyId),
+	index("fn_employee").on(table.employeeId),
+	index("fn_obra").on(table.obraId),
+	index("fn_status").on(table.status),
+	index("fn_data").on(table.data),
+	index("fn_tipo").on(table.tipoOcorrencia),
+]);

@@ -4483,3 +4483,20 @@
 - [x] Integração Convênios com Folha: descontoConvenio incluído no totalDescontos
 - [x] Integração Convênios com Folha: coluna Conv. (roxo) na tabela de simulação de pagamento
 - [x] Integração Convênios com Folha: descontoOutros agora recebe valor de convênio no INSERT
+
+## Fase 92: Módulo Apontamentos de Campo + Reorganizar Folha
+
+### Módulo Apontamentos de Campo
+- [x] Schema: tabela field_notes (companyId, employeeId, obraId, data, tipoOcorrencia, descricao, solicitanteId, solicitanteNome, status, respostaRH, resolvidoPor, resolvidoEm)
+- [x] Backend: CRUD de apontamentos com filtro por empresa/status/data/obra
+- [x] Backend: procedure para RH resolver apontamento (aprovar/rejeitar com resposta)
+- [x] Backend: stats de apontamentos pendentes por empresa
+- [x] Frontend: Tela de registro de ocorrência (gestor seleciona funcionário, obra, data, tipo, descrição)
+- [x] Frontend: Painel RH com lista de pendências para resolver no fechamento do ponto
+- [x] Frontend: Filtros por status, obra, funcionário, período
+- [x] Navegação: adicionado no menu lateral em Operacional (RH & DP)
+
+### Reorganizar Layout Folha de Pagamento
+- [x] Atividades rotineiras em destaque (Cálculo Interno no topo com destaque visual)
+- [x] Conferência contabilidade mais compacta (accordion colapsável já implementado)
+- [x] Melhorar hierarquia visual: subtítulo com fluxo (Ponto → Vale → Pagamento → Conferência)

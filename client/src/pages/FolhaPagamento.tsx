@@ -1821,10 +1821,13 @@ export default function FolhaPagamento() {
         {/* HEADER */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Folha de Pagamento</h1>
-            <p className="text-muted-foreground text-sm">Importação e verificação da folha da contabilidade</p>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <DollarSign className="h-6 w-6 text-[#E8B931]" />
+              Folha de Pagamento
+            </h1>
+            <p className="text-muted-foreground text-sm">Fluxo mensal: Ponto → Vale → Pagamento → Conferência</p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
             <Button size="sm" variant="outline" onClick={() => openView("horas_extras")}>
               <Clock className="h-4 w-4 mr-1" /> Horas Extras
             </Button>

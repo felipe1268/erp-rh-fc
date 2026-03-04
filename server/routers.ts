@@ -77,6 +77,7 @@ import { terceirosRouter } from "./routers/terceiros";
 import { parceirosRouter } from "./routers/parceiros";
 import { portalExternoRouter } from "./routers/portalExterno";
 import { payrollEngineRouter } from "./routers/payrollEngine";
+import { fieldNotesRouter } from "./routers/fieldNotes";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -112,6 +113,7 @@ export const appRouter = router({
   parceiros: parceirosRouter,
   portalExterno: portalExternoRouter,
   payrollEngine: payrollEngineRouter,
+  fieldNotes: fieldNotesRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

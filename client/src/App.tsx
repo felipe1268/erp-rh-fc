@@ -60,6 +60,7 @@ import ModuloPJ from "./pages/ModuloPJ";
 import ContratoPJView from "./pages/ContratoPJView";
 import Revisoes from "./pages/Revisoes";
 import SolicitacaoHE from "./pages/SolicitacaoHE";
+import ApontamentosCampo from "./pages/ApontamentosCampo";
 import Feriados from "./pages/Feriados";
 import Dissidio from "./pages/Dissidio";
 import PJMedicoes from "./pages/PJMedicoes";
@@ -136,6 +137,7 @@ function Router() {
       <Route path={"/contrato-pj/:id"} component={ContratoPJView} />
       <Route path={"/revisoes"} component={Revisoes} />
       <Route path={"/solicitacao-he"} component={SolicitacaoHE} />
+      <Route path={"/apontamentos-campo"} component={ApontamentosCampo} />
       <Route path={"/feriados"} component={Feriados} />
       <Route path={"/dissidio"} component={Dissidio} />
       <Route path={"/pj-medicoes"} component={PJMedicoes} />

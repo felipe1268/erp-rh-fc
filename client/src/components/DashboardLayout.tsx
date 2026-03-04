@@ -99,6 +99,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },
+      { icon: ClipboardList, label: "Apontamentos de Campo", path: "/apontamentos-campo" },
       { icon: CreditCard, label: "Crachás", path: "/crachas" },
       { icon: ClipboardPlus, label: "Lançar Atestados", path: "/controle-documentos?tab=atestados" },
       { icon: ShieldAlert, label: "Advertências", path: "/controle-documentos?tab=advertencias" },
@@ -509,6 +510,7 @@ function DashboardLayoutContent({
     map.set('/relatorios/divergencias', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
     map.set('/relatorios/custo-obra', { moduleId: 'rh-dp', featureKey: 'folha-pagamento' });
     map.set('/comparativo-convencoes', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/apontamentos-campo', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
     map.set('/crachas', { moduleId: 'rh-dp', featureKey: 'crachas-rh' });
     map.set('/pj-medicoes', { moduleId: 'rh-dp', featureKey: 'modulo-pj' });
     // Dashboards mapeados para features correspondentes
