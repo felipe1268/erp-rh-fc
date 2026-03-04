@@ -1232,4 +1232,47 @@ Exemplos de referência:
         .where(eq(epis.id, input.epiId));
       return { success: true };
     }),
+
+  // Entrada direta de EPI no estoque da obra (TST local cadastra EPIs que já tem)
+  entradaDiretaObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      epiId: z.number(),
+      obraId: z.number(),
+      quantidade: z.number().min(1),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      // Verificar se já existe registro de estoque para este EPI nesta obra
+      const [existing] = await db.select().from(epiEstoqueObra)
+        .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.obraId)));
+      if (existing) {
+        await db.update(epiEstoqueObra)
+          .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
+          .where(eq(epiEstoqueObra.id, existing.id));
+      } else {
+        await db.insert(epiEstoqueObra).values({
+          companyId: input.companyId,
+          epiId: input.epiId,
+          obraId: input.obraId,
+          quantidade: input.quantidade,
+        });
+      }
+      // Registrar como transferência tipo "entrada_direta" para histórico
+      const today = new Date().toISOString().split('T')[0];
+      await db.insert(epiTransferencias).values({
+        companyId: input.companyId,
+        epiId: input.epiId,
+        tipoOrigem: 'entrada_direta',
+        origemObraId: null,
+        destinoObraId: input.obraId,
+        quantidade: input.quantidade,
+        data: today,
+        observacoes: input.observacao || 'Entrada direta - EPI já existente na obra',
+        criadoPor: ctx.user?.name || 'Sistema',
+        criadoPorUserId: ctx.user?.id || null,
+      } as any);
+      return { success: true };
+    }),
 });

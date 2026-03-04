@@ -1,0 +1,1 @@
+ALTER TABLE `epi_transferencias` MODIFY COLUMN `tipo_origem` enum('central','obra','entrada_direta') NOT NULL;

@@ -1460,11 +1460,11 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
   }
 
   function handleToggleActive(r: any) {
-    updateMut.mutate({ id: r.id, ativo: !r.ativo });
+    updateMut.mutate({ id: r.id, ativo: !Number(r.ativo) });
   }
 
   const recipients = recipientsQuery.data || [];
-  const activeCount = recipients.filter((r: any) => r.ativo).length;
+  const activeCount = recipients.filter((r: any) => Number(r.ativo)).length;
 
   return (
     <div className="space-y-4">
@@ -1494,11 +1494,11 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
           <p className="text-xs text-gray-500">Ativos</p>
         </div>
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-700">{recipients.filter((r: any) => r.ativo && r.notificarContratacao).length}</p>
+          <p className="text-2xl font-bold text-emerald-700">{recipients.filter((r: any) => Number(r.ativo) && Number(r.notificarContratacao)).length}</p>
           <p className="text-xs text-gray-500">Recebem Contratação</p>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-red-700">{recipients.filter((r: any) => r.ativo && r.notificarDemissao).length}</p>
+          <p className="text-2xl font-bold text-red-700">{recipients.filter((r: any) => Number(r.ativo) && Number(r.notificarDemissao)).length}</p>
           <p className="text-xs text-gray-500">Recebem Demissão</p>
         </div>
       </div>
@@ -1578,9 +1578,9 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
       ) : (
         <div className="space-y-2">
           {recipients.map((r: any) => (
-            <div key={r.id} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${r.ativo ? "bg-white hover:bg-gray-50" : "bg-gray-50 opacity-60"}`}>
+            <div key={r.id} className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${Number(r.ativo) ? "bg-white hover:bg-gray-50" : "bg-gray-50 opacity-60"}`}>
               <div className="flex items-center gap-4 flex-1 min-w-0">
-                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${r.ativo ? "bg-blue-600" : "bg-gray-400"}`}>
+                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${Number(r.ativo) ? "bg-blue-600" : "bg-gray-400"}`}>
                   {r.nome.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0">
@@ -1588,15 +1588,15 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
                   <p className="text-sm text-gray-500 truncate">{r.email}</p>
                 </div>
                 <div className="flex gap-1.5 flex-wrap">
-                  {r.notificarContratacao && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-medium">Contratação</span>}
-                  {r.notificarDemissao && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-medium">Demissão</span>}
-                  {r.notificarTransferencia && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">Transferência</span>}
-                  {r.notificarAfastamento && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium">Afastamento</span>}
+                  {!!r.notificarContratacao && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-medium">Contratação</span>}
+                  {!!r.notificarDemissao && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-medium">Demissão</span>}
+                  {!!r.notificarTransferencia && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">Transferência</span>}
+                  {!!r.notificarAfastamento && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium">Afastamento</span>}
                 </div>
               </div>
               <div className="flex items-center gap-2 ml-4">
-                <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleToggleActive(r)} title={r.ativo ? "Desativar" : "Ativar"}>
-                  {r.ativo ? <ToggleRight className="w-5 h-5 text-green-600" /> : <ToggleLeft className="w-5 h-5 text-gray-400" />}
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleToggleActive(r)} title={Number(r.ativo) ? "Desativar" : "Ativar"}>
+                  {Number(r.ativo) ? <ToggleRight className="w-5 h-5 text-green-600" /> : <ToggleLeft className="w-5 h-5 text-gray-400" />}
                 </Button>
                 <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleEdit(r)}>
                   <Settings className="w-4 h-4" />

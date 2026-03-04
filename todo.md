@@ -4578,3 +4578,9 @@
 - [x] Integrar fluxo completo: entrada → transferência → entrega → saldo
 - [x] Tornar filtros da tela de Processos Trabalhistas responsivos (busca + selects)
 - [x] BUG: Erro ao atualizar destinatário de notificação - expected boolean, received number
+- [x] BUG: Destinatários do Renan (ativos) não recebem e-mails de notificação - corrigido filtro ativo com Number() para tinyint
+- [x] BUG: Felipe (desativado) continua recebendo e-mails normalmente - corrigido toggle ativo com Number()
+- [x] BUG: Exibição de "00" ao lado das tags de notificação na lista de destinatários - corrigido com !! para coerção booleana de tinyint
+- [x] Adicionar entrada direta de EPI no estoque da obra (TST local pode cadastrar EPIs que já tem) - botão + dialog + backend mutation
+- [x] Tornar tela de EPIs totalmente responsiva (cards, abas, filtros) - grid responsivo, flex-wrap, overflow-x-auto
+- [x] Badge de Entrada Direta no histórico de transferências (tipo entrada_direta com cor emerald)

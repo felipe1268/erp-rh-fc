@@ -216,6 +216,8 @@ export default function Epis() {
   const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showObraConfirm, setShowObraConfirm] = useState(false);
+  const [showEntradaDiretaDialog, setShowEntradaDiretaDialog] = useState(false);
+  const [entradaDiretaForm, setEntradaDiretaForm] = useState({ epiId: "", obraId: "", quantidade: "", observacao: "" });
 
   // BDI config
   const [bdiValue, setBdiValue] = useState("");
@@ -313,6 +315,15 @@ export default function Epis() {
   });
   const entradaEstoqueMut = trpc.epis.entradaEstoque.useMutation({
     onSuccess: () => { episQ.refetch(); statsQ.refetch(); toast.success("Entrada de estoque registrada!"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const entradaDiretaObraMut = trpc.epis.entradaDiretaObra.useMutation({
+    onSuccess: () => {
+      estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); transferenciasQ.refetch(); statsQ.refetch();
+      setShowEntradaDiretaDialog(false);
+      setEntradaDiretaForm({ epiId: "", obraId: "", quantidade: "", observacao: "" });
+      toast.success("Entrada direta registrada com sucesso!");
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -1510,64 +1521,68 @@ export default function Epis() {
           </div>
         )}
 
-        {/* Tabs + Search */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg shrink-0">
-            <button onClick={() => setViewMode("catalogo")}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "catalogo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              <Package className="h-3.5 w-3.5 inline mr-1" /> Catálogo
-            </button>
-            <button onClick={() => setViewMode("entregas")}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "entregas" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              <ClipboardList className="h-3.5 w-3.5 inline mr-1" /> Entregas
-            </button>
-            <button onClick={() => setViewMode("estoque_obra")}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "estoque_obra" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              <Warehouse className="h-3.5 w-3.5 inline mr-1" /> Estoque Obra
-            </button>
-            <button onClick={() => setViewMode("transferencias")}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "transferencias" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              <ArrowLeftRight className="h-3.5 w-3.5 inline mr-1" /> Transferências
-            </button>
-          </div>
-          <div className="relative flex-1 min-w-[200px] sm:max-w-md">
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+          <button onClick={() => setViewMode("catalogo")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "catalogo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Package className="h-3.5 w-3.5 inline mr-1" /> Catálogo
+          </button>
+          <button onClick={() => setViewMode("entregas")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "entregas" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <ClipboardList className="h-3.5 w-3.5 inline mr-1" /> Entregas
+          </button>
+          <button onClick={() => setViewMode("estoque_obra")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "estoque_obra" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Warehouse className="h-3.5 w-3.5 inline mr-1" /> Estoque Obra
+          </button>
+          <button onClick={() => setViewMode("transferencias")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "transferencias" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <ArrowLeftRight className="h-3.5 w-3.5 inline mr-1" /> Transferências
+          </button>
+        </div>
+
+        {/* Search + Filters */}
+        <div className="space-y-3">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 w-full" />
           </div>
-          <Select value={filterCategoria} onValueChange={(v: any) => setFilterCategoria(v)}>
-            <SelectTrigger className="w-[150px] sm:w-[160px] shrink-0">
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Todos">Todas Categorias</SelectItem>
-              <SelectItem value="EPI">EPI</SelectItem>
-              <SelectItem value="Uniforme">Uniforme</SelectItem>
-              <SelectItem value="Calçado">Calçado</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={filterCondicao} onValueChange={(v: any) => setFilterCondicao(v)}>
-            <SelectTrigger className="w-[150px] sm:w-[160px] shrink-0">
-              <SelectValue placeholder="Condição" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Todos">Todas Condições</SelectItem>
-              <SelectItem value="Novo">Novo</SelectItem>
-              <SelectItem value="Reutilizado">Reutilizado</SelectItem>
-            </SelectContent>
-          </Select>
-          {tamanhosFiltro.length > 0 && (
-            <Select value={filterTamanho} onValueChange={(v: any) => setFilterTamanho(v)}>
-              <SelectTrigger className="w-[150px] sm:w-[160px] shrink-0">
-                <SelectValue placeholder="Tamanho" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <Select value={filterCategoria} onValueChange={(v: any) => setFilterCategoria(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Categoria" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Todos">Todos Tamanhos</SelectItem>
-                {tamanhosFiltro.map(t => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
+                <SelectItem value="Todos">Todas Categorias</SelectItem>
+                <SelectItem value="EPI">EPI</SelectItem>
+                <SelectItem value="Uniforme">Uniforme</SelectItem>
+                <SelectItem value="Calçado">Calçado</SelectItem>
               </SelectContent>
             </Select>
-          )}
+            <Select value={filterCondicao} onValueChange={(v: any) => setFilterCondicao(v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Condição" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Todos">Todas Condições</SelectItem>
+                <SelectItem value="Novo">Novo</SelectItem>
+                <SelectItem value="Reutilizado">Reutilizado</SelectItem>
+              </SelectContent>
+            </Select>
+            {tamanhosFiltro.length > 0 && (
+              <Select value={filterTamanho} onValueChange={(v: any) => setFilterTamanho(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Tamanho" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Todos">Todos Tamanhos</SelectItem>
+                  {tamanhosFiltro.map(t => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
 
         {/* ============================================================ */}
@@ -1831,13 +1846,13 @@ export default function Epis() {
         {/* ============================================================ */}
         {viewMode === "estoque_obra" && (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <h2 className="text-lg font-bold text-[#1B3A5C] flex items-center gap-2">
                   <Warehouse className="h-5 w-5" /> Estoque por Obra
                 </h2>
                 <Select value={filterObraEstoque} onValueChange={setFilterObraEstoque}>
-                  <SelectTrigger className="w-[220px]"><SelectValue placeholder="Filtrar por obra..." /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[220px]"><SelectValue placeholder="Filtrar por obra..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas as Obras</SelectItem>
                     {obrasList.map((o: any) => (
@@ -1846,9 +1861,14 @@ export default function Epis() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button size="sm" onClick={() => setShowTransferDialog(true)} className="bg-[#1B2A4A] hover:bg-[#243660]">
-                <ArrowLeftRight className="h-4 w-4 mr-2" /> Nova Transferência
-              </Button>
+              <div className="flex gap-2 flex-wrap">
+                <Button size="sm" onClick={() => setShowEntradaDiretaDialog(true)} variant="outline" className="border-green-500 text-green-700 hover:bg-green-50">
+                  <Plus className="h-4 w-4 mr-2" /> Entrada Direta
+                </Button>
+                <Button size="sm" onClick={() => setShowTransferDialog(true)} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                  <ArrowLeftRight className="h-4 w-4 mr-2" /> Nova Transferência
+                </Button>
+              </div>
             </div>
 
             {/* Resumo por obra */}
@@ -1881,10 +1901,15 @@ export default function Epis() {
                   <div className="flex flex-col items-center justify-center py-16">
                     <Warehouse className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <h3 className="font-semibold text-lg">Nenhum estoque em obra</h3>
-                    <p className="text-muted-foreground text-sm mt-1">Faça transferências do escritório central para as obras.</p>
-                    <Button onClick={() => setShowTransferDialog(true)} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
-                      <ArrowLeftRight className="h-4 w-4 mr-2" /> Nova Transferência
-                    </Button>
+                    <p className="text-muted-foreground text-sm mt-1">Faça transferências ou cadastre EPIs já existentes na obra.</p>
+                    <div className="flex gap-2 mt-4">
+                      <Button onClick={() => setShowEntradaDiretaDialog(true)} variant="outline" className="border-green-500 text-green-700 hover:bg-green-50">
+                        <Plus className="h-4 w-4 mr-2" /> Entrada Direta
+                      </Button>
+                      <Button onClick={() => setShowTransferDialog(true)} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                        <ArrowLeftRight className="h-4 w-4 mr-2" /> Nova Transferência
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -1990,8 +2015,8 @@ export default function Epis() {
                             </td>
                             <td className="p-3 text-center font-bold">{t.quantidade}</td>
                             <td className="p-3">
-                              <Badge variant="outline" className={t.tipoOrigem === 'central' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-green-50 text-green-700 border-green-300'}>
-                                {t.tipoOrigem === 'central' ? '🏢 Central' : `🏗️ ${t.origemObraNome || 'Obra'}`}
+                              <Badge variant="outline" className={t.tipoOrigem === 'central' ? 'bg-blue-50 text-blue-700 border-blue-300' : t.tipoOrigem === 'entrada_direta' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-green-50 text-green-700 border-green-300'}>
+                                {t.tipoOrigem === 'central' ? '🏢 Central' : t.tipoOrigem === 'entrada_direta' ? '📋 Entrada Direta' : `🏗️ ${t.origemObraNome || 'Obra'}`}
                               </Badge>
                             </td>
                             <td className="p-3 text-center"><ArrowRight className="h-4 w-4 text-muted-foreground mx-auto" /></td>
@@ -2127,6 +2152,69 @@ export default function Epis() {
                     });
                   }}>
                   {transferirMut.isPending ? 'Transferindo...' : 'Confirmar Transferência'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog Entrada Direta na Obra */}
+      {showEntradaDiretaDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-bold text-[#1B3A5C] mb-4 flex items-center gap-2">
+              <Plus className="h-5 w-5 text-green-600" /> Entrada Direta na Obra
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">Cadastre EPIs que já existem fisicamente na obra.</p>
+            <div className="space-y-4">
+              <div>
+                <Label>EPI *</Label>
+                <Select value={entradaDiretaForm.epiId} onValueChange={v => setEntradaDiretaForm(f => ({ ...f, epiId: v }))}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Selecione o EPI..." /></SelectTrigger>
+                  <SelectContent>
+                    {(episQ.data || []).map((e: any) => (
+                      <SelectItem key={e.id} value={String(e.id)}>{e.nome} {e.ca ? `(CA ${e.ca})` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Obra *</Label>
+                <Select value={entradaDiretaForm.obraId} onValueChange={v => setEntradaDiretaForm(f => ({ ...f, obraId: v }))}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
+                  <SelectContent>
+                    {obrasList.map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Quantidade *</Label>
+                <Input type="number" min="1" value={entradaDiretaForm.quantidade}
+                  onChange={e => setEntradaDiretaForm(f => ({ ...f, quantidade: e.target.value }))} placeholder="Ex: 10" />
+              </div>
+              <div>
+                <Label>Observação</Label>
+                <Input value={entradaDiretaForm.observacao}
+                  onChange={e => setEntradaDiretaForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: EPIs já existentes no almoxarifado da obra" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setShowEntradaDiretaDialog(false); setEntradaDiretaForm({ epiId: "", obraId: "", quantidade: "", observacao: "" }); }}>
+                  Cancelar
+                </Button>
+                <Button className="flex-1 bg-green-600 hover:bg-green-700" disabled={entradaDiretaObraMut.isPending || !entradaDiretaForm.epiId || !entradaDiretaForm.obraId || !entradaDiretaForm.quantidade}
+                  onClick={() => {
+                    entradaDiretaObraMut.mutate({
+                      companyId,
+                      epiId: parseInt(entradaDiretaForm.epiId),
+                      obraId: parseInt(entradaDiretaForm.obraId),
+                      quantidade: parseInt(entradaDiretaForm.quantidade),
+                      observacao: entradaDiretaForm.observacao || undefined,
+                    });
+                  }}>
+                  {entradaDiretaObraMut.isPending ? 'Registrando...' : 'Confirmar Entrada'}
                 </Button>
               </div>
             </div>

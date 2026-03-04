@@ -1121,7 +1121,7 @@ export const epiTransferencias = mysqlTable("epi_transferencias", {
 	companyId: int().notNull(),
 	epiId: int().notNull(),
 	quantidade: int().notNull(),
-	tipoOrigem: mysqlEnum("tipo_origem", ['central','obra']).notNull(),
+	tipoOrigem: mysqlEnum("tipo_origem", ['central','obra','entrada_direta']).notNull(),
 	origemObraId: int("origem_obra_id"),
 	destinoObraId: int("destino_obra_id").notNull(),
 	data: date({ mode: 'string' }).notNull(),

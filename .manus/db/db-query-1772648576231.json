@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, nome, email, ativo, notificarContratacao as nc, notificarDemissao as nd, notificarTransferencia as nt, notificarAfastamento as na FROM notification_recipients;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nome, email, ativo, notificarContratacao as nc, notificarDemissao as nd, notificarTransferencia as nt, notificarAfastamento as na FROM notification_recipients;",
+  "rows": [
+    {
+      "id": "1",
+      "nome": "Felipe Alves",
+      "email": "felipe1268@gmail.com",
+      "ativo": "0",
+      "nc": "1",
+      "nd": "1",
+      "nt": "1",
+      "na": "1"
+    },
+    {
+      "id": "60001",
+      "nome": "Renan Pamplona",
+      "email": "pamplona.seguros@gmail.com",
+      "ativo": "1",
+      "nc": "1",
+      "nd": "1",
+      "nt": "0",
+      "na": "0"
+    },
+    {
+      "id": "60002",
+      "nome": "Renan Pamplona",
+      "email": "pamplona.consorcio@gmail.com",
+      "ativo": "1",
+      "nc": "1",
+      "nd": "1",
+      "nt": "0",
+      "na": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\temail\tativo\tnc\tnd\tnt\tna\n1\tFelipe Alves\tfelipe1268@gmail.com\t0\t1\t1\t1\t1\n60001\tRenan Pamplona\tpamplona.seguros@gmail.com\t1\t1\t1\t0\t0\n60002\tRenan Pamplona\tpamplona.consorcio@gmail.com\t1\t1\t1\t0\t0\n",
+  "stderr": "",
+  "execution_time_ms": 61
+}
