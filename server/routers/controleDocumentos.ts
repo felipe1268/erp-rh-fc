@@ -868,6 +868,17 @@ export const controleDocumentosRouter = router({
           sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} >= ${hoje} AND ${trainings.dataValidade} <= ${em30diasStr}`
         ));
 
+      // Funcionários ativos SEM nenhum ASO
+      const [semAsoCount] = await db.execute(sql`
+        SELECT COUNT(*) as cnt FROM employees e
+        WHERE e.companyId = ${input.companyId}
+          AND e.deletedAt IS NULL
+          AND e.status = 'Ativo'
+          AND NOT EXISTS (
+            SELECT 1 FROM asos a WHERE a.employeeId = e.id AND a.deletedAt IS NULL
+          )
+      `) as any[];
+
       return {
         totalASOs: Number(asoCount.count),
         totalTreinamentos: Number(treinamentoCount.count),
@@ -877,7 +888,29 @@ export const controleDocumentosRouter = router({
         asosAVencer: Number(asosAVencer.count),
         treinVencidos: Number(treinVencidos.count),
         treinAVencer: Number(treinAVencer.count),
+        semASO: Number((semAsoCount as any[])[0]?.cnt || 0),
       };
+    }),
+
+  // ===================== FUNCIONÁRIOS SEM ASO =====================
+  listSemASO: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [rows] = await db.execute(sql`
+        SELECT e.id, e.nomeCompleto, e.cpf, e.funcao, e.dataAdmissao, e.status,
+          o.nome as obraNome
+        FROM employees e
+        LEFT JOIN obras o ON e.obraAtualId = o.id
+        WHERE e.companyId = ${input.companyId}
+          AND e.deletedAt IS NULL
+          AND e.status = 'Ativo'
+          AND NOT EXISTS (
+            SELECT 1 FROM asos a WHERE a.employeeId = e.id AND a.deletedAt IS NULL
+          )
+        ORDER BY e.nomeCompleto ASC
+      `) as any[];
+      return rows as { id: number; nomeCompleto: string; cpf: string | null; funcao: string | null; dataAdmissao: string | null; status: string; obraNome: string | null }[];
     }),
 
   // ===================== RAIO-X DO FUNCIONÁRIO =====================

@@ -4523,3 +4523,10 @@
 - [x] Backend: ao criar apontamento urgente/alta, disparar notifyOwner com detalhes
 - [ ] Backend: resumo diário de apontamentos pendentes (futuro - scheduled task)
 - [x] Frontend: badge de contagem já existia via stats no ApontamentosCampo
+
+## Fase 94b: Filtro "Sem ASO" + Layout KPIs Controle de Documentos
+- [x] Backend: contar funcionários ativos sem ASO no resumo (semASO)
+- [x] Backend: procedure listSemASO com nome, CPF, função, obra
+- [x] Frontend: novo KPI card "Sem ASO" (rosa) com badge de contagem
+- [x] Frontend: nova aba "Sem ASO" com tabela, busca e botão "Cadastrar ASO"
+- [x] Frontend: layout KPIs centralizado, textos completos, grid 9 colunas

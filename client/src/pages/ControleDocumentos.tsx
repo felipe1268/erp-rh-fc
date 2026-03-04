@@ -247,6 +247,84 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
   );
 }
 
+// ============ PAINEL SEM ASO (Componente) ============
+function SemASOPanel({ companyId, onClickEmployee, onCreateAso }: { companyId: number; onClickEmployee: (id: number) => void; onCreateAso: (empId: number) => void }) {
+  const { data: empsSemAso = [], isLoading } = trpc.docs.listSemASO.useQuery({ companyId }, { enabled: !!companyId });
+  const [searchSemAso, setSearchSemAso] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!searchSemAso) return empsSemAso as any[];
+    const s = removeAccents(searchSemAso);
+    return (empsSemAso as any[]).filter((e: any) => removeAccents(e.nomeCompleto || '').includes(s) || e.cpf?.includes(s));
+  }, [empsSemAso, searchSemAso]);
+
+  if (isLoading) return <div className="py-12 text-center text-muted-foreground">Carregando...</div>;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-rose-500" />
+              Funcionários Ativos Sem ASO
+              <Badge className="bg-rose-100 text-rose-700 ml-2">{(empsSemAso as any[]).length} funcionário(s)</Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">Funcionários ativos que não possuem nenhum ASO cadastrado no sistema</p>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por nome ou CPF..." value={searchSemAso} onChange={e => setSearchSemAso(e.target.value)} className="pl-10" />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {filtered.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>{(empsSemAso as any[]).length === 0 ? "Todos os funcionários ativos possuem ASO cadastrado!" : "Nenhum resultado para a busca."}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-rose-50/50">
+                  <th className="text-left p-2 font-medium">Funcionário</th>
+                  <th className="text-left p-2 font-medium">CPF</th>
+                  <th className="text-left p-2 font-medium">Função</th>
+                  <th className="text-left p-2 font-medium">Obra</th>
+                  <th className="text-left p-2 font-medium">Admissão</th>
+                  <th className="text-left p-2 font-medium">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((emp: any) => (
+                  <tr key={emp.id} className="border-b hover:bg-muted/20">
+                    <td className="p-2">
+                      <button className="text-blue-600 hover:underline font-medium text-left" onClick={() => onClickEmployee(emp.id)}>
+                        {emp.nomeCompleto}
+                      </button>
+                    </td>
+                    <td className="p-2 text-xs font-mono">{emp.cpf ? formatCPF(emp.cpf) : "-"}</td>
+                    <td className="p-2 text-xs">{emp.funcao || "-"}</td>
+                    <td className="p-2 text-xs">{emp.obraNome || "-"}</td>
+                    <td className="p-2 text-xs font-mono">{formatDate(emp.dataAdmissao)}</td>
+                    <td className="p-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50" onClick={() => onCreateAso(emp.id)}>
+                        <Plus className="h-3 w-3 mr-1" /> Cadastrar ASO
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ============ LISTA DE EXAMES PADRÃO ============
 const EXAMES_PADRAO = [
   "Audiometria", "Acuidade Visual", "Hemograma Completo", "Glicemia de Jejum",
@@ -666,12 +744,13 @@ export default function ControleDocumentos() {
     if (cardFilter === filter) {
       setCardFilter(null);
       setStatusFilter("todos");
-      if (filter === "vencido" || filter === "vencer" || filter === "asos") setActiveTab("aso");
+      if (filter === "vencido" || filter === "vencer" || filter === "asos" || filter === "semASO") setActiveTab("aso");
     } else {
       setCardFilter(filter);
       if (filter === "asos") { setActiveTab("aso"); setStatusFilter("todos"); }
       else if (filter === "vencido") { setActiveTab("aso"); setStatusFilter("vencido"); }
       else if (filter === "vencer") { setActiveTab("aso"); setStatusFilter("vencer"); }
+      else if (filter === "semASO") { setActiveTab("semASO"); setStatusFilter("todos"); }
       else if (filter === "treinamentos") { setActiveTab("treinamentos"); setStatusFilter("todos"); }
       else if (filter === "treinVencido" || filter === "treinVencer") { setActiveTab("validade"); setStatusFilter("todos"); }
       else if (filter === "atestados") { setActiveTab("atestados"); setStatusFilter("todos"); }
@@ -1067,27 +1146,27 @@ export default function ControleDocumentos() {
           </div>
         )}
 
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
+        {/* KPI Cards - Layout melhorado */}
+        <div className="grid gap-3 grid-cols-3 sm:grid-cols-3 lg:grid-cols-9">
           {[
             { key: "asos", label: "ASOs", value: resumo?.totalASOs || 0, icon: Stethoscope, color: "blue" },
             { key: "vencido", label: "ASOs Vencidos", value: resumo?.asosVencidos || 0, icon: AlertTriangle, color: "red" },
             { key: "vencer", label: "ASOs A Vencer", value: resumo?.asosAVencer || 0, icon: Calendar, color: "yellow" },
+            { key: "semASO", label: "Sem ASO", value: (resumo as any)?.semASO || 0, icon: ShieldAlert, color: "rose" },
             { key: "treinamentos", label: "Treinamentos", value: resumo?.totalTreinamentos || 0, icon: GraduationCap, color: "green" },
             { key: "treinVencido", label: "Trein. Vencidos", value: (resumo as any)?.treinVencidos || 0, icon: AlertTriangle, color: "red" },
             { key: "treinVencer", label: "Trein. A Vencer", value: (resumo as any)?.treinAVencer || 0, icon: Clock, color: "yellow" },
             { key: "atestados", label: "Atestados", value: resumo?.totalAtestados || 0, icon: ClipboardList, color: "purple" },
             { key: "advertencias", label: "Advertências", value: resumo?.totalAdvertencias || 0, icon: ShieldAlert, color: "orange" },
           ].map(c => (
-            <Card key={c.key} className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${cardFilter === c.key ? `ring-2 ring-${c.color}-500 shadow-lg bg-${c.color}-50/50` : ""}`} onClick={() => handleCardClick(c.key)}>
+            <Card key={c.key} className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${cardFilter === c.key ? `ring-2 ring-${c.color}-500 shadow-lg` : ""} ${c.key === "semASO" && c.value > 0 ? "border-rose-300 bg-rose-50/40" : ""}`} onClick={() => handleCardClick(c.key)}>
               <CardContent className="p-3">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col items-center text-center gap-1">
                   <div className={`h-9 w-9 rounded-lg bg-${c.color}-100 flex items-center justify-center shrink-0`}>
                     <c.icon className={`h-4 w-4 text-${c.color}-600`} />
                   </div>
-                  <div className="min-w-0">
-                    <p className={`text-xl font-bold ${c.color === "red" || c.color === "yellow" ? `text-${c.color}-600` : ""}`}>{c.value}</p>
-                    <p className="text-[10px] text-muted-foreground leading-tight truncate">{c.label}</p>
-                  </div>
+                  <p className={`text-xl font-bold leading-none ${c.color === "red" || c.color === "yellow" || c.color === "rose" ? `text-${c.color}-600` : ""}`}>{c.value}</p>
+                  <p className="text-[11px] text-muted-foreground leading-tight">{c.label}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1099,7 +1178,7 @@ export default function ControleDocumentos() {
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Filtro ativo:</span>
             <Badge variant="secondary" className="gap-1">
-              {cardFilter === "asos" ? "Todos os ASOs" : cardFilter === "vencido" ? "ASOs Vencidos" : cardFilter === "vencer" ? "ASOs A Vencer" : cardFilter === "treinamentos" ? "Treinamentos" : cardFilter === "treinVencido" ? "Trein. Vencidos" : cardFilter === "treinVencer" ? "Trein. A Vencer" : cardFilter === "atestados" ? "Atestados" : "Advertências"}
+              {cardFilter === "asos" ? "Todos os ASOs" : cardFilter === "vencido" ? "ASOs Vencidos" : cardFilter === "vencer" ? "ASOs A Vencer" : cardFilter === "semASO" ? "Sem ASO" : cardFilter === "treinamentos" ? "Treinamentos" : cardFilter === "treinVencido" ? "Trein. Vencidos" : cardFilter === "treinVencer" ? "Trein. A Vencer" : cardFilter === "atestados" ? "Atestados" : "Advertências"}
               <button onClick={() => { setCardFilter(null); setStatusFilter("todos"); }} className="ml-1 hover:text-foreground">✕</button>
             </Badge>
           </div>
@@ -1126,7 +1205,7 @@ export default function ControleDocumentos() {
 
         {/* TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto sm:h-12 gap-1 bg-transparent p-0">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto sm:h-12 gap-1 bg-transparent p-0">
             <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
               <AlertTriangle className="h-4 w-4" /> Validade
             </TabsTrigger>
@@ -1145,7 +1224,15 @@ export default function ControleDocumentos() {
             <TabsTrigger value="advertencias" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "advertencias" ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-orange-50/50 hover:text-orange-600"}`}>
               <ShieldAlert className="h-4 w-4" /> Advertências
             </TabsTrigger>
+            <TabsTrigger value="semASO" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "semASO" ? "border-rose-500 bg-rose-50 text-rose-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-rose-50/50 hover:text-rose-600"}`}>
+              <ShieldAlert className="h-4 w-4" /> Sem ASO {(resumo as any)?.semASO > 0 && <Badge className="bg-rose-500 text-white text-[10px] px-1.5 py-0 ml-1">{(resumo as any)?.semASO}</Badge>}
+            </TabsTrigger>
           </TabsList>
+
+          {/* ===================== ABA SEM ASO ===================== */}
+          <TabsContent value="semASO">
+            <SemASOPanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} onCreateAso={(empId: number) => { setEditingAsoId(null); setAsoForm({ employeeId: empId }); setShowAsoDialog(true); }} />
+          </TabsContent>
 
           {/* ===================== ABA PAINEL DE VALIDADE ===================== */}
           <TabsContent value="validade">
