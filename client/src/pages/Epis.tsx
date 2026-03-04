@@ -17,7 +17,7 @@ import {
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp,
-  Brain, Sparkles, GraduationCap, Bell, BarChart3
+  Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
@@ -34,6 +34,8 @@ import EpiValidade from "./EpiValidade";
 import EpiRelatorioCusto from "./EpiRelatorioCusto";
 import EpiEstoqueMinimo from "./EpiEstoqueMinimo";
 import EpiIA from "./EpiIA";
+import EpiDrillDown, { type DrillDownType } from "./EpiDrillDown";
+import EpiAssinatura from "./EpiAssinatura";
 
 type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia";
 
@@ -137,6 +139,9 @@ export default function Epis() {
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
   const [fichaDelivery, setFichaDelivery] = useState<any>(null);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [drillDown, setDrillDown] = useState<DrillDownType>(null);
+  const [showFichaSignPad, setShowFichaSignPad] = useState(false);
+  const [fichaSignature, setFichaSignature] = useState<string | null>(null);
 
   // Queries
   const episQ = trpc.epis.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -1417,19 +1422,49 @@ export default function Epis() {
               <p>d) Cumprir as determinações do empregador sobre o uso adequado.</p>
             </div>
 
-            {/* Signature Lines */}
+            {/* Signature Lines - Digital ou Impressa */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-16 mt-6 sm:mt-12 pt-4 sm:pt-8">
               <div className="text-center">
-                <div className="border-t border-black pt-2 text-sm">
-                  Assinatura do Funcionário
-                </div>
+                {fichaDelivery.assinaturaUrl ? (
+                  <div>
+                    <img src={fichaDelivery.assinaturaUrl} alt="Assinatura" className="mx-auto h-16 object-contain mb-1" />
+                    <div className="border-t border-black pt-1 text-sm">Assinatura do Funcionário</div>
+                    <p className="text-[9px] text-green-600 mt-0.5">Assinatura digital coletada</p>
+                  </div>
+                ) : fichaSignature ? (
+                  <div>
+                    <img src={fichaSignature} alt="Assinatura" className="mx-auto h-16 object-contain mb-1" />
+                    <div className="border-t border-black pt-1 text-sm">Assinatura do Funcionário</div>
+                    <p className="text-[9px] text-green-600 mt-0.5">Assinatura digital coletada</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="border-t border-black pt-2 text-sm">Assinatura do Funcionário</div>
+                  </div>
+                )}
               </div>
               <div className="text-center">
                 <div className="border-t border-black pt-2 text-sm">
                   Responsável pela Entrega
                 </div>
+                <p className="text-[9px] text-gray-500 mt-0.5">{user?.name || ''}</p>
               </div>
             </div>
+
+            {/* Botão Assinar Digitalmente - só aparece na tela, não na impressão */}
+            {!fichaDelivery.assinaturaUrl && !fichaSignature && (
+              <div className="mt-4 print:hidden">
+                <Button
+                  className="w-full bg-[#1B2A4A] hover:bg-[#243660] text-white"
+                  onClick={() => setShowFichaSignPad(true)}
+                >
+                  <PenTool className="h-4 w-4 mr-2" /> Assinar Digitalmente pelo Celular
+                </Button>
+                <p className="text-[10px] text-center text-muted-foreground mt-1">
+                  O funcionário assina na tela do celular/tablet — substitui a ficha de papel
+                </p>
+              </div>
+            )}
 
             {/* Legal Footer */}
             <div className="mt-6 pt-4 border-t-2 border-[#1B2A4A] text-[10px] text-gray-400 text-center">
@@ -1438,6 +1473,30 @@ export default function Epis() {
             </div>
           </div>
         </div>
+
+        {/* Overlay de Assinatura Digital */}
+        {showFichaSignPad && fichaDelivery && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
+            <div className="max-w-lg w-full">
+              <EpiAssinatura
+                employeeId={fichaDelivery.employeeId}
+                employeeName={fichaDelivery.nomeFunc || ''}
+                deliveryId={fichaDelivery.id}
+                tipo="entrega"
+                epiNome={fichaDelivery.nomeEpi}
+                onComplete={(url) => {
+                  setShowFichaSignPad(false);
+                  setFichaSignature(url);
+                  // Atualizar o fichaDelivery com a URL da assinatura
+                  setFichaDelivery((prev: any) => prev ? { ...prev, assinaturaUrl: url } : prev);
+                  deliveriesQ.refetch();
+                  toast.success("Assinatura digital coletada com sucesso!");
+                }}
+                onCancel={() => setShowFichaSignPad(false)}
+              />
+            </div>
+          </div>
+        )}
       </DashboardLayout>
     );
   }
@@ -1479,47 +1538,47 @@ export default function Epis() {
           </div>
         </div>
 
-        {/* Stats Cards - scroll horizontal em mobile */}
+        {/* Stats Cards - clicáveis com drill-down full screen */}
         {stats && (
           <div className="overflow-x-auto -mx-2 px-2 pb-1">
             <div className="flex gap-2 sm:gap-3 sm:grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
-              <Card className="border-l-4 border-l-blue-500 flex-shrink-0 w-[130px] sm:w-auto">
+              <Card className="border-l-4 border-l-blue-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("totalEpis")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Total EPIs</p>
                   <p className="text-lg font-bold">{stats.totalItens}</p>
                 </CardContent>
               </Card>
-              <Card className="border-l-4 border-l-green-500 flex-shrink-0 w-[130px] sm:w-auto">
+              <Card className="border-l-4 border-l-green-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("estoqueTotal")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Total</p>
                   <p className="text-lg font-bold">{stats.estoqueTotal}</p>
                 </CardContent>
               </Card>
-              <Card className="border-l-4 border-l-amber-500 flex-shrink-0 w-[130px] sm:w-auto">
+              <Card className="border-l-4 border-l-amber-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("estoqueBaixo")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Baixo</p>
                   <p className="text-lg font-bold text-amber-600">{stats.estoqueBaixo}</p>
                 </CardContent>
               </Card>
-              <Card className="border-l-4 border-l-red-500 flex-shrink-0 w-[130px] sm:w-auto">
+              <Card className="border-l-4 border-l-red-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("caVencido")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">CA Vencido</p>
                   <p className="text-lg font-bold text-red-600">{stats.caVencido}</p>
                 </CardContent>
               </Card>
-              <Card className="border-l-4 border-l-purple-500 flex-shrink-0 w-[130px] sm:w-auto">
+              <Card className="border-l-4 border-l-purple-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("totalEntregas")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Total Entregas</p>
                   <p className="text-lg font-bold">{stats.totalEntregas}</p>
                 </CardContent>
               </Card>
-              <Card className="border-l-4 border-l-cyan-500 flex-shrink-0 w-[130px] sm:w-auto">
+              <Card className="border-l-4 border-l-cyan-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("entregasMes")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Entregas/Mês</p>
                   <p className="text-lg font-bold">{stats.entregasMes}</p>
                 </CardContent>
               </Card>
-              {!hideEpiValues && <Card className="border-l-4 border-l-emerald-500 flex-shrink-0 w-[150px] sm:w-auto">
+              {!hideEpiValues && <Card className="border-l-4 border-l-emerald-500 flex-shrink-0 w-[150px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("valorInventario")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Valor Inventário</p>
                   <p className="text-lg font-bold text-emerald-700">
@@ -2337,6 +2396,10 @@ export default function Epis() {
       {viewMode === "ia" && <EpiIA />}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* Drill-down full screen ao clicar nos cards */}
+      {drillDown && <EpiDrillDown type={drillDown} onClose={() => setDrillDown(null)} />}
+
           <PrintFooterLGPD />
     </DashboardLayout>
   );

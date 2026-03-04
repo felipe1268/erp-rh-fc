@@ -4707,3 +4707,24 @@
 - [x] Atualizar lógica de geração automática de número interno para pular números proibidos
 - [x] Adicionar lista de números proibidos nas configurações do sistema
 - [x] Testes da nova lógica de numeração (15 testes passando)
+
+## Assinatura Digital na Ficha de Entrega de EPI
+
+- [x] Adicionar canvas de assinatura touch na ficha de entrega de EPI existente
+- [x] Salvar assinatura como imagem no S3 vinculada à entrega
+- [x] Exibir assinatura salva na ficha ao visualizar entregas anteriores
+- [x] Botão "Assinar" na ficha de entrega com feedback visual
+- [x] Validar que assinatura foi feita antes de confirmar entrega
+
+## Botão Excluir Checklist de EPI + Assinatura Digital na Ficha
+
+- [x] Adicionar rota de exclusão de checklist no backend (epiAvancado)
+- [x] Adicionar botão de excluir no componente EpiChecklist.tsx
+- [x] Implementar assinatura digital touch na ficha de entrega de EPI
+
+## Dashboard EPI Interativo + Excluir Checklist + Assinatura Ficha
+
+- [x] Botão excluir checklist de EPI (backend + frontend)
+- [x] Cards do dashboard de EPIs clicáveis com tela full screen de dados filtrados
+- [x] Layout responsivo dos cards e telas
+- [x] Assinatura digital na ficha de entrega de EPI existente

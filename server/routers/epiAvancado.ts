@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   epiKits, epiKitItems, epiCoresCapacete, epiVidaUtil,
@@ -744,6 +745,25 @@ export const epiAvancadoRouter = router({
       } as any).where(eq(epiChecklists.id, input.checklistId));
 
       return { success: true, status: newStatus };
+    }),
+
+  // Excluir checklist de EPI
+  checklistDelete: protectedProcedure
+    .input(z.object({
+      checklistId: z.number(),
+      companyId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      // Verificar se o checklist pertence à empresa
+      const [checklist] = await db.select().from(epiChecklists)
+        .where(and(eq(epiChecklists.id, input.checklistId), eq(epiChecklists.companyId, input.companyId)));
+      if (!checklist) throw new TRPCError({ code: "NOT_FOUND", message: "Checklist não encontrado" });
+      // Excluir itens do checklist primeiro
+      await db.delete(epiChecklistItems).where(eq(epiChecklistItems.checklistId, input.checklistId));
+      // Excluir o checklist
+      await db.delete(epiChecklists).where(eq(epiChecklists.id, input.checklistId));
+      return { success: true };
     }),
 
   // ============================================================

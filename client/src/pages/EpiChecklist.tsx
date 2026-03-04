@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 import {
   ClipboardList, Plus, CheckCircle2, Circle, User, Search,
   QrCode, ChevronDown, ChevronUp, AlertTriangle, Package, PenTool,
-  FileText, Printer, Calendar
+  FileText, Printer, Calendar, Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -45,6 +45,10 @@ export default function EpiChecklist() {
   });
   const updateItemMut = trpc.epiAvancado.checklistUpdateItem.useMutation({
     onSuccess: () => { checklistsQ.refetch(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const deleteMut = trpc.epiAvancado.checklistDelete.useMutation({
+    onSuccess: () => { checklistsQ.refetch(); toast.success("Checklist excluído!"); setExpandedChecklist(null); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -259,9 +263,9 @@ export default function EpiChecklist() {
                         );
                       })}
 
-                      {/* Assinatura button */}
-                      {cl.status !== "cancelado" && (
-                        <div className="flex gap-2 pt-2">
+                      {/* Action buttons */}
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {cl.status !== "cancelado" && (
                           <Button size="sm" variant="outline" className="text-xs"
                             onClick={() => setShowAssinatura({
                               employeeId: cl.employeeId,
@@ -270,8 +274,18 @@ export default function EpiChecklist() {
                             })}>
                             <PenTool className="h-3.5 w-3.5 mr-1" /> Coletar Assinatura
                           </Button>
-                        </div>
-                      )}
+                        )}
+                        <Button size="sm" variant="outline" className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                          disabled={deleteMut.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Tem certeza que deseja excluir o checklist de ${cl.nomeFunc}?`)) {
+                              deleteMut.mutate({ checklistId: cl.id, companyId });
+                            }
+                          }}>
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> {deleteMut.isPending ? "Excluindo..." : "Excluir Checklist"}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </Card>
