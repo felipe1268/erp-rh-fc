@@ -1196,7 +1196,8 @@ export const avisoPrevioFeriasRouter = router({
           userId: ctx.user.id,
           userName: ctx.user.name ?? 'Sistema',
           action: 'REVERT_AVISO_PREVIO',
-          entity: 'terminationNotices',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
           entityId: input.id,
           details: `Status revertido de Concluído para Em Andamento por ${ctx.user.name}`,
         });

@@ -100,7 +100,7 @@ export default function AprovacoesParceiros() {
     if (!cancelarLancamento) return;
     cancelarMutation.mutate({
       id: cancelarLancamento.id,
-      comentarioAdmin: comentarioCancelar || undefined,
+      comentario: comentarioCancelar || undefined,
     });
   };
 

@@ -95,7 +95,7 @@ export default function DashCompetencias() {
                 ))}
               </SelectContent>
             </Select>
-            <PrintActions targetId="print-area" title={`Dashboard Competências ${ano}`} />
+            <PrintActions title={`Dashboard Competências ${ano}`} />
           </div>
         </div>
 
@@ -167,7 +167,7 @@ export default function DashCompetencias() {
                   label: "Bruto",
                   data: evolucao.map((e: any) => e.bruto),
                   borderColor: CHART_PALETTE[0],
-                  backgroundColor: CHART_FILL[0],
+                  backgroundColor: CHART_FILL.azul,
                   fill: true,
                   tension: 0.3,
                 },
@@ -175,7 +175,7 @@ export default function DashCompetencias() {
                   label: "Líquido",
                   data: evolucao.map((e: any) => e.liquido),
                   borderColor: CHART_PALETTE[1],
-                  backgroundColor: CHART_FILL[1],
+                  backgroundColor: CHART_FILL.verde,
                   fill: true,
                   tension: 0.3,
                 },
@@ -183,7 +183,7 @@ export default function DashCompetencias() {
                   label: "Descontos",
                   data: evolucao.map((e: any) => e.descontos),
                   borderColor: CHART_PALETTE[5],
-                  backgroundColor: CHART_FILL[5],
+                  backgroundColor: CHART_FILL.vermelho,
                   fill: true,
                   tension: 0.3,
                 },
@@ -276,12 +276,12 @@ export default function DashCompetencias() {
               {
                 label: "Inconsistentes",
                 data: inconsistencias.map((i: any) => i.inconsistentes),
-                backgroundColor: SEMANTIC_COLORS.danger,
+                backgroundColor: SEMANTIC_COLORS.negativo,
               },
               {
                 label: "Resolvidas",
                 data: inconsistencias.map((i: any) => i.resolvidas),
-                backgroundColor: SEMANTIC_COLORS.success,
+                backgroundColor: SEMANTIC_COLORS.positivo,
               },
             ]}
             height={280}

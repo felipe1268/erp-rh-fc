@@ -622,53 +622,61 @@ function DashboardLayoutContent({
         items: s.items.filter(item => !item.adminMasterOnly),
       }));
     }
-    // Filtrar por permissões granulares (se não for admin_master)
+    // ========== FILTRO DE PERMISSÕES ==========
+    // Se o usuário pertence a um grupo: usar APENAS permissões do grupo (groupCanAccessRoute)
+    // Se NÃO pertence a grupo: usar permissões individuais (canAccessFeature)
+    // Admin master: sem filtro
     if (!permIsAdminMaster) {
-      sections = sections.map(s => ({
-        ...s,
-        items: s.items.filter(item => {
-          // Admin paths são controlados pelo role, não pelas permissões granulares
-          if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
-          // Painel sempre visível
-          if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
-          // Ajuda/Biblioteca sempre visível
-          if (item.path === '/ajuda') return true;
-          // Shared features (empresas, obras, setores, funcoes) - visíveis se tem acesso ao módulo
-          const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes'];
-          if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
-          // "Todos os Dashboards" - visível se tem acesso a pelo menos um módulo
-          if (item.path === '/dashboards') return accessibleModules.length > 0;
-          // Verificar permissão granular pela rota (inclui dashboards individuais)
-          const itemBasePath = item.path.split('?')[0];
-          const featureInfo = routeToFeatureKey.get(itemBasePath);
-          if (featureInfo) {
-            return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
-          }
-          // Para rotas com query params (ex: /controle-documentos?tab=advertencias),
-          // verificar se a rota base tem permissão (o controle fino é feito pelo grupo)
-          if (item.path.includes('?')) {
-            const baseFeatureInfo = routeToFeatureKey.get(itemBasePath);
-            if (baseFeatureInfo) {
-              return canAccessFeature(baseFeatureInfo.moduleId, baseFeatureInfo.featureKey);
+      if (hasGroup) {
+        // GRUPO: filtrar exclusivamente pelas rotas configuradas no grupo
+        sections = sections.map(s => ({
+          ...s,
+          items: s.items.filter(item => {
+            // Admin paths são controlados pelo role, não pelo grupo
+            if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
+            // Ajuda/Biblioteca sempre visível
+            if (item.path === '/ajuda') return true;
+            // Grupos de Usuários sempre visível para quem tem grupo (pode ver seu próprio grupo)
+            if (item.path === '/grupos-usuarios') return true;
+            // Verificar se o grupo permite acesso a esta rota
+            return groupCanAccessRoute(item.path);
+          }),
+        }));
+      } else {
+        // SEM GRUPO: filtrar por permissões individuais granulares
+        sections = sections.map(s => ({
+          ...s,
+          items: s.items.filter(item => {
+            // Admin paths são controlados pelo role, não pelas permissões granulares
+            if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
+            // Painel sempre visível
+            if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
+            // Ajuda/Biblioteca sempre visível
+            if (item.path === '/ajuda') return true;
+            // Shared features (empresas, obras, setores, funcoes) - visíveis se tem acesso ao módulo
+            const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes'];
+            if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
+            // "Todos os Dashboards" - visível se tem acesso a pelo menos um módulo
+            if (item.path === '/dashboards') return accessibleModules.length > 0;
+            // Verificar permissão granular pela rota (inclui dashboards individuais)
+            const itemBasePath = item.path.split('?')[0];
+            const featureInfo = routeToFeatureKey.get(itemBasePath);
+            if (featureInfo) {
+              return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
             }
-          }
-          // Default: NEGAR acesso (segurança por padrão)
-          return false;
-        }),
-      }));
-    }
-    // Filtrar por permissões de grupo (se o usuário pertence a um grupo)
-    if (hasGroup && !permIsAdminMaster) {
-      sections = sections.map(s => ({
-        ...s,
-        items: s.items.filter(item => {
-          // Admin paths e ajuda são controlados pelo role, não pelo grupo
-          if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes' || item.path === '/ajuda') return true;
-          if (item.path === '/grupos-usuarios') return true;
-          // Verificar se o grupo permite acesso a esta rota
-          return groupCanAccessRoute(item.path);
-        }),
-      }));
+            // Para rotas com query params (ex: /controle-documentos?tab=advertencias),
+            // verificar se a rota base tem permissão (o controle fino é feito pelo grupo)
+            if (item.path.includes('?')) {
+              const baseFeatureInfo = routeToFeatureKey.get(itemBasePath);
+              if (baseFeatureInfo) {
+                return canAccessFeature(baseFeatureInfo.moduleId, baseFeatureInfo.featureKey);
+              }
+            }
+            // Default: NEGAR acesso (segurança por padrão)
+            return false;
+          }),
+        }));
+      }
     }
     return sections.filter(s => s.items.length > 0);
   }, [activeModule, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, savedMenuConfig]);

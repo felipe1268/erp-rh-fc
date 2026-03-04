@@ -753,7 +753,7 @@ export default function PayrollCompetencias() {
           headerActions={<PrintActions />}
         >
           <div className="p-6 space-y-6">
-            <PrintHeader companyId={companyId} title={`Contracheques — ${MESES[mesAtual - 1]}/${anoAtual}`} />
+            <PrintHeader title={`Contracheques — ${MESES[mesAtual - 1]}/${anoAtual}`} />
             {contracheque.data?.contracheques?.map((cc: any, idx: number) => (
               <div key={idx} className="border rounded-lg p-4 page-break-before">
                 <div className="flex justify-between items-start mb-4">

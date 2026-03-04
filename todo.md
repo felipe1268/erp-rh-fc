@@ -4540,3 +4540,13 @@
 ## Fase 96b: Apontamentos de Campo nas Permissões
 - [x] Adicionar "Apontamentos de Campo" na seção RH & DP - Operacional da tela de Permissões
 - [x] Adicionar "Dashboard Apontamentos de Campo" na seção Dashboards das Permissões
+
+## Fase 97: Filtrar módulos/telas por permissões do grupo
+- [ ] Home: mostrar somente módulos (RH&DP, SST, Jurídico) que o usuário tem acesso a pelo menos 1 tela
+- [ ] Sidebar: ocultar itens de menu que o grupo não tem permissão
+- [ ] Painéis (PainelRH, PainelSST): ocultar cards de telas sem permissão
+- [ ] Admin Master continua vendo tudo
+
+## Rev. 180: Correção de Erros TypeScript + Filtro de Permissões
+- [x] Fix 27 erros TypeScript que bloqueiam publicação (12 arquivos)
+- [x] Melhorar filtro de permissões na Home (ModuleHub) e sidebar (DashboardLayout)

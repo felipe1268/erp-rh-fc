@@ -1432,7 +1432,8 @@ export const folhaPagamentoRouter = router({
       }
 
       // ===== VERIFICAÇÃO DE CONFERÊNCIA COM CONTABILIDADE =====
-      if (lanc.companyId && (lanc.tipo === 'pagamento' || lanc.tipo === 'vale') && !input.ignorarConferencia) {
+      const tipoLanc = lanc.tipoLancamento;
+      if (lanc.companyId && (tipoLanc === 'pagamento' || tipoLanc === 'vale') && !input.ignorarConferencia) {
         const criterioConf = await db.select().from(systemCriteria)
           .where(and(
             eq(systemCriteria.companyId, lanc.companyId),
@@ -1441,19 +1442,22 @@ export const folhaPagamentoRouter = router({
         const modoConf = criterioConf.length > 0 ? criterioConf[0].valor : 'recomendada';
         if (modoConf !== 'opcional') {
           // Verificar se existe upload de PDF da contabilidade para este mês e tipo
-          const uploadsConf = await db.select().from(folhaLancamentos)
+          // Mapear tipo de lançamento para categorias de upload da contabilidade
+          const categoriasConf = tipoLanc === 'vale'
+            ? ['espelho_adiantamento_analitico', 'adiantamento_sintetico']
+            : ['espelho_folha_analitico', 'folha_sintetico'];
+          const uploadsConf = await db.select().from(payrollUploads)
             .where(and(
-              eq(folhaLancamentos.companyId, lanc.companyId),
-              eq(folhaLancamentos.mesReferencia, lanc.mesReferencia!),
-              eq(folhaLancamentos.tipo, lanc.tipo!),
-              eq(folhaLancamentos.origem, 'contabilidade')
+              eq(payrollUploads.companyId, lanc.companyId),
+              eq(payrollUploads.month, lanc.mesReferencia!),
+              sql`${payrollUploads.category} IN (${sql.join(categoriasConf.map(c => sql`${c}`), sql`, `)})`
             ));
           if (uploadsConf.length === 0) {
             if (modoConf === 'obrigatoria') {
-              throw new TRPCError({ code: 'BAD_REQUEST', message: `Conferência com contabilidade é OBRIGATÓRIA para consolidar o ${lanc.tipo === 'vale' ? 'Vale' : 'Pagamento'}. Faça o upload do PDF da contabilidade e confira os valores antes de consolidar. Altere em Configurações > Critérios do Sistema > Folha de Pagamento.` });
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `Conferência com contabilidade é OBRIGATÓRIA para consolidar o ${tipoLanc === 'vale' ? 'Vale' : 'Pagamento'}. Faça o upload do PDF da contabilidade e confira os valores antes de consolidar. Altere em Configurações > Critérios do Sistema > Folha de Pagamento.` });
             }
             // Recomendada: retornar alerta
-            return { success: false, alertaConferencia: true, message: `Conferência com contabilidade recomendada. Nenhum PDF da contabilidade foi enviado para o ${lanc.tipo === 'vale' ? 'Vale' : 'Pagamento'} de ${lanc.mesReferencia}. Deseja consolidar mesmo assim?` };
+            return { success: false, alertaConferencia: true, message: `Conferência com contabilidade recomendada. Nenhum PDF da contabilidade foi enviado para o ${tipoLanc === 'vale' ? 'Vale' : 'Pagamento'} de ${lanc.mesReferencia}. Deseja consolidar mesmo assim?` };
           }
         }
       }

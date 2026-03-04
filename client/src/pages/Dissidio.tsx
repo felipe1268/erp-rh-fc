@@ -30,8 +30,8 @@ export default function Dissidio() {
     dataBaseInicio: "",
     dataBaseFim: "",
     sindicato: "",
-    numeroCCT: "",
-    percentualINPC: "",
+    numeroCct: "",
+    percentualInpc: "",
     percentualGanhoReal: "",
     pisoSalarialAnterior: "",
     valorVA: "",
@@ -92,8 +92,8 @@ export default function Dissidio() {
       dataBaseInicio: form.dataBaseInicio,
       dataBaseFim: form.dataBaseFim || form.dataBaseInicio,
       sindicato: form.sindicato || undefined,
-      numeroCCT: form.numeroCCT || undefined,
-      percentualINPC: form.percentualINPC || undefined,
+      numeroCct: form.numeroCct || undefined,
+      percentualInpc: form.percentualInpc || undefined,
       percentualGanhoReal: form.percentualGanhoReal || undefined,
       valorVA: form.valorVA || undefined,
       valorVT: form.valorVT || undefined,
@@ -220,7 +220,7 @@ export default function Dissidio() {
                 </div>
                 <div>
                   <Label>INPC (%)</Label>
-                  <Input type="number" step="0.01" placeholder="Ex: 4.20" value={form.percentualINPC} onChange={e => setForm(p => ({ ...p, percentualINPC: e.target.value }))} />
+                  <Input type="number" step="0.01" placeholder="Ex: 4.20" value={form.percentualInpc} onChange={e => setForm(p => ({ ...p, percentualInpc: e.target.value }))} />
                 </div>
                 <div>
                   <Label>Ganho Real (%)</Label>
@@ -254,7 +254,7 @@ export default function Dissidio() {
                 </div>
                 <div>
                   <Label>Nº CCT</Label>
-                  <Input placeholder="Número da convenção" value={form.numeroCCT} onChange={e => setForm(p => ({ ...p, numeroCCT: e.target.value }))} />
+                  <Input placeholder="Número da convenção" value={form.numeroCct} onChange={e => setForm(p => ({ ...p, numeroCct: e.target.value }))} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -307,7 +307,7 @@ export default function Dissidio() {
           <div>
             <Button variant="ghost" size="sm" onClick={() => { setViewMode("lista"); setSelectedId(null); }} className="mb-2">← Voltar</Button>
             <h2 className="text-2xl font-bold">{detalhes.titulo || `Dissídio ${detalhes.anoReferencia}`}</h2>
-            <p className="text-sm text-muted-foreground">Data-base: {mesNome(detalhes.mesDataBase)} | Sindicato: {detalhes.sindicato || '—'} | CCT: {detalhes.numeroCCT || '—'}</p>
+            <p className="text-sm text-muted-foreground">Data-base: {mesNome(detalhes.mesDataBase)} | Sindicato: {detalhes.sindicato || '—'} | CCT: {detalhes.numeroCct || '—'}</p>
           </div>
           <div className="flex gap-2">
             {detalhes.status !== 'aplicado' && (
@@ -345,12 +345,12 @@ export default function Dissidio() {
                 </div>
                 <div>
                   <Label className="text-xs">Nº CCT</Label>
-                  <Input value={editForm.numeroCCT || ""} onChange={e => setEditForm((p: any) => ({ ...p, numeroCCT: e.target.value }))} />
+                  <Input value={editForm.numeroCct || ""} onChange={e => setEditForm((p: any) => ({ ...p, numeroCct: e.target.value }))} />
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => {
-                  atualizarMut.mutate({ id: editForm.id, percentualReajuste: editForm.percentualReajuste, pisoSalarial: editForm.pisoSalarial, sindicato: editForm.sindicato, numeroCCT: editForm.numeroCCT });
+                  atualizarMut.mutate({ id: editForm.id, percentualReajuste: editForm.percentualReajuste, pisoSalarial: editForm.pisoSalarial, sindicato: editForm.sindicato, numeroCct: editForm.numeroCct });
                   setEditMode(false);
                 }}>Salvar</Button>
                 <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>Cancelar</Button>
@@ -392,9 +392,9 @@ export default function Dissidio() {
         </div>
 
         {/* INPC / Ganho Real */}
-        {(detalhes.percentualINPC || detalhes.percentualGanhoReal) && (
+        {(detalhes.percentualInpc || detalhes.percentualGanhoReal) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            <Card><CardContent className="pt-4 text-center"><p className="text-lg font-bold">{detalhes.percentualINPC || '—'}%</p><p className="text-xs text-muted-foreground">INPC</p></CardContent></Card>
+            <Card><CardContent className="pt-4 text-center"><p className="text-lg font-bold">{detalhes.percentualInpc || '—'}%</p><p className="text-xs text-muted-foreground">INPC</p></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><p className="text-lg font-bold">{detalhes.percentualGanhoReal || '—'}%</p><p className="text-xs text-muted-foreground">Ganho Real</p></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><p className="text-lg font-bold">{detalhes.retroativo ? 'Sim' : 'Não'}</p><p className="text-xs text-muted-foreground">Retroativo</p></CardContent></Card>
           </div>

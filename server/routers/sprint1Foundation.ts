@@ -187,8 +187,8 @@ const convencaoRouter = router({
     if (!db) return [];
     const convs = await db.select().from(convencaoColetiva).orderBy(desc(convencaoColetiva.createdAt));
     // Enrich with company and obra names
-    const companyIds = [...new Set(convs.map((c: any) => c.companyId))];
-    const obraIds = [...new Set(convs.filter((c: any) => c.obraId).map((c: any) => c.obraId!))];
+    const companyIds = Array.from(new Set(convs.map((c: any) => c.companyId)));
+    const obraIds = Array.from(new Set(convs.filter((c: any) => c.obraId).map((c: any) => c.obraId!)));
     const allCompanies = companyIds.length > 0 ? await db.select({ id: companies.id, nomeFantasia: companies.nomeFantasia, razaoSocial: companies.razaoSocial }).from(companies) : [];
     const allObras = obraIds.length > 0 ? await db.select({ id: obras.id, nome: obras.nome }).from(obras) : [];
     const companyMap = Object.fromEntries(allCompanies.map((c: any) => [c.id, c.nomeFantasia || c.razaoSocial]));

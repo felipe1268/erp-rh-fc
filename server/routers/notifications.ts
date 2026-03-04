@@ -32,7 +32,13 @@ export const notificationsRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [result] = await db!.insert(notificationRecipients).values(input);
+      const [result] = await db!.insert(notificationRecipients).values({
+        ...input,
+        notificarContratacao: input.notificarContratacao ? 1 : 0,
+        notificarDemissao: input.notificarDemissao ? 1 : 0,
+        notificarTransferencia: input.notificarTransferencia ? 1 : 0,
+        notificarAfastamento: input.notificarAfastamento ? 1 : 0,
+      });
       return { id: result.insertId, success: true };
     }),
 
@@ -50,7 +56,15 @@ export const notificationsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       const { id, ...data } = input;
-      await db!.update(notificationRecipients).set(data).where(eq(notificationRecipients.id, id));
+      const setData: Record<string, any> = {};
+      if (data.nome !== undefined) setData.nome = data.nome;
+      if (data.email !== undefined) setData.email = data.email;
+      if (data.notificarContratacao !== undefined) setData.notificarContratacao = data.notificarContratacao ? 1 : 0;
+      if (data.notificarDemissao !== undefined) setData.notificarDemissao = data.notificarDemissao ? 1 : 0;
+      if (data.notificarTransferencia !== undefined) setData.notificarTransferencia = data.notificarTransferencia ? 1 : 0;
+      if (data.notificarAfastamento !== undefined) setData.notificarAfastamento = data.notificarAfastamento ? 1 : 0;
+      if (data.ativo !== undefined) setData.ativo = data.ativo ? 1 : 0;
+      await db!.update(notificationRecipients).set(setData).where(eq(notificationRecipients.id, id));
       return { success: true };
     }),
 

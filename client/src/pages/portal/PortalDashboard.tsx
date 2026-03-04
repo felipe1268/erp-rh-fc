@@ -604,7 +604,7 @@ export default function PortalDashboard() {
                     lancamentoId: editingLancamento.id,
                     valor: editForm.valor,
                     descricaoItens: editForm.descricaoItens || undefined,
-                    observacoes: editForm.observacoes || undefined,
+
                   });
                 }}>
                 {editarLancamentoMut.isPending ? "Salvando..." : "Salvar Alterações"}
