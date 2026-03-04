@@ -19,7 +19,7 @@ import {
   Trash2, Pencil, Eye, ChevronDown, ChevronUp, Clock,
   Scale, FileText, User, Building2, DollarSign, Shield,
   X, MessageSquare, RefreshCw, Database, Zap, Ban, Activity,
-  Globe, BookOpen, Loader2, CheckCircle2, Info,
+  Globe, BookOpen, Loader2, CheckCircle2, Info, Save, Paperclip,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -116,6 +116,7 @@ export default function ProcessosTrabalhistas() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisco, setFilterRisco] = useState("all");
+  const [filterArquivo, setFilterArquivo] = useState("all");
   const [showAndamentoDialog, setShowAndamentoDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "processo" | "andamento"; id: number } | null>(null);
@@ -393,9 +394,12 @@ export default function ProcessosTrabalhistas() {
         (p.vara || "").toUpperCase().includes(term)
       );
     }
+    if (filterStatus !== "all") items = items.filter(p => p.status === filterStatus);
     if (filterRisco !== "all") items = items.filter(p => p.risco === filterRisco);
+    if (filterArquivo === "com") items = items.filter((p: any) => (p.totalDocumentos || 0) > 0);
+    if (filterArquivo === "sem") items = items.filter((p: any) => (p.totalDocumentos || 0) === 0);
     return items;
-  }, [processos.data, searchTerm, filterRisco]);
+  }, [processos.data, searchTerm, filterStatus, filterRisco, filterArquivo]);
 
   // ===== DETALHE VIEW =====
   if (viewMode === "detalhe" && selectedProcessoId) {
@@ -576,11 +580,24 @@ export default function ProcessosTrabalhistas() {
                         <Zap className="h-4 w-4 text-purple-600" /> Análise Inteligente (IA Jurídica)
                         {analiseIA.data && <span className="text-xs font-normal text-muted-foreground">v{analiseIA.data.versaoAnalise} • {analiseIA.data.totalAnalises} análise(s)</span>}
                       </CardTitle>
-                      <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-100"
-                        onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId }); }}
-                        disabled={analisandoIA}>
-                        {analisandoIA ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Analisando...</> : <><Zap className="h-3.5 w-3.5 mr-1" /> {analiseIA.data ? 'Re-analisar' : 'Analisar Processo'}</>}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {analiseIA.data && (
+                          <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                            <CheckCircle2 className="h-3 w-3" /> Salvo
+                          </span>
+                        )}
+                        {analiseIA.data && (
+                          <Button size="sm" variant="outline" className="border-green-300 text-green-700 hover:bg-green-100"
+                            onClick={() => window.print()}>
+                            <Save className="h-3.5 w-3.5 mr-1" /> Imprimir / Salvar PDF
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-100"
+                          onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId }); }}
+                          disabled={analisandoIA}>
+                          {analisandoIA ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Analisando...</> : <><Zap className="h-3.5 w-3.5 mr-1" /> {analiseIA.data ? 'Re-analisar' : 'Analisar Processo'}</>}
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -725,9 +742,12 @@ export default function ProcessosTrabalhistas() {
                           </div>
                         )}
 
-                        {/* Metadata */}
-                        <div className="text-xs text-muted-foreground border-t pt-2 flex items-center justify-between">
-                          <span>Análise v{analiseIA.data.versaoAnalise} • {analiseIA.data.criadoPor} • {analiseIA.data.createdAt ? formatDateTimeBR(analiseIA.data.createdAt) : ''}</span>
+                        {/* Metadata + Save indicator */}
+                        <div className="text-xs text-muted-foreground border-t pt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="h-3.5 w-3.5" /> Análise salva automaticamente</span>
+                            <span>• v{analiseIA.data.versaoAnalise} • {analiseIA.data.criadoPor} • {analiseIA.data.createdAt ? formatDateTimeBR(analiseIA.data.createdAt) : ''}</span>
+                          </div>
                           <span>{analiseIA.data.tempoAnaliseMs ? `${(analiseIA.data.tempoAnaliseMs / 1000).toFixed(1)}s` : ''}</span>
                         </div>
                       </div>
@@ -1443,6 +1463,12 @@ export default function ProcessosTrabalhistas() {
             <option value="all">Todos os Riscos</option>
             {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
           </select>
+          <select value={filterArquivo} onChange={e => setFilterArquivo(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm bg-background">
+            <option value="all">Todos os Arquivos</option>
+            <option value="com">Com Arquivo</option>
+            <option value="sem">Sem Arquivo</option>
+          </select>
         </div>
 
         {/* Table */}
@@ -1485,6 +1511,7 @@ export default function ProcessosTrabalhistas() {
                       <th className="p-2.5 font-medium text-center">Fase</th>
                       <th className="p-2.5 font-medium">Valor Causa</th>
                       <th className="p-2.5 font-medium">Próx. Audiência</th>
+                      <th className="p-2.5 font-medium text-center">Arq.</th>
                       <th className="p-2.5 font-medium text-center w-24">Ações</th>
                     </tr>
                   </thead>
@@ -1511,6 +1538,15 @@ export default function ProcessosTrabalhistas() {
                           </td>
                           <td className="p-2.5 text-center text-xs">{FASE_LABELS[p.fase]}</td>
                           <td className="p-2.5 text-xs">{formatBRL(p.valorCausa)}</td>
+                          <td className="p-2.5 text-center">
+                            {(p.totalDocumentos || 0) > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700" title={`${p.totalDocumentos} arquivo(s)`}>
+                                <Paperclip className="h-3 w-3" /> {p.totalDocumentos}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
                           <td className="p-2.5 text-xs">
                             {p.dataAudiencia ? (
                               <span className={dias != null && dias <= 7 ? "text-red-600 font-semibold" : dias != null && dias <= 30 ? "text-amber-600" : ""}>

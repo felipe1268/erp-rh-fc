@@ -4550,3 +4550,8 @@
 ## Rev. 180: Correção de Erros TypeScript + Filtro de Permissões
 - [x] Fix 27 erros TypeScript que bloqueiam publicação (12 arquivos)
 - [x] Melhorar filtro de permissões na Home (ModuleHub) e sidebar (DashboardLayout)
+
+## Rev. 181: Filtros na Tela de Processos Trabalhistas
+- [x] Adicionar filtro funcional por Status na tela de Processos Trabalhistas
+- [x] Adicionar filtro por Arquivo (com/sem arquivo anexado) na tela de Processos Trabalhistas
+- [x] Adicionar botão Salvar na seção de Análise IA dos Processos Trabalhistas

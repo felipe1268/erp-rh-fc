@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { processosTrabalhistas, processosAndamentos, employees, processoAnalises, processoAprendizado, goldenRules } from "../../drizzle/schema";
+import { processosTrabalhistas, processosAndamentos, employees, processoAnalises, processoAprendizado, goldenRules, processoDocumentos } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
@@ -56,10 +56,27 @@ export const processosTrabRouter = router({
         empMap = new Map(emps.map(e => [e.id, e]));
       }
 
+      // Contar documentos por processo
+      const procIds = filtered.map(p => p.id);
+      let docCountMap = new Map<number, number>();
+      if (procIds.length > 0) {
+        const docCounts = await db.select({
+          processoId: processoDocumentos.processoId,
+          count: sql<number>`COUNT(*)`.as('count'),
+        }).from(processoDocumentos)
+          .where(and(
+            inArray(processoDocumentos.processoId, procIds),
+            sql`${processoDocumentos.deletedAt} IS NULL`,
+          ))
+          .groupBy(processoDocumentos.processoId);
+        docCountMap = new Map(docCounts.map(d => [d.processoId, Number(d.count)]));
+      }
+
       return filtered.map(p => ({
         ...p,
         employee: empMap.get(p.employeeId) || null,
         pedidos: typeof p.pedidos === "string" ? JSON.parse(p.pedidos) : (p.pedidos || []),
+        totalDocumentos: docCountMap.get(p.id) || 0,
       })).sort((a, b) => {
         // Ordenar: em_andamento primeiro, encerrado por último
         const statusOrder: Record<string, number> = {
