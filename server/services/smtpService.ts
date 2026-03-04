@@ -23,6 +23,9 @@ function getTransporter(): nodemailer.Transporter {
       tls: {
         rejectUnauthorized: false, // Allow self-signed certificates
       },
+      connectionTimeout: 10000, // 10s para conectar
+      greetingTimeout: 10000,   // 10s para greeting
+      socketTimeout: 15000,     // 15s para socket idle
     });
   }
   return transporter;

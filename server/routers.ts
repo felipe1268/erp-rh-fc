@@ -323,22 +323,24 @@ export const appRouter = router({
       }
       const result = await createEmployee(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "colaboradores", entityType: "employee", entityId: result.id, details: `Colaborador criado: ${input.nomeCompleto}` });
-      // Disparo automático de notificação de contratação
+      // Disparo automático de notificação de contratação (fire-and-forget, não bloqueia o retorno)
       if (input.status === "Ativo" && input.companyId) {
-        try {
-          const company = await getCompanyById(input.companyId);
-          await dispararNotificacao(input.companyId, "contratacao", {
-            nome: input.nomeCompleto || "",
-            cpf: input.cpf || "",
-            funcao: input.funcao || "",
-            setor: input.setor || "",
-            empresa: company?.razaoSocial || company?.nomeFantasia || "",
-            dataAdmissao: input.dataAdmissao || "",
-            employeeId: result.id,
-            statusAnterior: null as any,
-            statusNovo: "Ativo",
-          }, ctx.user.id, ctx.user.name ?? "Sistema");
-        } catch (e) { console.error("[Notificação] Erro ao disparar contratação:", e); }
+        (async () => {
+          try {
+            const company = await getCompanyById(input.companyId);
+            await dispararNotificacao(input.companyId, "contratacao", {
+              nome: input.nomeCompleto || "",
+              cpf: input.cpf || "",
+              funcao: input.funcao || "",
+              setor: input.setor || "",
+              empresa: company?.razaoSocial || company?.nomeFantasia || "",
+              dataAdmissao: input.dataAdmissao || "",
+              employeeId: result.id,
+              statusAnterior: null as any,
+              statusNovo: "Ativo",
+            }, ctx.user.id, ctx.user.name ?? "Sistema");
+          } catch (e) { console.error("[Notificação] Erro ao disparar contratação:", e); }
+        })();
       }
       return result;
     }),
@@ -424,26 +426,28 @@ export const appRouter = router({
         } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
       }
       
-      // Disparo automático de notificação por mudança de status
+      // Disparo automático de notificação por mudança de status (fire-and-forget, não bloqueia o retorno)
       if (statusNovo && statusAnterior !== statusNovo) {
         const tipoMov = mapStatusToTipoMovimentacao(statusAnterior, statusNovo);
         if (tipoMov && input.companyId) {
-          try {
-            const company = await getCompanyById(input.companyId);
-            const nome = employeeData.nomeCompleto || empAnterior?.nomeCompleto || "";
-            await dispararNotificacao(input.companyId, tipoMov, {
-              nome,
-              cpf: employeeData.cpf || empAnterior?.cpf || "",
-              funcao: employeeData.funcao || empAnterior?.funcao || "",
-              setor: employeeData.setor || empAnterior?.setor || "",
-              empresa: company?.razaoSocial || company?.nomeFantasia || "",
-              dataDesligamento: statusNovo === "Desligado" ? (employeeData.dataDesligamento || new Date().toISOString().split("T")[0]) : undefined,
-              motivoAfastamento: ["Afastado", "Licenca", "Recluso"].includes(statusNovo) ? getMotivoAfastamento(statusNovo) : undefined,
-              employeeId: input.id,
-              statusAnterior: statusAnterior || undefined,
-              statusNovo,
-            }, ctx.user.id, ctx.user.name ?? "Sistema");
-          } catch (e) { console.error("[Notificação] Erro ao disparar mudança de status:", e); }
+          (async () => {
+            try {
+              const company = await getCompanyById(input.companyId);
+              const nome = employeeData.nomeCompleto || empAnterior?.nomeCompleto || "";
+              await dispararNotificacao(input.companyId, tipoMov, {
+                nome,
+                cpf: employeeData.cpf || empAnterior?.cpf || "",
+                funcao: employeeData.funcao || empAnterior?.funcao || "",
+                setor: employeeData.setor || empAnterior?.setor || "",
+                empresa: company?.razaoSocial || company?.nomeFantasia || "",
+                dataDesligamento: statusNovo === "Desligado" ? (employeeData.dataDesligamento || new Date().toISOString().split("T")[0]) : undefined,
+                motivoAfastamento: ["Afastado", "Licenca", "Recluso"].includes(statusNovo) ? getMotivoAfastamento(statusNovo) : undefined,
+                employeeId: input.id,
+                statusAnterior: statusAnterior || undefined,
+                statusNovo,
+              }, ctx.user.id, ctx.user.name ?? "Sistema");
+            } catch (e) { console.error("[Notificação] Erro ao disparar mudança de status:", e); }
+          })();
         }
       }
       return { success: true };

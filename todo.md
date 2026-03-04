@@ -4596,3 +4596,4 @@
 - [x] BUG: Ao selecionar médico da lista de sugestões, o nome não é preenchido no campo - corrigido com onSelect callback único
 - [x] Adicionar opção de editar dados do médico na lista de sugestões - ícone de lápis + formulário de edição
 - [x] Adicionar opção de editar dados da clínica na lista de sugestões - ícone de lápis + formulário de edição
+- [x] BUG: Salvar funcionário trava em "Salvando..." - corrigido: dispararNotificacao agora é fire-and-forget + timeouts SMTP (10s/15s)
