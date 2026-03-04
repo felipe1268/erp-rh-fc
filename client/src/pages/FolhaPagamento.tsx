@@ -147,6 +147,14 @@ export default function FolhaPagamento() {
     },
     onError: (err) => toast.error(`Erro na aferição: ${err.message}`),
   });
+  const decidirValeMut = trpc.payrollEngine.decidirVale.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      // Recalculate vale to refresh the view
+      gerarValeMut.mutate({ companyId, mesReferencia: mesAno });
+    },
+    onError: (err) => toast.error(`Erro ao registrar decisão: ${err.message}`),
+  });
 
   // ===== MUTATIONS =====
   const importarAutoMut = trpc.folha.importarFolhaAuto.useMutation({
@@ -1325,6 +1333,11 @@ export default function FolhaPagamento() {
 
   // ===== CÁLCULO VALE VIEW =====
   if (viewMode === "calculo_vale" && valeResult) {
+    const funcionariosComAlerta = valeResult.funcionarios?.filter((f: any) => f.temAlerta) || [];
+    const funcionariosSemAlerta = valeResult.funcionarios?.filter((f: any) => !f.temAlerta) || [];
+    const totalSemAlerta = funcionariosSemAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    const totalComAlerta = funcionariosComAlerta.reduce((s: number, f: any) => s + (f.valorTotalVale || 0), 0);
+    
     return (
       <DashboardLayout>
         <PrintHeader />
@@ -1344,18 +1357,22 @@ export default function FolhaPagamento() {
           </div>
 
           {/* RESUMO CARDS */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card><CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-orange-700">{valeResult.totalFuncionarios}</p>
               <p className="text-xs text-muted-foreground">Funcionários</p>
             </CardContent></Card>
             <Card><CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-orange-700">{formatBRL(valeResult.totalVale)}</p>
-              <p className="text-xs text-muted-foreground">Total Vale</p>
+              <p className="text-xs text-muted-foreground">Total Vale (Geral)</p>
             </CardContent></Card>
             <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-amber-600">{valeResult.totalBloqueados}</p>
-              <p className="text-xs text-muted-foreground">Bloqueados</p>
+              <p className="text-2xl font-bold text-green-700">{formatBRL(totalSemAlerta)}</p>
+              <p className="text-xs text-muted-foreground">Aprovados Automaticamente</p>
+            </CardContent></Card>
+            <Card className={funcionariosComAlerta.length > 0 ? "border-2 border-amber-400" : ""}><CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-amber-600">{funcionariosComAlerta.length}</p>
+              <p className="text-xs text-muted-foreground">Com Alerta (Decisão Pendente)</p>
             </CardContent></Card>
             <Card><CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-blue-700">{valeResult.diasUteis}</p>
@@ -1363,9 +1380,100 @@ export default function FolhaPagamento() {
             </CardContent></Card>
           </div>
 
-          {/* TABELA DE FUNCIONÁRIOS */}
+          {/* ALERTAS - DECISÃO DO USUÁRIO */}
+          {funcionariosComAlerta.length > 0 && (
+            <Card className="border-2 border-amber-400 bg-amber-50/50">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-10 w-10 rounded-lg bg-amber-500 flex items-center justify-center">
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-base text-amber-800">Funcionários com Alerta — Decisão Necessária</p>
+                    <p className="text-xs text-amber-700">Estes funcionários possuem situações que requerem sua análise. Decida se deseja pagar ou não o vale para cada um.</p>
+                  </div>
+                  <div className="ml-auto flex gap-2 no-print">
+                    <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50"
+                      onClick={() => {
+                        const decisoes = funcionariosComAlerta.map((f: any) => ({ employeeId: f.employeeId, pagar: true }));
+                        decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes });
+                      }}
+                      disabled={decidirValeMut.isPending}>
+                      <CheckCircle className="h-3 w-3 mr-1" /> Aprovar Todos
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-red-500 text-red-700 hover:bg-red-50"
+                      onClick={() => {
+                        const decisoes = funcionariosComAlerta.map((f: any) => ({ employeeId: f.employeeId, pagar: false }));
+                        decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes });
+                      }}
+                      disabled={decidirValeMut.isPending}>
+                      <XCircle className="h-3 w-3 mr-1" /> Rejeitar Todos
+                    </Button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b-2 border-amber-300">
+                        <th className="text-left py-2 px-2">Funcionário</th>
+                        <th className="text-left py-2 px-2">Motivo do Alerta</th>
+                        <th className="text-right py-2 px-2">Faltas (1-15)</th>
+                        <th className="text-right py-2 px-2">Total Vale</th>
+                        <th className="text-center py-2 px-2 no-print">Decisão</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {funcionariosComAlerta.map((f: any, i: number) => (
+                        <tr key={i} className="border-b border-amber-200 hover:bg-amber-100/50">
+                          <td className="py-2 px-2 font-medium">{f.nome}</td>
+                          <td className="py-2 px-2">
+                            <div className="flex flex-wrap gap-1">
+                              {f.alertaMotivo?.split(' | ').map((motivo: string, j: number) => (
+                                <Badge key={j} className="bg-amber-200 text-amber-800 text-[10px]">
+                                  <AlertTriangle className="h-3 w-3 mr-0.5" /> {motivo}
+                                </Badge>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="text-right py-2 px-2 font-medium text-red-600">{f.faltas}</td>
+                          <td className="text-right py-2 px-2 font-bold">{formatBRL(f.valorTotalVale)}</td>
+                          <td className="text-center py-2 px-2 no-print">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-green-500 text-green-700 hover:bg-green-50"
+                                disabled={decidirValeMut.isPending}
+                                onClick={() => decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: true }] })}>
+                                <CheckCircle className="h-3 w-3 mr-0.5" /> Pagar
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-red-500 text-red-700 hover:bg-red-50"
+                                disabled={decidirValeMut.isPending}
+                                onClick={() => decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: false }] })}>
+                                <XCircle className="h-3 w-3 mr-0.5" /> Não Pagar
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-amber-400 bg-amber-100/50 font-bold">
+                        <td className="py-2 px-2" colSpan={3}>TOTAL COM ALERTA ({funcionariosComAlerta.length})</td>
+                        <td className="text-right py-2 px-2 text-lg">{formatBRL(totalComAlerta)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TABELA DE FUNCIONÁRIOS APROVADOS */}
           <Card>
             <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="font-semibold text-sm">Funcionários Aprovados ({funcionariosSemAlerta.length})</span>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -1379,7 +1487,7 @@ export default function FolhaPagamento() {
                     </tr>
                   </thead>
                   <tbody>
-                    {valeResult.funcionarios?.map((f: any, i: number) => (
+                    {funcionariosSemAlerta.map((f: any, i: number) => (
                       <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-2 px-2 font-medium">{f.nome}</td>
                         <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
@@ -1387,26 +1495,20 @@ export default function FolhaPagamento() {
                         <td className="text-right py-2 px-2 text-orange-700 font-medium">{formatBRL(f.valorHE)}</td>
                         <td className="text-right py-2 px-2 font-bold">{formatBRL(f.valorTotalVale)}</td>
                         <td className="text-center py-2 px-2">
-                          {f.bloqueado ? (
-                            <Badge className="bg-red-100 text-red-700 text-[10px]">
-                              <Ban className="h-3 w-3 mr-0.5" /> {f.motivoBloqueio}
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-green-100 text-green-700 text-[10px]">
-                              <CheckCircle className="h-3 w-3 mr-0.5" /> OK
-                            </Badge>
-                          )}
+                          <Badge className="bg-green-100 text-green-700 text-[10px]">
+                            <CheckCircle className="h-3 w-3 mr-0.5" /> OK
+                          </Badge>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                      <td className="py-2 px-2">TOTAL</td>
+                      <td className="py-2 px-2">TOTAL APROVADOS</td>
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">—</td>
                       <td className="text-right py-2 px-2">—</td>
-                      <td className="text-right py-2 px-2 text-lg">{formatBRL(valeResult.totalVale)}</td>
+                      <td className="text-right py-2 px-2 text-lg">{formatBRL(totalSemAlerta)}</td>
                       <td></td>
                     </tr>
                   </tfoot>
@@ -1617,9 +1719,18 @@ export default function FolhaPagamento() {
                   {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
                 </Button>
                 {valeResult && (
-                  <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-orange-700" onClick={() => setViewMode("calculo_vale")}>
-                    <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(valeResult.totalVale)})
-                  </Button>
+                  <>
+                    <Button size="sm" variant="ghost" className="w-full mt-1 text-xs text-orange-700" onClick={() => setViewMode("calculo_vale")}>
+                      <Eye className="h-3 w-3 mr-1" /> Ver Resultado ({formatBRL(valeResult.totalVale)})
+                    </Button>
+                    {(valeResult.totalAlertas || 0) > 0 && (
+                      <div className="mt-1 text-center">
+                        <Badge className="bg-amber-200 text-amber-800 text-[10px]">
+                          <AlertTriangle className="h-3 w-3 mr-0.5" /> {valeResult.totalAlertas} alerta(s)
+                        </Badge>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

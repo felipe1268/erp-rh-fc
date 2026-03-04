@@ -4417,3 +4417,12 @@
 ## Fase 82: Reorganizar Folha de Pagamento — Cálculo Interno em cima
 - [x] Mover seção Cálculo Interno para cima dos cards de Vale/Pagamento
 - [x] Mover cards de Importação da Contabilidade para baixo
+
+## Fase 83: Regras de Alerta no Calcular Vale
+- [x] Backend: contar faltas apenas dos 15 primeiros dias do mês atual (01 a 15)
+- [x] Backend: alertar se funcionário tem 10+ faltas (não bloquear)
+- [x] Backend: alertar se funcionário contratado após dia 10 (não bloquear)
+- [x] Backend: retornar campo de alerta por funcionário (tipo + motivo)
+- [x] Frontend: mostrar alerta amarelo/vermelho para funcionários com regra ativada
+- [x] Frontend: botões Pagar/Não Pagar para cada funcionário alertado
+- [x] Frontend: permitir decisão individual do usuário

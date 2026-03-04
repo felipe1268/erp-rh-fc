@@ -829,12 +829,16 @@ export const payrollEngineRouter = router({
         )
       );
 
-      // Count faltas per employee in the ponto period
+      // Count faltas ONLY from day 1 to 15 of current month (not the full ponto period)
+      const primeiroDiaMes = `${year}-${String(month).padStart(2, '0')}-01`;
+      const dia15Mes = `${year}-${String(month).padStart(2, '0')}-15`;
       const [faltasRows] = await db.execute(sql`
         SELECT employeeId, SUM(isFalta) as totalFaltas
         FROM timecard_daily 
         WHERE companyId = ${input.companyId} 
         AND mesCompetencia = ${input.mesReferencia}
+        AND data >= ${primeiroDiaMes}
+        AND data <= ${dia15Mes}
         AND statusDia = 'registrado'
         GROUP BY employeeId
       `) as any[];
@@ -879,24 +883,30 @@ export const payrollEngineRouter = router({
         const valorHE = (minutosHE / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
         const valorTotalVale = valorAdiantamento + valorHE;
 
-        // Check if employee was admitted after day 10
-        let bloqueado = 0;
-        let motivoBloqueio = "";
-        if (faltas > criteria.maxFaltasVale) {
-          bloqueado = 1;
-          motivoBloqueio = `Mais de ${criteria.maxFaltasVale} faltas no período (${faltas} faltas)`;
-          bloqueados++;
+        // Check alerts (not blocking - user decides)
+        let alertaTipo = "";
+        let alertaMotivo = "";
+        const alertas: string[] = [];
+        
+        // Regra 1: 10+ faltas nos 15 primeiros dias do mês atual
+        if (faltas >= 10) {
+          alertas.push(`${faltas} faltas nos 15 primeiros dias do mês (01/${String(month).padStart(2,'0')} a 15/${String(month).padStart(2,'0')})`);
         }
-        // Check admission date - if after day 10, no vale
+        // Regra 2: Admitido após dia 10 do mês
         if (emp.dataAdmissao) {
           const admDay = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCDate();
           const admMonth = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCMonth() + 1;
           const admYear = new Date(emp.dataAdmissao + "T12:00:00Z").getUTCFullYear();
           if (admYear === year && admMonth === month && admDay > 10) {
-            bloqueado = 1;
-            motivoBloqueio = `Admitido após dia 10 do mês (${emp.dataAdmissao})`;
-            bloqueados++;
+            alertas.push(`Admitido após dia 10 do mês (${emp.dataAdmissao})`);
           }
+        }
+        
+        const temAlerta = alertas.length > 0;
+        if (temAlerta) {
+          alertaTipo = alertas.length > 1 ? "multiplo" : (faltas >= 10 ? "faltas_excessivas" : "admissao_recente");
+          alertaMotivo = alertas.join(" | ");
+          bloqueados++; // count for summary, but NOT blocking
         }
 
         await db.execute(sql`
@@ -905,19 +915,19 @@ export const payrollEngineRouter = router({
             faltasNoPeriodo, valorHora, cargaHorariaDiaria, diasUteisNoMes, status)
           VALUES (${input.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
             ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
-            ${bloqueado}, ${motivoBloqueio || null},
-            ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, 'calculado')
+            ${temAlerta ? 1 : 0}, ${alertaMotivo || null},
+            ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${temAlerta ? 'alerta' : 'calculado'})
         `);
 
-        // Create financial event
+        // Create financial event (always create, user decides later for alerts)
         const dataPrevista = `${year}-${String(month).padStart(2, "0")}-${String(criteria.diaAdiantamento).padStart(2, "0")}`;
-        if (!bloqueado) {
+        if (!temAlerta) {
           await db.execute(sql`
             INSERT INTO financial_events (companyId, tipo, categoria, mesCompetencia, dataPrevista, valor, status, employeeId, employeeName, descricao, origemTipo, criadoPor)
             VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${formatMoney(valorTotalVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto}, ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
           `);
-          totalVale += valorTotalVale;
         }
+        totalVale += valorTotalVale; // always count in total
 
         results.push({
           employeeId: emp.id,
@@ -927,8 +937,10 @@ export const payrollEngineRouter = router({
           valorAdiantamento,
           valorHE,
           valorTotalVale,
-          bloqueado: !!bloqueado,
-          motivoBloqueio,
+          temAlerta,
+          alertaTipo,
+          alertaMotivo,
+          bloqueado: false, // never auto-block, user decides
           faltas,
           minutosHE,
         });
@@ -946,12 +958,14 @@ export const payrollEngineRouter = router({
 
       return {
         totalFuncionarios: empList.length,
-        totalBloqueados: bloqueados,
+        totalAlertas: bloqueados,
         totalVale,
         diasUteis,
         percentual: criteria.percentualAdiantamento,
         funcionarios: results,
-        message: `Vale gerado: ${empList.length} funcionários, ${bloqueados} bloqueados, total R$ ${formatMoney(totalVale)}`,
+        message: bloqueados > 0 
+          ? `Vale calculado: ${empList.length} funcionários, ${bloqueados} com alerta (decisão pendente), total R$ ${formatMoney(totalVale)}`
+          : `Vale calculado: ${empList.length} funcionários, total R$ ${formatMoney(totalVale)}`,
       };
     }),
 
@@ -971,6 +985,69 @@ export const payrollEngineRouter = router({
         ORDER BY e.nomeCompleto
       `) as any[];
       return rows || [];
+    }),
+
+  // ============================================================
+  // 5b. DECIDIR VALE (usuário aprova ou rejeita para funcionários com alerta)
+  // ============================================================
+  decidirVale: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      decisoes: z.array(z.object({
+        employeeId: z.number(),
+        pagar: z.boolean(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { year, month } = parseMesRef(input.mesReferencia);
+      const criteria = await getPayrollCriteria(db, input.companyId);
+      const dataPrevista = `${year}-${String(month).padStart(2, "0")}-${String(criteria.diaAdiantamento).padStart(2, "0")}`;
+      
+      let aprovados = 0;
+      let rejeitados = 0;
+      
+      for (const decisao of input.decisoes) {
+        if (decisao.pagar) {
+          // Aprovar: mudar status para 'calculado', bloqueado = 0
+          await db.execute(sql`
+            UPDATE payroll_advances SET status = 'calculado', bloqueado = 0,
+              motivoBloqueio = CONCAT(IFNULL(motivoBloqueio, ''), ' [APROVADO por ${ctx.user.name || "Usuário"}]')
+            WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND employeeId = ${decisao.employeeId}
+          `);
+          // Create financial event for approved
+          const [advRows] = await db.execute(sql`
+            SELECT valorTotalVale FROM payroll_advances 
+            WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND employeeId = ${decisao.employeeId}
+          `) as any[];
+          const adv = (advRows as any[])?.[0];
+          if (adv) {
+            const [empRows] = await db.execute(sql`SELECT nomeCompleto FROM employees WHERE id = ${decisao.employeeId}`) as any[];
+            const empName = (empRows as any[])?.[0]?.nomeCompleto || 'Funcionário';
+            await db.execute(sql`
+              INSERT INTO financial_events (companyId, tipo, categoria, mesCompetencia, dataPrevista, valor, status, employeeId, employeeName, descricao, origemTipo, criadoPor)
+              VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${adv.valorTotalVale}, 'consolidado', ${decisao.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (aprovado manualmente)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
+            `);
+          }
+          aprovados++;
+        } else {
+          // Rejeitar: mudar status para 'rejeitado', manter bloqueado = 1
+          await db.execute(sql`
+            UPDATE payroll_advances SET status = 'rejeitado',
+              motivoBloqueio = CONCAT(IFNULL(motivoBloqueio, ''), ' [REJEITADO por ${ctx.user.name || "Usuário"}]')
+            WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia} AND employeeId = ${decisao.employeeId}
+          `);
+          rejeitados++;
+        }
+      }
+      
+      return {
+        aprovados,
+        rejeitados,
+        message: `Decisão registrada: ${aprovados} aprovados, ${rejeitados} rejeitados`,
+      };
     }),
 
   // ============================================================
