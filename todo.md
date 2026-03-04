@@ -4449,3 +4449,25 @@
 - [x] Documento do fluxo atualizado (Rev. 172)
 - [x] Backend: critério configurável folha_conferencia_contabilidade (obrigatoria/recomendada/opcional)
 - [x] Frontend: dialog de conferência com contabilidade no consolidar pagamento
+
+## Fase 88: Reorganizar Folha + Campo Obra na Ficha de EPI
+- [ ] Reorganizar layout Folha de Pagamento: atividades rotineiras em destaque, conferência contabilidade compacta
+
+## Fase 88b: Campo Obra na Ficha de EPI com Confirmação
+- [ ] Frontend: alerta de confirmação de obra ao gerar ficha de EPI (pré-seleciona obra padrão, permite trocar)
+- [ ] Backend/PDF: adicionar campo Obra na ficha de entrega de EPI impressa
+- [ ] Salvar obra selecionada no registro de entrega de EPI
+
+## Fase 89: BUG Aferição + VT→VA + Layout Folha + Obra EPI
+- [ ] BUG: Erro INSERT duplicado em payroll_adjustments ao aferir escuro (chave duplicada)
+- [ ] Trocar VT por VA na folha de pagamento e conectar VA ao cálculo
+- [ ] Reorganizar layout Folha: conferência contabilidade compacta
+- [ ] Campo Obra na ficha de EPI com alerta de confirmação
+
+## Fase 90: VT + VA como colunas separadas na tabela de pagamento
+- [x] Backend: ativar cálculo VT usando vtValorDiario do cadastro do funcionário × dias úteis
+- [x] Backend: retornar VT e VA como campos separados (vtValor, descontoVaTotal, descontoVtFaltas)
+- [x] Backend: incluir VT no totalDescontos
+- [x] Frontend: tabela expandida com 16 colunas (Funcionário, Função, Bruto, H.E., Proventos, Adiant., INSS, VT, VA 5%, Faltas, Pensão, Seguro, Ac.Escuro, Tot.Desc., Líquido, FGTS)
+- [x] Frontend: totais por coluna no rodapé da tabela
+- [x] Frontend: cores diferenciadas (verde=proventos, laranja=adiantamento, vermelho=descontos, azul=líquido)

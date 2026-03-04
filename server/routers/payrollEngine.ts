@@ -606,6 +606,29 @@ export const payrollEngineRouter = router({
       const prevLastDay = new Date(prevParsed.year, prevParsed.month, 0).getDate();
 
       // Get "escuro" records from previous month
+      // Limpar ajustes de aferição anteriores para permitir re-aferição
+      await db.execute(sql`
+        DELETE FROM payroll_adjustments 
+        WHERE companyId = ${input.companyId} 
+        AND mesOrigem = ${prevMes}
+        AND mesDesconto = ${input.mesReferencia}
+        AND tipo IN ('falta', 'atraso', 'sem_registro')
+      `);
+
+      // Resetar status dos registros escuro que foram aferidos anteriormente
+      await db.execute(sql`
+        UPDATE timecard_daily SET 
+          statusDia = 'escuro',
+          statusAnterior = NULL,
+          afericaoResultado = NULL,
+          afericaoObs = NULL,
+          afericaoEm = NULL
+        WHERE companyId = ${input.companyId} 
+        AND mesCompetencia = ${prevMes}
+        AND (statusAnterior = 'escuro' OR statusDia IN ('escuro', 'pendente_decisao'))
+      `);
+
+      // Buscar registros escuro (inclui os que acabaram de ser resetados)
       const [escuroRecords] = await db.execute(sql`
         SELECT * FROM timecard_daily 
         WHERE companyId = ${input.companyId} 
@@ -614,7 +637,6 @@ export const payrollEngineRouter = router({
         ORDER BY employeeId, data
       `) as any[];
       if (!escuroRecords || (escuroRecords as any[]).length === 0) {
-        // Even with no escuro records, advance the period status
         await db.execute(sql`
           UPDATE payroll_periods SET status = 'aferida', afericaoRealizada = 1, afericaoEm = NOW(), afericaoPor = ${ctx.user.name || "Sistema"}
           WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
@@ -622,7 +644,7 @@ export const payrollEngineRouter = router({
         return { totalAferidos: 0, divergencias: 0, message: "Nenhum registro 'no escuro' encontrado no mês anterior. Competência avançada." };
       }
 
-      // Get actual time_records for the escuro period (these come from current month's ponto import)
+      // Get actual time_records for the escuro period
       const escuroInicio = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(diaCorte + 1).padStart(2, "0")}`;
       const escuroFim = `${prevParsed.year}-${String(prevParsed.month).padStart(2, "0")}-${String(prevLastDay).padStart(2, "0")}`;
 
@@ -1313,10 +1335,26 @@ export const payrollEngineRouter = router({
         const descontoFaltas = faltasQtd * valorHora * criteria.cargaHorariaDiaria;
         const descontoAtrasos = (atrasosMinutos / 60) * valorHora;
 
-        // VR/VT discount per falta
+        // VR discount per falta
         const vrDiario = await getEmployeeVrDiario(db, emp.id, input.companyId);
-        const vtDiario = parseBRL(emp.vtValorDiario);
         const descontoVrFaltas = criteria.descontoVrFalta ? faltasQtd * vrDiario : 0;
+
+        // VA (Vale Alimentação) - buscar do módulo vr_benefits (lançamento mensal)
+        const [vaRows] = await db.execute(sql`
+          SELECT valorTotal FROM vr_benefits 
+          WHERE companyId = ${input.companyId} AND employeeId = ${emp.id} AND mesReferencia = ${input.mesReferencia}
+          LIMIT 1
+        `) as any[];
+        const vaLancamento = vaRows?.[0] ? parseBRL(vaRows[0].valorTotal) : 0;
+        // Desconto de 5% do VA (conforme convenção coletiva) proporcional aos dias trabalhados
+        const vaDescontoPct = 0.05; // 5% conforme convenção
+        const vaDescontoBase = vaLancamento * vaDescontoPct;
+        // Se faltou, desconta proporcional do VA
+        const vaDescontoFaltas = faltasQtd > 0 ? (vaLancamento / diasUteis) * faltasQtd * vaDescontoPct : 0;
+        const descontoVaTotal = vaDescontoBase - vaDescontoFaltas; // desconto de 5% sobre dias trabalhados
+        // VT (Vale Transporte) - valor diário do cadastro do funcionário
+        const vtDiario = parseBRL(emp.vtValorDiario);
+        const vtValorMensalCalc = vtDiario * diasUteis;
         const descontoVtFaltas = criteria.descontoVtFalta ? faltasQtd * vtDiario : 0;
 
         // Pensão
@@ -1340,10 +1378,10 @@ export const payrollEngineRouter = router({
         }));
 
         // ===== CAMPOS RATEÁVEIS POR OBRA =====
-        // VA (Vale Alimentação) - do cadastro do funcionário
-        const vaValor = (emp.vaRecebe === '1' || emp.vaRecebe === 'Sim') ? parseBRL(emp.vaValor) : 0;
-        // VT (Vale Transporte) - valor total mensal (diário * dias úteis)
-        const vtValorMensal = vtDiario * diasUteis;
+        // VA (Vale Alimentação) - do módulo vr_benefits (já calculado acima)
+        const vaValor = vaLancamento;
+        // VT (Vale Transporte) - valor mensal calculado acima
+        const vtValorMensal = vtValorMensalCalc;
         // VR (Vale Refeição) - valor total mensal (diário * dias úteis)
         const vrValorMensal = vrDiario * diasUteis;
         // Seguro de Vida
@@ -1383,7 +1421,7 @@ export const payrollEngineRouter = router({
           };
         });
 
-        const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor;
+        const totalDescontos = descontoAdiantamento + descontoFaltas + descontoAtrasos + descontoVrFaltas + descontoVaTotal + descontoVtFaltas + descontoPensao + acertoEscuroValor + inssValor;
         const salarioLiquido = totalProventos - totalDescontos;
 
         await db.execute(sql`
@@ -1421,6 +1459,7 @@ export const payrollEngineRouter = router({
           descontoAtrasos,
           descontoVrFaltas,
           descontoVtFaltas,
+          descontoVaTotal,
           descontoPensao,
           descontoInss: inssValor,
           descontoFgts: fgtsValor,
@@ -1430,6 +1469,7 @@ export const payrollEngineRouter = router({
           dataPagamentoPrevista,
           vaValor,
           vtValor: vtValorMensal,
+          vtDiario,
           vrValor: vrValorMensal,
           seguroVidaValor,
           rateioPorObra,
@@ -1981,7 +2021,7 @@ export const payrollEngineRouter = router({
             ...(parseBRL(p.descontoFaltas) > 0 ? [{ descricao: `Faltas (${p.descontoFaltasQtd} dias)`, referencia: "", valor: parseBRL(p.descontoFaltas) }] : []),
             ...(parseBRL(p.descontoAtrasos) > 0 ? [{ descricao: `Atrasos (${p.descontoAtrasosMinutos}min)`, referencia: "", valor: parseBRL(p.descontoAtrasos) }] : []),
             ...(parseBRL(p.descontoVrFaltas) > 0 ? [{ descricao: "VR (dias de falta)", referencia: `${p.descontoFaltasQtd} dias`, valor: parseBRL(p.descontoVrFaltas) }] : []),
-            ...(parseBRL(p.descontoVtFaltas) > 0 ? [{ descricao: "VT (dias de falta)", referencia: `${p.descontoFaltasQtd} dias`, valor: parseBRL(p.descontoVtFaltas) }] : []),
+            ...(parseBRL(p.descontoVtFaltas) > 0 ? [{ descricao: "VA 5% (dias de falta)", referencia: `${p.descontoFaltasQtd} dias`, valor: parseBRL(p.descontoVtFaltas) }] : []),
             ...(parseBRL(p.descontoPensao) > 0 ? [{ descricao: "Pensão Alimentícia", referencia: "", valor: parseBRL(p.descontoPensao) }] : []),
             ...(parseBRL(p.acertoEscuroValor) > 0 ? [{ descricao: "Acerto Período Escuro", referencia: `Ref. mês anterior`, valor: parseBRL(p.acertoEscuroValor) }] : []),
           ],

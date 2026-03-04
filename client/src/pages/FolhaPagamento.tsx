@@ -10,7 +10,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -63,6 +63,7 @@ export default function FolhaPagamento() {
   const decimo1InputRef = useRef<HTMLInputElement>(null);
   const decimo2InputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<"vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2" | null>(null);
+  const [showConferencia, setShowConferencia] = useState(false);
 
   // Views
   const [viewMode, setViewMode] = useState<ViewMode>("resumo");
@@ -1705,46 +1706,94 @@ export default function FolhaPagamento() {
             </CardContent></Card>
           </div>
 
-          {/* TABELA DE FUNCIONÁRIOS */}
+          {/* TABELA DE FUNCIONÁRIOS - TODOS OS DESCONTOS */}
           <Card>
             <CardContent className="p-4">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b-2 border-gray-200">
-                      <th className="text-left py-2 px-2">Funcionário</th>
-                      <th className="text-left py-2 px-2">Função</th>
-                      <th className="text-right py-2 px-2">Bruto</th>
-                      <th className="text-right py-2 px-2">Adiant.</th>
-                      <th className="text-right py-2 px-2">INSS</th>
-                      <th className="text-right py-2 px-2">VT</th>
-                      <th className="text-right py-2 px-2">Outros</th>
-                      <th className="text-right py-2 px-2">Líquido</th>
-                      <th className="text-right py-2 px-2 text-[10px]">FGTS (info)</th>
+                      <th className="text-left py-2 px-1 sticky left-0 bg-white z-10">Funcionário</th>
+                      <th className="text-left py-2 px-1">Função</th>
+                      <th className="text-right py-2 px-1 bg-green-50">Bruto</th>
+                      <th className="text-right py-2 px-1 bg-green-50">H.E.</th>
+                      <th className="text-right py-2 px-1 bg-green-50 font-bold">Proventos</th>
+                      <th className="text-right py-2 px-1 bg-orange-50">Adiant.</th>
+                      <th className="text-right py-2 px-1 bg-red-50">INSS</th>
+                      <th className="text-right py-2 px-1 bg-red-50">VT</th>
+                      <th className="text-right py-2 px-1 bg-red-50">VA (5%)</th>
+                      <th className="text-right py-2 px-1 bg-red-50">Faltas</th>
+                      <th className="text-right py-2 px-1 bg-red-50">Pensão</th>
+                      <th className="text-right py-2 px-1 bg-red-50">Seguro</th>
+                      <th className="text-right py-2 px-1 bg-red-50">Ac. Escuro</th>
+                      <th className="text-right py-2 px-1 bg-red-50 font-bold">Tot. Desc.</th>
+                      <th className="text-right py-2 px-1 bg-blue-50 font-bold">Líquido</th>
+                      <th className="text-right py-2 px-1 text-[9px] text-muted-foreground">FGTS</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pagamentoResult.funcionarios?.map((f: any, i: number) => (
-                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-2 px-2 font-medium">{f.nome}</td>
-                        <td className="py-2 px-2 text-muted-foreground text-xs">{f.funcao}</td>
-                        <td className="text-right py-2 px-2">{formatBRL(f.salarioBruto)}</td>
-                        <td className="text-right py-2 px-2 text-orange-700">{formatBRL(f.descontoAdiantamento)}</td>
-                        <td className="text-right py-2 px-2 text-red-600">{formatBRL(f.descontoInss)}</td>
-                        <td className="text-right py-2 px-2 text-red-600">{formatBRL(f.vtValor)}</td>
-                        <td className="text-right py-2 px-2 text-red-600">{formatBRL((f.descontoPensao || 0) + (f.seguroVidaValor || 0))}</td>
-                        <td className="text-right py-2 px-2 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
-                        <td className="text-right py-2 px-2 text-xs text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
-                      </tr>
-                    ))}
+                    {pagamentoResult.funcionarios?.map((f: any, i: number) => {
+                      const vtVal = f.vtValor || 0;
+                      const vaDesc = f.descontoVaTotal || 0;
+                      const descFaltas = (f.descontoFaltas || 0) + (f.descontoAtrasos || 0);
+                      const pensao = f.descontoPensao || 0;
+                      const seguro = f.seguroVidaValor || 0;
+                      const acertoEsc = f.acertoEscuroValor || 0;
+                      return (
+                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-1.5 px-1 font-medium sticky left-0 bg-white z-10 whitespace-nowrap">{f.nome}</td>
+                          <td className="py-1.5 px-1 text-muted-foreground text-[10px] whitespace-nowrap">{f.funcao}</td>
+                          <td className="text-right py-1.5 px-1">{formatBRL(f.salarioBruto)}</td>
+                          <td className="text-right py-1.5 px-1 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 font-semibold">{formatBRL(f.totalProventos)}</td>
+                          <td className="text-right py-1.5 px-1 text-orange-700">{f.descontoAdiantamento > 0 ? formatBRL(f.descontoAdiantamento) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-red-600">{f.descontoInss > 0 ? formatBRL(f.descontoInss) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-red-600">{vtVal > 0 ? formatBRL(vtVal) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-red-600">{vaDesc > 0 ? formatBRL(vaDesc) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-red-600">{descFaltas > 0 ? formatBRL(descFaltas) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-red-600">{pensao > 0 ? formatBRL(pensao) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-red-600">{seguro > 0 ? formatBRL(seguro) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 text-red-600">{acertoEsc > 0 ? formatBRL(acertoEsc) : '—'}</td>
+                          <td className="text-right py-1.5 px-1 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
+                          <td className="text-right py-1.5 px-1 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
+                          <td className="text-right py-1.5 px-1 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                      <td className="py-2 px-2" colSpan={2}>TOTAL</td>
-                      <td className="text-right py-2 px-2">{formatBRL(pagamentoResult.totalBruto)}</td>
-                      <td className="text-right py-2 px-2" colSpan={4}>—</td>
-                      <td className="text-right py-2 px-2 text-lg text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</td>
-                      <td></td>
+                      <td className="py-2 px-1 sticky left-0 bg-gray-50 z-10" colSpan={2}>TOTAL ({pagamentoResult.totalFuncionarios})</td>
+                      <td className="text-right py-2 px-1" colSpan={3}>{formatBRL(pagamentoResult.totalBruto)}</td>
+                      <td className="text-right py-2 px-1 text-orange-700">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoAdiantamento || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoInss || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.vtValor || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoVaTotal || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoFaltas || 0) + (f.descontoAtrasos || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoPensao || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.seguroVidaValor || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-600">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.acertoEscuroValor || 0), 0) || 0)}
+                      </td>
+                      <td className="text-right py-2 px-1 text-red-700">{formatBRL(pagamentoResult.totalDescontos)}</td>
+                      <td className="text-right py-2 px-1 text-lg text-[#1B2A4A]">{formatBRL(pagamentoResult.totalLiquido)}</td>
+                      <td className="text-right py-2 px-1 text-[10px] text-muted-foreground">
+                        {formatBRL(pagamentoResult.funcionarios?.reduce((s: number, f: any) => s + (f.descontoFgts || 0), 0) || 0)}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1942,201 +1991,197 @@ export default function FolhaPagamento() {
           </CardContent>
         </Card>
 
-        {/* CARDS VALE + PAGAMENTO (Importação da Contabilidade) */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* VALE */}
-          <Card className={`border-2 ${vale ? "border-orange-200" : "border-dashed border-gray-300"}`}>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                    <CreditCard className="h-5 w-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-base">Vale / Adiantamento</p>
-                    <p className="text-xs text-muted-foreground">Pago dia 20</p>
-                  </div>
+        {/* CONFERÊNCIA COM CONTABILIDADE (Compacta / Colapsável) */}
+        <Card className="border border-gray-200">
+          <CardContent className="p-0">
+            <button
+              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+              onClick={() => setShowConferencia(!showConferencia)}
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <FileCheck className="h-4 w-4 text-gray-600" />
                 </div>
+                <div className="text-left">
+                  <p className="font-semibold text-sm">Conferência com Contabilidade</p>
+                  <p className="text-[10px] text-muted-foreground">Importação e verificação dos PDFs da contabilidade terceirizada</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
                 {vale && (
-                  <Badge className={
-                    vale.status === "consolidado" ? "bg-green-100 text-green-700" :
-                    "bg-amber-100 text-amber-700"
-                  }>
-                    {vale.status === "consolidado" && <Lock className="h-3 w-3 mr-1" />}
-                    {vale.status.charAt(0).toUpperCase() + vale.status.slice(1)}
+                  <Badge variant="outline" className="text-[10px] border-orange-200 text-orange-700">
+                    <CreditCard className="h-3 w-3 mr-1" /> Vale {vale.status === 'consolidado' ? '✓' : '•'}
                   </Badge>
                 )}
-              </div>
-
-              {vale ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                    <div className="bg-orange-50 rounded-lg p-2 text-center">
-                      <p className="text-lg font-bold text-orange-700">{vale.totalFuncionarios}</p>
-                      <p className="text-[10px] text-muted-foreground">Funcionários</p>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-2 text-center">
-                      <p className="text-base font-bold text-orange-700">{formatBRL(vale.totalLiquido)}</p>
-                      <p className="text-[10px] text-muted-foreground">Total Líquido</p>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-2 text-center">
-                      <p className={`text-lg font-bold ${(vale.totalDivergencias || 0) > 0 ? "text-red-600" : "text-green-600"}`}>
-                        {vale.totalDivergencias || 0}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">Divergências</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5 flex-wrap">
-                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView("detalhes", vale.id, "Vale/Adiantamento")}>
-                      <Eye className="h-3 w-3 mr-1" /> Detalhes
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView("verificacao", vale.id, "vale")}>
-                      <ShieldCheck className="h-3 w-3 mr-1" /> Verificação
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView("custos_obra", vale.id, "vale")}>
-                      <Building2 className="h-3 w-3 mr-1" /> Custos/Obra
-                    </Button>
-                    {vale.status !== "consolidado" && (
-                      <Button size="sm" variant="outline" className="text-xs h-8 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: vale.id })}>
-                        <Lock className="h-3 w-3 mr-1" /> Consolidar
-                      </Button>
-                    )}
-                    {vale.status === "consolidado" && isAdmin && (
-                      <Button size="sm" variant="outline" className="text-xs h-8 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: vale.id })}>
-                        <Unlock className="h-3 w-3 mr-1" /> Desconsolidar
-                      </Button>
-                    )}
-                    {vale.status !== "consolidado" && isAdmin && (
-                      <Button size="sm" variant="outline" className="text-xs h-8 text-red-600" onClick={() => {
-                        if (confirm("Excluir lançamento de Vale?")) excluirMut.mutate({ folhaLancamentoId: vale.id });
-                      }}>
-                        <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                      </Button>
-                    )}
-                  </div>
-                  {/* Re-importar */}
-                  {vale.status !== "consolidado" && (
-                    <Button size="sm" variant="ghost" className="text-xs w-full text-orange-700 hover:bg-orange-50"
-                      disabled={uploading === "vale"}
-                      onClick={() => valeInputRef.current?.click()}>
-                      {uploading === "vale" ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Reimportar PDFs</>}
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <CreditCard className="h-10 w-10 text-orange-300 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">Nenhum lançamento de vale para este mês</p>
-                  <Button className="bg-orange-600 hover:bg-orange-700"
-                    disabled={uploading === "vale"}
-                    onClick={() => valeInputRef.current?.click()}>
-                    {uploading === "vale" ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-2" /> Importar Vale</>}
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground mt-2">Selecione todos os PDFs de uma vez. O sistema detecta automaticamente o tipo.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* PAGAMENTO */}
-          <Card className={`border-2 ${pagamento ? "border-green-200" : "border-dashed border-gray-300"}`}>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <DollarSign className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-base">Pagamento</p>
-                    <p className="text-xs text-muted-foreground">5º dia útil</p>
-                  </div>
-                </div>
                 {pagamento && (
-                  <Badge className={
-                    pagamento.status === "consolidado" ? "bg-green-100 text-green-700" :
-                    "bg-amber-100 text-amber-700"
-                  }>
-                    {pagamento.status === "consolidado" && <Lock className="h-3 w-3 mr-1" />}
-                    {pagamento.status.charAt(0).toUpperCase() + pagamento.status.slice(1)}
+                  <Badge variant="outline" className="text-[10px] border-green-200 text-green-700">
+                    <DollarSign className="h-3 w-3 mr-1" /> Pagto {pagamento.status === 'consolidado' ? '✓' : '•'}
                   </Badge>
                 )}
+                {!vale && !pagamento && (
+                  <span className="text-[10px] text-muted-foreground">Nenhum PDF importado</span>
+                )}
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showConferencia ? 'rotate-180' : ''}`} />
               </div>
+            </button>
 
-              {pagamento ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                    <div className="bg-green-50 rounded-lg p-2 text-center">
-                      <p className="text-lg font-bold text-green-700">{pagamento.totalFuncionarios}</p>
-                      <p className="text-[10px] text-muted-foreground">Funcionários</p>
+            {showConferencia && (
+              <div className="border-t px-4 pb-4 pt-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {/* VALE COMPACTO */}
+                  <div className={`rounded-lg border p-3 ${vale ? 'border-orange-200 bg-orange-50/30' : 'border-dashed border-gray-300'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-orange-600" />
+                        <span className="font-semibold text-sm">Vale / Adiantamento</span>
+                        <span className="text-[10px] text-muted-foreground">Dia 20</span>
+                      </div>
+                      {vale && (
+                        <Badge className={`text-[10px] ${vale.status === 'consolidado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {vale.status === 'consolidado' && <Lock className="h-2.5 w-2.5 mr-0.5" />}
+                          {vale.status.charAt(0).toUpperCase() + vale.status.slice(1)}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="bg-green-50 rounded-lg p-2 text-center">
-                      <p className="text-base font-bold text-green-700">{formatBRL(pagamento.totalLiquido)}</p>
-                      <p className="text-[10px] text-muted-foreground">Total Líquido</p>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-2 text-center">
-                      <p className={`text-lg font-bold ${(pagamento.totalDivergencias || 0) > 0 ? "text-red-600" : "text-green-600"}`}>
-                        {pagamento.totalDivergencias || 0}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">Divergências</p>
-                    </div>
+                    {vale ? (
+                      <div>
+                        <div className="flex items-center gap-4 text-xs mb-2">
+                          <span><strong>{vale.totalFuncionarios}</strong> func.</span>
+                          <span className="text-orange-700 font-bold">{formatBRL(vale.totalLiquido)}</span>
+                          <span className={(vale.totalDivergencias || 0) > 0 ? 'text-red-600 font-bold' : 'text-green-600'}>
+                            {vale.totalDivergencias || 0} diverg.
+                          </span>
+                        </div>
+                        <div className="flex gap-1 flex-wrap">
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('detalhes', vale.id, 'Vale/Adiantamento')}>
+                            <Eye className="h-2.5 w-2.5 mr-0.5" /> Detalhes
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('verificacao', vale.id, 'vale')}>
+                            <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Verificação
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('custos_obra', vale.id, 'vale')}>
+                            <Building2 className="h-2.5 w-2.5 mr-0.5" /> Custos/Obra
+                          </Button>
+                          {vale.status !== 'consolidado' && (
+                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: vale.id })}>
+                              <Lock className="h-2.5 w-2.5 mr-0.5" /> Consolidar
+                            </Button>
+                          )}
+                          {vale.status === 'consolidado' && isAdmin && (
+                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: vale.id })}>
+                              <Unlock className="h-2.5 w-2.5 mr-0.5" /> Desconsolidar
+                            </Button>
+                          )}
+                          {vale.status !== 'consolidado' && isAdmin && (
+                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-red-600" onClick={() => {
+                              if (confirm('Excluir lançamento de Vale?')) excluirMut.mutate({ folhaLancamentoId: vale.id });
+                            }}>
+                              <Trash2 className="h-2.5 w-2.5 mr-0.5" /> Excluir
+                            </Button>
+                          )}
+                        </div>
+                        {vale.status !== 'consolidado' && (
+                          <Button size="sm" variant="ghost" className="text-[10px] w-full mt-1 h-6 text-orange-700 hover:bg-orange-50"
+                            disabled={uploading === 'vale'}
+                            onClick={() => valeInputRef.current?.click()}>
+                            {uploading === 'vale' ? <><RefreshCw className="h-2.5 w-2.5 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-2.5 w-2.5 mr-1" /> Reimportar PDFs</>}
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-3">
+                        <p className="text-xs text-muted-foreground mb-2">Nenhum PDF de vale importado</p>
+                        <Button size="sm" className="bg-orange-600 hover:bg-orange-700 h-7 text-xs"
+                          disabled={uploading === 'vale'}
+                          onClick={() => valeInputRef.current?.click()}>
+                          {uploading === 'vale' ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Importar Vale</>}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-1.5 flex-wrap">
-                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView("detalhes", pagamento.id, "Pagamento")}>
-                      <Eye className="h-3 w-3 mr-1" /> Detalhes
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView("verificacao", pagamento.id, "pagamento")}>
-                      <ShieldCheck className="h-3 w-3 mr-1" /> Verificação
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => openView("custos_obra", pagamento.id, "pagamento")}>
-                      <Building2 className="h-3 w-3 mr-1" /> Custos/Obra
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-8 text-red-700 border-red-200" onClick={() => openView("descontos_clt", pagamento.id, "pagamento")}>
-                      <Scale className="h-3 w-3 mr-1" /> Descontos CLT
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-8 text-blue-700 border-blue-200" onClick={() => openView("cruzamento_he", pagamento.id, "pagamento")}>
-                      <Clock className="h-3 w-3 mr-1" /> Cruzamento HE
-                    </Button>
-                    {pagamento.status !== "consolidado" && (
-                      <Button size="sm" variant="outline" className="text-xs h-8 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: pagamento.id })}>
-                        <Lock className="h-3 w-3 mr-1" /> Consolidar
-                      </Button>
-                    )}
-                    {pagamento.status === "consolidado" && isAdmin && (
-                      <Button size="sm" variant="outline" className="text-xs h-8 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: pagamento.id })}>
-                        <Unlock className="h-3 w-3 mr-1" /> Desconsolidar
-                      </Button>
-                    )}
-                    {pagamento.status !== "consolidado" && isAdmin && (
-                      <Button size="sm" variant="outline" className="text-xs h-8 text-red-600" onClick={() => {
-                        if (confirm("Excluir lançamento de Pagamento?")) excluirMut.mutate({ folhaLancamentoId: pagamento.id });
-                      }}>
-                        <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                      </Button>
+
+                  {/* PAGAMENTO COMPACTO */}
+                  <div className={`rounded-lg border p-3 ${pagamento ? 'border-green-200 bg-green-50/30' : 'border-dashed border-gray-300'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-green-600" />
+                        <span className="font-semibold text-sm">Pagamento</span>
+                        <span className="text-[10px] text-muted-foreground">5º dia útil</span>
+                      </div>
+                      {pagamento && (
+                        <Badge className={`text-[10px] ${pagamento.status === 'consolidado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {pagamento.status === 'consolidado' && <Lock className="h-2.5 w-2.5 mr-0.5" />}
+                          {pagamento.status.charAt(0).toUpperCase() + pagamento.status.slice(1)}
+                        </Badge>
+                      )}
+                    </div>
+                    {pagamento ? (
+                      <div>
+                        <div className="flex items-center gap-4 text-xs mb-2">
+                          <span><strong>{pagamento.totalFuncionarios}</strong> func.</span>
+                          <span className="text-green-700 font-bold">{formatBRL(pagamento.totalLiquido)}</span>
+                          <span className={(pagamento.totalDivergencias || 0) > 0 ? 'text-red-600 font-bold' : 'text-green-600'}>
+                            {pagamento.totalDivergencias || 0} diverg.
+                          </span>
+                        </div>
+                        <div className="flex gap-1 flex-wrap">
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('detalhes', pagamento.id, 'Pagamento')}>
+                            <Eye className="h-2.5 w-2.5 mr-0.5" /> Detalhes
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('verificacao', pagamento.id, 'pagamento')}>
+                            <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Verificação
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('custos_obra', pagamento.id, 'pagamento')}>
+                            <Building2 className="h-2.5 w-2.5 mr-0.5" /> Custos/Obra
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-red-700" onClick={() => openView('descontos_clt', pagamento.id, 'pagamento')}>
+                            <Scale className="h-2.5 w-2.5 mr-0.5" /> Descontos CLT
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-blue-700" onClick={() => openView('cruzamento_he', pagamento.id, 'pagamento')}>
+                            <Clock className="h-2.5 w-2.5 mr-0.5" /> Cruzamento HE
+                          </Button>
+                          {pagamento.status !== 'consolidado' && (
+                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: pagamento.id })}>
+                              <Lock className="h-2.5 w-2.5 mr-0.5" /> Consolidar
+                            </Button>
+                          )}
+                          {pagamento.status === 'consolidado' && isAdmin && (
+                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: pagamento.id })}>
+                              <Unlock className="h-2.5 w-2.5 mr-0.5" /> Desconsolidar
+                            </Button>
+                          )}
+                          {pagamento.status !== 'consolidado' && isAdmin && (
+                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-red-600" onClick={() => {
+                              if (confirm('Excluir lançamento de Pagamento?')) excluirMut.mutate({ folhaLancamentoId: pagamento.id });
+                            }}>
+                              <Trash2 className="h-2.5 w-2.5 mr-0.5" /> Excluir
+                            </Button>
+                          )}
+                        </div>
+                        {pagamento.status !== 'consolidado' && (
+                          <Button size="sm" variant="ghost" className="text-[10px] w-full mt-1 h-6 text-green-700 hover:bg-green-50"
+                            disabled={uploading === 'pagamento'}
+                            onClick={() => pagInputRef.current?.click()}>
+                            {uploading === 'pagamento' ? <><RefreshCw className="h-2.5 w-2.5 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-2.5 w-2.5 mr-1" /> Reimportar PDFs</>}
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-3">
+                        <p className="text-xs text-muted-foreground mb-2">Nenhum PDF de pagamento importado</p>
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs"
+                          disabled={uploading === 'pagamento'}
+                          onClick={() => pagInputRef.current?.click()}>
+                          {uploading === 'pagamento' ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Importar Pagamento</>}
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  {pagamento.status !== "consolidado" && (
-                    <Button size="sm" variant="ghost" className="text-xs w-full text-green-700 hover:bg-green-50"
-                      disabled={uploading === "pagamento"}
-                      onClick={() => pagInputRef.current?.click()}>
-                      {uploading === "pagamento" ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Reimportar PDFs</>}
-                    </Button>
-                  )}
                 </div>
-              ) : (
-                <div className="text-center py-6">
-                  <DollarSign className="h-10 w-10 text-green-300 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">Nenhum lançamento de pagamento para este mês</p>
-                  <Button className="bg-green-600 hover:bg-green-700"
-                    disabled={uploading === "pagamento"}
-                    onClick={() => pagInputRef.current?.click()}>
-                    {uploading === "pagamento" ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Processando...</> : <><Upload className="h-4 w-4 mr-2" /> Importar Pagamento</>}
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground mt-2">Selecione todos os PDFs de uma vez. O sistema detecta automaticamente o tipo.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* CARDS 13º SALÁRIO - Só aparecem em Nov e Dez */}
         {(isNovembro || isDezembro) && (
