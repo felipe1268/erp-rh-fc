@@ -52,6 +52,7 @@ import DashEfetivoObra from "./pages/dashboards/DashEfetivoObra";
 import DashPerfilTempoCasa from "./pages/dashboards/DashPerfilTempoCasa";
 import DashControleDocumentos from "./pages/dashboards/DashControleDocumentos";
 import DashCompetencias from "./pages/dashboards/DashCompetencias";
+import DashApontamentos from "./pages/dashboards/DashApontamentos";
 import Lixeira from "./pages/Lixeira";
 import AvisoPrevio from "./pages/AvisoPrevio";
 import Ferias from "./pages/Ferias";
@@ -166,6 +167,7 @@ function Router() {
       <Route path={"/dashboards/perfil-tempo-casa"} component={DashPerfilTempoCasa} />
       <Route path={"/dashboards/controle-documentos"} component={DashControleDocumentos} />
       <Route path={"/dashboards/competencias"} component={DashCompetencias} />
+      <Route path={"/dashboards/apontamentos"} component={DashApontamentos} />
       {/* Terceiros */}
       <Route path="/terceiros" component={PainelTerceiros} />
       <Route path="/terceiros/empresas" component={EmpresasTerceiras} />

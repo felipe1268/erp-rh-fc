@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { fieldNotes, employees, obras } from "../../drizzle/schema";
+import { fieldNotes, employees, obras, timeRecords } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, asc, gte, lte } from "drizzle-orm";
+import { notifyOwner } from "../_core/notification";
 
 const tipoOcorrenciaEnum = z.enum(['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'insubordinacao', 'acidente', 'atestado_medico', 'desvio_conduta', 'elogio', 'outro']);
 const prioridadeEnum = z.enum(['baixa', 'media', 'alta', 'urgente']);
@@ -74,12 +75,34 @@ export const fieldNotesRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const solicitanteNome = ctx.user?.name || ctx.user?.email || "Gestor";
       const [result] = await db.insert(fieldNotes).values({
         ...input,
-        solicitanteNome: ctx.user?.name || ctx.user?.email || "Gestor",
+        solicitanteNome,
         solicitanteId: ctx.user?.openId || ctx.user?.email || "",
       });
-      return { id: (result as any).insertId };
+      const newId = (result as any).insertId;
+
+      // Buscar nome do funcionário para a notificação
+      const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, input.employeeId));
+      const nomeFunc = emp?.nome || `Func. #${input.employeeId}`;
+
+      // Notificar owner para apontamentos urgentes ou de alta prioridade
+      if (input.prioridade === 'urgente' || input.prioridade === 'alta') {
+        const prioridadeLabel = input.prioridade === 'urgente' ? '🚨 URGENTE' : '⚠️ ALTA';
+        const tipoLabel = input.tipoOcorrencia.replace(/_/g, ' ');
+        try {
+          await notifyOwner({
+            title: `${prioridadeLabel} - Apontamento de Campo`,
+            content: `Novo apontamento ${prioridadeLabel} registrado por ${solicitanteNome}:\n\nFuncionário: ${nomeFunc}\nTipo: ${tipoLabel}\nData: ${input.data}\nDescrição: ${input.descricao.substring(0, 200)}`,
+          });
+        } catch (e) {
+          // Notificação falhou, mas não bloqueia o registro
+          console.error('[FieldNotes] Falha ao notificar owner:', e);
+        }
+      }
+
+      return { id: newId };
     }),
 
   update: protectedProcedure
@@ -107,14 +130,91 @@ export const fieldNotesRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const resolvidoPor = ctx.user?.name || ctx.user?.email || "RH";
+
+      // Buscar dados do apontamento para vincular ao ponto
+      const [note] = await db.select().from(fieldNotes).where(eq(fieldNotes.id, input.id));
+      if (!note) throw new Error("Apontamento não encontrado");
+
+      // Atualizar o apontamento
       await db.update(fieldNotes).set({
         respostaRH: input.respostaRH,
         acaoTomada: input.acaoTomada,
         status: input.status,
-        resolvidoPor: ctx.user?.name || ctx.user?.email || "RH",
+        resolvidoPor,
         resolvidoEm: sql`NOW()`,
       }).where(eq(fieldNotes.id, input.id));
-      return { success: true };
+
+      // === VINCULAR AO PONTO ===
+      // Se a ação é desconto_folha ou ajuste_ponto, e o tipo é falta/atraso/saida_antecipada
+      const tiposVinculaveis = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto'];
+      const acoesVinculaveis = ['desconto_folha', 'ajuste_ponto'];
+
+      if (note.data && tiposVinculaveis.includes(note.tipoOcorrencia) && acoesVinculaveis.includes(input.acaoTomada)) {
+        // Verificar se já existe registro de ponto para esse dia
+        const existing = await db.select().from(timeRecords)
+          .where(and(
+            eq(timeRecords.companyId, note.companyId),
+            eq(timeRecords.employeeId, note.employeeId),
+            eq(timeRecords.data, note.data),
+          ));
+
+        const justificativa = `[Apontamento #${note.id} - ${note.tipoOcorrencia}] ${input.respostaRH} (Resolvido por ${resolvidoPor})`;
+        const mesRef = note.data.substring(0, 7); // YYYY-MM
+
+        if (note.tipoOcorrencia === 'falta' || note.tipoOcorrencia === 'abandono_posto') {
+          // Marcar como falta no ponto
+          if (existing.length > 0) {
+            await db.update(timeRecords).set({
+              faltas: "1",
+              horasTrabalhadas: "00:00",
+              justificativa,
+              ajusteManual: 1,
+              ajustadoPor: resolvidoPor,
+            }).where(and(
+              eq(timeRecords.companyId, note.companyId),
+              eq(timeRecords.employeeId, note.employeeId),
+              eq(timeRecords.data, note.data),
+            ));
+          } else {
+            // Criar registro de falta
+            await db.insert(timeRecords).values({
+              companyId: note.companyId,
+              employeeId: note.employeeId,
+              data: note.data,
+              mesReferencia: mesRef,
+              obraId: note.obraId,
+              faltas: "1",
+              horasTrabalhadas: "00:00",
+              horasExtras: "0:00",
+              horasNoturnas: "0:00",
+              atrasos: "0:00",
+              fonte: "apontamento",
+              ajusteManual: 1,
+              ajustadoPor: resolvidoPor,
+              justificativa,
+            });
+          }
+        } else if (note.tipoOcorrencia === 'atraso' || note.tipoOcorrencia === 'saida_antecipada') {
+          // Marcar atraso no ponto existente
+          if (existing.length > 0) {
+            await db.update(timeRecords).set({
+              atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : existing[0].atrasos,
+              justificativa: existing[0].justificativa
+                ? `${existing[0].justificativa} | ${justificativa}`
+                : justificativa,
+              ajusteManual: 1,
+              ajustadoPor: resolvidoPor,
+            }).where(and(
+              eq(timeRecords.companyId, note.companyId),
+              eq(timeRecords.employeeId, note.employeeId),
+              eq(timeRecords.data, note.data),
+            ));
+          }
+        }
+      }
+
+      return { success: true, vinculadoPonto: tiposVinculaveis.includes(note.tipoOcorrencia) && acoesVinculaveis.includes(input.acaoTomada) };
     }),
 
   setEmAnalise: protectedProcedure
@@ -158,7 +258,95 @@ export const fieldNotesRouter = router({
       return stats;
     }),
 
-  // Stats por tipo de ocorrência (para dashboard)
+  // ============ DASHBOARD PROCEDURES ============
+
+  statsPorObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const dataConds: any[] = [];
+      if (input.dataInicio) dataConds.push(sql`fn.data >= ${input.dataInicio}`);
+      if (input.dataFim) dataConds.push(sql`fn.data <= ${input.dataFim}`);
+      const extraWhere = dataConds.length > 0 ? sql` AND ${sql.join(dataConds, sql` AND `)}` : sql``;
+
+      const [rows] = await db.execute(sql`
+        SELECT o.nome as obraNome, fn.obraId, COUNT(*) as total,
+          SUM(CASE WHEN fn.status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
+          SUM(CASE WHEN fn.status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos
+        FROM field_notes fn
+        LEFT JOIN obras o ON fn.obraId = o.id
+        WHERE fn.companyId = ${input.companyId} AND fn.deletedAt IS NULL ${extraWhere}
+        GROUP BY fn.obraId, o.nome
+        ORDER BY total DESC
+      `) as any[];
+      return rows as { obraNome: string | null; obraId: number | null; total: number; pendentes: number; resolvidos: number }[];
+    }),
+
+  statsPorMes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const ano = input.ano || new Date().getFullYear();
+      const [rows] = await db.execute(sql`
+        SELECT DATE_FORMAT(data, '%Y-%m') as mes, COUNT(*) as total,
+          SUM(CASE WHEN status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos,
+          SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) as pendentes
+        FROM field_notes
+        WHERE companyId = ${input.companyId} AND deletedAt IS NULL
+          AND YEAR(data) = ${ano}
+        GROUP BY DATE_FORMAT(data, '%Y-%m')
+        ORDER BY mes ASC
+      `) as any[];
+      return rows as { mes: string; total: number; resolvidos: number; pendentes: number }[];
+    }),
+
+  taxaResolucao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const dataConds: any[] = [];
+      if (input.dataInicio) dataConds.push(sql`data >= ${input.dataInicio}`);
+      if (input.dataFim) dataConds.push(sql`data <= ${input.dataFim}`);
+      const extraWhere = dataConds.length > 0 ? sql` AND ${sql.join(dataConds, sql` AND `)}` : sql``;
+
+      const [rows] = await db.execute(sql`
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos,
+          SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) as pendentes,
+          SUM(CASE WHEN status = 'em_analise' THEN 1 ELSE 0 END) as emAnalise,
+          SUM(CASE WHEN status = 'arquivado' THEN 1 ELSE 0 END) as arquivados,
+          SUM(CASE WHEN prioridade = 'urgente' THEN 1 ELSE 0 END) as urgentes,
+          SUM(CASE WHEN prioridade = 'alta' THEN 1 ELSE 0 END) as altas,
+          AVG(CASE WHEN resolvidoEm IS NOT NULL THEN TIMESTAMPDIFF(HOUR, createdAt, resolvidoEm) END) as tempoMedioResolucaoHoras
+        FROM field_notes
+        WHERE companyId = ${input.companyId} AND deletedAt IS NULL ${extraWhere}
+      `) as any[];
+      const r = (rows as any[])[0] || {};
+      return {
+        total: parseInt(r.total || '0'),
+        resolvidos: parseInt(r.resolvidos || '0'),
+        pendentes: parseInt(r.pendentes || '0'),
+        emAnalise: parseInt(r.emAnalise || '0'),
+        arquivados: parseInt(r.arquivados || '0'),
+        urgentes: parseInt(r.urgentes || '0'),
+        altas: parseInt(r.altas || '0'),
+        taxaResolucao: r.total > 0 ? Math.round((parseInt(r.resolvidos || '0') / parseInt(r.total)) * 100) : 0,
+        tempoMedioResolucaoHoras: Math.round(parseFloat(r.tempoMedioResolucaoHoras || '0')),
+      };
+    }),
+
   statsPorTipo: protectedProcedure
     .input(z.object({
       companyId: z.number(),

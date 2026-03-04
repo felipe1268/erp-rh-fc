@@ -122,8 +122,12 @@ export default function ApontamentosCampo() {
   });
 
   const resolveMut = trpc.fieldNotes.resolve.useMutation({
-    onSuccess: () => {
-      toast.success("Apontamento resolvido!");
+    onSuccess: (data: any) => {
+      if (data?.vinculadoPonto) {
+        toast.success("Apontamento resolvido e vinculado ao ponto do funcionário!", { duration: 5000 });
+      } else {
+        toast.success("Apontamento resolvido!");
+      }
       utils.fieldNotes.list.invalidate();
       utils.fieldNotes.stats.invalidate();
       setShowResolverDialog(false);

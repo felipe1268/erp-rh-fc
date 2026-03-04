@@ -137,6 +137,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Building2, label: "Efetivo por Obra", path: "/dashboards/efetivo-obra" },
       { icon: UserSearch, label: "Perfil por Tempo de Casa", path: "/dashboards/perfil-tempo-casa" },
       { icon: ShieldCheck, label: "Controle de Documentos", path: "/dashboards/controle-documentos" },
+      { icon: ClipboardList, label: "Apontamentos de Campo", path: "/dashboards/apontamentos" },
     ],
   },
   {
@@ -523,6 +524,7 @@ function DashboardLayoutContent({
     map.set('/dashboards/efetivo-obra', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
     map.set('/dashboards/perfil-tempo-casa', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
     map.set('/dashboards/controle-documentos', { moduleId: 'rh-dp', featureKey: 'controle-documentos' });
+    map.set('/dashboards/apontamentos', { moduleId: 'rh-dp', featureKey: 'apontamentos-campo' });
     // SST dashboards
     map.set('/dashboards/epis', { moduleId: 'sst', featureKey: 'epis' });
     // Jurídico dashboards

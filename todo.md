@@ -4500,3 +4500,26 @@
 - [x] Atividades rotineiras em destaque (Cálculo Interno no topo com destaque visual)
 - [x] Conferência contabilidade mais compacta (accordion colapsável já implementado)
 - [x] Melhorar hierarquia visual: subtítulo com fluxo (Ponto → Vale → Pagamento → Conferência)
+
+## Fase 93: Vincular Apontamentos + Dashboard + Notificações Push
+
+### 1. Vincular Apontamentos ao Fechamento de Ponto
+- [x] Backend: ao resolver apontamento de falta/abandono, criar/atualizar registro no ponto (faltas=1, horasTrabalhadas=00:00)
+- [x] Backend: ao resolver atraso/saída antecipada, ajustar atrasos no ponto existente
+- [x] Frontend: toast com feedback "vinculado ao ponto" quando ação é desconto_folha ou ajuste_ponto
+- [ ] Frontend: indicador visual de dias com apontamento no espelho de ponto (futuro)
+
+### 2. Dashboard de Apontamentos
+- [x] Backend: procedures statsPorObra, statsPorMes, taxaResolucao, statsPorTipo
+- [x] Frontend: página DashApontamentos com gráficos Chart.js
+- [x] Gráfico: ocorrências por tipo (donut)
+- [x] Gráfico: ocorrências por obra (barras empilhadas pendentes/resolvidos)
+- [x] Gráfico: evolução mensal (linha total/resolvidos/pendentes)
+- [x] KPIs: total, pendentes, em análise, resolvidos, taxa resolução, tempo médio
+- [x] Filtros por período (data início/fim) e ano
+- [x] Adicionado no menu de Dashboards (RH & DP)
+
+### 3. Notificações Push para Apontamentos Urgentes
+- [x] Backend: ao criar apontamento urgente/alta, disparar notifyOwner com detalhes
+- [ ] Backend: resumo diário de apontamentos pendentes (futuro - scheduled task)
+- [x] Frontend: badge de contagem já existia via stats no ApontamentosCampo
