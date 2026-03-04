@@ -13,6 +13,7 @@
  */
 
 import { notifyOwner } from "../_core/notification";
+import { sendEmail } from "./smtpService";
 import { getDb } from "../db";
 import { notificationRecipients, companies, auditLogs, notificationLogs } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -346,6 +347,46 @@ export function gerarTextoNotificacao(
 }
 
 // ============================================================
+// GERAR HTML DO E-MAIL
+// ============================================================
+function gerarEmailHtml(titulo: string, corpoTexto: string, companyData: any): string {
+  const empresaNome = getCompanyShortName(companyData);
+  const corpoFormatado = corpoTexto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>")
+    .replace(/•/g, "&#8226;")
+    .replace(/⚠/g, "&#9888;")
+    .replace(/➤/g, "&#10148;");
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:20px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+        <tr><td style="background-color:#1a365d;padding:20px 30px;text-align:center;">
+          <h1 style="color:#ffffff;margin:0;font-size:20px;letter-spacing:1px;">${empresaNome.toUpperCase()}</h1>
+          <p style="color:#a0c4ff;margin:5px 0 0;font-size:12px;">Sistema de Gestão Integrada</p>
+        </td></tr>
+        <tr><td style="padding:30px;">
+          <h2 style="color:#1a365d;margin:0 0 20px;font-size:16px;border-bottom:2px solid #e2e8f0;padding-bottom:10px;">${titulo}</h2>
+          <div style="color:#2d3748;font-size:14px;line-height:1.6;">${corpoFormatado}</div>
+        </td></tr>
+        <tr><td style="background-color:#f7fafc;padding:15px 30px;text-align:center;border-top:1px solid #e2e8f0;">
+          <p style="color:#718096;font-size:11px;margin:0;">Este e-mail foi enviado automaticamente pelo ERP - Gestão Integrada</p>
+          <p style="color:#a0aec0;font-size:10px;margin:5px 0 0;">Não responda este e-mail.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ============================================================
 // FUNÇÃO DE DISPARO DE NOTIFICAÇÕES
 // ============================================================
 export async function dispararNotificacao(
@@ -388,35 +429,43 @@ export async function dispararNotificacao(
   // Gerar texto com branding da empresa
   const { titulo, corpo } = gerarTextoNotificacao(tipo, dados, companyData);
 
-  // Enviar notificação via sistema Manus (notifyOwner)
+  // Converter texto plano para HTML para e-mail
+  const corpoHtml = gerarEmailHtml(titulo, corpo, companyData);
+
+  // Enviar e-mail real via SMTP para cada destinatário
   let enviados = 0;
   let erros = 0;
   const destinatariosNotificados: string[] = [];
-  let envioSuccess = false;
-  let envioErro = "";
 
-  try {
-    const destinatariosTexto = filteredRecipients.map(r => `  • ${r.nome} <${r.email}>`).join("\n");
-    const corpoComDestinatarios = `${corpo}\n\nDestinatários desta notificação:\n${destinatariosTexto}`;
-    
-    const success = await notifyOwner({ title: titulo, content: corpoComDestinatarios });
-    if (success) {
-      enviados = filteredRecipients.length;
-      envioSuccess = true;
-      destinatariosNotificados.push(...filteredRecipients.map(r => r.email));
-    } else {
-      erros = filteredRecipients.length;
-      envioErro = "Serviço de notificação indisponível";
-    }
-  } catch (error: any) {
-    console.error("[EmailNotification] Erro ao enviar notificação:", error);
-    erros = filteredRecipients.length;
-    envioErro = error?.message || "Erro desconhecido";
-  }
-
-  // Registrar cada destinatário no notification_logs
   for (const recipient of filteredRecipients) {
     const trackingId = crypto.randomUUID();
+    let envioSuccess = false;
+    let envioErro = "";
+
+    try {
+      const result = await sendEmail({
+        to: recipient.email,
+        subject: titulo,
+        html: corpoHtml,
+        text: corpo,
+      });
+      if (result.success) {
+        enviados++;
+        envioSuccess = true;
+        destinatariosNotificados.push(recipient.email);
+        console.log(`[EmailNotification] E-mail enviado com sucesso para ${recipient.nome} <${recipient.email}>`);
+      } else {
+        erros++;
+        envioErro = result.error || "Falha no envio SMTP";
+        console.error(`[EmailNotification] Falha ao enviar para ${recipient.email}: ${envioErro}`);
+      }
+    } catch (error: any) {
+      erros++;
+      envioErro = error?.message || "Erro desconhecido";
+      console.error(`[EmailNotification] Erro ao enviar para ${recipient.email}:`, error);
+    }
+
+    // Registrar no notification_logs
     try {
       await db.insert(notificationLogs).values({
         companyId,
@@ -441,6 +490,20 @@ export async function dispararNotificacao(
     } catch (e) {
       console.error("[EmailNotification] Erro ao registrar notification_log:", e);
     }
+
+    // Delay entre envios para evitar rate limiting
+    if (filteredRecipients.length > 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  // Notificar também o owner do projeto (notificação interna)
+  try {
+    const resumo = `${titulo}\n\nEnviado para ${enviados} destinatário(s)${erros > 0 ? `, ${erros} erro(s)` : ""}.\n\nDestinatários:\n${filteredRecipients.map(r => `  • ${r.nome} <${r.email}>`).join("\n")}`;
+    await notifyOwner({ title: `[E-mail] ${titulo}`, content: resumo });
+  } catch (e) {
+    // Não bloquear se notifyOwner falhar
+    console.warn("[EmailNotification] Falha ao notificar owner:", e);
   }
 
   // Registrar no audit log
