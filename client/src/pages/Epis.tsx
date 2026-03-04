@@ -16,7 +16,8 @@ import {
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
-  Building2, ArrowLeftRight, Warehouse, TrendingUp
+  Building2, ArrowLeftRight, Warehouse, TrendingUp,
+  Brain, Sparkles, GraduationCap, Bell, BarChart3
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
@@ -27,7 +28,14 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/contexts/PermissionsContext";
 
-type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias";
+import EpiKitsConfig from "./EpiKitsConfig";
+import EpiChecklist from "./EpiChecklist";
+import EpiValidade from "./EpiValidade";
+import EpiRelatorioCusto from "./EpiRelatorioCusto";
+import EpiEstoqueMinimo from "./EpiEstoqueMinimo";
+import EpiIA from "./EpiIA";
+
+type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia";
 
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
@@ -1542,10 +1550,35 @@ export default function Epis() {
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "transferencias" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <ArrowLeftRight className="h-3.5 w-3.5 inline mr-1" /> Transferências
           </button>
+          <button onClick={() => setViewMode("checklist")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "checklist" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <ClipboardList className="h-3.5 w-3.5 inline mr-1" /> Checklists
+          </button>
+          <button onClick={() => setViewMode("validade")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "validade" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Clock className="h-3.5 w-3.5 inline mr-1" /> Validade
+          </button>
+          <button onClick={() => setViewMode("minimo")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "minimo" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Bell className="h-3.5 w-3.5 inline mr-1" /> Mínimos
+          </button>
+          <button onClick={() => setViewMode("custos")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "custos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <BarChart3 className="h-3.5 w-3.5 inline mr-1" /> Custos
+          </button>
+          <button onClick={() => setViewMode("config")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "config" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Settings2 className="h-3.5 w-3.5 inline mr-1" /> Config
+          </button>
+          <button onClick={() => setViewMode("ia")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "ia" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Brain className="h-3.5 w-3.5 inline mr-1" /> IA
+          </button>
           </div>
         </div>
 
-        {/* Search + Filters */}
+        {/* Search + Filters - ocultar nas novas abas que têm seus próprios filtros */}
+        {!["config", "checklist", "validade", "custos", "minimo", "ia"].includes(viewMode) && (
         <div className="space-y-3">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1588,6 +1621,7 @@ export default function Epis() {
             )}
           </div>
         </div>
+        )}
 
         {/* ============================================================ */}
         {/* CATÁLOGO */}
@@ -2292,6 +2326,16 @@ export default function Epis() {
           </div>
         </div>
       )}
+      {/* ============================================================ */}
+      {/* NOVAS ABAS - COMPONENTES AVANÇADOS */}
+      {/* ============================================================ */}
+      {viewMode === "config" && <EpiKitsConfig />}
+      {viewMode === "checklist" && <EpiChecklist />}
+      {viewMode === "validade" && <EpiValidade />}
+      {viewMode === "custos" && <EpiRelatorioCusto />}
+      {viewMode === "minimo" && <EpiEstoqueMinimo />}
+      {viewMode === "ia" && <EpiIA />}
+
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
           <PrintFooterLGPD />
     </DashboardLayout>

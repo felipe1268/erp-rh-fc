@@ -1036,6 +1036,8 @@ export const epiDeliveries = mysqlTable("epi_deliveries", {
 	fotoEstadoUrl: text("foto_estado_url"),
 	origemEntrega: mysqlEnum("origem_entrega", ['central','obra']).default('central').notNull(),
 	obraId: int("obra_id"),
+	dataValidade: date("data_validade", { mode: 'string' }),
+	assinaturaUrl: text("assinatura_url"),
 },
 (table) => [
 	index("idx_ed_company").on(table.companyId),
@@ -1087,6 +1089,7 @@ export const epis = mysqlTable("epis", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	valorProduto: decimal("valor_produto", { precision: 10, scale: 2 }),
 	tempoMinimoTroca: int("tempo_minimo_troca"),
+	vidaUtilMeses: int("vida_util_meses"),
 	categoria: mysqlEnum(['EPI','Uniforme','Calcado']).default('EPI').notNull(),
 	tamanho: varchar({ length: 20 }),
 	fornecedorCnpj: varchar("fornecedor_cnpj", { length: 20 }),
@@ -3461,4 +3464,176 @@ export const clinicas = mysqlTable("clinicas", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
 	index("clin_company").on(table.companyId),
+]);
+
+// ============================================================
+// MÓDULO EPI AVANÇADO - Kits, Validade, Assinaturas, Treinamentos
+// ============================================================
+
+// Kits de EPI por Função (ex: Kit Pedreiro, Kit Eletricista)
+export const epiKits = mysqlTable("epi_kits", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	funcao: varchar({ length: 100 }).notNull(),
+	descricao: text(),
+	ativo: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("ek_company").on(table.companyId),
+	index("ek_funcao").on(table.funcao),
+]);
+
+// Itens de cada Kit de EPI
+export const epiKitItems = mysqlTable("epi_kit_items", {
+	id: int().autoincrement().notNull(),
+	kitId: int().notNull(),
+	epiId: int(),
+	nomeEpi: varchar({ length: 255 }).notNull(),
+	categoria: mysqlEnum(['EPI','Uniforme','Calcado']).default('EPI').notNull(),
+	quantidade: int().default(1).notNull(),
+	obrigatorio: tinyint().default(1).notNull(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+	index("eki_kit").on(table.kitId),
+	index("eki_epi").on(table.epiId),
+]);
+
+// Cores de Capacete por Função
+export const epiCoresCapacete = mysqlTable("epi_cores_capacete", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	cor: varchar({ length: 50 }).notNull(),
+	hexColor: varchar({ length: 10 }),
+	funcoes: text().notNull(),
+	descricao: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("ecc_company").on(table.companyId),
+]);
+
+// Vida Útil Padrão por Tipo de EPI (em meses)
+export const epiVidaUtil = mysqlTable("epi_vida_util", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nomeEpi: varchar({ length: 255 }).notNull(),
+	categoriaEpi: varchar({ length: 100 }),
+	vidaUtilMeses: int().notNull(),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("evu_company").on(table.companyId),
+]);
+
+// Assinaturas Digitais de Entrega/Devolução de EPI
+export const epiAssinaturas = mysqlTable("epi_assinaturas", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	deliveryId: int(),
+	employeeId: int().notNull(),
+	tipo: mysqlEnum(['entrega','devolucao']).notNull(),
+	assinaturaUrl: text().notNull(),
+	assinadoEm: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	ipAddress: varchar({ length: 45 }),
+	userAgent: text(),
+	entregadorNome: varchar({ length: 255 }),
+	entregadorUserId: int(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+	index("eas_company").on(table.companyId),
+	index("eas_delivery").on(table.deliveryId),
+	index("eas_employee").on(table.employeeId),
+]);
+
+// Treinamentos Vinculados a EPIs (NRs exigidas)
+export const epiTreinamentosVinculados = mysqlTable("epi_treinamentos_vinculados", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nomeEpi: varchar({ length: 255 }).notNull(),
+	categoriaEpi: varchar({ length: 100 }),
+	normaExigida: varchar({ length: 50 }).notNull(),
+	nomeTreinamento: varchar({ length: 255 }).notNull(),
+	obrigatorio: tinyint().default(1).notNull(),
+	descricao: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("etv_company").on(table.companyId),
+	index("etv_norma").on(table.normaExigida),
+]);
+
+// Estoque Mínimo por EPI por Obra (para alertas de reposição)
+export const epiEstoqueMinimo = mysqlTable("epi_estoque_minimo", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	epiId: int().notNull(),
+	obraId: int(),
+	quantidadeMinima: int().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("eem_company").on(table.companyId),
+	index("eem_epi").on(table.epiId),
+	index("eem_obra").on(table.obraId),
+]);
+
+// Checklist de EPI gerado na contratação
+export const epiChecklists = mysqlTable("epi_checklists", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	employeeId: int().notNull(),
+	kitId: int(),
+	tipo: mysqlEnum(['contratacao','devolucao']).default('contratacao').notNull(),
+	status: mysqlEnum(['pendente','parcial','concluido','cancelado']).default('pendente').notNull(),
+	observacoes: text(),
+	criadoPor: varchar({ length: 255 }),
+	criadoPorUserId: int(),
+	concluidoEm: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("ecl_company").on(table.companyId),
+	index("ecl_employee").on(table.employeeId),
+	index("ecl_status").on(table.status),
+]);
+
+// Itens do Checklist de EPI
+export const epiChecklistItems = mysqlTable("epi_checklist_items", {
+	id: int().autoincrement().notNull(),
+	checklistId: int().notNull(),
+	nomeEpi: varchar({ length: 255 }).notNull(),
+	categoria: mysqlEnum(['EPI','Uniforme','Calcado']).default('EPI').notNull(),
+	quantidade: int().default(1).notNull(),
+	entregue: tinyint().default(0).notNull(),
+	devolvido: tinyint().default(0).notNull(),
+	epiId: int(),
+	deliveryId: int(),
+	dataEntrega: date({ mode: 'string' }),
+	dataDevolucao: date({ mode: 'string' }),
+	observacoes: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+	index("ecli_checklist").on(table.checklistId),
+	index("ecli_epi").on(table.epiId),
+]);
+
+// Análises de IA para transferências de EPI
+export const epiAiAnalises = mysqlTable("epi_ai_analises", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	tipo: mysqlEnum(['automatica','manual']).default('manual').notNull(),
+	resultado: text().notNull(),
+	sugestoes: json(),
+	status: mysqlEnum(['nova','visualizada','aplicada','descartada']).default('nova').notNull(),
+	aplicadaPor: varchar({ length: 255 }),
+	aplicadaPorUserId: int(),
+	aplicadaEm: timestamp({ mode: 'string' }),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+	index("eaia_company").on(table.companyId),
+	index("eaia_status").on(table.status),
 ]);

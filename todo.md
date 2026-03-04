@@ -4604,3 +4604,98 @@
 - [x] Botão "Enviar Teste" na tela de Notificações para validar envio sem criar movimentação real (botão visível no topo + preview com envio)
 - [x] BUG: Preview de e-mail de Contratação faltando Data de Nascimento, Estado Civil e Salário - corrigido preview e teste com dados dummy
 - [x] BUG: Horário no histórico de notificações mostra UTC em vez do horário de Brasília (GMT-3) - corrigido com timeZone America/Sao_Paulo
+
+## Fase 20: Módulo Completo de EPI - Gestão Inteligente
+
+### Banco de Dados
+- [x] Criar tabela epi_kits (kits padrão por função com itens e quantidades)
+- [x] Criar tabela epi_kit_items (itens de cada kit com EPI, quantidade, obrigatório)
+- [x] Criar tabela epi_cores_capacete (cores de capacete por função)
+- [x] Criar tabela epi_validade (vida útil padrão por tipo de EPI em meses)
+- [x] Criar tabela epi_assinaturas (assinaturas digitais de entrega/devolução)
+- [x] Criar tabela epi_treinamentos_vinculados (NRs exigidas por tipo de EPI)
+- [x] Criar tabela epi_estoque_minimo (estoque mínimo por EPI por obra)
+- [x] Adicionar campos de custo unitário e validade na tabela de EPIs
+- [x] Adicionar campo de data_validade nas entregas de EPI (calculada automaticamente)
+
+### Backend - Kits e Cores de Capacete
+- [x] CRUD de kits por função (criar, editar, listar, excluir)
+- [x] CRUD de cores de capacete por função (editável pelo usuário)
+- [x] Seed de kits padrão (kit básico + variações por função)
+- [x] Seed de cores de capacete padrão (branco engenheiro, azul servente, etc.)
+
+### Backend - Geração Automática na Contratação
+- [x] Ao contratar funcionário, gerar checklist de EPI baseado na função
+- [x] Selecionar cor do capacete automaticamente pela função
+- [x] Permitir edição/confirmação do kit antes de finalizar
+
+### Backend - Entrega e Devolução com Assinatura
+- [x] Rota de entrega de EPI com campo de assinatura digital (base64)
+- [x] Rota de devolução de EPI na demissão com assinatura
+- [x] Integração com QR Code do crachá existente para identificar funcionário
+- [x] Registrar quem entregou (TST), data, hora, assinatura
+
+### Backend - Controle de Validade
+- [x] Calcular data de validade automaticamente na entrega (baseado na vida útil do EPI)
+- [x] Rota de consulta de EPIs próximos do vencimento (30, 15, 7 dias)
+- [x] Gerar alertas automáticos de troca de EPI vencido
+
+### Backend - Alertas de Reposição
+- [x] Configurar estoque mínimo por EPI por obra
+- [x] Verificar estoque ao registrar entrega/saída
+- [x] Enviar e-mail automático quando estoque abaixo do mínimo configurado
+
+### Backend - Relatórios de Custo
+- [x] Relatório de custo de EPI por funcionário
+- [x] Relatório de custo de EPI por obra
+- [x] Relatório de custo de EPI por mês/período
+- [x] Exportar relatórios em PDF
+
+### Backend - Controle de Treinamento Vinculado
+- [x] Vincular NRs exigidas por tipo de EPI (ex: cinto → NR-35, luva isolante → NR-10)
+- [x] Verificar treinamentos do funcionário antes da entrega
+- [x] Bloquear ou alertar entrega se treinamento não estiver válido
+
+### Backend - IA de Transferências
+- [x] Analisar estoque de todas as obras
+- [x] Calcular proximidade geográfica entre obras (usando CEP)
+- [x] Gerar sugestões de transferência via LLM
+- [x] Executar análise automaticamente a cada movimentação de EPI
+- [x] Botão "Analisar Estoque" para execução manual
+
+### Frontend - Kits por Função
+- [x] Tela de configuração de kits por função com drag-and-drop de itens
+- [x] Tabela de cores de capacete editável
+- [x] Preview do kit ao selecionar função
+
+### Frontend - Entrega/Devolução via QR Code
+- [x] Scanner de QR Code usando câmera do celular/tablet
+- [x] Tela de entrega com lista de itens do kit pendente
+- [x] Canvas de assinatura digital touch (funcionário assina na tela)
+- [x] Tela de devolução na demissão com checklist
+
+### Frontend - Controle de Validade e Alertas
+- [x] Painel de EPIs próximos do vencimento com semáforo (verde/amarelo/vermelho)
+- [x] Alertas visuais no dashboard de pendências
+- [x] Configuração de estoque mínimo por EPI/obra
+
+### Frontend - Histórico no Raio-X
+- [x] Seção de histórico completo de EPIs no Raio-X do funcionário
+- [x] Timeline de entregas e devoluções com datas
+- [x] Exportar ficha de EPI em PDF (substitui ficha de papel)
+
+### Frontend - Relatórios de Custo
+- [x] Tela de relatórios com filtros (funcionário, obra, período)
+- [x] Gráficos de custo por obra e por mês
+- [x] Exportar relatórios em PDF/Excel
+
+### Frontend - Controle de Treinamento
+- [x] Indicador visual de treinamento válido/inválido na tela de entrega
+- [x] Alerta/bloqueio ao tentar entregar EPI sem treinamento correspondente
+- [x] Lista de treinamentos exigidos por EPI
+
+### Frontend - IA de Transferências
+- [x] Card de sugestões da IA na aba de Transferências
+- [x] Botão "Analisar Estoque" com loading e resultado
+- [x] Visualização das sugestões com mapa de proximidade
+- [x] Aprovar/rejeitar sugestões da IA

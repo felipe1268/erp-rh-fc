@@ -1,0 +1,9 @@
+{
+  "query": "\nALTER TABLE `epis` ADD COLUMN IF NOT EXISTS `vida_util_meses` int NULL;\nALTER TABLE `epi_deliveries` ADD COLUMN IF NOT EXISTS `data_validade` date NULL;\nALTER TABLE `epi_deliveries` ADD COLUMN IF NOT EXISTS `assinatura_url` text NULL;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \nALTER TABLE `epis` ADD COLUMN IF NOT EXISTS `vida_util_meses` int NULL;\nALTER TABLE `epi_deliveries` ADD COLUMN IF NOT EXISTS `data_validade` date NULL;\nALTER TABLE `epi_deliveries` ADD COLUMN IF NOT EXISTS `assinatura_url` text NULL;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 761
+}
