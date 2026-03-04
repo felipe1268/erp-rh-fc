@@ -4426,3 +4426,10 @@
 - [x] Frontend: mostrar alerta amarelo/vermelho para funcionários com regra ativada
 - [x] Frontend: botões Pagar/Não Pagar para cada funcionário alertado
 - [x] Frontend: permitir decisão individual do usuário
+
+## Fase 84: Ajuste Tela Inicial RH & DP
+- [x] Remover card "Total Colaboradores" do Quadro de Pessoal na tela inicial
+
+## Fase 85: Correções Urgentes
+- [x] BUG: Botão Consolidar Mês travado em "Consolidando..." - otimizado com batch inserts (200 por vez)
+- [x] Remover card "Total Colaboradores" do Quadro de Pessoal na tela inicial do Painel RH

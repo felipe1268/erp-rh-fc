@@ -1601,6 +1601,25 @@ export const fechamentoPontoRouter = router({
         const _parseTime = (str: string | null | undefined): number | null => { if (!str) return null; const parts = str.split(':'); if (parts.length < 2) return null; const h = parseInt(parts[0]), m = parseInt(parts[1]); if (isNaN(h) || isNaN(m)) return null; return h * 60 + m; };
         const _getDateRange = (start: string, end: string): string[] => { const dates: string[] = []; const s = new Date(start + 'T12:00:00Z'); const e = new Date(end + 'T12:00:00Z'); const c = new Date(s); while (c <= e) { dates.push(c.toISOString().substring(0, 10)); c.setUTCDate(c.getUTCDate() + 1); } return dates; };
         
+        // Collect all rows in memory first, then batch insert
+        const batchRows: string[] = [];
+        const BATCH_SIZE = 200;
+        
+        const _esc = (v: any) => v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`;
+        const _escNum = (v: any) => v === null || v === undefined ? 'NULL' : String(Number(v));
+        
+        const flushBatch = async () => {
+          if (batchRows.length === 0) return;
+          const insertSql = `INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
+            entrada1, saida1, entrada2, saida2, entrada3, saida3,
+            horasTrabalhadas, horasExtras, horasNoturnas,
+            isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
+            tipoDia, timeRecordId, obraId, origem_registro, num_batidas, is_inconsistente, inconsistencia_tipo,
+            obra_secundaria_id, rateio_percentual) VALUES ${batchRows.join(',')}`;
+          await db.execute(sql.raw(insertSql));
+          batchRows.length = 0;
+        };
+        
         for (const emp of empList) {
           const pontoDates = _getDateRange(pontoInicio2, pontoFim2);
           for (const dateStr of pontoDates) {
@@ -1650,21 +1669,15 @@ export const fechamentoPontoRouter = router({
               if (tipoDia === 'util') { isFalta = 1; totalFaltas++; }
             }
             
-            await db.execute(sql`
-              INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
-                entrada1, saida1, entrada2, saida2, entrada3, saida3,
-                horasTrabalhadas, horasExtras, horasNoturnas,
-                isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
-                tipoDia, timeRecordId, obraId, origem_registro, num_batidas, is_inconsistente, inconsistencia_tipo,
-                obra_secundaria_id, rateio_percentual)
-              VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'registrado',
-                ${recs[0]?.entrada1 || null}, ${recs[0]?.saida1 || null}, ${recs[0]?.entrada2 || null}, ${recs[0]?.saida2 || null}, ${recs[0]?.entrada3 || null}, ${recs[0]?.saida3 || null},
-                ${horasTrabalhadas}, ${horasExtras}, ${horasNoturnas},
-                ${isFalta}, ${isAtraso}, ${isSaidaAntecipada}, ${minutosAtraso}, ${minutosSaidaAntecipada},
-                ${tipoDia}, ${timeRecordId}, ${obraId}, ${origemRegistro}, ${numBatidas}, ${isInconsistente}, ${inconsistenciaTipo},
-                ${obraSecundariaId}, ${rateioPercentual})
-            `);
+            batchRows.push(`(${_escNum(input.companyId)}, ${_escNum(emp.id)}, ${_esc(dateStr)}, ${_esc(input.mesReferencia)}, 'registrado',
+              ${_esc(recs[0]?.entrada1 || null)}, ${_esc(recs[0]?.saida1 || null)}, ${_esc(recs[0]?.entrada2 || null)}, ${_esc(recs[0]?.saida2 || null)}, ${_esc(recs[0]?.entrada3 || null)}, ${_esc(recs[0]?.saida3 || null)},
+              ${_esc(horasTrabalhadas)}, ${_esc(horasExtras)}, ${_esc(horasNoturnas)},
+              ${_escNum(isFalta)}, ${_escNum(isAtraso)}, ${_escNum(isSaidaAntecipada)}, ${_escNum(minutosAtraso)}, ${_escNum(minutosSaidaAntecipada)},
+              ${_esc(tipoDia)}, ${_escNum(timeRecordId)}, ${_escNum(obraId)}, ${_esc(origemRegistro)}, ${_escNum(numBatidas)}, ${_escNum(isInconsistente)}, ${_esc(inconsistenciaTipo)},
+              ${_escNum(obraSecundariaId)}, ${_escNum(rateioPercentual)})`);
             totalInserted++;
+            
+            if (batchRows.length >= BATCH_SIZE) await flushBatch();
           }
           
           // Escuro days
@@ -1675,18 +1688,21 @@ export const fechamentoPontoRouter = router({
               if (dow === 0) continue;
               let tipoDia = 'util';
               if (dow === 6) tipoDia = sabadoTipo === 'compensado' ? 'compensado' : 'sabado';
-              await db.execute(sql`
-                INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
-                  horasTrabalhadas, horasExtras, horasNoturnas, isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
-                  tipoDia, origem_registro, num_batidas, is_inconsistente)
-                VALUES (${input.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'escuro',
-                  ${_minutesToHHMM(cargaHorariaDiaria * 60)}, '0:00', '0:00', 0, 0, 0, 0, 0,
-                  ${tipoDia}, 'escuro', 0, 0)
-              `);
+              batchRows.push(`(${_escNum(input.companyId)}, ${_escNum(emp.id)}, ${_esc(dateStr)}, ${_esc(input.mesReferencia)}, 'escuro',
+                NULL, NULL, NULL, NULL, NULL, NULL,
+                ${_esc(_minutesToHHMM(cargaHorariaDiaria * 60))}, '0:00', '0:00',
+                0, 0, 0, 0, 0,
+                ${_esc(tipoDia)}, NULL, NULL, 'escuro', 0, 0, NULL,
+                NULL, NULL)`);
               totalInserted++;
+              
+              if (batchRows.length >= BATCH_SIZE) await flushBatch();
             }
           }
         }
+        
+        // Flush remaining rows
+        await flushBatch();
         
         // Update payroll period status
         await db.execute(sql`
