@@ -73,6 +73,7 @@ import { sindicalRouter } from "./routers/sindical";
 import { avaliacaoRouter } from "./routers/avaliacao";
 import { assistenteIARouter } from "./routers/assistenteIA";
 import { sprint1Router } from "./routers/sprint1Foundation";
+import { medicosClinicasRouter } from "./routers/medicosClinicas";
 import { terceirosRouter } from "./routers/terceiros";
 import { parceirosRouter } from "./routers/parceiros";
 import { portalExternoRouter } from "./routers/portalExterno";
@@ -109,6 +110,7 @@ export const appRouter = router({
   avaliacao: avaliacaoRouter,
   assistenteIA: assistenteIARouter,
   sprint1: sprint1Router,
+  medicosClinicas: medicosClinicasRouter,
   terceiros: terceirosRouter,
   parceiros: parceirosRouter,
   portalExterno: portalExternoRouter,

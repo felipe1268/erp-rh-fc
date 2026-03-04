@@ -335,6 +335,194 @@ const EXAMES_PADRAO = [
   "Eletroencefalograma", "Exame Clínico"
 ];
 
+// ============ COMPONENTE: AUTOCOMPLETE MÉDICO ============
+function MedicoAutocomplete({ medicoValue, crmValue, onChangeMedico, onChangeCrm, companyId }: {
+  medicoValue: string; crmValue: string;
+  onChangeMedico: (v: string) => void; onChangeCrm: (v: string) => void;
+  companyId: number;
+}) {
+  const [medicoSearch, setMedicoSearch] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showNewMedico, setShowNewMedico] = useState(false);
+  const [newMedicoNome, setNewMedicoNome] = useState("");
+  const [newMedicoCrm, setNewMedicoCrm] = useState("");
+  const [newMedicoEsp, setNewMedicoEsp] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const { data: medicosList = [] } = trpc.medicosClinicas.listarMedicos.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const criarMedico = trpc.medicosClinicas.criarMedico.useMutation();
+  const utils = trpc.useUtils();
+
+  const filtered = useMemo(() => {
+    if (!medicoSearch) return (medicosList as any[]).filter((m: any) => Number(m.ativo) === 1);
+    const term = medicoSearch.toLowerCase();
+    return (medicosList as any[]).filter((m: any) => Number(m.ativo) === 1 && (m.nome.toLowerCase().includes(term) || m.crm.toLowerCase().includes(term)));
+  }, [medicosList, medicoSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectMedico = (m: any) => {
+    onChangeMedico(m.nome);
+    onChangeCrm(m.crm);
+    setMedicoSearch("");
+    setShowSuggestions(false);
+  };
+
+  const handleSaveNew = async () => {
+    if (!newMedicoNome.trim() || !newMedicoCrm.trim()) { toast.error("Nome e CRM são obrigatórios"); return; }
+    try {
+      await criarMedico.mutateAsync({ companyId, nome: newMedicoNome.trim(), crm: newMedicoCrm.trim(), especialidade: newMedicoEsp.trim() || undefined });
+      utils.medicosClinicas.listarMedicos.invalidate();
+      onChangeMedico(newMedicoNome.trim());
+      onChangeCrm(newMedicoCrm.trim());
+      setShowNewMedico(false);
+      setNewMedicoNome(""); setNewMedicoCrm(""); setNewMedicoEsp("");
+      toast.success("Médico cadastrado com sucesso!");
+    } catch { toast.error("Erro ao cadastrar médico"); }
+  };
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div ref={wrapperRef} className="relative">
+        <label className="text-sm font-medium">Médico</label>
+        <Input
+          value={medicoValue || ""}
+          onChange={e => { onChangeMedico(e.target.value); setMedicoSearch(e.target.value); setShowSuggestions(true); }}
+          onFocus={() => setShowSuggestions(true)}
+          placeholder="Digite para buscar..."
+        />
+        {showSuggestions && (filtered.length > 0 || medicoSearch) && (
+          <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+            {filtered.map((m: any) => (
+              <button key={m.id} type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex justify-between items-center" onClick={() => selectMedico(m)}>
+                <span className="font-medium">{m.nome}</span>
+                <span className="text-xs text-muted-foreground">CRM: {m.crm}</span>
+              </button>
+            ))}
+            <button type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm text-blue-600 border-t flex items-center gap-1" onClick={() => { setShowSuggestions(false); setShowNewMedico(true); setNewMedicoNome(medicoSearch); }}>
+              <Plus className="h-3 w-3" /> Cadastrar novo médico
+            </button>
+          </div>
+        )}
+      </div>
+      <div>
+        <label className="text-sm font-medium">CRM</label>
+        <Input value={crmValue || ""} onChange={e => onChangeCrm(e.target.value)} />
+      </div>
+      {showNewMedico && (
+        <div className="col-span-1 sm:col-span-2 border rounded-lg p-3 bg-blue-50/50 space-y-2">
+          <p className="text-sm font-medium text-blue-800">Cadastrar Novo Médico</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Input placeholder="Nome completo *" value={newMedicoNome} onChange={e => setNewMedicoNome(e.target.value)} />
+            <Input placeholder="CRM *" value={newMedicoCrm} onChange={e => setNewMedicoCrm(e.target.value)} />
+            <Input placeholder="Especialidade" value={newMedicoEsp} onChange={e => setNewMedicoEsp(e.target.value)} />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowNewMedico(false)}>Cancelar</Button>
+            <Button type="button" size="sm" onClick={handleSaveNew} disabled={criarMedico.isPending}>Salvar Médico</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ COMPONENTE: AUTOCOMPLETE CLÍNICA ============
+function ClinicaAutocomplete({ value, onChange, companyId }: {
+  value: string; onChange: (v: string) => void; companyId: number;
+}) {
+  const [search, setSearch] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showNewClinica, setShowNewClinica] = useState(false);
+  const [newClinicaNome, setNewClinicaNome] = useState("");
+  const [newClinicaEnd, setNewClinicaEnd] = useState("");
+  const [newClinicaTel, setNewClinicaTel] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const { data: clinicasList = [] } = trpc.medicosClinicas.listarClinicas.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const criarClinica = trpc.medicosClinicas.criarClinica.useMutation();
+  const utils = trpc.useUtils();
+
+  const filtered = useMemo(() => {
+    if (!search) return (clinicasList as any[]).filter((c: any) => Number(c.ativo) === 1);
+    const term = search.toLowerCase();
+    return (clinicasList as any[]).filter((c: any) => Number(c.ativo) === 1 && c.nome.toLowerCase().includes(term));
+  }, [clinicasList, search]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSaveNew = async () => {
+    if (!newClinicaNome.trim()) { toast.error("Nome da clínica é obrigatório"); return; }
+    try {
+      await criarClinica.mutateAsync({ companyId, nome: newClinicaNome.trim(), endereco: newClinicaEnd.trim() || undefined, telefone: newClinicaTel.trim() || undefined });
+      utils.medicosClinicas.listarClinicas.invalidate();
+      onChange(newClinicaNome.trim());
+      setShowNewClinica(false);
+      setNewClinicaNome(""); setNewClinicaEnd(""); setNewClinicaTel("");
+      toast.success("Clínica cadastrada com sucesso!");
+    } catch { toast.error("Erro ao cadastrar clínica"); }
+  };
+
+  return (
+    <div>
+      <div ref={wrapperRef} className="relative">
+        <label className="text-sm font-medium">Clínica</label>
+        <Input
+          value={value || ""}
+          onChange={e => { onChange(e.target.value); setSearch(e.target.value); setShowSuggestions(true); }}
+          onFocus={() => setShowSuggestions(true)}
+          placeholder="Digite para buscar..."
+        />
+        {showSuggestions && (filtered.length > 0 || search) && (
+          <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+            {filtered.map((c: any) => (
+              <button key={c.id} type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm" onClick={() => { onChange(c.nome); setSearch(""); setShowSuggestions(false); }}>
+                <span className="font-medium">{c.nome}</span>
+                {c.endereco && <span className="text-xs text-muted-foreground ml-2">{c.endereco}</span>}
+              </button>
+            ))}
+            <button type="button" className="w-full text-left px-3 py-2 hover:bg-accent text-sm text-blue-600 border-t flex items-center gap-1" onClick={() => { setShowSuggestions(false); setShowNewClinica(true); setNewClinicaNome(search); }}>
+              <Plus className="h-3 w-3" /> Cadastrar nova clínica
+            </button>
+          </div>
+        )}
+      </div>
+      {showNewClinica && (
+        <div className="mt-2 border rounded-lg p-3 bg-blue-50/50 space-y-2">
+          <p className="text-sm font-medium text-blue-800">Cadastrar Nova Clínica</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Input placeholder="Nome da clínica *" value={newClinicaNome} onChange={e => setNewClinicaNome(e.target.value)} />
+            <Input placeholder="Endereço" value={newClinicaEnd} onChange={e => setNewClinicaEnd(e.target.value)} />
+            <Input placeholder="Telefone" value={newClinicaTel} onChange={e => setNewClinicaTel(e.target.value)} />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowNewClinica(false)}>Cancelar</Button>
+            <Button type="button" size="sm" onClick={handleSaveNew} disabled={criarClinica.isPending}>Salvar Clínica</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ COMPONENTE: EXAMES REALIZADOS (Checkboxes + Upload) ============
 function ExamesRealizadosField({ value, onChange, companyId }: { value: string; onChange: (v: string) => void; companyId: number }) {
   // Parse existing value: comma-separated string
@@ -1733,17 +1921,21 @@ export default function ControleDocumentos() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="text-sm font-medium">Médico</label>
-              <Input value={asoForm.medico || ""} onChange={e => setAsoForm({ ...asoForm, medico: e.target.value })} />
+            <div className="col-span-2">
+              <MedicoAutocomplete
+                medicoValue={asoForm.medico || ""}
+                crmValue={asoForm.crm || ""}
+                onChangeMedico={v => setAsoForm({ ...asoForm, medico: v })}
+                onChangeCrm={v => setAsoForm({ ...asoForm, crm: v })}
+                companyId={companyId}
+              />
             </div>
-            <div>
-              <label className="text-sm font-medium">CRM</label>
-              <Input value={asoForm.crm || ""} onChange={e => setAsoForm({ ...asoForm, crm: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Clínica</label>
-              <Input value={asoForm.clinica || ""} onChange={e => setAsoForm({ ...asoForm, clinica: e.target.value })} />
+            <div className="col-span-2">
+              <ClinicaAutocomplete
+                value={asoForm.clinica || ""}
+                onChange={v => setAsoForm({ ...asoForm, clinica: v })}
+                companyId={companyId}
+              />
             </div>
             <div className="col-span-2">
               <label className="text-sm font-medium">Exames Realizados</label>
@@ -1866,13 +2058,14 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">CID</label>
               <Input value={atestForm.cid || ""} onChange={e => setAtestForm({ ...atestForm, cid: e.target.value })} placeholder="Ex: J11, M54.5" />
             </div>
-            <div>
-              <label className="text-sm font-medium">Médico</label>
-              <Input value={atestForm.medico || ""} onChange={e => setAtestForm({ ...atestForm, medico: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">CRM</label>
-              <Input value={atestForm.crm || ""} onChange={e => setAtestForm({ ...atestForm, crm: e.target.value })} />
+            <div className="col-span-2">
+              <MedicoAutocomplete
+                medicoValue={atestForm.medico || ""}
+                crmValue={atestForm.crm || ""}
+                onChangeMedico={v => setAtestForm({ ...atestForm, medico: v })}
+                onChangeCrm={v => setAtestForm({ ...atestForm, crm: v })}
+                companyId={companyId}
+              />
             </div>
             <div>
               <label className="text-sm font-medium">Motivo do Atestado *</label>

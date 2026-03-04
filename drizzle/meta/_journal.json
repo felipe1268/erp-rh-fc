@@ -134,6 +134,13 @@
       "when": 1772649564754,
       "tag": "0018_mean_mathemanic",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1772652846399,
+      "tag": "0019_wealthy_speed_demon",
+      "breakpoints": true
     }
   ]
 }

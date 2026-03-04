@@ -3433,3 +3433,32 @@ export const fieldNotes = mysqlTable("field_notes", {
 	index("fn_data").on(table.data),
 	index("fn_tipo").on(table.tipoOcorrencia),
 ]);
+
+// ========== CADASTRO DE MÉDICOS E CLÍNICAS (autocomplete ASO/Atestados) ==========
+
+export const medicos = mysqlTable("medicos", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	crm: varchar({ length: 50 }).notNull(),
+	especialidade: varchar({ length: 255 }),
+	ativo: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("med_company").on(table.companyId),
+	index("med_crm").on(table.crm),
+]);
+
+export const clinicas = mysqlTable("clinicas", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	endereco: varchar({ length: 500 }),
+	telefone: varchar({ length: 50 }),
+	ativo: tinyint().default(1).notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("clin_company").on(table.companyId),
+]);

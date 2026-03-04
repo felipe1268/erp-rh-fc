@@ -4587,3 +4587,6 @@
 - [x] Tornar cards de estatísticas da tela de EPIs responsivos (scroll horizontal mobile, grid 3 cols tablet, 7 cols desktop)
 - [x] Tornar abas (Catálogo, Entregas, Estoque Obra, Transferências) responsivas com scroll horizontal em mobile
 - [x] Dropdown no nome do usuário (header) com links rápidos de Administração: Usuários e Permissões, Grupos de Usuários, Auditoria do Sistema, Configurações, Revisões do Sistema, Lixeira
+- [x] Cadastro de Médicos (nome + CRM) com tabela no banco para sugestões automáticas no formulário de ASO
+- [x] Cadastro de Clínicas com tabela no banco para sugestões automáticas no formulário de ASO
+- [x] Autocomplete nos campos Médico, CRM e Clínica do formulário de ASO e Atestados baseado nos registros cadastrados
