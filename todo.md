@@ -4602,3 +4602,4 @@
 - [x] Ajustar e-mail de Demissão e demais avisos para incluir apenas: Nome, CPF
 - [x] Adicionar logo da empresa no header do template HTML do e-mail de notificação
 - [x] Botão "Enviar Teste" na tela de Notificações para validar envio sem criar movimentação real (botão visível no topo + preview com envio)
+- [x] BUG: Preview de e-mail de Contratação faltando Data de Nascimento, Estado Civil e Salário - corrigido preview e teste com dados dummy

@@ -131,6 +131,9 @@ export const notificationsRouter = router({
       funcao: z.string().default("Servente"),
       setor: z.string().default("Obra"),
       empresa: z.string().default("FC Engenharia"),
+      dataNascimento: z.string().default("15/03/1990"),
+      estadoCivil: z.string().default("Solteiro"),
+      salario: z.string().default("2.500,00"),
     }))
     .query(async ({ input }) => {
       let companyData: any = null;
@@ -158,6 +161,9 @@ export const notificationsRouter = router({
         funcao: input.funcao,
         setor: input.setor,
         empresa: input.empresa,
+        dataNascimento: input.dataNascimento,
+        estadoCivil: input.estadoCivil,
+        salario: input.salario,
       }, companyData);
     }),
 
@@ -177,6 +183,9 @@ export const notificationsRouter = router({
           funcao: "Servente",
           setor: "Obra Teste",
           empresa: "FC Engenharia",
+          dataNascimento: "15/03/1990",
+          estadoCivil: "Solteiro",
+          salario: "2.500,00",
           employeeId: 0,
           statusAnterior: "Ativo",
           statusNovo: input.tipo === "demissao" ? "Desligado" : input.tipo === "afastamento" ? "Afastado" : "Ativo",
