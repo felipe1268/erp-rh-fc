@@ -170,11 +170,19 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules')) return 'vendor';
+          if (id.includes('node_modules')) {
+            // Split large vendor libs into separate chunks for better caching
+            if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+            if (id.includes('@radix-ui') || id.includes('cmdk')) return 'vendor-ui';
+            if (id.includes('date-fns') || id.includes('xlsx') || id.includes('exceljs')) return 'vendor-utils';
+            if (id.includes('@trpc') || id.includes('@tanstack')) return 'vendor-data';
+            if (id.includes('react-dom')) return 'vendor-react';
+            return 'vendor-core';
+          }
         },
       },
     },
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 1500,
   },
   server: {
     host: true,

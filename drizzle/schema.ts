@@ -86,7 +86,12 @@ export const asos = mysqlTable("asos", {
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
-});
+},
+(table) => [
+	index("idx_aso_company").on(table.companyId),
+	index("idx_aso_employee").on(table.employeeId),
+	index("idx_aso_validade").on(table.companyId, table.dataValidade),
+]);
 
 export const atestados = mysqlTable("atestados", {
 	id: int().autoincrement().notNull(),
@@ -1004,6 +1009,9 @@ export const employees = mysqlTable("employees", {
 },
 (table) => [
 	index("idx_company_codigo_interno").on(table.companyId, table.codigoInterno),
+	index("idx_emp_company").on(table.companyId),
+	index("idx_emp_status").on(table.companyId, table.status),
+
 ]);
 
 export const epiDeliveries = mysqlTable("epi_deliveries", {
@@ -1935,7 +1943,11 @@ export const obras = mysqlTable("obras", {
 	usarConvencaoMatriz: tinyint("usar_convencao_matriz").default(1).notNull(),
 	convencaoId: int("convencao_id"),
 	convencaoDivergencias: text("convencao_divergencias"),
-});
+},
+(table) => [
+	index("idx_obra_company").on(table.companyId),
+	index("idx_obra_status").on(table.companyId, table.status),
+]);
 
 export const payroll = mysqlTable("payroll", {
 	id: int().autoincrement().notNull(),

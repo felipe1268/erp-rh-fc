@@ -4555,3 +4555,12 @@
 - [x] Adicionar filtro funcional por Status na tela de Processos Trabalhistas
 - [x] Adicionar filtro por Arquivo (com/sem arquivo anexado) na tela de Processos Trabalhistas
 - [x] Adicionar botão Salvar na seção de Análise IA dos Processos Trabalhistas
+
+## Rev. 182: Otimização de Performance do Sistema
+- [ ] Análise completa de bundle size e identificação de gargalos
+- [x] Implementar code splitting e lazy loading nas rotas
+- [ ] Otimizar queries do backend (N+1, índices, caching)
+- [ ] Reduzir bundle size com imports otimizados
+- [x] Configurar manual chunks no Vite para melhor caching
+- [x] Adicionar índices no banco de dados para queries frequentes
+- [x] Adicionar botões Selecionar/Desmarcar Todos por coluna na tela de permissões de grupo

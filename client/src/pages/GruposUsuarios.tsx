@@ -298,6 +298,29 @@ export default function GruposUsuarios() {
     });
   };
 
+  // Toggle all routes in a section for a specific column
+  const toggleColumnAll = (sectionRoutes: { path: string }[], field: keyof RoutePermission, enable: boolean) => {
+    setRoutePerms(prev => {
+      const updated = { ...prev };
+      for (const r of sectionRoutes) {
+        const existing = updated[r.path] || { rota: r.path, canView: false, canEdit: false, canCreate: false, canDelete: false, ocultarValores: false, ocultarDocumentos: false };
+        const newPerm = { ...existing, [field]: enable };
+        // If enabling an action field, ensure canView is on
+        if (enable && (field === 'canEdit' || field === 'canCreate' || field === 'canDelete')) {
+          newPerm.canView = true;
+        }
+        // If disabling canView, turn off everything
+        if (field === 'canView' && !enable) {
+          newPerm.canEdit = false;
+          newPerm.canCreate = false;
+          newPerm.canDelete = false;
+        }
+        updated[r.path] = newPerm;
+      }
+      return updated;
+    });
+  };
+
   const savePermissions = () => {
     if (!selectedGroup) return;
     // Only save routes with canView=true to keep the database clean
@@ -665,15 +688,42 @@ export default function GruposUsuarios() {
 
                       {/* Routes - always show so user can toggle checkboxes */}
                       <div className="p-3 space-y-1">
-                          {/* Column headers */}
+                          {/* Column headers with select all toggles */}
                           <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider pb-1 border-b mb-1">
                             <div className="col-span-4">Tela</div>
-                            <div className="col-span-1 text-center">Ver</div>
-                            <div className="col-span-1 text-center">Editar</div>
-                            <div className="col-span-1 text-center">Criar</div>
-                            <div className="col-span-1 text-center">Excluir</div>
-                            <div className="col-span-2 text-center">Ocultar R$</div>
-                            <div className="col-span-2 text-center">Ocultar Docs</div>
+                            {[
+                              { field: 'canView' as const, label: 'Ver' },
+                              { field: 'canEdit' as const, label: 'Editar' },
+                              { field: 'canCreate' as const, label: 'Criar' },
+                              { field: 'canDelete' as const, label: 'Excluir' },
+                            ].map(col => {
+                              const allChecked = section.routes.every(r => !!(routePerms[r.path] as any)?.[col.field]);
+                              return (
+                                <div key={col.field} className="col-span-1 flex flex-col items-center gap-0.5">
+                                  <Checkbox
+                                    checked={allChecked}
+                                    onCheckedChange={(checked) => toggleColumnAll(section.routes, col.field, !!checked)}
+                                    className="h-3.5 w-3.5"
+                                    title={allChecked ? `Desmarcar todos ${col.label}` : `Selecionar todos ${col.label}`}
+                                  />
+                                  <span>{col.label}</span>
+                                </div>
+                              );
+                            })}
+                            {(() => {
+                              const allOcultarR = section.routes.every(r => !!(routePerms[r.path] as any)?.ocultarValores);
+                              const allOcultarD = section.routes.every(r => !!(routePerms[r.path] as any)?.ocultarDocumentos);
+                              return (<>
+                                <div className="col-span-2 flex flex-col items-center gap-0.5">
+                                  <Checkbox checked={allOcultarR} onCheckedChange={(checked) => toggleColumnAll(section.routes, 'ocultarValores', !!checked)} className="h-3.5 w-3.5" title={allOcultarR ? 'Desmarcar todos Ocultar R$' : 'Selecionar todos Ocultar R$'} />
+                                  <span>Ocultar R$</span>
+                                </div>
+                                <div className="col-span-2 flex flex-col items-center gap-0.5">
+                                  <Checkbox checked={allOcultarD} onCheckedChange={(checked) => toggleColumnAll(section.routes, 'ocultarDocumentos', !!checked)} className="h-3.5 w-3.5" title={allOcultarD ? 'Desmarcar todos Ocultar Docs' : 'Selecionar todos Ocultar Docs'} />
+                                  <span>Ocultar Docs</span>
+                                </div>
+                              </>);
+                            })()}
                           </div>
                           {section.routes.map(route => {
                             const perm = routePerms[route.path];
