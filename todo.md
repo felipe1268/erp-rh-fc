@@ -4586,3 +4586,4 @@
 - [x] Badge de Entrada Direta no histórico de transferências (tipo entrada_direta com cor emerald)
 - [x] Tornar cards de estatísticas da tela de EPIs responsivos (scroll horizontal mobile, grid 3 cols tablet, 7 cols desktop)
 - [x] Tornar abas (Catálogo, Entregas, Estoque Obra, Transferências) responsivas com scroll horizontal em mobile
+- [x] Dropdown no nome do usuário (header) com links rápidos de Administração: Usuários e Permissões, Grupos de Usuários, Auditoria do Sistema, Configurações, Revisões do Sistema, Lixeira

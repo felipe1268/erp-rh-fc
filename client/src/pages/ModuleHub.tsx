@@ -11,6 +11,7 @@ import {
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
   HardHat, Warehouse, Wrench, FolderOpen, BarChart3,
+  Settings, FileText, Trash2, GitBranch,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -18,6 +19,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLoginUrl } from "@/const";
@@ -431,10 +434,34 @@ export default function ModuleHub() {
                     <ChevronDown className="h-3 w-3 text-gray-300 hidden sm:block" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal px-2 py-1.5">Navegação Rápida</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => navigate("/painel")} className="cursor-pointer">
-                    <Users className="mr-2 h-4 w-4" /> Ir ao Painel
+                    <LayoutGrid className="mr-2 h-4 w-4" /> Ir ao Painel
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal px-2 py-1.5">Administração</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => navigate("/usuarios")} className="cursor-pointer">
+                    <Lock className="mr-2 h-4 w-4" /> Usuários e Permissões
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/grupos-usuarios")} className="cursor-pointer">
+                    <Users className="mr-2 h-4 w-4" /> Grupos de Usuários
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/auditoria")} className="cursor-pointer">
+                    <FileText className="mr-2 h-4 w-4" /> Auditoria do Sistema
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/configuracoes")} className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" /> Configurações
+                  </DropdownMenuItem>
+                  {user?.role === 'admin_master' && (
+                    <DropdownMenuItem onClick={() => navigate("/revisoes")} className="cursor-pointer">
+                      <GitBranch className="mr-2 h-4 w-4" /> Revisões do Sistema
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => navigate("/lixeira")} className="cursor-pointer">
+                    <Trash2 className="mr-2 h-4 w-4" /> Lixeira
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" /> Sair
                   </DropdownMenuItem>
