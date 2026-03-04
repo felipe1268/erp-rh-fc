@@ -1478,9 +1478,20 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
             Cadastre os e-mails que devem receber avisos automáticos de contratação, demissão e outras movimentações.
           </p>
         </div>
-        <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-1" /> Novo Destinatário
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm"
+            onClick={() => {
+              const el = document.getElementById('notif-historico-section');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+              // Dispatch custom event to open preview
+              window.dispatchEvent(new CustomEvent('open-notif-preview'));
+            }}>
+            <Send className="w-4 h-4 mr-1" /> Enviar Teste
+          </Button>
+          <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="w-4 h-4 mr-1" /> Novo Destinatário
+          </Button>
+        </div>
       </div>
 
       {/* Resumo */}
@@ -1645,6 +1656,19 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewTipo, setPreviewTipo] = useState<"contratacao" | "demissao" | "transferencia" | "afastamento">("contratacao");
 
+  // Listen for custom event from parent to open preview
+  useEffect(() => {
+    const handler = () => {
+      setShowPreview(true);
+      setTimeout(() => {
+        const el = document.getElementById('notif-preview-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    };
+    window.addEventListener('open-notif-preview', handler);
+    return () => window.removeEventListener('open-notif-preview', handler);
+  }, []);
+
   const logsQuery = trpc.notifications.listLogs.useQuery(
     { companyId, limit: 100, tipoFiltro, statusFiltro },
     { enabled: companyId > 0 }
@@ -1743,7 +1767,7 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
 
       {/* Preview de texto */}
       {showPreview && (
-        <Card className="border-indigo-200">
+        <Card id="notif-preview-section" className="border-indigo-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <p className="text-sm font-medium text-gray-700">Preview do texto para:</p>

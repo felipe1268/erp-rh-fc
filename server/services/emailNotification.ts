@@ -80,6 +80,9 @@ export interface DadosFuncionario {
   obraNova?: string;
   setorAnterior?: string;
   setorNovo?: string;
+  dataNascimento?: string;
+  estadoCivil?: string;
+  salario?: string;
 }
 
 // ============================================================
@@ -174,10 +177,10 @@ function gerarTextoContratacao(dados: DadosFuncionario, companyData: any): { tit
   const blocoDados = gerarBlocoDados("DADOS DO COLABORADOR ADMITIDO", [
     { campo: "Nome completo", valor: dados.nome },
     { campo: "CPF", valor: formatCPF(dados.cpf) },
-    { campo: "Função", valor: dados.funcao || "" },
-    { campo: "Setor", valor: dados.setor || "" },
-    { campo: "Obra / Local", valor: dados.obra || "" },
-    { campo: "Data de Admissão", valor: dados.dataAdmissao || "" },
+    { campo: "Data de Nascimento", valor: dados.dataNascimento || "" },
+    { campo: "Estado Civil", valor: dados.estadoCivil || "" },
+    { campo: "Salário", valor: dados.salario ? `R$ ${dados.salario}` : "" },
+    { campo: "Profissão", valor: dados.funcao || "" },
   ]);
 
   const corpo = `${gerarCabecalho(companyData)}
@@ -213,10 +216,6 @@ function gerarTextoDemissao(dados: DadosFuncionario, companyData: any): { titulo
   const blocoDados = gerarBlocoDados("DADOS DO COLABORADOR DESLIGADO", [
     { campo: "Nome completo", valor: dados.nome },
     { campo: "CPF", valor: formatCPF(dados.cpf) },
-    { campo: "Função", valor: dados.funcao || "" },
-    { campo: "Setor", valor: dados.setor || "" },
-    { campo: "Última Obra / Local", valor: dados.obra || "" },
-    { campo: "Data do Desligamento", valor: dados.dataDesligamento || "" },
   ]);
 
   const corpo = `${gerarCabecalho(companyData)}
@@ -252,11 +251,6 @@ function gerarTextoTransferencia(dados: DadosFuncionario, companyData: any): { t
   const blocoDados = gerarBlocoDados("DADOS DA TRANSFERÊNCIA", [
     { campo: "Colaborador", valor: dados.nome },
     { campo: "CPF", valor: formatCPF(dados.cpf) },
-    { campo: "Função", valor: dados.funcao || "" },
-    { campo: "Obra Anterior", valor: dados.obraAnterior || "" },
-    { campo: "Nova Obra", valor: dados.obraNova || "" },
-    { campo: "Setor Anterior", valor: dados.setorAnterior || "" },
-    { campo: "Novo Setor", valor: dados.setorNovo || "" },
   ]);
 
   const corpo = `${gerarCabecalho(companyData)}
@@ -291,10 +285,6 @@ function gerarTextoAfastamento(dados: DadosFuncionario, companyData: any): { tit
   const blocoDados = gerarBlocoDados("DADOS DO AFASTAMENTO", [
     { campo: "Colaborador", valor: dados.nome },
     { campo: "CPF", valor: formatCPF(dados.cpf) },
-    { campo: "Função", valor: dados.funcao || "" },
-    { campo: "Setor", valor: dados.setor || "" },
-    { campo: "Obra / Local", valor: dados.obra || "" },
-    { campo: "Motivo", valor: dados.motivoAfastamento || "" },
   ]);
 
   const corpo = `${gerarCabecalho(companyData)}
@@ -344,6 +334,7 @@ export function gerarTextoNotificacao(
 // ============================================================
 function gerarEmailHtml(titulo: string, corpoTexto: string, companyData: any): string {
   const empresaNome = getCompanyShortName(companyData);
+  const logoUrl = companyData?.logoUrl || "";
   const corpoFormatado = corpoTexto
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -353,6 +344,10 @@ function gerarEmailHtml(titulo: string, corpoTexto: string, companyData: any): s
     .replace(/⚠/g, "&#9888;")
     .replace(/➤/g, "&#10148;");
 
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${empresaNome}" style="max-height:50px;max-width:200px;margin-bottom:10px;" /><br>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -361,7 +356,7 @@ function gerarEmailHtml(titulo: string, corpoTexto: string, companyData: any): s
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
         <tr><td style="background-color:#1a365d;padding:20px 30px;text-align:center;">
-          <h1 style="color:#ffffff;margin:0;font-size:20px;letter-spacing:1px;">${empresaNome.toUpperCase()}</h1>
+          ${logoHtml}<h1 style="color:#ffffff;margin:0;font-size:20px;letter-spacing:1px;">${empresaNome.toUpperCase()}</h1>
           <p style="color:#a0c4ff;margin:5px 0 0;font-size:12px;">Sistema de Gestão Integrada</p>
         </td></tr>
         <tr><td style="padding:30px;">

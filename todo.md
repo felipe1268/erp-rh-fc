@@ -4598,3 +4598,7 @@
 - [x] Adicionar opção de editar dados da clínica na lista de sugestões - ícone de lápis + formulário de edição
 - [x] BUG: Salvar funcionário trava em "Salvando..." - corrigido: dispararNotificacao agora é fire-and-forget + timeouts SMTP (10s/15s)
 - [x] Remover rodapé do e-mail de notificação (Departamento Pessoal, nome empresa, e-mail, telefone)
+- [x] Ajustar e-mail de Contratação para incluir: Nome, CPF, Data Nascimento, Estado Civil, Salário, Profissão
+- [x] Ajustar e-mail de Demissão e demais avisos para incluir apenas: Nome, CPF
+- [x] Adicionar logo da empresa no header do template HTML do e-mail de notificação
+- [x] Botão "Enviar Teste" na tela de Notificações para validar envio sem criar movimentação real (botão visível no topo + preview com envio)
