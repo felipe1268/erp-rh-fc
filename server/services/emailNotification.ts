@@ -137,14 +137,7 @@ function gerarRodape(companyData: { razaoSocial: string; nomeFantasia: string; e
   lines.push("────────────────────────────────────────────────");
   lines.push("Atenciosamente,");
   lines.push("");
-  lines.push("Departamento Pessoal");
-  lines.push(getCompanyDisplayName(companyData));
-  if (companyData.email) lines.push(`E-mail: ${companyData.email}`);
-  if (companyData.telefone) lines.push(`Tel: ${companyData.telefone}`);
-  lines.push("────────────────────────────────────────────────");
-  lines.push("");
   lines.push("Comunicado automático — Sistema de Gestão de Pessoas");
-  lines.push("Em caso de dúvidas, entre em contato com o Departamento Pessoal.");
   return lines.join("\n");
 }
 

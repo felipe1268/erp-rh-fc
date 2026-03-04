@@ -4597,3 +4597,4 @@
 - [x] Adicionar opção de editar dados do médico na lista de sugestões - ícone de lápis + formulário de edição
 - [x] Adicionar opção de editar dados da clínica na lista de sugestões - ícone de lápis + formulário de edição
 - [x] BUG: Salvar funcionário trava em "Salvando..." - corrigido: dispararNotificacao agora é fire-and-forget + timeouts SMTP (10s/15s)
+- [x] Remover rodapé do e-mail de notificação (Departamento Pessoal, nome empresa, e-mail, telefone)
