@@ -35,7 +35,10 @@ export const processosTrabRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       let query = db.select().from(processosTrabalhistas)
-        .where(eq(processosTrabalhistas.companyId, input.companyId));
+        .where(and(
+          eq(processosTrabalhistas.companyId, input.companyId),
+          sql`${processosTrabalhistas.deletedAt} IS NULL`,
+        ));
 
       const processos = await query;
 
@@ -231,6 +234,28 @@ export const processosTrabRouter = router({
         deletedByUserId: ctx.user.id,
       } as any).where(inArray(processosTrabalhistas.id, input.ids));
       return { success: true, count: input.ids.length };
+    }),
+
+  // ============================================================
+  // ALTERAR FUNCIONÁRIO VINCULADO
+  // ============================================================
+  alterarFuncionario: protectedProcedure
+    .input(z.object({
+      processoId: z.number(),
+      employeeId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      // Buscar dados do novo funcionário para atualizar reclamante
+      const [emp] = await db.select().from(employees)
+        .where(eq(employees.id, input.employeeId));
+      if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+      await db.update(processosTrabalhistas).set({
+        employeeId: input.employeeId,
+        reclamante: emp.nomeCompleto,
+      } as any).where(eq(processosTrabalhistas.id, input.processoId));
+      return { success: true, nome: emp.nomeCompleto };
     }),
 
   // ============================================================

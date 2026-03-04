@@ -4530,3 +4530,9 @@
 - [x] Frontend: novo KPI card "Sem ASO" (rosa) com badge de contagem
 - [x] Frontend: nova aba "Sem ASO" com tabela, busca e botão "Cadastrar ASO"
 - [x] Frontend: layout KPIs centralizado, textos completos, grid 9 colunas
+
+## Fase 95b: Processos Trabalhistas - Bug exclusão + Alterar funcionário
+- [x] BUG: Excluir processo não atualiza a lista (corrigido: filtro deletedAt IS NULL no listar)
+- [x] Backend: procedure alterarFuncionario (atualiza employeeId e reclamante)
+- [x] Frontend: botão lápis na seção "Partes" para trocar o funcionário vinculado
+- [x] Frontend: dialog de busca por nome/CPF com confirmação (view detalhe + lista)

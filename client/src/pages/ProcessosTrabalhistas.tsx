@@ -157,6 +157,9 @@ export default function ProcessosTrabalhistas() {
   const [reAnalisarProgress, setReAnalisarProgress] = useState<{ current: number; total: number } | null>(null);
   const [showChangelogDialog, setShowChangelogDialog] = useState(false);
   const [changelogData, setChangelogData] = useState<any>(null);
+  const [showChangeEmployeeDialog, setShowChangeEmployeeDialog] = useState(false);
+  const [changeEmployeeSearch, setChangeEmployeeSearch] = useState("");
+  const [changeEmployeeProcessoId, setChangeEmployeeProcessoId] = useState<number | null>(null);
 
   // Andamento form
   const [andamentoForm, setAndamentoForm] = useState({
@@ -181,7 +184,7 @@ export default function ProcessosTrabalhistas() {
   );
   const desligados = trpc.processos.funcionariosDesligados.useQuery(
     { companyId },
-    { enabled: companyId > 0 && viewMode === "novo" }
+    { enabled: companyId > 0 && (viewMode === "novo" || showChangeEmployeeDialog) }
   );
 
   // Mutations
@@ -214,6 +217,17 @@ export default function ProcessosTrabalhistas() {
       stats.refetch();
       setViewMode("lista");
       setSelectedProcessoId(null);
+    },
+    onError: (err) => toast.error(`Erro: ${err.message}`),
+  });
+
+  const alterarFuncionarioMut = trpc.processos.alterarFuncionario.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Funcionário alterado para ${res.nome}`);
+      detalhe.refetch();
+      processos.refetch();
+      setShowChangeEmployeeDialog(false);
+      setChangeEmployeeSearch("");
     },
     onError: (err) => toast.error(`Erro: ${err.message}`),
   });
@@ -789,7 +803,24 @@ export default function ProcessosTrabalhistas() {
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Reclamante</span><span className="font-medium">{p.reclamante}</span></div>
                     {p.employee && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">Funcionário</span><span className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(p.employee.id)}>{p.employee.nomeCompleto}</span></div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Funcionário</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(p.employee.id)}>{p.employee.nomeCompleto}</span>
+                          <button
+                            onClick={() => { setChangeEmployeeProcessoId(p.id); setShowChangeEmployeeDialog(true); setChangeEmployeeSearch(""); }}
+                            className="text-muted-foreground hover:text-orange-600 transition-colors" title="Alterar funcionário vinculado"
+                          ><Pencil className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+                    )}
+                    {!p.employee && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Funcionário</span>
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setChangeEmployeeProcessoId(p.id); setShowChangeEmployeeDialog(true); setChangeEmployeeSearch(""); }}>
+                          <Plus className="h-3 w-3 mr-1" /> Vincular
+                        </Button>
+                      </div>
                     )}
                     <EditableField label="Adv. Reclamante" value={p.advogadoReclamante} field="advogadoReclamante" processoId={p.id} onSave={atualizarMut.mutate} />
                     <EditableField label="Adv. Empresa" value={p.advogadoEmpresa} field="advogadoEmpresa" processoId={p.id} onSave={atualizarMut.mutate} />
@@ -991,6 +1022,54 @@ export default function ProcessosTrabalhistas() {
                 else if (deleteTarget?.type === "andamento") excluirAndamentoMut.mutate({ id: deleteTarget.id });
                 setShowDeleteDialog(false);
               }}>Excluir</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog: Alterar Funcionário Vinculado (detalhe) */}
+        <Dialog open={showChangeEmployeeDialog} onOpenChange={(open) => { setShowChangeEmployeeDialog(open); if (!open) setChangeEmployeeSearch(""); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><User className="h-5 w-5" /> Alterar Funcionário Vinculado</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <input
+                type="text" placeholder="Buscar por nome ou CPF..."
+                value={changeEmployeeSearch} onChange={e => setChangeEmployeeSearch(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm bg-background" autoFocus
+              />
+              <div className="max-h-64 overflow-y-auto space-y-1">
+                {(desligados.data || []).filter((e: any) =>
+                  changeEmployeeSearch.length >= 2 && (
+                    e.nome.toLowerCase().includes(changeEmployeeSearch.toLowerCase()) ||
+                    (e.cpf || "").includes(changeEmployeeSearch)
+                  )
+                ).map((emp: any) => (
+                  <button key={emp.id} onClick={() => {
+                    if (changeEmployeeProcessoId && confirm(`Vincular ${emp.nome} a este processo?`)) {
+                      alterarFuncionarioMut.mutate({ processoId: changeEmployeeProcessoId, employeeId: emp.id });
+                    }
+                  }} className="w-full flex items-center justify-between px-3 py-2 rounded hover:bg-muted/60 text-left text-sm border">
+                    <div>
+                      <div className="font-medium">{emp.nome}</div>
+                      <div className="text-xs text-muted-foreground">{emp.cpf || "Sem CPF"} • {emp.funcao || "Sem função"}</div>
+                    </div>
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                ))}
+                {changeEmployeeSearch.length < 2 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">Digite ao menos 2 caracteres para buscar</p>
+                )}
+                {changeEmployeeSearch.length >= 2 && (desligados.data || []).filter((e: any) =>
+                  e.nome.toLowerCase().includes(changeEmployeeSearch.toLowerCase()) ||
+                  (e.cpf || "").includes(changeEmployeeSearch)
+                ).length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">Nenhum funcionário encontrado</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowChangeEmployeeDialog(false)}>Cancelar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1629,6 +1708,55 @@ export default function ProcessosTrabalhistas() {
         </FullScreenDialog>
       </div>
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* Dialog: Alterar Funcionário Vinculado */}
+      <Dialog open={showChangeEmployeeDialog} onOpenChange={(open) => { setShowChangeEmployeeDialog(open); if (!open) setChangeEmployeeSearch(""); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><User className="h-5 w-5" /> Alterar Funcionário Vinculado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <input
+              type="text" placeholder="Buscar por nome ou CPF..."
+              value={changeEmployeeSearch} onChange={e => setChangeEmployeeSearch(e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm bg-background" autoFocus
+            />
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {(desligados.data || []).filter((e: any) =>
+                changeEmployeeSearch.length >= 2 && (
+                  e.nome.toLowerCase().includes(changeEmployeeSearch.toLowerCase()) ||
+                  (e.cpf || "").includes(changeEmployeeSearch)
+                )
+              ).map((emp: any) => (
+                <button key={emp.id} onClick={() => {
+                  if (changeEmployeeProcessoId && confirm(`Vincular ${emp.nome} a este processo?`)) {
+                    alterarFuncionarioMut.mutate({ processoId: changeEmployeeProcessoId, employeeId: emp.id });
+                  }
+                }} className="w-full flex items-center justify-between px-3 py-2 rounded hover:bg-muted/60 text-left text-sm border">
+                  <div>
+                    <div className="font-medium">{emp.nome}</div>
+                    <div className="text-xs text-muted-foreground">{emp.cpf || "Sem CPF"} • {emp.funcao || "Sem função"}</div>
+                  </div>
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                </button>
+              ))}
+              {changeEmployeeSearch.length < 2 && (
+                <p className="text-xs text-muted-foreground text-center py-4">Digite ao menos 2 caracteres para buscar</p>
+              )}
+              {changeEmployeeSearch.length >= 2 && (desligados.data || []).filter((e: any) =>
+                e.nome.toLowerCase().includes(changeEmployeeSearch.toLowerCase()) ||
+                (e.cpf || "").includes(changeEmployeeSearch)
+              ).length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">Nenhum funcionário encontrado</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowChangeEmployeeDialog(false)}>Cancelar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
           <PrintFooterLGPD />
     </DashboardLayout>
   );
