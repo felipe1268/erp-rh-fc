@@ -4603,3 +4603,4 @@
 - [x] Adicionar logo da empresa no header do template HTML do e-mail de notificação
 - [x] Botão "Enviar Teste" na tela de Notificações para validar envio sem criar movimentação real (botão visível no topo + preview com envio)
 - [x] BUG: Preview de e-mail de Contratação faltando Data de Nascimento, Estado Civil e Salário - corrigido preview e teste com dados dummy
+- [x] BUG: Horário no histórico de notificações mostra UTC em vez do horário de Brasília (GMT-3) - corrigido com timeZone America/Sao_Paulo

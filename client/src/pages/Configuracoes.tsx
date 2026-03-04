@@ -1721,7 +1721,12 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
     if (!ts) return "-";
     try {
       const d = new Date(ts);
-      return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      // Se o timestamp do banco não tem 'Z' nem offset, é UTC do MySQL — forçar UTC
+      if (typeof ts === "string" && !ts.includes("Z") && !ts.includes("+") && !ts.includes("-", 10)) {
+        const utc = new Date(ts + "Z");
+        return utc.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+      }
+      return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
     } catch { return ts; }
   }
 
