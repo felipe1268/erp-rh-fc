@@ -1446,29 +1446,33 @@ export default function ProcessosTrabalhistas() {
         )}
 
         {/* Filters */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-col gap-3">
+          {/* Search - full width */}
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input type="text" placeholder="Buscar por nome, número do processo, vara..." value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm bg-background" />
           </div>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm bg-background">
-            <option value="all">Todos os Status</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
-          <select value={filterRisco} onChange={e => setFilterRisco(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm bg-background">
-            <option value="all">Todos os Riscos</option>
-            {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-          </select>
-          <select value={filterArquivo} onChange={e => setFilterArquivo(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm bg-background">
-            <option value="all">Todos os Arquivos</option>
-            <option value="com">Com Arquivo</option>
-            <option value="sem">Sem Arquivo</option>
-          </select>
+          {/* Select filters - responsive grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todos os Status</option>
+              {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <select value={filterRisco} onChange={e => setFilterRisco(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todos os Riscos</option>
+              {Object.entries(RISCO_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+            </select>
+            <select value={filterArquivo} onChange={e => setFilterArquivo(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+              <option value="all">Todos os Arquivos</option>
+              <option value="com">Com Arquivo</option>
+              <option value="sem">Sem Arquivo</option>
+            </select>
+          </div>
         </div>
 
         {/* Table */}

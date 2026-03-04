@@ -4576,3 +4576,4 @@
 - [x] Frontend: tela de transferência (escritório → obra)
 - [x] Frontend: tela de estoque por obra com saldo e entregas
 - [x] Integrar fluxo completo: entrada → transferência → entrega → saldo
+- [x] Tornar filtros da tela de Processos Trabalhistas responsivos (busca + selects)
