@@ -61,6 +61,7 @@ const ALL_ROUTES = [
       { path: "/controle-documentos?tab=advertencias", label: "Advertências", icon: "ShieldAlert" },
       { path: "/vale-alimentacao", label: "Vale Alimentação", icon: "UtensilsCrossed" },
       { path: "/solicitacao-he", label: "Solicitação de Hora Extra", icon: "Clock" },
+      { path: "/apontamentos-campo", label: "Apontamentos de Campo", icon: "ClipboardList" },
       { path: "/crachas", label: "Crachás", icon: "CreditCard" },
     ],
   },
@@ -88,6 +89,7 @@ const ALL_ROUTES = [
       { path: "/dashboards/efetivo-obra", label: "Dashboard Efetivo por Obra", icon: "Building2" },
       { path: "/dashboards/perfil-tempo-casa", label: "Dashboard Perfil Tempo de Casa", icon: "UserSearch" },
       { path: "/dashboards/controle-documentos", label: "Dashboard Controle de Documentos", icon: "ShieldCheck" },
+      { path: "/dashboards/apontamentos", label: "Dashboard Apontamentos de Campo", icon: "ClipboardList" },
     ],
   },
   {

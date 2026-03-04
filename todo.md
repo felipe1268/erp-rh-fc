@@ -4536,3 +4536,7 @@
 - [x] Backend: procedure alterarFuncionario (atualiza employeeId e reclamante)
 - [x] Frontend: botão lápis na seção "Partes" para trocar o funcionário vinculado
 - [x] Frontend: dialog de busca por nome/CPF com confirmação (view detalhe + lista)
+
+## Fase 96b: Apontamentos de Campo nas Permissões
+- [x] Adicionar "Apontamentos de Campo" na seção RH & DP - Operacional da tela de Permissões
+- [x] Adicionar "Dashboard Apontamentos de Campo" na seção Dashboards das Permissões
