@@ -1553,37 +1553,37 @@ export default function Epis() {
               <Card className="border-l-4 border-l-blue-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("totalEpis")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Total EPIs</p>
-                  <p className="text-lg font-bold">{stats.totalItens}</p>
+                  <p className="text-lg font-bold">{stats.totalItens.toLocaleString('pt-BR')}</p>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-green-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("estoqueTotal")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Total</p>
-                  <p className="text-lg font-bold">{stats.estoqueTotal}</p>
+                  <p className="text-lg font-bold">{stats.estoqueTotal.toLocaleString('pt-BR')}</p>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-amber-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("estoqueBaixo")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Estoque Baixo</p>
-                  <p className="text-lg font-bold text-amber-600">{stats.estoqueBaixo}</p>
+                  <p className="text-lg font-bold text-amber-600">{stats.estoqueBaixo.toLocaleString('pt-BR')}</p>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-red-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("caVencido")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">CA Vencido</p>
-                  <p className="text-lg font-bold text-red-600">{stats.caVencido}</p>
+                  <p className="text-lg font-bold text-red-600">{stats.caVencido.toLocaleString('pt-BR')}</p>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-purple-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("totalEntregas")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Total Entregas</p>
-                  <p className="text-lg font-bold">{stats.totalEntregas}</p>
+                  <p className="text-lg font-bold">{stats.totalEntregas.toLocaleString('pt-BR')}</p>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-cyan-500 flex-shrink-0 w-[130px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("entregasMes")}>
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground whitespace-nowrap">Entregas/Mês</p>
-                  <p className="text-lg font-bold">{stats.entregasMes}</p>
+                  <p className="text-lg font-bold">{stats.entregasMes.toLocaleString('pt-BR')}</p>
                 </CardContent>
               </Card>
               {!hideEpiValues && <Card className="border-l-4 border-l-emerald-500 flex-shrink-0 w-[150px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" onClick={() => setDrillDown("valorInventario")}>

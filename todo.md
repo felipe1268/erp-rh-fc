@@ -4849,3 +4849,6 @@
 
 ## Rev. 192: Reordenar abas EPIs
 - [x] Mover aba Config para a extrema direita da barra de abas (após Descontos)
+
+## Rev. 192b: Formatação de números
+- [x] Formatar valores numéricos com separador de milhar (pt-BR) nos cards do dashboard EPIs
