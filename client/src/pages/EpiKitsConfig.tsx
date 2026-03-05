@@ -520,7 +520,24 @@ export default function EpiKitsConfig() {
       {/* ============================================================ */}
       {tab === "cores" && (
         <div className="space-y-3">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2 flex-wrap">
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => {
+              const padrao = [
+                { cor: "Branco", hexColor: "#FFFFFF", funcoes: "Engenheiros, Mestres de Obras, Encarregados", descricao: "Liderança e supervisão" },
+                { cor: "Azul", hexColor: "#1E40AF", funcoes: "Pedreiros (alvenaria e estruturas)", descricao: "Serviços de alvenaria" },
+                { cor: "Verde", hexColor: "#16A34A", funcoes: "Serventes, Operários, Téc. Segurança, Armadores", descricao: "Operacional e segurança" },
+                { cor: "Amarelo", hexColor: "#EAB308", funcoes: "Visitantes", descricao: "Identificação de visitantes" },
+                { cor: "Vermelho", hexColor: "#DC2626", funcoes: "Carpinteiros, Bombeiros", descricao: "Carpintaria e combate a incêndio" },
+                { cor: "Laranja", hexColor: "#EA580C", funcoes: "Eletricistas", descricao: "Serviços elétricos" },
+                { cor: "Cinza", hexColor: "#6B7280", funcoes: "Estagiários, Visitantes técnicos", descricao: "Estagiários e visitantes técnicos" },
+                { cor: "Marrom", hexColor: "#92400E", funcoes: "Soldadores", descricao: "Serviços de solda" },
+                { cor: "Preto", hexColor: "#1F2937", funcoes: "Operadores de máquinas pesadas", descricao: "Operação de máquinas" },
+              ];
+              setCoresForm(padrao);
+              toast.success("Padrão NR-6/NR-18 carregado! Edite conforme necessário e clique em Salvar.");
+            }}>
+              <HardHat className="h-3 w-3 mr-1" /> Carregar Padrão NR-6/NR-18
+            </Button>
             <IAButton loading={iaCoresMut.isPending} onClick={() => iaCoresMut.mutate({ companyId })} label="Sugerir Cores com IA" />
           </div>
 

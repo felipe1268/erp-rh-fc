@@ -4841,3 +4841,8 @@
 ## Rev. 191: Card Capacidade no Painel SST
 - [x] Adicionar card de Capacidade de Contratação no Painel SST (painel inicial do módulo)
 - [x] Confirmar fix do filtro por obra na Capacidade — QIU2=0, PALES=0, Geral=38
+
+## Bug: Erro SQL nas sugestões IA + Cores Capacete + Versão ERP
+- [x] Fix: erro SQL "companyId = ? and is null" — removido isNull(epis.deletedAt) pois tabela epis não tem deletedAt
+- [x] Adicionar botão "Carregar Padrão NR-6/NR-18" com 9 cores padrão (Branco, Azul, Verde, Amarelo, Vermelho, Laranja, Cinza, Marrom, Preto)
+- [x] Atualizar versão do ERP para Rev. 191 (05/03/2026)

@@ -2275,7 +2275,7 @@ Forneça sugestões concretas com quantidades específicas.`;
       // Buscar EPIs existentes no catálogo
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
         .from(epis)
-        .where(and(eq(epis.companyId, input.companyId), isNull(epis.deletedAt)));
+        .where(eq(epis.companyId, input.companyId));
       const episUnicos = [...new Set(episCatalogo.map(e => `${e.nome} (${e.categoria || 'EPI'})`))].slice(0, 50);
 
       // Buscar kits já existentes
@@ -2439,7 +2439,7 @@ Considere as funções reais da empresa e o padrão: Branco (engenheiros/mestres
       // Buscar EPIs do catálogo
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
         .from(epis)
-        .where(and(eq(epis.companyId, input.companyId), isNull(epis.deletedAt)));
+        .where(eq(epis.companyId, input.companyId));
       const episUnicos = [...new Map(episCatalogo.map(e => [e.nome.toLowerCase().trim(), e])).values()].slice(0, 50);
 
       const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
@@ -2515,7 +2515,7 @@ Inclua: nome do EPI, categoria, vida útil em meses e observações.`;
       // Buscar EPIs do catálogo
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
         .from(epis)
-        .where(and(eq(epis.companyId, input.companyId), isNull(epis.deletedAt)));
+        .where(eq(epis.companyId, input.companyId));
       const episUnicos = [...new Map(episCatalogo.map(e => [e.nome.toLowerCase().trim(), e])).values()].slice(0, 50);
 
       const funcoes = await db.select({ nome: jobFunctions.nome })
