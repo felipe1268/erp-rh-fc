@@ -1132,13 +1132,29 @@ export default function ControleDocumentos() {
     setShowAsoDialog(false); setAsoForm({}); setEditingAsoId(null);
   };
 
-  const handleSubmitTrein = () => {
+  const handleSubmitTrein = async () => {
     if (!treinForm.employeeId || !treinForm.nome || !treinForm.dataRealizacao) { toast.error("Preencha os campos obrigatórios"); return; }
-    if (editingTreinId) {
-      updateTrein.mutate({ id: editingTreinId, ...treinForm });
-    } else {
-      createTrein.mutate({ companyId, ...treinForm });
-    }
+    const { _file, ...formData } = treinForm;
+    try {
+      let treinId = editingTreinId;
+      if (editingTreinId) {
+        await updateTrein.mutateAsync({ id: editingTreinId, ...formData });
+      } else {
+        const result = await createTrein.mutateAsync({ companyId, ...formData });
+        treinId = (result as any)?.id || null;
+      }
+      if (_file && treinId) {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
+          try {
+            await uploadTreinDoc.mutateAsync({ id: treinId!, fileBase64: base64, fileName: _file.name });
+            toast.success("Certificado anexado com sucesso!");
+          } catch { toast.error("Treinamento salvo, mas erro ao anexar certificado"); }
+        };
+        reader.readAsDataURL(_file);
+      }
+    } catch { toast.error("Erro ao salvar treinamento"); }
     setShowTreinDialog(false); setTreinForm({}); setEditingTreinId(null);
   };
 
@@ -1601,12 +1617,13 @@ export default function ControleDocumentos() {
                         <th className="pb-2 font-medium">Validade</th>
                         <th className="pb-2 font-medium">Status</th>
                         <th className="pb-2 font-medium">Instrutor/Entidade</th>
+                        <th className="pb-2 font-medium">Certificado</th>
                         <th className="pb-2 font-medium">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredTrein.length === 0 ? (
-                        <tr><td colSpan={9} className="py-8 text-center text-muted-foreground">Nenhum treinamento cadastrado</td></tr>
+                        <tr><td colSpan={10} className="py-8 text-center text-muted-foreground">Nenhum treinamento cadastrado</td></tr>
                       ) : filteredTrein.map((t: any) => (
                         <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
                           <td className="py-2">
@@ -1624,6 +1641,15 @@ export default function ControleDocumentos() {
                           <td className="py-2">
                             {t.instrutor && <div className="text-xs">{t.instrutor}</div>}
                             {t.entidade && <div className="text-xs text-muted-foreground">{t.entidade}</div>}
+                          </td>
+                          <td className="py-2">
+                            {t.certificadoUrl ? (
+                              <a href={t.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                                <FileText className="h-3.5 w-3.5" /> Ver
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </td>
                           <td className="py-2">
                             <div className="flex gap-1">
@@ -2076,6 +2102,20 @@ export default function ControleDocumentos() {
             <div className="col-span-2">
               <label className="text-sm font-medium">Observações</label>
               <Textarea value={treinForm.observacoes || ""} onChange={e => setTreinForm({ ...treinForm, observacoes: e.target.value })} rows={2} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm font-medium">Anexar Certificado (PDF/Imagem)</label>
+              <div className="mt-1">
+                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                    setTreinForm({ ...treinForm, _file: file });
+                  }
+                }} />
+                {treinForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {treinForm._file.name}</p>}
+                {editingTreinId && (() => { const trein = treinList.find((t: any) => t.id === editingTreinId); return trein?.certificadoUrl ? <a href={trein.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Ver certificado atual</a> : null; })()}
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">

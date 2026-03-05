@@ -5101,3 +5101,10 @@
 - [x] Quando CONSTRUTORAS selecionado, Configurações (módulos, regras, critérios) usam dados da FC
 - [x] Quando CONSTRUTORAS selecionado, Obras mostra obras de todas empresas do grupo
 - [x] GoldenRulesPanel: corrigido companyId para CONSTRUTORAS
+
+## Rev. 217: Upload de Certificado nos Treinamentos (igual ASO)
+- [x] Campo de upload de certificado (PDF/Imagem) no formulário de Novo/Editar Treinamento
+- [x] Submit handler envia arquivo junto ao salvar (como ASO)
+- [x] Link "Ver certificado atual" ao editar treinamento que já tem certificado
+- [x] Coluna de Certificado na tabela de treinamentos (link para ver)
+- [x] Backend create retorna ID para permitir upload imediato

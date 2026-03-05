@@ -605,7 +605,7 @@ export const controleDocumentosRouter = router({
           else if (diasRestantes <= 30) statusTreinamento = "A_Vencer";
         }
 
-        await db.insert(trainings).values({
+        const [insertResult] = await db.insert(trainings).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
           nome: input.nome,
@@ -618,7 +618,7 @@ export const controleDocumentosRouter = router({
           statusTreinamento,
           observacoes: input.observacoes || null,
         });
-        return { success: true };
+        return { success: true, id: (insertResult as any).insertId };
       }),
 
     update: protectedProcedure
