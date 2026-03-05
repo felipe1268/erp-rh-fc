@@ -4885,3 +4885,9 @@
 
 ## Rev. 195: Atualizar Controle de Revisões
 - [x] Inserir revisões 168 a 194 no banco de dados (27 revisões inseridas)
+
+## Rev. 196: Automatizar inserção de revisões no banco
+- [x] Criar arquivo shared/changelog.ts com todas as revisões em código
+- [x] Criar função syncRevisions() que compara versões do changelog com o banco
+- [x] Chamar syncRevisions() no startup do servidor
+- [x] Testar que novas revisões são inseridas automaticamente (Rev. 195-196 inseridas com sucesso)

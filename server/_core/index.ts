@@ -62,6 +62,8 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    // Sincronizar revisões do changelog com o banco de dados
+    import("../syncRevisions").then(m => m.syncRevisions()).catch(e => console.error("[SyncRevisions] Falha ao iniciar:", e));
     // Iniciar job de verificação automática do DataJud
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
     // Iniciar job de verificação de prazos de rescisão (Art. 477 §6º CLT)
