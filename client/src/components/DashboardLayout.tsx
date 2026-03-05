@@ -34,6 +34,7 @@ import {
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
+  Warehouse,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -167,6 +168,7 @@ const menuSectionsSST: MenuSection[] = [
     title: "Segurança do Trabalho",
     items: [
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
+      { icon: Warehouse, label: "Estoque por Obra", path: "/epis?tab=estoque_obra" },
       { icon: ClipboardList, label: "Checklists EPI", path: "/epis?tab=checklist" },
       { icon: Ban, label: "Descontos EPI", path: "/epis?tab=descontos" },
       { icon: ArrowLeftRight, label: "Transferências EPI", path: "/epis?tab=transferencias" },

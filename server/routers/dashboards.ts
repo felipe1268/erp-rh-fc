@@ -741,7 +741,11 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
     const mesLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
     const entregas = allDel.filter(del => del.dataEntrega?.startsWith(mesKey));
     const unidades = entregas.reduce((s, del) => s + (del.quantidade || 1), 0);
-    const custo = entregas.reduce((s, del) => s + parseFloat(String(del.valorCobrado || '0')), 0);
+    const custo = entregas.reduce((s, del) => {
+      if (del.valorCobrado) return s + parseFloat(String(del.valorCobrado));
+      const ep = allEpis.find(e => e.id === del.epiId);
+      return s + ((ep?.valorProduto ? parseFloat(String(ep.valorProduto)) : 0) * (del.quantidade || 1));
+    }, 0);
     consumoMensal.push({ mes: mesLabel, mesKey, entregas: entregas.length, unidades, custo });
   }
 
@@ -760,7 +764,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
       };
     }
     porEpi[d.epiId].qtd += d.quantidade;
-    porEpi[d.epiId].custo += parseFloat(String(d.valorCobrado || '0'));
+    porEpi[d.epiId].custo += d.valorCobrado ? parseFloat(String(d.valorCobrado)) : (porEpi[d.epiId].valor * d.quantidade);
   }
   const allEpiStats = Object.values(porEpi);
   const topEpis = [...allEpiStats].sort((a, b) => b.qtd - a.qtd).slice(0, 10);
@@ -794,7 +798,9 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
     if (!porFunc[d.employeeId]) porFunc[d.employeeId] = { qtd: 0, entregas: 0, custo: 0 };
     porFunc[d.employeeId].qtd += d.quantidade;
     porFunc[d.employeeId].entregas++;
-    porFunc[d.employeeId].custo += parseFloat(String(d.valorCobrado || '0'));
+    const epiValorFunc = allEpis.find(e => e.id === d.epiId);
+    const custoFunc = d.valorCobrado ? parseFloat(String(d.valorCobrado)) : ((epiValorFunc?.valorProduto ? parseFloat(String(epiValorFunc.valorProduto)) : 0) * d.quantidade);
+    porFunc[d.employeeId].custo += custoFunc;
   }
   const allFuncStats = Object.entries(porFunc)
     .map(([empId, d]) => {
@@ -848,6 +854,9 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
   const taxaReposicao = allDel.length > 0 ? ((totalReposicoes / allDel.length) * 100) : 0;
 
   // Custo por obra (com valor R$)
+  // Mapa de valor unitário por EPI para fallback quando valorCobrado é null
+  const epiValorMap = new Map(allEpis.map(e => [e.id, e.valorProduto ? parseFloat(String(e.valorProduto)) : 0]));
+
   const custoPorObraDetalhado: Record<string, { nome: string; entregas: number; unidades: number; custo: number }> = {};
   allDel.forEach(del => {
     const emp = empMap.get(del.employeeId);
@@ -855,7 +864,9 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
     if (!custoPorObraDetalhado[obraNome]) custoPorObraDetalhado[obraNome] = { nome: obraNome, entregas: 0, unidades: 0, custo: 0 };
     custoPorObraDetalhado[obraNome].entregas++;
     custoPorObraDetalhado[obraNome].unidades += (del.quantidade || 1);
-    custoPorObraDetalhado[obraNome].custo += parseFloat(String(del.valorCobrado || '0'));
+    // Usar valorCobrado se disponível, senão usar valor_produto do EPI * quantidade
+    const custoEntrega = del.valorCobrado ? parseFloat(String(del.valorCobrado)) : (epiValorMap.get(del.epiId) || 0) * (del.quantidade || 1);
+    custoPorObraDetalhado[obraNome].custo += custoEntrega;
   });
   const custoPorObraRanking = Object.values(custoPorObraDetalhado).sort((a, b) => b.unidades - a.unidades);
 
@@ -932,7 +943,11 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
   const valorDescontosPendentes = alertasPendentes.reduce((s, a) => s + parseFloat(String(a.valorTotal || '0')), 0);
 
   // Custo médio por funcionário
-  const totalCusto = allDel.reduce((s, d) => s + parseFloat(String(d.valorCobrado || '0')), 0);
+  const totalCusto = allDel.reduce((s, d) => {
+    const epVal = allEpis.find(e => e.id === d.epiId);
+    const c = d.valorCobrado ? parseFloat(String(d.valorCobrado)) : ((epVal?.valorProduto ? parseFloat(String(epVal.valorProduto)) : 0) * d.quantidade);
+    return s + c;
+  }, 0);
   const funcUnicos = new Set(allDel.map(d => d.employeeId)).size;
   const custoMedioPorFunc = funcUnicos > 0 ? totalCusto / funcUnicos : 0;
 

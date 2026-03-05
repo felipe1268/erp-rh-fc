@@ -5044,3 +5044,11 @@
 - [ ] Indicadores de EPIs consolidados
 - [ ] Filtro por empresa dentro da visão Construtoras
 - [x] Dashboard EPIs adaptado para visão Construtoras (multi-company)
+
+## Rev. 209: Estoque por Obra na Sidebar, Valores por Obra e Inventário PDF
+
+- [x] Adicionar link "Estoque por Obra" na sidebar do módulo SST
+- [x] Corrigir valores R$ 0,00 no custo de EPI por obra (dashboard)
+- [x] Adicionar valor do estoque separado por obra e total geral
+- [x] Implementar impressão do inventário com logo da empresa e LGPD
+- [x] Implementar geração de PDF do inventário com logo e LGPD

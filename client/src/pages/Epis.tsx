@@ -2056,6 +2056,27 @@ export default function Epis() {
 
             {/* Resumo por obra */}
             {estoqueResumo.length > 0 && (
+              <>
+              {/* Total geral de valor em obras */}
+              <Card className="border-emerald-200 bg-emerald-50/50">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-emerald-100 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-emerald-700" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Valor Total em Estoque nas Obras</p>
+                        <p className="text-xl font-bold text-emerald-700">R$ {estoqueResumo.filter((r: any) => filterObraEstoque === "todas" || String(r.obraId) === filterObraEstoque).reduce((s: number, r: any) => s + parseFloat(String(r.valorTotal || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">{estoqueResumo.filter((r: any) => filterObraEstoque === "todas" || String(r.obraId) === filterObraEstoque).reduce((s: number, r: any) => s + (r.totalUnidades || 0), 0)} unid.</p>
+                      <p className="text-xs text-muted-foreground">{estoqueResumo.filter((r: any) => filterObraEstoque === "todas" || String(r.obraId) === filterObraEstoque).length} obra(s)</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {estoqueResumo
                   .filter((r: any) => filterObraEstoque === "todas" || String(r.obraId) === filterObraEstoque)
@@ -2066,6 +2087,7 @@ export default function Epis() {
                         <div>
                           <p className="font-semibold text-sm text-[#1B3A5C]">{r.nomeObra}</p>
                           <p className="text-xs text-muted-foreground mt-1">{r.totalItens} tipo(s) de EPI</p>
+                          <p className="text-xs text-emerald-600 font-medium mt-0.5">R$ {parseFloat(String(r.valorTotal || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                         <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50">
                           {r.totalUnidades} unid.
@@ -2075,6 +2097,7 @@ export default function Epis() {
                   </Card>
                 ))}
               </div>
+              </>
             )}
 
             {/* Tabela detalhada */}
@@ -2104,6 +2127,8 @@ export default function Epis() {
                           <th className="p-3 text-center font-medium">CA</th>
                           <th className="p-3 text-center font-medium">Categoria</th>
                           <th className="p-3 text-center font-medium">Quantidade</th>
+                          <th className="p-3 text-right font-medium">Valor Unit.</th>
+                          <th className="p-3 text-right font-medium">Valor Total</th>
                           <th className="p-3 text-center font-medium">Status</th>
                           <th className="p-3 text-center font-medium">Ações</th>
                         </tr>
@@ -2135,6 +2160,12 @@ export default function Epis() {
                               <Badge variant="outline" className="text-[10px]">{e.categoriaEpi || '—'}</Badge>
                             </td>
                             <td className="p-3 text-center font-bold text-lg">{e.quantidade}</td>
+                            <td className="p-3 text-right text-xs">
+                              {e.valorProdutoEpi ? `R$ ${parseFloat(String(e.valorProdutoEpi)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                            </td>
+                            <td className="p-3 text-right text-xs font-semibold text-emerald-700">
+                              {e.valorProdutoEpi ? `R$ ${(parseFloat(String(e.valorProdutoEpi)) * e.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                            </td>
                             <td className="p-3 text-center">
                               {e.quantidade > 0 ? (
                                 <Badge className="bg-green-100 text-green-700 border-green-300">Disponível</Badge>

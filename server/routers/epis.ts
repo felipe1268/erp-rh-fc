@@ -1103,9 +1103,11 @@ Exemplos de referência:
         nomeObra: obras.nome,
         totalItens: sql<number>`COUNT(DISTINCT ${epiEstoqueObra.epiId})`,
         totalUnidades: sql<number>`SUM(${epiEstoqueObra.quantidade})`,
+        valorTotal: sql<number>`COALESCE(SUM(${epiEstoqueObra.quantidade} * COALESCE(${epis.valorProduto}, 0)), 0)`,
       })
         .from(epiEstoqueObra)
         .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
+        .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
         .where(and(inArray(epiEstoqueObra.companyId, ids), sql`${epiEstoqueObra.quantidade} > 0`))
         .groupBy(epiEstoqueObra.obraId, obras.nome)
         .orderBy(obras.nome);
