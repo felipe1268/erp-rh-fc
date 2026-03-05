@@ -176,6 +176,13 @@
       "when": 1772697142502,
       "tag": "0024_yielding_piledriver",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1772702021502,
+      "tag": "0025_curvy_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

@@ -27,7 +27,7 @@ ChartJS.register(
   ChartDataLabels
 );
 
-// Paleta de cores corporativa FC Engenharia
+// Paleta de cores corporativa do sistema
 export const CHART_COLORS = {
   blue: "#1B4F8A",
   darkBlue: "#0A192F",

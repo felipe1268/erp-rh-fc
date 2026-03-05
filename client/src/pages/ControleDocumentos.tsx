@@ -866,8 +866,12 @@ function DocumentosPanel({ companyId, employees, onClickEmployee }: { companyId:
 }
 
 export default function ControleDocumentos() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, companies } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const selectedCompany = companies?.find((c: any) => String(c.id) === selectedCompanyId);
+  const nomeEmpresaCompleto = selectedCompany?.razaoSocial || selectedCompany?.nomeFantasia || "Empresa";
+  const nomeEmpresaCurto = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
+  const companyLogoUrl = selectedCompany?.logoUrl || "";
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("aso");
 
@@ -1840,7 +1844,7 @@ export default function ControleDocumentos() {
                               {a.tipoAdvertencia !== "Verbal" && <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" title="Imprimir Documento CLT" onClick={() => {
                                 const userName = authUser?.name || authUser?.username || "Usuário";
                                 const dataEmissao = nowBrasilia();
-                                const logoUrl = "https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png";
+                                const logoUrl = companyLogoUrl;
                                 const tipo = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
                                 const tipoTitulo = a.tipoAdvertencia === "Suspensao" ? "SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "RESCISÃO POR JUSTA CAUSA" : a.tipoAdvertencia === "Escrita" ? "ADVERTÊNCIA POR ESCRITO" : "ADVERTÊNCIA VERBAL";
                                 const verbo = a.tipoAdvertencia === "Suspensao" ? "SUSPENDER" : a.tipoAdvertencia === "JustaCausa" ? "COMUNICAR A RESCISÃO POR JUSTA CAUSA de" : "ADVERTIR";
@@ -1880,12 +1884,12 @@ export default function ControleDocumentos() {
                                   .footer .lgpd { color: #dc2626; font-weight: 600; }
                                 </style></head><body>
                                 <div class="logo-bar">
-                                  <img src="${logoUrl}" alt="FC Engenharia" />
-                                  <div class="title"><h1>${tipoTitulo}</h1><p>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</p></div>
+                                  <img src="${logoUrl}" alt="Logo da Empresa" />
+                                  <div class="title"><h1>${tipoTitulo}</h1><p>${nomeEmpresaCompleto}</p></div>
                                   <span class="num-badge">${numAdv}ª MEDIDA</span>
                                 </div>
                                 <div class="doc-body">
-                                  <p>Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
+                                  <p>Pelo presente instrumento, a empresa <strong>${nomeEmpresaCompleto}</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
                                   <div class="motivo-box">${a.motivo}${a.descricao ? "<br/><br/>" + a.descricao : ""}</div>
                                   <p>Ocorrido em <strong>${formatDate(a.dataOcorrencia)}</strong>.</p>
                                   <p style="text-indent:0; font-weight:bold; color:#1e3a6e;">Esta é a ${numAdv}ª medida disciplinar aplicada a este(a) colaborador(a).</p>
@@ -1907,7 +1911,7 @@ export default function ControleDocumentos() {
                                   </div>
                                 </div>
                                 <div class="footer">
-                                  <span>ERP RH & DP — FC Engenharia</span>
+                                  <span>ERP - Gestão Integrada</span>
                                   <span>Documento gerado por: <strong>${userName}</strong> em ${dataEmissao}</span>
                                   <span class="lgpd">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span>
                                 </div>
@@ -2298,7 +2302,7 @@ export default function ControleDocumentos() {
             {/* Header fixo */}
             <div className="bg-[#1e3a6e] text-white px-6 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
-                <img src={logoUrl} alt="FC Engenharia" className="h-12 object-contain" />
+                <img src={logoUrl} alt="Logo da Empresa" className="h-12 object-contain" />
                 <div>
                   <h2 className="text-lg font-bold">{tipoTitulo}</h2>
                   <p className="text-xs text-blue-200">{numAdv}ª medida disciplinar — {a.nomeCompleto}</p>
@@ -2338,12 +2342,12 @@ export default function ControleDocumentos() {
                     .footer .lgpd { color: #dc2626; font-weight: 600; }
                   </style></head><body>
                   <div class="logo-bar">
-                    <img src="${logoUrl}" alt="FC Engenharia" />
-                    <div class="title"><h1>${tipoTitulo}</h1><p>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</p></div>
+                    <img src="${logoUrl}" alt="Logo da Empresa" />
+                    <div class="title"><h1>${tipoTitulo}</h1><p>${nomeEmpresaCompleto}</p></div>
                     <span class="num-badge">${numAdv}ª MEDIDA</span>
                   </div>
                   <div class="doc-body">
-                    <p>Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
+                    <p>Pelo presente instrumento, a empresa <strong>${nomeEmpresaCompleto}</strong>, vem por meio deste ${verbo} o(a) colaborador(a) <strong>${a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>${formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>${a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>${a.setor || "OBRA"}</strong>${a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? `, pelo período de <strong style="color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">${a.diasSuspensao} dia(s)</strong>, a contar de <strong style="color: #dc2626;">${a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong style="color: #dc2626;">${a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,` : ""} pelo seguinte motivo:</p>
                     <div class="motivo-box">${a.motivo}${a.descricao ? "<br/><br/>" + a.descricao : ""}</div>
                     <p>Ocorrido em <strong>${formatDate(a.dataOcorrencia)}</strong>.</p>
                     <p style="text-indent:0; font-weight:bold; color:#1e3a6e;">Esta é a ${numAdv}ª medida disciplinar aplicada a este(a) colaborador(a).</p>
@@ -2365,7 +2369,7 @@ export default function ControleDocumentos() {
                     </div>
                   </div>
                   <div class="footer">
-                    <span>ERP RH & DP — FC Engenharia</span>
+                    <span>ERP - Gestão Integrada</span>
                     <span>Documento gerado por: <strong>${userName}</strong> em ${dataEmissao}</span>
                     <span class="lgpd">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span>
                   </div>
@@ -2392,17 +2396,17 @@ export default function ControleDocumentos() {
               <div className="max-w-[800px] mx-auto bg-white shadow-xl" style={{ fontFamily: "'Times New Roman', serif" }}>
                 {/* Logo bar */}
                 <div className="bg-[#1e3a6e] p-4 flex items-center gap-4">
-                  <img src={logoUrl} alt="FC Engenharia" className="h-14 object-contain" />
+                  <img src={logoUrl} alt="Logo da Empresa" className="h-14 object-contain" />
                   <div className="text-white">
                     <h2 className="text-lg font-bold tracking-widest">{tipoTitulo}</h2>
-                    <p className="text-xs text-blue-200">FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</p>
+                    <p className="text-xs text-blue-200">{nomeEmpresaCompleto}</p>
                   </div>
                   <span className="ml-auto bg-red-600 text-white text-xs font-bold px-3 py-1 rounded">{numAdv}ª MEDIDA</span>
                 </div>
 
                 {/* Corpo do documento */}
                 <div className="p-8 text-justify leading-relaxed text-sm space-y-4">
-                  <p className="indent-10">Pelo presente instrumento, a empresa <strong>FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA</strong>, vem por meio deste {verbo} o(a) colaborador(a) <strong>{a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>{formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>{a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>{a.setor || "OBRA"}</strong>{a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? <>, pelo período de <strong className="text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{a.diasSuspensao} dia(s)</strong>, a contar de <strong className="text-red-600">{a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong className="text-red-600">{a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,</> : null} pelo seguinte motivo:</p>
+                  <p className="indent-10">Pelo presente instrumento, a empresa <strong>{nomeEmpresaCompleto}</strong>, vem por meio deste {verbo} o(a) colaborador(a) <strong>{a.nomeCompleto}</strong>, portador(a) do CPF nº <strong>{formatCPF(a.cpf)}</strong>, ocupante do cargo de <strong>{a.funcao || "N/I"}</strong>, lotado(a) no setor <strong>{a.setor || "OBRA"}</strong>{a.tipoAdvertencia === "Suspensao" && a.diasSuspensao ? <>, pelo período de <strong className="text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{a.diasSuspensao} dia(s)</strong>, a contar de <strong className="text-red-600">{a.dataInicio ? formatDate(a.dataInicio) : '___/___/______'}</strong> até <strong className="text-red-600">{a.dataFim ? formatDate(a.dataFim) : '___/___/______'}</strong>,</> : null} pelo seguinte motivo:</p>
                   
                   <div className="bg-gray-50 border-l-4 border-[#1e3a6e] p-4 italic">
                     <p className="font-semibold">{a.motivo}</p>
@@ -2457,7 +2461,7 @@ export default function ControleDocumentos() {
 
                   {/* Footer LGPD */}
                   <div className="mt-8 pt-3 border-t-2 border-[#1e3a6e] flex justify-between text-[9px] text-gray-500">
-                    <span>ERP RH & DP — FC Engenharia</span>
+                    <span>ERP - Gestão Integrada</span>
                     <span>Documento gerado por: <strong>{authUser?.name || authUser?.username || "Usuário"}</strong> em {nowBrasilia()}</span>
                     <span className="text-red-600 font-semibold">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span>
                   </div>

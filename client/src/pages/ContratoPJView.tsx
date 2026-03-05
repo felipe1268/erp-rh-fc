@@ -136,12 +136,15 @@ export default function ContratoPJView() {
   }
 
   const valorMensal = parseMoney(contrato.valorMensal);
-  const nomeEmpresa = contrato.companyRazaoSocial || selectedCompany?.razaoSocial || selectedCompany?.nomeFantasia || "FC ENGENHARIA PROJETOS E OBRAS LTDA";
+  const nomeEmpresa = contrato.companyRazaoSocial || selectedCompany?.razaoSocial || selectedCompany?.nomeFantasia || "Empresa";
   const cnpjEmpresa = contrato.companyCnpj || selectedCompany?.cnpj || "_______________";
   const enderecoEmpresa = contrato.companyEndereco || selectedCompany?.endereco || "_______________";
   const cidadeEmpresa = contrato.companyCidade || selectedCompany?.cidade || "São José dos Campos";
   const estadoEmpresa = contrato.companyEstado || selectedCompany?.estado || "SP";
   const logoUrl = contrato.companyLogoUrl || (selectedCompany as any)?.logoUrl || null;
+  const telefoneEmpresa = contrato.companyTelefone || (selectedCompany as any)?.telefone || "";
+  const emailEmpresa = contrato.companyEmail || (selectedCompany as any)?.email || "";
+  const siteEmpresa = contrato.companySite || (selectedCompany as any)?.site || "";
   const representante = (selectedCompany as any)?.responsavelLegal || (selectedCompany as any)?.representanteLegal || "_______________";
 
   const nomePrestador = contrato.razaoSocialPrestador || contrato.employeeName || "_______________";
@@ -302,6 +305,19 @@ export default function ContratoPJView() {
               </p>
             )}
           </div>
+
+          {/* RODAPÉ COM DADOS DA EMPRESA */}
+          {(telefoneEmpresa || emailEmpresa || siteEmpresa) && (
+            <div className="mt-12 pt-4 border-t border-gray-300 text-center">
+              <p className="text-[9pt] font-bold text-blue-900 mb-1">{nomeEmpresa}</p>
+              <p className="text-[8pt] text-gray-500">
+                {[telefoneEmpresa && `Tel: ${telefoneEmpresa}`, emailEmpresa && `E-mail: ${emailEmpresa}`, siteEmpresa && `Site: ${siteEmpresa}`].filter(Boolean).join(" | ")}
+              </p>
+              {enderecoEmpresa && enderecoEmpresa !== "_______________" && (
+                <p className="text-[8pt] text-gray-500">{enderecoEmpresa}{cidadeEmpresa ? ` \u2014 ${cidadeEmpresa}/${estadoEmpresa}` : ""}</p>
+              )}
+            </div>
+          )}
 
         </div>
       </div>

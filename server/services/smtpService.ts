@@ -45,7 +45,7 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
   try {
     const transport = getTransporter();
     const info = await transport.sendMail({
-      from: `"FC Engenharia - RH" <${ENV.smtpEmail}>`,
+      from: `"Gestão Integrada - RH" <${ENV.smtpEmail}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,

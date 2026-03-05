@@ -641,7 +641,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
   <div class="sig-line">${pdfData.funcionario.nome}<br/><small>Empregado(a)</small></div>
 </div>
 <div class="footer">
-  <p><strong>Documento gerado por:</strong> ${user?.name || user?.username || 'Usuário não identificado'} | <strong>Data/Hora:</strong> ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | <strong>Sistema:</strong> FC Gestão Integrada</p>
+  <p><strong>Documento gerado por:</strong> ${user?.name || user?.username || 'Usuário não identificado'} | <strong>Data/Hora:</strong> ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | <strong>Sistema:</strong> ERP - Gestão Integrada</p>
   <p>Este documento não substitui o TRCT homologado. Serve como previsão de verbas rescisórias.</p>
   <p style="font-size:7px;color:#aaa;margin-top:4px">Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD). É proibida a reprodução, distribuição ou compartilhamento sem autorização. O uso indevido está sujeito às sanções previstas na legislação vigente.</p>
 </div>

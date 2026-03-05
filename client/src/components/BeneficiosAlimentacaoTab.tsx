@@ -277,7 +277,7 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
               <Input
                 value={form.nome}
                 onChange={e => setForm({ ...form, nome: e.target.value })}
-                placeholder="Ex: Padrão FC Engenharia"
+                placeholder="Ex: Padrão Empresa"
                 className="mt-1"
               />
             </div>

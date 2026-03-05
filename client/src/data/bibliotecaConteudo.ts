@@ -56,11 +56,11 @@ const _ARTIGOS_BASE: Artigo[] = [
     id: "visao-geral",
     categoria: "inicio",
     titulo: "Visão Geral do Sistema",
-    subtitulo: "Conheça o ERP RH & DP da FC Engenharia",
+    subtitulo: "Conheça o ERP - Gestão Integrada",
     resumo: "Entenda a estrutura do sistema, seus módulos e como navegar entre eles.",
     conteudo: `## Visão Geral do Sistema
 
-O **ERP RH & DP** é um sistema integrado de gestão de Recursos Humanos e Departamento Pessoal desenvolvido especificamente para o grupo FC Engenharia. Ele centraliza todas as operações de RH em uma única plataforma.
+O **ERP RH & DP** é um sistema integrado de gestão de Recursos Humanos e Departamento Pessoal que centraliza todas as operações de RH em uma única plataforma.
 
 ### Módulos Disponíveis
 
@@ -160,8 +160,8 @@ Ao fazer login, você é direcionado ao Hub. Cada card representa um módulo:
 ### Voltando ao Hub
 
 Para voltar ao Hub a qualquer momento:
-- Clique no **logo FC** no topo do menu lateral
-- Ou clique no nome **"FC Gestão Integrada"** no cabeçalho do menu`,
+- Clique no **logo** no topo do menu lateral
+- Ou clique no nome **"Gestão Integrada"** no cabeçalho do menu`,
     tags: ["hub", "módulos", "tela inicial", "cards"],
     icone: "Grid2X2",
     ordemCategoria: 3,

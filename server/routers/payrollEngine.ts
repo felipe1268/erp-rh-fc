@@ -2048,7 +2048,7 @@ export const payrollEngineRouter = router({
 
       return {
         empresa: {
-          nome: company.nomeFantasia || company.razaoSocial || "FC Engenharia",
+          nome: company.nomeFantasia || company.razaoSocial || "Empresa",
           cnpj: company.cnpj || "",
           logoUrl: company.logoUrl || "",
         },

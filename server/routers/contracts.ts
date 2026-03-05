@@ -165,6 +165,7 @@ const TEMPLATE_EXPERIENCIA = `<div style="font-family: 'Times New Roman', serif;
 <div style="text-align: center; width: 45%;"><div style="border-top: 1px solid #000; padding-top: 5px;">Nome / CPF</div></div>
 </div>
 </div>
+[RODAPE_EMPRESA]
 
 <div style="page-break-before: always; margin-top: 60px;">
 [CABECALHO_EMPRESA]
@@ -186,6 +187,7 @@ const TEMPLATE_EXPERIENCIA = `<div style="font-family: 'Times New Roman', serif;
 <div style="text-align: center; width: 45%;"><div style="border-top: 1px solid #000; padding-top: 5px;">Nome / CPF</div></div>
 <div style="text-align: center; width: 45%;"><div style="border-top: 1px solid #000; padding-top: 5px;">Nome / CPF</div></div>
 </div>
+[RODAPE_EMPRESA]
 </div>
 </div>
 </div>`;
@@ -246,6 +248,7 @@ const TEMPLATE_INDETERMINADO = `<div style="font-family: 'Times New Roman', seri
 <div style="display: flex; justify-content: space-between; margin-top: 30px;">
 <div style="text-align: center; width: 45%;"><div style="border-top: 1px solid #000; padding-top: 5px;">Nome / CPF</div></div>
 <div style="text-align: center; width: 45%;"><div style="border-top: 1px solid #000; padding-top: 5px;">Nome / CPF</div></div>
+[RODAPE_EMPRESA]
 </div>
 </div>
 </div>`;
@@ -392,6 +395,9 @@ export const contractsRouter = router({
 
       // Gerar cabeçalho com logo da empresa
       const logoUrl = company.logoUrl || "";
+      const telefoneEmpresa = (company as any).telefone || "";
+      const emailEmpresa = (company as any).email || "";
+      const siteEmpresa = (company as any).site || "";
       const cabecalhoEmpresa = logoUrl
         ? `<div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #1B2A4A;">
 <img src="${logoUrl}" alt="Logo" style="max-height: 70px; max-width: 280px; object-fit: contain; margin-bottom: 8px;" />
@@ -403,8 +409,22 @@ export const contractsRouter = router({
 <div style="font-size: 9pt; color: #555;">CNPJ: ${company.cnpj}${company.endereco ? ` | ${company.endereco}` : ""}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>
 </div>`;
 
+      // Gerar rodapé com dados de contato da empresa
+      const rodapeItems: string[] = [];
+      if (telefoneEmpresa) rodapeItems.push(`Tel: ${telefoneEmpresa}`);
+      if (emailEmpresa) rodapeItems.push(`E-mail: ${emailEmpresa}`);
+      if (siteEmpresa) rodapeItems.push(`Site: ${siteEmpresa}`);
+      const rodapeEmpresa = rodapeItems.length > 0
+        ? `<div style="margin-top: 50px; padding-top: 15px; border-top: 1px solid #ccc; text-align: center; font-size: 8pt; color: #777;">
+<div style="font-weight: bold; color: #1B2A4A; font-size: 9pt; margin-bottom: 4px;">${company.razaoSocial}</div>
+<div>${rodapeItems.join(" | ")}</div>
+${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>` : ""}
+</div>`
+        : "";
+
       const placeholders: Record<string, string> = {
         CABECALHO_EMPRESA: cabecalhoEmpresa,
+        RODAPE_EMPRESA: rodapeEmpresa,
         EMPRESA_RAZAO_SOCIAL: company.razaoSocial,
         EMPRESA_CNPJ: company.cnpj,
         EMPRESA_ENDERECO: company.endereco || "",

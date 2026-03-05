@@ -514,10 +514,10 @@ export default function Colaboradores() {
       .footer { margin-top: 30px; border-top: 2px solid #e2e8f0; padding-top: 10px; font-size: 9px; color: #999; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
       .footer .lgpd { font-style: italic; color: #b91c1c; }
     </style></head><body>
-      <div class="header-bar"><div><h1>FC ENGENHARIA PROJETOS E CONSTRUÇÕES</h1><div class="sub">Ficha do Colaborador</div></div><div class="sub">Emitido em: ${dataEmissao}</div></div>
+      <div class="header-bar"><div><h1>${nomeEmpresa}</h1><div class="sub">Ficha do Colaborador</div></div><div class="sub">Emitido em: ${dataEmissao}</div></div>
       ${conteudo}
       <div class="footer">
-        <span>ERP RH & DP — FC Engenharia</span>
+        <span>ERP - Gestão Integrada</span>
         <span>Documento gerado por: <strong>${nomeUsuario}</strong> em ${dataEmissao}</span>
         <span class="lgpd">Este documento contém dados pessoais protegidos pela LGPD (Lei 13.709/2018). Uso restrito e confidencial.</span>
       </div>

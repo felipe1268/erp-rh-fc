@@ -1,0 +1,42 @@
+{
+  "query": "SELECT id, razaoSocial, telefone, email, site, logoUrl FROM companies WHERE deletedAt IS NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, razaoSocial, telefone, email, site, logoUrl FROM companies WHERE deletedAt IS NULL;",
+  "rows": [
+    {
+      "id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "telefone": "(12) 9144-3486",
+      "email": "contato@fcengenharia.com.br",
+      "site": "NULL",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60002-ky8jomx0.jpg"
+    },
+    {
+      "id": "60004",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "telefone": "(12) 3105-5110",
+      "email": "contato@hotelconsagrado.com.br",
+      "site": "NULL",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60004-88491vik.jpg"
+    },
+    {
+      "id": "60005",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "telefone": "(12) 9188-9238",
+      "email": "contato@julioferraz.com.br",
+      "site": "NULL",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60005-8j80b24l.jpg"
+    },
+    {
+      "id": "90001",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "telefone": "(12) 9260-6868",
+      "email": "",
+      "site": "NULL",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/90001-9d8nxsn9.jpg"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\ttelefone\temail\tsite\tlogoUrl\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t(12) 9144-3486\tcontato@fcengenharia.com.br\tNULL\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60002-ky8jomx0.jpg\n60004\tCF HOTELARIA LTDA\t(12) 3105-5110\tcontato@hotelconsagrado.com.br\tNULL\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60004-88491vik.jpg\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t(12) 9188-9238\tcontato@julioferraz.com.br\tNULL\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60005-8j80b24l.jpg\n90001\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\t(12) 9260-6868\t\tNULL\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/90001-9d8nxsn9.jpg\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

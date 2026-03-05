@@ -9,7 +9,7 @@ import { nowBrasilia } from "@/lib/dateUtils";
 export default function PrintHeader({ title }: { title?: string }) {
   const { selectedCompany } = useCompany();
   const logoUrl = selectedCompany?.logoUrl;
-  const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC Engenharia";
+  const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
   const cnpj = selectedCompany?.cnpj || "";
 
   return (
@@ -20,7 +20,7 @@ export default function PrintHeader({ title }: { title?: string }) {
         ) : (
           <img
             src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663028720190/supdCjdqVnpMeKVZ.png"
-            alt="FC Engenharia"
+            alt="Logo da Empresa"
             style={{ height: "48px", objectFit: "contain" }}
           />
         )}

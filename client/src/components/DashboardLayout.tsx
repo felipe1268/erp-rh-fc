@@ -748,10 +748,10 @@ function DashboardLayoutContent({
                     title="Voltar ao Hub de Módulos"
                   >
                     <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#D4A843] to-[#B8922F] flex items-center justify-center shrink-0">
-                      <span className="text-[#1B2A4A] font-black text-[10px]">FC</span>
+                      <span className="text-[#1B2A4A] font-black text-[10px]">GI</span>
                     </div>
                     <span className="font-bold tracking-tight truncate text-[#D4A843] text-sm">
-                      FC Gestão Integrada
+                      Gestão Integrada
                     </span>
                   </button>
                 </div>
@@ -761,7 +761,7 @@ function DashboardLayoutContent({
                   className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#D4A843] to-[#B8922F] flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity"
                   title="Voltar ao Hub de Módulos"
                 >
-                  <span className="text-[#1B2A4A] font-black text-[10px]">FC</span>
+                  <span className="text-[#1B2A4A] font-black text-[10px]">GI</span>
                 </button>
               )}
             </div>

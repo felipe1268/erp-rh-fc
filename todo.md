@@ -4936,3 +4936,33 @@
 - [x] Buscar logo da empresa ativa do banco/S3
 - [x] Exibir logo no cabeçalho do contrato (preview e impressão)
 - [x] Garantir que logo aparece corretamente na impressão A4
+
+## Rev. 201: Logo nos Contratos PJ + Rodapé com Dados da Empresa
+- [x] Adicionar logo da empresa no cabeçalho dos contratos PJ (já existia)
+- [x] Incluir rodapé com telefone, e-mail e site da empresa nos contratos CLT
+- [x] Incluir rodapé com telefone, e-mail e site da empresa nos contratos PJ
+- [x] Adicionar campo "site" na tabela companies e no formulário de empresas
+
+## Rev. 202: Rebranding - Remover FC, tornar sistema genérico "Gestão Integrada"
+- [x] Remover "FC" do nome na sidebar (DashboardLayout)
+- [x] Remover "FC" do ícone na sidebar (trocar por ícone genérico)
+- [x] Alterar título da página para "ERP - Gestão Integrada"
+- [x] Remover referências a "FC" no Home.tsx
+- [x] Verificar e remover "FC" de qualquer outro lugar do frontend
+
+## Rev. 203: Tornar TODOS os documentos dinâmicos por empresa (remover FC hardcoded)
+- [x] ControleDocumentos.tsx - Advertências: remover "FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA" hardcoded
+- [x] ControleDocumentos.tsx - Footer: remover "FC Engenharia" hardcoded
+- [x] ContratoPJView.tsx - Fallback: remover "FC ENGENHARIA" hardcoded
+- [x] Colaboradores.tsx - Impressão: usar nomeEmpresa dinâmico
+- [x] BeneficiosAlimentacaoTab.tsx - Placeholder: remover "FC Engenharia"
+- [x] ChartSetup.tsx - Comentário: remover "FC Engenharia"
+- [x] Notificações por e-mail (backend) - Templates de contratação/demissão: usar empresa dinâmica
+- [x] Verificar server/routers/ para referências FC hardcoded
+- [x] PrintHeader.tsx - Remover logo FC hardcoded como fallback
+- [x] assistenteIA.ts - Remover "FC" do system prompt
+- [x] smtpService.ts - Remover "FC" do remetente de e-mail
+- [x] backupService.ts - Remover "FC" do footer de e-mail
+- [x] bibliotecaConteudo.ts - Remover "FC" dos textos de ajuda
+- [x] payrollEngine.ts - Remover "FC" do fallback de empresa
+- [x] pjContracts.ts - Remover "FC" do comentário

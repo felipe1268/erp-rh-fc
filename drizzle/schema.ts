@@ -399,6 +399,7 @@ export const companies = mysqlTable("companies", {
 	telefone: varchar({ length: 20 }),
 	email: varchar({ length: 320 }),
 	logoUrl: text(),
+	site: varchar({ length: 255 }),
 	isActive: tinyint().default(1).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),

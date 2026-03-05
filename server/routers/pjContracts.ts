@@ -6,7 +6,7 @@ import { eq, and, sql, isNull, desc, asc, lte, gte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
 
-// Modelo de contrato PJ baseado no contrato real da FC Engenharia
+// Modelo de contrato PJ padrão
 const MODELO_CONTRATO_PJ = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS
 
 Pelo presente instrumento particular, as partes abaixo qualificadas:
@@ -166,6 +166,9 @@ export const pjContractsRouter = router({
           companyEstado: companies.estado,
           companyLogoUrl: companies.logoUrl,
           companyNomeFantasia: companies.nomeFantasia,
+          companyTelefone: companies.telefone,
+          companyEmail: companies.email,
+          companySite: companies.site,
         })
         .from(pjContracts)
         .innerJoin(employees, eq(pjContracts.employeeId, employees.id))

@@ -298,7 +298,7 @@ function gerarHtmlBackup(success: boolean, data: any): string {
             <tr><td style="padding: 8px; border-bottom: 1px solid #f3f4f6; font-weight: bold;">Duração</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${(data.duracao / 1000).toFixed(1)}s</td></tr>
           </table>
           ${data.s3Url ? `<p style="margin-top: 16px;"><a href="${data.s3Url}" style="color: #2563eb;">Baixar backup</a></p>` : ""}
-          <p style="color: #6b7280; font-size: 12px; margin-top: 16px;">ERP - Gestão Integrada | FC Engenharia Civil</p>
+          <p style="color: #6b7280; font-size: 12px; margin-top: 16px;">ERP - Gestão Integrada</p>
         </div>
       </div>
     `;
@@ -311,7 +311,7 @@ function gerarHtmlBackup(success: boolean, data: any): string {
         <div style="padding: 20px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
           <p><strong>Erro:</strong> ${data.erro}</p>
           <p><strong>Duração:</strong> ${(data.duracao / 1000).toFixed(1)}s</p>
-          <p style="color: #6b7280; font-size: 12px; margin-top: 16px;">ERP - Gestão Integrada | FC Engenharia Civil</p>
+          <p style="color: #6b7280; font-size: 12px; margin-top: 16px;">ERP - Gestão Integrada</p>
         </div>
       </div>
     `;

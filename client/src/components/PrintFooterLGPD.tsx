@@ -26,7 +26,7 @@ export default function PrintFooterLGPD() {
         lineHeight: "1.6",
       }}>
         <p style={{ margin: 0 }}>
-          <strong>Documento gerado por:</strong> {userName} | <strong>Data/Hora:</strong> {dataHora} | <strong>Sistema:</strong> FC Gestão Integrada
+          <strong>Documento gerado por:</strong> {userName} | <strong>Data/Hora:</strong> {dataHora} | <strong>Sistema:</strong> ERP - Gestão Integrada
         </p>
         <p style={{ margin: "2px 0 0 0", fontSize: "7px", color: "#aaa" }}>
           Este documento contém dados pessoais protegidos pela Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD). 
