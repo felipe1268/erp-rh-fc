@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
-import { formatCPF, formatMoeda } from "@/lib/formatters";
+import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
@@ -261,25 +261,25 @@ export default function ModuloPJ() {
           <Card className="cursor-pointer hover:shadow-md" onClick={() => setStatusFilter("todos")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Total Contratos</p>
-              <p className="text-2xl font-bold">{stats.total}</p>
+              <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-green-500" onClick={() => setStatusFilter("ativo")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Ativos</p>
-              <p className="text-2xl font-bold text-green-600">{stats.ativos}</p>
+              <p className="text-2xl font-bold text-green-600">{fmtNum(stats.ativos)}</p>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-amber-500" onClick={() => setStatusFilter("pendente_assinatura")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Pendentes</p>
-              <p className="text-2xl font-bold text-amber-600">{stats.pendentes}</p>
+              <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.pendentes)}</p>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-gray-500" onClick={() => setStatusFilter("encerrado")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Encerrados</p>
-              <p className="text-2xl font-bold text-gray-600">{stats.encerrados}</p>
+              <p className="text-2xl font-bold text-gray-600">{fmtNum(stats.encerrados)}</p>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-purple-500">

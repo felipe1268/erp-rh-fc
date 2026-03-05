@@ -15,6 +15,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
+import { fmtNum } from "@/lib/formatters";
 
 type FuncaoForm = { nome: string; descricao: string; ordemServico: string; cbo: string };
 const emptyForm: FuncaoForm = { nome: "", descricao: "", ordemServico: "", cbo: "" };
@@ -329,35 +330,35 @@ export default function Funcoes() {
             onClick={() => setActiveFilter("todas")}
             className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "todas" ? "ring-2 ring-[#1B2A4A] bg-[#1B2A4A]/5" : "bg-white hover:bg-gray-50"}`}
           >
-            <div className="text-xl sm:text-2xl font-bold text-[#1B2A4A]">{totalFuncoes}</div>
+            <div className="text-xl sm:text-2xl font-bold text-[#1B2A4A]">{fmtNum(totalFuncoes)}</div>
             <div className="text-[10px] sm:text-xs text-gray-500">Total de Funções</div>
           </button>
           <button
             onClick={() => setActiveFilter(activeFilter === "com_cbo" ? "todas" : "com_cbo")}
             className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "com_cbo" ? "ring-2 ring-green-600 bg-green-50" : "bg-white hover:bg-gray-50"}`}
           >
-            <div className="text-xl sm:text-2xl font-bold text-green-600">{comCBO}</div>
+            <div className="text-xl sm:text-2xl font-bold text-green-600">{fmtNum(comCBO)}</div>
             <div className="text-[10px] sm:text-xs text-gray-500">Com CBO</div>
           </button>
           <button
             onClick={() => setActiveFilter(activeFilter === "com_descricao" ? "todas" : "com_descricao")}
             className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "com_descricao" ? "ring-2 ring-blue-600 bg-blue-50" : "bg-white hover:bg-gray-50"}`}
           >
-            <div className="text-xl sm:text-2xl font-bold text-blue-600">{comDescricao}</div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-600">{fmtNum(comDescricao)}</div>
             <div className="text-[10px] sm:text-xs text-gray-500">Com Descrição</div>
           </button>
           <button
             onClick={() => setActiveFilter(activeFilter === "com_os" ? "todas" : "com_os")}
             className={`border rounded-lg p-2 sm:p-3 text-center transition-all ${activeFilter === "com_os" ? "ring-2 ring-amber-600 bg-amber-50" : "bg-white hover:bg-gray-50"}`}
           >
-            <div className="text-xl sm:text-2xl font-bold text-amber-600">{comOS}</div>
+            <div className="text-xl sm:text-2xl font-bold text-amber-600">{fmtNum(comOS)}</div>
             <div className="text-[10px] sm:text-xs text-gray-500">Com Ordem de Serviço</div>
           </button>
           <button
             onClick={() => setActiveFilter("incompletas")}
             className={`border rounded-lg p-2 sm:p-3 text-center transition-all col-span-2 sm:col-span-1 ${activeFilter === "incompletas" ? "ring-2 ring-red-600 bg-red-50" : "bg-white hover:bg-gray-50"}`}
           >
-            <div className="text-xl sm:text-2xl font-bold text-red-600">{incompletas}</div>
+            <div className="text-xl sm:text-2xl font-bold text-red-600">{fmtNum(incompletas)}</div>
             <div className="text-[10px] sm:text-xs text-gray-500 flex items-center justify-center gap-1">
               <AlertTriangle className="w-3 h-3" /> Incompletas
             </div>

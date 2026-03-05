@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
-import { formatCPF, formatMoeda } from "@/lib/formatters";
+import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
@@ -108,19 +108,19 @@ function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirDa
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
                 <p className="text-xs text-blue-600 font-semibold uppercase">Total Períodos</p>
-                <p className="text-2xl font-bold text-blue-700">{data.resumo.totalPeriodos}</p>
+                <p className="text-2xl font-bold text-blue-700">{fmtNum(data.resumo.totalPeriodos)}</p>
               </div>
               <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
                 <p className="text-xs text-green-600 font-semibold uppercase">Registrados</p>
-                <p className="text-2xl font-bold text-green-700">{data.resumo.totalRegistrados}</p>
+                <p className="text-2xl font-bold text-green-700">{fmtNum(data.resumo.totalRegistrados)}</p>
               </div>
               <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
                 <p className="text-xs text-amber-600 font-semibold uppercase">Não Registrados</p>
-                <p className="text-2xl font-bold text-amber-700">{data.resumo.totalNaoRegistrados}</p>
+                <p className="text-2xl font-bold text-amber-700">{fmtNum(data.resumo.totalNaoRegistrados)}</p>
               </div>
               <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
                 <p className="text-xs text-red-600 font-semibold uppercase">Vencidas</p>
-                <p className="text-2xl font-bold text-red-700">{data.resumo.totalVencidas}</p>
+                <p className="text-2xl font-bold text-red-700">{fmtNum(data.resumo.totalVencidas)}</p>
               </div>
               <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
                 <p className="text-xs text-purple-600 font-semibold uppercase">Valor Estimado</p>
@@ -548,31 +548,31 @@ export default function Ferias() {
           <Card className="cursor-pointer hover:shadow-md" onClick={() => setStatusFilter("todos")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Total</p>
-              <p className="text-2xl font-bold">{stats.total}</p>
+              <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-amber-500" onClick={() => setStatusFilter("pendente")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Férias a Vencer</p>
-              <p className="text-2xl font-bold text-amber-600">{stats.pendentes}</p>
+              <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.pendentes)}</p>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-blue-500" onClick={() => setStatusFilter("agendada")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Agendadas</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.agendadas}</p>
+              <p className="text-2xl font-bold text-blue-600">{fmtNum(stats.agendadas)}</p>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-red-500" onClick={() => { setStatusFilter("vencida"); setTab("vencidas"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Vencidas</p>
-              <p className="text-2xl font-bold text-red-600">{stats.vencidas}</p>
+              <p className="text-2xl font-bold text-red-600">{fmtNum(stats.vencidas)}</p>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-green-500" onClick={() => setStatusFilter("em_gozo")}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Em Gozo</p>
-              <p className="text-2xl font-bold text-green-600">{stats.emGozo}</p>
+              <p className="text-2xl font-bold text-green-600">{fmtNum(stats.emGozo)}</p>
             </CardContent>
           </Card>
         </div>

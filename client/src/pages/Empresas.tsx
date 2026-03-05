@@ -15,7 +15,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useCallback, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { useDefaultCompany } from "@/hooks/useDefaultCompany";
-import { formatCNPJ, formatTelefone } from "@/lib/formatters";
+import { formatCNPJ, formatTelefone, fmtNum } from "@/lib/formatters";
 
 type CompanyForm = {
   cnpj: string;
@@ -513,7 +513,7 @@ export default function Empresas() {
                       </div>
                       <div>
                         <CardTitle className="text-sm font-semibold">{c.nomeFantasia || c.razaoSocial}</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">{formatCNPJ(c.cnpj)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{fmtNum(formatCNPJ(c.cnpj))}</p>
                       </div>
                     </div>
                     <div className="flex gap-1">
@@ -694,19 +694,19 @@ export default function Empresas() {
               {/* Summary cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-muted/50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">{docsSummary.total}</p>
+                  <p className="text-2xl font-bold">{fmtNum(docsSummary.total)}</p>
                   <p className="text-xs text-muted-foreground">Total</p>
                 </div>
                 <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-green-600">{docsSummary.vigentes}</p>
+                  <p className="text-2xl font-bold text-green-600">{fmtNum(docsSummary.vigentes)}</p>
                   <p className="text-xs text-green-600">Vigentes</p>
                 </div>
                 <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-red-600">{docsSummary.vencidos}</p>
+                  <p className="text-2xl font-bold text-red-600">{fmtNum(docsSummary.vencidos)}</p>
                   <p className="text-xs text-red-600">Vencidos</p>
                 </div>
                 <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-amber-600">{docsSummary.pendentes}</p>
+                  <p className="text-2xl font-bold text-amber-600">{fmtNum(docsSummary.pendentes)}</p>
                   <p className="text-xs text-amber-600">Pendentes</p>
                 </div>
               </div>

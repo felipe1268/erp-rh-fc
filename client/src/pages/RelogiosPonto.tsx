@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Badge } from "@/components/ui/badge";
 import { removeAccents } from "@/lib/searchUtils";
+import { fmtNum } from "@/lib/formatters";
 
 type SnForm = {
   sn: string;
@@ -169,7 +170,7 @@ export default function RelogiosPonto() {
                   <Clock className="h-5 w-5 text-blue-700" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{sns.length}</p>
+                  <p className="text-2xl font-bold">{fmtNum(sns.length)}</p>
                   <p className="text-xs text-muted-foreground">Total de Relógios</p>
                 </div>
               </CardContent>
@@ -185,7 +186,7 @@ export default function RelogiosPonto() {
                   <Wifi className="h-5 w-5 text-green-700" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{ativos}</p>
+                  <p className="text-2xl font-bold">{fmtNum(ativos)}</p>
                   <p className="text-xs text-muted-foreground">Ativos</p>
                 </div>
               </CardContent>
@@ -201,7 +202,7 @@ export default function RelogiosPonto() {
                   <WifiOff className="h-5 w-5 text-red-700" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{inativos}</p>
+                  <p className="text-2xl font-bold">{fmtNum(inativos)}</p>
                   <p className="text-xs text-muted-foreground">Inativos</p>
                 </div>
               </CardContent>

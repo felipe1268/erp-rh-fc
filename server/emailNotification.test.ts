@@ -54,15 +54,14 @@ describe("Email Notification Templates", () => {
       expect(corpo).toContain("URGÊNCIA");
     });
 
-    it("deve incluir rodapé com Departamento Pessoal e dados da empresa", () => {
+    it("deve incluir rodapé com assinatura do sistema", () => {
       const { corpo } = gerarTextoNotificacao("demissao", {
         ...dadosFuncionario,
         dataDesligamento: "2026-02-22",
       }, companyData);
       
-      expect(corpo).toContain("Departamento Pessoal");
-      expect(corpo).toContain("dp@fcengenharia.com.br");
-      expect(corpo).toContain("(11) 1234-5678");
+      expect(corpo).toContain("Atenciosamente");
+      expect(corpo).toContain("Sistema de Gestão de Pessoas");
     });
 
     it("deve formatar CPF corretamente", () => {
@@ -133,7 +132,7 @@ describe("Email Notification Templates", () => {
       });
       
       expect(titulo).toContain("FC ENGENHARIA");
-      expect(corpo).toContain("Departamento Pessoal");
+      expect(corpo).toContain("Atenciosamente");
     });
   });
 

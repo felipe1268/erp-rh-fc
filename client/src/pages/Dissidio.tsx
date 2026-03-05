@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { TrendingUp, Plus, Play, CheckCircle2, AlertTriangle, Users, DollarSign, Calendar, FileText, Loader2, Eye, Pencil } from "lucide-react";
+import { fmtNum } from "@/lib/formatters";
 
 type ViewMode = "lista" | "detalhes" | "simular" | "aplicar";
 
@@ -378,7 +379,7 @@ export default function Dissidio() {
           <Card>
             <CardContent className="pt-4 text-center">
               <Users className="w-8 h-8 mx-auto mb-2 text-blue-600" />
-              <p className="text-2xl font-bold">{detalhes.funcionarios?.length || 0}</p>
+              <p className="text-2xl font-bold">{fmtNum(detalhes.funcionarios?.length || 0)}</p>
               <p className="text-xs text-muted-foreground">Funcionários Aplicados</p>
             </CardContent>
           </Card>
@@ -477,7 +478,7 @@ export default function Dissidio() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-blue-200">
             <CardContent className="pt-4 text-center">
-              <p className="text-3xl font-bold text-blue-600">{simulacao.resumo.totalFuncionarios}</p>
+              <p className="text-3xl font-bold text-blue-600">{fmtNum(simulacao.resumo.totalFuncionarios)}</p>
               <p className="text-xs text-muted-foreground">Funcionários Elegíveis</p>
             </CardContent>
           </Card>

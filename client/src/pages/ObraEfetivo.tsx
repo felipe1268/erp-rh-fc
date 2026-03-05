@@ -22,6 +22,7 @@ import {
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { fmtNum } from "@/lib/formatters";
 
 export default function ObraEfetivo() {
   const { selectedCompanyId } = useCompany();
@@ -289,7 +290,7 @@ export default function ObraEfetivo() {
                   <Users className="h-5 w-5 text-blue-700" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{totalAlocados}</p>
+                  <p className="text-2xl font-bold">{fmtNum(totalAlocados)}</p>
                   <p className="text-xs text-muted-foreground">Alocados</p>
                 </div>
               </div>
@@ -302,7 +303,7 @@ export default function ObraEfetivo() {
                   <Building2 className="h-5 w-5 text-green-700" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{totalObrasComEfetivo}</p>
+                  <p className="text-2xl font-bold">{fmtNum(totalObrasComEfetivo)}</p>
                   <p className="text-xs text-muted-foreground">Obras com Efetivo</p>
                 </div>
               </div>
@@ -315,7 +316,7 @@ export default function ObraEfetivo() {
                   <UserMinus className="h-5 w-5 text-amber-700" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{totalSemObra}</p>
+                  <p className="text-2xl font-bold">{fmtNum(totalSemObra)}</p>
                   <p className="text-xs text-muted-foreground">Sem Obra</p>
                 </div>
               </div>
@@ -328,7 +329,7 @@ export default function ObraEfetivo() {
                   <AlertTriangle className={`h-5 w-5 ${inconsistenciasCount > 0 ? "text-red-700" : "text-gray-500"}`} />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{inconsistenciasCount}</p>
+                  <p className="text-2xl font-bold">{fmtNum(inconsistenciasCount)}</p>
                   <p className="text-xs text-muted-foreground">Inconsistências</p>
                 </div>
               </div>
@@ -403,7 +404,7 @@ export default function ObraEfetivo() {
                       <div className="flex items-center justify-between pt-3 border-t">
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-[#1B2A4A]" />
-                          <span className="text-2xl font-bold text-[#1B2A4A]">{(item as any).efetivo || 0}</span>
+                          <span className="text-2xl font-bold text-[#1B2A4A]">{fmtNum((item as any).efetivo || 0)}</span>
                           <span className="text-sm text-muted-foreground">funcionários</span>
                         </div>
                         <ChevronRight className="h-5 w-5 text-muted-foreground" />

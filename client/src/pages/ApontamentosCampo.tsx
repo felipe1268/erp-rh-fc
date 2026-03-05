@@ -15,6 +15,7 @@ import {
   AlertCircle, Archive, Zap, MapPin
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { fmtNum } from "@/lib/formatters";
 
 const TIPO_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   falta: { label: "Falta", color: "bg-red-100 text-red-700", icon: AlertCircle },
@@ -214,7 +215,7 @@ export default function ApontamentosCampo() {
             <CardContent className="p-3 text-center">
               <div className="flex items-center justify-center gap-2">
                 <Clock className="h-5 w-5 text-yellow-600" />
-                <span className="text-2xl font-bold text-yellow-700">{stats.pendente}</span>
+                <span className="text-2xl font-bold text-yellow-700">{fmtNum(stats.pendente)}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Pendentes</p>
               {stats.urgentes > 0 && (
@@ -227,7 +228,7 @@ export default function ApontamentosCampo() {
             <CardContent className="p-3 text-center">
               <div className="flex items-center justify-center gap-2">
                 <Eye className="h-5 w-5 text-blue-600" />
-                <span className="text-2xl font-bold text-blue-700">{stats.em_analise}</span>
+                <span className="text-2xl font-bold text-blue-700">{fmtNum(stats.em_analise)}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Em Análise</p>
             </CardContent>
@@ -237,7 +238,7 @@ export default function ApontamentosCampo() {
             <CardContent className="p-3 text-center">
               <div className="flex items-center justify-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <span className="text-2xl font-bold text-green-700">{stats.resolvido}</span>
+                <span className="text-2xl font-bold text-green-700">{fmtNum(stats.resolvido)}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Resolvidos</p>
             </CardContent>
@@ -247,7 +248,7 @@ export default function ApontamentosCampo() {
             <CardContent className="p-3 text-center">
               <div className="flex items-center justify-center gap-2">
                 <ClipboardList className="h-5 w-5 text-gray-600" />
-                <span className="text-2xl font-bold text-gray-700">{stats.total}</span>
+                <span className="text-2xl font-bold text-gray-700">{fmtNum(stats.total)}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Todos</p>
             </CardContent>

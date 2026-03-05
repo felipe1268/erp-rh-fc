@@ -697,7 +697,7 @@ function KpiCard({ title, value, icon: Icon, color, onClick, badge, badgeColor, 
           {badge ? <Badge className={`text-[9px] ${badgeColor === "red" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>{badge}</Badge> : null}
         </div>
         <div>
-          <p className={`text-2xl font-bold ${c.text}`}>{value}</p>
+          <p className={`text-2xl font-bold ${c.text}`}>{typeof value === 'number' ? value.toLocaleString('pt-BR') : value}</p>
           <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{title}</p>
         </div>
       </CardContent>

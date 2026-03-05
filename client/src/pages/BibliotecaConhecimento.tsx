@@ -20,6 +20,7 @@ import {
 } from "@/data/bibliotecaConteudo";
 import { Streamdown } from "@/components/LazyStreamdown";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { fmtNum } from "@/lib/formatters";
 
 // Mapa de ícones por nome
 const ICON_MAP: Record<string, any> = {
@@ -342,11 +343,11 @@ function HomeView({
       {/* Quick Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="bg-card border border-border rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-primary">{ARTIGOS.length}</p>
+          <p className="text-2xl font-bold text-primary">{fmtNum(ARTIGOS.length)}</p>
           <p className="text-xs text-muted-foreground">Artigos</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-primary">{Object.keys(CATEGORIAS).length}</p>
+          <p className="text-2xl font-bold text-primary">{fmtNum(Object.keys(CATEGORIAS).length)}</p>
           <p className="text-xs text-muted-foreground">Categorias</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-3 text-center">
@@ -381,7 +382,7 @@ function HomeView({
                   <h3 className="font-semibold text-foreground text-sm group-hover:text-primary transition-colors">
                     {cat.label}
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{cat.descricao}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{fmtNum(cat.descricao)}</p>
                   <p className="text-[10px] text-muted-foreground/70 mt-1.5">
                     {artigos.length} artigo{artigos.length !== 1 ? "s" : ""}
                   </p>

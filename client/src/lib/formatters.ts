@@ -1,7 +1,16 @@
 /**
  * Funções de formatação de documentos brasileiros.
  * REGRA PERMANENTE: Todos os números de documentos devem ser exibidos formatados.
+ * REGRA PERMANENTE: Todos os números inteiros (contadores, totais) devem usar separador de milhar pt-BR.
  */
+
+/** Formata número inteiro com separador de milhar brasileiro (ex: 1.242) */
+export function fmtNum(val: unknown): string {
+  if (val === null || val === undefined) return "0";
+  const n = typeof val === 'number' ? val : Number(val);
+  if (isNaN(n)) return String(val);
+  return n.toLocaleString('pt-BR');
+}
 
 /** CPF: 000.000.000-00 */
 export function formatCPF(val: unknown): string {

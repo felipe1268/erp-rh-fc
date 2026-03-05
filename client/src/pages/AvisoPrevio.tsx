@@ -13,7 +13,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
-import { formatCPF, formatMoeda } from "@/lib/formatters";
+import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
@@ -278,7 +278,7 @@ export default function AvisoPrevio() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Total</p>
-                  <p className="text-2xl font-bold">{stats.total}</p>
+                  <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
                   <p className="text-xs text-muted-foreground mt-1 font-medium">{formatMoeda(stats.valorTotal)}</p>
                 </div>
                 <FileText className="h-8 w-8 text-gray-400" />
@@ -290,7 +290,7 @@ export default function AvisoPrevio() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Em Andamento</p>
-                  <p className="text-2xl font-bold text-blue-600">{stats.emAndamento}</p>
+                  <p className="text-2xl font-bold text-blue-600">{fmtNum(stats.emAndamento)}</p>
                   <p className="text-xs text-blue-600/70 mt-1 font-medium">{formatMoeda(stats.valorEmAndamento)}</p>
                 </div>
                 <Timer className="h-8 w-8 text-blue-400" />
@@ -302,7 +302,7 @@ export default function AvisoPrevio() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Concluídos</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.concluidos}</p>
+                  <p className="text-2xl font-bold text-green-600">{fmtNum(stats.concluidos)}</p>
                   <p className="text-xs text-green-600/70 mt-1 font-medium">{formatMoeda(stats.valorConcluidos)}</p>
                 </div>
                 <CheckCircle2 className="h-8 w-8 text-green-400" />
@@ -314,7 +314,7 @@ export default function AvisoPrevio() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Cancelados</p>
-                  <p className="text-2xl font-bold text-red-600">{stats.cancelados}</p>
+                  <p className="text-2xl font-bold text-red-600">{fmtNum(stats.cancelados)}</p>
                 </div>
                 <Ban className="h-8 w-8 text-red-400" />
               </div>

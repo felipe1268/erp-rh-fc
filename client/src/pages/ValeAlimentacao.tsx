@@ -23,7 +23,7 @@ import {
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
-import { formatCPF } from "@/lib/formatters";
+import { formatCPF, fmtNum } from "@/lib/formatters";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 type TabKey = "lancamento" | "configuracao" | "historico";
@@ -305,7 +305,7 @@ export default function ValeAlimentacao() {
                       <Users className="h-5 w-5 text-orange-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{stats?.totalLancamentos || 0}</p>
+                      <p className="text-2xl font-bold">{fmtNum(stats?.totalLancamentos || 0)}</p>
                       <p className="text-xs text-muted-foreground">Beneficiários</p>
                     </div>
                   </div>
@@ -331,7 +331,7 @@ export default function ValeAlimentacao() {
                       <AlertTriangle className="h-5 w-5 text-amber-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{stats?.pendentes || 0}</p>
+                      <p className="text-2xl font-bold">{fmtNum(stats?.pendentes || 0)}</p>
                       <p className="text-xs text-muted-foreground">Pendentes</p>
                     </div>
                   </div>
@@ -344,7 +344,7 @@ export default function ValeAlimentacao() {
                       <CheckCircle className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{(stats?.aprovados || 0) + (stats?.pagos || 0)}</p>
+                      <p className="text-2xl font-bold">{fmtNum((stats?.aprovados || 0) + (stats?.pagos || 0))}</p>
                       <p className="text-xs text-muted-foreground">Aprovados/Pagos</p>
                     </div>
                   </div>

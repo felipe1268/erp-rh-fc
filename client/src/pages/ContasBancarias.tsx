@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Badge } from "@/components/ui/badge";
 import { removeAccents } from "@/lib/searchUtils";
+import { fmtNum } from "@/lib/formatters";
 
 type ContaForm = {
   banco: string;
@@ -182,7 +183,7 @@ export default function ContasBancarias() {
                 <CreditCard className="h-5 w-5 text-blue-700" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{contas.length}</p>
+                <p className="text-2xl font-bold">{fmtNum(contas.length)}</p>
                 <p className="text-xs text-muted-foreground">Total de Contas</p>
               </div>
             </CardContent>
@@ -193,7 +194,7 @@ export default function ContasBancarias() {
                 <CheckCircle2 className="h-5 w-5 text-green-700" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{ativas}</p>
+                <p className="text-2xl font-bold">{fmtNum(ativas)}</p>
                 <p className="text-xs text-muted-foreground">Ativas</p>
               </div>
             </CardContent>
@@ -204,7 +205,7 @@ export default function ContasBancarias() {
                 <XCircle className="h-5 w-5 text-red-700" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{inativas}</p>
+                <p className="text-2xl font-bold">{fmtNum(inativas)}</p>
                 <p className="text-xs text-muted-foreground">Inativas</p>
               </div>
             </CardContent>

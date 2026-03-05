@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { fmtNum } from "@/lib/formatters";
 import {
   Clock, Plus, CheckCircle, XCircle, AlertTriangle, Send,
   Calendar, Users, Building2, FileText, Loader2, Eye, RotateCcw, MessageSquare, Trash2,
@@ -268,25 +269,25 @@ export default function SolicitacaoHE() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card className="border-l-4 border-l-yellow-500">
             <CardContent className="p-3 md:p-4">
-              <div className="text-xl md:text-2xl font-bold text-yellow-600">{countsQuery.data?.pendentes || 0}</div>
+              <div className="text-xl md:text-2xl font-bold text-yellow-600">{fmtNum(countsQuery.data?.pendentes || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Pendentes</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-green-500">
             <CardContent className="p-3 md:p-4">
-              <div className="text-xl md:text-2xl font-bold text-green-600">{countsQuery.data?.aprovadas || 0}</div>
+              <div className="text-xl md:text-2xl font-bold text-green-600">{fmtNum(countsQuery.data?.aprovadas || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Aprovadas</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-red-500">
             <CardContent className="p-3 md:p-4">
-              <div className="text-xl md:text-2xl font-bold text-red-600">{countsQuery.data?.rejeitadas || 0}</div>
+              <div className="text-xl md:text-2xl font-bold text-red-600">{fmtNum(countsQuery.data?.rejeitadas || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Rejeitadas</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-blue-500">
             <CardContent className="p-3 md:p-4">
-              <div className="text-xl md:text-2xl font-bold text-blue-600">{countsQuery.data?.total || 0}</div>
+              <div className="text-xl md:text-2xl font-bold text-blue-600">{fmtNum(countsQuery.data?.total || 0)}</div>
               <div className="text-[10px] md:text-xs text-muted-foreground">Total</div>
             </CardContent>
           </Card>

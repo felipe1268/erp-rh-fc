@@ -4852,3 +4852,19 @@
 
 ## Rev. 192b: Formatação de números
 - [x] Formatar valores numéricos com separador de milhar (pt-BR) nos cards do dashboard EPIs
+
+## Rev. 192: Formatação pt-BR em todos os módulos + Fix Aniversariantes
+- [x] Criar função utilitária fmtNum() centralizada em formatters.ts
+- [x] Aplicar fmtNum() em 27 arquivos (110+ valores numéricos) — KPI cards, stats, contadores
+- [x] Aplicar formatação pt-BR no módulo RH & DP (PainelRH, Home)
+- [x] Aplicar formatação pt-BR no módulo SST (PainelSST)
+- [x] Aplicar formatação pt-BR no módulo Jurídico (PainelJuridico já tinha)
+- [x] Aplicar formatação pt-BR em AvisoPrevio, Configuracoes, ControleDocumentos, ConvencoesColetivas
+- [x] Aplicar formatação pt-BR em FechamentoPonto, Ferias, FolhaPagamento, Funcoes
+- [x] Aplicar formatação pt-BR em ModuloPJ, ObraEfetivo, ProcessosTrabalhistas, ValeAlimentacao
+- [x] Aplicar formatação pt-BR em DixiPonto, Dissidio, EpiValidade, EpiEstoqueMinimo
+- [x] Aplicar formatação pt-BR em ApontamentosCampo, BibliotecaConhecimento, CipaCompleta
+- [x] Aplicar formatação pt-BR em ContasBancarias, Empresas, RelogiosPonto, SolicitacaoHE
+- [x] Aplicar formatação pt-BR em RaioXFuncionario, PJMedicoes
+- [x] Corrigir bug aniversariantes: usar timezone America/Sao_Paulo (GMT-3) no backend homeData.ts
+- [x] Atualizar versão do ERP para Rev. 192 (05/03/2026)

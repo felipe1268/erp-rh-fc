@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { formatCPF } from "@/lib/formatters";
+import { formatCPF, fmtNum } from "@/lib/formatters";
 import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
@@ -91,7 +91,7 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-red-600">{stats.vencidos}</p>
+                <p className="text-2xl font-bold text-red-600">{fmtNum(stats.vencidos)}</p>
                 <p className="text-xs text-muted-foreground">Vencidos</p>
               </div>
             </div>
@@ -104,7 +104,7 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
                 <Clock className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-yellow-600">{stats.aVencer30}</p>
+                <p className="text-2xl font-bold text-yellow-600">{fmtNum(stats.aVencer30)}</p>
                 <p className="text-xs text-muted-foreground">Vence em 30 dias</p>
               </div>
             </div>
@@ -117,7 +117,7 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
                 <Calendar className="h-5 w-5 text-orange-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-orange-600">{stats.aVencer60}</p>
+                <p className="text-2xl font-bold text-orange-600">{fmtNum(stats.aVencer60)}</p>
                 <p className="text-xs text-muted-foreground">Vence em 60 dias</p>
               </div>
             </div>
@@ -130,7 +130,7 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
                 <Shield className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-green-600">{stats.validos}</p>
+                <p className="text-2xl font-bold text-green-600">{fmtNum(stats.validos)}</p>
                 <p className="text-xs text-muted-foreground">Válidos</p>
               </div>
             </div>
@@ -1416,7 +1416,7 @@ export default function ControleDocumentos() {
                   <div className={`h-9 w-9 rounded-lg bg-${c.color}-100 flex items-center justify-center shrink-0`}>
                     <c.icon className={`h-4 w-4 text-${c.color}-600`} />
                   </div>
-                  <p className={`text-xl font-bold leading-none ${c.color === "red" || c.color === "yellow" || c.color === "rose" ? `text-${c.color}-600` : ""}`}>{c.value}</p>
+                  <p className={`text-xl font-bold leading-none ${c.color === "red" || c.color === "yellow" || c.color === "rose" ? `text-${c.color}-600` : ""}`}>{fmtNum(c.value)}</p>
                   <p className="text-[11px] text-muted-foreground leading-tight">{c.label}</p>
                 </div>
               </CardContent>

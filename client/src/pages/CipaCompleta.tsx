@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
-import { formatCPF } from "@/lib/formatters";
+import { formatCPF, fmtNum } from "@/lib/formatters";
 import {
   Shield, Plus, Search, Calendar, Users, Trash2, Pencil, Eye, X,
   AlertTriangle, CheckCircle2, Clock, CalendarDays, UserCheck,
@@ -156,7 +156,7 @@ export default function CipaCompleta() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Funcionários Ativos:</span>
-                    <span className="font-bold ml-1">{necessidade.numFuncionarios}</span>
+                    <span className="font-bold ml-1">{fmtNum(necessidade.numFuncionarios)}</span>
                   </div>
                   {necessidade.necessaria && (
                     <>
@@ -198,7 +198,7 @@ export default function CipaCompleta() {
                   <CardTitle className="text-sm flex items-center gap-2"><Vote className="h-4 w-4 text-blue-600" /> Mandatos</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{(eleicoes as any[]).length}</p>
+                  <p className="text-3xl font-bold">{fmtNum((eleicoes as any[]).length)}</p>
                   <p className="text-xs text-muted-foreground">Total de mandatos registrados</p>
                 </CardContent>
               </Card>
@@ -216,7 +216,7 @@ export default function CipaCompleta() {
                   <CardTitle className="text-sm flex items-center gap-2"><CalendarDays className="h-4 w-4 text-amber-600" /> Reuniões</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{(reunioes as any[]).length}</p>
+                  <p className="text-3xl font-bold">{fmtNum((reunioes as any[]).length)}</p>
                   <p className="text-xs text-muted-foreground">Total de reuniões</p>
                 </CardContent>
               </Card>

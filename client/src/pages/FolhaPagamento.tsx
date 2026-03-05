@@ -22,6 +22,7 @@ import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Textarea } from "@/components/ui/textarea";
+import { fmtNum } from "@/lib/formatters";
 
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -1388,7 +1389,7 @@ export default function FolhaPagamento() {
           {/* RESUMO CARDS */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-orange-700">{valeResult.totalFuncionarios}</p>
+              <p className="text-2xl font-bold text-orange-700">{fmtNum(valeResult.totalFuncionarios)}</p>
               <p className="text-xs text-muted-foreground">Funcionários</p>
             </CardContent></Card>
             <Card><CardContent className="p-4 text-center">
@@ -1400,11 +1401,11 @@ export default function FolhaPagamento() {
               <p className="text-xs text-muted-foreground">Aprovados Automaticamente</p>
             </CardContent></Card>
             <Card className={funcionariosComAlerta.length > 0 ? "border-2 border-amber-400" : ""}><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-amber-600">{funcionariosComAlerta.length}</p>
+              <p className="text-2xl font-bold text-amber-600">{fmtNum(funcionariosComAlerta.length)}</p>
               <p className="text-xs text-muted-foreground">Com Alerta (Decisão Pendente)</p>
             </CardContent></Card>
             <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-blue-700">{valeResult.diasUteis}</p>
+              <p className="text-2xl font-bold text-blue-700">{fmtNum(valeResult.diasUteis)}</p>
               <p className="text-xs text-muted-foreground">Dias Úteis</p>
             </CardContent></Card>
           </div>
@@ -1630,7 +1631,7 @@ export default function FolhaPagamento() {
                       <tr key={a.id} className="border-t hover:bg-amber-50/50">
                         <td className="p-3">
                           <div className="font-medium">{a.nomeCompleto || `ID ${a.employeeId}`}</div>
-                          <div className="text-xs text-muted-foreground">{a.codigoInterno}</div>
+                          <div className="text-xs text-muted-foreground">{fmtNum(a.codigoInterno)}</div>
                         </td>
                         <td className="p-3 text-muted-foreground">{a.funcao || '-'}</td>
                         <td className="p-3 text-center">{a.data ? new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</td>
@@ -1689,7 +1690,7 @@ export default function FolhaPagamento() {
           {/* RESUMO CARDS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card><CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">{pagamentoResult.totalFuncionarios}</p>
+              <p className="text-2xl font-bold text-green-700">{fmtNum(pagamentoResult.totalFuncionarios)}</p>
               <p className="text-xs text-muted-foreground">Funcionários</p>
             </CardContent></Card>
             <Card><CardContent className="p-4 text-center">
@@ -1846,7 +1847,7 @@ export default function FolhaPagamento() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAnoSelecionado(a => a - 1)}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="font-bold text-lg min-w-[60px] text-center">{anoSelecionado}</span>
+                <span className="font-bold text-lg min-w-[60px] text-center">{fmtNum(anoSelecionado)}</span>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAnoSelecionado(a => a + 1)}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>

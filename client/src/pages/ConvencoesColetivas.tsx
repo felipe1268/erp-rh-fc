@@ -12,6 +12,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
 import { toast } from "sonner";
+import { fmtNum } from "@/lib/formatters";
 
 const EMPTY_FORM = {
   companyId: 0,
@@ -392,27 +393,27 @@ export default function ConvencoesColetivas() {
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="bg-white border rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+            <p className="text-2xl font-bold text-foreground">{fmtNum(stats.total)}</p>
             <p className="text-[11px] text-muted-foreground">Total</p>
           </div>
           <div className="bg-white border rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-green-600">{stats.vigentes}</p>
+            <p className="text-2xl font-bold text-green-600">{fmtNum(stats.vigentes)}</p>
             <p className="text-[11px] text-muted-foreground">Vigentes</p>
           </div>
           <div className="bg-white border rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-red-600">{stats.vencidas}</p>
+            <p className="text-2xl font-bold text-red-600">{fmtNum(stats.vencidas)}</p>
             <p className="text-[11px] text-muted-foreground">Vencidas</p>
           </div>
           <div className="bg-white border rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-amber-600">{stats.negociacao}</p>
+            <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.negociacao)}</p>
             <p className="text-[11px] text-muted-foreground">Em Negociação</p>
           </div>
           <div className="bg-white border rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-blue-600">{stats.sede}</p>
+            <p className="text-2xl font-bold text-blue-600">{fmtNum(stats.sede)}</p>
             <p className="text-[11px] text-muted-foreground">Sede</p>
           </div>
           <div className="bg-white border rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-orange-600">{stats.obra}</p>
+            <p className="text-2xl font-bold text-orange-600">{fmtNum(stats.obra)}</p>
             <p className="text-[11px] text-muted-foreground">Por Obra</p>
           </div>
         </div>

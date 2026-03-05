@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { formatCPF } from "@/lib/formatters";
+import { formatCPF, fmtNum } from "@/lib/formatters";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
@@ -933,7 +933,7 @@ export default function FechamentoPonto() {
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setAnoSelecionado(a => a - 1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-lg font-bold text-[#1B2A4A] min-w-[60px] text-center">{anoSelecionado}</span>
+              <span className="text-lg font-bold text-[#1B2A4A] min-w-[60px] text-center">{fmtNum(anoSelecionado)}</span>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setAnoSelecionado(a => a + 1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -1063,7 +1063,7 @@ export default function FechamentoPonto() {
                   <Users className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stats.data?.totalColaboradores || 0}</p>
+                  <p className="text-2xl font-bold">{fmtNum(stats.data?.totalColaboradores || 0)}</p>
                   <p className="text-xs text-muted-foreground">Colaboradores</p>
                 </div>
               </div>
@@ -1077,7 +1077,7 @@ export default function FechamentoPonto() {
                   <Clock className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stats.data?.totalRegistros || 0}</p>
+                  <p className="text-2xl font-bold">{fmtNum(stats.data?.totalRegistros || 0)}</p>
                   <p className="text-xs text-muted-foreground">Registros</p>
                 </div>
               </div>
@@ -1091,7 +1091,7 @@ export default function FechamentoPonto() {
                   <AlertTriangle className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stats.data?.totalInconsistencias || 0}</p>
+                  <p className="text-2xl font-bold">{fmtNum(stats.data?.totalInconsistencias || 0)}</p>
                   <p className="text-xs text-muted-foreground">Inconsistências</p>
                 </div>
               </div>
@@ -1105,7 +1105,7 @@ export default function FechamentoPonto() {
                   <PenLine className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stats.data?.totalAjustesManuais || 0}</p>
+                  <p className="text-2xl font-bold">{fmtNum(stats.data?.totalAjustesManuais || 0)}</p>
                   <p className="text-xs text-muted-foreground">Ajustes Manuais</p>
                 </div>
               </div>
@@ -1119,7 +1119,7 @@ export default function FechamentoPonto() {
                   <MapPin className={`h-5 w-5 ${multiSiteCount > 0 ? "text-red-600" : "text-gray-400"}`} />
                 </div>
                 <div>
-                  <p className={`text-2xl font-bold ${multiSiteCount > 0 ? "text-red-600" : ""}`}>{multiSiteCount}</p>
+                  <p className={`text-2xl font-bold ${multiSiteCount > 0 ? "text-red-600" : ""}`}>{fmtNum(multiSiteCount)}</p>
                   <p className="text-xs text-muted-foreground">Múltiplas Obras</p>
                 </div>
               </div>
@@ -1133,7 +1133,7 @@ export default function FechamentoPonto() {
                   <AlertCircle className={`h-5 w-5 ${conflitosCount > 0 ? "text-orange-600" : "text-gray-400"}`} />
                 </div>
                 <div>
-                  <p className={`text-2xl font-bold ${conflitosCount > 0 ? "text-orange-600" : ""}`}>{conflitosCount}</p>
+                  <p className={`text-2xl font-bold ${conflitosCount > 0 ? "text-orange-600" : ""}`}>{fmtNum(conflitosCount)}</p>
                   <p className="text-xs text-muted-foreground">Conflitos Obra/Dia</p>
                 </div>
               </div>
@@ -2285,7 +2285,7 @@ export default function FechamentoPonto() {
                         <div className="flex items-center justify-between flex-wrap gap-3">
                           <div className="flex items-center gap-6 flex-wrap">
                             <div className="text-center">
-                              <p className="text-2xl font-bold text-[#1B2A4A]">{totalDias}</p>
+                              <p className="text-2xl font-bold text-[#1B2A4A]">{fmtNum(totalDias)}</p>
                               <p className="text-xs text-muted-foreground">Dias Trab.</p>
                             </div>
                             <div className="h-8 w-px bg-border" />
@@ -2305,14 +2305,14 @@ export default function FechamentoPonto() {
                             </div>
                             <div className="h-8 w-px bg-border" />
                             <div className="text-center">
-                              <p className="text-2xl font-bold text-[#1B2A4A]">{totalObras}</p>
+                              <p className="text-2xl font-bold text-[#1B2A4A]">{fmtNum(totalObras)}</p>
                               <p className="text-xs text-muted-foreground">Obra{totalObras !== 1 ? "s" : ""}</p>
                             </div>
                             {inconsPendentes > 0 && (
                               <>
                                 <div className="h-8 w-px bg-border" />
                                 <div className="text-center">
-                                  <p className="text-2xl font-bold text-amber-600">{inconsPendentes}</p>
+                                  <p className="text-2xl font-bold text-amber-600">{fmtNum(inconsPendentes)}</p>
                                   <p className="text-xs text-muted-foreground">Inconsistências</p>
                                 </div>
                               </>
@@ -2321,7 +2321,7 @@ export default function FechamentoPonto() {
                               <>
                                 <div className="h-8 w-px bg-border" />
                                 <div className="text-center">
-                                  <p className="text-2xl font-bold text-orange-600">{empConflitos.length}</p>
+                                  <p className="text-2xl font-bold text-orange-600">{fmtNum(empConflitos.length)}</p>
                                   <p className="text-xs text-muted-foreground">Conflitos</p>
                                 </div>
                               </>
@@ -3115,7 +3115,7 @@ export default function FechamentoPonto() {
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
-                      <p className="text-2xl font-bold text-emerald-700">{simuladorData.data.totalFuncionarios}</p>
+                      <p className="text-2xl font-bold text-emerald-700">{fmtNum(simuladorData.data.totalFuncionarios)}</p>
                       <p className="text-xs text-emerald-600">CLT com Valor/Hora</p>
                     </div>
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
@@ -3202,7 +3202,7 @@ export default function FechamentoPonto() {
                   {uploadFiles.map((f, i) => (
                     <div key={i} className="flex items-center gap-2 text-sm bg-muted/50 rounded px-3 py-1.5">
                       <FileSpreadsheet className="h-4 w-4 text-green-600" />
-                      <span className="flex-1 truncate">{f.name}</span>
+                      <span className="flex-1 truncate">{fmtNum(f.name)}</span>
                       <span className="text-muted-foreground">{(f.size / 1024).toFixed(0)} KB</span>
                     </div>
                   ))}

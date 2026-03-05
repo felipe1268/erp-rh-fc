@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { fmtNum } from "@/lib/formatters";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -204,7 +205,7 @@ export default function PJMedicoes() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-medium text-violet-600 uppercase tracking-wider">Prestadores</p>
-                <p className="text-2xl font-bold text-violet-700 mt-2">{contratos?.filter((c: any) => c.status === 'ativo').length || 0}</p>
+                <p className="text-2xl font-bold text-violet-700 mt-2">{fmtNum(contratos?.filter((c: any) => c.status === 'ativo').length || 0)}</p>
                 <p className="text-xs text-violet-600/70 mt-1.5 flex items-center gap-1">
                   <Users className="w-3 h-3" />
                   contratos ativos

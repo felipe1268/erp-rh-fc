@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { fmtNum } from "@/lib/formatters";
 
 export default function EpiEstoqueMinimo() {
   const { selectedCompanyId } = useCompany();
@@ -80,14 +81,14 @@ export default function EpiEstoqueMinimo() {
                 <Card className="border-red-200 bg-red-50/50">
                   <CardContent className="py-3 text-center">
                     <ShieldAlert className="h-6 w-6 text-red-600 mx-auto mb-1" />
-                    <p className="text-2xl font-bold text-red-700">{alertas.length}</p>
+                    <p className="text-2xl font-bold text-red-700">{fmtNum(alertas.length)}</p>
                     <p className="text-xs text-red-600">Itens abaixo do mínimo</p>
                   </CardContent>
                 </Card>
                 <Card className="border-amber-200 bg-amber-50/50">
                   <CardContent className="py-3 text-center">
                     <Package className="h-6 w-6 text-amber-600 mx-auto mb-1" />
-                    <p className="text-2xl font-bold text-amber-700">{alertas.reduce((s: number, a: any) => s + a.deficit, 0)}</p>
+                    <p className="text-2xl font-bold text-amber-700">{fmtNum(alertas.reduce((s: number, a: any) => s + a.deficit, 0))}</p>
                     <p className="text-xs text-amber-600">Unidades faltantes</p>
                   </CardContent>
                 </Card>

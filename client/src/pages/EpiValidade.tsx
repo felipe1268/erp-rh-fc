@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, Clock, Calendar, User, HardHat, Search, Bell, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
+import { fmtNum } from "@/lib/formatters";
 
 export default function EpiValidade() {
   const { selectedCompanyId } = useCompany();
@@ -56,14 +57,14 @@ export default function EpiValidade() {
         <Card className="border-red-200 bg-red-50/50">
           <CardContent className="py-3 text-center">
             <ShieldAlert className="h-6 w-6 text-red-600 mx-auto mb-1" />
-            <p className="text-2xl font-bold text-red-700">{vencidos.length}</p>
+            <p className="text-2xl font-bold text-red-700">{fmtNum(vencidos.length)}</p>
             <p className="text-xs text-red-600">Vencidos</p>
           </CardContent>
         </Card>
         <Card className="border-amber-200 bg-amber-50/50">
           <CardContent className="py-3 text-center">
             <AlertTriangle className="h-6 w-6 text-amber-600 mx-auto mb-1" />
-            <p className="text-2xl font-bold text-amber-700">{proximosVencer.length}</p>
+            <p className="text-2xl font-bold text-amber-700">{fmtNum(proximosVencer.length)}</p>
             <p className="text-xs text-amber-600">Próximos a vencer</p>
           </CardContent>
         </Card>

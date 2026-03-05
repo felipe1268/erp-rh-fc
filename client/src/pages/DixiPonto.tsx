@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
+import { fmtNum } from "@/lib/formatters";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
@@ -115,7 +116,7 @@ function DashboardTab({ companyId }: { companyId: number }) {
                   <card.icon className={`w-5 h-5 ${card.color}`} />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{card.value}</p>
+                  <p className="text-2xl font-bold">{fmtNum(card.value)}</p>
                   <p className="text-xs text-muted-foreground">{card.label}</p>
                 </div>
               </div>

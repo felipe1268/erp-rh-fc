@@ -15,9 +15,15 @@ export const homeDataRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const hoje = new Date();
-      const hojeStr = hoje.toISOString().split("T")[0];
-      const mesAtual = hoje.getMonth() + 1; // 1-12
-      const diaAtual = hoje.getDate();
+      // Usar timezone de Brasília (GMT-3) para evitar bug de dia errado
+      const brasilFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const brasilParts = brasilFormatter.formatToParts(hoje);
+      const brasilYear = parseInt(brasilParts.find(p => p.type === 'year')!.value);
+      const brasilMonth = parseInt(brasilParts.find(p => p.type === 'month')!.value);
+      const brasilDay = parseInt(brasilParts.find(p => p.type === 'day')!.value);
+      const hojeStr = `${brasilYear}-${String(brasilMonth).padStart(2,'0')}-${String(brasilDay).padStart(2,'0')}`;
+      const mesAtual = brasilMonth; // 1-12
+      const diaAtual = brasilDay;
 
       // ============================================================
       // 1. BUSCAR TODOS OS FUNCIONÁRIOS ATIVOS

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { formatCPF, formatMoeda } from "@/lib/formatters";
+import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { nowBrasilia, todayBrasilia } from "@/lib/dateUtils";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -1109,7 +1109,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <div className="grid grid-cols-3 gap-4">
                         <Card className="border-l-4 border-l-purple-500"><CardContent className="p-4">
                           <p className="text-xs text-muted-foreground">Total Adicionais</p>
-                          <p className="text-2xl font-bold text-purple-600">{horasExtras.length}</p>
+                          <p className="text-2xl font-bold text-purple-600">{fmtNum(horasExtras.length)}</p>
                         </CardContent></Card>
                         <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
                           <p className="text-xs text-muted-foreground">Horas Adicionais</p>
@@ -1153,7 +1153,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <div className="grid grid-cols-3 gap-4">
                         <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
                           <p className="text-xs text-muted-foreground">Total Registros</p>
-                          <p className="text-2xl font-bold text-orange-600">{horasExtras.length}</p>
+                          <p className="text-2xl font-bold text-orange-600">{fmtNum(horasExtras.length)}</p>
                         </CardContent></Card>
                         <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
                           <p className="text-xs text-muted-foreground">Total Horas</p>
@@ -1280,17 +1280,17 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       {/* Resumo */}
                       <div className="grid grid-cols-3 gap-3">
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
-                          <p className="text-2xl font-bold text-amber-700">{pendentes.length}</p>
+                          <p className="text-2xl font-bold text-amber-700">{fmtNum(pendentes.length)}</p>
                           <p className="text-xs text-amber-600 font-medium">Pendentes</p>
                           <p className="text-xs text-amber-500 mt-1">{pendentes.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                          <p className="text-2xl font-bold text-green-700">{confirmados.length}</p>
+                          <p className="text-2xl font-bold text-green-700">{fmtNum(confirmados.length)}</p>
                           <p className="text-xs text-green-600 font-medium">Confirmados</p>
                           <p className="text-xs text-green-500 mt-1">{confirmados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-                          <p className="text-2xl font-bold text-gray-500">{cancelados.length}</p>
+                          <p className="text-2xl font-bold text-gray-500">{fmtNum(cancelados.length)}</p>
                           <p className="text-xs text-gray-500 font-medium">Cancelados</p>
                           <p className="text-xs text-gray-400 mt-1">{cancelados.reduce((s: number, a: any) => s + parseFloat(a.valorTotal || '0'), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
@@ -1769,7 +1769,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                               <div className="text-[10px] text-amber-600 font-medium">Média Geral</div>
                             </div>
                             <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
-                              <div className="text-2xl font-bold text-blue-700">{avaliacoesList.length}</div>
+                              <div className="text-2xl font-bold text-blue-700">{fmtNum(avaliacoesList.length)}</div>
                               <div className="text-[10px] text-blue-600 font-medium">Total Avaliações</div>
                             </div>
                             <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">

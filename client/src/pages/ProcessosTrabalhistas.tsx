@@ -14,6 +14,7 @@ import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { formatDate as formatDateBR, formatDateTime as formatDateTimeBR } from "@/lib/dateUtils";
+import { fmtNum } from "@/lib/formatters";
 import {
   Plus, Search, Gavel, ArrowLeft, Calendar, AlertTriangle,
   Trash2, Pencil, Eye, ChevronDown, ChevronUp, Clock,
@@ -640,7 +641,7 @@ export default function ProcessosTrabalhistas() {
                         {/* Resumo Executivo */}
                         <div>
                           <h4 className="text-xs font-semibold text-purple-700 mb-1 flex items-center gap-1"><FileText className="h-3 w-3" /> Resumo Executivo</h4>
-                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{analiseIA.data.resumoExecutivo}</p>
+                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{fmtNum(analiseIA.data.resumoExecutivo)}</p>
                         </div>
 
                         {/* Pontos Fortes e Fracos */}
@@ -1634,19 +1635,19 @@ export default function ProcessosTrabalhistas() {
                 {/* Resumo geral */}
                 <div className="grid grid-cols-4 gap-3">
                   <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-blue-700">{changelogData.total}</div>
+                    <div className="text-2xl font-bold text-blue-700">{fmtNum(changelogData.total)}</div>
                     <div className="text-xs text-blue-600">Total Consultados</div>
                   </div>
                   <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-green-700">{changelogData.atualizados}</div>
+                    <div className="text-2xl font-bold text-green-700">{fmtNum(changelogData.atualizados)}</div>
                     <div className="text-xs text-green-600">Atualizados</div>
                   </div>
                   <div className="bg-amber-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-amber-700">{changelogData.novasMovsTotal}</div>
+                    <div className="text-2xl font-bold text-amber-700">{fmtNum(changelogData.novasMovsTotal)}</div>
                     <div className="text-xs text-amber-600">Novas Movimentações</div>
                   </div>
                   <div className="bg-red-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-red-700">{changelogData.erros}</div>
+                    <div className="text-2xl font-bold text-red-700">{fmtNum(changelogData.erros)}</div>
                     <div className="text-xs text-red-600">Erros</div>
                   </div>
                 </div>

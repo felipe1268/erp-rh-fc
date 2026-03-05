@@ -20,6 +20,7 @@ import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gi
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
+import { fmtNum } from "@/lib/formatters";
 
 const MODULES_LIST = [
   { key: "colaboradores", label: "Colaboradores" },
@@ -1497,19 +1498,19 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
       {/* Resumo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-blue-700">{recipients.length}</p>
+          <p className="text-2xl font-bold text-blue-700">{fmtNum(recipients.length)}</p>
           <p className="text-xs text-gray-500">Total Cadastrados</p>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-green-700">{activeCount}</p>
+          <p className="text-2xl font-bold text-green-700">{fmtNum(activeCount)}</p>
           <p className="text-xs text-gray-500">Ativos</p>
         </div>
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-700">{recipients.filter((r: any) => Number(r.ativo) && Number(r.notificarContratacao)).length}</p>
+          <p className="text-2xl font-bold text-emerald-700">{fmtNum(recipients.filter((r: any) => Number(r.ativo) && Number(r.notificarContratacao)).length)}</p>
           <p className="text-xs text-gray-500">Recebem Contratação</p>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-red-700">{recipients.filter((r: any) => Number(r.ativo) && Number(r.notificarDemissao)).length}</p>
+          <p className="text-2xl font-bold text-red-700">{fmtNum(recipients.filter((r: any) => Number(r.ativo) && Number(r.notificarDemissao)).length)}</p>
           <p className="text-xs text-gray-500">Recebem Demissão</p>
         </div>
       </div>
@@ -1753,19 +1754,19 @@ function NotificacoesHistoricoSection({ companyId }: { companyId: number }) {
       {/* Estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-indigo-700">{stats.total}</p>
+          <p className="text-2xl font-bold text-indigo-700">{fmtNum(stats.total)}</p>
           <p className="text-xs text-gray-500">Total Enviadas</p>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-green-700">{stats.enviados}</p>
+          <p className="text-2xl font-bold text-green-700">{fmtNum(stats.enviados)}</p>
           <p className="text-xs text-gray-500">✓ Enviados</p>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-red-700">{stats.erros}</p>
+          <p className="text-2xl font-bold text-red-700">{fmtNum(stats.erros)}</p>
           <p className="text-xs text-gray-500">✗ Erros</p>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold text-blue-700">{stats.lidos}</p>
+          <p className="text-2xl font-bold text-blue-700">{fmtNum(stats.lidos)}</p>
           <p className="text-xs text-gray-500">👁 Lidos</p>
         </div>
       </div>
