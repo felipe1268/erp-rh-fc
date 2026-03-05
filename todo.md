@@ -4800,3 +4800,16 @@
 - [x] Botão "Verificar e Enviar Agora" para teste manual de alertas
 - [x] Email HTML profissional com tabela de itens, gargalo destacado, e ação requerida
 - [x] 10 testes vitest passando para o módulo de alerta de capacidade
+
+## Rev. 189: Kit Básico Automático + Emails Compras + Desconto EPI Folha
+- [x] Configurar kit básico de contratação automaticamente para cada empresa (EPIs padrão construção civil)
+- [x] Seed automático do kit ao acessar Capacidade sem kit configurado
+- [x] Adicionar campo de e-mails de responsáveis de compras na seção de alertas de capacidade
+- [x] Implementar desconto automático de EPI por mau uso/perda integrado à folha de pagamento
+- [x] Criar tabela epi_descontos (motivo, valor, status aprovação, vinculo folha) — já existia epi_discount_alerts
+- [x] Backend: rotas CRUD de descontos EPI + rota de aprovação DP — já existia, verificado
+- [x] Frontend: campo "Motivo da troca" na entrega de EPI (mau uso/perda/desgaste normal) — já existia
+- [x] Frontend: alerta na ficha do colaborador quando há desconto pendente — já existia no RaioX
+- [x] Frontend: tela de aprovação de descontos para o DP — nova aba Descontos no Epis.tsx
+- [x] Integração com folha: exibir descontos pendentes ao lançar pagamento/vale — já existia no avisoPrevioFerias
+- [x] Testes vitest para desconto EPI — 14 testes passando

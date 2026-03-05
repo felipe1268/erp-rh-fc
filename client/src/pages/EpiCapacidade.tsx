@@ -94,6 +94,26 @@ export default function EpiCapacidade({ companyId }: EpiCapacidadeProps) {
     }
   }, [alertaConfig.data]);
 
+  // Auto-seed mutation
+  const autoSeed = trpc.epiAvancado.autoSeedKitBasico.useMutation({
+    onSuccess: (result) => {
+      if (result.created) {
+        toast.success(result.message || "Kit básico criado automaticamente!");
+        capacidade.refetch();
+        kitBasico.refetch();
+      }
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // Auto-seed: quando capacidade carrega e kitConfigurado é false, criar automaticamente
+  useEffect(() => {
+    if (capacidade.data && !capacidade.data.kitConfigurado && companyId > 0 && !autoSeed.isPending) {
+      autoSeed.mutate({ companyId });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capacidade.data?.kitConfigurado, companyId]);
+
   // Mutations
   const salvarKit = trpc.epiAvancado.salvarKitBasicoContratacao.useMutation({
     onSuccess: () => {
@@ -521,20 +541,34 @@ export default function EpiCapacidade({ companyId }: EpiCapacidadeProps) {
               </div>
             </div>
 
-            <div>
+            <div className="space-y-3">
               <label className="text-sm font-medium text-gray-700 mb-1 block">
-                <Mail className="w-3.5 h-3.5 inline mr-1 text-gray-500" />
-                E-mails Extras (além dos destinatários de notificação)
+                <Mail className="w-3.5 h-3.5 inline mr-1 text-blue-500" />
+                E-mails dos Responsáveis de Compras
               </label>
+              <p className="text-xs text-gray-500">
+                Informe os e-mails dos responsáveis de compras/suprimentos que devem ser notificados quando o estoque de EPIs estiver baixo.
+                Estes e-mails são adicionais aos destinatários de notificação já cadastrados no sistema.
+              </p>
               <Input
                 value={alertaEmails}
                 onChange={(e) => setAlertaEmails(e.target.value)}
-                placeholder="email1@empresa.com, email2@empresa.com"
+                placeholder="compras@empresa.com, suprimentos@empresa.com, almoxarife@empresa.com"
                 className="bg-white"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Separe múltiplos e-mails por vírgula
+                Separe múltiplos e-mails por vírgula. Ex: compras@empresa.com, almoxarife@empresa.com
               </p>
+              {alertaEmails && alertaEmails.split(",").filter(e => e.trim() && e.trim().includes("@")).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {alertaEmails.split(",").filter(e => e.trim() && e.trim().includes("@")).map((email, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+                      <Mail className="w-3 h-3" />
+                      {email.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2 pt-2">

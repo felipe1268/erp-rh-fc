@@ -1841,6 +1841,31 @@ Forneça sugestões concretas com quantidades específicas.`;
       return { obras: resultados, kitConfigurado: true };
     }),
 
+  // Auto-seed kit básico de contratação se não existir
+  autoSeedKitBasico: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      // Verificar se já existe kit
+      const existingKits = await db.select().from(epiKits)
+        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+      if (existingKits.length > 0) {
+        return { created: false, message: 'Kit já existe' };
+      }
+      // Criar kit básico
+      const [result] = await db.insert(epiKits).values({
+        companyId: input.companyId,
+        nome: 'Kit Básico Contratação',
+        funcao: 'Geral',
+        descricao: 'Kit padrão de EPIs para contratação de novos funcionários (NR-6)',
+      });
+      // Inserir itens padrão
+      await db.insert(epiKitItems).values(
+        DEFAULT_KIT_BASICO.map(item => ({ kitId: result.insertId, ...item }))
+      );
+      return { created: true, kitId: result.insertId, message: `Kit básico criado com ${DEFAULT_KIT_BASICO.length} itens` };
+    }),
+
   // ============================================================
   // ALERTA AUTOMÁTICO DE CAPACIDADE DE CONTRATAÇÃO
   // ============================================================

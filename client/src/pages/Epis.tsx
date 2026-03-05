@@ -17,7 +17,7 @@ import {
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp,
-  Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users
+  Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users, Ban
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
@@ -37,8 +37,9 @@ import EpiIA from "./EpiIA";
 import EpiDrillDown, { type DrillDownType } from "./EpiDrillDown";
 import EpiAssinatura from "./EpiAssinatura";
 import EpiCapacidade from "./EpiCapacidade";
+import EpiDescontos from "./EpiDescontos";
 
-type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia" | "capacidade";
+type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia" | "capacidade" | "descontos";
 
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
@@ -1678,6 +1679,10 @@ export default function Epis() {
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "capacidade" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <Users className="h-3.5 w-3.5 inline mr-1" /> Capacidade
           </button>
+          <button onClick={() => setViewMode("descontos")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "descontos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Ban className="h-3.5 w-3.5 inline mr-1" /> Descontos
+          </button>
           </div>
         </div>
 
@@ -2440,6 +2445,7 @@ export default function Epis() {
       {viewMode === "minimo" && <EpiEstoqueMinimo />}
       {viewMode === "ia" && <EpiIA />}
       {viewMode === "capacidade" && <EpiCapacidade companyId={companyId} />}
+      {viewMode === "descontos" && <EpiDescontos companyId={companyId} />}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 
