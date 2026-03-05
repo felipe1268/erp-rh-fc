@@ -30,12 +30,14 @@ type CompanyForm = {
   inscricaoEstadual: string;
   inscricaoMunicipal: string;
   site: string;
+  grupoEmpresarial: string;
 };
 
 const emptyForm: CompanyForm = {
   cnpj: "", razaoSocial: "", nomeFantasia: "", endereco: "",
   cidade: "", estado: "", cep: "", telefone: "", email: "",
   inscricaoEstadual: "", inscricaoMunicipal: "", site: "",
+  grupoEmpresarial: "",
 };
 
 function formatCnpj(value: string): string {
@@ -296,6 +298,7 @@ export default function Empresas() {
       inscricaoEstadual: company.inscricaoEstadual ?? "",
       inscricaoMunicipal: company.inscricaoMunicipal ?? "",
       site: company.site ?? "",
+      grupoEmpresarial: company.grupoEmpresarial ?? "",
     });
     setDialogTab("dados");
     setDialogOpen(true);
@@ -540,6 +543,7 @@ export default function Empresas() {
                   </CardHeader>
                   <CardContent className="text-xs text-muted-foreground space-y-1">
                     {c.razaoSocial ? <p>{c.razaoSocial}</p> : null}
+                    {c.grupoEmpresarial ? <p className="text-blue-600 font-medium">{c.grupoEmpresarial}</p> : null}
                     {c.cidade ? <p>{c.cidade}{c.estado ? ` - ${c.estado}` : ""}</p> : null}
                     {c.telefone ? <p>{formatTelefone(c.telefone)}</p> : null}
                     {c.email ? <p>{c.email}</p> : null}
@@ -651,6 +655,10 @@ export default function Empresas() {
                 <div>
                   <Label>Site</Label>
                   <Input value={form.site || ""} onChange={e => set("site", e.target.value)} placeholder="www.empresa.com.br" className="bg-input" />
+                </div>
+                <div>
+                  <Label>Grupo Empresarial</Label>
+                  <Input value={form.grupoEmpresarial || ""} onChange={e => set("grupoEmpresarial", e.target.value)} placeholder="Ex: Construtora, Hotelaria, Locação" className="bg-input" />
                 </div>
                 <div>
                   <Label>Inscrição Estadual</Label>

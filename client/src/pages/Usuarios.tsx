@@ -336,6 +336,32 @@ export default function Usuarios() {
 
   // Companies section component
   const CompaniesSection = ({ companyIds, setCompanyIds, role }: { companyIds: number[]; setCompanyIds: (v: number[]) => void; role: string }) => {
+    // Extrair grupos únicos das empresas
+    const grupos = useMemo(() => {
+      if (!allCompaniesQuery.data) return [];
+      const grupoSet = new Set<string>();
+      allCompaniesQuery.data.forEach((c: any) => {
+        if (c.grupoEmpresarial) grupoSet.add(c.grupoEmpresarial);
+      });
+      return Array.from(grupoSet).sort();
+    }, [allCompaniesQuery.data]);
+
+    const handleSelectGrupo = (grupo: string) => {
+      if (grupo === '__all__') {
+        setCompanyIds(allCompaniesQuery.data!.map((c: any) => c.id));
+        return;
+      }
+      if (grupo === '__clear__') {
+        setCompanyIds([]);
+        return;
+      }
+      // Selecionar apenas as empresas do grupo escolhido
+      const grupoIds = (allCompaniesQuery.data || []).filter((c: any) => c.grupoEmpresarial === grupo).map((c: any) => c.id);
+      // Adicionar ao que já está selecionado (merge)
+      const merged = Array.from(new Set([...companyIds, ...grupoIds]));
+      setCompanyIds(merged);
+    };
+
     if (role === 'admin_master') {
       return (
         <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
@@ -347,6 +373,38 @@ export default function Usuarios() {
 
     return (
       <div>
+        {/* Seleção rápida por grupo */}
+        {grupos.length > 0 && (
+          <div className="mb-3">
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Selecionar por Grupo Empresarial</label>
+            <div className="flex flex-wrap gap-2">
+              {grupos.map(g => {
+                const grupoIds = (allCompaniesQuery.data || []).filter((c: any) => c.grupoEmpresarial === g).map((c: any) => c.id);
+                const allSelected = grupoIds.every((id: number) => companyIds.includes(id));
+                return (
+                  <Button
+                    key={g}
+                    type="button"
+                    variant={allSelected ? "default" : "outline"}
+                    size="sm"
+                    className={`text-xs h-7 ${allSelected ? '' : 'hover:bg-blue-50'}`}
+                    onClick={() => {
+                      if (allSelected) {
+                        // Desmarcar todas do grupo
+                        setCompanyIds(companyIds.filter(id => !grupoIds.includes(id)));
+                      } else {
+                        handleSelectGrupo(g);
+                      }
+                    }}
+                  >
+                    {g} ({grupoIds.length})
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {allCompaniesQuery.data?.map((c: any) => (
             <label key={c.id} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${
@@ -362,16 +420,17 @@ export default function Usuarios() {
               <div className="min-w-0">
                 <span className="text-sm font-medium block truncate">{c.nomeFantasia || c.razaoSocial}</span>
                 <span className="text-xs text-muted-foreground">{c.cnpj}</span>
+                {c.grupoEmpresarial && <span className="text-[10px] text-blue-600 font-medium">{c.grupoEmpresarial}</span>}
               </div>
             </label>
           ))}
         </div>
         {allCompaniesQuery.data && allCompaniesQuery.data.length > 1 && (
           <div className="flex gap-2 mt-2">
-            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setCompanyIds(allCompaniesQuery.data!.map((c: any) => c.id))}>
+            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => handleSelectGrupo('__all__')}>
               Selecionar Todas
             </Button>
-            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setCompanyIds([])}>
+            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => handleSelectGrupo('__clear__')}>
               Limpar
             </Button>
           </div>

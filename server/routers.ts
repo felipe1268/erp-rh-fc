@@ -161,6 +161,7 @@ export const appRouter = router({
       cidade: z.string().optional(), estado: z.string().optional(),
       cep: z.string().optional(), telefone: z.string().optional(), email: z.string().optional(),
       inscricaoEstadual: z.string().optional(), inscricaoMunicipal: z.string().optional(),
+      grupoEmpresarial: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
       if (!validateCNPJ(input.cnpj)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ inválido. Verifique os dígitos e tente novamente." });
@@ -175,6 +176,7 @@ export const appRouter = router({
       cidade: z.string().optional(), estado: z.string().optional(),
       cep: z.string().optional(), telefone: z.string().optional(), email: z.string().optional(),
       inscricaoEstadual: z.string().optional(), inscricaoMunicipal: z.string().optional(),
+      grupoEmpresarial: z.string().optional(),
       isActive: z.boolean().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;

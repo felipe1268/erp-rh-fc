@@ -5085,3 +5085,9 @@
 - [x] Verificar cálculo de períodos aquisitivos (total, registrados, não registrados)
 - [x] Verificar cálculo de vencidas (contagem) - excluir concluídas/canceladas
 - [x] Verificar cálculo de valor estimado de férias - agora mostra apenas valor pendente (exclui concluídas)
+
+## Rev. 214: Seleção por grupo de empresas nas permissões de usuário
+- [x] Adicionar botões de grupo (Construtora, etc.) na tela de permissões do usuário
+- [x] Ao selecionar um grupo, marcar automaticamente todas as empresas daquele grupo
+- [x] Campo grupoEmpresarial adicionado no cadastro de empresas
+- [x] Grupo exibido no card de cada empresa e na seleção de permissões
