@@ -105,25 +105,29 @@ function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirDa
             </div>
 
             {/* Resumo */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
                 <p className="text-xs text-blue-600 font-semibold uppercase">Total Períodos</p>
                 <p className="text-2xl font-bold text-blue-700">{fmtNum(data.resumo.totalPeriodos)}</p>
               </div>
               <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-                <p className="text-xs text-green-600 font-semibold uppercase">Registrados</p>
-                <p className="text-2xl font-bold text-green-700">{fmtNum(data.resumo.totalRegistrados)}</p>
+                <p className="text-xs text-green-600 font-semibold uppercase">Concluídas</p>
+                <p className="text-2xl font-bold text-green-700">{fmtNum(data.resumo.totalConcluidas || 0)}</p>
               </div>
               <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
-                <p className="text-xs text-amber-600 font-semibold uppercase">Não Registrados</p>
-                <p className="text-2xl font-bold text-amber-700">{fmtNum(data.resumo.totalNaoRegistrados)}</p>
+                <p className="text-xs text-amber-600 font-semibold uppercase">Pendentes</p>
+                <p className="text-2xl font-bold text-amber-700">{fmtNum(data.resumo.totalRegistrados - (data.resumo.totalConcluidas || 0) - (data.resumo.totalEmGozo || 0))}</p>
               </div>
               <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
                 <p className="text-xs text-red-600 font-semibold uppercase">Vencidas</p>
                 <p className="text-2xl font-bold text-red-700">{fmtNum(data.resumo.totalVencidas)}</p>
               </div>
+              <div className="bg-cyan-50 rounded-lg p-3 text-center border border-cyan-200">
+                <p className="text-xs text-cyan-600 font-semibold uppercase">Não Registrados</p>
+                <p className="text-2xl font-bold text-cyan-700">{fmtNum(data.resumo.totalNaoRegistrados)}</p>
+              </div>
               <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
-                <p className="text-xs text-purple-600 font-semibold uppercase">Valor Estimado</p>
+                <p className="text-xs text-purple-600 font-semibold uppercase">Valor Pendente</p>
                 <p className="text-xl font-bold text-purple-700">{formatMoeda(parseFloat(data.resumo.valorTotalEstimado))}</p>
               </div>
             </div>
@@ -427,7 +431,7 @@ export default function Ferias() {
       total: list.length,
       pendentes: list.filter(a => a.status === "pendente").length,
       agendadas: list.filter(a => a.status === "agendada").length,
-      vencidas: list.filter(a => a.status === "vencida" || a.vencida).length,
+      vencidas: list.filter(a => (a.status === "vencida" || a.vencida) && a.status !== "concluida" && a.status !== "cancelada").length,
       emGozo: list.filter(a => a.status === "em_gozo").length,
     };
   }, [allFeriasList]);

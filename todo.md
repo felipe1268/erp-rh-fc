@@ -5080,3 +5080,8 @@
 ## Rev. 212: Clique no nome abre detalhes de férias (não Raio X)
 - [x] Alterar clique no nome do colaborador na tela de Férias para abrir detalhes das férias (prorrogar, antecipar, gozo) ao invés do Raio X
 - [x] Aplicar tanto nos alertas (vencidas/a vencer) quanto na tabela de lista de férias
+
+## Rev. 213: Verificar e corrigir cálculos de férias
+- [x] Verificar cálculo de períodos aquisitivos (total, registrados, não registrados)
+- [x] Verificar cálculo de vencidas (contagem) - excluir concluídas/canceladas
+- [x] Verificar cálculo de valor estimado de férias - agora mostra apenas valor pendente (exclui concluídas)

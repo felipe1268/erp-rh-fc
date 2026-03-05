@@ -1341,8 +1341,9 @@ export const avisoPrevioFeriasRouter = router({
         ];
         if (input.status) {
           if (input.status === 'vencida') {
-            // Vencida = status 'vencida' OU flag vencida=1 (período concessivo expirado)
+            // Vencida = status 'vencida' OU flag vencida=1, MAS excluir concluídas/canceladas
             conditions.push(sql`(${vacationPeriods.status} = 'vencida' OR ${vacationPeriods.vencida} = 1)`);
+            conditions.push(sql`${vacationPeriods.status} NOT IN ('concluida', 'cancelada')`);
           } else {
             conditions.push(eq(vacationPeriods.status, input.status as any));
           }
@@ -2119,10 +2120,18 @@ export const avisoPrevioFeriasRouter = router({
           }));
         
         // Resumo
-        const totalVencidas = periodosRecalc.filter(p => p.vencida === 1 || p.status === 'vencida').length + periodosNaoRegistrados.filter(p => p.vencida).length;
+        // Vencidas: apenas períodos NÃO concluídos/cancelados que estão vencidos
+        const statusFinalizados = ['concluida', 'cancelada'];
+        const totalVencidas = periodosRecalc.filter(p => !statusFinalizados.includes(p.status) && (p.vencida === 1 || p.status === 'vencida')).length
+          + periodosNaoRegistrados.filter(p => p.vencida).length;
         const totalRegistrados = periodosRecalc.length;
         const totalNaoRegistrados = periodosNaoRegistrados.length;
-        const valorTotalEstimado = periodosRecalc.reduce((sum, p) => sum + parseFloat(p.valorTotal || '0'), 0)
+        const totalConcluidas = periodosRecalc.filter(p => p.status === 'concluida').length;
+        const totalEmGozo = periodosRecalc.filter(p => p.status === 'em_gozo').length;
+        // Valor estimado: apenas períodos pendentes/agendados/vencidos (não concluídos/cancelados)
+        const valorTotalEstimado = periodosRecalc
+          .filter(p => !statusFinalizados.includes(p.status))
+          .reduce((sum, p) => sum + parseFloat(p.valorTotal || '0'), 0)
           + periodosNaoRegistrados.reduce((sum, p) => sum + parseFloat(p.valorEstimado || '0'), 0);
         
         return {
@@ -2134,6 +2143,8 @@ export const avisoPrevioFeriasRouter = router({
             totalRegistrados,
             totalNaoRegistrados,
             totalVencidas,
+            totalConcluidas,
+            totalEmGozo,
             valorTotalEstimado: valorTotalEstimado.toFixed(2),
           },
         };
