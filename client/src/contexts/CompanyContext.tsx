@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 
 const STORAGE_KEY = "erp-rh-fc-default-company";
+export const CONSTRUTORAS_ID = "construtoras";
 
 interface CompanyContextType {
   selectedCompanyId: string;
@@ -9,14 +10,24 @@ interface CompanyContextType {
   companies: any[] | undefined;
   isLoading: boolean;
   selectedCompany: any | undefined;
+  /** true quando "CONSTRUTORAS" está selecionado */
+  isConstrutoras: boolean;
+  /** IDs das empresas do pool Construtoras (para queries) */
+  construtorasIds: number[];
+  /** Retorna o array de companyIds para usar em queries:
+   *  - Se Construtoras selecionado: retorna todos os IDs do pool
+   *  - Se empresa individual: retorna [companyId] */
+  getCompanyIdsForQuery: () => number[];
 }
 
 const CompanyContext = createContext<CompanyContextType | null>(null);
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const companiesQuery = trpc.companies.list.useQuery();
+  const construtorasQuery = trpc.companies.construtorasIds.useQuery();
   const companies = companiesQuery.data;
   const isLoading = companiesQuery.isLoading;
+  const construtorasIds = construtorasQuery.data ?? [];
 
   const [selectedCompanyId, setSelectedCompanyIdState] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEY) || "";
@@ -26,11 +37,12 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!companies || companies.length === 0) return;
     const ids = companies.map((c: any) => String(c.id));
+    const validIds = [...ids, CONSTRUTORAS_ID];
     // If current selection is valid, keep it
-    if (selectedCompanyId && ids.includes(selectedCompanyId)) return;
+    if (selectedCompanyId && validIds.includes(selectedCompanyId)) return;
     // Otherwise use stored default or first company
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ids.includes(stored)) {
+    if (stored && validIds.includes(stored)) {
       setSelectedCompanyIdState(stored);
     } else {
       setSelectedCompanyIdState(ids[0]);
@@ -39,10 +51,24 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const setSelectedCompanyId = (id: string) => {
     setSelectedCompanyIdState(id);
-    // Don't overwrite the "default" star — just change the active selection
+    localStorage.setItem(STORAGE_KEY, id);
   };
 
-  const selectedCompany = companies?.find((c: any) => String(c.id) === selectedCompanyId);
+  const isConstrutoras = selectedCompanyId === CONSTRUTORAS_ID;
+
+  const selectedCompany = isConstrutoras
+    ? { id: CONSTRUTORAS_ID, razaoSocial: "CONSTRUTORAS", nomeFantasia: "CONSTRUTORAS", isConstrutoras: true }
+    : companies?.find((c: any) => String(c.id) === selectedCompanyId);
+
+  const getCompanyIdsForQuery = useMemo(() => {
+    return () => {
+      if (isConstrutoras && construtorasIds.length > 0) {
+        return construtorasIds;
+      }
+      const numId = parseInt(selectedCompanyId);
+      return isNaN(numId) ? [] : [numId];
+    };
+  }, [isConstrutoras, construtorasIds, selectedCompanyId]);
 
   return (
     <CompanyContext.Provider
@@ -52,6 +78,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         companies,
         isLoading,
         selectedCompany,
+        isConstrutoras,
+        construtorasIds,
+        getCompanyIdsForQuery,
       }}
     >
       {children}

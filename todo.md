@@ -5013,3 +5013,34 @@
 - [x] Adicionar rastreabilidade no backend: create (criadoPor), update (alteradoPor), transferir, entradaDiretaObra
 - [x] Adicionar coluna "Cadastrado por" na tabela de Catálogo de EPIs (com data e quem alterou)
 - [x] Retornar campos de rastreabilidade (createdAt, updatedAt, criadoPor, alteradoPor) no endpoint estoqueObraList
+
+## Rev. 208: Conceito "Construtoras" — Visão Unificada Cross-Company
+
+### Fase 1 — Base e Seletor
+- [x] Adicionar campo compartilhaRecursos (boolean) na tabela companies
+- [x] Criar lógica de agrupamento: empresas com compartilhaRecursos=true formam "Construtoras"
+- [x] Adicionar opção "CONSTRUTORAS" no seletor de empresa do header
+- [x] Quando "Construtoras" selecionado, queries retornam dados de todas as empresas do pool
+- [x] Endpoint backend para listar empresas do pool compartilhado
+
+### Fase 2 — EPIs Unificados
+- [x] Catálogo de EPIs unificado quando "Construtoras" selecionado
+- [x] Estoque central unificado (um almoxarifado para FC+JF)
+- [x] Entrega de EPI: listar funcionários de todas as empresas do pool
+- [x] Centro de custo automático: custo alocado na empresa do funcionário (não da obra)
+- [x] Transferências para obra: visão unificada de obras FC+JF
+- [x] Relatórios de custo EPI com filtro por empresa dentro de Construtoras
+
+### Fase 3 — Demais módulos (sequência futura)
+- [ ] Advertências cross-company (visão unificada, registro na empresa do funcionário)
+- [ ] ASOs/Atestados cross-company
+- [ ] Acidentes cross-company
+- [ ] Treinamentos cross-company (turma mista FC+JF)
+- [ ] Raio X do funcionário: dados consolidados independente da empresa
+- [ ] Alocação de funcionários JF em obras FC
+
+### Dashboards Construtoras
+- [ ] Total colaboradores ativos: soma FC+JF quando Construtoras selecionado
+- [ ] Indicadores de EPIs consolidados
+- [ ] Filtro por empresa dentro da visão Construtoras
+- [x] Dashboard EPIs adaptado para visão Construtoras (multi-company)

@@ -74,9 +74,14 @@ function InsightCard({ icon: Icon, title, value, sub, color, badge }: {
 }
 
 export default function DashEpis() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
-  const { data, isLoading } = trpc.dashboards.epis.useQuery({ companyId }, { enabled: companyId > 0 });
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
+  const { data, isLoading } = trpc.dashboards.epis.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
 
   // Filtros
   const [periodoInicio, setPeriodoInicio] = useState<string>("todos");

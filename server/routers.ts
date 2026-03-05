@@ -6,7 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import {
   createCompany, updateCompany, getCompanies, getCompanyById, deleteCompany, restoreCompany,
-  getCompaniesForUser, getUserCompanyLinks, setUserCompanies,
+  getCompaniesForUser, getUserCompanyLinks, setUserCompanies, getConstrutoras, getConstrutorasIds,
   getUserPermissions, setUserPermissions,
   createEmployee, updateEmployee, getEmployees, getEmployeeById, deleteEmployee, softDeleteEmployee, restoreEmployee, getDeletedEmployees, permanentDeleteEmployee, getEmployeeStats,
   createEmployeeHistory, getEmployeeHistory,
@@ -140,6 +140,20 @@ export const appRouter = router({
   // ============================================================
   companies: router({
     list: protectedProcedure.query(async ({ ctx }) => getCompaniesForUser(ctx.user.id, ctx.user.role)),
+    // Listar empresas que compartilham recursos ("Construtoras")
+    construtoras: protectedProcedure.query(async () => getConstrutoras()),
+    construtorasIds: protectedProcedure.query(async () => getConstrutorasIds()),
+    // Toggle compartilhaRecursos (só Admin Master)
+    toggleCompartilhaRecursos: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      compartilhaRecursos: z.boolean(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode alterar esta configuração' });
+      const db = (await getDb())!;
+      await db.update(companies).set({ compartilhaRecursos: input.compartilhaRecursos ? 1 : 0 } as any).where(eq(companies.id, input.companyId));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'empresas', entityType: 'company', entityId: input.companyId, details: `Compartilha recursos: ${input.compartilhaRecursos}` });
+      return { success: true };
+    }),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getCompanyById(input.id)),
     create: protectedProcedure.input(z.object({
       cnpj: z.string().min(14), razaoSocial: z.string().min(1),
@@ -283,7 +297,7 @@ export const appRouter = router({
   // EMPLOYEES
   // ============================================================
   employees: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number(), search: z.string().optional(), status: z.string().optional() })).query(({ input }) => getEmployees(input.companyId, input.search, input.status)),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional() })).query(({ input }) => getEmployees(input.companyId, input.search, input.status, input.companyIds)),
     getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeById(input.id, input.companyId)),
     stats: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getEmployeeStats(input.companyId)),
     create: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }) => {
@@ -760,7 +774,7 @@ export const appRouter = router({
   // ============================================================
   obras: router({
     list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObras(input.companyId)),
-    listActive: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObrasByCompanyActive(input.companyId)),
+    listActive: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getObrasByCompanyActive(input.companyId, input.companyIds)),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getObraById(input.id)),
     create: protectedProcedure.input(z.object({
       companyId: z.number(),

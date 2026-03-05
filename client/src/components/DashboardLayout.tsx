@@ -991,7 +991,8 @@ function DashboardLayoutContent({
 }
 
 function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLabel: string }) {
-  const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany } = useCompany();
+  const { selectedCompanyId, setSelectedCompanyId, companies, selectedCompany, isConstrutoras, construtorasIds } = useCompany();
+  const hasConstrutoras = construtorasIds.length >= 2;
   const logoUrl = selectedCompany?.logoUrl;
 
   return (
@@ -1013,6 +1014,16 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            {hasConstrutoras && (
+              <SelectItem value="construtoras">
+                <div className="flex items-center gap-2">
+                  <div className="h-5 w-5 rounded bg-amber-500/20 flex items-center justify-center">
+                    <Building2 className="h-3.5 w-3.5 text-amber-600" />
+                  </div>
+                  <span className="font-semibold">CONSTRUTORAS</span>
+                </div>
+              </SelectItem>
+            )}
             {companies?.map((c: any) => (
               <SelectItem key={c.id} value={String(c.id)}>
                 <div className="flex items-center gap-2">
@@ -1022,6 +1033,7 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
                     <Building2 className="h-4 w-4 text-muted-foreground" />
                   )}
                   {c.nomeFantasia || c.razaoSocial}
+                  {(c as any).compartilhaRecursos ? <span className="text-[9px] text-amber-600 ml-1">●</span> : null}
                 </div>
               </SelectItem>
             ))}

@@ -123,8 +123,10 @@ function CorCapaceteField({ value, onChange }: { value: string; onChange: (v: st
 }
 
 export default function Epis() {
-  const { selectedCompanyId, selectedCompany } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const { selectedCompanyId, selectedCompany, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const companyId = isConstrutoras ? 0 : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
+  const companyIds = getCompanyIdsForQuery();
+  const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
   const { hasGroup, groupOcultarValores, isAdminMaster, isSomenteVisualizacao } = usePermissions();
@@ -170,26 +172,28 @@ export default function Epis() {
   const [fichaSignature, setFichaSignature] = useState<string | null>(null);
 
   // Queries
-  const episQ = trpc.epis.list.useQuery({ companyId }, { enabled: !!companyId });
-  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId }, { enabled: !!companyId });
-  const statsQ = trpc.epis.stats.useQuery({ companyId }, { enabled: !!companyId });
-  const employeesQ = trpc.employees.list.useQuery({ companyId, status: "Ativo" }, { enabled: !!companyId });
-  const bdiQ = trpc.epis.getBdi.useQuery({ companyId }, { enabled: !!companyId });
-  const formTextQ = trpc.epis.getFormText.useQuery({ companyId }, { enabled: !!companyId });
-  const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId }, { enabled: !!companyId });
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  // Quando Construtoras selecionado, companyId=0 mas companyIds tem os IDs do pool
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
+  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, status: "Ativo" }, { enabled: hasValidCompany });
+  const bdiQ = trpc.epis.getBdi.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany });
+  const formTextQ = trpc.epis.getFormText.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany });
+  const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const obrasList = obrasQ.data ?? [];
 
   // Capacidade de contratação (para card no dashboard)
   const capacidadeQ = trpc.epiAvancado.capacidadeContratacao.useQuery(
-    { companyId },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId },
+    { enabled: hasValidCompany }
   );
 
   // Estoque por obra queries
-  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId }, { enabled: !!companyId });
-  const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId }, { enabled: !!companyId });
-  const transferenciasQ = trpc.epis.listarTransferencias.useQuery({ companyId }, { enabled: !!companyId });
+  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
+  const transferenciasQ = trpc.epis.listarTransferencias.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const estoqueObraList2 = estoqueObraQ.data ?? [];
   const estoqueResumo = estoqueObraResumoQ.data ?? [];
   const transferenciasList = transferenciasQ.data ?? [];
@@ -799,7 +803,7 @@ export default function Epis() {
             if (editingFornecedor) {
               updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
             } else {
-              createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+              createFornecedorMut.mutate({ companyId: queryCompanyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
             }
           }}
           isPending={createFornecedorMut.isPending || updateFornecedorMut.isPending}
@@ -998,7 +1002,7 @@ export default function Epis() {
                 <Button onClick={() => {
                   if (!epiForm.nome.trim()) return toast.error("Nome do EPI é obrigatório");
                   createEpiMut.mutate({
-                    companyId, nome: epiForm.nome,
+                    companyId: queryCompanyId, nome: epiForm.nome,
                     ca: epiForm.ca || undefined, validadeCa: epiForm.validadeCa || undefined,
                     fabricante: epiForm.fabricante || undefined, fornecedor: epiForm.fornecedor || undefined,
                     fornecedorCnpj: epiForm.fornecedorCnpj?.replace(/\D/g, "") || undefined,
@@ -1031,7 +1035,7 @@ export default function Epis() {
             if (editingFornecedor) {
               updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
             } else {
-              createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+              createFornecedorMut.mutate({ companyId: queryCompanyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
             }
           }}
           isPending={createFornecedorMut.isPending || updateFornecedorMut.isPending}
@@ -1260,7 +1264,7 @@ export default function Epis() {
                   }
                   if (entregaForm.origemEntrega === 'obra' && !entregaForm.obraId) return toast.error("Selecione a obra para entrega pela obra");
                   createDeliveryMut.mutate({
-                    companyId,
+                    companyId: queryCompanyId,
                     epiId: parseInt(entregaForm.epiId),
                     employeeId: parseInt(entregaForm.employeeId),
                     quantidade: entregaForm.quantidade,
@@ -2341,7 +2345,7 @@ export default function Epis() {
                     if (transForm.tipoOrigem === 'obra' && !transForm.origemObraId) return toast.error('Selecione a obra de origem');
                     if (transForm.tipoOrigem === 'obra' && transForm.origemObraId === transForm.destinoObraId) return toast.error('Origem e destino não podem ser a mesma obra');
                     transferirMut.mutate({
-                      companyId,
+                      companyId: queryCompanyId,
                       epiId: parseInt(transForm.epiId),
                       quantidade: transForm.quantidade,
                       tipoOrigem: transForm.tipoOrigem,
@@ -2407,7 +2411,7 @@ export default function Epis() {
                 <Button className="flex-1 bg-green-600 hover:bg-green-700" disabled={entradaDiretaObraMut.isPending || !entradaDiretaForm.epiId || !entradaDiretaForm.obraId || !entradaDiretaForm.quantidade}
                   onClick={() => {
                     entradaDiretaObraMut.mutate({
-                      companyId,
+                      companyId: queryCompanyId,
                       epiId: parseInt(entradaDiretaForm.epiId),
                       obraId: parseInt(entradaDiretaForm.obraId),
                       quantidade: parseInt(entradaDiretaForm.quantidade),
@@ -2433,7 +2437,7 @@ export default function Epis() {
           if (editingFornecedor) {
             updateFornecedorMut.mutate({ id: editingFornecedor.id, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
           } else {
-            createFornecedorMut.mutate({ companyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
+            createFornecedorMut.mutate({ companyId: queryCompanyId, nome: fornecedorForm.nome, cnpj: cleanCnpj || undefined, contato: fornecedorForm.contato || undefined, telefone: fornecedorForm.telefone || undefined, email: fornecedorForm.email || undefined, endereco: fornecedorForm.endereco || undefined, observacoes: fornecedorForm.observacoes || undefined });
           }
         }}
         isPending={createFornecedorMut.isPending || updateFornecedorMut.isPending}
@@ -2497,8 +2501,8 @@ export default function Epis() {
       {viewMode === "custos" && <EpiRelatorioCusto />}
       {viewMode === "minimo" && <EpiEstoqueMinimo />}
       {viewMode === "ia" && <EpiIA />}
-      {viewMode === "capacidade" && <EpiCapacidade companyId={companyId} />}
-      {viewMode === "descontos" && <EpiDescontos companyId={companyId} />}
+      {viewMode === "capacidade" && <EpiCapacidade companyId={queryCompanyId} />}
+      {viewMode === "descontos" && <EpiDescontos companyId={queryCompanyId} />}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 

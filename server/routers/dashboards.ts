@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb } from "../db";
+import { getDb, getConstrutorasIds } from "../db";
 import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
@@ -8,7 +8,7 @@ import {
   epiDiscountAlerts, terminationNotices, vacationPeriods, goldenRules,
   asos, trainings, employeeDocuments, obraFuncionarios,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
+import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
 import { invokeLLM } from "../_core/llm";
 
@@ -703,18 +703,23 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
 // ============================================================
 // 5. DASHBOARD EPIs
 // ============================================================
-async function getDashEpis(companyId: number) {
+async function getDashEpis(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const hoje = new Date().toISOString().split("T")[0];
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+  const companyFilter = ids.length === 1 ? eq(epis.companyId, ids[0]) : inArray(epis.companyId, ids);
+  const delFilter = ids.length === 1 ? eq(epiDeliveries.companyId, ids[0]) : inArray(epiDeliveries.companyId, ids);
+  const empFilter = ids.length === 1 ? eq(employees.companyId, ids[0]) : inArray(employees.companyId, ids);
+  const obraFilter = ids.length === 1 ? eq(obras.companyId, ids[0]) : inArray(obras.companyId, ids);
 
-  const allEpis = await db.select().from(epis).where(eq(epis.companyId, companyId));
+  const allEpis = await db.select().from(epis).where(companyFilter);
   const allDel = await db.select().from(epiDeliveries)
-    .where(and(eq(epiDeliveries.companyId, companyId), isNull(epiDeliveries.deletedAt)));
+    .where(and(delFilter, isNull(epiDeliveries.deletedAt)));
   const allEmps = await db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, obraAtualId: employees.obraAtualId })
-    .from(employees).where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)));
+    .from(employees).where(and(empFilter, isNull(employees.deletedAt)));
   const empMap = new Map(allEmps.map(e => [e.id, e]));
-  const allObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(eq(obras.companyId, companyId));
+  const allObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(obraFilter);
   const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
   const estoqueTotal = allEpis.reduce((s, e) => s + (e.quantidadeEstoque || 0), 0);
@@ -921,8 +926,9 @@ async function getDashEpis(companyId: number) {
   });
 
   // Alertas de desconto pendentes
+  const discountFilter = ids.length === 1 ? eq(epiDiscountAlerts.companyId, ids[0]) : inArray(epiDiscountAlerts.companyId, ids);
   const alertasPendentes = await db.select().from(epiDiscountAlerts)
-    .where(and(eq(epiDiscountAlerts.companyId, companyId), eq(epiDiscountAlerts.status, 'pendente')));
+    .where(and(discountFilter, eq(epiDiscountAlerts.status, 'pendente')));
   const valorDescontosPendentes = alertasPendentes.reduce((s, a) => s + parseFloat(String(a.valorTotal || '0')), 0);
 
   // Custo médio por funcionário
@@ -2709,7 +2715,7 @@ export const dashboardsRouter = router({
     periodoTipo: z.enum(['ano','semestre','trimestre','mes','semana','dia']).optional(),
     periodoValor: z.string().optional(),
   })).query(({ input }) => getDashHorasExtras(input.companyId, input.year, input)),
-  epis: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashEpis(input.companyId)),
+  epis: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashEpis(input.companyId, input.companyIds)),
   juridico: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDashJuridico(input.companyId)),
   avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashAvisoPrevio(input.companyId, input.ano)),
   ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano)),

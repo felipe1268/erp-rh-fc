@@ -411,6 +411,7 @@ export const companies = mysqlTable("companies", {
 	deletedByUserId: int(),
 	inscricaoEstadual: varchar({ length: 30 }),
 	inscricaoMunicipal: varchar({ length: 30 }),
+	compartilhaRecursos: tinyint('compartilha_recursos').default(0).notNull(),
 },
 (table) => [
 	index("companies_cnpj_unique").on(table.cnpj),

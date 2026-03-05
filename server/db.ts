@@ -111,6 +111,21 @@ export async function getCompanies() {
   return db.select().from(companies).where(isNull(companies.deletedAt)).orderBy(companies.razaoSocial);
 }
 
+// Retorna IDs das empresas que compartilham recursos ("Construtoras")
+export async function getConstrutoras() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(companies)
+    .where(and(isNull(companies.deletedAt), eq(companies.compartilhaRecursos, 1)))
+    .orderBy(companies.razaoSocial);
+}
+
+// Retorna apenas os IDs das construtoras
+export async function getConstrutorasIds(): Promise<number[]> {
+  const list = await getConstrutoras();
+  return list.map(c => c.id);
+}
+
 // Retorna empresas que o usuário pode ver (admin_master vê todas)
 export async function getCompaniesForUser(userId: number, role: string) {
   const db = await getDb();
@@ -458,10 +473,11 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   await db.update(employees).set(sanitized).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
 }
 
-export async function getEmployees(companyId: number, search?: string, status?: string) {
+export async function getEmployees(companyId: number, search?: string, status?: string, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
-  const conditions = [eq(employees.companyId, companyId), isNull(employees.deletedAt)];
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+  const conditions = [inArray(employees.companyId, ids), isNull(employees.deletedAt)];
   if (status && status !== "Todos") {
     conditions.push(eq(employees.status, status as any));
   }
@@ -1313,10 +1329,11 @@ export async function restoreObra(id: number) {
   await db.update(obras).set({ deletedAt: null, deletedBy: null, deletedByUserId: null } as any).where(eq(obras.id, id));
 }
 
-export async function getObrasByCompanyActive(companyId: number) {
+export async function getObrasByCompanyActive(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(obras).where(and(eq(obras.companyId, companyId), eq(obras.isActive, 1), isNull(obras.deletedAt))).orderBy(obras.nome);
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+  return db.select().from(obras).where(and(inArray(obras.companyId, ids), eq(obras.isActive, 1), isNull(obras.deletedAt))).orderBy(obras.nome);
 }
 
 // Funcionários alocados na obra

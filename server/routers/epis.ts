@@ -2,7 +2,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, gte } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, gte, inArray } from "drizzle-orm";
+import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 
@@ -11,10 +12,11 @@ export const episRouter = router({
   // CATÁLOGO DE EPIs
   // ============================================================
   list: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      return db.select().from(epis).where(eq(epis.companyId, input.companyId)).orderBy(epis.nome);
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      return db.select().from(epis).where(inArray(epis.companyId, ids)).orderBy(epis.nome);
     }),
 
   create: protectedProcedure
@@ -139,12 +141,14 @@ export const episRouter = router({
   listDeliveries: protectedProcedure
     .input(z.object({
       companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
       employeeId: z.number().optional(),
       epiId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const conds: any[] = [eq(epiDeliveries.companyId, input.companyId), isNull(epiDeliveries.deletedAt)];
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const conds: any[] = [inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt)];
       if (input.employeeId) conds.push(eq(epiDeliveries.employeeId, input.employeeId));
       if (input.epiId) conds.push(eq(epiDeliveries.epiId, input.epiId));
 
@@ -420,12 +424,13 @@ export const episRouter = router({
   // STATS
   // ============================================================
   stats: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const allEpis = await db.select().from(epis).where(eq(epis.companyId, input.companyId));
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const allEpis = await db.select().from(epis).where(inArray(epis.companyId, ids));
       const allDeliveries = await db.select().from(epiDeliveries)
-        .where(and(eq(epiDeliveries.companyId, input.companyId), isNull(epiDeliveries.deletedAt)));
+        .where(and(inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt)));
 
       const hoje = new Date().toISOString().split("T")[0];
       const totalItens = allEpis.length;
@@ -984,11 +989,12 @@ Exemplos de referência:
   // FORNECEDORES DE EPIs
   // ============================================================
   fornecedoresList: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
       return db.select().from(fornecedoresEpi)
-        .where(and(eq(fornecedoresEpi.companyId, input.companyId), eq(fornecedoresEpi.ativo, 1)))
+        .where(and(inArray(fornecedoresEpi.companyId, ids), eq(fornecedoresEpi.ativo, 1)))
         .orderBy(fornecedoresEpi.nome);
     }),
 
@@ -1056,10 +1062,11 @@ Exemplos de referência:
   // ESTOQUE POR OBRA
   // ============================================================
   estoqueObraList: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const conds: any[] = [eq(epiEstoqueObra.companyId, input.companyId)];
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const conds: any[] = [inArray(epiEstoqueObra.companyId, ids)];
       if (input.obraId) conds.push(eq(epiEstoqueObra.obraId, input.obraId));
       const rows = await db.select({
         id: epiEstoqueObra.id,
@@ -1087,9 +1094,10 @@ Exemplos de referência:
 
   // Resumo de estoque por obra (agrupado)
   estoqueObraResumo: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
       const rows = await db.select({
         obraId: epiEstoqueObra.obraId,
         nomeObra: obras.nome,
@@ -1098,7 +1106,7 @@ Exemplos de referência:
       })
         .from(epiEstoqueObra)
         .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
-        .where(and(eq(epiEstoqueObra.companyId, input.companyId), sql`${epiEstoqueObra.quantidade} > 0`))
+        .where(and(inArray(epiEstoqueObra.companyId, ids), sql`${epiEstoqueObra.quantidade} > 0`))
         .groupBy(epiEstoqueObra.obraId, obras.nome)
         .orderBy(obras.nome);
       return rows;
@@ -1182,12 +1190,14 @@ Exemplos de referência:
   listarTransferencias: protectedProcedure
     .input(z.object({
       companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
       epiId: z.number().optional(),
       obraId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const conds: any[] = [eq(epiTransferencias.companyId, input.companyId)];
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+      const conds: any[] = [inArray(epiTransferencias.companyId, ids)];
       if (input.epiId) conds.push(eq(epiTransferencias.epiId, input.epiId));
       if (input.obraId) {
         conds.push(sql`(${epiTransferencias.origemObraId} = ${input.obraId} OR ${epiTransferencias.destinoObraId} = ${input.obraId})`);
