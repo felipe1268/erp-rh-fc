@@ -67,6 +67,60 @@ function valorPorExtenso(valor: number): string {
 }
 
 // ==========================================
+// Converter jornada JSON em tabela HTML
+// ==========================================
+const DIAS_SEMANA: Record<string, string> = {
+  seg: "Segunda-feira",
+  ter: "Terça-feira",
+  qua: "Quarta-feira",
+  qui: "Quinta-feira",
+  sex: "Sexta-feira",
+  sab: "Sábado",
+  dom: "Domingo",
+};
+
+function jornadaParaTabela(jornada: string): string {
+  try {
+    const dados = JSON.parse(jornada);
+    if (typeof dados !== "object" || dados === null) return jornada;
+
+    const rows = Object.entries(dados)
+      .filter(([key]) => DIAS_SEMANA[key])
+      .map(([key, val]: [string, any]) => {
+        const dia = DIAS_SEMANA[key] || key;
+        const entrada = val?.entrada || "—";
+        const intervalo = val?.intervalo || "—";
+        const saida = val?.saida || "—";
+        return `<tr>
+  <td style="border: 1px solid #999; padding: 5px 10px; font-size: 10pt;">${dia}</td>
+  <td style="border: 1px solid #999; padding: 5px 10px; font-size: 10pt; text-align: center;">${entrada}</td>
+  <td style="border: 1px solid #999; padding: 5px 10px; font-size: 10pt; text-align: center;">${intervalo}</td>
+  <td style="border: 1px solid #999; padding: 5px 10px; font-size: 10pt; text-align: center;">${saida}</td>
+</tr>`;
+      });
+
+    if (rows.length === 0) return jornada;
+
+    return `<table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+<thead>
+<tr style="background-color: #1B2A4A; color: #fff;">
+  <th style="border: 1px solid #999; padding: 6px 10px; font-size: 10pt; text-align: left;">Dia</th>
+  <th style="border: 1px solid #999; padding: 6px 10px; font-size: 10pt; text-align: center;">Entrada</th>
+  <th style="border: 1px solid #999; padding: 6px 10px; font-size: 10pt; text-align: center;">Intervalo</th>
+  <th style="border: 1px solid #999; padding: 6px 10px; font-size: 10pt; text-align: center;">Saída</th>
+</tr>
+</thead>
+<tbody>
+${rows.join("\n")}
+</tbody>
+</table>`;
+  } catch {
+    // Se não for JSON válido, retorna como texto (formato legado)
+    return jornada;
+  }
+}
+
+// ==========================================
 // Substituir placeholders no template
 // ==========================================
 function substituirPlaceholders(template: string, dados: Record<string, string>): string {
@@ -104,7 +158,7 @@ const TEMPLATE_EXPERIENCIA = `<div style="font-family: 'Times New Roman', serif;
 <p style="text-align: justify;"><strong>2.</strong> O local de trabalho será na [LOCAL_TRABALHO], podendo a EMPREGADORA a qualquer tempo, transferir o EMPREGADO a título temporário ou definitivo, tanto no âmbito da unidade para a qual foi admitido, como para outras, em qualquer localidade deste estado ou outro dentro do país.</p>
 
 <p style="text-align: justify;"><strong>3.</strong> O EMPREGADO trabalhará no horário descrito abaixo e aceita trabalhar em regime de compensação e de prorrogação de horas, inclusive em período noturno, sempre que as necessidades assim o exigirem, observadas as formalidades legais.</p>
-<p style="margin-left: 40px;">[HORARIO_TRABALHO]</p>
+<div style="margin: 10px 20px;">[HORARIO_TRABALHO]</div>
 <p style="text-align: justify;"><strong>Parágrafo único:</strong> Convindo as partes, poderá ser estabelecido um horário de trabalho diferente do mencionado nesta cláusula, inclusive da jornada diurna para noturna e vice-versa, ou em horários mistos e, quando necessário em regime de revezamento, prorrogação e compensação e horário extraordinário. Ao EMPREGADOR cabe a faculdade de indicar e alterar os períodos durante a jornada, observando as formalidades legais.</p>
 
 <p style="text-align: justify;"><strong>4.</strong> O EMPREGADO perceberá a remuneração de <strong>R$[VALOR_HORA]</strong> ([VALOR_HORA_EXTENSO]) por hora.</p>
@@ -203,7 +257,7 @@ const TEMPLATE_INDETERMINADO = `<div style="font-family: 'Times New Roman', seri
 <p style="text-align: justify;"><strong>2.</strong> O local de trabalho será na [LOCAL_TRABALHO], podendo a EMPREGADORA a qualquer tempo, transferir o EMPREGADO a título temporário ou definitivo, tanto no âmbito da unidade para a qual foi admitido, como para outras, em qualquer localidade deste estado ou outro dentro do país.</p>
 
 <p style="text-align: justify;"><strong>3.</strong> O EMPREGADO trabalhará no horário descrito abaixo e aceita trabalhar em regime de compensação e de prorrogação de horas, inclusive em período noturno, sempre que as necessidades assim o exigirem, observadas as formalidades legais.</p>
-<p style="margin-left: 40px;">[HORARIO_TRABALHO]</p>
+<div style="margin: 10px 20px;">[HORARIO_TRABALHO]</div>
 <p style="text-align: justify;"><strong>Parágrafo único:</strong> Convindo as partes, poderá ser estabelecido um horário de trabalho diferente do mencionado nesta cláusula, inclusive da jornada diurna para noturna e vice-versa, ou em horários mistos e, quando necessário em regime de revezamento, prorrogação e compensação e horário extraordinário. Ao EMPREGADOR cabe a faculdade de indicar e alterar os períodos durante a jornada, observando as formalidades legais.</p>
 
 <p style="text-align: justify;"><strong>4.</strong> O EMPREGADO perceberá a remuneração de <strong>R$[VALOR_HORA]</strong> ([VALOR_HORA_EXTENSO]) por hora.</p>
@@ -442,7 +496,7 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
         ESTADO_FUNCIONARIO: emp.estado || "",
         FUNCAO: input.funcaoOverride || emp.funcao || emp.cargo || "",
         LOCAL_TRABALHO: input.localTrabalhoOverride || `${company.endereco || ""}, ${company.cidade || ""}, estado de ${company.estado || ""}`,
-        HORARIO_TRABALHO: horario,
+        HORARIO_TRABALHO: jornadaParaTabela(horario),
         VALOR_HORA: valorHora,
         VALOR_HORA_EXTENSO: valorPorExtenso(valorHoraNum),
         DATA_INICIO: formatarDataCurta(dataInicio),

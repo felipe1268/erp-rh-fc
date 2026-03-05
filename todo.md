@@ -4966,3 +4966,9 @@
 - [x] bibliotecaConteudo.ts - Remover "FC" dos textos de ajuda
 - [x] payrollEngine.ts - Remover "FC" do fallback de empresa
 - [x] pjContracts.ts - Remover "FC" do comentário
+
+## Rev. 204: Tabela de Horários nos Contratos CLT
+- [x] Converter JSON bruto de horário de trabalho em tabela HTML formatada nos contratos CLT
+- [x] Tabela com colunas: Dia, Entrada, Intervalo, Saída
+- [x] Estilo profissional com cabeçalho azul escuro
+- [x] Garantir boa aparência na impressão e preview
