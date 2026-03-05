@@ -4846,3 +4846,6 @@
 - [x] Fix: erro SQL "companyId = ? and is null" — removido isNull(epis.deletedAt) pois tabela epis não tem deletedAt
 - [x] Adicionar botão "Carregar Padrão NR-6/NR-18" com 9 cores padrão (Branco, Azul, Verde, Amarelo, Vermelho, Laranja, Cinza, Marrom, Preto)
 - [x] Atualizar versão do ERP para Rev. 191 (05/03/2026)
+
+## Rev. 192: Reordenar abas EPIs
+- [x] Mover aba Config para a extrema direita da barra de abas (após Descontos)

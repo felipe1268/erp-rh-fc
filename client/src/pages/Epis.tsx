@@ -1667,10 +1667,6 @@ export default function Epis() {
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "custos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <BarChart3 className="h-3.5 w-3.5 inline mr-1" /> Custos
           </button>
-          <button onClick={() => setViewMode("config")}
-            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "config" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            <Settings2 className="h-3.5 w-3.5 inline mr-1" /> Config
-          </button>
           <button onClick={() => setViewMode("ia")}
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "ia" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <Brain className="h-3.5 w-3.5 inline mr-1" /> IA
@@ -1682,6 +1678,10 @@ export default function Epis() {
           <button onClick={() => setViewMode("descontos")}
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "descontos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <Ban className="h-3.5 w-3.5 inline mr-1" /> Descontos
+          </button>
+          <button onClick={() => setViewMode("config")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "config" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Settings2 className="h-3.5 w-3.5 inline mr-1" /> Config
           </button>
           </div>
         </div>
