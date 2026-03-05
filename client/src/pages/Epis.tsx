@@ -155,6 +155,12 @@ export default function Epis() {
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
   const obrasList = obrasQ.data ?? [];
 
+  // Capacidade de contratação (para card no dashboard)
+  const capacidadeQ = trpc.epiAvancado.capacidadeContratacao.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+
   // Estoque por obra queries
   const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId }, { enabled: !!companyId });
   const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId }, { enabled: !!companyId });
@@ -1587,6 +1593,40 @@ export default function Epis() {
                   </p>
                 </CardContent>
               </Card>}
+              <Card
+                className={`border-l-4 flex-shrink-0 w-[150px] sm:w-auto cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${
+                  !capacidadeQ.data?.kitConfigurado ? 'border-l-gray-400' :
+                  (capacidadeQ.data?.capacidade ?? 0) === 0 ? 'border-l-red-500' :
+                  (capacidadeQ.data?.capacidade ?? 0) <= 3 ? 'border-l-orange-500' :
+                  (capacidadeQ.data?.capacidade ?? 0) <= 10 ? 'border-l-yellow-500' : 'border-l-green-500'
+                }`}
+                onClick={() => setViewMode("capacidade")}
+              >
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                    <Users className="w-3 h-3" /> Cap. Contratação
+                  </p>
+                  {capacidadeQ.isLoading ? (
+                    <p className="text-lg font-bold text-gray-400">...</p>
+                  ) : !capacidadeQ.data?.kitConfigurado ? (
+                    <p className="text-sm font-medium text-gray-400">Não config.</p>
+                  ) : (
+                    <p className={`text-lg font-bold ${
+                      (capacidadeQ.data?.capacidade ?? 0) === 0 ? 'text-red-600' :
+                      (capacidadeQ.data?.capacidade ?? 0) <= 3 ? 'text-orange-600' :
+                      (capacidadeQ.data?.capacidade ?? 0) <= 10 ? 'text-yellow-600' : 'text-green-600'
+                    }`}>
+                      {capacidadeQ.data?.capacidade ?? 0}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">
+                        {capacidadeQ.data?.nivel === 'critico' ? 'CRÍTICO' :
+                         capacidadeQ.data?.nivel === 'baixo' ? 'BAIXO' :
+                         capacidadeQ.data?.nivel === 'medio' ? 'MÉDIO' :
+                         capacidadeQ.data?.nivel === 'bom' ? 'BOM' : 'ÓTIMO'}
+                      </span>
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </div>
         )}

@@ -3645,3 +3645,37 @@ export const epiAiAnalises = mysqlTable("epi_ai_analises", {
 	index("eaia_company").on(table.companyId),
 	index("eaia_status").on(table.status),
 ]);
+
+// ============================================================
+// ALERTA DE CAPACIDADE DE CONTRATAÇÃO (EPI)
+// ============================================================
+export const epiAlertaCapacidade = mysqlTable("epi_alerta_capacidade", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	limiar: int().default(5).notNull(), // Abaixo desse número, dispara alerta
+	ativo: tinyint().default(1).notNull(),
+	emailDestinatarios: text(), // JSON array de emails adicionais (além dos notification_recipients)
+	ultimoAlertaEm: timestamp({ mode: 'string' }),
+	ultimaCapacidade: int(),
+	intervaloMinHoras: int().default(24).notNull(), // Mínimo de horas entre alertas
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("eac_company").on(table.companyId),
+]);
+
+export const epiAlertaCapacidadeLog = mysqlTable("epi_alerta_capacidade_log", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	capacidade: int().notNull(),
+	limiar: int().notNull(),
+	gargaloItem: varchar({ length: 255 }),
+	gargaloEstoque: int(),
+	destinatariosEnviados: text(), // JSON array
+	emailsEnviados: int().default(0).notNull(),
+	emailsErros: int().default(0).notNull(),
+	enviadoEm: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+	index("eacl_company").on(table.companyId),
+	index("eacl_enviado").on(table.enviadoEm),
+]);

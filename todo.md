@@ -4783,3 +4783,20 @@
 - [x] Tela de configuração do kit básico editável (adicionar/remover itens, alterar quantidade)
 - [x] Filtro por obra (capacidade por obra específica ou geral)
 - [x] Integrar no dashboard de EPIs como card principal
+
+## Melhorias Capacidade de Contratação
+- [ ] Testar indicador de capacidade na aba EPIs > Capacidade
+- [ ] Alertas automáticos por e-mail quando capacidade cair abaixo do limite configurável
+- [ ] Card de "Capacidade de Contratação" no dashboard principal de EPIs (cards do topo)
+
+## Rev. 188: Correção EpiCapacidade + Alertas Automáticos + Card Dashboard
+- [x] Corrigir crash do EpiCapacidade em mobile/produção (null checks, loading states, error boundary)
+- [x] Adicionar card "Cap. Contratação" no dashboard principal de EPIs (sempre visível)
+- [x] Implementar alertas automáticos por email quando capacidade < limiar configurável
+- [x] Criar tabela epi_alerta_capacidade (configuração de alertas)
+- [x] Criar tabela epi_alerta_capacidade_log (histórico de alertas enviados)
+- [x] Backend: getAlertaCapacidade, salvarAlertaCapacidade, getAlertaCapacidadeLogs, verificarAlertaCapacidade
+- [x] Frontend: seção de configuração de alertas no EpiCapacidade (limiar, intervalo, emails extras, histórico)
+- [x] Botão "Verificar e Enviar Agora" para teste manual de alertas
+- [x] Email HTML profissional com tabela de itens, gargalo destacado, e ação requerida
+- [x] 10 testes vitest passando para o módulo de alerta de capacidade

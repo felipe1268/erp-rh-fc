@@ -8,7 +8,9 @@ import {
   epiChecklists, epiChecklistItems, epiAiAnalises,
   epis, epiDeliveries, epiEstoqueObra, epiTransferencias,
   employees, obras, trainings, systemCriteria,
+  epiAlertaCapacidade, epiAlertaCapacidadeLog, notificationRecipients,
 } from "../../drizzle/schema";
+import { sendEmail } from "../services/smtpService";
 import { eq, and, desc, sql, isNull, gte, lte, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
@@ -1837,5 +1839,294 @@ Forneça sugestões concretas com quantidades específicas.`;
       }));
 
       return { obras: resultados, kitConfigurado: true };
+    }),
+
+  // ============================================================
+  // ALERTA AUTOMÁTICO DE CAPACIDADE DE CONTRATAÇÃO
+  // ============================================================
+
+  // Buscar configuração de alerta
+  getAlertaCapacidade: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [config] = await db.select().from(epiAlertaCapacidade)
+        .where(eq(epiAlertaCapacidade.companyId, input.companyId));
+      return config || null;
+    }),
+
+  // Salvar configuração de alerta
+  salvarAlertaCapacidade: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      limiar: z.number().min(1).max(100),
+      ativo: z.number().min(0).max(1),
+      emailDestinatarios: z.string().optional(), // JSON array
+      intervaloMinHoras: z.number().min(1).max(168).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const [existing] = await db.select().from(epiAlertaCapacidade)
+        .where(eq(epiAlertaCapacidade.companyId, input.companyId));
+      
+      if (existing) {
+        await db.update(epiAlertaCapacidade)
+          .set({
+            limiar: input.limiar,
+            ativo: input.ativo,
+            emailDestinatarios: input.emailDestinatarios || null,
+            intervaloMinHoras: input.intervaloMinHoras || 24,
+          })
+          .where(eq(epiAlertaCapacidade.id, existing.id));
+        return { id: existing.id, updated: true };
+      } else {
+        const [result] = await db.insert(epiAlertaCapacidade).values({
+          companyId: input.companyId,
+          limiar: input.limiar,
+          ativo: input.ativo,
+          emailDestinatarios: input.emailDestinatarios || null,
+          intervaloMinHoras: input.intervaloMinHoras || 24,
+        });
+        return { id: result.insertId, updated: false };
+      }
+    }),
+
+  // Buscar logs de alertas enviados
+  getAlertaCapacidadeLogs: protectedProcedure
+    .input(z.object({ companyId: z.number(), limit: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      return db.select().from(epiAlertaCapacidadeLog)
+        .where(eq(epiAlertaCapacidadeLog.companyId, input.companyId))
+        .orderBy(desc(epiAlertaCapacidadeLog.enviadoEm))
+        .limit(input.limit || 20);
+    }),
+
+  // Verificar e disparar alerta de capacidade (chamado manualmente ou por cron)
+  verificarAlertaCapacidade: protectedProcedure
+    .input(z.object({ companyId: z.number(), forcar: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      
+      // 1. Buscar configuração
+      const [config] = await db.select().from(epiAlertaCapacidade)
+        .where(and(
+          eq(epiAlertaCapacidade.companyId, input.companyId),
+          eq(epiAlertaCapacidade.ativo, 1),
+        ));
+      
+      if (!config) {
+        return { disparado: false, motivo: 'Alerta não configurado ou desativado' };
+      }
+
+      // 2. Verificar intervalo mínimo (a menos que forçado)
+      if (!input.forcar && config.ultimoAlertaEm) {
+        const ultimoAlerta = new Date(config.ultimoAlertaEm);
+        const agora = new Date();
+        const horasDesdeUltimo = (agora.getTime() - ultimoAlerta.getTime()) / (1000 * 60 * 60);
+        if (horasDesdeUltimo < (config.intervaloMinHoras || 24)) {
+          return { 
+            disparado: false, 
+            motivo: `Último alerta enviado há ${Math.round(horasDesdeUltimo)}h. Mínimo: ${config.intervaloMinHoras}h.` 
+          };
+        }
+      }
+
+      // 3. Calcular capacidade atual
+      const kits = await db.select().from(epiKits)
+        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+      let kitBasico = kits.find(k => 
+        k.nome.toLowerCase().includes('básico') || k.nome.toLowerCase().includes('basico') || 
+        k.nome.toLowerCase().includes('contratação') || k.nome.toLowerCase().includes('contratacao')
+      );
+      if (!kitBasico && kits.length > 0) kitBasico = kits[0];
+      if (!kitBasico) {
+        return { disparado: false, motivo: 'Nenhum kit básico configurado' };
+      }
+
+      const itensKit = await db.select().from(epiKitItems)
+        .where(eq(epiKitItems.kitId, kitBasico.id));
+      if (itensKit.length === 0) {
+        return { disparado: false, motivo: 'Kit básico sem itens' };
+      }
+
+      const todosEpis = await db.select({
+        id: epis.id, nome: epis.nome, quantidadeEstoque: epis.quantidadeEstoque,
+      }).from(epis).where(eq(epis.companyId, input.companyId));
+
+      const estoqueObras = await db.select({
+        epiId: epiEstoqueObra.epiId,
+        total: sql<number>`SUM(${epiEstoqueObra.quantidade})`,
+      }).from(epiEstoqueObra)
+        .where(eq(epiEstoqueObra.companyId, input.companyId))
+        .groupBy(epiEstoqueObra.epiId);
+
+      const detalhes = itensKit.filter(i => i.obrigatorio === 1).map(itemKit => {
+        let epiMatch = itemKit.epiId
+          ? todosEpis.find(e => e.id === itemKit.epiId)
+          : todosEpis.find(e => e.nome.toLowerCase().includes(itemKit.nomeEpi.toLowerCase().split(' ')[0]));
+        
+        const estoqueCentral = epiMatch?.quantidadeEstoque || 0;
+        const estoqueObraTotal = epiMatch ? (estoqueObras.find(eo => eo.epiId === epiMatch!.id)?.total || 0) : 0;
+        const estoqueTotal = estoqueCentral + estoqueObraTotal;
+        const capacidade = itemKit.quantidade > 0 ? Math.floor(estoqueTotal / itemKit.quantidade) : 0;
+        return { nomeEpi: itemKit.nomeEpi, estoqueTotal, capacidade };
+      });
+
+      const capacidadeGeral = detalhes.length > 0 ? Math.min(...detalhes.map(d => d.capacidade)) : 0;
+      const gargalo = detalhes.length > 0 ? detalhes.reduce((min, d) => d.capacidade < min.capacidade ? d : min) : null;
+
+      // 4. Verificar se está abaixo do limiar
+      if (capacidadeGeral >= config.limiar) {
+        // Atualizar última capacidade
+        await db.update(epiAlertaCapacidade)
+          .set({ ultimaCapacidade: capacidadeGeral })
+          .where(eq(epiAlertaCapacidade.id, config.id));
+        return { 
+          disparado: false, 
+          motivo: `Capacidade (${capacidadeGeral}) está acima do limiar (${config.limiar})`,
+          capacidade: capacidadeGeral,
+        };
+      }
+
+      // 5. DISPARAR ALERTA! Buscar destinatários
+      const recipients = await db.select().from(notificationRecipients)
+        .where(and(
+          eq(notificationRecipients.companyId, input.companyId),
+          eq(notificationRecipients.ativo, 1),
+        ));
+
+      // Adicionar emails extras da configuração
+      let todosEmails: { nome: string; email: string }[] = recipients.map(r => ({ nome: r.nome, email: r.email }));
+      if (config.emailDestinatarios) {
+        try {
+          const extras: string[] = JSON.parse(config.emailDestinatarios);
+          for (const email of extras) {
+            if (email && !todosEmails.find(e => e.email === email)) {
+              todosEmails.push({ nome: email.split('@')[0], email });
+            }
+          }
+        } catch {}
+      }
+
+      if (todosEmails.length === 0) {
+        return { disparado: false, motivo: 'Nenhum destinatário configurado' };
+      }
+
+      // 6. Gerar e-mail de alerta
+      const nivelTexto = capacidadeGeral === 0 ? 'CRÍTICO' : capacidadeGeral <= 3 ? 'BAIXO' : 'ATENÇÃO';
+      const corNivel = capacidadeGeral === 0 ? '#DC2626' : capacidadeGeral <= 3 ? '#EA580C' : '#EAB308';
+      
+      const assunto = `⚠️ ALERTA EPI: Capacidade de Contratação ${nivelTexto} — ${capacidadeGeral} funcionário${capacidadeGeral !== 1 ? 's' : ''}`;
+      
+      const textoPlain = [
+        `ALERTA DE CAPACIDADE DE CONTRATAÇÃO`,
+        ``,
+        `Nível: ${nivelTexto}`,
+        `Capacidade atual: ${capacidadeGeral} funcionário${capacidadeGeral !== 1 ? 's' : ''}`,
+        `Limiar configurado: ${config.limiar}`,
+        ``,
+        gargalo ? `Item gargalo: ${gargalo.nomeEpi} (estoque: ${gargalo.estoqueTotal})` : '',
+        ``,
+        `Detalhes:`,
+        ...detalhes.map(d => `  • ${d.nomeEpi}: estoque ${d.estoqueTotal} → capacidade ${d.capacidade}`),
+        ``,
+        `Providência necessária: Reposição urgente de estoque de EPIs.`,
+        ``,
+        `Este alerta foi gerado automaticamente pelo Sistema de Gestão Integrada.`,
+      ].filter(Boolean).join('\n');
+
+      const htmlEmail = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:20px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+<tr><td style="background:${corNivel};padding:20px 30px;text-align:center;">
+  <h1 style="color:#fff;margin:0;font-size:22px;">⚠️ ALERTA DE CAPACIDADE</h1>
+  <p style="color:rgba(255,255,255,0.9);margin:8px 0 0;font-size:14px;">Estoque de EPIs abaixo do limiar</p>
+</td></tr>
+<tr><td style="padding:30px;">
+  <div style="text-align:center;margin-bottom:20px;">
+    <div style="font-size:64px;font-weight:900;color:${corNivel};">${capacidadeGeral}</div>
+    <div style="font-size:14px;color:#666;">funcionário${capacidadeGeral !== 1 ? 's' : ''} podem ser equipados</div>
+    <div style="display:inline-block;margin-top:8px;padding:4px 16px;border-radius:20px;background:${corNivel}20;color:${corNivel};font-weight:700;font-size:13px;">${nivelTexto}</div>
+  </div>
+  ${gargalo ? `<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+    <strong style="color:#92400E;">🔒 Item Gargalo:</strong> <span style="color:#78350F;">${gargalo.nomeEpi} (estoque: ${gargalo.estoqueTotal})</span>
+  </div>` : ''}
+  <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+    <tr style="background:#F3F4F6;"><th style="text-align:left;padding:8px;border-bottom:2px solid #E5E7EB;">Item</th><th style="text-align:center;padding:8px;border-bottom:2px solid #E5E7EB;">Estoque</th><th style="text-align:center;padding:8px;border-bottom:2px solid #E5E7EB;">Capacidade</th></tr>
+    ${detalhes.map(d => `<tr><td style="padding:8px;border-bottom:1px solid #E5E7EB;">${d.nomeEpi}</td><td style="text-align:center;padding:8px;border-bottom:1px solid #E5E7EB;">${d.estoqueTotal}</td><td style="text-align:center;padding:8px;border-bottom:1px solid #E5E7EB;font-weight:700;color:${d.capacidade === 0 ? '#DC2626' : d.capacidade <= 3 ? '#EA580C' : '#16A34A'};">${d.capacidade}</td></tr>`).join('')}
+  </table>
+  <div style="margin-top:20px;padding:12px 16px;background:#FEE2E2;border-radius:8px;border-left:4px solid #DC2626;">
+    <strong style="color:#991B1B;">Ação Necessária:</strong> <span style="color:#7F1D1D;">Reposição urgente de estoque de EPIs para manter a capacidade de contratação.</span>
+  </div>
+</td></tr>
+<tr><td style="background:#F7FAFC;padding:15px 30px;text-align:center;border-top:1px solid #E2E8F0;">
+  <p style="color:#718096;font-size:11px;margin:0;">Limiar configurado: ${config.limiar} funcionários | Alerta automático — ERP Gestão Integrada</p>
+</td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+      // 7. Enviar emails
+      let enviados = 0;
+      let erros = 0;
+      const destinatariosEnviados: string[] = [];
+
+      for (const dest of todosEmails) {
+        try {
+          const result = await sendEmail({
+            to: dest.email,
+            subject: assunto,
+            html: htmlEmail,
+            text: textoPlain,
+          });
+          if (result.success) {
+            enviados++;
+            destinatariosEnviados.push(dest.email);
+          } else {
+            erros++;
+          }
+        } catch {
+          erros++;
+        }
+        // Delay entre envios
+        if (todosEmails.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      // 8. Registrar log
+      await db.insert(epiAlertaCapacidadeLog).values({
+        companyId: input.companyId,
+        capacidade: capacidadeGeral,
+        limiar: config.limiar,
+        gargaloItem: gargalo?.nomeEpi || null,
+        gargaloEstoque: gargalo?.estoqueTotal || null,
+        destinatariosEnviados: JSON.stringify(destinatariosEnviados),
+        emailsEnviados: enviados,
+        emailsErros: erros,
+      });
+
+      // 9. Atualizar config
+      await db.update(epiAlertaCapacidade)
+        .set({
+          ultimoAlertaEm: sql`NOW()`,
+          ultimaCapacidade: capacidadeGeral,
+        })
+        .where(eq(epiAlertaCapacidade.id, config.id));
+
+      return {
+        disparado: true,
+        capacidade: capacidadeGeral,
+        limiar: config.limiar,
+        gargalo: gargalo?.nomeEpi,
+        enviados,
+        erros,
+        destinatarios: destinatariosEnviados,
+      };
     }),
 });
