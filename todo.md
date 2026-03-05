@@ -5076,3 +5076,7 @@
 - [x] Corrigir busca de colaborador no formulário Registrar Férias - removeAccents corrigido
 - [x] Formulário Registrar Férias: lista aumentada de 20 para 200 e busca corrigida
 - [x] Adicionar botões de ação rápida na tabela de férias: Iniciar Gozo, Concluir Férias
+
+## Rev. 212: Clique no nome abre detalhes de férias (não Raio X)
+- [x] Alterar clique no nome do colaborador na tela de Férias para abrir detalhes das férias (prorrogar, antecipar, gozo) ao invés do Raio X
+- [x] Aplicar tanto nos alertas (vencidas/a vencer) quanto na tabela de lista de férias

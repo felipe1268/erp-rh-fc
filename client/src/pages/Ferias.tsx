@@ -589,7 +589,7 @@ export default function Ferias() {
                 <div className="mt-2 space-y-1">
                   {alertas.vencidas.slice(0, 5).map((v: any) => (
                     <p key={v.id} className="text-xs text-red-700">
-                      <span className="font-medium cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(v.employeeId)}>{v.employeeName}</span>
+                      <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
                       {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
                     </p>
                   ))}
@@ -604,7 +604,7 @@ export default function Ferias() {
                 <div className="mt-2 space-y-1">
                   {alertas.prestesVencer.slice(0, 5).map((v: any) => (
                     <p key={v.id} className="text-xs text-amber-700">
-                      <span className="font-medium cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(v.employeeId)}>{v.employeeName}</span>
+                      <span className="font-medium cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(v.employeeId)}>{v.employeeName}</span>
                       {" — "}{v.employeeCargo} — Concessivo até {formatDate(v.periodoConcessivoFim)}
                     </p>
                   ))}
@@ -675,7 +675,7 @@ export default function Ferias() {
                         return (
                           <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : ""}`}>
                             <td className="p-3">
-                              <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(f.employeeId)}>{f.employeeName}</div>
+                              <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
                               <div className="text-xs text-muted-foreground">{f.employeeCargo}</div>
                             </td>
                             <td className="p-3 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
@@ -783,7 +783,7 @@ export default function Ferias() {
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div>
-                              <p className="font-semibold text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(grupo.employee.id)}>
+                              <p className="font-semibold text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(grupo.employee.id)}>
                                 {grupo.employee.nome}
                               </p>
                               <p className="text-xs text-muted-foreground">
@@ -912,7 +912,7 @@ export default function Ferias() {
                         {calendarioAgrupado.map((grupo: any) => (
                           <tr key={grupo.employee.id} className="border-b last:border-0 hover:bg-muted/10">
                             <td className="p-2">
-                              <div className="font-medium text-blue-700 cursor-pointer hover:underline text-xs" onClick={() => setRaioXEmployeeId(grupo.employee.id)}>
+                              <div className="font-medium text-blue-700 cursor-pointer hover:underline text-xs" onClick={() => setGanttEmployeeId(grupo.employee.id)}>
                                 {grupo.employee.nome}
                               </div>
                               <div className="text-[10px] text-muted-foreground">{grupo.employee.cargo}</div>
