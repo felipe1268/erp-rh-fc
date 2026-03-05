@@ -2399,7 +2399,7 @@ export default function Epis() {
       {viewMode === "custos" && <EpiRelatorioCusto />}
       {viewMode === "minimo" && <EpiEstoqueMinimo />}
       {viewMode === "ia" && <EpiIA />}
-      {viewMode === "capacidade" && <EpiCapacidade companyId={company?.id || 0} />}
+      {viewMode === "capacidade" && <EpiCapacidade companyId={companyId} />}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 
