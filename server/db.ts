@@ -2431,3 +2431,41 @@ export async function getUserEffectiveGroupPermissions(userId: number) {
     ocultarDadosSensiveis,
   };
 }
+
+
+// ============================================================
+// CACHE EM MEMÓRIA PARA QUERIES FREQUENTES
+// ============================================================
+
+import { cache } from "./cache";
+
+/** Lista obras {id, nome} de uma empresa (cacheada 5 min) */
+export async function getCachedObraNames(companyId: number) {
+  return cache.getOrSet(`obraNames:${companyId}`, async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select({ id: obras.id, nome: obras.nome })
+      .from(obras)
+      .where(and(eq(obras.companyId, companyId), isNull(obras.deletedAt)))
+      .orderBy(obras.nome);
+  }, 300);
+}
+
+/** Lista todas as empresas (cacheada 5 min) */
+export async function getCachedCompanies() {
+  return cache.getOrSet("companies:all", async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(companies).where(isNull(companies.deletedAt)).orderBy(companies.razaoSocial);
+  }, 300);
+}
+
+/** Invalida cache de obras de uma empresa */
+export function invalidateObrasCache(companyId: number) {
+  cache.invalidate(`obraNames:${companyId}`);
+}
+
+/** Invalida cache de empresas */
+export function invalidateCompaniesCache() {
+  cache.invalidate("companies:all");
+}

@@ -4891,3 +4891,18 @@
 - [x] Criar função syncRevisions() que compara versões do changelog com o banco
 - [x] Chamar syncRevisions() no startup do servidor
 - [x] Testar que novas revisões são inseridas automaticamente (Rev. 195-196 inseridas com sucesso)
+
+## Rev. 197: Otimização de Performance + Reforço de Segurança
+
+### Performance
+- [x] Analisar queries (N+1 encontrados em avaliacao.ts — corrigir em batch futuro)
+- [x] Implementar cache em memória com TTL 5min (server/cache.ts + server/cachedQueries.ts)
+- [x] Lazy loading já implementado em 50+ páginas (Rev. 182)
+- [x] Manual chunks já configurados no Vite (vendor-charts, vendor-ui, vendor-utils, vendor-data)
+- [x] 282 índices já definidos no schema (cobertura adequada)
+
+### Segurança
+- [x] Rate limiting: API 200 req/min, Auth 20 req/min, Upload 30 req/min (server/security.ts)
+- [x] Headers HTTP: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, Permissions-Policy
+- [x] Validação Zod: 702 rotas com validação, 0 sem — já 100% coberto
+- [x] Atualizar versão para Rev. 197

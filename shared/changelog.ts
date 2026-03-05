@@ -282,4 +282,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-05 03:00:00",
   },
+  {
+    version: 197,
+    titulo: "Otimização de Performance + Reforço de Segurança",
+    descricao: "Cache em memória com TTL de 5 min para dados estáticos (empresas, obras, funções). Rate limiting na API (200 req/min) e autenticação (20 req/min) contra brute force. Headers de segurança HTTP: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, Permissions-Policy. Proteção contra clickjacking, MIME sniffing e XSS.",
+    tipo: "seguranca",
+    modulos: "Sistema",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-05 04:00:00",
+  },
 ];

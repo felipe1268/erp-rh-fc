@@ -10,6 +10,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { securityHeaders, apiRateLimit, authRateLimit } from "../security";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -33,9 +34,15 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  // Security headers (XSS, clickjacking, MIME sniffing, HSTS)
+  app.use(securityHeaders());
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Rate limiting para autenticação (mais restritivo: 20 req/min)
+  app.use("/api/oauth", authRateLimit);
+  // Rate limiting para API (200 req/min por IP+path)
+  app.use("/api/trpc", apiRateLimit);
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // tRPC API
