@@ -4919,3 +4919,15 @@
 - [x] Adicionar seção de aniversários de empresa (anos de casa) na Home
 - [x] Backend: calcular aniversários de contratação no homeData
 - [x] Atualizar Controle de Revisões (Rev. 198 no changelog)
+
+## Rev. 199: Módulo de Contratos CLT
+- [x] Criar tabelas no banco: contract_templates, employee_contracts
+- [x] Criar router tRPC para contratos (8 procedures: CRUD, geração, upload, status)
+- [x] Implementar função de valor por extenso em pt-BR (até milhares + centavos)
+- [x] Criar UI de geração de contrato (escolher tipo, prazo 30+30 ou 45+45)
+- [x] Criar aba "Contratos CLT" no Raio-X do funcionário
+- [x] Implementar impressão em formato A4 com window.print()
+- [x] Implementar upload de contrato assinado (PDF/foto) para S3
+- [x] Implementar Prorrogar e Efetivar com um clique
+- [x] Horário de trabalho puxado do cadastro do funcionário
+- [x] Templates com LGPD, sigilo e segurança baseados nos contratos originais

@@ -300,4 +300,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-05 05:00:00",
   },
+  {
+    version: 199,
+    titulo: "Módulo de Contratos CLT (Experiência e Indeterminado)",
+    descricao: "Geração automática de contratos CLT (Experiência 30+30 ou 45+45 dias, e Indeterminado) com placeholders preenchidos automaticamente a partir do cadastro do funcionário. Valor por extenso calculado automaticamente. Horário de trabalho puxado do cadastro. Templates com LGPD, sigilo e segurança. Impressão em formato A4. Upload de contrato assinado (PDF/foto). Prorrogar e efetivar com um clique. Histórico completo na aba Contratos CLT do Raio-X do funcionário.",
+    tipo: "feature",
+    modulos: "RH & DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-05 08:00:00",
+  },
 ];

@@ -12,7 +12,7 @@ import {
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
-  Palmtree, Shield, FileSignature, Ban, Star, Eye
+  Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -705,6 +705,13 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     ],
                   },
                   {
+                    label: "Contratos",
+                    color: "cyan",
+                    tabs: [
+                      { value: "contratos_clt", label: "Contratos CLT", icon: ScrollText, count: 0 },
+                    ],
+                  },
+                  {
                     label: "Disciplinar / Saída",
                     color: "red",
                     tabs: [
@@ -723,6 +730,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   emerald: "bg-emerald-600 text-white shadow-sm",
                   red: "bg-red-600 text-white shadow-sm",
                   amber: "bg-amber-600 text-white shadow-sm",
+                  cyan: "bg-cyan-600 text-white shadow-sm",
                 };
                 const labelColorMap: Record<string, string> = {
                   indigo: "text-indigo-700 border-indigo-300",
@@ -730,6 +738,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   emerald: "text-emerald-700 border-emerald-300",
                   red: "text-red-700 border-red-300",
                   amber: "text-amber-700 border-amber-300",
+                  cyan: "text-cyan-700 border-cyan-300",
                 };
 
                 return (
@@ -1888,10 +1897,333 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   </div>
                 )}
               </TabsContent>
+
+              {/* ============ CONTRATOS CLT ============ */}
+              <TabsContent value="contratos_clt" className="mt-4">
+                <ContratosTab employeeId={employeeId!} companyId={selectedCompany?.id || 0} empNome={emp?.nomeCompleto || ""} />
+              </TabsContent>
             </Tabs>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ============ COMPONENTE CONTRATOS TAB ============
+function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; companyId: number; empNome: string }) {
+  const [showGerador, setShowGerador] = useState(false);
+  const [tipo, setTipo] = useState<"experiencia" | "indeterminado">("experiencia");
+  const [prazoExp, setPrazoExp] = useState<"30+30" | "45+45">("45+45");
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [dadosContrato, setDadosContrato] = useState<any>(null);
+  const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [uploadTipo, setUploadTipo] = useState<"contrato" | "prorrogacao">("contrato");
+  const [viewingHtml, setViewingHtml] = useState("");
+
+  const contratosQuery = trpc.contracts.listarContratos.useQuery({ employeeId });
+  const contratos = contratosQuery.data || [];
+  const gerarMutation = trpc.contracts.gerarContrato.useMutation();
+  const salvarMutation = trpc.contracts.salvarContrato.useMutation();
+  const uploadMutation = trpc.contracts.uploadAssinado.useMutation();
+  const statusMutation = trpc.contracts.atualizarStatus.useMutation();
+  const utils = trpc.useUtils();
+
+  const handleGerar = async () => {
+    try {
+      const result = await gerarMutation.mutateAsync({
+        companyId,
+        employeeId,
+        tipo,
+        prazoExperiencia: prazoExp,
+      });
+      setPreviewHtml(result.conteudoHtml);
+      setDadosContrato(result.dados);
+    } catch (e: any) {
+      alert("Erro ao gerar contrato: " + (e.message || "Erro desconhecido"));
+    }
+  };
+
+  const handleSalvar = async () => {
+    if (!dadosContrato || !previewHtml) return;
+    setSaving(true);
+    try {
+      await salvarMutation.mutateAsync({
+        companyId,
+        employeeId,
+        tipo: dadosContrato.tipo,
+        dataInicio: dadosContrato.dataInicio,
+        dataFim: dadosContrato.dataFim || undefined,
+        prazoExperienciaDias: dadosContrato.prazoExperienciaDias || undefined,
+        prazoProrrogacaoDias: dadosContrato.prazoProrrogacaoDias || undefined,
+        salarioBase: dadosContrato.salarioBase || undefined,
+        valorHora: dadosContrato.valorHora || undefined,
+        funcao: dadosContrato.funcao || undefined,
+        jornadaTrabalho: dadosContrato.jornadaTrabalho || undefined,
+        localTrabalho: dadosContrato.localTrabalho || undefined,
+        conteudoGerado: previewHtml,
+      });
+      utils.contracts.listarContratos.invalidate();
+      setShowGerador(false);
+      setPreviewHtml("");
+      setDadosContrato(null);
+    } catch (e: any) {
+      alert("Erro ao salvar: " + (e.message || "Erro desconhecido"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleImprimir = (html: string) => {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato - ${empNome}</title><style>@page{size:A4;margin:20mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${html}</body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  };
+
+  const handleUpload = async (contratoId: number, isProrrogacao: boolean) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,.jpg,.jpeg,.png";
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { alert("Arquivo muito grande (max 10MB)"); return; }
+      setUploadingId(contratoId);
+      try {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
+          await uploadMutation.mutateAsync({
+            contratoId,
+            fileBase64: base64,
+            fileName: file.name,
+            mimeType: file.type,
+            tipoProrrogacao: isProrrogacao,
+          });
+          utils.contracts.listarContratos.invalidate();
+          setUploadingId(null);
+        };
+        reader.readAsDataURL(file);
+      } catch {
+        setUploadingId(null);
+        alert("Erro no upload");
+      }
+    };
+    input.click();
+  };
+
+  const handleEfetivar = async (contrato: any) => {
+    if (!confirm("Deseja efetivar este funcionário? Será gerado um contrato por tempo indeterminado.")) return;
+    await statusMutation.mutateAsync({ id: contrato.id, status: "efetivado", dataEfetivacao: new Date().toISOString().split("T")[0] });
+    // Gerar contrato indeterminado automaticamente
+    const result = await gerarMutation.mutateAsync({ companyId, employeeId, tipo: "indeterminado" });
+    await salvarMutation.mutateAsync({
+      companyId, employeeId, tipo: "indeterminado",
+      dataInicio: new Date().toISOString().split("T")[0],
+      conteudoGerado: result.conteudoHtml,
+      funcao: result.dados.funcao,
+      jornadaTrabalho: result.dados.jornadaTrabalho,
+      localTrabalho: result.dados.localTrabalho,
+      salarioBase: result.dados.salarioBase,
+      valorHora: result.dados.valorHora,
+      contratoAnteriorId: contrato.id,
+    });
+    utils.contracts.listarContratos.invalidate();
+  };
+
+  const tipoLabel: Record<string, string> = {
+    experiencia: "Experiência", indeterminado: "Indeterminado", prorrogacao: "Prorrogação",
+  };
+  const statusLabel: Record<string, string> = {
+    vigente: "Vigente", prorrogado: "Prorrogado", efetivado: "Efetivado", encerrado: "Encerrado", rescindido: "Rescindido",
+  };
+  const statusColor: Record<string, string> = {
+    vigente: "bg-green-100 text-green-800", prorrogado: "bg-blue-100 text-blue-800",
+    efetivado: "bg-emerald-100 text-emerald-800", encerrado: "bg-gray-100 text-gray-800",
+    rescindido: "bg-red-100 text-red-800",
+  };
+
+  // Visualizar contrato
+  if (viewingHtml) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Button variant="outline" size="sm" onClick={() => setViewingHtml("")}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+          </Button>
+          <Button size="sm" onClick={() => handleImprimir(viewingHtml)}>
+            <Printer className="h-4 w-4 mr-1" /> Imprimir
+          </Button>
+        </div>
+        <div className="border rounded-lg bg-white p-6 shadow-sm" dangerouslySetInnerHTML={{ __html: viewingHtml }} />
+      </div>
+    );
+  }
+
+  // Gerador de contrato
+  if (showGerador) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setShowGerador(false); setPreviewHtml(""); setDadosContrato(null); }}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+          </Button>
+          <h3 className="text-lg font-bold text-slate-800">Gerar Novo Contrato</h3>
+        </div>
+
+        {!previewHtml ? (
+          <div className="bg-white border rounded-lg p-6 space-y-4">
+            <div>
+              <label className="text-sm font-semibold text-slate-700 block mb-2">Tipo de Contrato</label>
+              <div className="flex gap-3">
+                <button onClick={() => setTipo("experiencia")} className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${tipo === "experiencia" ? "bg-cyan-600 text-white border-cyan-600" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                  Experiência
+                </button>
+                <button onClick={() => setTipo("indeterminado")} className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${tipo === "indeterminado" ? "bg-cyan-600 text-white border-cyan-600" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                  Indeterminado
+                </button>
+              </div>
+            </div>
+
+            {tipo === "experiencia" && (
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Prazo de Experiência</label>
+                <div className="flex gap-3">
+                  <button onClick={() => setPrazoExp("30+30")} className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${prazoExp === "30+30" ? "bg-cyan-600 text-white border-cyan-600" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                    30 + 30 dias
+                  </button>
+                  <button onClick={() => setPrazoExp("45+45")} className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${prazoExp === "45+45" ? "bg-cyan-600 text-white border-cyan-600" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                    45 + 45 dias
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <Button onClick={handleGerar} disabled={gerarMutation.isPending} className="bg-cyan-600 hover:bg-cyan-700">
+              {gerarMutation.isPending ? "Gerando..." : "Gerar Contrato"}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Button onClick={handleSalvar} disabled={saving} className="bg-green-600 hover:bg-green-700">
+                {saving ? "Salvando..." : "Salvar Contrato"}
+              </Button>
+              <Button variant="outline" onClick={() => handleImprimir(previewHtml)}>
+                <Printer className="h-4 w-4 mr-1" /> Imprimir
+              </Button>
+              <Button variant="outline" onClick={() => { setPreviewHtml(""); setDadosContrato(null); }}>
+                Refazer
+              </Button>
+            </div>
+            <div className="border rounded-lg bg-white p-6 shadow-sm max-h-[600px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Lista de contratos
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-bold text-slate-800">Contratos CLT</h3>
+        <Button onClick={() => setShowGerador(true)} className="bg-cyan-600 hover:bg-cyan-700">
+          <ScrollText className="h-4 w-4 mr-1" /> Gerar Novo Contrato
+        </Button>
+      </div>
+
+      {contratos.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <ScrollText className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p>Nenhum contrato CLT registrado</p>
+          <p className="text-xs mt-1">Clique em "Gerar Novo Contrato" para criar</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {contratos.map((c: any) => (
+            <div key={c.id} className="border rounded-lg bg-white p-4 hover:shadow-sm transition-all">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-slate-800">{tipoLabel[c.tipo] || c.tipo}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusColor[c.status] || "bg-gray-100 text-gray-800"}`}>
+                      {statusLabel[c.status] || c.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 space-y-0.5">
+                    <p>Início: {c.dataInicio ? new Date(c.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "-"}
+                      {c.dataFim && ` | Fim: ${new Date(c.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}`}
+                      {c.prazoExperienciaDias && ` | Prazo: ${c.prazoExperienciaDias} dias`}
+                    </p>
+                    {c.funcao && <p>Função: {c.funcao}</p>}
+                    <p>Criado por: {c.criadoPor} em {new Date(c.createdAt).toLocaleDateString("pt-BR")}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={() => setViewingHtml(c.conteudoGerado)}>
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleImprimir(c.conteudoGerado)}>
+                    <Printer className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Ações do contrato */}
+              <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
+                {/* Upload contrato assinado */}
+                {!c.contratoAssinadoUrl ? (
+                  <Button variant="outline" size="sm" onClick={() => handleUpload(c.id, false)} disabled={uploadingId === c.id}>
+                    <FileDown className="h-3.5 w-3.5 mr-1" />
+                    {uploadingId === c.id ? "Enviando..." : "Upload Assinado"}
+                  </Button>
+                ) : (
+                  <a href={c.contratoAssinadoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-1 rounded-md font-medium">
+                    <Eye className="h-3 w-3" /> Contrato Assinado
+                  </a>
+                )}
+
+                {/* Prorrogar (só experiência vigente) */}
+                {c.tipo === "experiencia" && c.status === "vigente" && (
+                  <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-50"
+                    onClick={async () => {
+                      if (!confirm("Deseja prorrogar o contrato de experiência?")) return;
+                      await statusMutation.mutateAsync({ id: c.id, status: "prorrogado", dataProrrogacao: new Date().toISOString().split("T")[0] });
+                      utils.contracts.listarContratos.invalidate();
+                    }}>
+                    Prorrogar
+                  </Button>
+                )}
+
+                {/* Upload prorrogação assinada */}
+                {c.status === "prorrogado" && !c.prorrogacaoAssinadaUrl && (
+                  <Button variant="outline" size="sm" onClick={() => handleUpload(c.id, true)} disabled={uploadingId === c.id}>
+                    <FileDown className="h-3.5 w-3.5 mr-1" />
+                    {uploadingId === c.id ? "Enviando..." : "Upload Prorrogação"}
+                  </Button>
+                )}
+                {c.prorrogacaoAssinadaUrl && (
+                  <a href={c.prorrogacaoAssinadaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded-md font-medium">
+                    <Eye className="h-3 w-3" /> Prorrogação Assinada
+                  </a>
+                )}
+
+                {/* Efetivar (experiência prorrogado ou vigente) */}
+                {c.tipo === "experiencia" && (c.status === "vigente" || c.status === "prorrogado") && (
+                  <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    onClick={() => handleEfetivar(c)}>
+                    Efetivar
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
