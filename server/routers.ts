@@ -197,16 +197,20 @@ export const appRouter = router({
       return {
         prefixoCodigo: (company as any).prefixoCodigo || 'EMP',
         nextCodigoInterno: (company as any).nextCodigoInterno || 1,
+        numerosProibidos: (company as any).numerosProibidos || '13,17,22,24,69,171,666',
       };
     }),
     updateNumbering: protectedProcedure.input(z.object({
       companyId: z.number(),
       prefixoCodigo: z.string().min(1).max(10),
       nextCodigoInterno: z.number().min(1),
+      numerosProibidos: z.string().max(500).optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar a numeração" });
-      await updateCompany(input.companyId, { prefixoCodigo: input.prefixoCodigo, nextCodigoInterno: input.nextCodigoInterno } as any);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna alterada: prefixo=${input.prefixoCodigo}, próximo=${input.nextCodigoInterno}` });
+      const updateData: any = { prefixoCodigo: input.prefixoCodigo, nextCodigoInterno: input.nextCodigoInterno };
+      if (input.numerosProibidos !== undefined) updateData.numerosProibidos = input.numerosProibidos;
+      await updateCompany(input.companyId, updateData);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna alterada: prefixo=${input.prefixoCodigo}, próximo=${input.nextCodigoInterno}${input.numerosProibidos !== undefined ? `, proibidos=${input.numerosProibidos}` : ''}` });
       return { success: true };
     }),
     resetNumbering: protectedProcedure.input(z.object({

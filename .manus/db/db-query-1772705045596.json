@@ -1,0 +1,73 @@
+{
+  "query": "\nSELECT e.id, e.codigoInterno, e.nomeCompleto, c.nomeFantasia, \n  CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) as numPart\nFROM employees e \nJOIN companies c ON e.companyId = c.id\nWHERE CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) IN (13, 17, 22, 24, 69, 171, 666)\nORDER BY c.nomeFantasia, numPart;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \nSELECT e.id, e.codigoInterno, e.nomeCompleto, c.nomeFantasia, \n  CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) as numPart\nFROM employees e \nJOIN companies c ON e.companyId = c.id\nWHERE CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) IN (13, 17, 22, 24, 69, 171, 666)\nORDER BY c.nomeFantasia, numPart;\n",
+  "rows": [
+    {
+      "id": "420065",
+      "codigoInterno": "JFC013",
+      "nomeCompleto": "MARCIO DE TOLEDO",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "13"
+    },
+    {
+      "id": "420069",
+      "codigoInterno": "JFC017",
+      "nomeCompleto": "ANDERSON BRAGA SILVA",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "17"
+    },
+    {
+      "id": "420074",
+      "codigoInterno": "JFC022",
+      "nomeCompleto": "CARLOS VITORIANO TOBIAS",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "22"
+    },
+    {
+      "id": "420076",
+      "codigoInterno": "JFC024",
+      "nomeCompleto": "AGOSTINHO DIJALMA FERREIRA",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "24"
+    },
+    {
+      "id": "420121",
+      "codigoInterno": "JFC069",
+      "nomeCompleto": "ALEX DA SILVA DOMINGOS",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "69"
+    },
+    {
+      "id": "1320015",
+      "codigoInterno": "JFC171",
+      "nomeCompleto": "THAIS NAMIE YOSHII",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "171"
+    },
+    {
+      "id": "1200003",
+      "codigoInterno": "JFP017",
+      "nomeCompleto": "DANIEL CARNEIRO PEREIRA",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "numPart": "17"
+    },
+    {
+      "id": "1200008",
+      "codigoInterno": "JFP022",
+      "nomeCompleto": "HENRIQUE LOPES",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "numPart": "22"
+    },
+    {
+      "id": "1200010",
+      "codigoInterno": "JFP024",
+      "nomeCompleto": "JOSE BENEDITO MENDES",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "numPart": "24"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcodigoInterno\tnomeCompleto\tnomeFantasia\tnumPart\n420065\tJFC013\tMARCIO DE TOLEDO\tFC ENGENHARIA PROJETOS E OBRAS\t13\n420069\tJFC017\tANDERSON BRAGA SILVA\tFC ENGENHARIA PROJETOS E OBRAS\t17\n420074\tJFC022\tCARLOS VITORIANO TOBIAS\tFC ENGENHARIA PROJETOS E OBRAS\t22\n420076\tJFC024\tAGOSTINHO DIJALMA FERREIRA\tFC ENGENHARIA PROJETOS E OBRAS\t24\n420121\tJFC069\tALEX DA SILVA DOMINGOS\tFC ENGENHARIA PROJETOS E OBRAS\t69\n1320015\tJFC171\tTHAIS NAMIE YOSHII\tFC ENGENHARIA PROJETOS E OBRAS\t171\n1200003\tJFP017\tDANIEL CARNEIRO PEREIRA\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t17\n1200008\tJFP022\tHENRIQUE LOPES\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t22\n1200010\tJFP024\tJOSE BENEDITO MENDES\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t24\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

@@ -4972,3 +4972,17 @@
 - [x] Tabela com colunas: Dia, Entrada, Intervalo, Saída
 - [x] Estilo profissional com cabeçalho azul escuro
 - [x] Garantir boa aparência na impressão e preview
+
+## Rev. 205: Corrigir Números Proibidos na Numeração Interna
+- [x] Verificar funcionários existentes com números proibidos (13, 17, 22, 24, 69, 171, 666)
+- [x] Renumerar funcionários que possuem números proibidos (8 renumerados)
+- [x] Garantir que a regra funciona para TODAS as empresas (não só FC)
+- [x] Atualizar o nextCodigoInterno das empresas afetadas
+
+## Rev. 205: Números Proibidos Editáveis nas Configurações
+- [x] Adicionar campo numerosProibidos no schema/banco (coluna na tabela companies)
+- [x] Criar rota tRPC para ler/salvar números proibidos (getNumbering/updateNumbering)
+- [x] Adicionar campo editável na tela de Critérios/Parâmetros (seção Numeração Interna)
+- [x] Integrar números proibidos dinâmicos na geração de código interno (server/db.ts)
+- [x] Renumerar funcionários existentes com números proibidos (8 renumerados)
+- [x] Preview na tela mostra os números sendo pulados com badges vermelhos

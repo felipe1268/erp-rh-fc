@@ -107,6 +107,7 @@ export default function Configuracoes() {
   // Numeração Interna
   const [numPrefixo, setNumPrefixo] = useState("");
   const [numProximo, setNumProximo] = useState(1);
+  const [numProibidos, setNumProibidos] = useState("13,17,22,24,69,171,666");
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
   const [numDirty, setNumDirty] = useState(false);
@@ -139,9 +140,20 @@ export default function Configuracoes() {
     if (numberingQuery.data) {
       setNumPrefixo(numberingQuery.data.prefixoCodigo);
       setNumProximo(numberingQuery.data.nextCodigoInterno);
+      setNumProibidos(numberingQuery.data.numerosProibidos || '13,17,22,24,69,171,666');
       setNumDirty(false);
     }
   }, [numberingQuery.data]);
+
+  // Parse números proibidos para Set
+  const proibidosSet = new Set(
+    numProibidos.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n) && n > 0)
+  );
+  // Função para calcular próximo número válido (pulando proibidos)
+  const proximoValido = (num: number): number => {
+    while (proibidosSet.has(num)) num++;
+    return num;
+  };
 
   // Critérios
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
@@ -477,7 +489,7 @@ export default function Configuracoes() {
                     Configure o prefixo alfanumérico e o próximo número sequencial para geração automática do código interno dos colaboradores.
                   </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Prefixo */}
                     <div>
                       <Label className="text-sm font-medium text-gray-700 mb-1 block">Prefixo</Label>
@@ -503,25 +515,55 @@ export default function Configuracoes() {
                       />
                       <p className="text-xs text-gray-400 mt-1">Próximo número a ser gerado automaticamente</p>
                     </div>
+                  </div>
 
-                    {/* Preview */}
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700 mb-1 block">Preview</Label>
-                      <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border rounded-md">
-                        <span className="font-mono text-lg font-bold text-cyan-700">
-                          {numPrefixo}{String(numProximo).padStart(3, '0')}
-                        </span>
-                        <span className="text-xs text-gray-400">→</span>
-                        <span className="font-mono text-sm text-gray-500">
-                          {numPrefixo}{String(numProximo + 1).padStart(3, '0')}
-                        </span>
-                        <span className="text-xs text-gray-400">→</span>
-                        <span className="font-mono text-sm text-gray-500">
-                          {numPrefixo}{String(numProximo + 2).padStart(3, '0')}
-                        </span>
+                  {/* Números Proibidos */}
+                  <div className="mt-4">
+                    <Label className="text-sm font-medium text-gray-700 mb-1 block flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      Números Proibidos
+                    </Label>
+                    <Input
+                      value={numProibidos}
+                      onChange={e => { setNumProibidos(e.target.value); setNumDirty(true); }}
+                      placeholder="Ex: 13,17,22,24,69,171,666"
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Separe os números por vírgula. Esses números serão automaticamente pulados na geração de códigos internos.</p>
+                    {proibidosSet.size > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {Array.from(proibidosSet).sort((a, b) => a - b).map(n => (
+                          <span key={n} className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-mono font-medium">
+                            {n}
+                          </span>
+                        ))}
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">Sequência dos próximos códigos</p>
+                    )}
+                  </div>
+
+                  {/* Preview com números proibidos */}
+                  <div className="mt-4">
+                    <Label className="text-sm font-medium text-gray-700 mb-1 block">Preview (pulando proibidos)</Label>
+                    <div className="flex items-center gap-2 h-10 px-3 bg-gray-50 border rounded-md overflow-x-auto">
+                      {(() => {
+                        const previews: number[] = [];
+                        let n = numProximo;
+                        for (let i = 0; i < 5 && n < 99999; i++) {
+                          n = proximoValido(n);
+                          previews.push(n);
+                          n++;
+                        }
+                        return previews.map((p, i) => (
+                          <span key={i} className="flex items-center gap-2">
+                            {i > 0 && <span className="text-xs text-gray-400">→</span>}
+                            <span className={`font-mono ${i === 0 ? 'text-lg font-bold text-cyan-700' : 'text-sm text-gray-500'}`}>
+                              {numPrefixo}{String(p).padStart(3, '0')}
+                            </span>
+                          </span>
+                        ));
+                      })()}
                     </div>
+                    <p className="text-xs text-gray-400 mt-1">Sequência dos próximos códigos (números proibidos são pulados automaticamente)</p>
                   </div>
 
                   {/* Ações */}
@@ -540,7 +582,7 @@ export default function Configuracoes() {
                       size="sm"
                       onClick={() => {
                         if (!numPrefixo.trim()) { toast.error("Prefixo não pode ser vazio"); return; }
-                        updateNumberingMutation.mutate({ companyId, prefixoCodigo: numPrefixo.trim(), nextCodigoInterno: numProximo });
+                        updateNumberingMutation.mutate({ companyId, prefixoCodigo: numPrefixo.trim(), nextCodigoInterno: numProximo, numerosProibidos: numProibidos.trim() });
                       }}
                       disabled={!numDirty || updateNumberingMutation.isPending}
                       className={numDirty ? "bg-blue-600 hover:bg-blue-700" : ""}

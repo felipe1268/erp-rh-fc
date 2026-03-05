@@ -267,12 +267,20 @@ export async function getPermissions(profileId: number) {
 // EMPLOYEES
 // ============================================================
 
-// Números proibidos que devem ser pulados na geração de código interno
-const NUMEROS_PROIBIDOS = new Set([13, 17, 22, 24, 69, 171, 666]);
+// Números proibidos padrão (fallback se não houver configuração na empresa)
+const NUMEROS_PROIBIDOS_DEFAULT = new Set([13, 17, 22, 24, 69, 171, 666]);
+
+// Parseia string de números proibidos ("13,17,22") para Set
+function parseNumerosProibidos(str?: string | null): Set<number> {
+  if (!str || !str.trim()) return NUMEROS_PROIBIDOS_DEFAULT;
+  const nums = str.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n) && n > 0);
+  return nums.length > 0 ? new Set(nums) : NUMEROS_PROIBIDOS_DEFAULT;
+}
 
 // Avança o número para o próximo válido (que não esteja na lista de proibidos)
-function proximoNumeroValido(num: number): number {
-  while (NUMEROS_PROIBIDOS.has(num)) {
+function proximoNumeroValido(num: number, proibidos?: Set<number>): number {
+  const set = proibidos || NUMEROS_PROIBIDOS_DEFAULT;
+  while (set.has(num)) {
     num++;
   }
   return num;
@@ -294,14 +302,16 @@ export async function createEmployee(data: InsertEmployee) {
     sql`UPDATE companies SET nextCodigoInterno = nextCodigoInterno + 1 WHERE id = ${companyId}`
   );
   const [companyRows] = await db.execute(
-    sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum FROM companies WHERE id = ${companyId}`
+    sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum, numerosProibidos FROM companies WHERE id = ${companyId}`
   ) as any;
   
   const prefixo = companyRows?.[0]?.prefixoCodigo || 'EMP';
+  const numerosProibidosStr = companyRows?.[0]?.numerosProibidos;
+  const proibidos = parseNumerosProibidos(numerosProibidosStr);
   let num = companyRows?.[0]?.usedNum || 1;
   
-  // Pular números proibidos (13, 17, 22, 24, 69, 171, 666)
-  num = proximoNumeroValido(num);
+  // Pular números proibidos (dinâmico, configurado por empresa)
+  num = proximoNumeroValido(num, proibidos);
   
   // Se o número foi avançado por causa de proibidos, atualizar o contador da empresa
   const originalNum = companyRows?.[0]?.usedNum || 1;
@@ -328,7 +338,7 @@ export async function createEmployee(data: InsertEmployee) {
           sql`SELECT prefixoCodigo, nextCodigoInterno - 1 as usedNum FROM companies WHERE id = ${companyId}`
         ) as any;
         let retryNum = retry?.[0]?.usedNum || (num + attempt + 1);
-        retryNum = proximoNumeroValido(retryNum);
+        retryNum = proximoNumeroValido(retryNum, proibidos);
         // Atualizar contador se pulou proibidos
         if (retryNum !== (retry?.[0]?.usedNum || 0)) {
           await db.execute(
@@ -431,11 +441,17 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   if (sanitized.nomeCompleto && typeof sanitized.nomeCompleto === 'string') {
     sanitized.nomeCompleto = sanitized.nomeCompleto.replace(/[\t\r\n]/g, '').replace(/\s+/g, ' ').trim();
   }
-  // Validar código interno: não permitir números proibidos
+  // Validar código interno: não permitir números proibidos (dinâmico)
   if (sanitized.codigoInterno) {
+    // Buscar números proibidos da empresa
+    const [companyConfig] = await db.execute(
+      sql`SELECT numerosProibidos FROM companies WHERE id = ${companyId}`
+    ) as any;
+    const proibidosEmpresa = parseNumerosProibidos(companyConfig?.[0]?.numerosProibidos);
     const numPart = parseInt(String(sanitized.codigoInterno).replace(/\D/g, ''));
-    if (!isNaN(numPart) && NUMEROS_PROIBIDOS.has(numPart)) {
-      throw new Error(`Número interno ${numPart} não é permitido. Números proibidos: 13, 17, 22, 24, 69, 171, 666`);
+    if (!isNaN(numPart) && proibidosEmpresa.has(numPart)) {
+      const listaProibidos = Array.from(proibidosEmpresa).sort((a, b) => a - b).join(', ');
+      throw new Error(`Número interno ${numPart} não é permitido. Números proibidos: ${listaProibidos}`);
     }
   }
   if (Object.keys(sanitized).length === 0) return;

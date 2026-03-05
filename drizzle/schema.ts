@@ -405,6 +405,7 @@ export const companies = mysqlTable("companies", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	prefixoCodigo: varchar({ length: 10 }).default('EMP'),
 	nextCodigoInterno: int().default(1).notNull(),
+	numerosProibidos: varchar({ length: 500 }).default('13,17,22,24,69,171,666'),
 	deletedAt: timestamp({ mode: 'string' }),
 	deletedBy: varchar({ length: 255 }),
 	deletedByUserId: int(),
