@@ -4882,3 +4882,6 @@
 - [x] Adicionar Config EPI à sidebar do módulo SST
 - [x] Implementar suporte a ?tab= no Epis.tsx com listener navParamsUpdated
 - [x] Atualizar versão para Rev. 194
+
+## Rev. 195: Atualizar Controle de Revisões
+- [x] Inserir revisões 168 a 194 no banco de dados (27 revisões inseridas)

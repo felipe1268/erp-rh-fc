@@ -1,0 +1,90 @@
+{
+  "query": "SELECT id, version, titulo, tipo, modulos, DATE_FORMAT(dataPublicacao, '%Y-%m-%d %H:%i') as data FROM system_revisions ORDER BY version DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, tipo, modulos, DATE_FORMAT(dataPublicacao, '%Y-%m-%d %H:%i') as data FROM system_revisions ORDER BY version DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "270025",
+      "version": "167",
+      "titulo": "Módulo Completo de Gestão de Competências (Ponto e Folha)",
+      "tipo": "feature",
+      "modulos": "RH & DP, Folha de Pagamento",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270024",
+      "version": "166",
+      "titulo": "Sidebar Lê Configuração Salva do Menu",
+      "tipo": "feature",
+      "modulos": "Sistema, Configurações",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270023",
+      "version": "165",
+      "titulo": "Sincronizar Painel de Controle com Sidebar",
+      "tipo": "feature",
+      "modulos": "Configurações, Sistema",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270022",
+      "version": "164",
+      "titulo": "Correção Definitiva: Atalho Lançar Atestados",
+      "tipo": "bugfix",
+      "modulos": "RH & DP",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270021",
+      "version": "163",
+      "titulo": "Reimplementar Drag-and-Drop com @dnd-kit",
+      "tipo": "feature",
+      "modulos": "Configurações",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270020",
+      "version": "162",
+      "titulo": "Correção Atalhos Atestados e Sidebar",
+      "tipo": "bugfix",
+      "modulos": "RH & DP, Sistema",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270019",
+      "version": "161",
+      "titulo": "Atualizar Fases do Processo Trabalhista (Jurídico)",
+      "tipo": "feature",
+      "modulos": "Jurídico",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270018",
+      "version": "160",
+      "titulo": "Correção Drag-and-Drop na Tela de Configurações",
+      "tipo": "bugfix",
+      "modulos": "Configurações",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270017",
+      "version": "159",
+      "titulo": "Permissões: Atalhos Sidebar Respeitam Permissões do Grupo",
+      "tipo": "feature",
+      "modulos": "Admin, Sistema",
+      "data": "2026-03-03 08:47"
+    },
+    {
+      "id": "270016",
+      "version": "158",
+      "titulo": "Correção Atalhos Sidebar (Advertências e Atestados)",
+      "tipo": "bugfix",
+      "modulos": "RH & DP",
+      "data": "2026-03-03 08:47"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\ttipo\tmodulos\tdata\n270025\t167\tMódulo Completo de Gestão de Competências (Ponto e Folha)\tfeature\tRH & DP, Folha de Pagamento\t2026-03-03 08:47\n270024\t166\tSidebar Lê Configuração Salva do Menu\tfeature\tSistema, Configurações\t2026-03-03 08:47\n270023\t165\tSincronizar Painel de Controle com Sidebar\tfeature\tConfigurações, Sistema\t2026-03-03 08:47\n270022\t164\tCorreção Definitiva: Atalho Lançar Atestados\tbugfix\tRH & DP\t2026-03-03 08:47\n270021\t163\tReimplementar Drag-and-Drop com @dnd-kit\tfeature\tConfigurações\t2026-03-03 08:47\n270020\t162\tCorreção Atalhos Atestados e Sidebar\tbugfix\tRH & DP, Sistema\t2026-03-03 08:47\n270019\t161\tAtualizar Fases do Processo Trabalhista (Jurídico)\tfeature\tJurídico\t2026-03-03 08:47\n270018\t160\tCorreção Drag-and-Drop na Tela de Configurações\tbugfix\tConfigurações\t2026-03-03 08:47\n270017\t159\tPermissões: Atalhos Sidebar Respeitam Permissões do Grupo\tfeature\tAdmin, Sistema\t2026-03-03 08:47\n270016\t158\tCorreção Atalhos Sidebar (Advertências e Atestados)\tbugfix\tRH & DP\t2026-03-03 08:47\n",
+  "stderr": "",
+  "execution_time_ms": 111
+}
