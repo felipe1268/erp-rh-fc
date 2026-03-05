@@ -5052,3 +5052,12 @@
 - [x] Adicionar valor do estoque separado por obra e total geral
 - [x] Implementar impressão do inventário com logo da empresa e LGPD
 - [x] Implementar geração de PDF do inventário com logo e LGPD
+
+## Rev. 210: Bug Filtro Processos Trabalhistas
+
+- [x] Corrigir filtro de status para incluir processos "Encerrado" na listagem
+- [x] Verificar se o card "Encerrados" está contando corretamente (6 encerrados agora)
+- [x] Adicionar filtro "Ativos (em andamento)" e "Encerrados (todos)" no dropdown
+- [x] Adaptar Processos Trabalhistas para multi-company (CONSTRUTORAS)
+- [x] Backend: endpoints listar, estatisticas, funcionariosDesligados aceitam companyIds
+- [x] Frontend: usa getCompanyIdsForQuery e queryCompanyId do contexto

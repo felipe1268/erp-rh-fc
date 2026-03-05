@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getConstrutorasIds } from "../db";
 import { processosTrabalhistas, processosAndamentos, employees, processoAnalises, processoAprendizado, goldenRules, processoDocumentos } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -30,13 +30,15 @@ export const processosTrabRouter = router({
   listar: protectedProcedure
     .input(z.object({
       companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
       status: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
       let query = db.select().from(processosTrabalhistas)
         .where(and(
-          eq(processosTrabalhistas.companyId, input.companyId),
+          ids.length === 1 ? eq(processosTrabalhistas.companyId, ids[0]) : inArray(processosTrabalhistas.companyId, ids),
           sql`${processosTrabalhistas.deletedAt} IS NULL`,
         ));
 
@@ -316,15 +318,17 @@ export const processosTrabRouter = router({
   // ESTATÍSTICAS
   // ============================================================
   estatisticas: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
       const processos = await db.select().from(processosTrabalhistas)
-        .where(eq(processosTrabalhistas.companyId, input.companyId));
+        .where(ids.length === 1 ? eq(processosTrabalhistas.companyId, ids[0]) : inArray(processosTrabalhistas.companyId, ids));
 
       const total = processos.length;
-      const emAndamento = processos.filter(p => !['encerrado', 'arquivado'].includes(p.status)).length;
-      const encerrados = processos.filter(p => ['encerrado', 'arquivado'].includes(p.status)).length;
+      const isEncerrado = (p: any) => ['encerrado', 'arquivado'].includes(p.status) || p.fase === 'encerrado';
+      const emAndamento = processos.filter(p => !isEncerrado(p)).length;
+      const encerrados = processos.filter(p => isEncerrado(p)).length;
 
       const parseBRL = (val: string | null) => {
         if (!val) return 0;
@@ -339,10 +343,10 @@ export const processosTrabRouter = router({
       const totalValorPago = processos.reduce((s, p) => s + parseBRL(p.valorPago), 0);
 
       const porRisco = {
-        baixo: processos.filter(p => p.risco === 'baixo' && !['encerrado', 'arquivado'].includes(p.status)).length,
-        medio: processos.filter(p => p.risco === 'medio' && !['encerrado', 'arquivado'].includes(p.status)).length,
-        alto: processos.filter(p => p.risco === 'alto' && !['encerrado', 'arquivado'].includes(p.status)).length,
-        critico: processos.filter(p => p.risco === 'critico' && !['encerrado', 'arquivado'].includes(p.status)).length,
+        baixo: processos.filter(p => p.risco === 'baixo' && !isEncerrado(p)).length,
+        medio: processos.filter(p => p.risco === 'medio' && !isEncerrado(p)).length,
+        alto: processos.filter(p => p.risco === 'alto' && !isEncerrado(p)).length,
+        critico: processos.filter(p => p.risco === 'critico' && !isEncerrado(p)).length,
       };
 
       const porStatus: Record<string, number> = {};
@@ -353,7 +357,7 @@ export const processosTrabRouter = router({
       // Próximas audiências
       const hoje = new Date().toISOString().split('T')[0];
       const proximasAudiencias = processos
-        .filter(p => p.dataAudiencia && p.dataAudiencia >= hoje && !['encerrado', 'arquivado'].includes(p.status))
+        .filter(p => p.dataAudiencia && p.dataAudiencia >= hoje && !isEncerrado(p))
         .sort((a, b) => (a.dataAudiencia || "").localeCompare(b.dataAudiencia || ""))
         .slice(0, 5);
 
@@ -369,9 +373,10 @@ export const processosTrabRouter = router({
   // BUSCAR FUNCIONÁRIOS DESLIGADOS (para vincular ao processo)
   // ============================================================
   funcionariosDesligados: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
       const desligados = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
@@ -381,7 +386,7 @@ export const processosTrabRouter = router({
         status: employees.status,
       }).from(employees)
         .where(and(
-          eq(employees.companyId, input.companyId),
+          ids.length === 1 ? eq(employees.companyId, ids[0]) : inArray(employees.companyId, ids),
           eq(employees.status, 'Desligado'),
           sql`${employees.deletedAt} IS NULL`,
         ));

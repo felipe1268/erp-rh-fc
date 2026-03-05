@@ -108,8 +108,10 @@ function diasAte(d: string | null | undefined): number | null {
 }
 
 export default function ProcessosTrabalhistas() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const companyId = selectedCompanyId && !isConstrutoras ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = companyIds.length > 0 ? companyIds[0] : companyId;
   const { user } = useAuth();
   const [viewMode, setViewMode] = useState<"lista" | "detalhe" | "novo">("lista");
   const [selectedProcessoId, setSelectedProcessoId] = useState<number | null>(null);
@@ -172,21 +174,22 @@ export default function ProcessosTrabalhistas() {
   });
 
   // Queries
+  const backendStatus = !['all', 'encerrados_todos', 'ativos'].includes(filterStatus) ? filterStatus : undefined;
   const processos = trpc.processos.listar.useQuery(
-    { companyId, status: filterStatus !== "all" ? filterStatus : undefined },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined, status: backendStatus },
+    { enabled: queryCompanyId > 0 || companyIds.length > 0 }
   );
   const stats = trpc.processos.estatisticas.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
+    { enabled: queryCompanyId > 0 || companyIds.length > 0 }
   );
   const detalhe = trpc.processos.getById.useQuery(
     { id: selectedProcessoId! },
     { enabled: !!selectedProcessoId && viewMode === "detalhe" }
   );
   const desligados = trpc.processos.funcionariosDesligados.useQuery(
-    { companyId },
-    { enabled: companyId > 0 && (viewMode === "novo" || showChangeEmployeeDialog) }
+    { companyId: queryCompanyId, companyIds: companyIds.length > 0 ? companyIds : undefined },
+    { enabled: (queryCompanyId > 0 || companyIds.length > 0) && (viewMode === "novo" || showChangeEmployeeDialog) }
   );
 
   // Mutations
@@ -358,7 +361,7 @@ export default function ProcessosTrabalhistas() {
     if (!form.reclamante.trim()) return toast.error("Informe o nome do reclamante");
 
     criarMut.mutate({
-      companyId,
+      companyId: queryCompanyId,
       ...form,
       tipoAcao: form.tipoAcao as any,
       status: form.status as any,
@@ -395,7 +398,13 @@ export default function ProcessosTrabalhistas() {
         (p.vara || "").toUpperCase().includes(term)
       );
     }
-    if (filterStatus !== "all") items = items.filter(p => p.status === filterStatus);
+    if (filterStatus === "encerrados_todos") {
+      items = items.filter(p => ['encerrado', 'arquivado'].includes(p.status) || p.fase === 'encerrado');
+    } else if (filterStatus === "ativos") {
+      items = items.filter(p => !['encerrado', 'arquivado'].includes(p.status) && p.fase !== 'encerrado');
+    } else if (filterStatus !== "all") {
+      items = items.filter(p => p.status === filterStatus);
+    }
     if (filterRisco !== "all") items = items.filter(p => p.risco === filterRisco);
     if (filterArquivo === "com") items = items.filter((p: any) => (p.totalDocumentos || 0) > 0);
     if (filterArquivo === "sem") items = items.filter((p: any) => (p.totalDocumentos || 0) === 0);
@@ -594,7 +603,7 @@ export default function ProcessosTrabalhistas() {
                           </Button>
                         )}
                         <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-100"
-                          onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId }); }}
+                          onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId: queryCompanyId }); }}
                           disabled={analisandoIA}>
                           {analisandoIA ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Analisando...</> : <><Zap className="h-3.5 w-3.5 mr-1" /> {analiseIA.data ? 'Re-analisar' : 'Analisar Processo'}</>}
                         </Button>
@@ -758,7 +767,7 @@ export default function ProcessosTrabalhistas() {
                         <p className="text-sm font-medium text-purple-700">Nenhuma análise realizada ainda</p>
                         <p className="text-xs text-muted-foreground mt-1 mb-4">Clique em "Analisar Processo" para que a IA analise todos os dados e gere insights estratégicos</p>
                         <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white"
-                          onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId }); }}
+                          onClick={() => { setAnalisandoIA(true); analisarIAMut.mutate({ processoId: selectedProcessoId!, companyId: queryCompanyId }); }}
                           disabled={analisandoIA}>
                           <Zap className="h-3.5 w-3.5 mr-1" /> Analisar Processo com IA
                         </Button>
@@ -1358,7 +1367,7 @@ export default function ProcessosTrabalhistas() {
             <p className="text-sm text-muted-foreground">Acompanhamento de processos trabalhistas vinculados a funcionários desligados</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => datajudConsultarTodosMut.mutate({ companyId })}
+            <Button variant="outline" onClick={() => datajudConsultarTodosMut.mutate({ companyId: queryCompanyId })}
               disabled={datajudConsultarTodosMut.isPending}
               className="border-blue-200 text-blue-700 hover:bg-blue-50">
               {datajudConsultarTodosMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Database className="h-4 w-4 mr-1" />}
@@ -1379,7 +1388,7 @@ export default function ProcessosTrabalhistas() {
                     clearInterval(interval);
                   }
                 }, 18000); // ~18s per process
-                reAnalisarTodosMut.mutate({ companyId }, {
+                reAnalisarTodosMut.mutate({ companyId: queryCompanyId }, {
                   onSettled: () => clearInterval(interval),
                 });
               }
@@ -1460,6 +1469,9 @@ export default function ProcessosTrabalhistas() {
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
               <option value="all">Todos os Status</option>
+              <option value="ativos">⚡ Ativos (em andamento)</option>
+              <option value="encerrados_todos">✅ Encerrados (todos)</option>
+              <option disabled>──────────</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <select value={filterRisco} onChange={e => setFilterRisco(e.target.value)}
