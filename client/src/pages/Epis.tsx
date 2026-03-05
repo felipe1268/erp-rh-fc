@@ -1790,6 +1790,7 @@ export default function Epis() {
                         <th className="p-3 text-center font-medium">Estoque</th>
                         {!hideEpiValues && <th className="p-3 text-center font-medium">Valor (R$)</th>}
                         <th className="p-3 text-center font-medium">Vida Útil</th>
+                        <th className="p-3 text-left font-medium">Cadastrado por</th>
                         <th className="p-3 text-center font-medium">Ações</th>
                       </tr>
                     </thead>
@@ -1855,6 +1856,13 @@ export default function Epis() {
                             </td>}
                             <td className="p-3 text-center text-xs">
                               {epi.tempoMinimoTroca ? `${epi.tempoMinimoTroca} dias` : "—"}
+                            </td>
+                            <td className="p-3 text-left">
+                              <div className="text-xs">
+                                <span className="font-medium">{epi.criadoPor || '—'}</span>
+                                {epi.createdAt && <p className="text-[10px] text-muted-foreground">{new Date(epi.createdAt).toLocaleDateString('pt-BR')}</p>}
+                                {epi.alteradoPor && <p className="text-[10px] text-blue-600 mt-0.5">Alt: {epi.alteradoPor}</p>}
+                              </div>
                             </td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1">
@@ -2052,11 +2060,11 @@ export default function Epis() {
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-semibold text-sm text-[#1B3A5C]">{r.obraNome}</p>
+                          <p className="font-semibold text-sm text-[#1B3A5C]">{r.nomeObra}</p>
                           <p className="text-xs text-muted-foreground mt-1">{r.totalItens} tipo(s) de EPI</p>
                         </div>
                         <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50">
-                          {r.totalQuantidade} unid.
+                          {r.totalUnidades} unid.
                         </Badge>
                       </div>
                     </CardContent>
@@ -2090,29 +2098,37 @@ export default function Epis() {
                           <th className="p-3 text-left font-medium">Obra</th>
                           <th className="p-3 text-left font-medium">EPI</th>
                           <th className="p-3 text-center font-medium">CA</th>
+                          <th className="p-3 text-center font-medium">Categoria</th>
                           <th className="p-3 text-center font-medium">Quantidade</th>
                           <th className="p-3 text-center font-medium">Status</th>
+                          <th className="p-3 text-center font-medium">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
                         {estoqueObraList2
                           .filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque)
                           .map((e: any) => (
-                          <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => {
+                            const epi = episList.find((ep: any) => ep.id === e.epiId);
+                            if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
+                          }}>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
                                 <Building2 className="h-3.5 w-3.5 text-blue-600" />
-                                <span className="font-medium text-xs">{e.obraNome || 'Obra #' + e.obraId}</span>
+                                <span className="font-medium text-xs">{e.nomeObra || 'Obra #' + e.obraId}</span>
                               </div>
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
-                                {getEpiIcon(e.epiNome || '', 'h-3.5 w-3.5')}
-                                <span className="text-xs">{e.epiNome || 'EPI #' + e.epiId}</span>
+                                {getEpiIcon(e.nomeEpi || '', 'h-3.5 w-3.5')}
+                                <span className="text-xs font-medium">{e.nomeEpi || 'EPI #' + e.epiId}</span>
                               </div>
                             </td>
                             <td className="p-3 text-center">
-                              {e.epiCa ? <Badge variant="outline" className="text-[10px]">CA: {e.epiCa}</Badge> : '—'}
+                              {e.caEpi ? <Badge variant="outline" className="text-[10px]">CA: {e.caEpi}</Badge> : '—'}
+                            </td>
+                            <td className="p-3 text-center">
+                              <Badge variant="outline" className="text-[10px]">{e.categoriaEpi || '—'}</Badge>
                             </td>
                             <td className="p-3 text-center font-bold text-lg">{e.quantidade}</td>
                             <td className="p-3 text-center">
@@ -2121,6 +2137,19 @@ export default function Epis() {
                               ) : (
                                 <Badge variant="destructive">Zerado</Badge>
                               )}
+                            </td>
+                            <td className="p-3 text-center" onClick={(ev) => ev.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar EPI" onClick={() => {
+                                  const epi = episList.find((ep: any) => ep.id === e.epiId);
+                                  if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
+                                }}>
+                                  <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Ver Entregas" onClick={() => setViewMode('entregas')}>
+                                  <Eye className="h-3.5 w-3.5 text-gray-500" />
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -2180,20 +2209,20 @@ export default function Epis() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
-                                {getEpiIcon(t.epiNome || '', 'h-3.5 w-3.5')}
-                                <span className="text-xs">{t.epiNome || 'EPI #' + t.epiId}</span>
+                                {getEpiIcon(t.nomeEpi || '', 'h-3.5 w-3.5')}
+                                <span className="text-xs">{t.nomeEpi || 'EPI #' + t.epiId}</span>
                               </div>
                             </td>
                             <td className="p-3 text-center font-bold">{t.quantidade}</td>
                             <td className="p-3">
                               <Badge variant="outline" className={t.tipoOrigem === 'central' ? 'bg-blue-50 text-blue-700 border-blue-300' : t.tipoOrigem === 'entrada_direta' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-green-50 text-green-700 border-green-300'}>
-                                {t.tipoOrigem === 'central' ? '🏢 Central' : t.tipoOrigem === 'entrada_direta' ? '📋 Entrada Direta' : `🏗️ ${t.origemObraNome || 'Obra'}`}
+                                {t.tipoOrigem === 'central' ? '🏢 Central' : t.tipoOrigem === 'entrada_direta' ? '📋 Entrada Direta' : `🏗️ ${t.origemNome || 'Obra'}`}
                               </Badge>
                             </td>
                             <td className="p-3 text-center"><ArrowRight className="h-4 w-4 text-muted-foreground mx-auto" /></td>
                             <td className="p-3">
                               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                                🏗️ {t.destinoObraNome || 'Obra #' + t.destinoObraId}
+                                🏗️ {t.destinoNome || 'Obra #' + t.destinoObraId}
                               </Badge>
                             </td>
                             <td className="p-3 text-xs text-muted-foreground">{t.observacoes || '—'}</td>

@@ -4994,3 +4994,22 @@
 - [x] Garantir que TODA funcionalidade da sidebar tenha correspondência nas permissões
 - [x] Limpar rotas extras hardcoded no DashboardLayout.tsx
 - [x] Regra: sempre que criar nova funcionalidade na sidebar, adicionar nas permissões também
+
+## Rev. 207: Melhorar Tabela de EPIs - Rastreabilidade e Edição
+- [ ] Mostrar nomes reais (nome do EPI, nome da obra) em vez de IDs
+- [ ] Adicionar coluna CA com número real
+- [ ] Adicionar rastreabilidade: quem cadastrou, data de cadastro
+- [ ] Adicionar botão de editar em cada linha
+- [ ] Tornar linhas clicáveis para ver detalhes
+
+## Rev. 207: Correção Tabela EPIs - Nomes Reais e Rastreabilidade
+- [x] Corrigir mapeamento de campos na tabela Estoque por Obra (nomeEpi, nomeObra, caEpi em vez de epiNome, obraNome, epiCa)
+- [x] Corrigir mapeamento de campos na tabela de Transferências (nomeEpi, origemNome, destinoNome)
+- [x] Corrigir mapeamento no resumo de estoque por obra (nomeObra, totalUnidades)
+- [x] Adicionar coluna Categoria na tabela de Estoque por Obra
+- [x] Adicionar coluna Ações (Editar EPI, Ver Entregas) na tabela de Estoque por Obra
+- [x] Tornar linhas da tabela de Estoque por Obra clicáveis (abre editor do EPI)
+- [x] Adicionar campos criadoPor e alteradoPor no schema de epis e epiEstoqueObra
+- [x] Adicionar rastreabilidade no backend: create (criadoPor), update (alteradoPor), transferir, entradaDiretaObra
+- [x] Adicionar coluna "Cadastrado por" na tabela de Catálogo de EPIs (com data e quem alterou)
+- [x] Retornar campos de rastreabilidade (createdAt, updatedAt, criadoPor, alteradoPor) no endpoint estoqueObraList

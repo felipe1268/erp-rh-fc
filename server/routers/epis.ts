@@ -37,9 +37,11 @@ export const episRouter = router({
       tempoMinimoTroca: z.number().optional(),
       corCapacete: z.string().nullable().optional(),
       condicao: z.enum(['Novo','Reutilizado']).default('Novo'),
+      criadoPor: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      const userName = ctx.user?.name || input.criadoPor || 'Sistema';
       const result = await db.insert(epis).values({
         companyId: input.companyId,
         nome: input.nome,
@@ -59,6 +61,7 @@ export const episRouter = router({
         tempoMinimoTroca: input.tempoMinimoTroca || null,
         corCapacete: input.corCapacete || null,
         condicao: input.condicao,
+        criadoPor: userName,
       } as any);
       return { id: result[0].insertId };
     }),
@@ -83,11 +86,13 @@ export const episRouter = router({
       tempoMinimoTroca: z.number().nullable().optional(),
       corCapacete: z.string().nullable().optional(),
       condicao: z.enum(['Novo','Reutilizado']).optional(),
+      alteradoPor: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const { id, ...data } = input;
       const updateData: any = {};
+      updateData.alteradoPor = ctx.user?.name || data.alteradoPor || 'Sistema';
       if (data.nome !== undefined) updateData.nome = data.nome;
       if (data.ca !== undefined) updateData.ca = data.ca;
       if (data.validadeCa !== undefined) updateData.validadeCa = data.validadeCa;
@@ -1067,6 +1072,10 @@ Exemplos de referência:
         categoriaEpi: epis.categoria,
         valorProdutoEpi: epis.valorProduto,
         nomeObra: obras.nome,
+        createdAt: epiEstoqueObra.createdAt,
+        updatedAt: epiEstoqueObra.updatedAt,
+        criadoPor: epiEstoqueObra.criadoPor,
+        alteradoPor: epiEstoqueObra.alteradoPor,
       })
         .from(epiEstoqueObra)
         .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
@@ -1149,6 +1158,7 @@ Exemplos de referência:
           epiId: input.epiId,
           obraId: input.destinoObraId,
           quantidade: input.quantidade,
+          criadoPor: ctx.user?.name || 'Sistema',
         });
       }
 
@@ -1257,6 +1267,7 @@ Exemplos de referência:
           epiId: input.epiId,
           obraId: input.obraId,
           quantidade: input.quantidade,
+          criadoPor: ctx.user?.name || 'Sistema',
         });
       }
       // Registrar como transferência tipo "entrada_direta" para histórico

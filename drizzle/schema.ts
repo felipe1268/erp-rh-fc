@@ -1101,6 +1101,8 @@ export const epis = mysqlTable("epis", {
 	fornecedorEndereco: varchar("fornecedor_endereco", { length: 500 }),
 	corCapacete: varchar("cor_capacete", { length: 30 }),
 	condicao: mysqlEnum(['Novo','Reutilizado']).default('Novo').notNull(),
+	criadoPor: varchar("criado_por", { length: 255 }),
+	alteradoPor: varchar("alterado_por", { length: 255 }),
 });
 
 // Estoque de EPI por Obra
@@ -1112,6 +1114,8 @@ export const epiEstoqueObra = mysqlTable("epi_estoque_obra", {
 	quantidade: int().default(0).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	criadoPor: varchar("criado_por", { length: 255 }),
+	alteradoPor: varchar("alterado_por", { length: 255 }),
 },
 (table) => [
 	index("idx_eeo_company").on(table.companyId),
