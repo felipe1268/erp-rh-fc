@@ -17,7 +17,7 @@ import {
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp,
-  Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool
+  Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
@@ -36,8 +36,9 @@ import EpiEstoqueMinimo from "./EpiEstoqueMinimo";
 import EpiIA from "./EpiIA";
 import EpiDrillDown, { type DrillDownType } from "./EpiDrillDown";
 import EpiAssinatura from "./EpiAssinatura";
+import EpiCapacidade from "./EpiCapacidade";
 
-type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia";
+type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia" | "capacidade";
 
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
@@ -1633,11 +1634,15 @@ export default function Epis() {
             className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "ia" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             <Brain className="h-3.5 w-3.5 inline mr-1" /> IA
           </button>
+          <button onClick={() => setViewMode("capacidade")}
+            className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === "capacidade" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            <Users className="h-3.5 w-3.5 inline mr-1" /> Capacidade
+          </button>
           </div>
         </div>
 
         {/* Search + Filters - ocultar nas novas abas que têm seus próprios filtros */}
-        {!["config", "checklist", "validade", "custos", "minimo", "ia"].includes(viewMode) && (
+        {!["config", "checklist", "validade", "custos", "minimo", "ia", "capacidade"].includes(viewMode) && (
         <div className="space-y-3">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -2394,6 +2399,7 @@ export default function Epis() {
       {viewMode === "custos" && <EpiRelatorioCusto />}
       {viewMode === "minimo" && <EpiEstoqueMinimo />}
       {viewMode === "ia" && <EpiIA />}
+      {viewMode === "capacidade" && <EpiCapacidade companyId={company?.id || 0} />}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 

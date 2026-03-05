@@ -1520,4 +1520,322 @@ Forneça sugestões concretas com quantidades específicas.`;
 
       return { message: results.length > 0 ? results.join("; ") : "Tudo já estava configurado", results };
     }),
+
+  // ============================================================
+  // INDICADOR DE CAPACIDADE DE CONTRATAÇÃO
+  // ============================================================
+
+  // Configurar kit básico de contratação (lista editável)
+  kitBasicoContratacao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      // Buscar kit "Básico" ou "Kit Básico" da empresa
+      const kits = await db.select().from(epiKits)
+        .where(and(
+          eq(epiKits.companyId, input.companyId),
+          eq(epiKits.ativo, 1),
+        ));
+      // Procurar kit com nome contendo "básico" ou "basico" ou "contratação"
+      let kitBasico = kits.find(k => 
+        k.nome.toLowerCase().includes('básico') || 
+        k.nome.toLowerCase().includes('basico') || 
+        k.nome.toLowerCase().includes('contratação') ||
+        k.nome.toLowerCase().includes('contratacao')
+      );
+      // Se não encontrar, pegar o primeiro kit ativo
+      if (!kitBasico && kits.length > 0) kitBasico = kits[0];
+      if (!kitBasico) return { kit: null, itens: [] };
+
+      const itens = await db.select().from(epiKitItems)
+        .where(eq(epiKitItems.kitId, kitBasico.id));
+      return { kit: kitBasico, itens };
+    }),
+
+  // Salvar/Criar kit básico de contratação
+  salvarKitBasicoContratacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      itens: z.array(z.object({
+        epiId: z.number().nullable(),
+        nomeEpi: z.string(),
+        categoria: z.enum(['EPI', 'Uniforme', 'Calcado']),
+        quantidade: z.number().min(1),
+        obrigatorio: z.number().default(1),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      // Buscar ou criar kit básico
+      const existingKits = await db.select().from(epiKits)
+        .where(and(
+          eq(epiKits.companyId, input.companyId),
+          eq(epiKits.ativo, 1),
+        ));
+      let kitBasico = existingKits.find(k => 
+        k.nome.toLowerCase().includes('básico') || 
+        k.nome.toLowerCase().includes('basico') || 
+        k.nome.toLowerCase().includes('contratação') ||
+        k.nome.toLowerCase().includes('contratacao')
+      );
+
+      let kitId: number;
+      if (kitBasico) {
+        kitId = kitBasico.id;
+        // Limpar itens antigos
+        await db.delete(epiKitItems).where(eq(epiKitItems.kitId, kitId));
+      } else {
+        // Criar novo kit
+        const [result] = await db.insert(epiKits).values({
+          companyId: input.companyId,
+          nome: 'Kit Básico de Contratação',
+          funcao: 'Geral',
+          descricao: 'Kit padrão de EPIs necessários para equipar um novo funcionário',
+          ativo: 1,
+        });
+        kitId = result.insertId;
+      }
+
+      // Inserir novos itens
+      if (input.itens.length > 0) {
+        await db.insert(epiKitItems).values(
+          input.itens.map(item => ({
+            kitId,
+            epiId: item.epiId,
+            nomeEpi: item.nomeEpi,
+            categoria: item.categoria,
+            quantidade: item.quantidade,
+            obrigatorio: item.obrigatorio,
+          }))
+        );
+      }
+
+      return { kitId, totalItens: input.itens.length };
+    }),
+
+  // Calcular capacidade de contratação
+  capacidadeContratacao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(), // Se informado, calcula só para essa obra
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // 1. Buscar kit básico de contratação
+      const kits = await db.select().from(epiKits)
+        .where(and(
+          eq(epiKits.companyId, input.companyId),
+          eq(epiKits.ativo, 1),
+        ));
+      let kitBasico = kits.find(k => 
+        k.nome.toLowerCase().includes('básico') || 
+        k.nome.toLowerCase().includes('basico') || 
+        k.nome.toLowerCase().includes('contratação') ||
+        k.nome.toLowerCase().includes('contratacao')
+      );
+      if (!kitBasico && kits.length > 0) kitBasico = kits[0];
+      if (!kitBasico) {
+        return {
+          capacidade: 0,
+          kitConfigurado: false,
+          mensagem: 'Nenhum kit básico de contratação configurado. Configure na aba Config.',
+          detalhes: [],
+          gargalo: null,
+        };
+      }
+
+      // 2. Buscar itens do kit
+      const itensKit = await db.select().from(epiKitItems)
+        .where(eq(epiKitItems.kitId, kitBasico.id));
+      if (itensKit.length === 0) {
+        return {
+          capacidade: 0,
+          kitConfigurado: true,
+          mensagem: 'Kit básico está vazio. Adicione itens na aba Config.',
+          detalhes: [],
+          gargalo: null,
+        };
+      }
+
+      // 3. Buscar todos os EPIs da empresa com estoque
+      const todosEpis = await db.select({
+        id: epis.id,
+        nome: epis.nome,
+        categoria: epis.categoria,
+        estoqueCentral: epis.quantidadeEstoque,
+      }).from(epis).where(eq(epis.companyId, input.companyId));
+
+      // 4. Buscar estoque por obra (se filtro de obra ou total)
+      let estoqueObras: { epiId: number; obraId: number; quantidade: number | null; nomeObra: string | null }[] = [];
+      if (input.obraId) {
+        estoqueObras = await db.select({
+          epiId: epiEstoqueObra.epiId,
+          obraId: epiEstoqueObra.obraId,
+          quantidade: epiEstoqueObra.quantidade,
+          nomeObra: obras.nome,
+        }).from(epiEstoqueObra)
+          .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
+          .where(and(
+            eq(epiEstoqueObra.companyId, input.companyId),
+            eq(epiEstoqueObra.obraId, input.obraId),
+          ));
+      } else {
+        estoqueObras = await db.select({
+          epiId: epiEstoqueObra.epiId,
+          obraId: epiEstoqueObra.obraId,
+          quantidade: epiEstoqueObra.quantidade,
+          nomeObra: obras.nome,
+        }).from(epiEstoqueObra)
+          .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
+          .where(eq(epiEstoqueObra.companyId, input.companyId));
+      }
+
+      // 5. Para cada item do kit, calcular quantos funcionários podem ser equipados
+      const detalhes = itensKit.map(itemKit => {
+        // Encontrar EPI correspondente no catálogo
+        let epiMatch = itemKit.epiId 
+          ? todosEpis.find(e => e.id === itemKit.epiId)
+          : todosEpis.find(e => e.nome.toLowerCase().includes(itemKit.nomeEpi.toLowerCase().split(' ')[0]));
+
+        let estoqueTotal = 0;
+        let estoqueCentral = 0;
+        let estoqueObra = 0;
+
+        if (epiMatch) {
+          estoqueCentral = epiMatch.estoqueCentral || 0;
+          // Somar estoque de obras
+          const obrasEstoque = estoqueObras.filter(eo => eo.epiId === epiMatch!.id);
+          estoqueObra = obrasEstoque.reduce((sum, eo) => sum + (eo.quantidade || 0), 0);
+          estoqueTotal = estoqueCentral + estoqueObra;
+        } else {
+          // Tentar match por nome parcial mais flexível
+          const palavras = itemKit.nomeEpi.toLowerCase().split(' ');
+          for (const epi of todosEpis) {
+            const nomeEpiLower = epi.nome.toLowerCase();
+            if (palavras.some(p => p.length > 3 && nomeEpiLower.includes(p))) {
+              estoqueCentral = epi.estoqueCentral || 0;
+              const obrasEstoque = estoqueObras.filter(eo => eo.epiId === epi.id);
+              estoqueObra = obrasEstoque.reduce((sum, eo) => sum + (eo.quantidade || 0), 0);
+              estoqueTotal = estoqueCentral + estoqueObra;
+              epiMatch = epi;
+              break;
+            }
+          }
+        }
+
+        const qtdNecessaria = itemKit.quantidade;
+        const capacidadeItem = qtdNecessaria > 0 ? Math.floor(estoqueTotal / qtdNecessaria) : 0;
+
+        return {
+          nomeEpi: itemKit.nomeEpi,
+          categoria: itemKit.categoria,
+          epiId: epiMatch?.id || null,
+          epiNomeCatalogo: epiMatch?.nome || null,
+          qtdNecessariaPorPessoa: qtdNecessaria,
+          obrigatorio: itemKit.obrigatorio,
+          estoqueCentral,
+          estoqueObra,
+          estoqueTotal,
+          capacidade: capacidadeItem,
+          encontradoNoCatalogo: !!epiMatch,
+        };
+      });
+
+      // 6. Capacidade geral = menor capacidade entre os itens OBRIGATÓRIOS
+      const itensObrigatorios = detalhes.filter(d => d.obrigatorio === 1);
+      const capacidadeGeral = itensObrigatorios.length > 0
+        ? Math.min(...itensObrigatorios.map(d => d.capacidade))
+        : 0;
+
+      // 7. Identificar gargalo (item com menor capacidade)
+      const gargalo = itensObrigatorios.length > 0
+        ? itensObrigatorios.reduce((min, d) => d.capacidade < min.capacidade ? d : min)
+        : null;
+
+      // 8. Classificar nível
+      let nivel: 'critico' | 'baixo' | 'medio' | 'bom' | 'otimo';
+      if (capacidadeGeral === 0) nivel = 'critico';
+      else if (capacidadeGeral <= 3) nivel = 'baixo';
+      else if (capacidadeGeral <= 10) nivel = 'medio';
+      else if (capacidadeGeral <= 25) nivel = 'bom';
+      else nivel = 'otimo';
+
+      return {
+        capacidade: capacidadeGeral,
+        kitConfigurado: true,
+        kitNome: kitBasico.nome,
+        nivel,
+        mensagem: capacidadeGeral === 0
+          ? 'Estoque insuficiente para novas contratações. Compra urgente necessária!'
+          : `Com o estoque atual, você consegue equipar ${capacidadeGeral} novo${capacidadeGeral > 1 ? 's' : ''} funcionário${capacidadeGeral > 1 ? 's' : ''}.`,
+        detalhes,
+        gargalo: gargalo ? {
+          nomeEpi: gargalo.nomeEpi,
+          estoqueTotal: gargalo.estoqueTotal,
+          capacidade: gargalo.capacidade,
+          mensagem: `Item limitante: ${gargalo.nomeEpi} (estoque: ${gargalo.estoqueTotal}, capacidade: ${gargalo.capacidade})`,
+        } : null,
+        totalItensKit: itensKit.length,
+        itensObrigatorios: itensObrigatorios.length,
+      };
+    }),
+
+  // Capacidade por obra (resumo de todas as obras)
+  capacidadePorObra: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Buscar todas as obras ativas
+      const obrasAtivas = await db.select({ id: obras.id, nome: obras.nome })
+        .from(obras)
+        .where(and(eq(obras.companyId, input.companyId), eq(obras.isActive, 1)));
+
+      // Buscar kit básico
+      const kits = await db.select().from(epiKits)
+        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+      let kitBasico = kits.find(k => 
+        k.nome.toLowerCase().includes('básico') || k.nome.toLowerCase().includes('basico') || 
+        k.nome.toLowerCase().includes('contratação') || k.nome.toLowerCase().includes('contratacao')
+      );
+      if (!kitBasico && kits.length > 0) kitBasico = kits[0];
+      if (!kitBasico) return { obras: [], kitConfigurado: false };
+
+      const itensKit = await db.select().from(epiKitItems)
+        .where(eq(epiKitItems.kitId, kitBasico.id));
+      if (itensKit.length === 0) return { obras: [], kitConfigurado: true };
+
+      // Para cada obra, calcular capacidade
+      const resultados = await Promise.all(obrasAtivas.map(async (obra) => {
+        const estoqueObra = await db.select({
+          epiId: epiEstoqueObra.epiId,
+          quantidade: epiEstoqueObra.quantidade,
+        }).from(epiEstoqueObra)
+          .where(and(
+            eq(epiEstoqueObra.companyId, input.companyId),
+            eq(epiEstoqueObra.obraId, obra.id),
+          ));
+
+        const todosEpis = await db.select({ id: epis.id, nome: epis.nome })
+          .from(epis).where(eq(epis.companyId, input.companyId));
+
+        const capacidades = itensKit.filter(i => i.obrigatorio === 1).map(itemKit => {
+          let epiMatch = itemKit.epiId
+            ? todosEpis.find(e => e.id === itemKit.epiId)
+            : todosEpis.find(e => e.nome.toLowerCase().includes(itemKit.nomeEpi.toLowerCase().split(' ')[0]));
+          if (!epiMatch) {
+            const palavras = itemKit.nomeEpi.toLowerCase().split(' ');
+            epiMatch = todosEpis.find(e => palavras.some(p => p.length > 3 && e.nome.toLowerCase().includes(p)));
+          }
+          const estoque = epiMatch ? (estoqueObra.find(eo => eo.epiId === epiMatch!.id)?.quantidade || 0) : 0;
+          return itemKit.quantidade > 0 ? Math.floor(estoque / itemKit.quantidade) : 0;
+        });
+
+        const capacidade = capacidades.length > 0 ? Math.min(...capacidades) : 0;
+        return { obraId: obra.id, obraNome: obra.nome, capacidade };
+      }));
+
+      return { obras: resultados, kitConfigurado: true };
+    }),
 });

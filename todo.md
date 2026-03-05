@@ -4773,3 +4773,13 @@
 - [ ] Aplicar filtro de visibilidade na Home (cards de módulos)
 - [ ] Aplicar filtro de visibilidade em relatórios e filtros de seleção
 - [ ] Garantir que desativar um item no Painel de Controle oculte em TODOS os módulos
+
+## Indicador de Capacidade de Contratação (EPI)
+- [x] Criar tabela/config de "Kit Básico de Contratação" (lista editável de EPIs obrigatórios + quantidade)
+- [x] Rota backend que calcula capacidade: cruza kit básico com estoque disponível (central + obras)
+- [x] Retornar: quantos novos funcionários podem ser equipados com estoque atual
+- [x] Detalhar item limitante (gargalo): qual EPI limita a capacidade
+- [x] Componente frontend: card grande com número de capacidade + semáforo
+- [x] Tela de configuração do kit básico editável (adicionar/remover itens, alterar quantidade)
+- [x] Filtro por obra (capacidade por obra específica ou geral)
+- [x] Integrar no dashboard de EPIs como card principal
