@@ -1,0 +1,130 @@
+{
+  "query": "SELECT id, nome, quantidadeEstoque, categoria FROM epis \nWHERE companyId = 60002 AND (LOWER(nome) LIKE '%protetor%' OR LOWER(nome) LIKE '%auricular%' OR LOWER(nome) LIKE '%calça%' OR LOWER(nome) LIKE '%brim%' OR LOWER(nome) LIKE '%camisa%' OR LOWER(nome) LIKE '%manga%')\nORDER BY nome LIMIT 20",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nome, quantidadeEstoque, categoria FROM epis \nWHERE companyId = 60002 AND (LOWER(nome) LIKE '%protetor%' OR LOWER(nome) LIKE '%auricular%' OR LOWER(nome) LIKE '%calça%' OR LOWER(nome) LIKE '%brim%' OR LOWER(nome) LIKE '%camisa%' OR LOWER(nome) LIKE '%manga%')\nORDER BY nome LIMIT 20",
+  "rows": [
+    {
+      "id": "1020012",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "15",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1050022",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "14",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1020011",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "39",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1020010",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "33",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1050021",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "6",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1050023",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "21",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1020009",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "18",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1020015",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "6",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1020014",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "15",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1050020",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "2",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "1020013",
+      "nome": "Calça Brim",
+      "quantidadeEstoque": "29",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "690047",
+      "nome": "Calça de segurança  de confeccionada em tecido Cedrotech FR, 100% algodão, sarja 3x1, ATPV 11 cal/cm², fabricado pela Cia de Fiação e Tecidos Cedro Cachoeira, com gramatura nominal de 8,6 oz/yd² (290 g/m²).",
+      "quantidadeEstoque": "3",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "690046",
+      "nome": "Calça de segurança  de confeccionada em tecido Cedrotech FR, 100% algodão, sarja 3x1, ATPV 11 cal/cm², fabricado pela Cia de Fiação e Tecidos Cedro Cachoeira, com gramatura nominal de 8,6 oz/yd² (290 g/m²).",
+      "quantidadeEstoque": "2",
+      "categoria": "Uniforme"
+    },
+    {
+      "id": "690051",
+      "nome": "Calçado de segurança de uso profissional tipo botina, confeccionado em couro, fechamento em elástico, palmilha de montagem em não tecido fixada pelo sistema strobel, biqueira de composite, solado empoliuretano bidensidade injetado direto ao cabedal, para uso eletricista.",
+      "quantidadeEstoque": "2",
+      "categoria": "Calcado"
+    },
+    {
+      "id": "690052",
+      "nome": "Calçado de segurança de uso profissional tipo botina, confeccionado em couro, fechamento em elástico, palmilha de montagem em não tecido fixada pelo sistema strobel, biqueira de composite, solado empoliuretano bidensidade injetado direto ao cabedal, para uso eletricista.",
+      "quantidadeEstoque": "1",
+      "categoria": "Calcado"
+    },
+    {
+      "id": "690050",
+      "nome": "Calçado de segurança de uso profissional tipo botina, confeccionado em couro, fechamento em elástico, palmilha de montagem em não tecido fixada pelo sistema strobel, biqueira de composite, solado empoliuretano bidensidade injetado direto ao cabedal, para uso eletricista.",
+      "quantidadeEstoque": "2",
+      "categoria": "Calcado"
+    },
+    {
+      "id": "690026",
+      "nome": "Calçado ocupacional tipo botina, fechamento em cadarço, confeccionado em couro nobuck na cor café curtido ao cromo, forro da gáspea em nãotecido, forro lateral em material têxtil, palmilha de montagem em não tecidoresinado fixada pelo sistema strobel, palmilha interna removível, solado de poliuretano bidensidade injetado diretamente no cabedal, biqueira de polipropileno para conformação.",
+      "quantidadeEstoque": "1",
+      "categoria": "Calcado"
+    },
+    {
+      "id": "690005",
+      "nome": "Calçado ocupacional, tipo botina, com fechamento em elástico nas laterais, confeccionado em couro preto curtido ao cromo, palmilha de montagem em TNT – tecido não tecido resinado na cor branca, costurada pelo processo strobel, forro interno em TNT tecido não tecido na cor cinza, solado em poliuretano bidensidade na cor cinza, injetado diretamente ao cabedal, com resistência ao óleo combustível e a absorção de energia no salto, biqueira em polipropileno.",
+      "quantidadeEstoque": "6",
+      "categoria": "Calcado"
+    },
+    {
+      "id": "690010",
+      "nome": "Calçado ocupacional, tipo botina, com fechamento em elástico nas laterais, confeccionado em couro preto curtido ao cromo, palmilha de montagem em TNT – tecido não tecido resinado na cor branca, costurada pelo processo strobel, forro interno em TNT tecido não tecido na cor cinza, solado em poliuretano bidensidade na cor cinza, injetado diretamente ao cabedal, com resistência ao óleo combustível e a absorção de energia no salto, biqueira em polipropileno.",
+      "quantidadeEstoque": "3",
+      "categoria": "Calcado"
+    },
+    {
+      "id": "690011",
+      "nome": "Calçado ocupacional, tipo botina, com fechamento em elástico nas laterais, confeccionado em couro preto curtido ao cromo, palmilha de montagem em TNT – tecido não tecido resinado na cor branca, costurada pelo processo strobel, forro interno em TNT tecido não tecido na cor cinza, solado em poliuretano bidensidade na cor cinza, injetado diretamente ao cabedal, com resistência ao óleo combustível e a absorção de energia no salto, biqueira em polipropileno.",
+      "quantidadeEstoque": "1",
+      "categoria": "Calcado"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\tquantidadeEstoque\tcategoria\n1020012\tCalça Brim\t15\tUniforme\n1050022\tCalça Brim\t14\tUniforme\n1020011\tCalça Brim\t39\tUniforme\n1020010\tCalça Brim\t33\tUniforme\n1050021\tCalça Brim\t6\tUniforme\n1050023\tCalça Brim\t21\tUniforme\n1020009\tCalça Brim\t18\tUniforme\n1020015\tCalça Brim\t6\tUniforme\n1020014\tCalça Brim\t15\tUniforme\n1050020\tCalça Brim\t2\tUniforme\n1020013\tCalça Brim\t29\tUniforme\n690047\tCalça de segurança  de confeccionada em tecido Cedrotech FR, 100% algodão, sarja 3x1, ATPV 11 cal/cm², fabricado pela Cia de Fiação e Tecidos Cedro Cachoeira, com gramatura nominal de 8,6 oz/yd² (290 g/m²).\t3\tUniforme\n690046\tCalça de segurança  de confeccionada em tecido Cedrotech FR, 100% algodão, sarja 3x1, ATPV 11 cal/cm², fabricado pela Cia de Fiação e Tecidos Cedro Cachoeira, com gramatura nominal de 8,6 oz/yd² (290 g/m²).\t2\tUniforme\n690051\tCalçado de segurança de uso profissional tipo botina, confeccionado em couro, fechamento em elástico, palmilha de montagem em não tecido fixada pelo sistema strobel, biqueira de composite, solado empoliuretano bidensidade injetado direto ao cabedal, para uso eletricista.\t2\tCalcado\n690052\tCalçado de segurança de uso profissional tipo botina, confeccionado em couro, fechamento em elástico, palmilha de montagem em não tecido fixada pelo sistema strobel, biqueira de composite, solado empoliuretano bidensidade injetado direto ao cabedal, para uso eletricista.\t1\tCalcado\n690050\tCalçado de segurança de uso profissional tipo botina, confeccionado em couro, fechamento em elástico, palmilha de montagem em não tecido fixada pelo sistema strobel, biqueira de composite, solado empoliuretano bidensidade injetado direto ao cabedal, para uso eletricista.\t2\tCalcado\n690026\tCalçado ocupacional tipo botina, fechamento em cadarço, confeccionado em couro nobuck na cor café curtido ao cromo, forro da gáspea em nãotecido, forro lateral em material têxtil, palmilha de montagem em não tecidoresinado fixada pelo sistema strobel, palmilha interna removível, solado de poliuretano bidensidade injetado diretamente no cabedal, biqueira de polipropileno para conformação.\t1\tCalcado\n690005\tCalçado ocupacional, tipo botina, com fechamento em elástico nas laterais, confeccionado em couro preto curtido ao cromo, palmilha de montagem em TNT – tecido não tecido resinado na cor branca, costurada pelo processo strobel, forro interno em TNT tecido não tecido na cor cinza, solado em poliuretano bidensidade na cor cinza, injetado diretamente ao cabedal, com resistência ao óleo combustível e a absorção de energia no salto, biqueira em polipropileno.\t6\tCalcado\n690010\tCalçado ocupacional, tipo botina, com fechamento em elástico nas laterais, confeccionado em couro preto curtido ao cromo, palmilha de montagem em TNT – tecido não tecido resinado na cor branca, costurada pelo processo strobel, forro interno em TNT tecido não tecido na cor cinza, solado em poliuretano bidensidade na cor cinza, injetado diretamente ao cabedal, com resistência ao óleo combustível e a absorção de energia no salto, biqueira em polipropileno.\t3\tCalcado\n690011\tCalçado ocupacional, tipo botina, com fechamento em elástico nas laterais, confeccionado em couro preto curtido ao cromo, palmilha de montagem em TNT – tecido não tecido resinado na cor branca, costurada pelo processo strobel, forro interno em TNT tecido não tecido na cor cinza, solado em poliuretano bidensidade na cor cinza, injetado diretamente ao cabedal, com resistência ao óleo combustível e a absorção de energia no salto, biqueira em polipropileno.\t1\tCalcado\n",
+  "stderr": "",
+  "execution_time_ms": 62
+}

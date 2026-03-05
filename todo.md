@@ -4813,3 +4813,10 @@
 - [x] Frontend: tela de aprovação de descontos para o DP — nova aba Descontos no Epis.tsx
 - [x] Integração com folha: exibir descontos pendentes ao lançar pagamento/vale — já existia no avisoPrevioFerias
 - [x] Testes vitest para desconto EPI — 14 testes passando
+
+## Bug: Capacidade de Contratação mostrando valor incorreto
+- [x] Investigar cálculo: mostra 1 funcionário quando deveria ser muito mais (mais de mil itens no estoque)
+- [x] Verificar vinculação do kit básico auto-seed com catálogo de EPIs real
+- [x] Gargalo "Camisa Manga Longa (estoque: 2)" — matching pegava só 1º EPI, agora soma todos
+- [x] Corrigir lógica de cálculo: matching inteligente por palavras-chave + soma de TODOS os EPIs do mesmo tipo
+- [x] Resultado: Cap. Contratação agora mostra 38 (antes 1) para FC Engenharia

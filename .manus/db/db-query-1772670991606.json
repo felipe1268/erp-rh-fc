@@ -1,0 +1,202 @@
+{
+  "query": "SELECT ki.nomeEpi, ki.quantidade, ki.obrigatorio, ki.epiId, k.companyId, k.nome as kitNome\nFROM epi_kit_items ki \nJOIN epi_kits k ON ki.kitId = k.id \nWHERE (k.nome LIKE '%Básico%' OR k.nome LIKE '%Contratação%')\nORDER BY k.companyId, ki.nomeEpi",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT ki.nomeEpi, ki.quantidade, ki.obrigatorio, ki.epiId, k.companyId, k.nome as kitNome\nFROM epi_kit_items ki \nJOIN epi_kits k ON ki.kitId = k.id \nWHERE (k.nome LIKE '%Básico%' OR k.nome LIKE '%Contratação%')\nORDER BY k.companyId, ki.nomeEpi",
+  "rows": [
+    {
+      "nomeEpi": "Botina de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Calça de Brim",
+      "quantidade": "2",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Camisa Manga Longa",
+      "quantidade": "2",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Capacete de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Luva de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Máscara PFF2",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Óculos de Proteção",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Protetor Auricular",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "999",
+      "kitNome": "Kit Básico Obra"
+    },
+    {
+      "nomeEpi": "Botina de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Calça de Brim",
+      "quantidade": "2",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Camisa Manga Longa",
+      "quantidade": "2",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Capacete de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Luva de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Máscara PFF2",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Óculos de Proteção",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Protetor Auricular",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60002",
+      "kitNome": "Kit Básico de Contratação"
+    },
+    {
+      "nomeEpi": "Botina de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    },
+    {
+      "nomeEpi": "Calça de Brim",
+      "quantidade": "2",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    },
+    {
+      "nomeEpi": "Camisa Manga Longa",
+      "quantidade": "2",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    },
+    {
+      "nomeEpi": "Capacete de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    },
+    {
+      "nomeEpi": "Luva de Segurança",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    },
+    {
+      "nomeEpi": "Máscara PFF2",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    },
+    {
+      "nomeEpi": "Óculos de Proteção",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    },
+    {
+      "nomeEpi": "Protetor Auricular",
+      "quantidade": "1",
+      "obrigatorio": "1",
+      "epiId": "NULL",
+      "companyId": "60004",
+      "kitNome": "Kit Básico Contratação"
+    }
+  ],
+  "messages": [],
+  "stdout": "nomeEpi\tquantidade\tobrigatorio\tepiId\tcompanyId\tkitNome\nBotina de Segurança\t1\t1\tNULL\t999\tKit Básico Obra\nCalça de Brim\t2\t1\tNULL\t999\tKit Básico Obra\nCamisa Manga Longa\t2\t1\tNULL\t999\tKit Básico Obra\nCapacete de Segurança\t1\t1\tNULL\t999\tKit Básico Obra\nLuva de Segurança\t1\t1\tNULL\t999\tKit Básico Obra\nMáscara PFF2\t1\t1\tNULL\t999\tKit Básico Obra\nÓculos de Proteção\t1\t1\tNULL\t999\tKit Básico Obra\nProtetor Auricular\t1\t1\tNULL\t999\tKit Básico Obra\nBotina de Segurança\t1\t1\tNULL\t60002\tKit Básico de Contratação\nCalça de Brim\t2\t1\tNULL\t60002\tKit Básico de Contratação\nCamisa Manga Longa\t2\t1\tNULL\t60002\tKit Básico de Contratação\nCapacete de Segurança\t1\t1\tNULL\t60002\tKit Básico de Contratação\nLuva de Segurança\t1\t1\tNULL\t60002\tKit Básico de Contratação\nMáscara PFF2\t1\t1\tNULL\t60002\tKit Básico de Contratação\nÓculos de Proteção\t1\t1\tNULL\t60002\tKit Básico de Contratação\nProtetor Auricular\t1\t1\tNULL\t60002\tKit Básico de Contratação\nBotina de Segurança\t1\t1\tNULL\t60004\tKit Básico Contratação\nCalça de Brim\t2\t1\tNULL\t60004\tKit Básico Contratação\nCamisa Manga Longa\t2\t1\tNULL\t60004\tKit Básico Contratação\nCapacete de Segurança\t1\t1\tNULL\t60004\tKit Básico Contratação\nLuva de Segurança\t1\t1\tNULL\t60004\tKit Básico Contratação\nMáscara PFF2\t1\t1\tNULL\t60004\tKit Básico Contratação\nÓculos de Proteção\t1\t1\tNULL\t60004\tKit Básico Contratação\nProtetor Auricular\t1\t1\tNULL\t60004\tKit Básico Contratação\n",
+  "stderr": "",
+  "execution_time_ms": 64
+}

@@ -1694,37 +1694,86 @@ Forneça sugestões concretas com quantidades específicas.`;
       }
 
       // 5. Para cada item do kit, calcular quantos funcionários podem ser equipados
-      const detalhes = itensKit.map(itemKit => {
-        // Encontrar EPI correspondente no catálogo
-        let epiMatch = itemKit.epiId 
-          ? todosEpis.find(e => e.id === itemKit.epiId)
-          : todosEpis.find(e => e.nome.toLowerCase().includes(itemKit.nomeEpi.toLowerCase().split(' ')[0]));
+      // IMPORTANTE: Somar estoque de TODOS os EPIs que fazem match (mesmo tipo, tamanhos diferentes)
+      
+      // Mapa de palavras-chave para matching inteligente por tipo de EPI
+      const MATCHING_KEYWORDS: Record<string, { must: string[]; mustNot?: string[]; category?: string }> = {
+        'Capacete de Segurança': { must: ['capacete'], mustNot: ['protetor facial', 'protetor auditivo'] },
+        'Protetor Auricular': { must: ['protetor auditivo', 'protetor auricular', 'plug', 'inserção', 'concha'], mustNot: ['facial', 'capacete'] },
+        'Máscara PFF2': { must: ['pff2', 'pff-2', 'respirador', 'semifacial filtrante'], mustNot: ['solda'] },
+        'Luva de Segurança': { must: ['luva'], mustNot: ['isolante', 'manga'] },
+        'Óculos de Proteção': { must: ['óculos', 'oculos'], mustNot: ['solda', 'arco'] },
+        'Camisa Manga Longa': { must: ['camisa'], category: 'Uniforme' },
+        'Calça de Brim': { must: ['calça'], category: 'Uniforme', mustNot: ['calçado', 'calcado'] },
+        'Botina de Segurança': { must: ['botina'], category: 'Calcado' },
+      };
 
+      const detalhes = itensKit.map(itemKit => {
+        let matchedEpis: typeof todosEpis = [];
         let estoqueTotal = 0;
         let estoqueCentral = 0;
         let estoqueObra = 0;
+        let primaryMatch: typeof todosEpis[0] | null = null;
 
-        if (epiMatch) {
-          estoqueCentral = epiMatch.estoqueCentral || 0;
-          // Somar estoque de obras
-          const obrasEstoque = estoqueObras.filter(eo => eo.epiId === epiMatch!.id);
-          estoqueObra = obrasEstoque.reduce((sum, eo) => sum + (eo.quantidade || 0), 0);
-          estoqueTotal = estoqueCentral + estoqueObra;
-        } else {
-          // Tentar match por nome parcial mais flexível
-          const palavras = itemKit.nomeEpi.toLowerCase().split(' ');
-          for (const epi of todosEpis) {
-            const nomeEpiLower = epi.nome.toLowerCase();
-            if (palavras.some(p => p.length > 3 && nomeEpiLower.includes(p))) {
-              estoqueCentral = epi.estoqueCentral || 0;
-              const obrasEstoque = estoqueObras.filter(eo => eo.epiId === epi.id);
-              estoqueObra = obrasEstoque.reduce((sum, eo) => sum + (eo.quantidade || 0), 0);
-              estoqueTotal = estoqueCentral + estoqueObra;
-              epiMatch = epi;
-              break;
-            }
+        // 1. Se tem epiId direto, usar apenas esse
+        if (itemKit.epiId) {
+          const epi = todosEpis.find(e => e.id === itemKit.epiId);
+          if (epi) matchedEpis = [epi];
+        }
+
+        // 2. Matching inteligente por palavras-chave
+        if (matchedEpis.length === 0) {
+          const keywords = MATCHING_KEYWORDS[itemKit.nomeEpi];
+          if (keywords) {
+            matchedEpis = todosEpis.filter(epi => {
+              const nomeLower = epi.nome.toLowerCase();
+              // Deve conter pelo menos uma das palavras obrigatórias
+              const hasMust = keywords.must.some(kw => nomeLower.includes(kw));
+              if (!hasMust) return false;
+              // Não deve conter palavras de exclusão
+              if (keywords.mustNot && keywords.mustNot.some(kw => nomeLower.includes(kw))) return false;
+              // Se tem filtro de categoria, aplicar
+              if (keywords.category && epi.categoria !== keywords.category) return false;
+              return true;
+            });
           }
         }
+
+        // 3. Fallback: match por nome parcial (todas as palavras > 3 chars)
+        if (matchedEpis.length === 0) {
+          const palavras = itemKit.nomeEpi.toLowerCase().split(' ').filter(p => p.length > 3);
+          if (palavras.length > 0) {
+            matchedEpis = todosEpis.filter(epi => {
+              const nomeLower = epi.nome.toLowerCase();
+              // Deve conter TODAS as palavras significativas (mais restritivo)
+              return palavras.every(p => nomeLower.includes(p));
+            });
+          }
+          // Se não encontrou com todas, tentar com pelo menos 2
+          if (matchedEpis.length === 0 && palavras.length >= 2) {
+            matchedEpis = todosEpis.filter(epi => {
+              const nomeLower = epi.nome.toLowerCase();
+              const matches = palavras.filter(p => nomeLower.includes(p));
+              return matches.length >= 2;
+            });
+          }
+          // Último recurso: qualquer palavra
+          if (matchedEpis.length === 0) {
+            matchedEpis = todosEpis.filter(epi => {
+              const nomeLower = epi.nome.toLowerCase();
+              return palavras.some(p => nomeLower.includes(p));
+            });
+          }
+        }
+
+        // 4. Somar estoque de TODOS os EPIs que fizeram match
+        for (const epi of matchedEpis) {
+          estoqueCentral += epi.estoqueCentral || 0;
+          const obrasEstoque = estoqueObras.filter(eo => eo.epiId === epi.id);
+          estoqueObra += obrasEstoque.reduce((sum, eo) => sum + (eo.quantidade || 0), 0);
+        }
+        estoqueTotal = estoqueCentral + estoqueObra;
+        primaryMatch = matchedEpis.length > 0 ? matchedEpis[0] : null;
 
         const qtdNecessaria = itemKit.quantidade;
         const capacidadeItem = qtdNecessaria > 0 ? Math.floor(estoqueTotal / qtdNecessaria) : 0;
@@ -1732,15 +1781,16 @@ Forneça sugestões concretas com quantidades específicas.`;
         return {
           nomeEpi: itemKit.nomeEpi,
           categoria: itemKit.categoria,
-          epiId: epiMatch?.id || null,
-          epiNomeCatalogo: epiMatch?.nome || null,
+          epiId: primaryMatch?.id || null,
+          epiNomeCatalogo: primaryMatch?.nome || null,
           qtdNecessariaPorPessoa: qtdNecessaria,
           obrigatorio: itemKit.obrigatorio,
           estoqueCentral,
           estoqueObra,
           estoqueTotal,
           capacidade: capacidadeItem,
-          encontradoNoCatalogo: !!epiMatch,
+          encontradoNoCatalogo: matchedEpis.length > 0,
+          qtdEpisMatch: matchedEpis.length,
         };
       });
 
@@ -1822,15 +1872,54 @@ Forneça sugestões concretas com quantidades específicas.`;
         const todosEpis = await db.select({ id: epis.id, nome: epis.nome })
           .from(epis).where(eq(epis.companyId, input.companyId));
 
+        // Matching inteligente por tipo de EPI (mesma lógica de capacidadeContratacao)
+        const MATCHING_KEYWORDS_OBRA: Record<string, { must: string[]; mustNot?: string[]; category?: string }> = {
+          'Capacete de Segurança': { must: ['capacete'], mustNot: ['protetor facial', 'protetor auditivo'] },
+          'Protetor Auricular': { must: ['protetor auditivo', 'protetor auricular', 'plug', 'inserção', 'concha'], mustNot: ['facial', 'capacete'] },
+          'Máscara PFF2': { must: ['pff2', 'pff-2', 'respirador', 'semifacial filtrante'], mustNot: ['solda'] },
+          'Luva de Segurança': { must: ['luva'], mustNot: ['isolante', 'manga'] },
+          'Óculos de Proteção': { must: ['óculos', 'oculos'], mustNot: ['solda', 'arco'] },
+          'Camisa Manga Longa': { must: ['camisa'], category: 'Uniforme' },
+          'Calça de Brim': { must: ['calça'], category: 'Uniforme', mustNot: ['calçado', 'calcado'] },
+          'Botina de Segurança': { must: ['botina'], category: 'Calcado' },
+        };
+
         const capacidades = itensKit.filter(i => i.obrigatorio === 1).map(itemKit => {
-          let epiMatch = itemKit.epiId
-            ? todosEpis.find(e => e.id === itemKit.epiId)
-            : todosEpis.find(e => e.nome.toLowerCase().includes(itemKit.nomeEpi.toLowerCase().split(' ')[0]));
-          if (!epiMatch) {
-            const palavras = itemKit.nomeEpi.toLowerCase().split(' ');
-            epiMatch = todosEpis.find(e => palavras.some(p => p.length > 3 && e.nome.toLowerCase().includes(p)));
+          let matchedIds: number[] = [];
+          
+          // 1. epiId direto
+          if (itemKit.epiId) {
+            const epi = todosEpis.find(e => e.id === itemKit.epiId);
+            if (epi) matchedIds = [epi.id];
           }
-          const estoque = epiMatch ? (estoqueObra.find(eo => eo.epiId === epiMatch!.id)?.quantidade || 0) : 0;
+          
+          // 2. Matching inteligente
+          if (matchedIds.length === 0) {
+            const keywords = MATCHING_KEYWORDS_OBRA[itemKit.nomeEpi];
+            if (keywords) {
+              matchedIds = todosEpis.filter(epi => {
+                const nomeLower = epi.nome.toLowerCase();
+                const hasMust = keywords.must.some(kw => nomeLower.includes(kw));
+                if (!hasMust) return false;
+                if (keywords.mustNot && keywords.mustNot.some(kw => nomeLower.includes(kw))) return false;
+                return true;
+              }).map(e => e.id);
+            }
+          }
+          
+          // 3. Fallback nome parcial
+          if (matchedIds.length === 0) {
+            const palavras = itemKit.nomeEpi.toLowerCase().split(' ').filter(p => p.length > 3);
+            matchedIds = todosEpis.filter(epi => {
+              const nomeLower = epi.nome.toLowerCase();
+              return palavras.some(p => nomeLower.includes(p));
+            }).map(e => e.id);
+          }
+          
+          // Somar estoque de TODOS os EPIs que fizeram match
+          const estoque = matchedIds.reduce((sum, epiId) => {
+            return sum + (estoqueObra.find(eo => eo.epiId === epiId)?.quantidade || 0);
+          }, 0);
           return itemKit.quantidade > 0 ? Math.floor(estoque / itemKit.quantidade) : 0;
         });
 
