@@ -4832,3 +4832,12 @@
 - [x] Frontend: botão Salvar Todos para persistir sugestões aceitas
 - [x] Testes vitest para as 4 rotas de IA — 25 testes passando
 - [x] Fix: EpiDescontos.tsx corrigido para usar listDiscountAlerts (não listDiscounts)
+
+## Bug: Filtro por Obra na Capacidade de Contratação não funciona
+- [x] Dropdown de obra não altera o cálculo — CORRIGIDO: agora filtra por obra
+- [x] Ao selecionar obra específica (QIU 2, PALES, etc.), deve filtrar estoque daquela obra
+- [x] Corrigir backend: quando obraId informado, usa apenas estoque da obra (não soma central)
+
+## Rev. 191: Card Capacidade no Painel SST
+- [x] Adicionar card de Capacidade de Contratação no Painel SST (painel inicial do módulo)
+- [x] Confirmar fix do filtro por obra na Capacidade — QIU2=0, PALES=0, Geral=38

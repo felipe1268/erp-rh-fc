@@ -12,7 +12,7 @@ import { trpc } from "@/lib/trpc";
 import {
   Shield, HardHat, HeartPulse, FileWarning, AlertTriangle,
   ChevronRight, BarChart3, ShieldCheck, ClipboardList, Activity,
-  Clock, Users, Search, Filter, X
+  Clock, Users, Search, Filter, X, UserPlus
 } from "lucide-react";
 import { formatDateTime } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
@@ -45,6 +45,12 @@ export default function PainelSST() {
 
   const s = homeData?.stats;
   const totalAlertasSST = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0);
+
+  // Capacidade de Contratação
+  const { data: capData } = trpc.epiAvancado.capacidadeContratacao.useQuery(
+    { companyId: companyId! },
+    { enabled: !!companyId }
+  );
 
   const [showAlertasDialog, setShowAlertasDialog] = useState(false);
   const [alertFilter, setAlertFilter] = useState<string>("todos");
@@ -174,6 +180,62 @@ export default function PainelSST() {
                   {canSee('/colaboradores') && <KpiCard title="Total Colaboradores" value={s?.totalFuncionarios ?? 0} icon={Users} color="blue" onClick={() => navigate("/colaboradores")} />}
                 </div>
               </div>
+
+              {/* Card Capacidade de Contratação */}
+              {capData && (
+                <div>
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Capacidade de Contratação (EPIs)</h2>
+                  <Card
+                    className={`border-l-4 hover:shadow-md transition-shadow cursor-pointer ${
+                      capData.capacidade >= 20 ? 'border-l-green-500' :
+                      capData.capacidade >= 10 ? 'border-l-yellow-500' :
+                      capData.capacidade >= 5 ? 'border-l-orange-500' : 'border-l-red-500'
+                    }`}
+                    onClick={() => navigate('/epis')}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                            capData.capacidade >= 20 ? 'bg-green-50' :
+                            capData.capacidade >= 10 ? 'bg-yellow-50' :
+                            capData.capacidade >= 5 ? 'bg-orange-50' : 'bg-red-50'
+                          }`}>
+                            <UserPlus className={`h-5 w-5 ${
+                              capData.capacidade >= 20 ? 'text-green-600' :
+                              capData.capacidade >= 10 ? 'text-yellow-600' :
+                              capData.capacidade >= 5 ? 'text-orange-600' : 'text-red-600'
+                            }`} />
+                          </div>
+                          <div>
+                            <p className={`text-3xl font-bold ${
+                              capData.capacidade >= 20 ? 'text-green-600' :
+                              capData.capacidade >= 10 ? 'text-yellow-600' :
+                              capData.capacidade >= 5 ? 'text-orange-600' : 'text-red-600'
+                            }`}>{capData.capacidade}</p>
+                            <p className="text-xs text-muted-foreground">novos funcionários equipáveis</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge className={`text-xs ${
+                            capData.nivel === 'OTIMO' ? 'bg-green-100 text-green-800 border-green-300' :
+                            capData.nivel === 'BOM' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                            capData.nivel === 'BAIXO' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                            'bg-red-100 text-red-800 border-red-300'
+                          }`}>
+                            {capData.nivel === 'OTIMO' ? 'ÓTIMO' : capData.nivel}
+                          </Badge>
+                          {capData.gargalo && (
+                            <p className="text-[10px] text-muted-foreground mt-1 max-w-[140px]">
+                              Gargalo: {capData.gargalo.nome}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
 
               {/* Main Content Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

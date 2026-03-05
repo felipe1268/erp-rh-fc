@@ -1773,7 +1773,9 @@ Forneça sugestões concretas com quantidades específicas.`;
           const obrasEstoque = estoqueObras.filter(eo => eo.epiId === epi.id);
           estoqueObra += obrasEstoque.reduce((sum, eo) => sum + (eo.quantidade || 0), 0);
         }
-        estoqueTotal = estoqueCentral + estoqueObra;
+        // Se filtro por obra, usar APENAS estoque da obra (não somar central)
+        // Se estoque geral (sem filtro), somar central + todas as obras
+        estoqueTotal = input.obraId ? estoqueObra : (estoqueCentral + estoqueObra);
         primaryMatch = matchedEpis.length > 0 ? matchedEpis[0] : null;
 
         const qtdNecessaria = itemKit.quantidade;
