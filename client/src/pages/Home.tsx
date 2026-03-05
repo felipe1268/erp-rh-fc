@@ -11,7 +11,7 @@ import {
   BarChart3, Landmark, Gavel, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, TrendingUp, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, X, ExternalLink,
-  Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw
+  Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw, Award
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
@@ -20,6 +20,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { useMenuVisibility } from "@/hooks/useMenuVisibility";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 const RISCO_COLORS: Record<string, string> = {
   baixo: "bg-green-100 text-green-700",
@@ -47,6 +48,7 @@ export default function Home() {
   const hideValues = (route: string) => !isAdminMaster && hasGroup && groupOcultarValores(route);
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
   const [alertasOpen, setAlertasOpen] = useState(false);
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);
   const [expMotivo, setExpMotivo] = useState('');
   const [expObs, setExpObs] = useState('');
@@ -329,7 +331,7 @@ export default function Home() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* Coluna 1: Alertas Prioritários */}
                 <div className="space-y-4">
-                  {/* Aniversariantes */}
+                  {/* Aniversariantes de Nascimento */}
                   {canSee('/colaboradores') && <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
@@ -349,16 +351,59 @@ export default function Home() {
                             <div
                               key={a.id}
                               className={`flex items-center justify-between text-xs px-2 py-1.5 rounded cursor-pointer hover:bg-accent/50 ${a.isHoje ? "bg-pink-50 border border-pink-200" : ""}`}
-                              onClick={() => navigate("/colaboradores")}
+                              onClick={() => setRaioXEmployeeId(a.id)}
                             >
                               <div className="flex items-center gap-2">
                                 {a.isHoje && <span className="text-base">🎂</span>}
                                 <div>
                                   <span className="font-medium">{a.nome}</span>
                                   {a.funcao && <span className="text-muted-foreground ml-1">({a.funcao})</span>}
+                                  {a.obra && <span className="text-blue-500 ml-1 text-[10px]">📍 {a.obra}</span>}
                                 </div>
                               </div>
                               <span className={`font-mono ${a.isHoje ? "font-bold text-pink-600" : a.jaPassou ? "text-muted-foreground line-through" : ""}`}>
+                                Dia {a.dia}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>}
+
+                  {/* Aniversários de Empresa (anos de casa) */}
+                  {canSee('/colaboradores') && <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Award className="h-4 w-4 text-amber-500" />
+                        Aniversários de Empresa
+                        {s?.aniversariosEmpresaHoje ? (
+                          <Badge className="bg-amber-100 text-amber-700 text-[10px]">{s.aniversariosEmpresaHoje} hoje!</Badge>
+                        ) : null}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!homeData?.aniversariosEmpresa?.length ? (
+                        <p className="text-xs text-muted-foreground">Nenhum aniversário de empresa este mês</p>
+                      ) : (
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {homeData.aniversariosEmpresa.map(a => (
+                            <div
+                              key={a.id}
+                              className={`flex items-center justify-between text-xs px-2 py-1.5 rounded cursor-pointer hover:bg-accent/50 ${a.isHoje ? "bg-amber-50 border border-amber-200" : ""}`}
+                              onClick={() => setRaioXEmployeeId(a.id)}
+                            >
+                              <div className="flex items-center gap-2">
+                                {a.isHoje && <span className="text-base">🏆</span>}
+                                <div>
+                                  <span className="font-medium">{a.nome}</span>
+                                  <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 border-amber-300 text-amber-700">
+                                    {a.anosEmpresa} {a.anosEmpresa === 1 ? 'ano' : 'anos'}
+                                  </Badge>
+                                  {a.obra && <span className="text-blue-500 ml-1 text-[10px]">📍 {a.obra}</span>}
+                                </div>
+                              </div>
+                              <span className={`font-mono ${a.isHoje ? "font-bold text-amber-600" : a.jaPassou ? "text-muted-foreground line-through" : ""}`}>
                                 Dia {a.dia}
                               </span>
                             </div>
@@ -699,6 +744,7 @@ export default function Home() {
         )}
       </div>
           <PrintFooterLGPD />
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }

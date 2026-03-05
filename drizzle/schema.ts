@@ -3679,3 +3679,27 @@ export const epiAlertaCapacidadeLog = mysqlTable("epi_alerta_capacidade_log", {
 	index("eacl_company").on(table.companyId),
 	index("eacl_enviado").on(table.enviadoEm),
 ]);
+
+
+// ============================================================
+// BACKUPS
+// ============================================================
+
+export const backups = mysqlTable("backups", {
+	id: int().autoincrement().notNull(),
+	tipo: mysqlEnum(["automatico", "manual"]).notNull().default("automatico"),
+	status: mysqlEnum(["em_andamento", "concluido", "erro"]).notNull().default("em_andamento"),
+	tabelasExportadas: int().default(0).notNull(),
+	registrosExportados: int().default(0).notNull(),
+	tamanhoBytes: int().default(0).notNull(),
+	s3Key: varchar({ length: 500 }),
+	s3Url: varchar({ length: 1000 }),
+	erro: text(),
+	iniciadoPor: varchar({ length: 255 }).default("Sistema"),
+	iniciadoEm: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	concluidoEm: timestamp({ mode: 'string' }),
+}, (table) => [
+	index("bkp_status").on(table.status),
+	index("bkp_tipo").on(table.tipo),
+	index("bkp_iniciado").on(table.iniciadoEm),
+]);

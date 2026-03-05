@@ -80,6 +80,7 @@ import { portalExternoRouter } from "./routers/portalExterno";
 import { payrollEngineRouter } from "./routers/payrollEngine";
 import { fieldNotesRouter } from "./routers/fieldNotes";
 import { epiAvancadoRouter } from "./routers/epiAvancado";
+import { backupRouter } from "./routers/backup";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -118,6 +119,7 @@ export const appRouter = router({
   payrollEngine: payrollEngineRouter,
   fieldNotes: fieldNotesRouter,
   epiAvancado: epiAvancadoRouter,
+  backup: backupRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

@@ -291,4 +291,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-03-05 04:00:00",
   },
+  {
+    version: 198,
+    titulo: "Backup Automatizado + Aniversários de Empresa + Raio-X Clicável",
+    descricao: "Backup automático diário do banco de dados às 03:00 (Brasília) com export JSON comprimido para S3 e notificação por e-mail/plataforma. Backup manual disponível em Configurações > Backup do Banco. Histórico de backups com download. Aniversários de empresa (anos de casa) na tela inicial. Aniversariantes clicáveis abrindo Raio-X do funcionário.",
+    tipo: "feature",
+    modulos: "Sistema,RH & DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-03-05 05:00:00",
+  },
 ];

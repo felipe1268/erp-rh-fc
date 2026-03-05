@@ -80,7 +80,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos";
+type TabKey = "criterios" | "senha" | "limpeza" | "painel" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -293,6 +293,7 @@ export default function Configuracoes() {
     { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin" },
     { key: "beneficios_alimentacao" as TabKey, label: "Benefícios Alimentação", icon: UtensilsCrossed, minRole: "admin" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master" },
+    { key: "backup" as TabKey, label: "Backup do Banco", icon: Database, minRole: "admin" },
   ];
   const tabs = allTabs.filter(tab => {
     if (tab.minRole === "user") return true;
@@ -756,9 +757,10 @@ export default function Configuracoes() {
           </Card>
         )}
 
-
-
-
+        {/* TAB: Backup */}
+        {activeTab === "backup" && (
+          <BackupTab />
+        )}
 
         {/* Dialog: Limpeza do Banco */}
         <FullScreenDialog open={showCleanDialog} onClose={() => setShowCleanDialog(false)} title="Limpeza do Banco de Dados" subtitle="Selecione os módulos que deseja limpar. Todos os registros serão removidos permanentemente." headerColor="bg-gradient-to-r from-red-700 to-red-500">
@@ -2062,6 +2064,186 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// ============================================================
+// COMPONENTE: Backup do Banco de Dados
+// ============================================================
+function BackupTab() {
+  const [executando, setExecutando] = useState(false);
+
+  const backupsQuery = trpc.backup.listar.useQuery({ limit: 20 });
+  const executarMutation = trpc.backup.executar.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(`Backup concluído! ${data.tabelasExportadas} tabelas, ${data.registrosExportados.toLocaleString("pt-BR")} registros`);
+      } else {
+        toast.error(`Erro no backup: ${data.erro}`);
+      }
+      setExecutando(false);
+      backupsQuery.refetch();
+    },
+    onError: (err: any) => {
+      toast.error("Erro: " + err.message);
+      setExecutando(false);
+    },
+  });
+
+  const handleExecutar = () => {
+    setExecutando(true);
+    executarMutation.mutate();
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+  };
+
+  const backups = backupsQuery.data || [];
+
+  return (
+    <div className="space-y-4">
+      {/* Cabeçalho */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Database className="w-5 h-5 text-blue-600" />
+                Backup do Banco de Dados
+              </CardTitle>
+              <CardDescription>
+                Backup automático diário às 03:00 (Brasília). Exporta todas as tabelas em JSON comprimido e faz upload para o S3.
+                Você também pode executar um backup manual a qualquer momento.
+              </CardDescription>
+            </div>
+            <Button
+              onClick={handleExecutar}
+              disabled={executando}
+              className="gap-1.5"
+            >
+              {executando ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Executando...</>
+              ) : (
+                <><Download className="w-4 h-4" /> Backup Manual</>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Info automático */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">Backup Automático</p>
+              <ul className="space-y-1 text-xs text-blue-700">
+                <li>• O sistema executa backup automático <strong>todos os dias às 03:00</strong> (horário de Brasília).</li>
+                <li>• Todas as <strong>160 tabelas</strong> do banco são exportadas em formato JSON comprimido (gzip).</li>
+                <li>• Os backups são armazenados no <strong>S3</strong> e notificações são enviadas por e-mail e plataforma.</li>
+                <li>• Recomendamos manter pelo menos <strong>30 dias</strong> de histórico para segurança.</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Histórico */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <History className="w-4 h-4 text-gray-600" />
+            Histórico de Backups
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {backupsQuery.isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+              Carregando...
+            </div>
+          ) : backups.length === 0 ? (
+            <div className="text-center py-8">
+              <Database className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">Nenhum backup encontrado</p>
+              <p className="text-xs text-gray-400 mt-1">Execute o primeiro backup manual ou aguarde o backup automático.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">Data</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">Tipo</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">Iniciado por</th>
+                    <th className="px-3 py-2 text-center font-medium text-gray-600">Tabelas</th>
+                    <th className="px-3 py-2 text-center font-medium text-gray-600">Registros</th>
+                    <th className="px-3 py-2 text-center font-medium text-gray-600">Tamanho</th>
+                    <th className="px-3 py-2 text-center font-medium text-gray-600">Status</th>
+                    <th className="px-3 py-2 text-center font-medium text-gray-600">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {backups.map((b: any) => (
+                    <tr key={b.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 text-gray-900">
+                        {b.iniciadoEm ? new Date(b.iniciadoEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                          b.tipo === "automatico" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
+                        }`}>
+                          {b.tipo === "automatico" ? "Automático" : "Manual"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{b.iniciadoPor || "—"}</td>
+                      <td className="px-3 py-2 text-center font-mono">{b.tabelasExportadas ?? "—"}</td>
+                      <td className="px-3 py-2 text-center font-mono">{b.registrosExportados?.toLocaleString("pt-BR") ?? "—"}</td>
+                      <td className="px-3 py-2 text-center font-mono">{b.tamanhoBytes ? formatBytes(b.tamanhoBytes) : "—"}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                          b.status === "concluido" ? "bg-green-100 text-green-700" :
+                          b.status === "em_andamento" ? "bg-yellow-100 text-yellow-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>
+                          {b.status === "concluido" ? <><Check className="w-3 h-3" /> Concluído</> :
+                           b.status === "em_andamento" ? <><Loader2 className="w-3 h-3 animate-spin" /> Em andamento</> :
+                           <><X className="w-3 h-3" /> Erro</>}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {b.s3Url && b.status === "concluido" && (
+                          <a
+                            href={b.s3Url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-xs font-medium inline-flex items-center gap-1"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Baixar
+                          </a>
+                        )}
+                        {b.status === "erro" && b.erro && (
+                          <span className="text-xs text-red-500 truncate max-w-[150px] inline-block" title={b.erro}>
+                            {b.erro.slice(0, 40)}...
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

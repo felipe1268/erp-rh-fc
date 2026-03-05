@@ -4906,3 +4906,16 @@
 - [x] Headers HTTP: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, Permissions-Policy
 - [x] Validação Zod: 702 rotas com validação, 0 sem — já 100% coberto
 - [x] Atualizar versão para Rev. 197
+
+## Rev. 198: Backup Automatizado + Aniversários de Empresa + Raio-X Clicável
+- [x] Criar serviço de backup (export JSON de todas as 160 tabelas)
+- [x] Compactar backup em gzip e fazer upload para S3
+- [x] Criar job agendado (backup diário automático às 03:00 Brasília)
+- [x] Criar rota tRPC para backup manual (admin only)
+- [x] Notificar admin por e-mail e plataforma após backup
+- [x] Adicionar UI de backups em Configurações > Backup do Banco
+- [x] Registrar histórico de backups no banco (tabela system_backups)
+- [x] Ao clicar no aniversariante na Home, abrir Raio-X do funcionário
+- [x] Adicionar seção de aniversários de empresa (anos de casa) na Home
+- [x] Backend: calcular aniversários de contratação no homeData
+- [x] Atualizar Controle de Revisões (Rev. 198 no changelog)

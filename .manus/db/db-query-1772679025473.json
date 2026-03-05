@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `backups` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `tipo` enum('automatico','manual') NOT NULL DEFAULT 'automatico',\n  `status` enum('em_andamento','concluido','erro') NOT NULL DEFAULT 'em_andamento',\n  `tabelasExportadas` int NOT NULL DEFAULT 0,\n  `registrosExportados` int NOT NULL DEFAULT 0,\n  `tamanhoBytes` int NOT NULL DEFAULT 0,\n  `s3Key` varchar(500),\n  `s3Url` varchar(1000),\n  `erro` text,\n  `iniciadoPor` varchar(255) DEFAULT 'Sistema',\n  `iniciadoEm` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `concluidoEm` timestamp NULL,\n  PRIMARY KEY (`id`),\n  INDEX `bkp_status` (`status`),\n  INDEX `bkp_tipo` (`tipo`),\n  INDEX `bkp_iniciado` (`iniciadoEm`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `backups` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `tipo` enum('automatico','manual') NOT NULL DEFAULT 'automatico',\n  `status` enum('em_andamento','concluido','erro') NOT NULL DEFAULT 'em_andamento',\n  `tabelasExportadas` int NOT NULL DEFAULT 0,\n  `registrosExportados` int NOT NULL DEFAULT 0,\n  `tamanhoBytes` int NOT NULL DEFAULT 0,\n  `s3Key` varchar(500),\n  `s3Url` varchar(1000),\n  `erro` text,\n  `iniciadoPor` varchar(255) DEFAULT 'Sistema',\n  `iniciadoEm` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `concluidoEm` timestamp NULL,\n  PRIMARY KEY (`id`),\n  INDEX `bkp_status` (`status`),\n  INDEX `bkp_tipo` (`tipo`),\n  INDEX `bkp_iniciado` (`iniciadoEm`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 155
+}

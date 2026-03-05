@@ -37,6 +37,11 @@ export const homeDataRouter = router({
       // ============================================================
       // 2. ANIVERSARIANTES DO MÊS
       // ============================================================
+      // Mapa de obras para nome
+      const allObras = await db.select().from(obras)
+        .where(eq(obras.companyId, input.companyId));
+      const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
+
       const aniversariantes = ativos
         .filter(e => {
           if (!e.dataNascimento) return false;
@@ -53,11 +58,43 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
+            obra: e.obraAtualId ? obraMap.get(e.obraAtualId) || null : null,
             dia,
             isHoje,
             jaPassou,
           };
         })
+        .sort((a, b) => a.dia - b.dia);
+
+      // ============================================================
+      // 2B. ANIVERSÁRIOS DE EMPRESA (anos de casa)
+      // ============================================================
+      const aniversariosEmpresa = ativos
+        .filter(e => {
+          if (!e.dataAdmissao) return false;
+          const parts = e.dataAdmissao.split("-");
+          if (parts.length < 3) return false;
+          return parseInt(parts[1]) === mesAtual;
+        })
+        .map(e => {
+          const parts = e.dataAdmissao!.split("-");
+          const dia = parseInt(parts[2]);
+          const anoAdmissao = parseInt(parts[0]);
+          const anosEmpresa = brasilYear - anoAdmissao;
+          const isHoje = dia === diaAtual;
+          const jaPassou = dia < diaAtual;
+          return {
+            id: e.id,
+            nome: e.nomeCompleto,
+            funcao: e.funcao,
+            obra: e.obraAtualId ? obraMap.get(e.obraAtualId) || null : null,
+            dia,
+            anosEmpresa,
+            isHoje,
+            jaPassou,
+          };
+        })
+        .filter(e => e.anosEmpresa >= 1) // só quem tem pelo menos 1 ano
         .sort((a, b) => a.dia - b.dia);
 
       // ============================================================
@@ -303,12 +340,8 @@ export const homeDataRouter = router({
       // ============================================================
       // 9. OBRAS ATIVAS
       // ============================================================
-      const allObras = await db.select().from(obras)
-        .where(and(
-          eq(obras.companyId, input.companyId),
-          sql`${obras.deletedAt} IS NULL`,
-        ));
-      const obrasAtivas = allObras.filter(o => o.status === "Em_Andamento" || (o.status as string) === "Em Andamento");
+      // Reusar allObras já carregado na seção 2 (aniversários)
+      const obrasAtivas = allObras.filter(o => !o.deletedAt && (o.status === "Em_Andamento" || (o.status as string) === "Em Andamento"));
 
       // ============================================================
       // 9b. ALERTA 80 DIAS - OBRAS PRÓXIMAS DO FIM
@@ -442,6 +475,8 @@ export const homeDataRouter = router({
         semAso: semAso.length,
         aniversariantesHoje: aniversariantes.filter(a => a.isHoje).length,
         aniversariantesMes: aniversariantes.length,
+        aniversariosEmpresaHoje: aniversariosEmpresa.filter(a => a.isHoje).length,
+        aniversariosEmpresaMes: aniversariosEmpresa.length,
         advertenciasRecentes: advertenciasRecentes.length,
         feriasAlerta: feriasAlerta.length,
         experienciasTotal: experiencias.length,
@@ -455,6 +490,7 @@ export const homeDataRouter = router({
       return {
         stats: statsConsolidados,
         aniversariantes,
+        aniversariosEmpresa,
         asosAlerta,
         semAso,
         feriasAlerta,
