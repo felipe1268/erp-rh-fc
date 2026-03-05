@@ -33,7 +33,7 @@ import {
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
-  FileBarChart, DollarSign, Construction,
+  FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -167,6 +167,10 @@ const menuSectionsSST: MenuSection[] = [
     title: "Segurança do Trabalho",
     items: [
       { icon: HardHat, label: "Controle de EPIs", path: "/epis" },
+      { icon: ClipboardList, label: "Checklists EPI", path: "/epis?tab=checklist" },
+      { icon: Ban, label: "Descontos EPI", path: "/epis?tab=descontos" },
+      { icon: ArrowLeftRight, label: "Transferências EPI", path: "/epis?tab=transferencias" },
+      { icon: Settings2, label: "Config EPI", path: "/epis?tab=config" },
       { icon: Shield, label: "CIPA", path: "/cipa" },
     ],
   },

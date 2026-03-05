@@ -131,7 +131,31 @@ export default function Epis() {
   const hideEpiValues = !isAdminMaster && hasGroup && groupOcultarValores('/epis');
   const readOnly = !isAdminMaster && hasGroup && isSomenteVisualizacao;
 
-  const [viewMode, setViewMode] = useState<ViewMode>("catalogo");
+  // Suporte a ?tab= para links diretos da sidebar
+  const validTabs: ViewMode[] = useMemo(() => ["catalogo", "entregas", "estoque_obra", "transferencias", "config", "checklist", "validade", "custos", "minimo", "ia", "capacidade", "descontos"], []);
+  const initialTab = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    return (tab && validTabs.includes(tab as ViewMode)) ? tab as ViewMode : "catalogo";
+  }, []);
+  const [viewMode, setViewMode] = useState<ViewMode>(initialTab);
+
+  // Escutar evento navParamsUpdated da sidebar para trocar aba sem recarregar
+  useEffect(() => {
+    const handleNavParams = () => {
+      const raw = sessionStorage.getItem('_navParams');
+      if (raw) {
+        const sp = new URLSearchParams(raw);
+        const tab = sp.get('tab');
+        if (tab && validTabs.includes(tab as ViewMode)) {
+          setViewMode(tab as ViewMode);
+        }
+        sessionStorage.removeItem('_navParams');
+      }
+    };
+    window.addEventListener('navParamsUpdated', handleNavParams);
+    return () => window.removeEventListener('navParamsUpdated', handleNavParams);
+  }, [validTabs]);
   const [search, setSearch] = useState("");
   const [filterCondicao, setFilterCondicao] = useState<"Todos" | "Novo" | "Reutilizado">("Todos");
   const [filterCategoria, setFilterCategoria] = useState<"Todos" | "EPI" | "Uniforme" | "Calçado">("Todos");

@@ -4874,3 +4874,11 @@
 - [x] Remover seção Administração do módulo Avaliação de Desempenho
 - [x] Manter acesso via Home e rota direta
 - [x] Atualizar versão para Rev. 193
+
+## Rev. 194: Adicionar itens EPI à sidebar SST
+- [x] Adicionar Checklists EPI à sidebar do módulo SST
+- [x] Adicionar Descontos EPI à sidebar do módulo SST
+- [x] Adicionar Transferências EPI à sidebar do módulo SST
+- [x] Adicionar Config EPI à sidebar do módulo SST
+- [x] Implementar suporte a ?tab= no Epis.tsx com listener navParamsUpdated
+- [x] Atualizar versão para Rev. 194
