@@ -4868,3 +4868,9 @@
 - [x] Aplicar formatação pt-BR em RaioXFuncionario, PJMedicoes
 - [x] Corrigir bug aniversariantes: usar timezone America/Sao_Paulo (GMT-3) no backend homeData.ts
 - [x] Atualizar versão do ERP para Rev. 192 (05/03/2026)
+
+## Rev. 193: Remover seção ADMINISTRAÇÃO completa da sidebar
+- [x] Remover todos os 6 itens: Usuários/Permissões, Grupos, Auditoria, Configurações, Revisões, Lixeira
+- [x] Remover seção Administração do módulo Avaliação de Desempenho
+- [x] Manter acesso via Home e rota direta
+- [x] Atualizar versão para Rev. 193

@@ -203,17 +203,6 @@ const menuSectionsJuridico: MenuSection[] = [
 // Shared admin sections (appended to every module)
 const adminSections: MenuSection[] = [
   {
-    title: "Administração",
-    items: [
-      { icon: Lock, label: "Usuários e Permissões", path: "/usuarios" },
-      { icon: Users, label: "Grupos de Usuários", path: "/grupos-usuarios" },
-      { icon: FileText, label: "Auditoria do Sistema", path: "/auditoria" },
-      { icon: Settings, label: "Configurações", path: "/configuracoes" },
-      { icon: GitBranch, label: "Revisões do Sistema", path: "/revisoes", adminMasterOnly: true },
-      { icon: Trash2, label: "Lixeira", path: "/lixeira" },
-    ],
-  },
-  {
     title: "Ajuda",
     items: [
       { icon: BookOpen, label: "Biblioteca de Conhecimento", path: "/ajuda" },
@@ -243,13 +232,6 @@ const menuSectionsAvaliacao: MenuSection[] = [
     items: [
       { icon: FileText, label: "Pesquisas Customizadas", path: "/avaliacao-desempenho?tab=pesquisas" },
       { icon: TrendingUp, label: "Clima Organizacional", path: "/avaliacao-desempenho?tab=clima" },
-    ],
-  },
-  {
-    title: "Administração",
-    items: [
-      { icon: Shield, label: "Auditoria", path: "/avaliacao-desempenho?tab=auditoria" },
-      { icon: BookOpen, label: "Biblioteca de Conhecimento", path: "/ajuda" },
     ],
   },
 ];
