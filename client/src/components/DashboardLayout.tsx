@@ -488,38 +488,18 @@ function DashboardLayoutContent({
         map.set(feat.route, { moduleId: mod.id, featureKey: feat.key });
       }
     }
-    // Rotas extras que não estão em MODULE_DEFINITIONS mas pertencem a features
-    // RH-DP extras
-    map.set('/convencoes-coletivas', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
-    map.set('/relatorios/raio-x', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
-    map.set('/relatorios/ponto', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
-    map.set('/relatorios/folha', { moduleId: 'rh-dp', featureKey: 'folha-pagamento' });
-    map.set('/relatorios/divergencias', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
-    map.set('/relatorios/custo-obra', { moduleId: 'rh-dp', featureKey: 'folha-pagamento' });
-    map.set('/comparativo-convencoes', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
-    map.set('/apontamentos-campo', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
-    map.set('/crachas', { moduleId: 'rh-dp', featureKey: 'crachas-rh' });
-    map.set('/pj-medicoes', { moduleId: 'rh-dp', featureKey: 'modulo-pj' });
-    // Dashboards mapeados para features correspondentes
-    map.set('/dashboards/funcionarios', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
-    map.set('/dashboards/cartao-ponto', { moduleId: 'rh-dp', featureKey: 'fechamento-ponto' });
-    map.set('/dashboards/folha-pagamento', { moduleId: 'rh-dp', featureKey: 'folha-pagamento' });
-    map.set('/dashboards/horas-extras', { moduleId: 'rh-dp', featureKey: 'solicitacao-he' });
-    map.set('/dashboards/aviso-previo', { moduleId: 'rh-dp', featureKey: 'aviso-previo' });
-    map.set('/dashboards/ferias', { moduleId: 'rh-dp', featureKey: 'ferias' });
-    map.set('/dashboards/efetivo-obra', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
-    map.set('/dashboards/perfil-tempo-casa', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
-    map.set('/dashboards/controle-documentos', { moduleId: 'rh-dp', featureKey: 'controle-documentos' });
-    map.set('/dashboards/apontamentos', { moduleId: 'rh-dp', featureKey: 'apontamentos-campo' });
-    // SST dashboards
-    map.set('/dashboards/epis', { moduleId: 'sst', featureKey: 'epis' });
-    // Jurídico dashboards
-    map.set('/dashboards/juridico', { moduleId: 'juridico', featureKey: 'processos-trabalhistas' });
-    // Terceiros extras
-    map.set('/terceiros/validacao-ia', { moduleId: 'terceiros', featureKey: 'terceiros-empresas' });
-    map.set('/terceiros/aprovacao', { moduleId: 'terceiros', featureKey: 'terceiros-aprovacao' });
-    // Parceiros extras
-    map.set('/parceiros/portal', { moduleId: 'parceiros', featureKey: 'parceiros-painel' });
+    // Rotas extras: tab-based routes que compartilham a mesma rota base
+    // (as rotas com query params ?tab= são mapeadas para a feature principal)
+    map.set('/controle-documentos?tab=atestados', { moduleId: 'rh-dp', featureKey: 'lancar-atestados' });
+    map.set('/controle-documentos?tab=advertencias', { moduleId: 'rh-dp', featureKey: 'advertencias' });
+    map.set('/epis?tab=checklist', { moduleId: 'sst', featureKey: 'epis-checklist' });
+    map.set('/epis?tab=descontos', { moduleId: 'sst', featureKey: 'epis-descontos' });
+    map.set('/epis?tab=transferencias', { moduleId: 'sst', featureKey: 'epis-transferencias' });
+    map.set('/epis?tab=config', { moduleId: 'sst', featureKey: 'epis-config' });
+    // Painéis de módulo (não precisam de permissão granular, seguem o módulo)
+    map.set('/painel/rh', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
+    map.set('/painel/sst', { moduleId: 'sst', featureKey: 'epis' });
+    map.set('/painel/juridico', { moduleId: 'juridico', featureKey: 'processos-trabalhistas' });
     return map;
   }, []);
 

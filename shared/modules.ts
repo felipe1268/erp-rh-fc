@@ -66,6 +66,7 @@ export type EmployeeStatus = typeof EMPLOYEE_STATUS[number]["value"];
 // ============================================================
 // MAPA DE MÓDULOS E FUNCIONALIDADES GRANULARES
 // Usado para controle de acesso por usuário na sidebar e rotas
+// REGRA: Toda funcionalidade listada na sidebar DEVE ter entrada aqui
 // ============================================================
 
 export type ActiveModuleId = "rh-dp" | "sst" | "juridico" | "terceiros" | "parceiros";
@@ -94,21 +95,53 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     color: "blue",
     icon: "Users",
     features: [
+      // === Cadastro ===
       { key: "colaboradores", label: "Colaboradores", route: "/colaboradores", icon: "Users" },
+      { key: "efetivo-obra", label: "Efetivo por Obra", route: "/obras/efetivo", icon: "HardHat" },
+      { key: "relogios-ponto", label: "Relógios de Ponto", route: "/relogios-ponto", icon: "Wifi" },
+      { key: "convencoes-coletivas", label: "Convenções Coletivas", route: "/convencoes-coletivas", icon: "Scale" },
+      // === Financeiro ===
+      { key: "contas-bancarias", label: "Contas Bancárias", route: "/contas-bancarias", icon: "Landmark" },
+      // === Operacional ===
       { key: "fechamento-ponto", label: "Fechamento de Ponto", route: "/fechamento-ponto", icon: "Clock" },
       { key: "folha-pagamento", label: "Folha de Pagamento", route: "/folha-pagamento", icon: "FileText" },
       { key: "controle-documentos", label: "Controle de Documentos", route: "/controle-documentos", icon: "FileCheck" },
       { key: "vale-alimentacao", label: "Vale Alimentação", route: "/vale-alimentacao", icon: "UtensilsCrossed" },
-      { key: "ferias", label: "Férias", route: "/ferias", icon: "Palmtree" },
-      { key: "aviso-previo", label: "Aviso Prévio", route: "/aviso-previo", icon: "Bell" },
-      { key: "dissidio", label: "Dissídio", route: "/dissidio", icon: "TrendingUp" },
-      { key: "modulo-pj", label: "Módulo PJ", route: "/modulo-pj", icon: "Briefcase" },
       { key: "solicitacao-he", label: "Solicitação de HE", route: "/solicitacao-he", icon: "ClipboardList" },
-      { key: "dixi-ponto", label: "Dixi Ponto", route: "/dixi-ponto", icon: "Wifi" },
-      { key: "contas-bancarias", label: "Contas Bancárias", route: "/contas-bancarias", icon: "Landmark" },
+      { key: "apontamentos-campo", label: "Apontamentos de Campo", route: "/apontamentos-campo", icon: "ClipboardList" },
+      { key: "crachas-rh", label: "Crachás", route: "/crachas", icon: "CreditCard" },
+      { key: "lancar-atestados", label: "Lançar Atestados", route: "/controle-documentos?tab=atestados", icon: "ClipboardPlus" },
+      { key: "advertencias", label: "Advertências", route: "/controle-documentos?tab=advertencias", icon: "ShieldAlert" },
+      // === Gestão de Pessoas ===
+      { key: "aviso-previo", label: "Aviso Prévio", route: "/aviso-previo", icon: "Bell" },
+      { key: "ferias", label: "Férias", route: "/ferias", icon: "Palmtree" },
+      { key: "modulo-pj", label: "Módulo PJ", route: "/modulo-pj", icon: "Briefcase" },
+      { key: "pj-medicoes", label: "PJ Medições", route: "/pj-medicoes", icon: "FileSpreadsheet" },
+      // === Relatórios ===
+      { key: "raio-x", label: "Raio-X do Funcionário", route: "/relatorios/raio-x", icon: "UserSearch" },
+      { key: "relatorio-ponto", label: "Relatório de Ponto", route: "/relatorios/ponto", icon: "Clock" },
+      { key: "relatorio-folha", label: "Relatório de Folha", route: "/relatorios/folha", icon: "Wallet" },
+      { key: "relatorio-divergencias", label: "Relatório de Divergências", route: "/relatorios/divergencias", icon: "AlertTriangle" },
+      { key: "custo-obra", label: "Custo por Obra", route: "/relatorios/custo-obra", icon: "Construction" },
+      // === Dashboards ===
+      { key: "dashboards-rh", label: "Todos os Dashboards", route: "/dashboards", icon: "BarChart3" },
+      { key: "dashboard-funcionarios", label: "Dashboard Funcionários", route: "/dashboards/funcionarios", icon: "Users" },
+      { key: "dashboard-cartao-ponto", label: "Dashboard Cartão de Ponto", route: "/dashboards/cartao-ponto", icon: "Clock" },
+      { key: "dashboard-folha", label: "Dashboard Folha de Pagamento", route: "/dashboards/folha-pagamento", icon: "Wallet" },
+      { key: "dashboard-horas-extras", label: "Dashboard Horas Extras", route: "/dashboards/horas-extras", icon: "Clock" },
+      { key: "dashboard-aviso-previo", label: "Dashboard Aviso Prévio", route: "/dashboards/aviso-previo", icon: "AlertTriangle" },
+      { key: "dashboard-ferias", label: "Dashboard Férias", route: "/dashboards/ferias", icon: "Palmtree" },
+      { key: "dashboard-efetivo-obra", label: "Dashboard Efetivo por Obra", route: "/dashboards/efetivo-obra", icon: "Building2" },
+      { key: "dashboard-perfil-tempo", label: "Dashboard Perfil Tempo de Casa", route: "/dashboards/perfil-tempo-casa", icon: "UserSearch" },
+      { key: "dashboard-controle-docs", label: "Dashboard Controle de Documentos", route: "/dashboards/controle-documentos", icon: "ShieldCheck" },
+      { key: "dashboard-apontamentos", label: "Dashboard Apontamentos", route: "/dashboards/apontamentos", icon: "ClipboardList" },
+      // === Tabelas e Configurações ===
       { key: "feriados", label: "Feriados", route: "/feriados", icon: "Calendar" },
-      { key: "relogios-ponto", label: "Relógios de Ponto", route: "/relogios-ponto", icon: "Wifi" },
-      { key: "crachas-rh", label: "Crachás", route: "/terceiros/crachas", icon: "CreditCard" },
+      { key: "dissidio", label: "Dissídio", route: "/dissidio", icon: "TrendingUp" },
+      // === Inteligência Artificial ===
+      { key: "comparativo-convencoes", label: "Comparativo Convenções (IA)", route: "/comparativo-convencoes", icon: "Scale" },
+      // === Dixi Ponto (legado) ===
+      { key: "dixi-ponto", label: "Dixi Ponto", route: "/dixi-ponto", icon: "Wifi" },
     ],
   },
   {
@@ -118,9 +151,16 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     color: "green",
     icon: "Shield",
     features: [
+      // === Segurança do Trabalho ===
       { key: "epis", label: "EPIs", route: "/epis", icon: "HardHat" },
+      { key: "epis-checklist", label: "Checklists EPI", route: "/epis?tab=checklist", icon: "ClipboardList" },
+      { key: "epis-descontos", label: "Descontos EPI", route: "/epis?tab=descontos", icon: "Ban" },
+      { key: "epis-transferencias", label: "Transferências EPI", route: "/epis?tab=transferencias", icon: "ArrowLeftRight" },
+      { key: "epis-config", label: "Config EPI", route: "/epis?tab=config", icon: "Settings2" },
       { key: "cipa", label: "CIPA", route: "/cipa", icon: "ShieldCheck" },
       { key: "controle-documentos-sst", label: "ASOs / Documentos", route: "/controle-documentos", icon: "HeartPulse" },
+      // === Dashboards SST ===
+      { key: "dashboard-epis", label: "Dashboard EPIs", route: "/dashboards/epis", icon: "HardHat" },
     ],
   },
   {
@@ -131,6 +171,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: "Scale",
     features: [
       { key: "processos-trabalhistas", label: "Processos Trabalhistas", route: "/processos-trabalhistas", icon: "Gavel" },
+      { key: "dashboard-juridico", label: "Dashboard Jurídico", route: "/dashboards/juridico", icon: "Gavel" },
     ],
   },
   {
@@ -149,6 +190,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "terceiros-aprovacao", label: "Aprovação Portal", route: "/terceiros/aprovacao", icon: "UserCheck" },
       { key: "terceiros-portal", label: "Portal Externo", route: "/terceiros/portal", icon: "ExternalLink" },
       { key: "terceiros-crachas", label: "Crachás", route: "/terceiros/crachas", icon: "CreditCard" },
+      { key: "terceiros-validacao-ia", label: "Validação IA de Docs", route: "/terceiros/validacao-ia", icon: "FileSearch" },
     ],
   },
   {
@@ -162,6 +204,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "parceiros-cadastro", label: "Parceiros Conveniados", route: "/parceiros/cadastro", icon: "Store" },
       { key: "parceiros-lancamentos", label: "Lançamentos", route: "/parceiros/lancamentos", icon: "Receipt" },
       { key: "parceiros-aprovacoes", label: "Aprovações RH", route: "/parceiros/aprovacoes", icon: "CheckCircle" },
+      { key: "parceiros-portal", label: "Portal Externo", route: "/parceiros/portal", icon: "Globe" },
       { key: "parceiros-guia-descontos", label: "Guia de Descontos", route: "/parceiros/guia-descontos", icon: "FileText" },
       { key: "parceiros-pagamentos", label: "Pagamentos", route: "/parceiros/pagamentos", icon: "Wallet" },
     ],

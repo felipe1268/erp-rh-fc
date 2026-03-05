@@ -4986,3 +4986,11 @@
 - [x] Integrar números proibidos dinâmicos na geração de código interno (server/db.ts)
 - [x] Renumerar funcionários existentes com números proibidos (8 renumerados)
 - [x] Preview na tela mostra os números sendo pulados com badges vermelhos
+
+## Rev. 206: Sincronizar Módulos/Funcionalidades nas Permissões de Usuário
+- [x] Levantar todas as funcionalidades da sidebar (RH, SST, Jurídico, Terceiros, Parceiros)
+- [x] Comparar com a lista atual de permissões em Módulos e Funcionalidades
+- [x] Adicionar ~25 funcionalidades faltantes (Apontamento de Campo, Raio-X, Dashboards, Relatórios, etc.)
+- [x] Garantir que TODA funcionalidade da sidebar tenha correspondência nas permissões
+- [x] Limpar rotas extras hardcoded no DashboardLayout.tsx
+- [x] Regra: sempre que criar nova funcionalidade na sidebar, adicionar nas permissões também
