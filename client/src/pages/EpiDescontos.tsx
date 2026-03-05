@@ -29,7 +29,7 @@ export default function EpiDescontos({ companyId }: EpiDescontosProps) {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // Queries
-  const descontosQ = trpc.epis.listDiscounts.useQuery(
+  const descontosQ = trpc.epis.listDiscountAlerts.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus as any },
     { enabled: companyId > 0 }
   );

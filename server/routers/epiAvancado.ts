@@ -9,6 +9,7 @@ import {
   epis, epiDeliveries, epiEstoqueObra, epiTransferencias,
   employees, obras, trainings, systemCriteria,
   epiAlertaCapacidade, epiAlertaCapacidadeLog, notificationRecipients,
+  goldenRules, jobFunctions,
 } from "../../drizzle/schema";
 import { sendEmail } from "../services/smtpService";
 import { eq, and, desc, sql, isNull, gte, lte, inArray } from "drizzle-orm";
@@ -2242,5 +2243,346 @@ Forneça sugestões concretas com quantidades específicas.`;
         erros,
         destinatarios: destinatariosEnviados,
       };
+    }),
+
+  // ============================================================
+  // IA: SUGESTÕES INTELIGENTES PARA CONFIGURAÇÃO DE EPIs
+  // ============================================================
+
+  // Helper interno para buscar regras de ouro e funções da empresa
+  // (não é rota, é usado internamente pelas rotas de IA abaixo)
+
+  iaSugerirKitsPorFuncao: protectedProcedure
+    .input(z.object({ companyId: z.number(), funcao: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Buscar funções da empresa
+      const funcoes = await db.select({ nome: jobFunctions.nome, descricao: jobFunctions.descricao, cbo: jobFunctions.cbo })
+        .from(jobFunctions)
+        .where(and(eq(jobFunctions.companyId, input.companyId), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
+
+      // Buscar regras de ouro
+      const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
+        .from(goldenRules)
+        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+      const regrasTexto = rules.length > 0
+        ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
+        : 'Nenhuma regra de ouro cadastrada.';
+
+      // Buscar EPIs existentes no catálogo
+      const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
+        .from(epis)
+        .where(and(eq(epis.companyId, input.companyId), isNull(epis.deletedAt)));
+      const episUnicos = [...new Set(episCatalogo.map(e => `${e.nome} (${e.categoria || 'EPI'})`))].slice(0, 50);
+
+      // Buscar kits já existentes
+      const kitsExistentes = await db.select({ nome: epiKits.nome, funcao: epiKits.funcao })
+        .from(epiKits)
+        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+
+      const funcoesAlvo = input.funcao
+        ? [input.funcao]
+        : funcoes.filter(f => !kitsExistentes.some(k => k.funcao.toLowerCase() === f.nome.toLowerCase())).map(f => f.nome).slice(0, 10);
+
+      if (funcoesAlvo.length === 0 && !input.funcao) {
+        // Se todas as funções já têm kit, sugerir para funções comuns da construção civil
+        funcoesAlvo.push('Pedreiro', 'Servente', 'Eletricista', 'Encanador', 'Carpinteiro');
+      }
+
+      const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
+
+Funções da empresa: ${funcoes.map(f => f.nome + (f.cbo ? ` (CBO: ${f.cbo})` : '')).join(', ') || 'Não cadastradas'}
+EPIs disponíveis no catálogo: ${episUnicos.join(', ') || 'Catálogo vazio'}
+Kits já existentes: ${kitsExistentes.map(k => `${k.nome} (${k.funcao})`).join(', ') || 'Nenhum'}
+
+Regras de Ouro da empresa:
+${regrasTexto}
+
+Gere kits de EPI para as seguintes funções: ${funcoesAlvo.join(', ')}
+
+Para cada função, liste os EPIs necessários conforme NR-6, NR-18 e boas práticas.
+Use preferencialmente os nomes dos EPIs que já existem no catálogo da empresa.
+Cada item deve ter: nomeEpi, categoria (EPI, Uniforme ou Calcado), quantidade por pessoa e se é obrigatório.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "user", content: prompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "kits_sugestao",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                kits: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      nome: { type: "string", description: "Nome do kit, ex: Kit Eletricista" },
+                      funcao: { type: "string", description: "Nome da função" },
+                      descricao: { type: "string", description: "Breve descrição do kit" },
+                      items: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            nomeEpi: { type: "string" },
+                            categoria: { type: "string", description: "EPI, Uniforme ou Calcado" },
+                            quantidade: { type: "number" },
+                            obrigatorio: { type: "boolean" },
+                          },
+                          required: ["nomeEpi", "categoria", "quantidade", "obrigatorio"],
+                          additionalProperties: false,
+                        },
+                      },
+                    },
+                    required: ["nome", "funcao", "descricao", "items"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["kits"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de kits" });
+      return JSON.parse(content);
+    }),
+
+  iaSugerirCoresCapacete: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+
+      const funcoes = await db.select({ nome: jobFunctions.nome })
+        .from(jobFunctions)
+        .where(and(eq(jobFunctions.companyId, input.companyId), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
+
+      const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
+        .from(goldenRules)
+        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+      const regrasTexto = rules.length > 0
+        ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
+        : 'Nenhuma regra de ouro cadastrada.';
+
+      const coresExistentes = await db.select().from(epiCoresCapacete)
+        .where(eq(epiCoresCapacete.companyId, input.companyId));
+
+      const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
+
+Funções da empresa: ${funcoes.map(f => f.nome).join(', ') || 'Não cadastradas'}
+Cores já configuradas: ${coresExistentes.map(c => `${c.cor} → ${c.funcoes}`).join(', ') || 'Nenhuma'}
+
+Regras de Ouro da empresa:
+${regrasTexto}
+
+Gere uma tabela de cores de capacete por função/hierarquia conforme padrão NR-18 e boas práticas da construção civil brasileira.
+Inclua a cor, o código hexadecimal, as funções que usam aquela cor, e uma breve descrição.
+Considere as funções reais da empresa e o padrão: Branco (engenheiros/mestres), Azul (eletricistas), Vermelho (bombeiros/socorristas), Amarelo (visitantes), Verde (CIPA/segurança), Cinza (pedreiros/serventes), Laranja (sinaleiros), Marrom (carpinteiros).`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "user", content: prompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "cores_sugestao",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                cores: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      cor: { type: "string", description: "Nome da cor" },
+                      hexColor: { type: "string", description: "Código hexadecimal da cor, ex: #FFFFFF" },
+                      funcoes: { type: "string", description: "Funções separadas por vírgula" },
+                      descricao: { type: "string", description: "Breve descrição/justificativa" },
+                    },
+                    required: ["cor", "hexColor", "funcoes", "descricao"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["cores"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de cores" });
+      return JSON.parse(content);
+    }),
+
+  iaSugerirVidaUtil: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Buscar EPIs do catálogo
+      const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
+        .from(epis)
+        .where(and(eq(epis.companyId, input.companyId), isNull(epis.deletedAt)));
+      const episUnicos = [...new Map(episCatalogo.map(e => [e.nome.toLowerCase().trim(), e])).values()].slice(0, 50);
+
+      const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
+        .from(goldenRules)
+        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+      const regrasTexto = rules.length > 0
+        ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
+        : 'Nenhuma regra de ouro cadastrada.';
+
+      const vidaExistente = await db.select().from(epiVidaUtil)
+        .where(eq(epiVidaUtil.companyId, input.companyId));
+
+      const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
+
+EPIs no catálogo da empresa:
+${episUnicos.map(e => `- ${e.nome} (${e.categoria || 'EPI'})`).join('\n') || 'Catálogo vazio'}
+
+Vida útil já configurada: ${vidaExistente.map(v => `${v.nomeEpi}: ${v.vidaUtilMeses} meses`).join(', ') || 'Nenhuma'}
+
+Regras de Ouro da empresa:
+${regrasTexto}
+
+Gere uma tabela de vida útil recomendada para cada tipo de EPI.
+Baseie-se nas normas NR-6, recomendações dos fabricantes e boas práticas.
+Use os nomes dos EPIs que existem no catálogo da empresa.
+Inclua: nome do EPI, categoria, vida útil em meses e observações.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "user", content: prompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "vida_util_sugestao",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                items: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      nomeEpi: { type: "string" },
+                      categoriaEpi: { type: "string", description: "EPI, Uniforme ou Calcado" },
+                      vidaUtilMeses: { type: "number", description: "Vida útil em meses" },
+                      observacoes: { type: "string", description: "Observações sobre a vida útil" },
+                    },
+                    required: ["nomeEpi", "categoriaEpi", "vidaUtilMeses", "observacoes"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["items"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de vida útil" });
+      return JSON.parse(content);
+    }),
+
+  iaSugerirTreinamentos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+
+      // Buscar EPIs do catálogo
+      const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
+        .from(epis)
+        .where(and(eq(epis.companyId, input.companyId), isNull(epis.deletedAt)));
+      const episUnicos = [...new Map(episCatalogo.map(e => [e.nome.toLowerCase().trim(), e])).values()].slice(0, 50);
+
+      const funcoes = await db.select({ nome: jobFunctions.nome })
+        .from(jobFunctions)
+        .where(and(eq(jobFunctions.companyId, input.companyId), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
+
+      const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
+        .from(goldenRules)
+        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+      const regrasTexto = rules.length > 0
+        ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
+        : 'Nenhuma regra de ouro cadastrada.';
+
+      const treinExistentes = await db.select().from(epiTreinamentosVinculados)
+        .where(eq(epiTreinamentosVinculados.companyId, input.companyId));
+
+      const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
+
+EPIs no catálogo da empresa:
+${episUnicos.map(e => `- ${e.nome} (${e.categoria || 'EPI'})`).join('\n') || 'Catálogo vazio'}
+
+Funções da empresa: ${funcoes.map(f => f.nome).join(', ') || 'Não cadastradas'}
+
+Treinamentos já vinculados: ${treinExistentes.map(t => `${t.nomeEpi} → ${t.nomeTreinamento} (${t.normaExigida})`).join(', ') || 'Nenhum'}
+
+Regras de Ouro da empresa:
+${regrasTexto}
+
+Gere uma lista de treinamentos obrigatórios vinculados aos EPIs conforme NR-6, NR-18, NR-35, NR-10, NR-33 e demais normas aplicáveis.
+Para cada item, informe: nome do EPI, norma exigida (NR-XX), nome do treinamento e se é obrigatório.
+Foque nos EPIs que existem no catálogo da empresa e que realmente exigem treinamento para uso seguro.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido." },
+          { role: "user", content: prompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "treinamentos_sugestao",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                items: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      nomeEpi: { type: "string" },
+                      normaExigida: { type: "string", description: "Ex: NR-35" },
+                      nomeTreinamento: { type: "string" },
+                      obrigatorio: { type: "boolean" },
+                    },
+                    required: ["nomeEpi", "normaExigida", "nomeTreinamento", "obrigatorio"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["items"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      if (!content) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao gerar sugestões de treinamentos" });
+      return JSON.parse(content);
     }),
 });

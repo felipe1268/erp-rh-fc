@@ -4820,3 +4820,15 @@
 - [x] Gargalo "Camisa Manga Longa (estoque: 2)" — matching pegava só 1º EPI, agora soma todos
 - [x] Corrigir lógica de cálculo: matching inteligente por palavras-chave + soma de TODOS os EPIs do mesmo tipo
 - [x] Resultado: Cap. Contratação agora mostra 38 (antes 1) para FC Engenharia
+
+## Rev. 190: IA Assistente nos Campos de Configuração de EPIs
+- [x] Backend: rota iaSugerirKitsPorFuncao com invokeLLM + json_schema
+- [x] Backend: rota iaSugerirCoresCapacete com invokeLLM + json_schema (NR-6/NR-18)
+- [x] Backend: rota iaSugerirVidaUtil com invokeLLM + json_schema
+- [x] Backend: rota iaSugerirTreinamentos com invokeLLM + json_schema (NR-6/10/18/33/35)
+- [x] Backend: consultar Regras de Ouro + jobFunctions + EPIs catálogo como contexto
+- [x] Frontend: botão "Sugerir com IA" em cada aba (Kits, Cores, Vida Útil, Treinamentos)
+- [x] Frontend: UI de revisão com banner de sugestões + aceitar/rejeitar individual
+- [x] Frontend: botão Salvar Todos para persistir sugestões aceitas
+- [x] Testes vitest para as 4 rotas de IA — 25 testes passando
+- [x] Fix: EpiDescontos.tsx corrigido para usar listDiscountAlerts (não listDiscounts)

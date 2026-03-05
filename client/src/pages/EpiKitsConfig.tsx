@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import {
   Plus, Trash2, Pencil, Settings2, HardHat, Package, ShieldCheck, BookOpen,
-  Clock, Palette, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, Sparkles, GraduationCap
+  Clock, Palette, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, Sparkles, GraduationCap,
+  Wand2, Loader2, X, Check, RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -22,6 +23,12 @@ export default function EpiKitsConfig() {
   const [showKitForm, setShowKitForm] = useState(false);
   const [editingKit, setEditingKit] = useState<any>(null);
   const [expandedKit, setExpandedKit] = useState<number | null>(null);
+
+  // IA suggestion states
+  const [iaSugestaoKits, setIaSugestaoKits] = useState<any[] | null>(null);
+  const [iaSugestaoCores, setIaSugestaoCores] = useState<any[] | null>(null);
+  const [iaSugestaoVida, setIaSugestaoVida] = useState<any[] | null>(null);
+  const [iaSugestaoTreino, setIaSugestaoTreino] = useState<any[] | null>(null);
 
   // Queries
   const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId }, { enabled: !!companyId });
@@ -60,6 +67,36 @@ export default function EpiKitsConfig() {
   const treinamentosUpsertMut = trpc.epiAvancado.treinamentosVinculadosUpsert.useMutation({
     onSuccess: () => { treinamentosQ.refetch(); toast.success("Treinamentos salvos!"); },
     onError: (err) => toast.error(err.message),
+  });
+
+  // IA Mutations
+  const iaKitsMut = trpc.epiAvancado.iaSugerirKitsPorFuncao.useMutation({
+    onSuccess: (data) => {
+      setIaSugestaoKits(data.kits || []);
+      toast.success(`IA gerou ${data.kits?.length || 0} sugestões de kits!`);
+    },
+    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+  });
+  const iaCoresMut = trpc.epiAvancado.iaSugerirCoresCapacete.useMutation({
+    onSuccess: (data) => {
+      setIaSugestaoCores(data.cores || []);
+      toast.success(`IA gerou ${data.cores?.length || 0} sugestões de cores!`);
+    },
+    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+  });
+  const iaVidaMut = trpc.epiAvancado.iaSugerirVidaUtil.useMutation({
+    onSuccess: (data) => {
+      setIaSugestaoVida(data.items || []);
+      toast.success(`IA gerou ${data.items?.length || 0} sugestões de vida útil!`);
+    },
+    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+  });
+  const iaTreinoMut = trpc.epiAvancado.iaSugerirTreinamentos.useMutation({
+    onSuccess: (data) => {
+      setIaSugestaoTreino(data.items || []);
+      toast.success(`IA gerou ${data.items?.length || 0} sugestões de treinamentos!`);
+    },
+    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
   });
 
   const kits = kitsQ.data ?? [];
@@ -107,6 +144,87 @@ export default function EpiKitsConfig() {
     return treinoForm;
   }, [treinamentos, treinoForm]);
 
+  // IA Button Component
+  function IAButton({ loading, onClick, label }: { loading: boolean; onClick: () => void; label?: string }) {
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onClick}
+        disabled={loading}
+        className="bg-gradient-to-r from-violet-50 to-purple-50 border-violet-200 text-violet-700 hover:from-violet-100 hover:to-purple-100 hover:border-violet-300 hover:text-violet-800 transition-all"
+      >
+        {loading ? (
+          <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Gerando...</>
+        ) : (
+          <><Wand2 className="h-3.5 w-3.5 mr-1.5" /> {label || "Gerar com IA"}</>
+        )}
+      </Button>
+    );
+  }
+
+  // IA Suggestion Banner
+  function IASuggestionBanner({ count, onClear, onAcceptAll, loading }: { count: number; onClear: () => void; onAcceptAll?: () => void; loading?: boolean }) {
+    return (
+      <div className="bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50 border border-violet-200 rounded-lg p-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center">
+            <Wand2 className="h-4 w-4 text-violet-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-violet-800">IA gerou {count} sugestões</p>
+            <p className="text-xs text-violet-600">Revise, edite ou remova itens antes de salvar</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {onAcceptAll && (
+            <Button size="sm" onClick={onAcceptAll} disabled={loading}
+              className="bg-violet-600 hover:bg-violet-700 text-white text-xs">
+              {loading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+              Salvar Todos
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={onClear} className="border-violet-200 text-violet-600 hover:bg-violet-50 text-xs">
+            <X className="h-3 w-3 mr-1" /> Descartar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => {}} className="text-violet-500 text-xs">
+            <RotateCcw className="h-3 w-3 mr-1" /> Regenerar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Save all IA kit suggestions
+  const [savingKits, setSavingKits] = useState(false);
+  async function saveAllIAKits() {
+    if (!iaSugestaoKits || iaSugestaoKits.length === 0) return;
+    setSavingKits(true);
+    try {
+      for (const kit of iaSugestaoKits) {
+        await createKitMut.mutateAsync({
+          companyId,
+          nome: kit.nome,
+          funcao: kit.funcao,
+          descricao: kit.descricao || undefined,
+          items: kit.items.map((i: any) => ({
+            nomeEpi: i.nomeEpi,
+            categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI",
+            quantidade: i.quantidade || 1,
+            obrigatorio: i.obrigatorio !== false,
+          })),
+        });
+      }
+      toast.success(`${iaSugestaoKits.length} kits salvos com sucesso!`);
+      setIaSugestaoKits(null);
+      kitsQ.refetch();
+    } catch (err: any) {
+      toast.error("Erro ao salvar kits: " + err.message);
+    } finally {
+      setSavingKits(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -150,17 +268,111 @@ export default function EpiKitsConfig() {
       {/* ============================================================ */}
       {tab === "kits" && (
         <div className="space-y-3">
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+            <IAButton
+              loading={iaKitsMut.isPending}
+              onClick={() => iaKitsMut.mutate({ companyId })}
+              label="Sugerir Kits com IA"
+            />
             <Button size="sm" onClick={() => { resetKitForm(); setShowKitForm(true); }}>
               <Plus className="h-4 w-4 mr-1" /> Novo Kit
             </Button>
           </div>
 
-          {kits.length === 0 ? (
+          {/* IA Suggestions for Kits */}
+          {iaSugestaoKits && iaSugestaoKits.length > 0 && (
+            <div className="space-y-3">
+              <IASuggestionBanner
+                count={iaSugestaoKits.length}
+                onClear={() => setIaSugestaoKits(null)}
+                onAcceptAll={saveAllIAKits}
+                loading={savingKits}
+              />
+              <div className="space-y-2">
+                {iaSugestaoKits.map((kit, kidx) => (
+                  <Card key={kidx} className="border-violet-200 bg-violet-50/30 overflow-hidden">
+                    <div className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center">
+                          <Wand2 className="h-5 w-5 text-violet-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-sm text-violet-900">{kit.nome}</h4>
+                          <p className="text-xs text-violet-600">Função: {kit.funcao} | {kit.items?.length || 0} itens | {kit.descricao}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="ghost" className="h-7 text-violet-600 hover:bg-violet-100" onClick={() => {
+                          setEditingKit(null);
+                          setKitForm({
+                            nome: kit.nome, funcao: kit.funcao, descricao: kit.descricao || "",
+                            items: kit.items?.map((i: any) => ({
+                              nomeEpi: i.nomeEpi,
+                              categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI" as any,
+                              quantidade: i.quantidade || 1,
+                              obrigatorio: i.obrigatorio !== false,
+                            })) || [],
+                          });
+                          setShowKitForm(true);
+                        }}>
+                          <Pencil className="h-3 w-3 mr-1" /> Editar
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-green-600 hover:bg-green-50" onClick={async () => {
+                          try {
+                            await createKitMut.mutateAsync({
+                              companyId,
+                              nome: kit.nome,
+                              funcao: kit.funcao,
+                              descricao: kit.descricao || undefined,
+                              items: kit.items.map((i: any) => ({
+                                nomeEpi: i.nomeEpi,
+                                categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI",
+                                quantidade: i.quantidade || 1,
+                                obrigatorio: i.obrigatorio !== false,
+                              })),
+                            });
+                            setIaSugestaoKits(prev => prev?.filter((_, i) => i !== kidx) || null);
+                          } catch {}
+                        }}>
+                          <Check className="h-3 w-3 mr-1" /> Aceitar
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-red-500 hover:bg-red-50" onClick={() => {
+                          setIaSugestaoKits(prev => prev?.filter((_, i) => i !== kidx) || null);
+                        }}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="border-t border-violet-200 px-3 py-2 bg-violet-50/50">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                        {kit.items?.map((item: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs py-1">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                            <span className="font-medium">{item.nomeEpi}</span>
+                            <Badge variant="outline" className="text-[10px] px-1 border-violet-200">{item.categoria}</Badge>
+                            <span className="text-muted-foreground">x{item.quantidade}</span>
+                            {!item.obrigatorio && <Badge variant="secondary" className="text-[10px]">Opcional</Badge>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {kits.length === 0 && !iaSugestaoKits ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Package className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                <p className="text-sm text-muted-foreground">Nenhum kit configurado. Clique em "Configurar Padrões NR-6" para começar.</p>
+                <p className="text-sm text-muted-foreground mb-3">Nenhum kit configurado.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => seedAllMut.mutate({ companyId })} disabled={seedAllMut.isPending}>
+                    <Sparkles className="h-4 w-4 mr-1" /> Configurar Padrões NR-6
+                  </Button>
+                  <IAButton loading={iaKitsMut.isPending} onClick={() => iaKitsMut.mutate({ companyId })} label="Gerar com IA" />
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -308,6 +520,44 @@ export default function EpiKitsConfig() {
       {/* ============================================================ */}
       {tab === "cores" && (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <IAButton loading={iaCoresMut.isPending} onClick={() => iaCoresMut.mutate({ companyId })} label="Sugerir Cores com IA" />
+          </div>
+
+          {/* IA Suggestions for Cores */}
+          {iaSugestaoCores && iaSugestaoCores.length > 0 && (
+            <div className="space-y-3">
+              <IASuggestionBanner
+                count={iaSugestaoCores.length}
+                onClear={() => setIaSugestaoCores(null)}
+                onAcceptAll={() => {
+                  setCoresForm(iaSugestaoCores.map(c => ({ cor: c.cor, hexColor: c.hexColor || "#000000", funcoes: c.funcoes, descricao: c.descricao || "" })));
+                  setIaSugestaoCores(null);
+                  toast.success("Sugestões aplicadas! Clique em 'Salvar Cores' para confirmar.");
+                }}
+              />
+              <Card className="border-violet-200 bg-violet-50/30">
+                <CardContent className="pt-3">
+                  <div className="space-y-2">
+                    {iaSugestaoCores.map((cor, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <div className="w-8 h-8 rounded-full border-2 shrink-0" style={{ backgroundColor: cor.hexColor || "#ccc", borderColor: cor.hexColor || "#ccc" }} />
+                        <span className="text-xs font-medium w-20">{cor.cor}</span>
+                        <span className="text-xs text-violet-600 flex-1">{cor.funcoes}</span>
+                        <span className="text-xs text-muted-foreground italic max-w-[200px] truncate">{cor.descricao}</span>
+                        <Button size="sm" variant="ghost" className="h-7 text-red-500" onClick={() => {
+                          setIaSugestaoCores(prev => prev?.filter((_, i) => i !== idx) || null);
+                        }}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -361,6 +611,45 @@ export default function EpiKitsConfig() {
       {/* ============================================================ */}
       {tab === "vida_util" && (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <IAButton loading={iaVidaMut.isPending} onClick={() => iaVidaMut.mutate({ companyId })} label="Sugerir Vida Útil com IA" />
+          </div>
+
+          {/* IA Suggestions for Vida Útil */}
+          {iaSugestaoVida && iaSugestaoVida.length > 0 && (
+            <div className="space-y-3">
+              <IASuggestionBanner
+                count={iaSugestaoVida.length}
+                onClear={() => setIaSugestaoVida(null)}
+                onAcceptAll={() => {
+                  setVidaForm(iaSugestaoVida.map(v => ({ nomeEpi: v.nomeEpi, categoriaEpi: v.categoriaEpi || "EPI", vidaUtilMeses: v.vidaUtilMeses, observacoes: v.observacoes || "" })));
+                  setIaSugestaoVida(null);
+                  toast.success("Sugestões aplicadas! Clique em 'Salvar Vida Útil' para confirmar.");
+                }}
+              />
+              <Card className="border-violet-200 bg-violet-50/30">
+                <CardContent className="pt-3">
+                  <div className="space-y-1.5">
+                    {iaSugestaoVida.map((item, idx) => (
+                      <div key={idx} className="flex gap-2 items-center text-xs">
+                        <Clock className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                        <span className="font-medium flex-1">{item.nomeEpi}</span>
+                        <Badge variant="outline" className="text-[10px] border-violet-200">{item.categoriaEpi}</Badge>
+                        <span className="font-semibold text-violet-700">{item.vidaUtilMeses} meses</span>
+                        <span className="text-muted-foreground italic max-w-[200px] truncate">{item.observacoes}</span>
+                        <Button size="sm" variant="ghost" className="h-6 text-red-500" onClick={() => {
+                          setIaSugestaoVida(prev => prev?.filter((_, i) => i !== idx) || null);
+                        }}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -421,6 +710,45 @@ export default function EpiKitsConfig() {
       {/* ============================================================ */}
       {tab === "treinamentos" && (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <IAButton loading={iaTreinoMut.isPending} onClick={() => iaTreinoMut.mutate({ companyId })} label="Sugerir Treinamentos com IA" />
+          </div>
+
+          {/* IA Suggestions for Treinamentos */}
+          {iaSugestaoTreino && iaSugestaoTreino.length > 0 && (
+            <div className="space-y-3">
+              <IASuggestionBanner
+                count={iaSugestaoTreino.length}
+                onClear={() => setIaSugestaoTreino(null)}
+                onAcceptAll={() => {
+                  setTreinoForm(iaSugestaoTreino.map(t => ({ nomeEpi: t.nomeEpi, normaExigida: t.normaExigida, nomeTreinamento: t.nomeTreinamento, obrigatorio: t.obrigatorio !== false })));
+                  setIaSugestaoTreino(null);
+                  toast.success("Sugestões aplicadas! Clique em 'Salvar Treinamentos' para confirmar.");
+                }}
+              />
+              <Card className="border-violet-200 bg-violet-50/30">
+                <CardContent className="pt-3">
+                  <div className="space-y-1.5">
+                    {iaSugestaoTreino.map((item, idx) => (
+                      <div key={idx} className="flex gap-2 items-center text-xs">
+                        <GraduationCap className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                        <span className="font-medium">{item.nomeEpi}</span>
+                        <Badge variant="outline" className="text-[10px] border-violet-200">{item.normaExigida}</Badge>
+                        <span className="flex-1 text-violet-700">{item.nomeTreinamento}</span>
+                        {item.obrigatorio && <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200">Obrigatório</Badge>}
+                        <Button size="sm" variant="ghost" className="h-6 text-red-500" onClick={() => {
+                          setIaSugestaoTreino(prev => prev?.filter((_, i) => i !== idx) || null);
+                        }}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
