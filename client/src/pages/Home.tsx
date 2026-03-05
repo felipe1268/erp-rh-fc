@@ -529,15 +529,19 @@ export default function Home() {
                           {homeData.feriasAlerta.slice(0, 6).map(f => (
                             <div
                               key={f.id}
-                              className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${f.urgente ? "bg-amber-50 border border-amber-200" : ""}`}
+                              className={`flex items-center justify-between text-xs px-2 py-1.5 rounded cursor-pointer hover:shadow-sm transition-all ${f.urgente ? "bg-amber-50 border border-amber-200 hover:bg-amber-100" : "hover:bg-muted/50"}`}
+                              onClick={() => navigate("/ferias")}
                             >
                               <div>
                                 <span className="font-medium">{f.nome}</span>
                                 <span className="text-muted-foreground ml-1 text-[10px]">{f.periodoAquisitivo}º período</span>
                               </div>
-                              <span className={`font-mono text-[10px] ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
-                                {f.diasParaVencer <= 0 ? "VENCIDO" : `${f.diasParaVencer}d`}
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className={`font-mono text-[10px] ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
+                                  {f.diasParaVencer <= 0 ? "VENCIDO" : `${f.diasParaVencer}d`}
+                                </span>
+                                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -563,9 +567,12 @@ export default function Home() {
                           <p className="text-[10px] font-semibold text-blue-600 uppercase mb-1">De férias agora</p>
                           <div className="space-y-1">
                             {homeData!.feriasDashboard.emAndamento.slice(0, 4).map((f: any) => (
-                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-blue-50 border border-blue-100">
+                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-blue-50 border border-blue-100 cursor-pointer hover:bg-blue-100 transition-all" onClick={() => navigate("/ferias")}>
                                 <span className="font-medium">{f.nome}</span>
-                                <span className="text-blue-600 font-mono text-[10px]">volta em {f.diasRestantes}d</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-blue-600 font-mono text-[10px]">volta em {f.diasRestantes}d</span>
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -577,12 +584,15 @@ export default function Home() {
                           <p className="text-[10px] font-semibold text-green-600 uppercase mb-1">Próximas agendadas</p>
                           <div className="space-y-1 max-h-32 overflow-y-auto">
                             {homeData!.feriasDashboard.agendadas.slice(0, 5).map((f: any) => (
-                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded">
+                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded cursor-pointer hover:bg-muted/50 transition-all" onClick={() => navigate("/ferias")}>
                                 <div>
                                   <span className="font-medium">{f.nome}</span>
                                   <span className="text-muted-foreground ml-1 text-[10px]">{f.diasGozo}d</span>
                                 </div>
-                                <span className="text-green-600 font-mono text-[10px]">em {f.diasAteInicio}d</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-green-600 font-mono text-[10px]">em {f.diasAteInicio}d</span>
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                </div>
                               </div>
                             ))}
                           </div>

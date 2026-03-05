@@ -5061,3 +5061,18 @@
 - [x] Adaptar Processos Trabalhistas para multi-company (CONSTRUTORAS)
 - [x] Backend: endpoints listar, estatisticas, funcionariosDesligados aceitam companyIds
 - [x] Frontend: usa getCompanyIdsForQuery e queryCompanyId do contexto
+
+## Rev. 211: Correção formato data de nascimento
+
+- [x] Corrigir data de nascimento para padrão brasileiro (dd/mm/aaaa) na tela de dados do colaborador (já estava correto)
+
+## Rev. 211: Data nascimento BR + Férias clicáveis
+
+- [x] Corrigir data de nascimento para padrão brasileiro (dd/mm/aaaa) em todas as telas (já estava correto)
+- [x] Tornar nomes clicáveis nos alertas de férias vencidas/a vencer
+- [x] Ao clicar no nome, navegar para módulo de férias
+## Rev. 211: Filtros Férias + Alertas clicáveis + Data BR
+- [x] Corrigir filtros dos cards no módulo de Férias (Total, Férias a Vencer, Agendadas, Vencidas, Em Gozo) - agora mudam aba e filtram
+- [x] Corrigir busca de colaborador no formulário Registrar Férias - removeAccents corrigido
+- [x] Formulário Registrar Férias: lista aumentada de 20 para 200 e busca corrigida
+- [x] Adicionar botões de ação rápida na tabela de férias: Iniciar Gozo, Concluir Férias

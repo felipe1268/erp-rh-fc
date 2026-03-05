@@ -19,7 +19,7 @@ import {
   Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
   Users, Trash2, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
-  Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight,
+  Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -402,11 +402,12 @@ export default function Ferias() {
   const [empSearch, setEmpSearch] = useState("");
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
   const selectedEmp = activeEmployees.find((e: any) => e.id === form.employeeId);
-  const filteredEmps = activeEmployees.filter((e: any) => {
+  const filteredEmps = useMemo(() => activeEmployees.filter((e: any) => {
     if (!empSearch) return true;
     const s = removeAccents(empSearch);
-    return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, ""));
-  });
+    const sDigits = s.replace(/\D/g, "");
+    return removeAccents(e.nomeCompleto || "").includes(s) || (sDigits.length > 0 && (e.cpf || "").replace(/\D/g, "").includes(sDigits));
+  }), [activeEmployees, empSearch]);
 
   // Filtered list
   const filtered = useMemo(() => {
@@ -545,31 +546,31 @@ export default function Ferias() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className="cursor-pointer hover:shadow-md" onClick={() => setStatusFilter("todos")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === "todos" && tab === "lista" ? "ring-2 ring-primary shadow-md" : ""}`} onClick={() => { setStatusFilter("todos"); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Total</p>
               <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-amber-500" onClick={() => setStatusFilter("pendente")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-amber-500 ${statusFilter === "pendente" && tab === "lista" ? "ring-2 ring-amber-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("pendente"); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Férias a Vencer</p>
               <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.pendentes)}</p>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-blue-500" onClick={() => setStatusFilter("agendada")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter === "agendada" && tab === "lista" ? "ring-2 ring-blue-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("agendada"); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Agendadas</p>
               <p className="text-2xl font-bold text-blue-600">{fmtNum(stats.agendadas)}</p>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-red-500" onClick={() => { setStatusFilter("vencida"); setTab("vencidas"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500 ${statusFilter === "vencida" && tab === "lista" ? "ring-2 ring-red-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("vencida"); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Vencidas</p>
               <p className="text-2xl font-bold text-red-600">{fmtNum(stats.vencidas)}</p>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md border-l-4 border-l-green-500" onClick={() => setStatusFilter("em_gozo")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500 ${statusFilter === "em_gozo" && tab === "lista" ? "ring-2 ring-green-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("em_gozo"); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Em Gozo</p>
               <p className="text-2xl font-bold text-green-600">{fmtNum(stats.emGozo)}</p>
@@ -695,6 +696,24 @@ export default function Ferias() {
                                 {(f.status === "pendente" || f.status === "vencida") && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Definir Data" onClick={() => handleDefinirData(f)}>
                                     <PenLine className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {f.status === "agendada" && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-green-700 hover:bg-green-50 font-medium text-xs" title="Marcar como Em Gozo" onClick={() => {
+                                    if (confirm(`Confirmar que ${f.employeeName} está em gozo de férias?`)) {
+                                      updateFerias.mutate({ id: f.id, status: "em_gozo" });
+                                    }
+                                  }}>
+                                    <Play className="h-3.5 w-3.5 mr-1" /> Iniciar Gozo
+                                  </Button>
+                                )}
+                                {f.status === "em_gozo" && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-gray-700 hover:bg-gray-100 font-medium text-xs" title="Concluir Férias" onClick={() => {
+                                    if (confirm(`Confirmar conclusão das férias de ${f.employeeName}?`)) {
+                                      updateFerias.mutate({ id: f.id, status: "concluida" });
+                                    }
+                                  }}>
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Concluir
                                   </Button>
                                 )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={() => { setSelectedItem(f); setShowDetailDialog(true); }}>
@@ -1485,7 +1504,7 @@ export default function Ferias() {
                       <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-64 overflow-y-auto" style={{ zIndex: 62 }}>
                         {filteredEmps.length === 0 ? (
                           <div className="p-3 text-sm text-muted-foreground text-center">Nenhum resultado para "{empSearch}"</div>
-                        ) : filteredEmps.slice(0, 20).map((e: any) => (
+                        ) : filteredEmps.slice(0, empSearch ? 50 : 200).map((e: any) => (
                           <div key={e.id} className="px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm flex justify-between" onClick={() => { setForm({ ...form, employeeId: e.id }); setEmpDropdownOpen(false); setEmpSearch(""); }}>
                             <span className="font-medium">{e.nomeCompleto}</span>
                             <span className="text-muted-foreground">{formatCPF(e.cpf)}</span>

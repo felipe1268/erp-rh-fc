@@ -1339,7 +1339,14 @@ export const avisoPrevioFeriasRouter = router({
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
         ];
-        if (input.status) conditions.push(eq(vacationPeriods.status, input.status as any));
+        if (input.status) {
+          if (input.status === 'vencida') {
+            // Vencida = status 'vencida' OU flag vencida=1 (período concessivo expirado)
+            conditions.push(sql`(${vacationPeriods.status} = 'vencida' OR ${vacationPeriods.vencida} = 1)`);
+          } else {
+            conditions.push(eq(vacationPeriods.status, input.status as any));
+          }
+        }
         if (input.employeeId) conditions.push(eq(vacationPeriods.employeeId, input.employeeId));
         
         const rows = await db.select({
