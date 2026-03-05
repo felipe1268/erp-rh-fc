@@ -1,0 +1,8 @@
+{
+  "query": "SELECT \n  COUNT(*) as total_epis,\n  SUM(quantidade_estoque) as estoque_total,\n  SUM(CASE WHEN valor_produto IS NOT NULL AND valor_produto > 0 THEN 1 ELSE 0 END) as epis_com_valor,\n  SUM(CASE WHEN valor_produto IS NULL OR valor_produto = 0 THEN 1 ELSE 0 END) as epis_sem_valor,\n  SUM(COALESCE(valor_produto, 0) * COALESCE(quantidade_estoque, 0)) as valor_inventario_total\nFROM epis;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT \n  COUNT(*) as total_epis,\n  SUM(quantidade_estoque) as estoque_total,\n  SUM(CASE WHEN valor_produto IS NOT NULL AND valor_produto > 0 THEN 1 ELSE 0 END) as epis_com_valor,\n  SUM(CASE WHEN valor_produto IS NULL OR valor_produto = 0 THEN 1 ELSE 0 END) as epis_sem_valor,\n  SUM(COALESCE(valor_produto, 0) * COALESCE(quantidade_estoque, 0)) as valor_inventario_total\nFROM epis;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'quantidade_estoque' in ''"
+  ]
+}

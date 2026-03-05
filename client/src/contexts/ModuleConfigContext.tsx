@@ -25,12 +25,12 @@ const ModuleConfigContext = createContext<ModuleConfigContextType>({
 });
 
 export function ModuleConfigProvider({ children }: { children: ReactNode }) {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, construtorasIds } = useCompany();
+  const companyId = isConstrutoras ? (construtorasIds[0] || undefined) : (selectedCompanyId ? parseInt(selectedCompanyId) : undefined);
 
   const { data: modules = [], isLoading, refetch } = trpc.moduleConfig.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: !!companyId && companyId > 0 }
   );
 
   const isModuleEnabled = (key: string): boolean => {

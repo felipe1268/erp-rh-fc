@@ -86,8 +86,8 @@ export default function Configuracoes() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
   const isAdmin = user?.role === "admin" || isMaster;
-  const { selectedCompanyId } = useCompany();
-  const companyId = Number(selectedCompanyId) || 0;
+  const { selectedCompanyId, isConstrutoras, construtorasIds } = useCompany();
+  const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (Number(selectedCompanyId) || 0);
   const [activeTab, setActiveTab] = useState<TabKey>(isAdmin ? "criterios" : "senha");
 
   // Limpeza

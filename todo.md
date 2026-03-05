@@ -5091,3 +5091,13 @@
 - [x] Ao selecionar um grupo, marcar automaticamente todas as empresas daquele grupo
 - [x] Campo grupoEmpresarial adicionado no cadastro de empresas
 - [x] Grupo exibido no card de cada empresa e na seleção de permissões
+
+## Rev. 215: Corrigir Valor Inventário de EPIs
+- [x] Valor Inventário já está correto: soma de (estoque × valor unitário) de todos os EPIs - verificado no banco
+- [x] BUG: Módulos do Sistema sumiram na tela de Configurações - corrigido para usar FC quando CONSTRUTORAS
+- [x] GoldenRulesPanel corrigido para usar FC quando CONSTRUTORAS selecionado
+
+## Rev. 216: CONSTRUTORAS usar FC como referência
+- [x] Quando CONSTRUTORAS selecionado, Configurações (módulos, regras, critérios) usam dados da FC
+- [x] Quando CONSTRUTORAS selecionado, Obras mostra obras de todas empresas do grupo
+- [x] GoldenRulesPanel: corrigido companyId para CONSTRUTORAS

@@ -29,8 +29,8 @@ type Categoria = typeof CATEGORIAS[number]["value"];
 type Prioridade = typeof PRIORIDADES[number]["value"];
 
 export default function GoldenRulesPanel() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = Number(selectedCompanyId) || 0;
+  const { selectedCompanyId, isConstrutoras, construtorasIds } = useCompany();
+  const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (Number(selectedCompanyId) || 0);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);

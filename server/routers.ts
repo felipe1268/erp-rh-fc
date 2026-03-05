@@ -775,7 +775,13 @@ export const appRouter = router({
   // OBRAS
   // ============================================================
   obras: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObras(input.companyId)),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input }) => {
+      if (input.companyIds && input.companyIds.length > 0) {
+        const results = await Promise.all(input.companyIds.map(id => getObras(id)));
+        return results.flat();
+      }
+      return getObras(input.companyId);
+    }),
     listActive: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getObrasByCompanyActive(input.companyId, input.companyIds)),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getObraById(input.id)),
     create: protectedProcedure.input(z.object({

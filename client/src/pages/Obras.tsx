@@ -41,9 +41,11 @@ const emptyForm: ObraForm = {
 };
 
 export default function Obras() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
-  const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { selectedCompanyId, isConstrutoras, construtorasIds, getCompanyIdsForQuery } = useCompany();
+  const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
+  const companyIds = getCompanyIdsForQuery();
+  const hasCompany = companyIds.length > 0;
+  const obrasQ = trpc.obras.list.useQuery({ companyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasCompany });
   const obras = obrasQ.data ?? [];
   const allSnsQ = trpc.obras.listSnsByCompany.useQuery({ companyId }, { enabled: !!companyId });
   const allSns = allSnsQ.data ?? [];
