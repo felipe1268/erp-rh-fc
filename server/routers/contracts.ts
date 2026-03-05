@@ -94,6 +94,7 @@ function formatarDataCurta(dateStr: string | null | undefined): string {
 // Templates padrão
 // ==========================================
 const TEMPLATE_EXPERIENCIA = `<div style="font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px;">
+[CABECALHO_EMPRESA]
 <h2 style="text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 30px;">CONTRATO DE TRABALHO A TÍTULO DE EXPERIÊNCIA</h2>
 
 <p style="text-align: justify;">Pelo presente instrumento particular de Contrato de Trabalho a título de experiência, a empresa <strong>[EMPRESA_RAZAO_SOCIAL]</strong>, com sede na [EMPRESA_ENDERECO], [EMPRESA_CIDADE], estado de [EMPRESA_ESTADO], CNPJ nº [EMPRESA_CNPJ], denominada a seguir EMPREGADORA e o(a) Sr(a) <strong>[NOME_FUNCIONARIO]</strong> domiciliado na [ENDERECO_FUNCIONARIO], [NUMERO_FUNCIONARIO], [BAIRRO_FUNCIONARIO], na cidade de [CIDADE_FUNCIONARIO], estado de [ESTADO_FUNCIONARIO], portador do CPF [CPF], CTPS nº [CTPS], série [SERIE_CTPS] e PIS [PIS], doravante designado EMPREGADO, celebram o presente Contrato Individual de trabalho para fins de experiência, conforme legislação trabalhista em vigor, regido pelas cláusulas abaixo e demais disposições legais vigentes.</p>
@@ -166,6 +167,7 @@ const TEMPLATE_EXPERIENCIA = `<div style="font-family: 'Times New Roman', serif;
 </div>
 
 <div style="page-break-before: always; margin-top: 60px;">
+[CABECALHO_EMPRESA]
 <h2 style="text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 30px;">TERMO DE PRORROGAÇÃO</h2>
 <p style="text-align: justify;">Por mútuo acordo entre as Partes, fica o contrato de experiência prorrogado por mais <strong>[PRAZO_PRORROGACAO] dias</strong>, a contar da data de hoje, cujo término é <strong>[DATA_FIM_PRORROGACAO]</strong>.</p>
 
@@ -189,6 +191,7 @@ const TEMPLATE_EXPERIENCIA = `<div style="font-family: 'Times New Roman', serif;
 </div>`;
 
 const TEMPLATE_INDETERMINADO = `<div style="font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px;">
+[CABECALHO_EMPRESA]
 <h2 style="text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 30px;">CONTRATO DE TRABALHO POR PRAZO INDETERMINADO</h2>
 
 <p style="text-align: justify;">Pelo presente instrumento particular que entre si fazem a empresa <strong>[EMPRESA_RAZAO_SOCIAL]</strong>, com sede na [EMPRESA_ENDERECO], [EMPRESA_CIDADE], estado de [EMPRESA_ESTADO], CNPJ nº [EMPRESA_CNPJ], denominada a seguir EMPREGADORA e o(a) Sr(a) <strong>[NOME_FUNCIONARIO]</strong> domiciliado na [ENDERECO_FUNCIONARIO], [NUMERO_FUNCIONARIO], [BAIRRO_FUNCIONARIO], na cidade de [CIDADE_FUNCIONARIO], estado de [ESTADO_FUNCIONARIO], portador da CTPS nº [CTPS], série [SERIE_CTPS], doravante designado EMPREGADO, fica justo e contratado o seguinte:</p>
@@ -255,7 +258,7 @@ export const contractsRouter = router({
   listTemplates: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       return db.select().from(contractTemplates)
         .where(and(eq(contractTemplates.companyId, input.companyId), eq(contractTemplates.ativo, 1)))
         .orderBy(contractTemplates.tipo);
@@ -265,7 +268,7 @@ export const contractsRouter = router({
   getTemplate: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const [tmpl] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, input.id));
       return tmpl || null;
     }),
@@ -280,7 +283,7 @@ export const contractsRouter = router({
       conteudoHtml: z.string().min(1),
     }))
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
       if (input.id) {
         await db.update(contractTemplates)
           .set({ nome: input.nome, conteudoHtml: input.conteudoHtml, tipo: input.tipo })
@@ -302,7 +305,7 @@ export const contractsRouter = router({
   deleteTemplate: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       await db.update(contractTemplates).set({ ativo: 0 }).where(eq(contractTemplates.id, input.id));
       return { success: true };
     }),
@@ -311,7 +314,7 @@ export const contractsRouter = router({
   initTemplates: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
       const existing = await db.select().from(contractTemplates)
         .where(and(eq(contractTemplates.companyId, input.companyId), eq(contractTemplates.ativo, 1)));
       if (existing.length > 0) return { message: "Templates já existem", count: existing.length };
@@ -353,7 +356,7 @@ export const contractsRouter = router({
       horarioTrabalhoOverride: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
 
       // Buscar funcionário
       const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
@@ -387,7 +390,21 @@ export const contractsRouter = router({
 
       const horario = input.horarioTrabalhoOverride || emp.jornadaTrabalho || "de 2ª feira à 5ª feira: 07h00 às 12h00 e das 13h00 às 17h00<br>na 6ª feira: 07h00 às 12h00 e das 13h00 às 16h00";
 
+      // Gerar cabeçalho com logo da empresa
+      const logoUrl = company.logoUrl || "";
+      const cabecalhoEmpresa = logoUrl
+        ? `<div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #1B2A4A;">
+<img src="${logoUrl}" alt="Logo" style="max-height: 70px; max-width: 280px; object-fit: contain; margin-bottom: 8px;" />
+<div style="font-size: 11pt; font-weight: bold; color: #1B2A4A;">${company.razaoSocial}</div>
+<div style="font-size: 9pt; color: #555;">CNPJ: ${company.cnpj}${company.endereco ? ` | ${company.endereco}` : ""}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>
+</div>`
+        : `<div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #1B2A4A;">
+<div style="font-size: 14pt; font-weight: bold; color: #1B2A4A; letter-spacing: 1px;">${company.razaoSocial}</div>
+<div style="font-size: 9pt; color: #555;">CNPJ: ${company.cnpj}${company.endereco ? ` | ${company.endereco}` : ""}${company.cidade ? ` — ${company.cidade}/${company.estado || "SP"}` : ""}</div>
+</div>`;
+
       const placeholders: Record<string, string> = {
+        CABECALHO_EMPRESA: cabecalhoEmpresa,
         EMPRESA_RAZAO_SOCIAL: company.razaoSocial,
         EMPRESA_CNPJ: company.cnpj,
         EMPRESA_ENDERECO: company.endereco || "",
@@ -457,7 +474,7 @@ export const contractsRouter = router({
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
       const [result] = await db.insert(employeeContracts).values({
         companyId: input.companyId,
         employeeId: input.employeeId,
@@ -486,7 +503,7 @@ export const contractsRouter = router({
   listarContratos: protectedProcedure
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       return db.select().from(employeeContracts)
         .where(eq(employeeContracts.employeeId, input.employeeId))
         .orderBy(desc(employeeContracts.createdAt));
@@ -496,7 +513,7 @@ export const contractsRouter = router({
   getContrato: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
       return contrato || null;
     }),
@@ -511,7 +528,7 @@ export const contractsRouter = router({
       tipoProrrogacao: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const buffer = Buffer.from(input.fileBase64, "base64");
       const suffix = Math.random().toString(36).substring(2, 8);
       const key = `contratos/${input.contratoId}/${suffix}-${input.fileName}`;
@@ -538,7 +555,7 @@ export const contractsRouter = router({
       dataEfetivacao: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const updateData: any = { status: input.status };
       if (input.dataProrrogacao) updateData.dataProrrogacao = input.dataProrrogacao;
       if (input.dataEfetivacao) updateData.dataEfetivacao = input.dataEfetivacao;

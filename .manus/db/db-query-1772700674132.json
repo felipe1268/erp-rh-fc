@@ -1,0 +1,34 @@
+{
+  "query": "SELECT id, razaoSocial, nomeFantasia, logoUrl FROM companies WHERE deletedAt IS NULL LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, razaoSocial, nomeFantasia, logoUrl FROM companies WHERE deletedAt IS NULL LIMIT 10;",
+  "rows": [
+    {
+      "id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60002-ky8jomx0.jpg"
+    },
+    {
+      "id": "60004",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "nomeFantasia": "HOTEL CONSAGRADO",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60004-88491vik.jpg"
+    },
+    {
+      "id": "60005",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60005-8j80b24l.jpg"
+    },
+    {
+      "id": "90001",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "nomeFantasia": "",
+      "logoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/90001-9d8nxsn9.jpg"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\tnomeFantasia\tlogoUrl\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\tFC ENGENHARIA PROJETOS E OBRAS\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60002-ky8jomx0.jpg\n60004\tCF HOTELARIA LTDA\tHOTEL CONSAGRADO\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60004-88491vik.jpg\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\tJULIO FERRAZ PROJETOS E OBRAS LTDA\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/60005-8j80b24l.jpg\n90001\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\t\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/company-logos/90001-9d8nxsn9.jpg\n",
+  "stderr": "",
+  "execution_time_ms": 99
+}

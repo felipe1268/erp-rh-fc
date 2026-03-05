@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, LEFT(razaoSocial, 30) as empresa, CASE WHEN logoUrl IS NULL THEN 'NULL' WHEN logoUrl = '' THEN 'EMPTY' ELSE LEFT(logoUrl, 80) END as logo FROM companies WHERE deletedAt IS NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, LEFT(razaoSocial, 30) as empresa, CASE WHEN logoUrl IS NULL THEN 'NULL' WHEN logoUrl = '' THEN 'EMPTY' ELSE LEFT(logoUrl, 80) END as logo FROM companies WHERE deletedAt IS NULL;",
+  "rows": [
+    {
+      "id": "60002",
+      "empresa": "FC ENGENHARIA E CONSTRUCAO LTD",
+      "logo": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/"
+    },
+    {
+      "id": "60004",
+      "empresa": "CF HOTELARIA LTDA",
+      "logo": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/"
+    },
+    {
+      "id": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS ",
+      "logo": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/"
+    },
+    {
+      "id": "90001",
+      "empresa": "LOCNOW LOCACOES E SERVICOS DE ",
+      "logo": "https://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tempresa\tlogo\n60002\tFC ENGENHARIA E CONSTRUCAO LTD\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/\n60004\tCF HOTELARIA LTDA\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/\n60005\tJULIO FERRAZ PROJETOS E OBRAS \thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/\n90001\tLOCNOW LOCACOES E SERVICOS DE \thttps://d2xsxph8kpxj0f.cloudfront.net/310419663028720190/W4MM458SKqYRWRGGQrfw8A/\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

@@ -4931,3 +4931,8 @@
 - [x] Implementar Prorrogar e Efetivar com um clique
 - [x] Horário de trabalho puxado do cadastro do funcionário
 - [x] Templates com LGPD, sigilo e segurança baseados nos contratos originais
+
+## Rev. 200: Logo da Empresa nos Contratos CLT
+- [x] Buscar logo da empresa ativa do banco/S3
+- [x] Exibir logo no cabeçalho do contrato (preview e impressão)
+- [x] Garantir que logo aparece corretamente na impressão A4
