@@ -49,6 +49,7 @@ import { importExcelRouter } from "./routers/importExcel";
 import { payrollParsersRouter } from "./routers/payrollParsers";
 import { folhaPagamentoRouter } from "./routers/folhaPagamento";
 import { controleDocumentosRouter } from "./routers/controleDocumentos";
+import { getAvailableTables, getTableStructure, importTableData } from "./routers/importData";
 import { processosTrabRouter } from "./routers/processosTrabalhistas";
 import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
@@ -2002,5 +2003,29 @@ export const appRouter = router({
       return { success: true };
     }),
   }),
+
+    // ============================================================
+    // IMPORTAÇÃO DE DADOS (Manus)
+    // ============================================================
+    importData: router({
+      getAvailableTables: protectedProcedure.query(async () => {
+              return getAvailableTables();
+      }),
+      getTableStructure: protectedProcedure
+        .input(z.object({ tableName: z.string() }))
+        .query(async ({ input }) => {
+                  return getTableStructure(input.tableName);
+        }),
+      importTable: protectedProcedure
+        .input(z.object({
+                  tableName: z.string(),
+                  columns: z.array(z.string()),
+                  rows: z.array(z.array(z.any())),
+                  mode: z.enum(["insert", "upsert", "replace"]).default("insert"),
+        }))
+        .mutation(async ({ input }) => {
+                  return importTableData({ tableName: input.tableName, columns: input.columns, rows: input.rows }, input.mode);
+        }),
+}),
 });
 export type AppRouter = typeof appRouter;
