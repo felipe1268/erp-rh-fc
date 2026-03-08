@@ -7,7 +7,7 @@ import { CompanyProvider } from "./contexts/CompanyContext";
 import { ModuleProvider } from "./contexts/ModuleContext";
 import { ModuleConfigProvider } from "./contexts/ModuleConfigContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";h
 import { Loader2 } from "lucide-react";
 
 // ============================================================
@@ -60,6 +60,7 @@ const PainelJuridico = lazy(() => import("./pages/PainelJuridico"));
 const BibliotecaConhecimento = lazy(() => import("./pages/BibliotecaConhecimento"));
 const AvaliacaoDesempenho = lazy(() => import("./pages/AvaliacaoDesempenho"));
 const AssistenteIAFloat = lazy(() => import("./components/AssistenteIAFloat"));
+const ImportData = lazy(() => import("./pages/ImportData"));
 
 // Relatórios
 const RaioXPage = lazy(() => import("./pages/relatorios/RaioXPage"));
@@ -238,6 +239,8 @@ function Router() {
         <Route path="/verificar/clt/:id" component={VerificarAptidao} />
         <Route path="/verificar/pj/:id" component={VerificarAptidao} />
         <Route path="/verificar/terceiro/:id" component={VerificarAptidao} />
+        {/* Importação de Dados */}
+                  <Route path="/import-data" component={ImportData} />
         <Route path={"404"} component={NotFound} />
         <Route component={NotFound} />
       </Switch>
