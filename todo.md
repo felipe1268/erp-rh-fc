@@ -5214,3 +5214,13 @@
 - [x] Funcionários sem alocação ativa aparecem como "Não Alocado" para alocação manual
 - [x] Migrar banco de dados (ALTER TABLE DROP COLUMN)
 - [x] 720 testes passando
+
+## BUG: Erro "Unexpected token < is not valid JSON" ao registrar férias
+- [x] Investigar rota de registro de férias no backend
+- [x] Identificar causa: coluna obraAtualId removida do banco mas schema antigo (publicado) ainda referencia
+- [x] Corrigir: Rev. 227 já tem schema sem obraAtualId - basta publicar
+
+## BUG: Processos Trabalhistas não carregam (fica em "Carregando processos..." infinitamente)
+- [ ] Investigar query de listagem de processos trabalhistas
+- [ ] Identificar causa do erro (possivelmente referência a obraAtualId removida)
+- [ ] Corrigir o bug
