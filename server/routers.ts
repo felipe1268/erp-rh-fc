@@ -83,6 +83,7 @@ import { payrollEngineRouter } from "./routers/payrollEngine";
 import { fieldNotesRouter } from "./routers/fieldNotes";
 import { epiAvancadoRouter } from "./routers/epiAvancado";
 import { backupRouter } from "./routers/backup";
+import { portabilidadeRouter } from "./routers/portabilidade";
 import { migrationRouter } from "./routers/migration";
 import { contractsRouter } from "./routers/contracts";
 import { storagePut } from "./storage";
@@ -124,6 +125,7 @@ export const appRouter = router({
   fieldNotes: fieldNotesRouter,
   epiAvancado: epiAvancadoRouter,
   backup: backupRouter,
+  portabilidade: portabilidadeRouter,
   migration: migrationRouter,
   contracts: contractsRouter,
   auth: router({

@@ -11,7 +11,7 @@ import {
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, TrendingUp, Home, Ruler, BookOpen, FileSignature,
   HardHat, Warehouse, Wrench, FolderOpen, BarChart3,
-  Settings, FileText, Trash2, GitBranch,
+  Settings, FileText, Trash2, GitBranch, Package,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -469,6 +469,11 @@ export default function ModuleHub() {
                   <DropdownMenuItem onClick={() => navigate("/lixeira")} className="cursor-pointer">
                     <Trash2 className="mr-2 h-4 w-4" /> Lixeira
                   </DropdownMenuItem>
+                  {(user?.role === 'admin' || user?.role === 'admin_master') && (
+                    <DropdownMenuItem onClick={() => navigate("/portabilidade")} className="cursor-pointer">
+                      <Package className="mr-2 h-4 w-4" /> Portabilidade
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" /> Sair

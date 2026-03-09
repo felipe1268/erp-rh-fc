@@ -5152,3 +5152,9 @@
 - [x] Aviso Prévio: ajustar tabela conforme planilha (Nome, Data Aviso, Redução, Dia Trabalhado, Último Dia, Data de Pagamento)
 - [x] Aviso Prévio: renomear "Rescisão" para "Data de Pagamento" na tabela
 - [x] Aviso Prévio: calcular e exibir automaticamente Último Dia Trabalhado e Data de Pagamento ao preencher Data do Aviso + Redução
+
+## Rev. 226: Portabilidade e Backup
+- [x] Login por email/senha como alternativa ao OAuth Manus (já existia)
+- [x] Página de Portabilidade: backup do banco, listar documentos S3, credenciais, guia de migração
+- [x] Documentação completa de credenciais e variáveis de ambiente (MIGRATION_GUIDE.md)
+- [x] Link de Portabilidade no menu do ModuleHub (admin/admin_master)
