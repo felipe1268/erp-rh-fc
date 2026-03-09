@@ -321,6 +321,114 @@ export default function AvisoPrevio() {
           </Card>
         </div>
 
+        {/* Gráfico Timeline - Datas dos Avisos Prévios */}
+        {(() => {
+          const emAndamento = (avisosList as any[]).filter((a: any) => a.status === 'em_andamento');
+          if (emAndamento.length === 0) return null;
+          
+          // Ordenar por data do aviso
+          const sorted = [...emAndamento].sort((a, b) => (a.dataDiaTrabalhado || '').localeCompare(b.dataDiaTrabalhado || ''));
+          
+          return (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-amber-600" />
+                  Timeline dos Avisos em Andamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="p-2 text-left font-medium w-48">Funcionário</th>
+                        <th className="p-2 text-center font-medium">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>
+                            Data Aviso
+                          </span>
+                        </th>
+                        <th className="p-2 text-center font-medium">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+                            Último Dia
+                          </span>
+                        </th>
+                        <th className="p-2 text-center font-medium">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span>
+                            Pagamento
+                          </span>
+                        </th>
+                        <th className="p-2 text-center font-medium">Dias Restantes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((a: any) => {
+                        const hoje = new Date();
+                        hoje.setHours(0,0,0,0);
+                        const dataFim = a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
+                        const dataPgto = a.dataLimitePagamento ? new Date(a.dataLimitePagamento + 'T00:00:00') : null;
+                        const diasRestantes = dataFim ? Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000*60*60*24)) : null;
+                        const diasPgto = dataPgto ? Math.ceil((dataPgto.getTime() - hoje.getTime()) / (1000*60*60*24)) : null;
+                        
+                        // Barra visual de progresso
+                        const dataInicio = a.dataDiaTrabalhado ? new Date(a.dataDiaTrabalhado + 'T00:00:00') : null;
+                        let progresso = 0;
+                        if (dataInicio && dataFim) {
+                          const totalDias = (dataFim.getTime() - dataInicio.getTime()) / (1000*60*60*24);
+                          const diasPassados = (hoje.getTime() - dataInicio.getTime()) / (1000*60*60*24);
+                          progresso = totalDias > 0 ? Math.min(Math.max(diasPassados / totalDias * 100, 0), 100) : 0;
+                        }
+                        
+                        return (
+                          <tr key={a.id} className="border-b last:border-0 hover:bg-muted/10">
+                            <td className="p-2">
+                              <p className="font-medium text-xs truncate max-w-[180px]" title={a.employeeName}>{a.employeeName}</p>
+                              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                <div className="h-1.5 rounded-full transition-all" style={{ width: `${progresso}%`, backgroundColor: progresso >= 100 ? '#ef4444' : progresso >= 75 ? '#f59e0b' : '#3b82f6' }}></div>
+                              </div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">{formatDate(a.dataDiaTrabalhado)}</span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-medium">{formatDate(a.dataFim)}</span>
+                              {diasRestantes !== null && (
+                                <p className={`text-[10px] mt-0.5 ${diasRestantes <= 0 ? 'text-red-600 font-bold' : diasRestantes <= 7 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                  {diasRestantes <= 0 ? 'VENCIDO' : `em ${diasRestantes} dias`}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`px-2 py-0.5 rounded font-medium ${diasPgto !== null && diasPgto <= 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                {formatDate(a.dataLimitePagamento)}
+                              </span>
+                              {diasPgto !== null && (
+                                <p className={`text-[10px] mt-0.5 ${diasPgto <= 0 ? 'text-red-600 font-bold' : diasPgto <= 5 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                  {diasPgto <= 0 ? 'VENCIDO' : `em ${diasPgto} dias`}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-2 text-center">
+                              {diasRestantes !== null && (
+                                <span className={`text-sm font-bold ${diasRestantes <= 0 ? 'text-red-600' : diasRestantes <= 7 ? 'text-amber-600' : 'text-blue-600'}`}>
+                                  {diasRestantes <= 0 ? '0' : diasRestantes}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* Info Banner */}
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
@@ -390,7 +498,7 @@ export default function AvisoPrevio() {
                     const reducaoShort = a.reducaoJornada === '2h_dia' ? '2 HORAS' : a.reducaoJornada === '7_dias_corridos' ? '7 DIAS' : '-';
                     return (
                       <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                        <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>
+                        <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={async () => { setSelectedItem(a); setShowDetailDialog(true); try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) setSelectedItem(detail); } catch(e) { console.error('Erro ao buscar detalhes:', e); } }}>
                           {a.employeeName}
                         </td>
                         <td className="p-3 text-xs">{formatCPF(a.employeeCpf)}</td>

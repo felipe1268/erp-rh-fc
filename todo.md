@@ -5159,3 +5159,5 @@
 - [x] Documentação completa de credenciais e variáveis de ambiente (MIGRATION_GUIDE.md)
 - [x] Link de Portabilidade no menu do ModuleHub (admin/admin_master)
 - [x] Processos Trabalhistas: Valor Causas = apenas em andamento, Total Pago = soma dos encerrados
+- [x] Aviso Prévio: clicar no nome do funcionário abre modal com dados completos do aviso
+- [x] Aviso Prévio: gráfico timeline no dashboard mostrando Data Aviso, Último Dia e Data Pagamento
