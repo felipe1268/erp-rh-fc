@@ -24,6 +24,7 @@ import {
   obras,
   users,
   userProfiles,
+  obraFuncionarios,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql, count, avg, inArray, gte, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";

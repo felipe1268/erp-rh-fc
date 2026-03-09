@@ -9,7 +9,7 @@ import {
   epis, epiDeliveries, epiEstoqueObra, epiTransferencias,
   employees, obras, trainings, systemCriteria,
   epiAlertaCapacidade, epiAlertaCapacidadeLog, notificationRecipients,
-  goldenRules, jobFunctions,
+  goldenRules, jobFunctions, obraFuncionarios,
 } from "../../drizzle/schema";
 import { sendEmail } from "../services/smtpService";
 import { eq, and, desc, sql, isNull, gte, lte, inArray } from "drizzle-orm";

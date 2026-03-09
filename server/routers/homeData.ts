@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods, terminationNotices } from "../../drizzle/schema";
+import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods, terminationNotices, obraFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 

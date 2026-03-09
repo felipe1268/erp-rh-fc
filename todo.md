@@ -5224,3 +5224,20 @@
 - [ ] Investigar query de listagem de processos trabalhistas
 - [ ] Identificar causa do erro (possivelmente referência a obraAtualId removida)
 - [ ] Corrigir o bug
+
+## Rev. 228: Pagamento de Processos Trabalhistas
+- [ ] Adicionar campo valorPago e dataPagamento no schema/banco
+- [ ] Criar procedure de registrar pagamento no backend
+- [ ] Adicionar botão "Registrar Pagamento" na listagem e dentro de cada processo
+- [ ] Dialog para informar valor pago e data
+- [ ] Processos pagos não contam como pendentes no card "Valor Causas"
+- [ ] Card "Total Pago" mostra soma real dos pagamentos
+
+## Rev. 228: Correção de imports faltantes de obraFuncionarios
+- [x] homeData.ts - import obraFuncionarios adicionado
+- [x] avaliacao.ts - import obraFuncionarios adicionado
+- [x] controleDocumentos.ts - import obraFuncionarios adicionado
+- [x] epiAvancado.ts - import obraFuncionarios adicionado
+- [x] epis.ts - import obraFuncionarios adicionado
+- [x] Causa raiz: ao substituir obraAtualId por queries em obraFuncionarios, os imports não foram adicionados em todos os arquivos
+- [x] 720 testes passando
