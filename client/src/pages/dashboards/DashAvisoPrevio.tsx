@@ -187,7 +187,7 @@ export default function DashAvisoPrevio() {
               </div>
             </div>
 
-            {/* ===== SEÇÃO 2: RESUMO FINANCEIRO (visão rápida) ===== */}
+            {/* ===== SEÇÃO 2: PREVISÃO DE CUSTO (apenas em andamento) ===== */}
             <Card>
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center gap-2 mb-4">
@@ -195,89 +195,30 @@ export default function DashAvisoPrevio() {
                     <Wallet className="h-4 w-4 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-sm">Resumo Financeiro</h3>
-                    <p className="text-[10px] text-muted-foreground">Visão consolidada dos custos de rescisão</p>
+                    <h3 className="font-semibold text-sm">Previsão de Custo</h3>
+                    <p className="text-[10px] text-muted-foreground">Custo estimado dos avisos em andamento (cancelados e concluídos não entram na previsão)</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {/* Custo Total */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Custo Total Em Andamento */}
                   <div
-                    className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-blue-400 hover:shadow-md active:scale-[0.98] transition-all"
-                    onClick={() => setDrillDown({ type: 'finTotal', label: 'total' })}
-                    title="Clique para ver detalhes"
-                  >
-                    <DollarSign className="h-5 w-5 text-blue-500 mx-auto mb-1" />
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-700 tabular-nums">{fmtBRL(data.valorTotalEstimado)}</p>
-                    <p className="text-[10px] sm:text-xs text-blue-600 font-medium mt-1">Custo Total Estimado</p>
-                    <p className="text-[9px] text-blue-400 mt-0.5">Clique para detalhes</p>
-                  </div>
-                  {/* Em Andamento */}
-                  <div
-                    className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-orange-400 hover:shadow-md active:scale-[0.98] transition-all"
+                    className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-4 sm:p-5 text-center cursor-pointer hover:border-orange-400 hover:shadow-md active:scale-[0.98] transition-all"
                     onClick={() => setDrillDown({ type: 'finStatus', label: 'em_andamento' })}
                     title="Clique para ver detalhes"
                   >
-                    <Clock className="h-5 w-5 text-orange-500 mx-auto mb-1" />
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-700 tabular-nums">{fmtBRL(data.valorEmAndamento)}</p>
-                    <p className="text-[10px] sm:text-xs text-orange-600 font-medium mt-1">Custo Em Andamento</p>
-                    <p className="text-[9px] text-orange-400 mt-0.5">Clique para detalhes</p>
+                    <DollarSign className="h-6 w-6 text-orange-500 mx-auto mb-2" />
+                    <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-700 tabular-nums">{fmtBRL(data.valorTotalEstimado)}</p>
+                    <p className="text-xs text-orange-600 font-medium mt-1">Custo Total Estimado (Em Andamento)</p>
+                    <p className="text-[10px] text-orange-400 mt-0.5">{data.emAndamento} aviso(s) ativo(s) · Clique para detalhes</p>
                   </div>
-                  {/* Concluído */}
-                  <div
-                    className="rounded-xl border-2 border-green-200 bg-green-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-green-400 hover:shadow-md active:scale-[0.98] transition-all"
-                    onClick={() => setDrillDown({ type: 'finStatus', label: 'concluido' })}
-                    title="Clique para ver detalhes"
-                  >
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto mb-1" />
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-700 tabular-nums">{fmtBRL(data.valorConcluido)}</p>
-                    <p className="text-[10px] sm:text-xs text-green-600 font-medium mt-1">Custo Concluído</p>
-                    <p className="text-[9px] text-green-400 mt-0.5">Clique para detalhes</p>
-                  </div>
-                  {/* Cancelado */}
-                  <div
-                    className="rounded-xl border-2 border-gray-200 bg-gray-50/50 p-3 sm:p-4 text-center cursor-pointer hover:border-gray-400 hover:shadow-md active:scale-[0.98] transition-all"
-                    onClick={() => setDrillDown({ type: 'finStatus', label: 'cancelado' })}
-                    title="Clique para ver detalhes"
-                  >
-                    <Ban className="h-5 w-5 text-gray-400 mx-auto mb-1" />
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-500 tabular-nums">{fmtBRL(data.valorCancelado)}</p>
-                    <p className="text-[10px] sm:text-xs text-gray-500 font-medium mt-1">Custo Cancelado</p>
-                    <p className="text-[9px] text-gray-400 mt-0.5">Clique para detalhes</p>
+                  {/* Média por aviso */}
+                  <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-4 sm:p-5 text-center">
+                    <Receipt className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                    <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-700 tabular-nums">{data.emAndamento > 0 ? fmtBRL(data.valorTotalEstimado / data.emAndamento) : 'R$ 0,00'}</p>
+                    <p className="text-xs text-blue-600 font-medium mt-1">Média por Aviso</p>
+                    <p className="text-[10px] text-blue-400 mt-0.5">Custo médio de rescisão por funcionário</p>
                   </div>
                 </div>
-                {/* Barra visual de proporção */}
-                {data.valorTotalEstimado > 0 && (
-                  <div className="mt-4">
-                    <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
-                      {data.valorEmAndamento > 0 && (
-                        <div
-                          className="bg-orange-400 transition-all"
-                          style={{ width: `${(data.valorEmAndamento / data.valorTotalEstimado) * 100}%` }}
-                          title={`Em Andamento: ${fmtBRL(data.valorEmAndamento)} (${((data.valorEmAndamento / data.valorTotalEstimado) * 100).toFixed(1)}%)`}
-                        />
-                      )}
-                      {data.valorConcluido > 0 && (
-                        <div
-                          className="bg-green-400 transition-all"
-                          style={{ width: `${(data.valorConcluido / data.valorTotalEstimado) * 100}%` }}
-                          title={`Concluído: ${fmtBRL(data.valorConcluido)} (${((data.valorConcluido / data.valorTotalEstimado) * 100).toFixed(1)}%)`}
-                        />
-                      )}
-                      {data.valorCancelado > 0 && (
-                        <div
-                          className="bg-gray-300 transition-all"
-                          style={{ width: `${(data.valorCancelado / data.valorTotalEstimado) * 100}%` }}
-                          title={`Cancelado: ${fmtBRL(data.valorCancelado)} (${((data.valorCancelado / data.valorTotalEstimado) * 100).toFixed(1)}%)`}
-                        />
-                      )}
-                    </div>
-                    <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400 inline-block" /> Em Andamento ({data.valorTotalEstimado > 0 ? ((data.valorEmAndamento / data.valorTotalEstimado) * 100).toFixed(1) : 0}%)</span>
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-400 inline-block" /> Concluído ({data.valorTotalEstimado > 0 ? ((data.valorConcluido / data.valorTotalEstimado) * 100).toFixed(1) : 0}%)</span>
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-gray-300 inline-block" /> Cancelado ({data.valorTotalEstimado > 0 ? ((data.valorCancelado / data.valorTotalEstimado) * 100).toFixed(1) : 0}%)</span>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -480,11 +421,15 @@ export default function DashAvisoPrevio() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    Avisos Prévios Detalhados ({reducaoFilter === 'todos' ? data.avisos.length : data.avisos.filter((a: any) => {
-                      if (reducaoFilter === '7_dias_corridos') return a.reducaoJornada === '7_dias_corridos';
-                      if (reducaoFilter === '2h_dia') return a.reducaoJornada === '2h_dia';
-                      return true;
-                    }).length})
+                    Avisos Prévios Em Andamento ({(() => {
+                      const base = data.avisos.filter((a: any) => a.status === 'em_andamento');
+                      if (reducaoFilter === 'todos') return base.length;
+                      return base.filter((a: any) => {
+                        if (reducaoFilter === '7_dias_corridos') return a.reducaoJornada === '7_dias_corridos';
+                        if (reducaoFilter === '2h_dia') return a.reducaoJornada === '2h_dia';
+                        return true;
+                      }).length;
+                    })()})
                   </CardTitle>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">Redução:</span>
@@ -508,7 +453,8 @@ export default function DashAvisoPrevio() {
                 {data.avisos.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">Nenhum aviso prévio registrado.</p>
                 ) : (() => {
-                  const filteredAvisos = reducaoFilter === 'todos' ? data.avisos : data.avisos.filter((a: any) => {
+                  const baseAvisos = data.avisos.filter((a: any) => a.status === 'em_andamento');
+                  const filteredAvisos = reducaoFilter === 'todos' ? baseAvisos : baseAvisos.filter((a: any) => {
                     if (reducaoFilter === '7_dias_corridos') return a.reducaoJornada === '7_dias_corridos';
                     if (reducaoFilter === '2h_dia') return a.reducaoJornada === '2h_dia';
                     return true;
@@ -527,6 +473,7 @@ export default function DashAvisoPrevio() {
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Dias</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Redução</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground min-w-[160px]">Evolução</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Dias Restantes</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Setor</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Valor Est.</th>
                           <th className="py-2 font-medium text-muted-foreground">Status</th>
@@ -584,6 +531,17 @@ export default function DashAvisoPrevio() {
                                 <p className="text-[9px] text-red-600 font-semibold mt-0.5">Vencido!</p>
                               )}
                             </td>
+                            <td className="py-2 pr-3 text-center">{(() => {
+                              const ultimoDia = a.reducaoJornada === '7_dias_corridos' && a.dataFim
+                                ? (() => { const dt = new Date(a.dataFim + 'T00:00:00'); dt.setDate(dt.getDate() - 7); return dt; })()
+                                : a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
+                              if (!ultimoDia) return '-';
+                              const hj = new Date(); hj.setHours(0,0,0,0);
+                              const diff = Math.ceil((ultimoDia.getTime() - hj.getTime()) / (1000*60*60*24));
+                              if (diff < 0) return <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">Vencido!</span>;
+                              if (diff <= 7) return <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">{diff}d</span>;
+                              return <span className="text-xs font-medium text-blue-600">{diff}d</span>;
+                            })()}</td>
                             <td className="py-2 pr-3 text-xs text-muted-foreground">{a.setor || "-"}</td>
                             <td className="py-2 pr-3 text-xs font-semibold text-right tabular-nums">
                               {fmtValorStr(a.valorEstimadoTotal)}

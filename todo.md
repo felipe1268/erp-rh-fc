@@ -5177,3 +5177,25 @@
 ## Melhorias Dashboard Aviso Prévio
 - [x] Adicionar barra de evolução (progresso) responsiva em cada linha da tabela de avisos detalhados
 - [x] Adicionar filtro por tipo de redução (7 dias corridos / 2h dia / Todos)
+
+## Regra: Avisos Cancelados fora das listagens
+- [ ] Excluir avisos cancelados E concluídos da listagem principal (só mostrar Em Andamento)
+- [ ] Excluir cancelados e concluídos dos cards de resumo e previsão de custo
+- [ ] Excluir cancelados e concluídos do Dashboard Aviso Prévio (tabela e gráficos)
+- [ ] Manter registro do cancelamento apenas na timeline do funcionário
+
+## Regra: Avisos Cancelados fora das listagens + Coluna Dias Restantes
+- [ ] Excluir avisos cancelados E concluídos da listagem principal (só mostrar Em Andamento)
+- [ ] Excluir cancelados e concluídos dos cards de resumo e previsão de custo
+- [ ] Excluir cancelados e concluídos do Dashboard Aviso Prévio (tabela e gráficos)
+- [ ] Adicionar coluna "Dias Restantes" na tabela do Dashboard Aviso Prévio
+
+## Rev. 226: Aviso Prévio - Cancelados/Concluídos removidos de listagens e custos
+- [x] Backend Dashboard: Custos, gráficos e distribuições filtram apenas avisos em_andamento
+- [x] Backend Dashboard: Custo total estimado = apenas em andamento (cancelados/concluídos excluídos da previsão)
+- [x] Backend Dashboard: Breakdown de rescisão, custo por setor, evolução mensal = apenas em andamento
+- [x] Frontend Dashboard: Seção financeira simplificada (Custo Total Em Andamento + Média por Aviso)
+- [x] Frontend Dashboard: Removidos cards de custo concluído e cancelado da previsão
+- [x] Frontend Aviso Prévio: valorTotal nos stats cards = apenas em andamento
+- [x] Coluna "Dias Restantes" já existente em ambas as páginas (Aviso Prévio e Dashboard)
+- [x] 720 testes passando

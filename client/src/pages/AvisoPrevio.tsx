@@ -56,7 +56,7 @@ export default function AvisoPrevio() {
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("todos");
+  const [statusFilter, setStatusFilter] = useState("em_andamento");
   const [showDialog, setShowDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -175,7 +175,8 @@ export default function AvisoPrevio() {
       emAndamento: emAndamentoList.length,
       concluidos: concluidosList.length,
       cancelados: canceladosList.length,
-      valorTotal: list.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
+      // Custo total = apenas em andamento (cancelados/concluídos não entram na previsão)
+      valorTotal: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorEmAndamento: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorConcluidos: concluidosList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
     };
@@ -284,7 +285,7 @@ export default function AvisoPrevio() {
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-medium">Total</p>
                   <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
-                  <p className="text-xs text-muted-foreground mt-1 font-medium">{formatMoeda(stats.valorTotal)}</p>
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">Previsão: {formatMoeda(stats.valorTotal)}</p>
                 </div>
                 <FileText className="h-8 w-8 text-gray-400" />
               </div>
@@ -383,6 +384,7 @@ export default function AvisoPrevio() {
                     <th className="p-3 text-center font-medium">Dia Trabalhado</th>
                     <th className="p-3 text-center font-medium">Último Dia</th>
                     <th className="p-3 text-center font-medium">Data Pagamento</th>
+                    <th className="p-3 text-center font-medium">Dias Restantes</th>
                     <th className="p-3 text-right font-medium">Valor Estimado</th>
                     <th className="p-3 text-center font-medium">Status</th>
                     <th className="p-3 text-center font-medium">Ações</th>
@@ -390,7 +392,7 @@ export default function AvisoPrevio() {
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">Nenhum aviso prévio encontrado</td></tr>
+                    <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Nenhum aviso prévio encontrado</td></tr>
                   ) : filtered.map((a: any) => {
                     const st = STATUS_LABELS[a.status] || STATUS_LABELS.em_andamento;
                     const reducaoShort = a.reducaoJornada === '2h_dia' ? '2 HORAS' : a.reducaoJornada === '7_dias_corridos' ? '7 DIAS' : '-';
@@ -413,6 +415,18 @@ export default function AvisoPrevio() {
                           return formatDate(a.dataFim);
                         })()}</td>
                         <td className="p-3 text-center font-semibold text-red-600">{formatDate(a.dataLimitePagamento)}</td>
+                        <td className="p-3 text-center">{(() => {
+                          if (a.status !== 'em_andamento') return <span className="text-xs text-muted-foreground">-</span>;
+                          const ultimoDia = a.reducaoJornada === '7_dias_corridos' && a.dataFim
+                            ? (() => { const dt = new Date(a.dataFim + 'T00:00:00'); dt.setDate(dt.getDate() - 7); return dt; })()
+                            : a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
+                          if (!ultimoDia) return '-';
+                          const hoje = new Date(); hoje.setHours(0,0,0,0);
+                          const diff = Math.ceil((ultimoDia.getTime() - hoje.getTime()) / (1000*60*60*24));
+                          if (diff < 0) return <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">Vencido!</span>;
+                          if (diff <= 7) return <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">{diff}d restantes</span>;
+                          return <span className="text-xs font-medium text-blue-600">{diff}d restantes</span>;
+                        })()}</td>
                         <td className="p-3 text-right font-semibold">{formatMoeda(a.valorEstimadoTotal)}</td>
                         <td className="p-3 text-center">
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>

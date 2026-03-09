@@ -1488,29 +1488,35 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
     return { ...n, valorRecalculado: parseVal(n.valorEstimadoTotal), rescisao: null };
   });
 
-  const valorTotalEstimado = recalculated.reduce((s, n) => s + n.valorRecalculado, 0);
-  const valorEmAndamento = recalculated.filter(n => n.status === 'em_andamento').reduce((s, n) => s + n.valorRecalculado, 0);
+  // Custos: apenas avisos em andamento são relevantes para previsão
+  const recalcEmAndamento = recalculated.filter(n => n.status === 'em_andamento');
+  const valorEmAndamento = recalcEmAndamento.reduce((s, n) => s + n.valorRecalculado, 0);
   const valorConcluido = recalculated.filter(n => n.status === 'concluido').reduce((s, n) => s + n.valorRecalculado, 0);
   const valorCancelado = recalculated.filter(n => n.status === 'cancelado').reduce((s, n) => s + n.valorRecalculado, 0);
+  // Custo total = apenas em andamento (cancelados/concluídos não entram na previsão)
+  const valorTotalEstimado = valorEmAndamento;
 
-  const reducao2h = filteredNotices.filter(n => n.reducaoJornada === '2h_dia').length;
-  const reducao7dias = filteredNotices.filter(n => n.reducaoJornada === '7_dias_corridos').length;
-  const semReducao = filteredNotices.filter(n => n.reducaoJornada === 'nenhuma' || !n.reducaoJornada).length;
+  // Distribuições: apenas avisos em andamento
+  const avisosAtivos = filteredNotices.filter(n => n.status === 'em_andamento');
+  const reducao2h = avisosAtivos.filter(n => n.reducaoJornada === '2h_dia').length;
+  const reducao7dias = avisosAtivos.filter(n => n.reducaoJornada === '7_dias_corridos').length;
+  const semReducao = avisosAtivos.filter(n => n.reducaoJornada === 'nenhuma' || !n.reducaoJornada).length;
 
   const porSetor: Record<string, number> = {};
-  filteredNotices.forEach(n => { const s = n.setor || 'Não informado'; porSetor[s] = (porSetor[s] || 0) + 1; });
+  avisosAtivos.forEach(n => { const s = n.setor || 'Não informado'; porSetor[s] = (porSetor[s] || 0) + 1; });
   const setorDist = Object.entries(porSetor).map(([setor, c]) => ({ setor, count: c })).sort((a, b) => b.count - a.count);
 
   const porFuncao: Record<string, number> = {};
-  filteredNotices.forEach(n => { const f = n.funcao || n.cargo || 'Não informado'; porFuncao[f] = (porFuncao[f] || 0) + 1; });
+  avisosAtivos.forEach(n => { const f = n.funcao || n.cargo || 'Não informado'; porFuncao[f] = (porFuncao[f] || 0) + 1; });
   const funcaoDist = Object.entries(porFuncao).map(([funcao, c]) => ({ funcao, count: c })).sort((a, b) => b.count - a.count).slice(0, 10);
 
   // Pré-popular todos os 12 meses do ano selecionado para continuidade visual
+  // Evolução mensal: apenas avisos em andamento
   const porMes: Record<string, { trabalhado: number; indenizado: number }> = {};
   for (let m = 1; m <= 12; m++) {
     porMes[`${anoRef}-${String(m).padStart(2, '0')}`] = { trabalhado: 0, indenizado: 0 };
   }
-  filteredNotices.forEach(n => {
+  avisosAtivos.forEach(n => {
     const d = n.dataInicio ? new Date(n.dataInicio) : new Date(n.createdAt);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (!porMes[key]) porMes[key] = { trabalhado: 0, indenizado: 0 };
@@ -1519,25 +1525,27 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
   const evolucaoMensal = Object.entries(porMes).map(([mes, v]) => ({ mes, ...v, total: v.trabalhado + v.indenizado })).sort((a, b) => a.mes.localeCompare(b.mes));
 
   const diasDist: Record<number, number> = {};
-  filteredNotices.forEach(n => { const d = n.diasAviso || 30; diasDist[d] = (diasDist[d] || 0) + 1; });
+  avisosAtivos.forEach(n => { const d = n.diasAviso || 30; diasDist[d] = (diasDist[d] || 0) + 1; });
   const diasAvisoDist = Object.entries(diasDist).map(([dias, c]) => ({ dias: Number(dias), count: c })).sort((a, b) => a.dias - b.dias);
 
   const anosDist: Record<number, number> = {};
-  filteredNotices.forEach(n => { const a = n.anosServico || 0; anosDist[a] = (anosDist[a] || 0) + 1; });
+  avisosAtivos.forEach(n => { const a = n.anosServico || 0; anosDist[a] = (anosDist[a] || 0) + 1; });
   const anosServicoDist = Object.entries(anosDist).map(([anos, c]) => ({ anos: Number(anos), count: c })).sort((a, b) => a.anos - b.anos);
 
+  // Custo por setor: apenas avisos em andamento
   const custoSetor: Record<string, number> = {};
-  recalculated.forEach(n => { const s = n.setor || 'Não informado'; custoSetor[s] = (custoSetor[s] || 0) + n.valorRecalculado; });
+  recalcEmAndamento.forEach(n => { const s = n.setor || 'Não informado'; custoSetor[s] = (custoSetor[s] || 0) + n.valorRecalculado; });
   const custoPorSetor = Object.entries(custoSetor).map(([setor, valor]) => ({ setor, valor })).sort((a, b) => b.valor - a.valor);
 
   const hoje = new Date();
   const em7dias = new Date(hoje); em7dias.setDate(em7dias.getDate() + 7);
   const em30dias = new Date(hoje); em30dias.setDate(em30dias.getDate() + 30);
-  const vencendo7dias = filteredNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em7dias; }).length;
-  const vencendo30dias = filteredNotices.filter(n => { if (n.status !== 'em_andamento') return false; const fim = new Date(n.dataFim); return fim >= hoje && fim <= em30dias; }).length;
+  const vencendo7dias = avisosAtivos.filter(n => { const fim = new Date(n.dataFim); return fim >= hoje && fim <= em7dias; }).length;
+  const vencendo30dias = avisosAtivos.filter(n => { const fim = new Date(n.dataFim); return fim >= hoje && fim <= em30dias; }).length;
 
+  // Breakdown de rescisão: apenas avisos em andamento
   let totalSaldoSalario = 0, totalFerias = 0, total13o = 0, totalFGTS = 0, totalMultaFGTS = 0, totalAvisoIndenizado = 0;
-  recalculated.forEach(n => {
+  recalcEmAndamento.forEach(n => {
     if (n.rescisao) {
       totalSaldoSalario += n.rescisao.saldoSalario;
       totalFerias += n.rescisao.totalFerias;
