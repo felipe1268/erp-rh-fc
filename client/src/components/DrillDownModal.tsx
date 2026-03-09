@@ -24,13 +24,15 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export default function DrillDownModal({ open, onOpenChange, title, filterType, filterValue }: DrillDownModalProps) {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [, navigate] = useLocation();
 
   const { data, isLoading } = trpc.dashboards.drillDown.useQuery(
-    { companyId, filterType, filterValue },
-    { enabled: open && companyId > 0 && !!filterType && !!filterValue }
+    { companyId: queryCompanyId, filterType, filterValue, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: open && (isConstrutoras ? companyIds.length > 0 : companyId > 0) && !!filterType && !!filterValue }
   );
 
   const formatDate = (d: string | null) => {

@@ -73,12 +73,14 @@ function statusColor(s: string) {
 }
 
 export default function DashAvisoPrevio() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [ano, setAno] = useState(new Date().getFullYear());
   const { data, isLoading } = trpc.dashboards.avisoPrevio.useQuery(
-    { companyId, ano },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const [drillDown, setDrillDown] = useState<{ type: string; label: string } | null>(null);

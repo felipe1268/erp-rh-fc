@@ -1154,7 +1154,11 @@ export default function ControleDocumentos() {
         };
         reader.readAsDataURL(_file);
       }
-    } catch { toast.error("Erro ao salvar treinamento"); }
+    } catch (err: any) {
+      console.error("Erro ao salvar treinamento:", err);
+      toast.error(err?.message || "Erro ao salvar treinamento");
+      return;
+    }
     setShowTreinDialog(false); setTreinForm({}); setEditingTreinId(null);
   };
 

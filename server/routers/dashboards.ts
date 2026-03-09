@@ -12,10 +12,20 @@ import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizz
 import { parseBRL } from "../utils/parseBRL";
 import { invokeLLM } from "../_core/llm";
 
+// Helper: resolve company filter for single or multi-company (CONSTRUTORAS) queries
+function resolveIds(companyId: number, companyIds?: number[]): number[] {
+  return companyIds && companyIds.length > 0 ? companyIds : [companyId];
+}
+function companyWhere(table: any, companyId: number, companyIds?: number[]) {
+  const ids = resolveIds(companyId, companyIds);
+  return ids.length === 1 ? eq(table.companyId, ids[0]) : inArray(table.companyId, ids);
+}
+
+
 // ============================================================
 // 1. DASHBOARD FUNCIONÁRIOS (análise completa)
 // ============================================================
-async function getDashFuncionarios(companyIds: number[]) {
+async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
 
@@ -23,45 +33,45 @@ async function getDashFuncionarios(companyIds: number[]) {
   const statusDist = await db.select({
     status: employees.status,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.status);
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.status);
 
   // Gênero
   const sexDist = await db.select({
     sexo: employees.sexo,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.sexo);
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.sexo);
 
   // Por setor (top 10)
   const setorDist = await db.select({
     setor: employees.setor,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.setor)
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.setor)
     .orderBy(sql`count(*) desc`).limit(10);
 
   // Por função (top 10)
   const funcaoDist = await db.select({
     funcao: employees.funcao,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.funcao)
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.funcao)
     .orderBy(sql`count(*) desc`).limit(10);
 
   // Por tipo de contrato
   const contratoDist = await db.select({
     tipo: employees.tipoContrato,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.tipoContrato);
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.tipoContrato);
 
   // Por estado civil
   const estadoCivilDist = await db.select({
     estadoCivil: employees.estadoCivil,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.estadoCivil);
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.estadoCivil);
 
   // Por cidade (top 10)
   const cidadeDist = await db.select({
     cidade: employees.cidade,
     count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.cidade)
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)).groupBy(employees.cidade)
     .orderBy(sql`count(*) desc`).limit(10);
 
   // Pirâmide etária por gênero
@@ -78,7 +88,7 @@ async function getDashFuncionarios(companyIds: number[]) {
     sexo: employees.sexo,
     count: sql<number>`count(*)`,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataNascimento IS NOT NULL`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataNascimento IS NOT NULL`, sql`${employees.deletedAt} IS NULL`))
     .groupBy(sql`CASE 
       WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 21 THEN '14-20'
       WHEN TIMESTAMPDIFF(YEAR, dataNascimento, CURDATE()) < 26 THEN '21-25'
@@ -102,7 +112,7 @@ async function getDashFuncionarios(companyIds: number[]) {
     END`,
     count: sql<number>`count(*)`,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql`${employees.deletedAt} IS NULL`))
     .groupBy(sql`CASE 
       WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 3 THEN '< 3 meses'
       WHEN TIMESTAMPDIFF(MONTH, dataAdmissao, CURDATE()) < 6 THEN '3-6 meses'
@@ -118,39 +128,39 @@ async function getDashFuncionarios(companyIds: number[]) {
     mes: sql<string>`DATE_FORMAT(dataAdmissao, '%Y-%m')`,
     count: sql<number>`count(*)`,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataAdmissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataAdmissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, sql`${employees.deletedAt} IS NULL`))
     .groupBy(sql`DATE_FORMAT(dataAdmissao, '%Y-%m')`).orderBy(sql`DATE_FORMAT(dataAdmissao, '%Y-%m')`);
 
   const demissoesMensal = await db.select({
     mes: sql<string>`DATE_FORMAT(dataDemissao, '%Y-%m')`,
     count: sql<number>`count(*)`,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataDemissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataDemissao >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, sql`${employees.deletedAt} IS NULL`))
     .groupBy(sql`DATE_FORMAT(dataDemissao, '%Y-%m')`).orderBy(sql`DATE_FORMAT(dataDemissao, '%Y-%m')`);
 
   // Destaques
   const [oldest] = await db.select({
     nome: employees.nomeCompleto, data: employees.dataNascimento, funcao: employees.funcao,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataNascimento IS NOT NULL`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataNascimento IS NOT NULL`, sql`${employees.deletedAt} IS NULL`))
     .orderBy(employees.dataNascimento).limit(1);
 
   const [youngest] = await db.select({
     nome: employees.nomeCompleto, data: employees.dataNascimento, funcao: employees.funcao,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataNascimento IS NOT NULL`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataNascimento IS NOT NULL`, sql`${employees.deletedAt} IS NULL`))
     .orderBy(desc(employees.dataNascimento)).limit(1);
 
   const [longestTenure] = await db.select({
     nome: employees.nomeCompleto, data: employees.dataAdmissao, funcao: employees.funcao,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql`${employees.deletedAt} IS NULL`))
     .orderBy(employees.dataAdmissao).limit(1);
 
   const [shortestTenure] = await db.select({
     nome: employees.nomeCompleto, data: employees.dataAdmissao, funcao: employees.funcao,
   }).from(employees)
-    .where(and(inArray(employees.companyId, companyIds), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql`${employees.deletedAt} IS NULL`))
+    .where(and(companyWhere(employees, companyId, companyIds), sql`dataAdmissao IS NOT NULL`, sql`status != 'Desligado'`, sql`${employees.deletedAt} IS NULL`))
     .orderBy(desc(employees.dataAdmissao)).limit(1);
 
   // Ranking de advertências (top 10) — filtrar soft-deleted
@@ -161,7 +171,7 @@ async function getDashFuncionarios(companyIds: number[]) {
     total: sql<number>`count(*)`,
   }).from(warnings)
     .innerJoin(employees, eq(warnings.employeeId, employees.id))
-    .where(and(inArray(warnings.companyId, companyIds), isNull(warnings.deletedAt), isNull(employees.deletedAt)))
+    .where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), isNull(employees.deletedAt)))
     .groupBy(warnings.employeeId, employees.nomeCompleto, employees.funcao)
     .orderBy(sql`count(*) desc`).limit(10);
 
@@ -174,7 +184,7 @@ async function getDashFuncionarios(companyIds: number[]) {
     totalDias: sql<number>`COALESCE(SUM(diasAfastamento), 0)`,
   }).from(atestados)
     .innerJoin(employees, eq(atestados.employeeId, employees.id))
-    .where(and(inArray(atestados.companyId, companyIds), isNull(atestados.deletedAt), isNull(employees.deletedAt)))
+    .where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), isNull(employees.deletedAt)))
     .groupBy(atestados.employeeId, employees.nomeCompleto, employees.funcao)
     .orderBy(sql`count(*) desc`).limit(10);
 
@@ -182,7 +192,7 @@ async function getDashFuncionarios(companyIds: number[]) {
   const advertenciasTipo = await db.select({
     tipo: warnings.tipoAdvertencia,
     count: sql<number>`count(*)`,
-  }).from(warnings).where(and(inArray(warnings.companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia);
+  }).from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia);
 
   // Total geral
   const totalAtivos = statusDist.find(s => s.status === "Ativo")?.count || 0;
@@ -201,7 +211,7 @@ async function getDashFuncionarios(companyIds: number[]) {
       const rows = await db.select({
         estado: employees.estado,
         count: sql<number>`count(*)`,
-      }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`, sql`${employees.status} IN ('Ativo', 'Ferias')`)).groupBy(employees.estado).orderBy(sql`count(*) desc`);
+      }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`, sql`${employees.status} IN ('Ativo', 'Ferias')`)).groupBy(employees.estado).orderBy(sql`count(*) desc`);
       return rows.map(r => ({ state: (r.estado && r.estado.trim()) ? r.estado.toUpperCase() : 'Não informado', count: Number(r.count) }));
     })(),
     ageDist: ageDist.map(r => ({ faixa: r.faixa, sexo: r.sexo || "Outro", count: Number(r.count) })),
@@ -226,19 +236,19 @@ async function getDashFuncionarios(companyIds: number[]) {
 // ============================================================
 // 2. DASHBOARD CARTÃO DE PONTO
 // ============================================================
-async function getDashCartaoPonto(companyIds: number[], mesRef?: string) {
+async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const mes = mesRef || new Date().toISOString().slice(0, 7);
 
   // Registros do mês
   const registros = await db.select().from(timeRecords)
-    .where(and(inArray(timeRecords.companyId, companyIds), eq(timeRecords.mesReferencia, mes)));
+    .where(and(companyWhere(timeRecords, companyId, companyIds), eq(timeRecords.mesReferencia, mes)));
 
   // Funcionários ativos
   const allEmps = await db.select({
     id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, setor: employees.setor,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`status = 'Ativo'`, sql`${employees.deletedAt} IS NULL`));
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`status = 'Ativo'`, sql`${employees.deletedAt} IS NULL`));
   const empMap = new Map(allEmps.map(e => [e.id, e]));
 
   // Totais
@@ -370,7 +380,7 @@ async function getDashCartaoPonto(companyIds: number[], mesRef?: string) {
 // ============================================================
 // 3. DASHBOARD FOLHA DE PAGAMENTO
 // ============================================================
-async function getDashFolhaPagamento(companyIds: number[], mesRef?: string) {
+async function getDashFolhaPagamento(companyId: number, mesRef?: string, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const mes = mesRef || new Date().toISOString().slice(0, 7);
@@ -378,7 +388,7 @@ async function getDashFolhaPagamento(companyIds: number[], mesRef?: string) {
 
   // Dados do monthlyPayrollSummary (mais completo)
   const summaryMes = await db.select().from(monthlyPayrollSummary)
-    .where(and(inArray(monthlyPayrollSummary.companyId, companyIds), eq(monthlyPayrollSummary.mesReferencia, mes)));
+    .where(and(companyWhere(monthlyPayrollSummary, companyId, companyIds), eq(monthlyPayrollSummary.mesReferencia, mes)));
 
   // Evolução mensal (últimos 12 meses)
   const evolucaoRaw = await db.select({
@@ -390,7 +400,7 @@ async function getDashFolhaPagamento(companyIds: number[], mesRef?: string) {
     totalInss: sql<number>`COALESCE(SUM(CAST(valorInss AS DECIMAL(12,2))), 0)`,
     funcionarios: sql<number>`count(DISTINCT employeeId)`,
   }).from(monthlyPayrollSummary)
-    .where(and(inArray(monthlyPayrollSummary.companyId, companyIds), sql`mesReferencia >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y-%m')`))
+    .where(and(companyWhere(monthlyPayrollSummary, companyId, companyIds), sql`mesReferencia >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y-%m')`))
     .groupBy(monthlyPayrollSummary.mesReferencia)
     .orderBy(monthlyPayrollSummary.mesReferencia);
 
@@ -465,10 +475,10 @@ async function getDashFolhaPagamento(companyIds: number[], mesRef?: string) {
 // ============================================================
 // 4. DASHBOARD HORAS EXTRAS (análise detalhada)
 // ============================================================
-async function getDashHorasExtras(companyIds: number[], year?: number, filters?: {
+async function getDashHorasExtras(companyId: number, year?: number, filters?: {
   month?: number; obraId?: number; employeeId?: number;
   periodoTipo?: string; periodoValor?: string;
-}) {
+}, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const targetYear = year || new Date().getFullYear();
@@ -522,7 +532,7 @@ async function getDashHorasExtras(companyIds: number[], year?: number, filters?:
   }
 
   const conditions = [
-    inArray(extraPayments.companyId, companyIds),
+    companyWhere(extraPayments, companyId, companyIds),
     eq(extraPayments.tipoExtra, "Horas_Extras"),
     gte(extraPayments.mesReferencia, startDate),
     lte(extraPayments.mesReferencia, endDate),
@@ -540,15 +550,15 @@ async function getDashHorasExtras(companyIds: number[], year?: number, filters?:
     id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
     setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao,
     obraAtualId: employees.obraAtualId,
-  }).from(employees).where(and(inArray(employees.companyId, companyIds), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`, sql`${employees.deletedAt} IS NULL`));
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`, sql`${employees.deletedAt} IS NULL`));
   const empMap = new Map(allEmps.map(e => [e.id, e]));
 
   // Obras
-  const allObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(and(inArray(obras.companyId, companyIds), sql`${obras.deletedAt} IS NULL`));
+  const allObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(and(companyWhere(obras, companyId, companyIds), sql`${obras.deletedAt} IS NULL`));
   const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
   const allPayroll = await db.select().from(payroll)
-    .where(and(inArray(payroll.companyId, companyIds), gte(payroll.mesReferencia, startDate), lte(payroll.mesReferencia, endDate)));
+    .where(and(companyWhere(payroll, companyId, companyIds), gte(payroll.mesReferencia, startDate), lte(payroll.mesReferencia, endDate)));
 
   let totalHoras = 0, totalValor = 0;
   for (const he of allHE) {
@@ -703,11 +713,11 @@ async function getDashHorasExtras(companyIds: number[], year?: number, filters?:
 // ============================================================
 // 5. DASHBOARD EPIs
 // ============================================================
-async function getDashEpis(companyIds: number[]) {
+async function getDashEpis(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const hoje = new Date().toISOString().split("T")[0];
-  const ids = companyIds;
+  const ids = resolveIds(companyId, companyIds);
   const companyFilter = ids.length === 1 ? eq(epis.companyId, ids[0]) : inArray(epis.companyId, ids);
   const delFilter = ids.length === 1 ? eq(epiDeliveries.companyId, ids[0]) : inArray(epiDeliveries.companyId, ids);
   const empFilter = ids.length === 1 ? eq(employees.companyId, ids[0]) : inArray(employees.companyId, ids);
@@ -1008,13 +1018,13 @@ async function getDashEpis(companyIds: number[]) {
 // ============================================================
 // 6. DASHBOARD JURÍDICO
 // ============================================================
-async function getDashJuridico(companyIds: number[]) {
+async function getDashJuridico(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const hoje = new Date().toISOString().split("T")[0];
 
   const allProcessos = await db.select().from(processosTrabalhistas)
-    .where(inArray(processosTrabalhistas.companyId, companyIds));
+    .where(companyWhere(processosTrabalhistas, companyId, companyIds));
 
   // Próximas audiências
   const proximasAudiencias = allProcessos
@@ -1195,11 +1205,11 @@ async function getDashJuridico(companyIds: number[]) {
 // ============================================================
 // DRILL-DOWN: buscar funcionários detalhados por filtro
 // ============================================================
-async function getDrillDown(companyIds: number[], filterType: string, filterValue: string) {
+async function getDrillDown(companyId: number, filterType: string, filterValue: string, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
 
-  let whereClause = and(inArray(employees.companyId, companyIds), sql`${employees.deletedAt} IS NULL`);
+  let whereClause = and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`);
 
   switch (filterType) {
     case 'status':
@@ -1329,7 +1339,7 @@ async function getDrillDown(companyIds: number[], filterType: string, filterValu
 // ============================================================
 // 8. DASHBOARD AVISO PRÉVIO
 // ============================================================
-async function getDashAvisoPrevio(companyIds: number[], ano?: number) {
+async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const anoRef = ano || new Date().getFullYear();
@@ -1340,7 +1350,7 @@ async function getDashAvisoPrevio(companyIds: number[], ano?: number) {
   await db.update(terminationNotices)
     .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
     .where(and(
-      inArray(terminationNotices.companyId, companyIds),
+      companyWhere(terminationNotices, companyId, companyIds),
       eq(terminationNotices.status, 'em_andamento'),
       isNull(terminationNotices.deletedAt),
       sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`,
@@ -1372,7 +1382,7 @@ async function getDashAvisoPrevio(companyIds: number[], ano?: number) {
     empSalarioBase: employees.salarioBase,
   }).from(terminationNotices)
     .leftJoin(employees, eq(terminationNotices.employeeId, employees.id))
-    .where(and(inArray(terminationNotices.companyId, companyIds), isNull(terminationNotices.deletedAt)))
+    .where(and(companyWhere(terminationNotices, companyId, companyIds), isNull(terminationNotices.deletedAt)))
     .orderBy(desc(terminationNotices.createdAt));
 
   // Filtrar pelo ano selecionado
@@ -1577,7 +1587,7 @@ async function getDashAvisoPrevio(companyIds: number[], ano?: number) {
 // ============================================================
 // 9. DASHBOARD FÉRIAS (análise completa)
 // ============================================================
-async function getDashFerias(companyIds: number[], ano?: number) {
+async function getDashFerias(companyId: number, ano?: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const anoRef = ano || new Date().getFullYear();
@@ -1617,7 +1627,7 @@ async function getDashFerias(companyIds: number[], ano?: number) {
   }).from(vacationPeriods)
     .leftJoin(employees, eq(vacationPeriods.employeeId, employees.id))
     .where(and(
-      inArray(vacationPeriods.companyId, companyIds),
+      companyWhere(vacationPeriods, companyId, companyIds),
       isNull(vacationPeriods.deletedAt),
       sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
       isNull(employees.deletedAt),
@@ -1741,7 +1751,7 @@ async function getDashFerias(companyIds: number[], ano?: number) {
   let obraNames: Record<number, string> = {};
   if (obraIds.size > 0) {
     const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
-      .where(and(inArray(obras.companyId, companyIds), isNull(obras.deletedAt)));
+      .where(and(companyWhere(obras, companyId, companyIds), isNull(obras.deletedAt)));
     obraList.forEach(o => { obraNames[o.id] = o.nome; });
   }
   const porObra: Record<string, { total: number; vencidas: number; pendentes: number; agendadas: number }> = {};
@@ -1868,7 +1878,7 @@ function getFaixaEtaria(dataNascimento: string | null): string {
   return '55+';
 }
 
-async function getDashPerfilTempoCasa(companyIds: number[]) {
+async function getDashPerfilTempoCasa(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
 
@@ -1888,14 +1898,14 @@ async function getDashPerfilTempoCasa(companyIds: number[]) {
     status: employees.status,
   }).from(employees).where(
     and(
-      inArray(employees.companyId, companyIds),
+      companyWhere(employees, companyId, companyIds),
       sql`${employees.deletedAt} IS NULL`,
       sql`${employees.status} IN ('Ativo', 'Ferias')`
     )
   );
 
   // Buscar nomes das obras
-  const obrasList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.companyId, companyIds));
+  const obrasList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(companyWhere(obras, companyId, companyIds));
   const obraMap = new Map(obrasList.map(o => [o.id, o.nome]));
 
   // Buscar advertencias count por employee
@@ -1903,7 +1913,7 @@ async function getDashPerfilTempoCasa(companyIds: number[]) {
     employeeId: warnings.employeeId,
     total: sql<number>`count(*)`,
   }).from(warnings).where(
-    and(inArray(warnings.companyId, companyIds), sql`${warnings.deletedAt} IS NULL`)
+    and(companyWhere(warnings, companyId, companyIds), sql`${warnings.deletedAt} IS NULL`)
   ).groupBy(warnings.employeeId);
   const warnMap = new Map(warnRows.map(r => [r.employeeId, Number(r.total)]));
 
@@ -1912,7 +1922,7 @@ async function getDashPerfilTempoCasa(companyIds: number[]) {
     employeeId: atestados.employeeId,
     total: sql<number>`count(*)`,
   }).from(atestados).where(
-    and(inArray(atestados.companyId, companyIds), sql`${atestados.deletedAt} IS NULL`)
+    and(companyWhere(atestados, companyId, companyIds), sql`${atestados.deletedAt} IS NULL`)
   ).groupBy(atestados.employeeId);
   const atestMap = new Map(atestRows.map(r => [r.employeeId, Number(r.total)]));
 
@@ -2006,7 +2016,7 @@ async function getDashPerfilTempoCasa(companyIds: number[]) {
   };
 }
 
-async function getAnaliseIAPerfil(companyId: number) {
+async function getAnaliseIAPerfil(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
 
@@ -2017,7 +2027,7 @@ async function getAnaliseIAPerfil(companyId: number) {
   // Buscar regras de ouro da empresa
   const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
     .from(goldenRules)
-    .where(and(eq(goldenRules.companyId, companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+    .where(and(companyWhere(goldenRules, companyId, companyIds), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
 
   // Buscar demitidos recentes para análise de turnover
   const demitidos = await db.select({
@@ -2031,7 +2041,7 @@ async function getAnaliseIAPerfil(companyId: number) {
     categoriaDesligamento: employees.categoriaDesligamento,
   }).from(employees).where(
     and(
-      inArray(employees.companyId, companyIds),
+      companyWhere(employees, companyId, companyIds),
       sql`${employees.deletedAt} IS NULL`,
       sql`${employees.status} = 'Demitido'`
     )
@@ -2151,7 +2161,7 @@ Foque em:
 // ============================================================
 // DASHBOARD CONTROLE DE DOCUMENTOS
 // ============================================================
-async function getDashDocumentos(companyIds: number[]) {
+async function getDashDocumentos(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const today = new Date().toISOString().slice(0, 10);
@@ -2161,101 +2171,101 @@ async function getDashDocumentos(companyIds: number[]) {
 
   // ── ASOs ──
   const asoTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt)));
+    .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt)));
   const asoVencidos = await db.select({ count: sql<number>`count(*)` })
-    .from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`));
+    .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`));
   const asoAVencer30 = await db.select({ count: sql<number>`count(*)` })
-    .from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d30}`));
+    .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d30}`));
   const asoAVencer60 = await db.select({ count: sql<number>`count(*)` })
-    .from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d60}`));
+    .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d60}`));
   const asoAVencer90 = await db.select({ count: sql<number>`count(*)` })
-    .from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d90}`));
+    .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d90}`));
   const asoPorTipo = await db.select({ tipo: asos.tipo, count: sql<number>`count(*)` })
-    .from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt))).groupBy(asos.tipo);
+    .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt))).groupBy(asos.tipo);
   const asoPorResultado = await db.select({ resultado: asos.resultado, count: sql<number>`count(*)` })
-    .from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt))).groupBy(asos.resultado);
+    .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt))).groupBy(asos.resultado);
   const asosVencidosList = await db.select({
     id: asos.id, employeeId: asos.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf,
     funcao: employees.funcao, tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade,
     resultado: asos.resultado, medico: asos.medico,
   }).from(asos).innerJoin(employees, eq(asos.employeeId, employees.id))
-    .where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`, isNull(employees.deletedAt)))
+    .where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${today}`, isNull(employees.deletedAt)))
     .orderBy(asc(asos.dataValidade)).limit(50);
   const asosAVencerList = await db.select({
     id: asos.id, employeeId: asos.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf,
     funcao: employees.funcao, tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade,
     resultado: asos.resultado, medico: asos.medico,
   }).from(asos).innerJoin(employees, eq(asos.employeeId, employees.id))
-    .where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d90}`, isNull(employees.deletedAt)))
+    .where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt), sql`${asos.dataValidade} >= ${today} AND ${asos.dataValidade} <= ${d90}`, isNull(employees.deletedAt)))
     .orderBy(asc(asos.dataValidade)).limit(50);
   // Funcionários ativos sem ASO válido
   const funcSemAsoValido = await db.select({ count: sql<number>`count(DISTINCT ${employees.id})` })
     .from(employees)
     .where(and(
-      inArray(employees.companyId, companyIds), isNull(employees.deletedAt),
+      companyWhere(employees, companyId, companyIds), isNull(employees.deletedAt),
       sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`,
       sql`${employees.id} NOT IN (SELECT employeeId FROM asos WHERE companyId IN (${sql.join(companyIds.map(id => sql`${id}`), sql`, `)}) AND deletedAt IS NULL AND dataValidade >= ${today})`,
     ));
 
   // ── TREINAMENTOS ──
   const treinTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(trainings).where(and(inArray(trainings.companyId, companyIds), isNull(trainings.deletedAt)));
+    .from(trainings).where(and(companyWhere(trainings, companyId, companyIds), isNull(trainings.deletedAt)));
   const treinVencidos = await db.select({ count: sql<number>`count(*)` })
-    .from(trainings).where(and(inArray(trainings.companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${today}`));
+    .from(trainings).where(and(companyWhere(trainings, companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${today}`));
   const treinAVencer30 = await db.select({ count: sql<number>`count(*)` })
-    .from(trainings).where(and(inArray(trainings.companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.dataValidade} >= ${today} AND ${trainings.dataValidade} <= ${d30}`));
+    .from(trainings).where(and(companyWhere(trainings, companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.dataValidade} >= ${today} AND ${trainings.dataValidade} <= ${d30}`));
   const treinPorNorma = await db.select({ norma: trainings.norma, count: sql<number>`count(*)` })
-    .from(trainings).where(and(inArray(trainings.companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.norma} IS NOT NULL AND ${trainings.norma} != ''`))
+    .from(trainings).where(and(companyWhere(trainings, companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.norma} IS NOT NULL AND ${trainings.norma} != ''`))
     .groupBy(trainings.norma).orderBy(sql`count(*) desc`).limit(10);
   const treinTop10 = await db.select({ nome: trainings.nome, count: sql<number>`count(*)` })
-    .from(trainings).where(and(inArray(trainings.companyId, companyIds), isNull(trainings.deletedAt)))
+    .from(trainings).where(and(companyWhere(trainings, companyId, companyIds), isNull(trainings.deletedAt)))
     .groupBy(trainings.nome).orderBy(sql`count(*) desc`).limit(10);
   const treinVencidosList = await db.select({
     id: trainings.id, employeeId: trainings.employeeId, nome: employees.nomeCompleto, cpf: employees.cpf,
     funcao: employees.funcao, treinamento: trainings.nome, norma: trainings.norma,
     dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade, instrutor: trainings.instrutor,
   }).from(trainings).innerJoin(employees, eq(trainings.employeeId, employees.id))
-    .where(and(inArray(trainings.companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${today}`, isNull(employees.deletedAt)))
+    .where(and(companyWhere(trainings, companyId, companyIds), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${today}`, isNull(employees.deletedAt)))
     .orderBy(asc(trainings.dataValidade)).limit(50);
 
   // ── ATESTADOS ──
   const atestTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(atestados).where(and(inArray(atestados.companyId, companyIds), isNull(atestados.deletedAt)));
+    .from(atestados).where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt)));
   const atestPorTipo = await db.select({ tipo: atestados.tipo, count: sql<number>`count(*)` })
-    .from(atestados).where(and(inArray(atestados.companyId, companyIds), isNull(atestados.deletedAt))).groupBy(atestados.tipo);
+    .from(atestados).where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt))).groupBy(atestados.tipo);
   const atestPorMes = await db.select({
     mes: sql<string>`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`,
     count: sql<number>`count(*)`,
     diasTotal: sql<number>`COALESCE(SUM(${atestados.diasAfastamento}), 0)`,
-  }).from(atestados).where(and(inArray(atestados.companyId, companyIds), isNull(atestados.deletedAt), sql`${atestados.dataEmissao} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
+  }).from(atestados).where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), sql`${atestados.dataEmissao} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
     .groupBy(sql`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`).orderBy(sql`DATE_FORMAT(${atestados.dataEmissao}, '%Y-%m')`);
 
   // ── ADVERTÊNCIAS ──
   const advTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(warnings).where(and(inArray(warnings.companyId, companyIds), isNull(warnings.deletedAt)));
+    .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt)));
   const advPorTipo = await db.select({ tipo: warnings.tipoAdvertencia, count: sql<number>`count(*)` })
-    .from(warnings).where(and(inArray(warnings.companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia);
+    .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia);
   const advPorMes = await db.select({
     mes: sql<string>`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`,
     count: sql<number>`count(*)`,
-  }).from(warnings).where(and(inArray(warnings.companyId, companyIds), isNull(warnings.deletedAt), sql`${warnings.dataOcorrencia} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
+  }).from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), sql`${warnings.dataOcorrencia} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`))
     .groupBy(sql`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`).orderBy(sql`DATE_FORMAT(${warnings.dataOcorrencia}, '%Y-%m')`);
 
   // ── DOCUMENTOS PESSOAIS ──
   const docTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(employeeDocuments).where(inArray(employeeDocuments.companyId, companyIds));
+    .from(employeeDocuments).where(companyWhere(employeeDocuments, companyId, companyIds));
   const docVencidos = await db.select({ count: sql<number>`count(*)` })
-    .from(employeeDocuments).where(and(inArray(employeeDocuments.companyId, companyIds), sql`${employeeDocuments.dataValidade} IS NOT NULL AND ${employeeDocuments.dataValidade} < ${today}`));
+    .from(employeeDocuments).where(and(companyWhere(employeeDocuments, companyId, companyIds), sql`${employeeDocuments.dataValidade} IS NOT NULL AND ${employeeDocuments.dataValidade} < ${today}`));
   const docPorTipo = await db.select({ tipo: employeeDocuments.tipo, count: sql<number>`count(*)` })
-    .from(employeeDocuments).where(inArray(employeeDocuments.companyId, companyIds)).groupBy(employeeDocuments.tipo);
+    .from(employeeDocuments).where(companyWhere(employeeDocuments, companyId, companyIds)).groupBy(employeeDocuments.tipo);
 
   // ── EPIs com CA vencido ──
   const episCaVencido = await db.select({ count: sql<number>`count(*)` })
-    .from(epis).where(and(inArray(epis.companyId, companyIds), sql`${epis.validadeCa} IS NOT NULL AND ${epis.validadeCa} < ${today}`));
+    .from(epis).where(and(companyWhere(epis, companyId, companyIds), sql`${epis.validadeCa} IS NOT NULL AND ${epis.validadeCa} < ${today}`));
 
   // ── RESUMO GERAL ──
   const totalAtivos = await db.select({ count: sql<number>`count(*)` })
-    .from(employees).where(and(inArray(employees.companyId, companyIds), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`));
+    .from(employees).where(and(companyWhere(employees, companyId, companyIds), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`));
 
   return {
     totalAtivos: totalAtivos[0]?.count ?? 0,
@@ -2284,7 +2294,7 @@ async function getDashDocumentos(companyIds: number[]) {
 // ============================================================
 // DASHBOARD CONTROLE DE DOCUMENTOS
 // ============================================================
-async function getDashControleDocumentos(companyIds: number[]) {
+async function getDashControleDocumentos(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const today = new Date().toISOString().slice(0, 10);
@@ -2298,7 +2308,7 @@ async function getDashControleDocumentos(companyIds: number[]) {
     funcao: employees.funcao, setor: employees.setor, status: employees.status,
     validadeCnh: employees.validadeCnh, obraAtualId: employees.obraAtualId,
   }).from(employees).where(and(
-    inArray(employees.companyId, companyIds), isNull(employees.deletedAt),
+    companyWhere(employees, companyId, companyIds), isNull(employees.deletedAt),
     sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`,
   ));
   const totalAtivos = ativosRows.length;
@@ -2308,7 +2318,7 @@ async function getDashControleDocumentos(companyIds: number[]) {
     id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo,
     dataExame: asos.dataExame, dataValidade: asos.dataValidade,
     resultado: asos.resultado, medico: asos.medico,
-  }).from(asos).where(and(inArray(asos.companyId, companyIds), isNull(asos.deletedAt)));
+  }).from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt)));
 
   // Último ASO válido por funcionário
   const lastAsoMap = new Map<number, typeof allAsos[0]>();
@@ -2340,7 +2350,7 @@ async function getDashControleDocumentos(companyIds: number[]) {
     id: trainings.id, employeeId: trainings.employeeId, nome: trainings.nome,
     norma: trainings.norma, dataRealizacao: trainings.dataRealizacao,
     dataValidade: trainings.dataValidade, instrutor: trainings.instrutor,
-  }).from(trainings).where(and(inArray(trainings.companyId, companyIds), isNull(trainings.deletedAt)));
+  }).from(trainings).where(and(companyWhere(trainings, companyId, companyIds), isNull(trainings.deletedAt)));
 
   const treinTotal = allTrein.length;
   const treinVencidos = allTrein.filter(t => t.dataValidade && t.dataValidade < today).length;
@@ -2355,7 +2365,7 @@ async function getDashControleDocumentos(companyIds: number[]) {
     tipo: employeeDocuments.tipo, nome: employeeDocuments.nome,
     dataValidade: employeeDocuments.dataValidade, createdAt: employeeDocuments.createdAt,
   }).from(employeeDocuments).where(and(
-    inArray(employeeDocuments.companyId, companyIds),
+    companyWhere(employeeDocuments, companyId, companyIds),
     sql`${employeeDocuments.deletedAt} IS NULL`,
   ));
 
@@ -2380,12 +2390,12 @@ async function getDashControleDocumentos(companyIds: number[]) {
 
   // ── OBRAS (para filtro) ──
   const obrasRows = await db.select({ id: obras.id, nome: obras.nome })
-    .from(obras).where(and(inArray(obras.companyId, companyIds), isNull(obras.deletedAt)));
+    .from(obras).where(and(companyWhere(obras, companyId, companyIds), isNull(obras.deletedAt)));
 
   // Alocações ativas
   const alocacoes = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
     .from(obraFuncionarios).where(and(
-      inArray(obraHorasRateio.companyId, companyIds),
+      companyWhere(obraFuncionarios, companyId, companyIds),
       eq(obraFuncionarios.isActive, 1),
     ));
   const empObraMap = new Map<number, number>();
@@ -2580,7 +2590,7 @@ async function getDashControleDocumentos(companyIds: number[]) {
 // ============================================================
 // DASHBOARD COMPETÊNCIAS ANUAL
 // ============================================================
-async function getDashCompetenciasAnual(companyIds: number[], ano?: number) {
+async function getDashCompetenciasAnual(companyId: number, ano?: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
   const year = ano || new Date().getFullYear();
@@ -2717,26 +2727,27 @@ async function getDashCompetenciasAnual(companyIds: number[], ano?: number) {
 }
 
 export const dashboardsRouter = router({
-  funcionarios: protectedProcedure.input(z.object({ companyIds: z.array(z.number()) })).query(({ input }) => getDashFuncionarios(input.companyIds)),
-  drillDown: protectedProcedure.input(z.object({ companyIds: z.array(z.number()), filterType: z.string(), filterValue: z.string() })).query(({ input }) => getDrillDown(input.companyIds, input.filterType, input.filterValue)),
-  cartaoPonto: protectedProcedure.input(z.object({ companyIds: z.array(z.number()), mesReferencia: z.string().optional() })).query(({ input }) => getDashCartaoPonto(input.companyIds, input.mesReferencia)),
-  folhaPagamento: protectedProcedure.input(z.object({ companyIds: z.array(z.number()), mesReferencia: z.string().optional() })).query(({ input }) => getDashFolhaPagamento(input.companyIds, input.mesReferencia)),
+  funcionarios: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionarios(input.companyId, input.companyIds)),
+  drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue, input.companyIds)),
+  cartaoPonto: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCartaoPonto(input.companyId, input.mesReferencia, input.companyIds)),
+  folhaPagamento: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamento(input.companyId, input.mesReferencia, input.companyIds)),
   horasExtras: protectedProcedure.input(z.object({
-    companyIds: z.array(z.number()),
+    companyId: z.number(),
     year: z.number().optional(),
     month: z.number().optional(),
     obraId: z.number().optional(),
     employeeId: z.number().optional(),
     periodoTipo: z.enum(['ano','semestre','trimestre','mes','semana','dia']).optional(),
     periodoValor: z.string().optional(),
-  })).query(({ input }) => getDashHorasExtras(input.companyIds, input.year, input)),
-  epis: protectedProcedure.input(z.object({ companyIds: z.array(z.number()) })).query(({ input }) => getDashEpis(input.companyIds)),
-  juridico: protectedProcedure.input(z.object({ companyIds: z.array(z.number()) })).query(({ input }) => getDashJuridico(input.companyIds)),
-  avisoPrevio: protectedProcedure.input(z.object({ companyIds: z.array(z.number()), ano: z.number().optional() })).query(({ input }) => getDashAvisoPrevio(input.companyIds, input.ano)),
-  ferias: protectedProcedure.input(z.object({ companyIds: z.array(z.number()), ano: z.number().optional() })).query(({ input }) => getDashFerias(input.companyIds, input.ano)),
-  perfilTempoCasa: protectedProcedure.input(z.object({ companyIds: z.array(z.number()) })).query(({ input }) => getDashPerfilTempoCasa(input.companyIds)),
-  analiseIAPerfil: protectedProcedure.input(z.object({ companyIds: z.array(z.number()) })).mutation(({ input }) => getAnaliseIAPerfil(input.companyIds)),
-  documentos: protectedProcedure.input(z.object({ companyIds: z.array(z.number()) })).query(({ input }) => getDashDocumentos(input.companyIds)),
-  controleDocumentos: protectedProcedure.input(z.object({ companyIds: z.array(z.number()) })).query(({ input }) => getDashControleDocumentos(input.companyIds)),
-  competenciasAnual: protectedProcedure.input(z.object({ companyIds: z.array(z.number()), ano: z.number().optional() })).query(({ input }) => getDashCompetenciasAnual(input.companyIds, input.ano)),
+    companyIds: z.array(z.number()).optional(),
+  })).query(({ input }) => getDashHorasExtras(input.companyId, input.year, input, input.companyIds)),
+  epis: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashEpis(input.companyId, input.companyIds)),
+  juridico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashJuridico(input.companyId, input.companyIds)),
+  avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashAvisoPrevio(input.companyId, input.ano, input.companyIds)),
+  ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano, input.companyIds)),
+  perfilTempoCasa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashPerfilTempoCasa(input.companyId, input.companyIds)),
+  analiseIAPerfil: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).mutation(({ input }) => getAnaliseIAPerfil(input.companyId, input.companyIds)),
+  documentos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashDocumentos(input.companyId, input.companyIds)),
+  controleDocumentos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashControleDocumentos(input.companyId, input.companyIds)),
+  competenciasAnual: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCompetenciasAnual(input.companyId, input.ano, input.companyIds)),
 });

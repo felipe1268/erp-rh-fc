@@ -32,19 +32,21 @@ function fmtBRLShort(v: number) {
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export default function DashFerias() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [ano, setAno] = useState(new Date().getFullYear());
   const [drillDialog, setDrillDialog] = useState<{ title: string; items: any[] } | null>(null);
   const [ganttEmployeeId, setGanttEmployeeId] = useState<number | null>(null);
 
   const feriasDoFunc = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
-    { companyId, employeeId: ganttEmployeeId! },
+    { companyId: queryCompanyId, employeeId: ganttEmployeeId!, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: !!ganttEmployeeId && !!companyId }
   );
 
   const { data, isLoading } = trpc.dashboards.ferias.useQuery(
-    { companyId, ano },
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: !!companyId }
   );
 

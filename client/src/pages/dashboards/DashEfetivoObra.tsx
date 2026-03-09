@@ -26,8 +26,10 @@ import { Button } from "@/components/ui/button";
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export default function DashEfetivoObra() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
@@ -44,27 +46,27 @@ export default function DashEfetivoObra() {
 
   // Dados
   const { data: efetivoPorObra, isLoading: loadingEfetivo } = trpc.obras.efetivoPorObra.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: historicoData, isLoading: loadingHistorico } = trpc.obras.efetivoHistorico.useQuery(
-    { companyId, meses: 24 },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, meses: 24, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: semObra, isLoading: loadingSemObra } = trpc.obras.semObra.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: inconsistenciasCount } = trpc.obras.inconsistenciasCount.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: dashMensal } = trpc.obras.efetivoDashMensal.useQuery(
-    { companyId, mesRef },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, mesRef, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: equipeData, isLoading: loadingEquipe } = trpc.obras.equipeObra.useQuery(
-    { obraId: selectedObra?.id || 0, companyId },
+    { obraId: selectedObra?.id || 0, companyId: queryCompanyId },
     { enabled: !!selectedObra && companyId > 0 }
   );
 

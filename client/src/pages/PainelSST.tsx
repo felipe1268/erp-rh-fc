@@ -31,16 +31,19 @@ export default function PainelSST() {
     return isAdminMaster || !hasGroup || groupCanAccessRoute(route);
   };
   const [, navigate] = useLocation();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : (companyId || 0);
+  const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
 
   const { data: homeData, isLoading } = trpc.home.getData.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
   const { data: logs } = trpc.audit.list.useQuery(
-    { companyId, limit: 6 },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId, limit: 6, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
 
   const s = homeData?.stats;
@@ -48,8 +51,8 @@ export default function PainelSST() {
 
   // Capacidade de Contratação
   const { data: capData } = trpc.epiAvancado.capacidadeContratacao.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
 
   const [showAlertasDialog, setShowAlertasDialog] = useState(false);
@@ -161,7 +164,7 @@ export default function PainelSST() {
           ) : null}
         </div>
 
-        {companyId ? (
+        {hasValidCompany ? (
           isLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {Array.from({ length: 4 }).map((_, i) => (

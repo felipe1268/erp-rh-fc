@@ -46,10 +46,12 @@ const CATEGORIA_ICONS: Record<string, any> = {
 type TabType = 'alertas' | 'incompletos';
 
 export default function DashControleDocumentos() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const { data, isLoading } = trpc.dashboards.controleDocumentos.useQuery(
-    { companyId }, { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const [activeTab, setActiveTab] = useState<TabType>('alertas');

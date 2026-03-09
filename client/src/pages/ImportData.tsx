@@ -210,26 +210,26 @@ export default function ImportData() {
                                 <Button variant="ghost" onClick={() => navigate("/")}>
                                             <ArrowLeft className="h-4 w-4 mr-2" />
                                             Voltar
-                                </Button>Button>
+                                </Button>
                                 <div>
                                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                                                           <Database className="h-6 w-6" />
                                                           Importacao de Dados
-                                            </h1>h1>
-                                            <p className="text-gray-500">Importe dados de arquivos CSV ou JSON para o sistema</p>p>
-                                </div>div>
-                      </div>div>
+                                            </h1>
+                                            <p className="text-gray-500">Importe dados de arquivos CSV ou JSON para o sistema</p>
+                                </div>
+                      </div>
               
                 {/* Step 1: Upload */}
                 {step === "upload" && (
                     <Card>
                                 <CardHeader>
-                                              <CardTitle>1. Selecione os arquivos</CardTitle>CardTitle>
+                                              <CardTitle>1. Selecione os arquivos</CardTitle>
                                               <CardDescription>
                                                               Arraste arquivos CSV ou JSON exportados da Manus ou de outro sistema.
                                                               Cada arquivo CSV sera importado como uma tabela separada.
-                                              </CardDescription>CardDescription>
-                                </CardHeader>CardHeader>
+                                              </CardDescription>
+                                </CardHeader>
                                 <CardContent>
                                               <div
                                                                 className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer"
@@ -240,10 +240,10 @@ export default function ImportData() {
                                                               <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                                                               <p className="text-lg font-medium text-gray-700">
                                                                                 Arraste arquivos aqui ou clique para selecionar
-                                                              </p>p>
+                                                              </p>
                                                               <p className="text-sm text-gray-500 mt-2">
                                                                                 Formatos aceitos: .csv, .json
-                                                              </p>p>
+                                                              </p>
                                                               <input
                                                                                   id="file-input"
                                                                                   type="file"
@@ -252,10 +252,10 @@ export default function ImportData() {
                                                                                   className="hidden"
                                                                                   onChange={handleFileChange}
                                                                                 />
-                                              </div>div>
+                                              </div>
                                 
                                               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                                                              <h3 className="font-semibold text-amber-800 mb-2">Formato esperado para JSON:</h3>h3>
+                                                              <h3 className="font-semibold text-amber-800 mb-2">Formato esperado para JSON:</h3>
                                                               <pre className="text-xs text-amber-700 bg-amber-100 p-3 rounded overflow-x-auto">
                                                                 {`{
                                                                   "tables": [
@@ -266,10 +266,10 @@ export default function ImportData() {
                                                                                             }
                                                                                               ]
                                                                                               }`}
-                                                              </pre>pre>
-                                              </div>div>
-                                </CardContent>CardContent>
-                    </Card>Card>
+                                                              </pre>
+                                              </div>
+                                </CardContent>
+                    </Card>
                       )}
               
                 {/* Step 2: Review */}
@@ -277,67 +277,67 @@ export default function ImportData() {
                     <div className="space-y-4">
                                 <Card>
                                               <CardHeader>
-                                                              <CardTitle>2. Revise os dados</CardTitle>CardTitle>
+                                                              <CardTitle>2. Revise os dados</CardTitle>
                                                               <CardDescription>
                                                                 {parsedTables.length} tabela(s) encontrada(s) com{" "}
                                                                 {parsedTables.reduce((sum, t) => sum + t.rowCount, 0)} registros no total
-                                                              </CardDescription>CardDescription>
-                                              </CardHeader>CardHeader>
+                                                              </CardDescription>
+                                              </CardHeader>
                                               <CardContent className="space-y-4">
                                                               <div className="flex items-center gap-4">
-                                                                                <label className="font-medium text-sm">Modo de importacao:</label>label>
+                                                                                <label className="font-medium text-sm">Modo de importacao:</label>
                                                                                 <Select value={importMode} onValueChange={setImportMode}>
                                                                                                     <SelectTrigger className="w-64">
                                                                                                                           <SelectValue />
-                                                                                                      </SelectTrigger>SelectTrigger>
+                                                                                                      </SelectTrigger>
                                                                                                     <SelectContent>
-                                                                                                                          <SelectItem value="insert">Inserir (ignora duplicados)</SelectItem>SelectItem>
-                                                                                                                          <SelectItem value="upsert">Atualizar ou inserir</SelectItem>SelectItem>
-                                                                                                                          <SelectItem value="replace">Substituir existentes</SelectItem>SelectItem>
-                                                                                                      </SelectContent>SelectContent>
-                                                                                </Select>Select>
-                                                              </div>div>
+                                                                                                                          <SelectItem value="insert">Inserir (ignora duplicados)</SelectItem>
+                                                                                                                          <SelectItem value="upsert">Atualizar ou inserir</SelectItem>
+                                                                                                                          <SelectItem value="replace">Substituir existentes</SelectItem>
+                                                                                                      </SelectContent>
+                                                                                </Select>
+                                                              </div>
                                               
                                                 {parsedTables.map((table, idx) => (
                                         <div key={idx} className="border rounded-lg p-4">
                                                             <div className="flex items-center justify-between mb-2">
                                                                                   <div className="flex items-center gap-2">
                                                                                                           <FileSpreadsheet className="h-5 w-5 text-green-600" />
-                                                                                                          <span className="font-semibold">{table.tableName}</span>span>
-                                                                                    </div>div>
+                                                                                                          <span className="font-semibold">{table.tableName}</span>
+                                                                                    </div>
                                                                                   <div className="flex gap-2">
-                                                                                                          <Badge variant="secondary">{table.columns.length} colunas</Badge>Badge>
-                                                                                                          <Badge variant="outline">{table.rowCount} registros</Badge>Badge>
-                                                                                    </div>div>
-                                                            </div>div>
+                                                                                                          <Badge variant="secondary">{table.columns.length} colunas</Badge>
+                                                                                                          <Badge variant="outline">{table.rowCount} registros</Badge>
+                                                                                    </div>
+                                                            </div>
                                                             <div className="text-xs text-gray-500 overflow-x-auto">
                                                                                   Colunas: {table.columns.join(", ")}
-                                                            </div>div>
+                                                            </div>
                                           {table.rowCount > 0 && (
                                                                 <div className="mt-2 text-xs bg-gray-50 p-2 rounded max-h-32 overflow-auto">
-                                                                                        <strong>Preview (primeiras 3 linhas):</strong>strong>
+                                                                                        <strong>Preview (primeiras 3 linhas):</strong>
                                                                   {table.rows.slice(0, 3).map((row, ri) => (
                                                                                             <div key={ri} className="truncate">
                                                                                               {row.map((v, ci) => `${table.columns[ci]}=${v}`).join(" | ")}
-                                                                                              </div>div>
+                                                                                              </div>
                                                                                           ))}
-                                                                </div>div>
+                                                                </div>
                                                             )}
-                                        </div>div>
+                                        </div>
                                       ))}
                                               
                                                               <div className="flex gap-3 pt-4">
                                                                                 <Button variant="outline" onClick={resetImport}>
                                                                                                     Cancelar
-                                                                                </Button>Button>
+                                                                                </Button>
                                                                                 <Button onClick={handleImport} className="bg-green-600 hover:bg-green-700">
                                                                                                     <Database className="h-4 w-4 mr-2" />
                                                                                                     Iniciar Importacao
-                                                                                </Button>Button>
-                                                              </div>div>
-                                              </CardContent>CardContent>
-                                </Card>Card>
-                    </div>div>
+                                                                                </Button>
+                                                              </div>
+                                              </CardContent>
+                                </Card>
+                    </div>
                       )}
               
                 {/* Step 3: Importing */}
@@ -345,11 +345,11 @@ export default function ImportData() {
                     <Card>
                                 <CardContent className="py-12 text-center">
                                               <Loader2 className="h-12 w-12 mx-auto text-blue-500 animate-spin mb-4" />
-                                              <h3 className="text-lg font-semibold">Importando dados...</h3>h3>
-                                              <p className="text-gray-500 mt-2">Aguarde enquanto os dados sao processados</p>p>
+                                              <h3 className="text-lg font-semibold">Importando dados...</h3>
+                                              <p className="text-gray-500 mt-2">Aguarde enquanto os dados sao processados</p>
                                               <Progress value={importProgress} className="mt-6 max-w-md mx-auto" />
-                                </CardContent>CardContent>
-                    </Card>Card>
+                                </CardContent>
+                    </Card>
                       )}
               
                 {/* Step 4: Results */}
@@ -364,49 +364,49 @@ export default function ImportData() {
                                           <AlertCircle className="h-6 w-6 text-yellow-500" />
                                         )}
                                                                                 Importacao {importResults.success ? "Concluida" : "Concluida com Erros"}
-                                                              </CardTitle>CardTitle>
+                                                              </CardTitle>
                                                               <CardDescription>
                                                                 {importResults.totalTablesProcessed} tabela(s) processada(s),{" "}
                                                                 {importResults.totalRowsImported} registro(s) importado(s)
-                                                              </CardDescription>CardDescription>
-                                              </CardHeader>CardHeader>
+                                                              </CardDescription>
+                                              </CardHeader>
                                               <CardContent>
                                                 {importResults.results.map((result, idx) => (
                                         <div key={idx} className={`border rounded-lg p-3 mb-2 ${result.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
                                                             <div className="flex items-center justify-between">
-                                                                                  <span className="font-medium">{result.table}</span>span>
+                                                                                  <span className="font-medium">{result.table}</span>
                                                                                   <div className="flex gap-2">
                                                                                                           <Badge variant={result.success ? "default" : "destructive"}>
                                                                                                             {result.rowsImported} importados
-                                                                                                            </Badge>Badge>
+                                                                                                            </Badge>
                                                                                     {result.errors.length > 0 && (
-                                                                    <Badge variant="destructive">{result.errors.length} erro(s)</Badge>Badge>
+                                                                    <Badge variant="destructive">{result.errors.length} erro(s)</Badge>
                                                                                                           )}
-                                                                                    </div>div>
-                                                            </div>div>
+                                                                                    </div>
+                                                            </div>
                                           {result.errors.length > 0 && (
                                                                 <div className="mt-2 text-xs text-red-600">
                                                                   {result.errors.map((err, ei) => (
-                                                                                            <div key={ei}>{err}</div>div>
+                                                                                            <div key={ei}>{err}</div>
                                                                                           ))}
-                                                                </div>div>
+                                                                </div>
                                                             )}
-                                        </div>div>
+                                        </div>
                                       ))}
                                               
                                                               <div className="flex gap-3 pt-4">
                                                                                 <Button variant="outline" onClick={resetImport}>
                                                                                                     Nova Importacao
-                                                                                </Button>Button>
+                                                                                </Button>
                                                                                 <Button onClick={() => navigate("/")}>
                                                                                                     Voltar ao Dashboard
-                                                                                </Button>Button>
-                                                              </div>div>
-                                              </CardContent>CardContent>
-                                </Card>Card>
-                    </div>div>
+                                                                                </Button>
+                                                              </div>
+                                              </CardContent>
+                                </Card>
+                    </div>
                       )}
-              </div>div>
-        </div>div>
+              </div>
+        </div>
       );
-}</div>
+}

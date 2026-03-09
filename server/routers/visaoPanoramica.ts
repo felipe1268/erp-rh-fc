@@ -8,13 +8,20 @@ import {
   monthlyPayrollSummary, terminationNotices, vacationPeriods,
   goldenRules, epiDiscountAlerts,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, desc, count, asc, isNull } from "drizzle-orm";
+import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
+
+
+// Helper: resolve company filter for CONSTRUTORAS
+function companyWhere(table: any, companyId: number, companyIds?: number[]) {
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+  return ids.length === 1 ? eq(table.companyId, ids[0]) : inArray(table.companyId, ids);
+}
 
 // ============================================================
 // VISÃO PANORÂMICA — Dashboard Executivo
 // ============================================================
-async function getVisaoPanoramica(companyId: number) {
+async function getVisaoPanoramica(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return null;
 
@@ -32,7 +39,7 @@ async function getVisaoPanoramica(companyId: number) {
     dataAdmissao: employees.dataAdmissao,
     salarioBase: employees.salarioBase,
     sexo: employees.sexo,
-  }).from(employees).where(and(eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`));
+  }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`));
 
   const totalFuncionarios = allEmps.length;
   const ativos = allEmps.filter(e => e.status === "Ativo").length;
@@ -60,7 +67,7 @@ async function getVisaoPanoramica(companyId: number) {
     totalFgts: monthlyPayrollSummary.valorFgts,
     valorInss: monthlyPayrollSummary.valorInss,
   }).from(monthlyPayrollSummary)
-    .where(eq(monthlyPayrollSummary.companyId, companyId))
+    .where(companyWhere(monthlyPayrollSummary, companyId, companyIds))
     .orderBy(desc(monthlyPayrollSummary.mesReferencia))
     .limit(6);
 
@@ -88,7 +95,7 @@ async function getVisaoPanoramica(companyId: number) {
     mesReferencia: extraPayments.mesReferencia,
     tipoExtra: extraPayments.tipoExtra,
   }).from(extraPayments)
-    .where(eq(extraPayments.companyId, companyId));
+    .where(companyWhere(extraPayments, companyId, companyIds));
 
   const heMesAtual = heRows.filter(r => r.mesReferencia === mesAtual && r.tipoExtra === 'Horas_Extras');
   const totalHEValor = heMesAtual.reduce((s, r) => s + parseFloat(String(r.valor || 0)), 0);
@@ -104,7 +111,7 @@ async function getVisaoPanoramica(companyId: number) {
     data: timeRecords.data,
   }).from(timeRecords)
     .where(and(
-      eq(timeRecords.companyId, companyId),
+      companyWhere(timeRecords, companyId, companyIds),
       sql`${timeRecords.data} LIKE ${mesAtual + '%'}`,
     ));
 
@@ -118,7 +125,7 @@ async function getVisaoPanoramica(companyId: number) {
     validadeCa: epis.validadeCa,
     valorProduto: epis.valorProduto,
   }).from(epis)
-    .where(eq(epis.companyId, companyId));
+    .where(companyWhere(epis, companyId, companyIds));
 
   const estoqueBaixo = allEpis.filter(e => {
     const est = parseInt(String(e.quantidadeEstoque || 0));
@@ -132,7 +139,7 @@ async function getVisaoPanoramica(companyId: number) {
 
   const alertasPendentes = await db.select({ count: sql<number>`count(*)` })
     .from(epiDiscountAlerts)
-    .where(and(eq(epiDiscountAlerts.companyId, companyId), eq(epiDiscountAlerts.status, 'pendente')));
+    .where(and(companyWhere(epiDiscountAlerts, companyId, companyIds), eq(epiDiscountAlerts.status, 'pendente')));
   const totalAlertasEPI = Number(alertasPendentes[0]?.count || 0);
 
   // ── 6. JURÍDICO ──
@@ -144,7 +151,7 @@ async function getVisaoPanoramica(companyId: number) {
     valorCondenacao: processosTrabalhistas.valorCondenacao,
     valorAcordo: processosTrabalhistas.valorAcordo,
   }).from(processosTrabalhistas)
-    .where(and(eq(processosTrabalhistas.companyId, companyId), sql`${processosTrabalhistas.deletedAt} IS NULL`));
+    .where(and(companyWhere(processosTrabalhistas, companyId, companyIds), sql`${processosTrabalhistas.deletedAt} IS NULL`));
 
   const processosAtivos = processos.filter(p => !['Encerrado', 'Arquivado'].includes(p.status || '')).length;
   const processosAltoRisco = processos.filter(p => ['Crítico', 'Alto'].includes(p.nivelRisco || '')).length;
@@ -159,7 +166,7 @@ async function getVisaoPanoramica(companyId: number) {
   }).from(processosAndamentos)
     .innerJoin(processosTrabalhistas, eq(processosAndamentos.processoId, processosTrabalhistas.id))
     .where(and(
-      eq(processosTrabalhistas.companyId, companyId),
+      companyWhere(processosTrabalhistas, companyId, companyIds),
       eq(processosAndamentos.tipo, 'audiencia'),
       gte(processosAndamentos.data, now.toISOString().slice(0, 10)),
     ))
@@ -169,7 +176,7 @@ async function getVisaoPanoramica(companyId: number) {
   // ── 7. ADVERTÊNCIAS ──
   const advRows = await db.select({ count: sql<number>`count(*)` })
     .from(warnings)
-    .where(and(eq(warnings.companyId, companyId), sql`${warnings.deletedAt} IS NULL`));
+    .where(and(companyWhere(warnings, companyId, companyIds), sql`${warnings.deletedAt} IS NULL`));
   const totalAdvertencias = Number(advRows[0]?.count || 0);
 
   // ── 8. ATESTADOS ──
@@ -177,7 +184,7 @@ async function getVisaoPanoramica(companyId: number) {
     count: sql<number>`count(*)`,
     totalDias: sql<number>`COALESCE(SUM(${atestados.diasAfastamento}), 0)`,
   }).from(atestados)
-    .where(and(eq(atestados.companyId, companyId), sql`${atestados.deletedAt} IS NULL`));
+    .where(and(companyWhere(atestados, companyId, companyIds), sql`${atestados.deletedAt} IS NULL`));
   const totalAtestados = Number(atestadoRows[0]?.count || 0);
   const totalDiasAtestado = Number(atestadoRows[0]?.totalDias || 0);
 
@@ -187,7 +194,7 @@ async function getVisaoPanoramica(companyId: number) {
     status: vacationPeriods.status,
     valorTotal: vacationPeriods.valorTotal,
   }).from(vacationPeriods)
-    .where(and(eq(vacationPeriods.companyId, companyId), sql`${vacationPeriods.deletedAt} IS NULL`));
+    .where(and(companyWhere(vacationPeriods, companyId, companyIds), sql`${vacationPeriods.deletedAt} IS NULL`));
 
   const feriasVencidas = feriasRows.filter(f => f.status === 'vencida').length;
   const feriasAgendadas = feriasRows.filter(f => f.status === 'agendada').length;
@@ -205,7 +212,7 @@ async function getVisaoPanoramica(companyId: number) {
     empId: terminationNotices.employeeId,
     salarioBase: terminationNotices.salarioBase,
   }).from(terminationNotices)
-    .where(and(eq(terminationNotices.companyId, companyId), sql`${terminationNotices.deletedAt} IS NULL`));
+    .where(and(companyWhere(terminationNotices, companyId, companyIds), sql`${terminationNotices.deletedAt} IS NULL`));
 
   // Buscar salarioBase e dataAdmissao dos funcionários para recálculo
   const empMap = new Map(allEmps.map(e => [e.id, e]));
@@ -280,7 +287,7 @@ async function getVisaoPanoramica(companyId: number) {
 
   // ── 11. GOLDEN RULES ──
   const rules = await db.select().from(goldenRules)
-    .where(eq(goldenRules.companyId, companyId))
+    .where(companyWhere(goldenRules, companyId, companyIds))
     .orderBy(desc(goldenRules.prioridade));
 
   return {
@@ -514,15 +521,15 @@ Forneça pelo menos 3 itens em cada categoria. Seja específico, use os números
 // ============================================================
 export const visaoPanoramicaRouter = router({
   getData: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
-      return getVisaoPanoramica(input.companyId);
+      return getVisaoPanoramica(input.companyId, input.companyIds);
     }),
 
   analiseIA: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyName: z.string() }))
+    .input(z.object({ companyId: z.number(), companyName: z.string(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
-      const data = await getVisaoPanoramica(input.companyId);
+      const data = await getVisaoPanoramica(input.companyId, input.companyIds);
       if (!data) return null;
       return getAnaliseIA(input.companyId, input.companyName, data);
     }),

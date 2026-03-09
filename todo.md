@@ -5108,3 +5108,14 @@
 - [x] Link "Ver certificado atual" ao editar treinamento que já tem certificado
 - [x] Coluna de Certificado na tabela de treinamentos (link para ver)
 - [x] Backend create retorna ID para permitir upload imediato
+
+## Rev. 218: Dashboards unificados para CONSTRUTORAS
+- [x] Dashboards devem mostrar dados unificados quando CONSTRUTORAS selecionado
+- [x] Remover mensagem "Selecione uma empresa" quando CONSTRUTORAS está ativo
+- [x] Todos os gráficos/cards devem agregar dados de todas empresas do grupo
+
+## Bugs Reportados - Março 2026
+- [x] BUG: Cartão de ponto dia 19/02 mostra 'Inconsistente/batida ímpar' mesmo com 4 horários preenchidos - filtrar apenas pendentes
+- [x] BUG: Após ajuste manual, status continua 'Inconsistente' - corrigido filtrando por status=pendente
+- [x] BUG: Edição de treinamentos não salva as modificações - corrigido tratamento de strings vazias
+- [x] Dashboards CONSTRUTORAS: mostrar dados unificados de todas as empresas do grupo - backend e frontend atualizados

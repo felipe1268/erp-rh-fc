@@ -376,8 +376,10 @@ function AcaoRow({ acao, prazo, responsavel, prioridade }: {
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════
 export default function VisaoPanoramica() {
-  const { selectedCompanyId, selectedCompany } = useCompany();
+  const { selectedCompanyId, selectedCompany, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const companyName = (selectedCompany as any)?.nomeFantasia || (selectedCompany as any)?.razaoSocial || "Empresa";
   const [showScoreDetail, setShowScoreDetail] = useState(false);
   const [showAllFortes, setShowAllFortes] = useState(false);
@@ -387,8 +389,8 @@ export default function VisaoPanoramica() {
   const [showAllAcoes, setShowAllAcoes] = useState(false);
 
   const { data, isLoading } = trpc.visaoPanoramica.getData.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const analiseMutation = trpc.visaoPanoramica.analiseIA.useMutation({
@@ -398,8 +400,8 @@ export default function VisaoPanoramica() {
   const analise = analiseMutation.data;
 
   const handleGerarAnalise = () => {
-    if (companyId > 0) {
-      analiseMutation.mutate({ companyId, companyName });
+    if (isConstrutoras ? companyIds.length > 0 : companyId > 0) {
+      analiseMutation.mutate({ companyId: queryCompanyId, companyName, ...(isConstrutoras ? { companyIds } : {}) });
     }
   };
 

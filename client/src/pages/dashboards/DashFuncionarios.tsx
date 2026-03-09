@@ -36,9 +36,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DashFuncionarios() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
-  const { data, isLoading } = trpc.dashboards.funcionarios.useQuery({ companyId }, { enabled: companyId > 0 });
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
+  const { data, isLoading } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
 
   // Drill-down state
   const [drillDown, setDrillDown] = useState<{ open: boolean; title: string; filterType: string; filterValue: string }>({

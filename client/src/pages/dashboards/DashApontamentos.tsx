@@ -39,32 +39,34 @@ const MESES_LABELS: Record<string, string> = {
 };
 
 export default function DashApontamentos() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const [ano, setAno] = useState(new Date().getFullYear());
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
 
   const companyId = Number(selectedCompanyId || 0);
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
 
   // Queries
   const { data: taxa, isLoading: loadTaxa } = trpc.fieldNotes.taxaResolucao.useQuery(
-    { companyId, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const { data: porTipo, isLoading: loadTipo } = trpc.fieldNotes.statsPorTipo.useQuery(
-    { companyId, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const { data: porObra, isLoading: loadObra } = trpc.fieldNotes.statsPorObra.useQuery(
-    { companyId, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const { data: porMes, isLoading: loadMes } = trpc.fieldNotes.statsPorMes.useQuery(
-    { companyId, ano },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const isLoading = loadTaxa || loadTipo || loadObra || loadMes;
@@ -86,7 +88,7 @@ export default function DashApontamentos() {
   const mesResolvidos = useMemo(() => (porMes || []).map((r: any) => Number(r.resolvidos)), [porMes]);
   const mesPendentes = useMemo(() => (porMes || []).map((r: any) => Number(r.pendentes)), [porMes]);
 
-  if (!companyId) {
+  if (!companyId && !isConstrutoras) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">

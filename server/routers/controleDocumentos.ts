@@ -640,10 +640,21 @@ export const controleDocumentosRouter = router({
         const db = (await getDb())!;
         const { id, ...rest } = input;
         const updateData: any = {};
-        Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
-        if (updateData.dataValidade) {
+        // Convert empty strings to null for nullable fields, skip undefined
+        const nullableFields = ['norma', 'cargaHoraria', 'dataValidade', 'instrutor', 'entidade', 'observacoes'];
+        Object.entries(rest).forEach(([k, v]) => {
+          if (v === undefined) return;
+          if (v === '' && nullableFields.includes(k)) {
+            updateData[k] = null;
+          } else {
+            updateData[k] = v;
+          }
+        });
+        if (updateData.dataValidade && updateData.dataValidade !== null) {
           const { diasRestantes } = calcularStatusASO(updateData.dataValidade);
           updateData.statusTreinamento = diasRestantes < 0 ? "Vencido" : diasRestantes <= 30 ? "A_Vencer" : "Valido";
+        } else if (updateData.dataValidade === null) {
+          updateData.statusTreinamento = "Valido";
         }
         await db.update(trainings).set(updateData).where(eq(trainings.id, id));
         return { success: true };

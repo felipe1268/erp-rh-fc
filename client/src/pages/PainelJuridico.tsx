@@ -171,8 +171,11 @@ function MiniHBarChart({ labels, data, color, height = 200 }: { labels: string[]
 export default function PainelJuridico() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : (companyId || 0);
+  const hasValidCompany = isConstrutoras ? companyIds.length > 0 : (!!companyId && companyId > 0);
   const [selectedProcesso, setSelectedProcesso] = useState<any>(null);
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -181,16 +184,16 @@ export default function PainelJuridico() {
 
   // DataJud Auto-Check alerts
   const { data: alertsData, refetch: refetchAlerts } = trpc.datajudAutoCheck.listarAlertas.useQuery(
-    { companyId: companyId!, apenasNaoLidos: false, limit: 50 },
-    { enabled: !!companyId && companyId > 0 }
+    { companyId: queryCompanyId, apenasNaoLidos: false, limit: 50, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
   const { data: alertCount } = trpc.datajudAutoCheck.contarNaoLidos.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId && companyId > 0, refetchInterval: 60000 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany, refetchInterval: 60000 }
   );
   const { data: autoCheckConfig } = trpc.datajudAutoCheck.getConfig.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId && companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
   const saveConfigMut = trpc.datajudAutoCheck.saveConfig.useMutation({
     onSuccess: () => { refetchAlerts(); }
@@ -210,20 +213,20 @@ export default function PainelJuridico() {
 
   // Use the full dashboard data (same as DashJuridico) for rich info
   const { data: dashData, isLoading: dashLoading } = trpc.dashboards.juridico.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId && companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
 
   // Also get the processos list for the table
   const { data: processos, isLoading: processosLoading } = trpc.processos.listar.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId && companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
 
   // Get audit logs for activity
   const { data: logs } = trpc.audit.list.useQuery(
-    { companyId, limit: 5 },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId, limit: 5, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
 
   const isLoading = dashLoading || processosLoading;
@@ -282,7 +285,7 @@ export default function PainelJuridico() {
           </div>
         </div>
 
-        {!companyId ? (
+        {!hasValidCompany ? (
           <Card className="bg-card border-border">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <Scale className="h-12 w-12 text-muted-foreground mb-4" />

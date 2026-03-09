@@ -54,16 +54,18 @@ const FAIXA_COLORS: Record<string, string> = {
 };
 
 export default function DashPerfilTempoCasa() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [selectedFaixa, setSelectedFaixa] = useState<string | null>(null);
   const [showIA, setShowIA] = useState(false);
   const [expandedPositive, setExpandedPositive] = useState<number | null>(null);
   const [expandedNegative, setExpandedNegative] = useState<number | null>(null);
 
   const { data, isLoading } = trpc.dashboards.perfilTempoCasa.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   const analiseMutation = trpc.dashboards.analiseIAPerfil.useMutation({
@@ -176,7 +178,7 @@ export default function DashPerfilTempoCasa() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => analiseMutation.mutate({ companyId })}
+              onClick={() => analiseMutation.mutate({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) })}
               disabled={analiseMutation.isPending}
               className="gap-2"
             >
@@ -500,7 +502,7 @@ export default function DashPerfilTempoCasa() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => analiseMutation.mutate({ companyId })}
+                  onClick={() => analiseMutation.mutate({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) })}
                   disabled={analiseMutation.isPending}
                   className="gap-1"
                 >

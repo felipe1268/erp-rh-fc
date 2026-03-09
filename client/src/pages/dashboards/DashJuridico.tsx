@@ -20,9 +20,11 @@ const RISCO_COLORS: Record<string, string> = {
 };
 
 export default function DashJuridico() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
-  const { data, isLoading } = trpc.dashboards.juridico.useQuery({ companyId }, { enabled: companyId > 0 });
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
+  const { data, isLoading } = trpc.dashboards.juridico.useQuery({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
 
   if (isLoading) return (
     <DashboardLayout>

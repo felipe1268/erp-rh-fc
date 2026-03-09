@@ -21,8 +21,10 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 export default function DashHorasExtras() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
 
   // Seletor de mês simples (igual Folha de Pagamento)
   const now = new Date();
@@ -33,13 +35,14 @@ export default function DashHorasExtras() {
   const month = parseInt(monthStr);
 
   const queryInput = useMemo(() => ({
-    companyId,
+    companyId: queryCompanyId,
     year,
     periodoTipo: "mes" as const,
     periodoValor: String(month),
-  }), [companyId, year, month]);
+    ...(isConstrutoras ? { companyIds } : {}),
+  }), [queryCompanyId, year, month, isConstrutoras, companyIds]);
 
-  const { data, isLoading } = trpc.dashboards.horasExtras.useQuery(queryInput, { enabled: companyId > 0 });
+  const { data, isLoading } = trpc.dashboards.horasExtras.useQuery(queryInput, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
 
   const periodoLabel = `${MESES_FULL[month - 1]} ${year}`;
 

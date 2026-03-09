@@ -1233,6 +1233,7 @@ export const fechamentoPontoRouter = router({
           eq(timeInconsistencies.companyId, input.companyId),
           eq(timeInconsistencies.employeeId, input.employeeId),
           eq(timeInconsistencies.mesReferencia, input.mesReferencia),
+          eq(timeInconsistencies.status, "pendente"),
         ));
 
       const emp = await db.select({

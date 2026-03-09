@@ -13,11 +13,13 @@ import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
 
 export default function DashCartaoPonto() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
   const [mes, setMes] = useState(mesRef);
-  const { data, isLoading } = trpc.dashboards.cartaoPonto.useQuery({ companyId, mesReferencia: mes }, { enabled: companyId > 0 });
+  const { data, isLoading } = trpc.dashboards.cartaoPonto.useQuery({ companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
   const [, navigate] = useLocation();
 
   const mesLabel = useMemo(() => {

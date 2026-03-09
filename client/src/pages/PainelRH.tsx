@@ -44,8 +44,11 @@ export default function PainelRH() {
   const canEditExperiencia = isAdminMaster || !isSomenteVisualizacao;
   const [selectedAvisoId, setSelectedAvisoId] = useState<number | null>(null);
   const [, navigate] = useLocation();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : (companyId || 0);
+  const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
   const [alertasOpen, setAlertasOpen] = useState(false);
   const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);
   const [expMotivo, setExpMotivo] = useState('');
@@ -62,12 +65,12 @@ export default function PainelRH() {
   });
 
   const { data: homeData, isLoading } = trpc.home.getData.useQuery(
-    { companyId: companyId! },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
   const { data: logs } = trpc.audit.list.useQuery(
-    { companyId, limit: 6 },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId, limit: 6, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: hasValidCompany }
   );
 
   const s = homeData?.stats;
@@ -135,7 +138,7 @@ export default function PainelRH() {
           ) : null}
         </div>
 
-        {companyId ? (
+        {hasValidCompany ? (
           isLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
