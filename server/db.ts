@@ -1770,10 +1770,11 @@ export async function getEmployeeSiteHistory(employeeId: number) {
  * Cruza com termination_notices (em_andamento) para Aviso Prévio
  * e vacation_periods (em_gozo/agendada com datas atuais) para Férias
  * Dados em tempo real — sempre reflete o estado atual do banco */
-export async function getEfetivoPorObra(companyId: number) {
+export async function getEfetivoPorObra(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
   const today = new Date().toISOString().split('T')[0];
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
 
   // 1. Buscar alocações ativas com dados do funcionário
   const alocacoes = await db.select({
@@ -1788,7 +1789,7 @@ export async function getEfetivoPorObra(companyId: number) {
     .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
     .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
     .where(and(
-      eq(obraFuncionarios.companyId, companyId),
+      inArray(obraFuncionarios.companyId, ids),
       eq(obraFuncionarios.isActive, 1),
     ));
 
@@ -1799,7 +1800,7 @@ export async function getEfetivoPorObra(companyId: number) {
     employeeId: terminationNotices.employeeId,
   }).from(terminationNotices)
     .where(and(
-      eq(terminationNotices.companyId, companyId),
+      inArray(terminationNotices.companyId, ids),
       eq(terminationNotices.status, 'em_andamento'),
       sql`${terminationNotices.deletedAt} IS NULL`,
     ));
@@ -1810,7 +1811,7 @@ export async function getEfetivoPorObra(companyId: number) {
     employeeId: vacationPeriods.employeeId,
   }).from(vacationPeriods)
     .where(and(
-      eq(vacationPeriods.companyId, companyId),
+      inArray(vacationPeriods.companyId, ids),
       sql`${vacationPeriods.deletedAt} IS NULL`,
       sql`(
         ${vacationPeriods.status} = 'em_gozo'
@@ -1859,9 +1860,10 @@ export async function getEfetivoPorObra(companyId: number) {
 }
 
 /** Efetivo histórico por obra para dashboard (evolução mensal) */
-export async function getEfetivoHistorico(companyId: number, meses: number = 12) {
+export async function getEfetivoHistorico(companyId: number, meses: number = 12, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   // Gerar lista de meses para análise
   const hoje = new Date();
   const mesesList: string[] = [];
@@ -1880,7 +1882,7 @@ export async function getEfetivoHistorico(companyId: number, meses: number = 12)
     isActive: obraFuncionarios.isActive,
   }).from(obraFuncionarios)
     .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
-    .where(eq(obraFuncionarios.companyId, companyId));
+    .where(inArray(obraFuncionarios.companyId, ids));
   
   // Calcular efetivo por obra por mês
   const obrasMap: Record<number, string> = {};
@@ -1921,9 +1923,10 @@ export async function getEfetivoHistorico(companyId: number, meses: number = 12)
 }
 
 /** Funcionários sem obra alocada */
-export async function getFuncionariosSemObra(companyId: number) {
+export async function getFuncionariosSemObra(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const result = await db.select({
     id: employees.id,
     nomeCompleto: employees.nomeCompleto,
@@ -1935,7 +1938,7 @@ export async function getFuncionariosSemObra(companyId: number) {
     obraAtualId: employees.obraAtualId,
   }).from(employees)
     .where(and(
-      eq(employees.companyId, companyId),
+      inArray(employees.companyId, ids),
       isNull(employees.deletedAt),
       sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
       sql`(${employees.obraAtualId} IS NULL OR ${employees.obraAtualId} = 0)`,
@@ -2014,9 +2017,10 @@ export async function detectarInconsistenciaPonto(data: {
 }
 
 /** Listar inconsistências pendentes */
-export async function getInconsistenciasPendentes(companyId: number) {
+export async function getInconsistenciasPendentes(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const result = await db.select({
     id: obraPontoInconsistencies.id,
     companyId: obraPontoInconsistencies.companyId,
@@ -2032,7 +2036,7 @@ export async function getInconsistenciasPendentes(companyId: number) {
   }).from(obraPontoInconsistencies)
     .leftJoin(employees, eq(obraPontoInconsistencies.employeeId, employees.id))
     .where(and(
-      eq(obraPontoInconsistencies.companyId, companyId),
+      inArray(obraPontoInconsistencies.companyId, ids),
       eq(obraPontoInconsistencies.status, 'pendente'),
     ))
     .orderBy(desc(obraPontoInconsistencies.dataPonto));
@@ -2105,11 +2109,12 @@ export async function resolverInconsistenciaTransferir(id: number, userId: numbe
 }
 
 /** Contar inconsistências pendentes (para badge no menu) */
-export async function countInconsistenciasPendentes(companyId: number) {
+export async function countInconsistenciasPendentes(companyId: number, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return 0;
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const [result] = await db.select({ count: sql<number>`COUNT(*)` }).from(obraPontoInconsistencies).where(and(
-    eq(obraPontoInconsistencies.companyId, companyId),
+    inArray(obraPontoInconsistencies.companyId, ids),
     eq(obraPontoInconsistencies.status, 'pendente'),
   ));
   return result?.count || 0;
@@ -2233,9 +2238,10 @@ export async function getEquipeObra(obraId: number, companyId: number) {
 }
 
 /** Get efetivo dashboard data with ponto cross-reference for a specific month */
-export async function getEfetivoDashboardMensal(companyId: number, mesRef: string) {
+export async function getEfetivoDashboardMensal(companyId: number, mesRef: string, companyIds?: number[]) {
   const db = await getDb();
   if (!db) return { porObra: [], pontoData: [], semObra: 0 };
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   
   // 1. Get active allocations for this company
   const alocacoes = await db.select({
@@ -2247,7 +2253,7 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
     isActive: obraFuncionarios.isActive,
   }).from(obraFuncionarios)
     .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
-    .where(eq(obraFuncionarios.companyId, companyId));
+    .where(inArray(obraFuncionarios.companyId, ids));
   
   // 2. Get ponto records for this month (if any)
   const pontoRecords = await db.select({
@@ -2257,7 +2263,7 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
     totalHoras: sql<string>`SUM(CASE WHEN ${timeRecords.horasTrabalhadas} IS NOT NULL AND ${timeRecords.horasTrabalhadas} != '' THEN CAST(REPLACE(${timeRecords.horasTrabalhadas}, ':', '.') AS DECIMAL(10,2)) ELSE 0 END)`.as('totalHoras'),
   }).from(timeRecords)
     .where(and(
-      eq(timeRecords.companyId, companyId),
+      inArray(timeRecords.companyId, ids),
       like(timeRecords.data, `${mesRef}%`),
     ))
     .groupBy(timeRecords.employeeId, timeRecords.obraId);
@@ -2290,7 +2296,7 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
   
   // 5. Count sem obra
   const activeEmps = await db.select({ id: employees.id }).from(employees).where(and(
-    eq(employees.companyId, companyId),
+    inArray(employees.companyId, ids),
     isNull(employees.deletedAt),
     sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
     sql`(${employees.obraAtualId} IS NULL OR ${employees.obraAtualId} = 0)`,

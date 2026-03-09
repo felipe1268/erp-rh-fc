@@ -863,13 +863,13 @@ export const appRouter = router({
     // Histórico de alocações de um funcionário
     employeeHistory: protectedProcedure.input(z.object({ employeeId: z.number() })).query(({ input }) => getEmployeeSiteHistory(input.employeeId)),
     // Efetivo atual por obra
-    efetivoPorObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEfetivoPorObra(input.companyId)),
+    efetivoPorObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEfetivoPorObra(input.companyId, input.companyIds)),
     // Efetivo histórico (evolução mensal)
-    efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses)),
+    efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses, input.companyIds)),
     // Funcionários sem obra
-    semObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosSemObra(input.companyId)),
+    semObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosSemObra(input.companyId, input.companyIds)),
     equipeObra: protectedProcedure.input(z.object({ obraId: z.number(), companyId: z.number() })).query(({ input }) => getEquipeObra(input.obraId, input.companyId)),
-    efetivoDashMensal: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesRef: z.string() })).query(({ input }) => getEfetivoDashboardMensal(input.companyId, input.mesRef)),
+    efetivoDashMensal: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesRef: z.string() })).query(({ input }) => getEfetivoDashboardMensal(input.companyId, input.mesRef, input.companyIds)),
     // Transferência em lote
     transferirEmLote: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraDestinoId: z.number(),
       employeeIds: z.array(z.number()),
@@ -923,8 +923,8 @@ export const appRouter = router({
     // ============================================================
     // INCONSISTÊNCIAS PONTO x OBRA
     // ============================================================
-    inconsistencias: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getInconsistenciasPendentes(input.companyId)),
-    inconsistenciasCount: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => countInconsistenciasPendentes(input.companyId)),
+    inconsistencias: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getInconsistenciasPendentes(input.companyId, input.companyIds)),
+    inconsistenciasCount: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => countInconsistenciasPendentes(input.companyId, input.companyIds)),
     resolverEsporadico: protectedProcedure.input(z.object({ id: z.number(), observacoes: z.string().optional() })).mutation(({ input, ctx }) => resolverInconsistenciaEsporadico(input.id, ctx.user.id, ctx.user.name ?? 'Sistema', input.observacoes)),
     resolverTransferir: protectedProcedure.input(z.object({ id: z.number(), observacoes: z.string().optional() })).mutation(({ input, ctx }) => resolverInconsistenciaTransferir(input.id, ctx.user.id, ctx.user.name ?? 'Sistema', input.observacoes)),
     ondeTrabalhou: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(), mesAno: z.string() })).query(({ input }) => getOndeTrabalhouNoMes(input.companyId, input.employeeId, input.mesAno)),

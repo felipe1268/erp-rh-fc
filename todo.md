@@ -5167,3 +5167,6 @@
 ## Correção: Preenchimento Automático NRs - Treinamentos
 - [x] Completar todas as NRs faltantes no preenchimento rápido
 - [x] Adicionar carga horária automática para cada NR ao selecionar
+
+## Bug: Efetivo por Obra zerado na CONSTRUTORAS
+- [x] Corrigir Efetivo por Obra que mostra 0 alocados, 0 obras com efetivo na empresa CONSTRUTORAS (companyIds não era passado para as funções do backend)
