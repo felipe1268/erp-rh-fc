@@ -5161,3 +5161,19 @@
 - [x] Processos Trabalhistas: Valor Causas = apenas em andamento, Total Pago = soma dos encerrados
 - [x] Aviso Prévio: clicar no nome do funcionário abre modal com dados completos do aviso
 - [x] Aviso Prévio: gráfico timeline no dashboard mostrando Data Aviso, Último Dia e Data Pagamento
+- [ ] Mover Timeline dos Avisos em Andamento da página AvisoPrevio para o Dashboard do Aviso Prévio
+- [ ] Bug: Cards de resumo do Aviso Prévio zeram quando filtro é aplicado - devem sempre mostrar totais gerais
+- [ ] Ponto: restrição backend para impedir duplicidade de registro no mesmo dia/funcionário
+- [ ] Ponto: alerta visual grave para registros duplicados existentes com opção de excluir
+- [ ] Ponto: botão editar em cada dia do ponto
+
+## Rev. 200: Melhorias Fechamento de Ponto e Aviso Prévio
+- [x] Endpoint editRecord para edição individual de registros de ponto no backend
+- [x] Endpoint getDuplicates para detectar registros duplicados no backend
+- [x] Endpoint cleanDuplicates para limpar registros duplicados automaticamente
+- [x] Edição inline de registros de ponto no frontend (botão lápis, campos time editáveis)
+- [x] Alerta visual de registros duplicados com botão "Limpar Duplicatas"
+- [x] Timeline visual de avisos em andamento no Dashboard Aviso Prévio (barra de progresso, datas chave)
+- [x] Cards de filtro do Aviso Prévio com indicação visual do filtro ativo (ring highlight)
+- [x] Testes vitest para editRecord, getDuplicates e cleanDuplicates (7 testes passando)
+- [x] Atualização do teste de versão para Rev. 200

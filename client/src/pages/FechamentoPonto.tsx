@@ -19,7 +19,7 @@ import {
   Clock, Upload, FileSpreadsheet, Users, CalendarDays, AlertTriangle,
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
-  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText
+  ListChecks, Filter, ChevronDown, Zap, ArrowRightLeft, ArrowRight, FileText, Pencil, Copy
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -501,6 +501,9 @@ export default function FechamentoPonto() {
   const [newMappingDixiName, setNewMappingDixiName] = useState("");
   const [newMappingEmpId, setNewMappingEmpId] = useState<number | null>(null);
   const [memSearchTerm, setMemSearchTerm] = useState("");
+  // Edição inline de registro de ponto
+  const [editingRecId, setEditingRecId] = useState<number | null>(null);
+  const [editData, setEditData] = useState({ entrada1: "", saida1: "", entrada2: "", saida2: "", entrada3: "", saida3: "", justificativa: "" });
   // Modal de ajuste rápido de inconsistência
   const [quickFixOpen, setQuickFixOpen] = useState(false);
   const [quickFixRec, setQuickFixRec] = useState<any>(null); // o registro do timeRecord
@@ -669,7 +672,30 @@ export default function FechamentoPonto() {
     onError: (err) => toast.error("Erro: " + err.message),
   });
 
+  const editRecordMut = trpc.fechamentoPonto.editRecord.useMutation({
+    onSuccess: () => {
+      setEditingRecId(null);
+      if (selectedEmployeeId) employeeDetail.refetch();
+      stats.refetch(); summary.refetch();
+      toast.success("Registro atualizado com sucesso!");
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+  const duplicatesQuery = trpc.fechamentoPonto.getDuplicates.useQuery(
+    { companyId, companyIds, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
+  const cleanDuplicatesMut = trpc.fechamentoPonto.cleanDuplicates.useMutation({
+    onSuccess: (data) => {
+      duplicatesQuery.refetch(); stats.refetch(); summary.refetch();
+      if (selectedEmployeeId) employeeDetail.refetch();
+      toast.success(`${data.removed} duplicata(s) removida(s) de ${data.duplicatesFound} grupo(s)!`);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+
   // ===== COMPUTED =====
+  const duplicatesCount = (duplicatesQuery.data || []).length;
   const multiSiteCount = useMemo(() => {
     if (!summary.data) return 0;
     return summary.data.filter((e: any) => e.multiplasObras).length;
@@ -1183,6 +1209,25 @@ export default function FechamentoPonto() {
               </p>
             </div>
             <Badge variant="destructive" className="text-sm px-3 py-1 shrink-0">{multiSiteCount}</Badge>
+          </div>
+        )}
+
+        {/* ALERTA DE DUPLICATAS */}
+        {duplicatesCount > 0 && (
+          <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4 flex items-start gap-3">
+            <Copy className="h-6 w-6 text-yellow-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-bold text-yellow-800 text-base">Registros Duplicados Detectados</p>
+              <p className="text-sm text-yellow-700 mt-1">
+                <strong>{duplicatesCount} grupo(s)</strong> de registros duplicados encontrados (mesmo funcionário + mesma data + mesma obra).
+                Isso pode causar erros no cálculo de horas. Clique em "Limpar Duplicatas" para manter apenas o registro mais relevante.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="border-yellow-500 text-yellow-800 hover:bg-yellow-100 shrink-0"
+              disabled={cleanDuplicatesMut.isPending}
+              onClick={() => cleanDuplicatesMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
+              {cleanDuplicatesMut.isPending ? "Limpando..." : "Limpar Duplicatas"}
+            </Button>
           </div>
         )}
 
@@ -2634,20 +2679,33 @@ export default function FechamentoPonto() {
                                 <th className="p-2 font-medium text-center">Saldo</th>
                                 <th className="p-2 font-medium text-center">Fonte</th>
                                 <th className="p-2 font-medium text-center">Status</th>
+                                {!isConsolidado && <th className="p-2 font-medium text-center">Ações</th>}
                               </tr>
                             </thead>
                             <tbody>
                               {obraGroup.records.map((rec: any) => {
                                 const hasIncons = (employeeDetail.data?.inconsistencies || []).some((i: any) => i.data === rec.data);
                                 const hasConflict = (conflitos.data || []).some((c: any) => c.employeeId === selectedEmployeeId && c.data === rec.data);
+                                const isEditing = editingRecId === rec.id;
                                 return (
-                                  <tr key={rec.id} className={`border-b last:border-0 ${hasConflict ? "bg-orange-50" : rec.ajusteManual ? "bg-purple-50" : hasIncons ? "bg-amber-50" : ""}`}>
+                                  <tr key={rec.id} className={`border-b last:border-0 ${isEditing ? "bg-blue-50 ring-1 ring-blue-200" : hasConflict ? "bg-orange-50" : rec.ajusteManual ? "bg-purple-50" : hasIncons ? "bg-amber-50" : ""}`}>
                                     <td className="p-2">{rec.data ? new Date(rec.data + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</td>
                                     <td className="p-2 text-muted-foreground">{dayOfWeek(rec.data)}</td>
-                                    <td className="p-2 text-center font-mono">{rec.entrada1 || "-"}</td>
-                                    <td className="p-2 text-center font-mono">{rec.saida1 || "-"}</td>
-                                    <td className="p-2 text-center font-mono">{rec.entrada2 || "-"}</td>
-                                    <td className="p-2 text-center font-mono">{rec.saida2 || "-"}</td>
+                                    {isEditing ? (
+                                      <>
+                                        <td className="p-1 text-center"><Input type="time" className="h-7 text-xs w-[80px] mx-auto" value={editData.entrada1} onChange={e => setEditData(d => ({...d, entrada1: e.target.value}))} /></td>
+                                        <td className="p-1 text-center"><Input type="time" className="h-7 text-xs w-[80px] mx-auto" value={editData.saida1} onChange={e => setEditData(d => ({...d, saida1: e.target.value}))} /></td>
+                                        <td className="p-1 text-center"><Input type="time" className="h-7 text-xs w-[80px] mx-auto" value={editData.entrada2} onChange={e => setEditData(d => ({...d, entrada2: e.target.value}))} /></td>
+                                        <td className="p-1 text-center"><Input type="time" className="h-7 text-xs w-[80px] mx-auto" value={editData.saida2} onChange={e => setEditData(d => ({...d, saida2: e.target.value}))} /></td>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <td className="p-2 text-center font-mono">{rec.entrada1 || "-"}</td>
+                                        <td className="p-2 text-center font-mono">{rec.saida1 || "-"}</td>
+                                        <td className="p-2 text-center font-mono">{rec.entrada2 || "-"}</td>
+                                        <td className="p-2 text-center font-mono">{rec.saida2 || "-"}</td>
+                                      </>
+                                    )}
                                     <td className="p-2 text-center font-mono font-semibold">{rec.horasTrabalhadas || "-"}</td>
                                     <td className="p-2 text-center font-mono">
                                       {rec.horasExtras && rec.horasExtras !== "0:00" ? <span className="text-green-600 font-semibold">{rec.horasExtras}</span> : "-"}
@@ -2698,6 +2756,44 @@ export default function FechamentoPonto() {
                                         <Badge variant="outline" className="text-xs text-green-600 border-green-300">OK</Badge>
                                       )}
                                     </td>
+                                    {!isConsolidado && (
+                                      <td className="p-2 text-center">
+                                        {isEditing ? (
+                                          <div className="flex items-center gap-1 justify-center">
+                                            <Button size="sm" variant="default" className="h-7 px-2 text-xs" disabled={editRecordMut.isPending}
+                                              onClick={() => editRecordMut.mutate({
+                                                id: rec.id, companyId,
+                                                entrada1: editData.entrada1 || undefined,
+                                                saida1: editData.saida1 || undefined,
+                                                entrada2: editData.entrada2 || undefined,
+                                                saida2: editData.saida2 || undefined,
+                                                justificativa: editData.justificativa || undefined,
+                                              })}>
+                                              <CheckCircle className="h-3 w-3" />
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingRecId(null)}>
+                                              <XCircle className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        ) : (
+                                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-blue-600 hover:text-blue-800"
+                                            onClick={() => {
+                                              setEditingRecId(rec.id);
+                                              setEditData({
+                                                entrada1: rec.entrada1 || "",
+                                                saida1: rec.saida1 || "",
+                                                entrada2: rec.entrada2 || "",
+                                                saida2: rec.saida2 || "",
+                                                entrada3: rec.entrada3 || "",
+                                                saida3: rec.saida3 || "",
+                                                justificativa: rec.justificativa || "",
+                                              });
+                                            }}>
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                      </td>
+                                    )}
                                   </tr>
                                 );
                               })}

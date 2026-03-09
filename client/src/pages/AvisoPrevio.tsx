@@ -67,11 +67,16 @@ export default function AvisoPrevio() {
   const [form, setForm] = useState<any>({});
   const [calculoPreview, setCalculoPreview] = useState<any>(null);
 
-  // Queries
-  const { data: avisosList = [], refetch } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
-    { companyId, companyIds, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
+  // Queries - buscar TODOS os avisos (sem filtro de status) para stats corretos
+  const { data: allAvisos = [], refetch } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
+    { companyId, companyIds },
     { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
+  // Filtrar no frontend para a tabela
+  const avisosList = useMemo(() => {
+    if (statusFilter === 'todos') return allAvisos;
+    return (allAvisos as any[]).filter((a: any) => a.status === statusFilter);
+  }, [allAvisos, statusFilter]);
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
@@ -158,9 +163,9 @@ export default function AvisoPrevio() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Stats
+  // Stats - sempre baseado na lista COMPLETA (allAvisos), não na filtrada
   const stats = useMemo(() => {
-    const list = avisosList as any[];
+    const list = allAvisos as any[];
     const emAndamentoList = list.filter(a => a.status === "em_andamento");
     const concluidosList = list.filter(a => a.status === "concluido");
     const canceladosList = list.filter(a => a.status === "cancelado");
@@ -173,7 +178,7 @@ export default function AvisoPrevio() {
       valorEmAndamento: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorConcluidos: concluidosList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
     };
-  }, [avisosList]);
+  }, [allAvisos]);
 
   // Employee search for form (Popover + Command)
   const [empPopoverOpen, setEmpPopoverOpen] = useState(false);
@@ -272,7 +277,7 @@ export default function AvisoPrevio() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter("todos")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === 'todos' ? 'ring-2 ring-gray-400 shadow-md' : ''}`} onClick={() => setStatusFilter("todos")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -284,7 +289,7 @@ export default function AvisoPrevio() {
               </div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500" onClick={() => setStatusFilter("em_andamento")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter === 'em_andamento' ? 'ring-2 ring-blue-400 shadow-md' : ''}`} onClick={() => setStatusFilter("em_andamento")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -296,7 +301,7 @@ export default function AvisoPrevio() {
               </div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500" onClick={() => setStatusFilter("concluido")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500 ${statusFilter === 'concluido' ? 'ring-2 ring-green-400 shadow-md' : ''}`} onClick={() => setStatusFilter("concluido")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -308,7 +313,7 @@ export default function AvisoPrevio() {
               </div>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500" onClick={() => setStatusFilter("cancelado")}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500 ${statusFilter === 'cancelado' ? 'ring-2 ring-red-400 shadow-md' : ''}`} onClick={() => setStatusFilter("cancelado")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -320,114 +325,6 @@ export default function AvisoPrevio() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Gráfico Timeline - Datas dos Avisos Prévios */}
-        {(() => {
-          const emAndamento = (avisosList as any[]).filter((a: any) => a.status === 'em_andamento');
-          if (emAndamento.length === 0) return null;
-          
-          // Ordenar por data do aviso
-          const sorted = [...emAndamento].sort((a, b) => (a.dataDiaTrabalhado || '').localeCompare(b.dataDiaTrabalhado || ''));
-          
-          return (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-amber-600" />
-                  Timeline dos Avisos em Andamento
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-muted/30">
-                        <th className="p-2 text-left font-medium w-48">Funcionário</th>
-                        <th className="p-2 text-center font-medium">
-                          <span className="inline-flex items-center gap-1">
-                            <span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>
-                            Data Aviso
-                          </span>
-                        </th>
-                        <th className="p-2 text-center font-medium">
-                          <span className="inline-flex items-center gap-1">
-                            <span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
-                            Último Dia
-                          </span>
-                        </th>
-                        <th className="p-2 text-center font-medium">
-                          <span className="inline-flex items-center gap-1">
-                            <span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span>
-                            Pagamento
-                          </span>
-                        </th>
-                        <th className="p-2 text-center font-medium">Dias Restantes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sorted.map((a: any) => {
-                        const hoje = new Date();
-                        hoje.setHours(0,0,0,0);
-                        const dataFim = a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
-                        const dataPgto = a.dataLimitePagamento ? new Date(a.dataLimitePagamento + 'T00:00:00') : null;
-                        const diasRestantes = dataFim ? Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000*60*60*24)) : null;
-                        const diasPgto = dataPgto ? Math.ceil((dataPgto.getTime() - hoje.getTime()) / (1000*60*60*24)) : null;
-                        
-                        // Barra visual de progresso
-                        const dataInicio = a.dataDiaTrabalhado ? new Date(a.dataDiaTrabalhado + 'T00:00:00') : null;
-                        let progresso = 0;
-                        if (dataInicio && dataFim) {
-                          const totalDias = (dataFim.getTime() - dataInicio.getTime()) / (1000*60*60*24);
-                          const diasPassados = (hoje.getTime() - dataInicio.getTime()) / (1000*60*60*24);
-                          progresso = totalDias > 0 ? Math.min(Math.max(diasPassados / totalDias * 100, 0), 100) : 0;
-                        }
-                        
-                        return (
-                          <tr key={a.id} className="border-b last:border-0 hover:bg-muted/10">
-                            <td className="p-2">
-                              <p className="font-medium text-xs truncate max-w-[180px]" title={a.employeeName}>{a.employeeName}</p>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                                <div className="h-1.5 rounded-full transition-all" style={{ width: `${progresso}%`, backgroundColor: progresso >= 100 ? '#ef4444' : progresso >= 75 ? '#f59e0b' : '#3b82f6' }}></div>
-                              </div>
-                            </td>
-                            <td className="p-2 text-center">
-                              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">{formatDate(a.dataDiaTrabalhado)}</span>
-                            </td>
-                            <td className="p-2 text-center">
-                              <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-medium">{formatDate(a.dataFim)}</span>
-                              {diasRestantes !== null && (
-                                <p className={`text-[10px] mt-0.5 ${diasRestantes <= 0 ? 'text-red-600 font-bold' : diasRestantes <= 7 ? 'text-amber-600' : 'text-muted-foreground'}`}>
-                                  {diasRestantes <= 0 ? 'VENCIDO' : `em ${diasRestantes} dias`}
-                                </p>
-                              )}
-                            </td>
-                            <td className="p-2 text-center">
-                              <span className={`px-2 py-0.5 rounded font-medium ${diasPgto !== null && diasPgto <= 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                {formatDate(a.dataLimitePagamento)}
-                              </span>
-                              {diasPgto !== null && (
-                                <p className={`text-[10px] mt-0.5 ${diasPgto <= 0 ? 'text-red-600 font-bold' : diasPgto <= 5 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                  {diasPgto <= 0 ? 'VENCIDO' : `em ${diasPgto} dias`}
-                                </p>
-                              )}
-                            </td>
-                            <td className="p-2 text-center">
-                              {diasRestantes !== null && (
-                                <span className={`text-sm font-bold ${diasRestantes <= 0 ? 'text-red-600' : diasRestantes <= 7 ? 'text-amber-600' : 'text-blue-600'}`}>
-                                  {diasRestantes <= 0 ? '0' : diasRestantes}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })()}
 
         {/* Info Banner */}
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">

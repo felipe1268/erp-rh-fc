@@ -473,7 +473,68 @@ export default function DashAvisoPrevio() {
               )}
             </div>
 
-            {/* ===== SEÇÃO 10: Tabela Detalhada ===== */}
+            {/* ===== SEÇÃO 10: TIMELINE VISUAL DE AVISOS EM ANDAMENTO ===== */}
+            {(() => {
+              const avisosEmAndamento = (data.avisos || []).filter((a: any) => a.status === 'em_andamento' && a.dataInicio && a.dataFim);
+              if (avisosEmAndamento.length === 0) return null;
+              const hoje = new Date();
+              hoje.setHours(0, 0, 0, 0);
+              return (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Timer className="h-4 w-4 text-amber-500" />
+                      Timeline de Avisos em Andamento ({avisosEmAndamento.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {avisosEmAndamento.map((a: any) => {
+                        const inicio = new Date(a.dataInicio + 'T00:00:00');
+                        const fim = new Date(a.dataFim + 'T00:00:00');
+                        const totalDias = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+                        const diasPassados = Math.max(0, Math.ceil((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+                        const progresso = Math.min(100, Math.max(0, (diasPassados / totalDias) * 100));
+                        const diasRestantes = Math.max(0, totalDias - diasPassados);
+                        // Calcular data limite de pagamento (10 dias após término)
+                        const dataPagamento = new Date(fim);
+                        dataPagamento.setDate(dataPagamento.getDate() + 10);
+                        const barColor = progresso >= 90 ? 'bg-red-500' : progresso >= 70 ? 'bg-amber-500' : 'bg-blue-500';
+                        return (
+                          <div key={a.id} className="p-3 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-sm truncate">{a.nomeCompleto}</p>
+                                <p className="text-[10px] text-muted-foreground">{fmtTipoLabel(a.tipo)} · {a.diasAviso} dias · {fmtReducaoLabel(a.reducaoJornada || 'nenhuma')}</p>
+                              </div>
+                              <div className="text-right ml-3 shrink-0">
+                                <p className="text-xs font-bold text-red-600">{fmtValorStr(a.valorEstimadoTotal)}</p>
+                                <p className="text-[10px] text-muted-foreground">{diasRestantes} dia{diasRestantes !== 1 ? 's' : ''} restante{diasRestantes !== 1 ? 's' : ''}</p>
+                              </div>
+                            </div>
+                            {/* Barra de progresso */}
+                            <div className="relative h-5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${progresso}%` }} />
+                              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-difference">
+                                {progresso.toFixed(0)}%
+                              </span>
+                            </div>
+                            {/* Datas chave */}
+                            <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
+                              <span>Início: {inicio.toLocaleDateString('pt-BR')}</span>
+                              <span className="font-semibold text-foreground">Término: {fim.toLocaleDateString('pt-BR')}</span>
+                              <span className="text-red-600 font-semibold">Pgto: {dataPagamento.toLocaleDateString('pt-BR')}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* ===== SEÇÃO 11: Tabela Detalhada ===== */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">

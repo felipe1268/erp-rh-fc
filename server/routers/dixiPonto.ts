@@ -584,11 +584,17 @@ export const dixiPontoRouter = router({
         );
       }
 
-      // Insert time records
-      if (timeRecordsToInsert.length > 0) {
+      // Insert time records - deduplicar antes de inserir
+      const uniqueMap = new Map<string, typeof timeRecordsToInsert[0]>();
+      for (const rec of timeRecordsToInsert) {
+        const key = `${rec.employeeId}-${rec.data}-${rec.obraId || 0}`;
+        uniqueMap.set(key, rec);
+      }
+      const dedupedRecords = Array.from(uniqueMap.values());
+      if (dedupedRecords.length > 0) {
         const batchSize = 50;
-        for (let i = 0; i < timeRecordsToInsert.length; i += batchSize) {
-          await db.insert(timeRecords).values(timeRecordsToInsert.slice(i, i + batchSize));
+        for (let i = 0; i < dedupedRecords.length; i += batchSize) {
+          await db.insert(timeRecords).values(dedupedRecords.slice(i, i + batchSize));
         }
       }
 
