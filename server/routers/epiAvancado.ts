@@ -1183,7 +1183,6 @@ export const epiAvancadoRouter = router({
         valorProduto: epis.valorProduto,
         nomeFunc: employees.nomeCompleto,
         funcaoFunc: employees.funcao,
-        obraAtualId: employees.obraAtualId,
       })
         .from(epiDeliveries)
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
@@ -1191,8 +1190,16 @@ export const epiAvancadoRouter = router({
         .where(and(...conds))
         .orderBy(desc(epiDeliveries.dataEntrega));
 
+      // Buscar alocações ativas para mapear empId -> obraId
+      const epiAvEmpIds = [...new Set(entregas.map(e => e.employeeId))];
+      const epiAvAlocs = epiAvEmpIds.length > 0
+        ? await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+            .from(obraFuncionarios).where(and(inArray(obraFuncionarios.employeeId, epiAvEmpIds), eq(obraFuncionarios.isActive, 1)))
+        : [];
+      const epiAvEmpObraMap = new Map(epiAvAlocs.map(a => [a.employeeId, a.obraId]));
+
       // Get obra names
-      const obraIds = Array.from(new Set(entregas.map(e => e.obraId || e.obraAtualId).filter(Boolean))) as number[];
+      const obraIds = Array.from(new Set([...entregas.map(e => e.obraId).filter(Boolean), ...epiAvAlocs.map(a => a.obraId)])) as number[];
       let obraMap: Record<number, string> = {};
       if (obraIds.length > 0) {
         const obrasList = await db.select({ id: obras.id, nome: obras.nome })
@@ -1222,7 +1229,7 @@ export const epiAvancadoRouter = router({
       if (input.tipo === "obra") {
         const porObra: Record<string, { nome: string; custo: number; qtd: number; itens: any[] }> = {};
         for (const e of entregas) {
-          const obraKey = String(e.obraId || e.obraAtualId || 0);
+          const obraKey = String(e.obraId || epiAvEmpObraMap.get(e.employeeId) || 0);
           const obraNome = obraMap[Number(obraKey)] || "Sem Obra";
           if (!porObra[obraKey]) {
             porObra[obraKey] = { nome: obraNome, custo: 0, qtd: 0, itens: [] };
@@ -1290,18 +1297,20 @@ export const epiAvancadoRouter = router({
         .where(companyFilter(epiEstoqueMinimo.companyId, input));
 
       // Get active employees per obra
-      const funcPorObra = await db.select({
-        obraAtualId: employees.obraAtualId,
+      // Contar funcionários por obra via obra_funcionarios
+      const funcAlocs = await db.select({
+        obraId: obraFuncionarios.obraId,
         total: sql<number>`COUNT(*)`,
       })
-        .from(employees)
-        .where(and(companyFilter(employees.companyId, input), eq(employees.status, "Ativo"), isNull(employees.deletedAt)))
-        .groupBy(employees.obraAtualId);
+        .from(obraFuncionarios)
+        .where(and(companyFilter(obraFuncionarios.companyId, input), eq(obraFuncionarios.isActive, 1)))
+        .groupBy(obraFuncionarios.obraId);
+      const funcPorObraMap = new Map(funcAlocs.map(f => [f.obraId, f.total]));
 
       // Build context for LLM
       const obraInfo = allObras.map(o => {
         const estoque = estoqueObras.filter(e => e.obraId === o.id);
-        const funcs = funcPorObra.find(f => f.obraAtualId === o.id);
+        const funcsCount = funcPorObraMap.get(o.id) || 0;
         const mins = minimos.filter(m => m.obraId === o.id);
         return {
           id: o.id,
@@ -1310,7 +1319,7 @@ export const epiAvancadoRouter = router({
           cidade: o.cidade,
           estado: o.estado,
           status: o.status,
-          funcionarios: funcs?.total || 0,
+          funcionarios: funcsCount,
           estoque: estoque.map(e => ({
             epi: e.nomeEpi,
             quantidade: e.quantidade,

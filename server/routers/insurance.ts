@@ -268,7 +268,7 @@ export const insuranceRouter = router({
         nomeFuncionario: emp[0].nomeCompleto || "",
         cpfFuncionario: emp[0].cpf || "",
         funcaoFuncionario: emp[0].funcao || "",
-        obraFuncionario: emp[0].obraAtualId ? String(emp[0].obraAtualId) : "",
+        obraFuncionario: "", // obra via obra_funcionarios (não crítico para log de seguro)
         destinatarios: JSON.stringify(activeRecipients.map((r: any) => ({ nome: r.nome, email: r.email, tipo: r.tipoDestinatario }))),
         disparadoPor: ctx.user.name ?? "Sistema",
         disparoAutomatico: 0,

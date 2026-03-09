@@ -1237,7 +1237,6 @@ export const payrollEngineRouter = router({
         inssPercentual: employees.inssPercentual,
         vaRecebe: employees.vaRecebe,
         vaValor: employees.vaValor,
-        obraAtualId: employees.obraAtualId,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
@@ -1799,16 +1798,17 @@ export const payrollEngineRouter = router({
 
       // Get payment totals by obra (via employee allocation)
       const [payRows] = await db.execute(sql`
-        SELECT e.obraAtualId as obraId, o.nome as obraNome,
+        SELECT of2.obraId as obraId, o.nome as obraNome,
           SUM(CAST(pp.salarioBrutoMes AS DECIMAL(15,2))) as totalBruto,
           SUM(CAST(pp.salarioLiquido AS DECIMAL(15,2))) as totalLiquido,
           SUM(CAST(pp.horasExtrasValor AS DECIMAL(15,2))) as totalHE,
           COUNT(*) as totalFuncionarios
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
-        LEFT JOIN obras o ON e.obraAtualId = o.id
+        LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
+        LEFT JOIN obras o ON of2.obraId = o.id
         WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
-        GROUP BY e.obraAtualId, o.nome
+        GROUP BY of2.obraId, o.nome
         ORDER BY totalBruto DESC
       `) as any[];
 

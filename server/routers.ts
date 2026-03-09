@@ -441,8 +441,8 @@ export const appRouter = router({
           const activeAlloc = allocations.find((a: any) => a.employeeId === input.id);
           if (activeAlloc) {
             await removeEmployeeFromObra(input.id, `Auto-desalocação: status alterado para ${statusNovo}`, ctx.user.name ?? 'Sistema', ctx.user.id);
-            await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "obras", entityType: "obra_funcionario", entityId: activeAlloc.obraAtualId, details: `Funcionário ${employeeData.nomeCompleto || empAnterior?.nomeCompleto || ''} removido automaticamente da obra ${activeAlloc.obraAtualNome} (status: ${statusNovo})` });
-            console.log(`[AutoDesalocação] Funcionário #${input.id} removido da obra #${activeAlloc.obraAtualId} (status: ${statusNovo})`);
+            await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "obras", entityType: "obra_funcionario", entityId: input.id, details: `Funcionário ${employeeData.nomeCompleto || empAnterior?.nomeCompleto || ''} removido automaticamente da obra ${activeAlloc.obraAtualNome} (status: ${statusNovo})` });
+            console.log(`[AutoDesalocação] Funcionário #${input.id} removido da obra (status: ${statusNovo})`);
           }
         } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
       }
@@ -592,7 +592,7 @@ export const appRouter = router({
         const activeAlloc = allocations.find((a: any) => a.employeeId === input.employeeId);
         if (activeAlloc) {
           await removeEmployeeFromObra(input.employeeId, 'Auto-desalocação: desligamento durante período de experiência', ctx.user.name ?? 'Sistema', ctx.user.id);
-          console.log(`[AutoDesalocação] Funcionário #${input.employeeId} removido da obra #${activeAlloc.obraAtualId} (desligamento experiência)`);
+          console.log(`[AutoDesalocação] Funcionário #${input.employeeId} removido da obra (desligamento experiência)`);
         }
       } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
       return { success: true };

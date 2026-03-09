@@ -43,6 +43,11 @@ export const homeDataRouter = router({
         .where(companyFilter(obras.companyId, input));
       const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
+      // Buscar alocações ativas para mapear empId -> obraId
+      const homeAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+        .from(obraFuncionarios).where(and(companyFilter(obraFuncionarios.companyId, input), eq(obraFuncionarios.isActive, 1)));
+      const homeEmpObraMap = new Map(homeAlocs.map(a => [a.employeeId, a.obraId]));
+
       const aniversariantes = ativos
         .filter(e => {
           if (!e.dataNascimento) return false;
@@ -59,7 +64,7 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
-            obra: e.obraAtualId ? obraMap.get(e.obraAtualId) || null : null,
+            obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dia,
             isHoje,
             jaPassou,
@@ -88,7 +93,7 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
-            obra: e.obraAtualId ? obraMap.get(e.obraAtualId) || null : null,
+            obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dia,
             anosEmpresa,
             isHoje,
@@ -357,7 +362,8 @@ export const homeDataRouter = router({
           const fimPrevisto = new Date(o.dataPrevisaoFim! + 'T00:00:00');
           const diasRestantes = Math.ceil((fimPrevisto.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
           // Contar funcionários alocados nesta obra
-          const funcsAlocados = ativos.filter(e => e.obraAtualId === o.id).length;
+          // Contar via alocações ativas
+          const obraEmpCount = homeAlocs.filter(a => a.obraId === o.id).length;
           return {
             id: o.id,
             nome: o.nome,
@@ -365,7 +371,7 @@ export const homeDataRouter = router({
             cliente: o.cliente,
             dataPrevisaoFim: o.dataPrevisaoFim,
             diasRestantes,
-            funcionariosAlocados: funcsAlocados,
+            funcionariosAlocados: obraEmpCount,
             urgencia: diasRestantes <= 30 ? 'critico' : diasRestantes <= 60 ? 'urgente' : 'atencao',
           };
         })

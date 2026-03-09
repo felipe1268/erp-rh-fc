@@ -173,7 +173,6 @@ export const episRouter = router({
         tempoMinimoTrocaEpi: epis.tempoMinimoTroca,
         nomeFunc: employees.nomeCompleto,
         funcaoFunc: employees.funcao,
-        obraAtualId: employees.obraAtualId,
       })
         .from(epiDeliveries)
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
@@ -181,14 +180,23 @@ export const episRouter = router({
         .where(and(...conds))
         .orderBy(desc(epiDeliveries.dataEntrega));
 
-      // Enrich with obra name
-      const obraIds = Array.from(new Set(rows.filter(r => r.obraAtualId).map(r => r.obraAtualId!)));
+      // Enrich with obra name via obra_funcionarios
+      const empIds = [...new Set(rows.map(r => r.employeeId))];
+      const epiAlocs = empIds.length > 0
+        ? await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+            .from(obraFuncionarios).where(and(inArray(obraFuncionarios.employeeId, empIds), eq(obraFuncionarios.isActive, 1)))
+        : [];
+      const epiEmpObraMap2 = new Map(epiAlocs.map(a => [a.employeeId, a.obraId]));
+      const obraIds = [...new Set(epiAlocs.map(a => a.obraId))];
       let obraMap: Record<number, string> = {};
       if (obraIds.length > 0) {
         const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.join(obraIds.map(id => sql`${id}`), sql`,`)})`);
         obraList.forEach(o => { obraMap[o.id] = o.nome; });
       }
-      return rows.map(r => ({ ...r, obraNome: r.obraAtualId ? (obraMap[r.obraAtualId] || null) : null }));
+      return rows.map(r => {
+        const empObraId = epiEmpObraMap2.get(r.employeeId);
+        return { ...r, obraNome: empObraId ? (obraMap[empObraId] || null) : null };
+      });
     }),
 
   createDelivery: protectedProcedure
@@ -566,8 +574,8 @@ export const episRouter = router({
       for (const del of allDeliveries) {
         const emp = allEmployees.find(e => e.id === del.employeeId);
         // Get employee's obra from the full employee record
-        const empFull = await db.select({ obraAtualId: employees.obraAtualId }).from(employees).where(eq(employees.id, del.employeeId)).limit(1);
-        const obraId = empFull[0]?.obraAtualId;
+        const [empAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, del.employeeId), eq(obraFuncionarios.isActive, 1)));
+        const obraId = empAloc?.obraId;
         const obraNome = obraId ? (obraMap.get(obraId) || 'Sem obra') : 'Sem obra';
         if (!custoPorObra[obraNome]) custoPorObra[obraNome] = { nome: obraNome, entregas: 0, unidades: 0, custo: 0 };
         custoPorObra[obraNome].entregas++;

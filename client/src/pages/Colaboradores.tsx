@@ -358,9 +358,8 @@ export default function Colaboradores() {
       // Remover campos temporários de jornada dia a dia do form
       const data: Record<string, any> = {};
       Object.entries(rest).forEach(([k, v]) => { if (!k.startsWith("jornada_")) data[k] = v; });
-      // Tratar obraAtualId "none" como null
-      if (data.obraAtualId === "none") data.obraAtualId = "" as any;
       // Limpar valores "none" dos selects
+      delete data.obraAtualId; // obraAtualId removido - alocação via obra_funcionarios
       Object.keys(data).forEach(k => { if ((data as any)[k] === "none") (data as any)[k] = ""; });
       (data as any).jornadaTrabalho = jornadaStr;
       updateMut.mutate({ id: editingId, companyId: targetCompanyId, data });
@@ -369,7 +368,7 @@ export default function Colaboradores() {
       // Remover campos temporários de jornada dia a dia do form
       const createData: Record<string, any> = {};
       Object.entries(restCreate).forEach(([k, v]) => { if (!k.startsWith("jornada_")) createData[k] = v; });
-      if (createData.obraAtualId === "none") delete (createData as any).obraAtualId;
+      delete (createData as any).obraAtualId; // obraAtualId removido - alocação via obra_funcionarios
       Object.keys(createData).forEach(k => { if ((createData as any)[k] === "none") (createData as any)[k] = ""; });
       (createData as any).jornadaTrabalho = jornadaStr;
       createMut.mutate({ ...createData, companyId: targetCompanyId } as any);
@@ -1133,15 +1132,13 @@ export default function Colaboradores() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><HardHat className="h-3.5 w-3.5" /> Obra Atual</Label>
-                  <Select value={form.obraAtualId || "none"} onValueChange={v => set("obraAtualId", v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem obra vinculada</SelectItem>
-                      {(obras ?? []).map((o: any) => (
-                        <SelectItem key={o.id} value={String(o.id)}>{o.nome} {o.codigo ? `(${o.codigo})` : ""}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="bg-muted/50 border rounded-md px-3 py-2 mt-1 text-sm text-muted-foreground">
+                    {form.obraAtualId && form.obraAtualId !== "0" ? (
+                      (obras ?? []).find((o: any) => String(o.id) === String(form.obraAtualId))?.nome || "Obra #" + form.obraAtualId
+                    ) : (
+                      <span className="italic">Não alocado — use Efetivo por Obra</span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Código Contábil</Label>

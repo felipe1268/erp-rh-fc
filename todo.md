@@ -5199,3 +5199,18 @@
 - [x] Frontend Aviso Prévio: valorTotal nos stats cards = apenas em andamento
 - [x] Coluna "Dias Restantes" já existente em ambas as páginas (Aviso Prévio e Dashboard)
 - [x] 720 testes passando
+
+## BUG: Diferença de 13 funcionários entre Painel RH (142) e Efetivo por Obra (129)
+- [x] Investigar queries do Painel RH e Efetivo por Obra
+- [x] Identificar os 13 funcionários faltantes (20 sem alocação em obra_funcionarios)
+- [x] Corrigir a query para incluir todos os ativos (removido obraAtualId)
+
+## Rev. 227: Remover obraAtualId do sistema
+- [x] Remover obraAtualId do schema drizzle
+- [x] Remover obraAtualId de todas as queries backend (db.ts, routers) - 18 arquivos
+- [x] Remover obraAtualId de todos os componentes frontend (Colaboradores.tsx campo somente leitura)
+- [x] Corrigir getEfetivoPorObra para usar apenas obra_funcionarios
+- [x] Corrigir getFuncionariosSemObra para usar apenas obra_funcionarios (NOT IN alocações ativas)
+- [x] Funcionários sem alocação ativa aparecem como "Não Alocado" para alocação manual
+- [x] Migrar banco de dados (ALTER TABLE DROP COLUMN)
+- [x] 720 testes passando

@@ -916,7 +916,6 @@ export const employees = mysqlTable("employees", {
 	motivoListaNegra: text(),
 	// you can use { mode: 'date' }, if you want to have Date as type for this column
 	dataListaNegra: date({ mode: 'string' }),
-	obraAtualId: int(),
 	codigoContabil: varchar({ length: 20 }),
 	codigoInterno: varchar({ length: 10 }),
 	recebeComplemento: tinyint().default(0).notNull(),

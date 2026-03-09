@@ -549,9 +549,14 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
   const allEmps = await db.select({
     id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
     setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao,
-    obraAtualId: employees.obraAtualId,
   }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`, sql`${employees.deletedAt} IS NULL`));
-  const empMap = new Map(allEmps.map(e => [e.id, e]));
+  
+  // Buscar alocações ativas para mapear empId -> obraId
+  const empObraAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+    .from(obraFuncionarios).where(and(companyWhere(obraFuncionarios, companyId, companyIds), eq(obraFuncionarios.isActive, 1)));
+  const empObraIdMap = new Map(empObraAlocs.map(a => [a.employeeId, a.obraId]));
+  
+  const empMap = new Map(allEmps.map(e => [e.id, { ...e, obraAtualId: empObraIdMap.get(e.id) || null }]));
 
   // Obras
   const allObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(and(companyWhere(obras, companyId, companyIds), sql`${obras.deletedAt} IS NULL`));
@@ -726,9 +731,13 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
   const allEpis = await db.select().from(epis).where(companyFilter);
   const allDel = await db.select().from(epiDeliveries)
     .where(and(delFilter, isNull(epiDeliveries.deletedAt)));
-  const allEmps = await db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, obraAtualId: employees.obraAtualId })
+  const allEmps = await db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao })
     .from(employees).where(and(empFilter, isNull(employees.deletedAt)));
-  const empMap = new Map(allEmps.map(e => [e.id, e]));
+  // Buscar alocações ativas para mapear empId -> obraId
+  const epiEmpObraAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+    .from(obraFuncionarios).where(and(ids.length === 1 ? eq(obraFuncionarios.companyId, ids[0]) : inArray(obraFuncionarios.companyId, ids), eq(obraFuncionarios.isActive, 1)));
+  const epiEmpObraMap = new Map(epiEmpObraAlocs.map(a => [a.employeeId, a.obraId]));
+  const empMap = new Map(allEmps.map(e => [e.id, { ...e, obraAtualId: epiEmpObraMap.get(e.id) || null }]));
   const allObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(obraFilter);
   const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
@@ -1629,7 +1638,6 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
     nomeCompleto: employees.nomeCompleto,
     funcao: employees.funcao,
     setor: employees.setor,
-    obraAtualId: employees.obraAtualId,
     salarioBase: employees.salarioBase,
     empStatus: employees.status,
   }).from(vacationPeriods)
@@ -1754,17 +1762,24 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
     custoMensalDist.push({ mes: key, valor: custoMensal[key] || 0 });
   }
 
-  // Férias por obra
-  const obraIds = new Set(allPeriods.map(p => p.obraAtualId).filter(Boolean));
+  // Férias por obra (via obra_funcionarios)
+  const feriasEmpIds = [...new Set(allPeriods.map(p => p.employeeId))];
+  const feriasEmpAlocs = feriasEmpIds.length > 0
+    ? await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+        .from(obraFuncionarios).where(and(companyWhere(obraFuncionarios, companyId, companyIds), eq(obraFuncionarios.isActive, 1)))
+    : [];
+  const feriasEmpObraMap = new Map(feriasEmpAlocs.map(a => [a.employeeId, a.obraId]));
   let obraNames: Record<number, string> = {};
-  if (obraIds.size > 0) {
+  const obraIdsFerias = new Set(feriasEmpAlocs.map(a => a.obraId));
+  if (obraIdsFerias.size > 0) {
     const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
       .where(and(companyWhere(obras, companyId, companyIds), isNull(obras.deletedAt)));
     obraList.forEach(o => { obraNames[o.id] = o.nome; });
   }
   const porObra: Record<string, { total: number; vencidas: number; pendentes: number; agendadas: number }> = {};
   allPeriods.forEach(p => {
-    const obraNome = p.obraAtualId ? (obraNames[p.obraAtualId] || `Obra ${p.obraAtualId}`) : 'Sem Obra';
+    const empObraId = feriasEmpObraMap.get(p.employeeId);
+    const obraNome = empObraId ? (obraNames[empObraId] || `Obra ${empObraId}`) : 'Sem Obra';
     if (!porObra[obraNome]) porObra[obraNome] = { total: 0, vencidas: 0, pendentes: 0, agendadas: 0 };
     porObra[obraNome].total++;
     if (p.status === 'vencida' || p.vencida === 1) porObra[obraNome].vencidas++;
@@ -1902,7 +1917,6 @@ async function getDashPerfilTempoCasa(companyId: number, companyIds?: number[]) 
     dataAdmissao: employees.dataAdmissao,
     dataNascimento: employees.dataNascimento,
     tipoContrato: employees.tipoContrato,
-    obraAtualId: employees.obraAtualId,
     status: employees.status,
   }).from(employees).where(
     and(
@@ -1912,9 +1926,12 @@ async function getDashPerfilTempoCasa(companyId: number, companyIds?: number[]) 
     )
   );
 
-  // Buscar nomes das obras
+  // Buscar nomes das obras e alocações ativas
   const obrasList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(companyWhere(obras, companyId, companyIds));
   const obraMap = new Map(obrasList.map(o => [o.id, o.nome]));
+  const perfilEmpAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+    .from(obraFuncionarios).where(and(companyWhere(obraFuncionarios, companyId, companyIds), eq(obraFuncionarios.isActive, 1)));
+  const perfilEmpObraMap = new Map(perfilEmpAlocs.map(a => [a.employeeId, a.obraId]));
 
   // Buscar advertencias count por employee
   const warnRows = await db.select({
@@ -1987,7 +2004,8 @@ async function getDashPerfilTempoCasa(companyId: number, companyIds?: number[]) 
     const st = emp.setor || 'Não informado';
     d.setor[st] = (d.setor[st] || 0) + 1;
 
-    const ob = emp.obraAtualId ? (obraMap.get(emp.obraAtualId) || 'Sem obra') : 'Sem obra';
+    const empObraId = perfilEmpObraMap.get(emp.id);
+    const ob = empObraId ? (obraMap.get(empObraId) || 'Sem obra') : 'Sem obra';
     d.obra[ob] = (d.obra[ob] || 0) + 1;
 
     const advCount = warnMap.get(emp.id) || 0;
@@ -2314,7 +2332,7 @@ async function getDashControleDocumentos(companyId: number, companyIds?: number[
   const ativosRows = await db.select({
     id: employees.id, nomeCompleto: employees.nomeCompleto, cpf: employees.cpf,
     funcao: employees.funcao, setor: employees.setor, status: employees.status,
-    validadeCnh: employees.validadeCnh, obraAtualId: employees.obraAtualId,
+    validadeCnh: employees.validadeCnh,
   }).from(employees).where(and(
     companyWhere(employees, companyId, companyIds), isNull(employees.deletedAt),
     sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`,

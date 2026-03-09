@@ -158,11 +158,21 @@ export const avaliacaoRouter = router({
         if (input.evaluatorId > 0) {
           const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
           if (!evaluator) return [];
-          if (evaluator.obraId) conditions.push(eq(employees.obraAtualId, evaluator.obraId));
+          // Filtro por obra será feito após a query
         }
         // Se evaluatorId === 0, é admin/gestor - lista todos os ativos da empresa
-        return db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, obraId: employees.obraAtualId, fotoUrl: employees.fotoUrl })
+        const evalEmps = await db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, fotoUrl: employees.fotoUrl })
           .from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
+        // Buscar alocações para mapear obraId
+        const evalAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+          .from(obraFuncionarios).where(eq(obraFuncionarios.isActive, 1));
+        const evalObraMap = new Map(evalAlocs.map(a => [a.employeeId, a.obraId]));
+        let evalResult = evalEmps.map(e => ({ ...e, obraId: evalObraMap.get(e.id) || null }));
+        if (input.evaluatorId > 0) {
+          const [ev] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
+          if (ev?.obraId) evalResult = evalResult.filter(e => e.obraId === ev.obraId);
+        }
+        return evalResult;
       }),
 
     // Listar funcionários pendentes de avaliação (exclui já avaliados no período)
@@ -181,10 +191,14 @@ export const avaliacaoRouter = router({
         const evaluatedIds = new Set(alreadyEvaluated.map(e => e.employeeId));
         // Buscar todos os funcionários ATIVOS da empresa (e obra se aplicável)
         const conditions: any[] = [companyFilter(employees.companyId, input), eq(employees.status, "Ativo")];
-        if (evaluator.obraId) conditions.push(eq(employees.obraAtualId, evaluator.obraId));
-        const allEmployees = await db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, obraId: employees.obraAtualId, fotoUrl: employees.fotoUrl })
+        const allEmployees = await db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, fotoUrl: employees.fotoUrl })
           .from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
-        return allEmployees.map(emp => ({ ...emp, jaAvaliado: evaluatedIds.has(emp.id) }));
+        const pendAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+          .from(obraFuncionarios).where(eq(obraFuncionarios.isActive, 1));
+        const pendObraMap = new Map(pendAlocs.map(a => [a.employeeId, a.obraId]));
+        let pendResult = allEmployees.map(emp => ({ ...emp, obraId: pendObraMap.get(emp.id) || null, jaAvaliado: evaluatedIds.has(emp.id) }));
+        if (evaluator.obraId) pendResult = pendResult.filter(e => e.obraId === evaluator.obraId);
+        return pendResult;
       }),
 
     // Verificar trava de frequência
@@ -257,7 +271,10 @@ export const avaliacaoRouter = router({
         if (existingEval.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Você já avaliou este funcionário neste período. Sua frequência de avaliação é ${freqLabels[freq] || freq}. Aguarde o próximo período.` });
 
         // Verificar se avaliador pode avaliar este funcionário (mesma obra)
-        if (evaluator.obraId && employee.obraAtualId && evaluator.obraId !== employee.obraAtualId) {
+        // Verificar obra via alocação ativa
+        const [empAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, input.employeeId), eq(obraFuncionarios.isActive, 1)));
+        const empObraId = empAloc?.obraId || null;
+        if (evaluator.obraId && empObraId && evaluator.obraId !== empObraId) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode avaliar funcionários da obra que você gerencia." });
         }
 

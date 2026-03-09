@@ -400,7 +400,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "status", "listaNegra", "motivoListaNegra", "dataListaNegra",
     "listaNegraPor", "listaNegraUserId",
     // Obra / Foto / Observações
-    "obraAtualId", "fotoUrl", "observacoes",
+    "fotoUrl", "observacoes",
     // Complemento salarial
     "recebeComplemento", "valorComplemento", "descricaoComplemento",
     // Horas extras
@@ -431,7 +431,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
   // Campos booleanos (tinyint no schema)
   const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao"]);
   // Campos inteiros
-  const intFields = new Set(["obraAtualId", "contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId"]);
+  const intFields = new Set(["contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId"]);
   // Campos string de HE (são varchar no banco, não int)
   const stringFields = new Set(["heNormal50", "he100", "heNoturna"]);
   // Sanitizar: remover campos inválidos e converter tipos
@@ -446,8 +446,6 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     } else if (intFields.has(key)) {
       const num = parseInt(String(value));
       sanitized[key] = isNaN(num) ? null : num;
-    } else if (key === "obraAtualId" && value === "none") {
-      sanitized[key] = null;
     } else {
       sanitized[key] = value;
     }
@@ -509,14 +507,23 @@ export async function getEmployees(companyId: number, search?: string, status?: 
   // Get all employee rows
   const rows = await db.select().from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
   
-  // Enrich with obra name if any employees have obraAtualId
-  const obraIds = Array.from(new Set(rows.filter(r => r.obraAtualId).map(r => r.obraAtualId!)));
-  let obraMap: Record<number, string> = {};
-  if (obraIds.length > 0) {
-    const obraList = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(sql`${obras.id} IN (${sql.join(obraIds.map(id => sql`${id}`), sql`,`)})`);
-    obraList.forEach(o => { obraMap[o.id] = o.nome; });
+  // Enrich with obra name via obra_funcionarios (alocação ativa)
+  const empIds = rows.map(r => r.id);
+  let empObraMap: Record<number, { obraId: number; obraNome: string }> = {};
+  if (empIds.length > 0) {
+    const alocacoes = await db.select({
+      employeeId: obraFuncionarios.employeeId,
+      obraId: obraFuncionarios.obraId,
+      obraNome: obras.nome,
+    }).from(obraFuncionarios)
+      .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+      .where(and(
+        inArray(obraFuncionarios.employeeId, empIds),
+        eq(obraFuncionarios.isActive, 1),
+      ));
+    alocacoes.forEach(a => { empObraMap[a.employeeId] = { obraId: a.obraId, obraNome: a.obraNome }; });
   }
-  return rows.map(r => ({ ...r, obraAtualNome: r.obraAtualId ? (obraMap[r.obraAtualId] || null) : null }));
+  return rows.map(r => ({ ...r, obraAtualId: empObraMap[r.id]?.obraId || null, obraAtualNome: empObraMap[r.id]?.obraNome || null }));
 }
 
 export async function getEmployeeById(id: number, companyId: number) {
@@ -1371,7 +1378,6 @@ export async function checkEmployeeAllocations(employeeIds: number[]) {
   return allocs.map(a => ({
     employeeId: a.employeeId,
     employeeName: empMap[a.employeeId] || `#${a.employeeId}`,
-    obraAtualId: a.obraId,
     obraAtualNome: obraMap[a.obraId] || `Obra #${a.obraId}`,
     dataInicio: a.dataInicio,
   }));
@@ -1423,8 +1429,6 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
     registradoPor: data.registradoPor || null,
     registradoPorUserId: data.registradoPorUserId || null,
   } as any);
-  // Atualizar obraAtualId do funcionário
-  await db.update(employees).set({ obraAtualId: data.obraId } as any).where(eq(employees.id, data.employeeId));
   return { id: result.insertId, isTransferencia, obraOrigemId };
 }
 
@@ -1448,7 +1452,6 @@ export async function removeEmployeeFromObra(employeeId: number, motivo?: string
     } as any);
   }
   await db.update(obraFuncionarios).set({ isActive: 0, dataFim: hoje } as any).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, 1)));
-  await db.update(employees).set({ obraAtualId: null } as any).where(eq(employees.id, employeeId));
 }
 
 // Rateio de horas
@@ -1927,7 +1930,17 @@ export async function getFuncionariosSemObra(companyId: number, companyIds?: num
   const db = await getDb();
   if (!db) return [];
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
-  const result = await db.select({
+  // Buscar IDs de funcionários com alocação ativa em obra_funcionarios
+  const alocados = await db.select({ employeeId: obraFuncionarios.employeeId })
+    .from(obraFuncionarios)
+    .where(and(
+      inArray(obraFuncionarios.companyId, ids),
+      eq(obraFuncionarios.isActive, 1),
+    ));
+  const empIdsAlocados = new Set(alocados.map(a => a.employeeId));
+  
+  // Buscar todos os funcionários ativos
+  const allActive = await db.select({
     id: employees.id,
     nomeCompleto: employees.nomeCompleto,
     funcao: employees.funcao,
@@ -1935,16 +1948,16 @@ export async function getFuncionariosSemObra(companyId: number, companyIds?: num
     setor: employees.setor,
     status: employees.status,
     dataAdmissao: employees.dataAdmissao,
-    obraAtualId: employees.obraAtualId,
   }).from(employees)
     .where(and(
       inArray(employees.companyId, ids),
       isNull(employees.deletedAt),
       sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
-      sql`(${employees.obraAtualId} IS NULL OR ${employees.obraAtualId} = 0)`,
     ))
     .orderBy(employees.nomeCompleto);
-  return result;
+  
+  // Retornar apenas os que NÃO têm alocação ativa
+  return allActive.filter(e => !empIdsAlocados.has(e.id));
 }
 
 /** Transferência em lote de funcionários para uma obra */
@@ -1992,9 +2005,9 @@ export async function detectarInconsistenciaPonto(data: {
 }) {
   const db = await getDb();
   if (!db) return null;
-  // Buscar obra alocada do funcionário
-  const [emp] = await db.select({ obraAtualId: employees.obraAtualId }).from(employees).where(eq(employees.id, data.employeeId));
-  const obraAlocadaId = emp?.obraAtualId || null;
+  // Buscar obra alocada via obra_funcionarios
+  const [alocAtiva] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, 1)));
+  const obraAlocadaId = alocAtiva?.obraId || null;
   // Se não tem obra alocada ou é a mesma, não é inconsistência
   if (!obraAlocadaId || obraAlocadaId === data.obraPontoId) return null;
   // Verificar se já existe inconsistência para este funcionário/data/obra
@@ -2294,13 +2307,18 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
     }
   }
   
-  // 5. Count sem obra
-  const activeEmps = await db.select({ id: employees.id }).from(employees).where(and(
+  // 5. Count sem obra (funcionários ativos sem alocação em obra_funcionarios)
+  const allActiveEmps = await db.select({ id: employees.id }).from(employees).where(and(
     inArray(employees.companyId, ids),
     isNull(employees.deletedAt),
     sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
-    sql`(${employees.obraAtualId} IS NULL OR ${employees.obraAtualId} = 0)`,
   ));
+  const alocadosIds = await db.select({ employeeId: obraFuncionarios.employeeId }).from(obraFuncionarios).where(and(
+    inArray(obraFuncionarios.companyId, ids),
+    eq(obraFuncionarios.isActive, 1),
+  ));
+  const alocadosSet = new Set(alocadosIds.map(a => a.employeeId));
+  const activeEmps = allActiveEmps.filter(e => !alocadosSet.has(e.id));
   
   const result = Object.entries(porObra).map(([obraId, data]) => ({
     obraId: Number(obraId),

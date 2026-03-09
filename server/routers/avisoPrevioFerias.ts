@@ -550,7 +550,9 @@ export const avisoPrevioFeriasRouter = router({
         let vrConfigNome = '';
         let vrExtra: any = {};
         try {
-          const obraId = (emp as any).obraAtualId;
+          // Buscar obra via alocação ativa
+          const [empObraAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, emp.id), eq(obraFuncionarios.isActive, 1)));
+          const obraId = empObraAloc?.obraId || null;
           let cfgRows: any[] = [];
           if (obraId) {
             const [rows] = await db.execute(
@@ -689,7 +691,7 @@ export const avisoPrevioFeriasRouter = router({
             nome: emp.nomeCompleto,
             cargo: emp.cargo || (emp as any).funcao || '',
             cpf: emp.cpf,
-            obraAtualId: (emp as any).obraAtualId,
+            obraAtualId: empObraAloc?.obraId || null,
           },
         };
       }),
@@ -714,7 +716,9 @@ export const avisoPrevioFeriasRouter = router({
         // ============================================================
         let vrDiario = 0;
         try {
-          const obraId = (emp as any).obraAtualId;
+          // Buscar obra via alocação ativa
+          const [empObraAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, emp.id), eq(obraFuncionarios.isActive, 1)));
+          const obraId = empObraAloc?.obraId || null;
           let cfgRows: any[] = [];
           if (obraId) {
             const [rows] = await db.execute(
@@ -1311,10 +1315,20 @@ export const avisoPrevioFeriasRouter = router({
             eq(employees.status, 'Ativo'),
           ));
 
+        // Buscar todas as alocações ativas de uma vez
+        const allObraAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+          .from(obraFuncionarios).where(and(companyFilter(obraFuncionarios.companyId, input), eq(obraFuncionarios.isActive, 1)));
+        const obraEmpMap: Record<number, Set<number>> = {};
+        for (const a of allObraAlocs) {
+          if (!obraEmpMap[a.obraId]) obraEmpMap[a.obraId] = new Set();
+          obraEmpMap[a.obraId].add(a.employeeId);
+        }
+
         const result = obrasAtivas.map(obra => {
           const fimPrevisto = new Date(obra.dataPrevisaoFim! + 'T00:00:00');
           const diasRestantes = Math.ceil((fimPrevisto.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-          const funcsAlocados = allEmps.filter(e => (e as any).obraAtualId === obra.id);
+          const obraEmpIds = obraEmpMap[obra.id] || new Set();
+          const funcsAlocados = allEmps.filter(e => obraEmpIds.has(e.id));
 
           return {
             obraId: obra.id,

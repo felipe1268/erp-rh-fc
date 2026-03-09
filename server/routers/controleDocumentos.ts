@@ -911,9 +911,10 @@ export const controleDocumentosRouter = router({
       const db = (await getDb())!;
       const [rows] = await db.execute(sql`
         SELECT e.id, e.nomeCompleto, e.cpf, e.funcao, e.dataAdmissao, e.status,
-          o.nome as obraNome
+          ob.nome as obraNome
         FROM employees e
-        LEFT JOIN obras o ON e.obraAtualId = o.id
+        LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
+        LEFT JOIN obras ob ON of2.obraId = ob.id
         WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           AND e.deletedAt IS NULL
           AND e.status = 'Ativo'
@@ -935,8 +936,10 @@ export const controleDocumentosRouter = router({
       if (!emp) return null;
       // Buscar nome da obra principal
       let obraAtualNome: string | null = null;
-      if (emp.obraAtualId) {
-        const [obraAtual] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, emp.obraAtualId));
+      // Buscar obra via alocação ativa
+      const [empObraAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, input.employeeId), eq(obraFuncionarios.isActive, 1)));
+      if (empObraAloc) {
+        const [obraAtual] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, empObraAloc.obraId));
         if (obraAtual) obraAtualNome = obraAtual.nome;
       }
 

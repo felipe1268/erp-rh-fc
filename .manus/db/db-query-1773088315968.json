@@ -1,0 +1,18 @@
+{
+  "query": "\n-- Identificar quais empresas são as construtoras\nSELECT id, nomeFantasia FROM companies WHERE nomeFantasia LIKE '%FC%' OR nomeFantasia LIKE '%Julio%' OR nomeFantasia LIKE '%Júlio%' OR nomeFantasia LIKE '%JF%' OR nomeFantasia LIKE '%Ferraz%' OR nomeFantasia LIKE '%Engenharia%' LIMIT 10;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \n-- Identificar quais empresas são as construtoras\nSELECT id, nomeFantasia FROM companies WHERE nomeFantasia LIKE '%FC%' OR nomeFantasia LIKE '%Julio%' OR nomeFantasia LIKE '%Júlio%' OR nomeFantasia LIKE '%JF%' OR nomeFantasia LIKE '%Ferraz%' OR nomeFantasia LIKE '%Engenharia%' LIMIT 10;\n",
+  "rows": [
+    {
+      "id": "60002",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "60005",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeFantasia\n60002\tFC ENGENHARIA PROJETOS E OBRAS\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}
