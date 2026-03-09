@@ -5,15 +5,16 @@
  * Importa: restaura banco + faz upload dos arquivos
  * 
  * Formato do pacote ZIP:
- *   /database/          - Cada tabela em um arquivo JSON separado
- *   /database/_meta.json - Metadados (versão, data, estatísticas)
- *   /files/             - Todos os documentos organizados por tabela/campo
- *   /files/_manifest.json - Mapeamento URL original -> caminho local
+ *   /banco/              - Cada tabela em um arquivo JSON separado
+ *   /banco/_meta.json    - Metadados (versão, data, estatísticas)
+ *   /arquivos-manifesto.json - Mapeamento de todos os arquivos/documentos
+ *   /README-MIGRACAO.md  - Instruções para migrar para Railway
  */
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
 import { storagePut } from "../storage";
-import { ENV } from "../_core/env";
+import archiver from "archiver";
+import { Readable } from "stream";
 
 // ============================================================
 // LISTA DE TABELAS
@@ -159,7 +160,8 @@ export async function exportDatabase(
 
     try {
       const rows = await db.execute(sql.raw(`SELECT * FROM \`${tableName}\``));
-      const data = Array.isArray(rows) ? (rows as any[])[0] || [] : [];
+      // mysql2 retorna [rows, fields] - pegar primeiro elemento
+      const data = (rows[0] as unknown[]) || [];
       tables[tableName] = Array.isArray(data) ? data : [];
       totalRecords += tables[tableName].length;
 
@@ -169,7 +171,6 @@ export async function exportDatabase(
         for (const row of tables[tableName]) {
           for (const field of urlFields) {
             const camelField = field;
-            // Tentar tanto camelCase quanto snake_case
             const snakeField = field.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
             const value = row[camelField] || row[snakeField];
             if (value && typeof value === "string" && value.startsWith("http")) {
@@ -213,11 +214,84 @@ export async function exportDatabase(
   return { tables, meta, fileUrls };
 }
 
+// ============================================================
+// README DE MIGRAÇÃO
+// ============================================================
+const MIGRATION_README = `# Guia de Migração - ERP FC Engenharia
+
+## Conteúdo do Pacote ZIP
+
+\`\`\`
+/banco/                    - Dados de cada tabela em JSON separado
+/banco/_meta.json          - Metadados da exportação (data, estatísticas)
+/arquivos-manifesto.json   - Lista de todos os documentos/arquivos com URLs
+/README-MIGRACAO.md        - Este arquivo
+\`\`\`
+
+## Passo a Passo para Migrar para Railway
+
+### 1. Criar Banco de Dados MySQL
+- Acesse [railway.app](https://railway.app) e crie um novo projeto
+- Adicione um serviço MySQL
+- Copie a connection string (DATABASE_URL)
+
+### 2. Clonar o Repositório
+\`\`\`bash
+git clone https://github.com/felipe1268/erp-rh-fc.git
+cd erp-rh-fc
+pnpm install
+\`\`\`
+
+### 3. Configurar Variáveis de Ambiente
+Crie um arquivo \`.env\` na raiz:
+\`\`\`env
+DATABASE_URL=mysql://user:pass@host:port/dbname
+JWT_SECRET=seu-segredo-jwt-aqui
+\`\`\`
+
+### 4. Criar as Tabelas
+\`\`\`bash
+pnpm db:push
+\`\`\`
+
+### 5. Importar os Dados
+Use o script de importação incluído ou importe manualmente:
+\`\`\`bash
+node scripts/import-data.mjs ./banco/
+\`\`\`
+
+### 6. Baixar os Arquivos/Documentos
+Use o manifesto de arquivos para baixar todos os documentos:
+\`\`\`bash
+node scripts/download-files.mjs ./arquivos-manifesto.json ./uploads/
+\`\`\`
+
+### 7. Deploy no Railway
+\`\`\`bash
+railway link
+railway up
+\`\`\`
+
+## Estrutura dos Dados
+
+Cada arquivo JSON na pasta \`/banco/\` contém um array de registros da tabela correspondente.
+O arquivo \`_meta.json\` contém estatísticas e a data da exportação.
+
+## Arquivos/Documentos
+
+O \`arquivos-manifesto.json\` lista todos os documentos anexados (ASOs, certificados, fotos, etc.)
+com suas URLs originais. Use o script de download para baixá-los em lote.
+`;
+
+// ============================================================
+// EXPORTAÇÃO EM ZIP
+// ============================================================
+
 /**
- * Gera o pacote completo de exportação (JSON com banco + manifesto de arquivos).
- * O download dos arquivos é feito separadamente pelo frontend via streaming.
+ * Gera o pacote ZIP completo de exportação.
+ * Contém: /banco/*.json + /arquivos-manifesto.json + /README-MIGRACAO.md
  */
-export async function generateExportPackage(
+export async function generateExportZip(
   onProgress?: (p: ExportProgress) => void
 ): Promise<ExportResult> {
   const startTime = Date.now();
@@ -232,20 +306,40 @@ export async function generateExportPackage(
       totalTables: ALL_TABLES.length,
       filesProcessed: 0,
       totalFiles: fileUrls.length,
-      message: "Empacotando dados...",
+      message: "Gerando arquivo ZIP...",
     });
 
-    // 2. Criar o pacote JSON principal (banco de dados)
-    const dbPackage = JSON.stringify({
-      _meta: meta,
-      ...tables,
+    // 2. Criar ZIP em memória
+    const archive = archiver("zip", { zlib: { level: 6 } });
+    const chunks: Buffer[] = [];
+
+    // Coletar chunks do stream
+    const streamPromise = new Promise<Buffer>((resolve, reject) => {
+      archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+      archive.on("end", () => resolve(Buffer.concat(chunks)));
+      archive.on("error", reject);
     });
 
-    // 3. Criar manifesto de arquivos
-    const fileManifest = JSON.stringify({
+    // 3. Adicionar _meta.json
+    archive.append(JSON.stringify(meta, null, 2), { name: "banco/_meta.json" });
+
+    // 4. Adicionar cada tabela com dados como arquivo JSON separado
+    for (const [tableName, data] of Object.entries(tables)) {
+      if (data.length > 0) {
+        archive.append(JSON.stringify(data, null, 2), { name: `banco/${tableName}.json` });
+      }
+    }
+
+    // 5. Adicionar banco completo (um JSON com tudo para importação fácil)
+    const fullDbExport = { _meta: meta, ...tables };
+    archive.append(JSON.stringify(fullDbExport), { name: "banco-completo.json" });
+
+    // 6. Adicionar manifesto de arquivos
+    const fileManifest = {
       _meta: {
         totalFiles: fileUrls.length,
         exportedAt: meta.exportedAt,
+        instrucoes: "Use as URLs originais para baixar cada arquivo. O campo 'localPath' sugere onde salvar localmente.",
       },
       files: fileUrls.map((f, idx) => ({
         id: idx + 1,
@@ -253,18 +347,88 @@ export async function generateExportPackage(
         field: f.field,
         rowId: f.rowId,
         originalUrl: f.url,
-        localPath: `files/${f.table}/${f.rowId}_${f.field}${getExtFromUrl(f.url)}`,
+        localPath: `arquivos/${f.table}/${f.rowId}_${f.field}${getExtFromUrl(f.url)}`,
       })),
+    };
+    archive.append(JSON.stringify(fileManifest, null, 2), { name: "arquivos-manifesto.json" });
+
+    // 7. Adicionar README de migração
+    archive.append(MIGRATION_README, { name: "README-MIGRACAO.md" });
+
+    // 8. Finalizar ZIP
+    await archive.finalize();
+    const zipBuffer = await streamPromise;
+
+    // 9. Upload do ZIP para S3
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const zipKey = `migration-exports/erp-export-completo-${timestamp}.zip`;
+    const { url: zipUrl } = await storagePut(zipKey, zipBuffer, "application/zip");
+
+    const duration = Date.now() - startTime;
+
+    onProgress?.({
+      phase: "done",
+      tablesProcessed: ALL_TABLES.length,
+      totalTables: ALL_TABLES.length,
+      filesProcessed: fileUrls.length,
+      totalFiles: fileUrls.length,
+      message: "Exportação concluída!",
     });
 
-    // 4. Upload do pacote do banco para S3
+    return {
+      success: true,
+      downloadUrl: zipUrl,
+      stats: {
+        tablesExported: Object.keys(tables).filter(t => tables[t].length > 0).length,
+        totalRecords: meta.totalRecords,
+        filesExported: fileUrls.length,
+        totalSizeBytes: zipBuffer.length,
+        duration,
+      },
+    };
+  } catch (e: any) {
+    const duration = Date.now() - startTime;
+    console.error(`[Migration] Erro na exportação ZIP: ${e.message}`, e.stack);
+    onProgress?.({
+      phase: "error",
+      tablesProcessed: 0,
+      totalTables: ALL_TABLES.length,
+      filesProcessed: 0,
+      totalFiles: 0,
+      message: `Erro: ${e.message}`,
+    });
+    return {
+      success: false,
+      stats: { tablesExported: 0, totalRecords: 0, filesExported: 0, totalSizeBytes: 0, duration },
+      error: e.message,
+    };
+  }
+}
+
+/**
+ * Gera exportação JSON simples (sem ZIP) - mantido para compatibilidade
+ */
+export async function generateExportPackage(
+  onProgress?: (p: ExportProgress) => void
+): Promise<ExportResult> {
+  const startTime = Date.now();
+
+  try {
+    const { tables, meta, fileUrls } = await exportDatabase(onProgress);
+
+    onProgress?.({
+      phase: "packaging",
+      tablesProcessed: ALL_TABLES.length,
+      totalTables: ALL_TABLES.length,
+      filesProcessed: 0,
+      totalFiles: fileUrls.length,
+      message: "Empacotando dados...",
+    });
+
+    const dbPackage = JSON.stringify({ _meta: meta, ...tables });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const dbKey = `migration-exports/erp-export-${timestamp}-db.json`;
     const { url: dbUrl } = await storagePut(dbKey, dbPackage, "application/json");
-
-    // 5. Upload do manifesto de arquivos para S3
-    const manifestKey = `migration-exports/erp-export-${timestamp}-files-manifest.json`;
-    const { url: manifestUrl } = await storagePut(manifestKey, fileManifest, "application/json");
 
     const duration = Date.now() - startTime;
 
@@ -290,14 +454,6 @@ export async function generateExportPackage(
     };
   } catch (e: any) {
     const duration = Date.now() - startTime;
-    onProgress?.({
-      phase: "error",
-      tablesProcessed: 0,
-      totalTables: ALL_TABLES.length,
-      filesProcessed: 0,
-      totalFiles: 0,
-      message: `Erro: ${e.message}`,
-    });
     return {
       success: false,
       stats: { tablesExported: 0, totalRecords: 0, filesExported: 0, totalSizeBytes: 0, duration },
@@ -347,11 +503,10 @@ export async function importDatabase(
 
     try {
       if (mode === "replace") {
-        // Limpar tabela antes de inserir
         await db.execute(sql.raw(`DELETE FROM \`${tableName}\``));
       }
 
-      // Inserir em lotes de 100
+      // Inserir em lotes
       const batchSize = 100;
       for (let j = 0; j < rows.length; j += batchSize) {
         const batch = rows.slice(j, j + batchSize);
@@ -370,7 +525,6 @@ export async function importDatabase(
 
           try {
             if (mode === "merge") {
-              // UPSERT: INSERT ... ON DUPLICATE KEY UPDATE
               const updateCols = columns
                 .filter(c => c !== "id")
                 .map(c => `\`${c}\` = VALUES(\`${c}\`)`)
@@ -385,7 +539,6 @@ export async function importDatabase(
             }
             totalRecords++;
           } catch (rowErr: any) {
-            // Ignorar erros de registro individual, continuar
             if (!rowErr.message.includes("Duplicate entry")) {
               errors.push(`${tableName} row ${row.id || j}: ${rowErr.message}`);
             }

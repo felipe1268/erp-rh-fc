@@ -5128,3 +5128,8 @@
 - [x] Frontend: Página de Backup/Migração com botões Exportar e Importar
 - [x] Frontend: Progresso de exportação/importação com feedback visual
 - [x] Documentação: README com instruções para migrar para Railway + banco independente
+
+## Rev. 220: Corrigir Exportação - ZIP com dados reais
+- [x] BUG: Exportação retorna tabelas vazias (totalRecords: 0) - corrigido rows[0] do mysql2
+- [x] Gerar exportação em formato ZIP organizado com pastas (archiver)
+- [x] ZIP contém: /banco/*.json + banco-completo.json + manifesto-arquivos.json + README-MIGRACAO.md

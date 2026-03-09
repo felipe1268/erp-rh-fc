@@ -5,16 +5,15 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   ArrowLeft, Download, Upload, Database, FileArchive, HardDrive,
   AlertTriangle, CheckCircle, Loader2, FileJson, Files, Shield,
-  Server, ExternalLink, Info
+  Server, ExternalLink, Info, PackageOpen
 } from "lucide-react";
 
-type ExportPhase = "idle" | "exporting-db" | "exporting-files" | "done" | "error";
+type ExportPhase = "idle" | "exporting" | "done" | "error";
 type ImportPhase = "idle" | "reading" | "importing" | "done" | "error";
 
 export default function Migration() {
@@ -24,7 +23,6 @@ export default function Migration() {
   // Export state
   const [exportPhase, setExportPhase] = useState<ExportPhase>("idle");
   const [exportResult, setExportResult] = useState<any>(null);
-  const [filesResult, setFilesResult] = useState<any>(null);
 
   // Import state
   const [importPhase, setImportPhase] = useState<ImportPhase>("idle");
@@ -34,7 +32,8 @@ export default function Migration() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // tRPC mutations
-  const exportMutation = trpc.migration.exportar.useMutation();
+  const exportZipMutation = trpc.migration.exportarZip.useMutation();
+  const exportJsonMutation = trpc.migration.exportar.useMutation();
   const exportFilesMutation = trpc.migration.exportarArquivos.useMutation();
   const importMutation = trpc.migration.importar.useMutation();
 
@@ -44,57 +43,61 @@ export default function Migration() {
   });
 
   // ============================================================
-  // EXPORTAR
+  // EXPORTAR ZIP (principal)
   // ============================================================
-  const handleExportDB = useCallback(async () => {
-    setExportPhase("exporting-db");
+  const handleExportZip = useCallback(async () => {
+    setExportPhase("exporting");
     setExportResult(null);
     try {
-      const result = await exportMutation.mutateAsync();
-      setExportResult(result);
+      const result = await exportZipMutation.mutateAsync();
+      setExportResult({ ...result, format: "zip" });
       setExportPhase("done");
-      toast.success("Banco de dados exportado com sucesso!");
+      toast.success("Exportação ZIP concluída com sucesso!");
+      // Auto-download
+      if (result.downloadUrl) {
+        window.open(result.downloadUrl, "_blank");
+      }
     } catch (e: any) {
       setExportPhase("error");
       toast.error(`Erro na exportação: ${e.message}`);
     }
-  }, [exportMutation]);
+  }, [exportZipMutation]);
 
+  // Exportar só JSON (alternativo)
+  const handleExportJson = useCallback(async () => {
+    setExportPhase("exporting");
+    setExportResult(null);
+    try {
+      const result = await exportJsonMutation.mutateAsync();
+      setExportResult({ ...result, format: "json" });
+      setExportPhase("done");
+      toast.success("Banco exportado em JSON!");
+      if (result.downloadUrl) {
+        window.open(result.downloadUrl, "_blank");
+      }
+    } catch (e: any) {
+      setExportPhase("error");
+      toast.error(`Erro: ${e.message}`);
+    }
+  }, [exportJsonMutation]);
+
+  // Exportar manifesto de arquivos
   const handleExportFiles = useCallback(async () => {
-    setExportPhase("exporting-files");
-    setFilesResult(null);
+    setExportPhase("exporting");
+    setExportResult(null);
     try {
       const result = await exportFilesMutation.mutateAsync();
-      setFilesResult(result);
+      setExportResult({ ...result, format: "manifest", stats: { tablesExported: 0, totalRecords: 0, filesExported: result.totalFiles, totalSizeBytes: 0, duration: 0 } });
       setExportPhase("done");
-      toast.success("Manifesto de arquivos gerado com sucesso!");
+      toast.success("Manifesto de arquivos gerado!");
+      if (result.downloadUrl) {
+        window.open(result.downloadUrl, "_blank");
+      }
     } catch (e: any) {
       setExportPhase("error");
       toast.error(`Erro: ${e.message}`);
     }
   }, [exportFilesMutation]);
-
-  const handleExportAll = useCallback(async () => {
-    setExportPhase("exporting-db");
-    setExportResult(null);
-    setFilesResult(null);
-    try {
-      // 1. Exportar banco
-      const dbResult = await exportMutation.mutateAsync();
-      setExportResult(dbResult);
-
-      // 2. Exportar manifesto de arquivos
-      setExportPhase("exporting-files");
-      const filesRes = await exportFilesMutation.mutateAsync();
-      setFilesResult(filesRes);
-
-      setExportPhase("done");
-      toast.success("Exportação completa realizada com sucesso!");
-    } catch (e: any) {
-      setExportPhase("error");
-      toast.error(`Erro na exportação: ${e.message}`);
-    }
-  }, [exportMutation, exportFilesMutation]);
 
   // ============================================================
   // IMPORTAR
@@ -103,7 +106,7 @@ export default function Migration() {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.name.endsWith(".json")) {
-        toast.error("Selecione um arquivo JSON de exportação");
+        toast.error("Selecione um arquivo JSON de exportação (banco-completo.json)");
         return;
       }
       setImportFile(file);
@@ -157,6 +160,8 @@ export default function Migration() {
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
   }
+
+  const isExporting = exportPhase === "exporting";
 
   // Access check
   if (user?.role !== "admin_master" && user?.role !== "admin") {
@@ -244,53 +249,67 @@ export default function Migration() {
               <div className="flex gap-3">
                 <Info className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
                 <div className="text-sm text-amber-800 dark:text-amber-200">
-                  <p className="font-semibold mb-1">O que será exportado:</p>
+                  <p className="font-semibold mb-1">O que o ZIP contém:</p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li><strong>Banco de dados</strong>: Todas as {statsQuery.data?.totalTables || "160+"} tabelas em formato JSON</li>
-                    <li><strong>Manifesto de arquivos</strong>: Lista de todos os documentos anexados (ASOs, certificados, fotos, contratos) com URLs de download</li>
+                    <li><strong>/banco/</strong> - Cada tabela em um arquivo JSON separado</li>
+                    <li><strong>banco-completo.json</strong> - Todas as tabelas em um único arquivo (para importação)</li>
+                    <li><strong>arquivos-manifesto.json</strong> - Lista de todos os documentos com URLs de download</li>
+                    <li><strong>README-MIGRACAO.md</strong> - Guia passo a passo para migrar para Railway</li>
                   </ul>
-                  <p className="mt-2 text-amber-700 dark:text-amber-300">
-                    Após exportar, use o manifesto para baixar os arquivos com um script (instruções incluídas).
-                  </p>
                 </div>
               </div>
             </div>
 
             {/* Export buttons */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Botão principal: ZIP */}
               <Button
-                onClick={handleExportAll}
-                disabled={exportPhase !== "idle" && exportPhase !== "done" && exportPhase !== "error"}
-                className="h-auto py-4 bg-green-600 hover:bg-green-700"
+                onClick={handleExportZip}
+                disabled={isExporting}
+                className="h-auto py-5 bg-green-600 hover:bg-green-700 md:col-span-1"
               >
                 <div className="flex flex-col items-center gap-1">
-                  <FileArchive className="h-6 w-6" />
-                  <span className="font-semibold">Exportar Tudo</span>
-                  <span className="text-xs opacity-80">Banco + Manifesto de Arquivos</span>
+                  {isExporting ? (
+                    <Loader2 className="h-7 w-7 animate-spin" />
+                  ) : (
+                    <PackageOpen className="h-7 w-7" />
+                  )}
+                  <span className="font-bold text-base">Exportar ZIP Completo</span>
+                  <span className="text-xs opacity-80">Banco + Manifesto + README</span>
                 </div>
               </Button>
 
+              {/* Botão secundário: só JSON */}
               <Button
                 variant="outline"
-                onClick={handleExportDB}
-                disabled={exportPhase !== "idle" && exportPhase !== "done" && exportPhase !== "error"}
+                onClick={handleExportJson}
+                disabled={isExporting}
                 className="h-auto py-4"
               >
                 <div className="flex flex-col items-center gap-1">
-                  <Database className="h-6 w-6" />
-                  <span className="font-semibold">Só Banco de Dados</span>
-                  <span className="text-xs opacity-60">JSON com todas as tabelas</span>
+                  {isExporting ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <Database className="h-6 w-6" />
+                  )}
+                  <span className="font-semibold">Só Banco (JSON)</span>
+                  <span className="text-xs opacity-60">Arquivo único com todas as tabelas</span>
                 </div>
               </Button>
 
+              {/* Botão secundário: só manifesto */}
               <Button
                 variant="outline"
                 onClick={handleExportFiles}
-                disabled={exportPhase !== "idle" && exportPhase !== "done" && exportPhase !== "error"}
+                disabled={isExporting}
                 className="h-auto py-4"
               >
                 <div className="flex flex-col items-center gap-1">
-                  <Files className="h-6 w-6" />
+                  {isExporting ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <Files className="h-6 w-6" />
+                  )}
                   <span className="font-semibold">Só Manifesto de Arquivos</span>
                   <span className="text-xs opacity-60">Lista de URLs para download</span>
                 </div>
@@ -298,98 +317,91 @@ export default function Migration() {
             </div>
 
             {/* Export progress */}
-            {(exportPhase === "exporting-db" || exportPhase === "exporting-files") && (
+            {isExporting && (
               <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
                 <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
                 <div>
                   <p className="font-medium text-blue-800 dark:text-blue-200">
-                    {exportPhase === "exporting-db" ? "Exportando banco de dados..." : "Gerando manifesto de arquivos..."}
+                    Exportando dados...
                   </p>
                   <p className="text-sm text-blue-600 dark:text-blue-400">
-                    Isso pode levar alguns minutos dependendo do volume de dados.
+                    Isso pode levar alguns minutos dependendo do volume de dados. Não feche esta página.
                   </p>
                 </div>
               </div>
             )}
 
             {/* Export results */}
-            {exportPhase === "done" && (exportResult || filesResult) && (
-              <div className="space-y-3">
-                {exportResult && (
-                  <div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="font-semibold text-green-800 dark:text-green-200">Banco de Dados Exportado</p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-sm">
-                          <div>
-                            <span className="text-gray-500">Tabelas:</span>{" "}
-                            <strong>{exportResult.stats.tablesExported}</strong>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Registros:</span>{" "}
-                            <strong>{exportResult.stats.totalRecords.toLocaleString("pt-BR")}</strong>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Tamanho:</span>{" "}
-                            <strong>{formatBytes(exportResult.stats.totalSizeBytes)}</strong>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Duração:</span>{" "}
-                            <strong>{formatDuration(exportResult.stats.duration)}</strong>
-                          </div>
+            {exportPhase === "done" && exportResult && (
+              <div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-green-800 dark:text-green-200">
+                      {exportResult.format === "zip" ? "Exportação ZIP Concluída" :
+                       exportResult.format === "manifest" ? "Manifesto de Arquivos Gerado" :
+                       "Banco de Dados Exportado"}
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-sm">
+                      {exportResult.stats?.tablesExported > 0 && (
+                        <div>
+                          <span className="text-gray-500">Tabelas:</span>{" "}
+                          <strong>{exportResult.stats.tablesExported}</strong>
                         </div>
-                        {exportResult.downloadUrl && (
-                          <a
-                            href={exportResult.downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-3 text-green-700 hover:text-green-800 font-medium text-sm"
-                          >
-                            <Download className="h-4 w-4" />
-                            Baixar JSON do Banco de Dados
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
-                      </div>
+                      )}
+                      {exportResult.stats?.totalRecords > 0 && (
+                        <div>
+                          <span className="text-gray-500">Registros:</span>{" "}
+                          <strong>{exportResult.stats.totalRecords.toLocaleString("pt-BR")}</strong>
+                        </div>
+                      )}
+                      {exportResult.stats?.filesExported > 0 && (
+                        <div>
+                          <span className="text-gray-500">Arquivos:</span>{" "}
+                          <strong>{exportResult.stats.filesExported}</strong>
+                        </div>
+                      )}
+                      {exportResult.stats?.totalSizeBytes > 0 && (
+                        <div>
+                          <span className="text-gray-500">Tamanho:</span>{" "}
+                          <strong>{formatBytes(exportResult.stats.totalSizeBytes)}</strong>
+                        </div>
+                      )}
+                      {exportResult.stats?.duration > 0 && (
+                        <div>
+                          <span className="text-gray-500">Duração:</span>{" "}
+                          <strong>{formatDuration(exportResult.stats.duration)}</strong>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
 
-                {filesResult && (
-                  <div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="font-semibold text-green-800 dark:text-green-200">Manifesto de Arquivos Gerado</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          {filesResult.totalFiles} arquivos mapeados em {filesResult.byTable?.length || 0} tabelas
-                        </p>
-                        {filesResult.byTable && filesResult.byTable.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {filesResult.byTable.slice(0, 8).map((t: any) => (
-                              <Badge key={t.table} variant="secondary" className="text-xs">
-                                {t.table}: {t.count}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                        {filesResult.downloadUrl && (
-                          <a
-                            href={filesResult.downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-3 text-green-700 hover:text-green-800 font-medium text-sm"
-                          >
-                            <Download className="h-4 w-4" />
-                            Baixar Manifesto de Arquivos (JSON)
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
+                    {/* Tabelas por arquivo (manifesto) */}
+                    {exportResult.byTable && exportResult.byTable.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {exportResult.byTable.slice(0, 8).map((t: any) => (
+                          <Badge key={t.table} variant="secondary" className="text-xs">
+                            {t.table}: {t.count}
+                          </Badge>
+                        ))}
                       </div>
-                    </div>
+                    )}
+
+                    {exportResult.downloadUrl && (
+                      <a
+                        href={exportResult.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium text-sm transition-colors"
+                      >
+                        <Download className="h-4 w-4" />
+                        {exportResult.format === "zip" ? "Baixar ZIP" :
+                         exportResult.format === "manifest" ? "Baixar Manifesto" :
+                         "Baixar JSON"}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -458,9 +470,11 @@ export default function Migration() {
               ) : (
                 <div>
                   <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
-                    Clique para selecionar o arquivo JSON de exportação
+                    Clique para selecionar o arquivo JSON
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">Arquivo gerado pela função "Exportar Banco de Dados"</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Use o arquivo "banco-completo.json" do ZIP exportado
+                  </p>
                 </div>
               )}
               <input
@@ -564,8 +578,8 @@ export default function Migration() {
               <div className="flex gap-3">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-700 dark:text-purple-300 font-bold">1</div>
                 <div>
-                  <p className="font-semibold">Exporte seus dados</p>
-                  <p className="text-gray-500">Use o botão "Exportar Tudo" acima para gerar o JSON do banco e o manifesto de arquivos.</p>
+                  <p className="font-semibold">Exporte seus dados em ZIP</p>
+                  <p className="text-gray-500">Use o botão "Exportar ZIP Completo" acima. O ZIP contém o banco de dados, manifesto de arquivos e instruções.</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -573,24 +587,26 @@ export default function Migration() {
                 <div>
                   <p className="font-semibold">Baixe os arquivos anexados</p>
                   <p className="text-gray-500">
-                    Use o manifesto de arquivos com um script para baixar todos os documentos. Exemplo com Node.js:
+                    Extraia o ZIP e use o <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">arquivos-manifesto.json</code> com um script para baixar todos os documentos:
                   </p>
                   <pre className="mt-2 bg-gray-100 dark:bg-gray-900 p-3 rounded text-xs overflow-x-auto">
 {`// download-files.mjs
 import fs from 'fs';
 import path from 'path';
 
-const manifest = JSON.parse(fs.readFileSync('files-manifest.json', 'utf-8'));
+const manifest = JSON.parse(
+  fs.readFileSync('arquivos-manifesto.json', 'utf-8')
+);
 
 for (const file of manifest.files) {
-  const dir = path.dirname(file.suggestedPath);
+  const dir = path.dirname(file.localPath);
   fs.mkdirSync(dir, { recursive: true });
   
   const res = await fetch(file.originalUrl);
   const buffer = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(file.suggestedPath, buffer);
+  fs.writeFileSync(file.localPath, buffer);
   
-  console.log(\`Downloaded: \${file.suggestedPath}\`);
+  console.log(\`OK: \${file.localPath}\`);
 }`}
                   </pre>
                 </div>
@@ -610,8 +626,8 @@ for (const file of manifest.files) {
                 <div>
                   <p className="font-semibold">Importe os dados</p>
                   <p className="text-gray-500">
-                    No novo servidor, use a função "Importar Dados" desta página para restaurar o banco.
-                    Para os arquivos, configure um bucket S3 (AWS, Cloudflare R2, etc.) e faça upload dos documentos.
+                    No novo servidor, use a função "Importar Dados" desta página com o arquivo <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">banco-completo.json</code> do ZIP.
+                    Para os arquivos, configure um bucket S3 e faça upload dos documentos baixados.
                   </p>
                 </div>
               </div>

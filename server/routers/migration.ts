@@ -5,17 +5,16 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { generateExportPackage, importDatabase, exportDatabase } from "../services/migrationService";
+import { generateExportPackage, generateExportZip, importDatabase, exportDatabase } from "../services/migrationService";
 import { storagePut } from "../storage";
 
 export const migrationRouter = router({
   /**
-   * Exportar banco de dados completo + manifesto de arquivos
-   * Retorna URL para download do pacote JSON
+   * Exportar banco de dados completo em ZIP organizado
+   * Contém: /banco/*.json + manifesto de arquivos + README de migração
    */
-  exportar: protectedProcedure
+  exportarZip: protectedProcedure
     .mutation(async ({ ctx }) => {
-      // Apenas admin_master pode exportar
       if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -23,7 +22,32 @@ export const migrationRouter = router({
         });
       }
 
-      console.log(`[Migration] Exportação iniciada por ${ctx.user.name}`);
+      console.log(`[Migration] Exportação ZIP iniciada por ${ctx.user.name}`);
+      const result = await generateExportZip();
+
+      if (!result.success) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro na exportação: ${result.error}`,
+        });
+      }
+
+      return result;
+    }),
+
+  /**
+   * Exportar banco de dados completo em JSON (mantido para compatibilidade)
+   */
+  exportar: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas administradores podem exportar dados",
+        });
+      }
+
+      console.log(`[Migration] Exportação JSON iniciada por ${ctx.user.name}`);
       const result = await generateExportPackage();
 
       if (!result.success) {
@@ -38,7 +62,6 @@ export const migrationRouter = router({
 
   /**
    * Exportar apenas o manifesto de arquivos (lista de URLs)
-   * O frontend usa isso para baixar os arquivos individualmente
    */
   exportarArquivos: protectedProcedure
     .mutation(async ({ ctx }) => {
@@ -46,9 +69,8 @@ export const migrationRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores" });
       }
 
-      const { fileUrls, meta } = await exportDatabase();
+      const { fileUrls } = await exportDatabase();
 
-      // Gerar manifesto organizado
       const manifest = {
         _meta: {
           totalFiles: fileUrls.length,
@@ -64,7 +86,6 @@ export const migrationRouter = router({
         })),
       };
 
-      // Upload do manifesto
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const key = `migration-exports/files-manifest-${timestamp}.json`;
       const { url } = await storagePut(key, JSON.stringify(manifest, null, 2), "application/json");
@@ -83,7 +104,6 @@ export const migrationRouter = router({
 
   /**
    * Importar dados de um pacote de exportação
-   * Recebe o JSON do banco e restaura todas as tabelas
    */
   importar: protectedProcedure
     .input(z.object({
