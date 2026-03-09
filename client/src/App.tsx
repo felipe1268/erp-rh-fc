@@ -7,7 +7,7 @@ import { CompanyProvider } from "./contexts/CompanyContext";
 import { ModuleProvider } from "./contexts/ModuleContext";
 import { ModuleConfigProvider } from "./contexts/ModuleConfigContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
-import { lazy, Suspense } from "react";h
+import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
 // ============================================================
