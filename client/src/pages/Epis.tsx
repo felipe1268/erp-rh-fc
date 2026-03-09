@@ -261,7 +261,7 @@ export default function Epis() {
   // Transferência form state
   const [transForm, setTransForm] = useState({
     epiId: "", quantidade: 1, tipoOrigem: "central" as "central" | "obra",
-    origemObraId: "", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "",
+    origemObraId: "", tipoDestino: "obra" as "central" | "obra", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "",
   });
   const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -422,7 +422,7 @@ export default function Epis() {
     setFotoEstado({ file: null, preview: "" });
   }
   function resetTransForm() {
-    setTransForm({ epiId: "", quantidade: 1, tipoOrigem: "central", origemObraId: "", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "" });
+    setTransForm({ epiId: "", quantidade: 1, tipoOrigem: "central", origemObraId: "", tipoDestino: "obra", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "" });
   }
 
   // CA lookup function
@@ -1077,7 +1077,15 @@ export default function Epis() {
                     searchExtra: `${e.ca || ""} ${e.nome || ""}`,
                   }))}
                   value={entregaForm.epiId || undefined}
-                  onValueChange={v => setEntregaForm(f => ({ ...f, epiId: v }))}
+                  onValueChange={v => {
+                    // Auto-selecionar origem 'obra' se funcionário já selecionado está em obra com estoque
+                    let origemEntrega = entregaForm.origemEntrega;
+                    if (entregaForm.obraId && v) {
+                      const temEstoqueObra = estoqueObraList2.some((e: any) => e.epiId === parseInt(v) && e.obraId === parseInt(entregaForm.obraId) && e.quantidade > 0);
+                      if (temEstoqueObra) origemEntrega = 'obra';
+                    }
+                    setEntregaForm(f => ({ ...f, epiId: v, origemEntrega }));
+                  }}
                   placeholder="Selecione o EPI..."
                   searchPlaceholder="Buscar por nome ou CA..."
                   emptyMessage="Nenhum EPI encontrado."
@@ -1096,7 +1104,13 @@ export default function Epis() {
                   onValueChange={v => {
                     const emp = employeesList.find((e: any) => String(e.id) === v);
                     const obraId = emp?.obraAtualId ? String(emp.obraAtualId) : "";
-                    setEntregaForm(f => ({ ...f, employeeId: v, obraId }));
+                    // Auto-selecionar origem 'obra' se funcionário está em obra com estoque do EPI
+                    let origemEntrega = entregaForm.origemEntrega;
+                    if (obraId && entregaForm.epiId) {
+                      const temEstoqueObra = estoqueObraList2.some((e: any) => e.epiId === parseInt(entregaForm.epiId) && e.obraId === parseInt(obraId) && e.quantidade > 0);
+                      if (temEstoqueObra) origemEntrega = 'obra';
+                    }
+                    setEntregaForm(f => ({ ...f, employeeId: v, obraId, origemEntrega }));
                   }}
                   placeholder="Selecione o funcionário..."
                   searchPlaceholder="Buscar por nome, CPF, matrícula, função..."
@@ -2262,8 +2276,8 @@ export default function Epis() {
                             </td>
                             <td className="p-3 text-center"><ArrowRight className="h-4 w-4 text-muted-foreground mx-auto" /></td>
                             <td className="p-3">
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                                🏗️ {t.destinoNome || 'Obra #' + t.destinoObraId}
+                              <Badge variant="outline" className={t.destinoObraId ? 'bg-green-50 text-green-700 border-green-300' : 'bg-blue-50 text-blue-700 border-blue-300'}>
+                                {t.destinoObraId ? `🏗️ ${t.destinoNome || 'Obra #' + t.destinoObraId}` : '🏢 Escritório Central'}
                               </Badge>
                             </td>
                             <td className="p-3 text-xs text-muted-foreground">{t.observacoes || '—'}</td>
@@ -2345,16 +2359,38 @@ export default function Epis() {
               )}
 
               <div>
-                <Label>Obra de Destino *</Label>
-                <Select value={transForm.destinoObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, destinoObraId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione a obra de destino..." /></SelectTrigger>
-                  <SelectContent>
-                    {obrasList.filter((o: any) => String(o.id) !== transForm.origemObraId).map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Destino *</Label>
+                <div className="flex gap-2 mt-1">
+                  <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoDestino: 'obra', destinoObraId: '' }))}
+                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
+                      transForm.tipoDestino === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
+                    }`}>
+                    🏗️ Obra
+                  </button>
+                  {transForm.tipoOrigem === 'obra' && (
+                    <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoDestino: 'central', destinoObraId: '' }))}
+                      className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${
+                        transForm.tipoDestino === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'
+                      }`}>
+                      🏢 Escritório Central
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {transForm.tipoDestino === 'obra' && (
+                <div>
+                  <Label>Obra de Destino *</Label>
+                  <Select value={transForm.destinoObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, destinoObraId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a obra de destino..." /></SelectTrigger>
+                    <SelectContent>
+                      {obrasList.filter((o: any) => String(o.id) !== transForm.origemObraId).map((o: any) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2378,16 +2414,19 @@ export default function Epis() {
                 <Button variant="outline" className="flex-1" onClick={() => { setShowTransferDialog(false); resetTransForm(); }}>Cancelar</Button>
                 <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]" disabled={transferirMut.isPending}
                   onClick={() => {
-                    if (!transForm.epiId || !transForm.destinoObraId) return toast.error('Selecione EPI e obra de destino');
+                    if (!transForm.epiId) return toast.error('Selecione o EPI');
+                    if (transForm.tipoDestino === 'obra' && !transForm.destinoObraId) return toast.error('Selecione a obra de destino');
                     if (transForm.tipoOrigem === 'obra' && !transForm.origemObraId) return toast.error('Selecione a obra de origem');
-                    if (transForm.tipoOrigem === 'obra' && transForm.origemObraId === transForm.destinoObraId) return toast.error('Origem e destino não podem ser a mesma obra');
+                    if (transForm.tipoOrigem === 'central' && transForm.tipoDestino === 'central') return toast.error('Não é possível transferir do central para o central');
+                    if (transForm.tipoOrigem === 'obra' && transForm.tipoDestino === 'obra' && transForm.origemObraId === transForm.destinoObraId) return toast.error('Origem e destino não podem ser a mesma obra');
                     transferirMut.mutate({
                       companyId: queryCompanyId,
                       epiId: parseInt(transForm.epiId),
                       quantidade: transForm.quantidade,
                       tipoOrigem: transForm.tipoOrigem,
                       origemObraId: transForm.origemObraId ? parseInt(transForm.origemObraId) : undefined,
-                      destinoObraId: parseInt(transForm.destinoObraId),
+                      tipoDestino: transForm.tipoDestino,
+                      destinoObraId: transForm.destinoObraId ? parseInt(transForm.destinoObraId) : undefined,
                       data: transForm.data,
                       observacoes: transForm.observacoes || undefined,
                     });

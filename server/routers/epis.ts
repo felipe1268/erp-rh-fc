@@ -296,15 +296,42 @@ export const episRouter = router({
     .input(z.object({ id: z.number(), epiId: z.number(), quantidade: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Buscar a entrega antes de deletar para saber a origem
+      const [delivery] = await db.select({
+        origemEntrega: epiDeliveries.origemEntrega,
+        obraId: epiDeliveries.obraId,
+        companyId: epiDeliveries.companyId,
+      }).from(epiDeliveries).where(eq(epiDeliveries.id, input.id));
       await db.update(epiDeliveries).set({
         deletedAt: sql`NOW()`,
         deletedBy: ctx.user.name ?? 'Sistema',
         deletedByUserId: ctx.user.id
       } as any).where(eq(epiDeliveries.id, input.id));
-      // Return to stock
-      await db.update(epis)
-        .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
-        .where(eq(epis.id, input.epiId));
+      // Return to correct stock based on origin
+      if (delivery?.origemEntrega === 'obra' && delivery?.obraId) {
+        // Devolver ao estoque da obra
+        const [estoqueObra] = await db.select().from(epiEstoqueObra)
+          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, delivery.obraId)));
+        if (estoqueObra) {
+          await db.update(epiEstoqueObra)
+            .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
+            .where(eq(epiEstoqueObra.id, estoqueObra.id));
+        } else {
+          // Se não existe mais o registro de estoque da obra, criar
+          await db.insert(epiEstoqueObra).values({
+            companyId: delivery.companyId,
+            epiId: input.epiId,
+            obraId: delivery.obraId,
+            quantidade: input.quantidade,
+            criadoPor: ctx.user?.name || 'Sistema',
+          });
+        }
+      } else {
+        // Devolver ao estoque central
+        await db.update(epis)
+          .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
+          .where(eq(epis.id, input.epiId));
+      }
       // Cancel any pending discount alerts linked to this delivery
       await db.update(epiDiscountAlerts).set({
         status: 'cancelado',
@@ -1124,12 +1151,18 @@ Exemplos de referência:
       quantidade: z.number().min(1),
       tipoOrigem: z.enum(['central','obra']),
       origemObraId: z.number().optional(),
-      destinoObraId: z.number(),
+      tipoDestino: z.enum(['central','obra']).default('obra'),
+      destinoObraId: z.number().optional(),
       data: z.string(),
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+
+      // Validar: não pode transferir central→central
+      if (input.tipoOrigem === 'central' && input.tipoDestino === 'central') {
+        throw new Error('Não é possível transferir do central para o central');
+      }
 
       // Validar estoque na origem
       if (input.tipoOrigem === 'central') {
@@ -1155,21 +1188,30 @@ Exemplos de referência:
           .where(eq(epiEstoqueObra.id, estoqueOrigem.id));
       }
 
-      // Adicionar ao estoque da obra destino
-      const [existente] = await db.select().from(epiEstoqueObra)
-        .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.destinoObraId)));
-      if (existente) {
-        await db.update(epiEstoqueObra)
-          .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
-          .where(eq(epiEstoqueObra.id, existente.id));
+      // Adicionar ao destino
+      if (input.tipoDestino === 'central') {
+        // Devolver ao estoque central (catálogo)
+        await db.update(epis)
+          .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
+          .where(eq(epis.id, input.epiId));
       } else {
-        await db.insert(epiEstoqueObra).values({
-          companyId: input.companyId,
-          epiId: input.epiId,
-          obraId: input.destinoObraId,
-          quantidade: input.quantidade,
-          criadoPor: ctx.user?.name || 'Sistema',
-        });
+        // Adicionar ao estoque da obra destino
+        if (!input.destinoObraId) throw new Error('Obra de destino é obrigatória');
+        const [existente] = await db.select().from(epiEstoqueObra)
+          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.destinoObraId)));
+        if (existente) {
+          await db.update(epiEstoqueObra)
+            .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
+            .where(eq(epiEstoqueObra.id, existente.id));
+        } else {
+          await db.insert(epiEstoqueObra).values({
+            companyId: input.companyId,
+            epiId: input.epiId,
+            obraId: input.destinoObraId,
+            quantidade: input.quantidade,
+            criadoPor: ctx.user?.name || 'Sistema',
+          });
+        }
       }
 
       // Registrar transferência
@@ -1179,7 +1221,7 @@ Exemplos de referência:
         quantidade: input.quantidade,
         tipoOrigem: input.tipoOrigem,
         origemObraId: input.origemObraId || null,
-        destinoObraId: input.destinoObraId,
+        destinoObraId: input.destinoObraId || null,
         data: input.data,
         observacoes: input.observacoes || null,
         criadoPor: ctx.user.name ?? 'Sistema',

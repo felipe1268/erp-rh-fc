@@ -5152,3 +5152,8 @@
 - [x] Aviso Prévio: ajustar tabela conforme planilha (Nome, Data Aviso, Redução, Dia Trabalhado, Último Dia, Data de Pagamento)
 - [x] Aviso Prévio: renomear "Rescisão" para "Data de Pagamento" na tabela
 - [x] Aviso Prévio: calcular e exibir automaticamente Último Dia Trabalhado e Data de Pagamento ao preencher Data do Aviso + Redução
+
+## Correção Fluxo de Estoque EPI
+- [x] Auto-selecionar "Obra" como origem quando funcionário está em obra com estoque do EPI
+- [x] Permitir transferência obra→central (devolver EPI ao catálogo/escritório)
+- [x] Corrigir deleteDelivery para devolver ao estoque correto (obra ou central) conforme origemEntrega
