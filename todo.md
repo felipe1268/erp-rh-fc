@@ -5151,3 +5151,4 @@
 - [x] TODAS as páginas: unificar dados quando CONSTRUTORAS selecionado (companyIds para grupo empresarial)
 - [x] Aviso Prévio: ajustar tabela conforme planilha (Nome, Data Aviso, Redução, Dia Trabalhado, Último Dia, Data de Pagamento)
 - [x] Aviso Prévio: renomear "Rescisão" para "Data de Pagamento" na tabela
+- [x] Aviso Prévio: calcular e exibir automaticamente Último Dia Trabalhado e Data de Pagamento ao preencher Data do Aviso + Redução

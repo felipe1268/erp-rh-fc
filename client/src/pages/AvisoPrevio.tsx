@@ -847,6 +847,93 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   </div>
                 )}
 
+                {/* Seção 3.5: Datas Calculadas - Último Dia Trabalhado e Data de Pagamento */}
+                {(() => {
+                  // Calcular no frontend assim que tiver Data do Aviso + Tipo
+                  if (!form.dataDesligamento || !form.tipo) return null;
+                  const dataAviso = form.dataDesligamento; // Data do Aviso informada pelo usuário
+                  
+                  // Calcular anos de serviço para determinar dias de aviso
+                  const selectedEmp = activeEmployees.find((e: any) => e.id === form.employeeId);
+                  const dataAdmissao = selectedEmp?.dataAdmissao;
+                  let anosServico = 0;
+                  if (dataAdmissao) {
+                    const diff = new Date(dataAviso + 'T00:00:00').getTime() - new Date(dataAdmissao + 'T00:00:00').getTime();
+                    anosServico = Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
+                  }
+                  
+                  // Dias de aviso: trabalhado = 30 fixo, indenizado = 30 + 3/ano (max 90)
+                  const isTrabalhado = form.tipo?.includes('trabalhado');
+                  const diasAviso = isTrabalhado ? 30 : Math.min(30 + (anosServico * 3), 90);
+                  
+                  // Data início do aviso = dia seguinte à data do aviso
+                  const dtInicio = new Date(dataAviso + 'T00:00:00');
+                  dtInicio.setDate(dtInicio.getDate() + 1);
+                  
+                  // Data fim do aviso = início + dias - 1
+                  const dtFim = new Date(dtInicio);
+                  dtFim.setDate(dtFim.getDate() + diasAviso - 1);
+                  
+                  // Redução: se 7 dias corridos, último dia trabalhado = 7 dias antes do fim
+                  const reducao = form.reducaoJornada || 'nenhuma';
+                  let dtUltimoDiaTrab = new Date(dtFim);
+                  if (reducao === '7_dias_corridos') {
+                    dtUltimoDiaTrab = new Date(dtFim);
+                    dtUltimoDiaTrab.setDate(dtUltimoDiaTrab.getDate() - 7);
+                  }
+                  // Se 2h/dia, trabalha todos os dias mas sai 2h mais cedo - último dia = data fim
+                  
+                  // Data de pagamento = 10 dias corridos após término do aviso (Art. 477 §6º CLT)
+                  const dtPagamento = new Date(dtFim);
+                  dtPagamento.setDate(dtPagamento.getDate() + 10);
+                  
+                  const fmtDt = (dt: Date) => {
+                    const d = dt.getDate().toString().padStart(2, '0');
+                    const m = (dt.getMonth() + 1).toString().padStart(2, '0');
+                    const y = dt.getFullYear();
+                    return `${d}/${m}/${y}`;
+                  };
+                  
+                  const fmtDtISO = (dt: Date) => dt.toISOString().split('T')[0];
+                  const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+                  
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
+                      <div className="text-center p-4 bg-white rounded-lg border border-blue-100 shadow-sm">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <Calendar className="h-5 w-5 text-blue-600" />
+                          <p className="text-xs font-bold text-blue-600 uppercase tracking-wide">Último Dia Trabalhado</p>
+                        </div>
+                        <p className="text-2xl font-bold text-blue-800">{fmtDt(dtUltimoDiaTrab)}</p>
+                        <p className="text-xs text-blue-500 mt-1">{diasSemana[dtUltimoDiaTrab.getDay()]}</p>
+                        {reducao === '7_dias_corridos' && (
+                          <p className="text-[10px] text-amber-600 mt-1">7 dias de folga no final do aviso</p>
+                        )}
+                        {reducao === '2h_dia' && (
+                          <p className="text-[10px] text-amber-600 mt-1">Sai 2h mais cedo todos os dias</p>
+                        )}
+                      </div>
+                      <div className="text-center p-4 bg-white rounded-lg border border-green-100 shadow-sm">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          <p className="text-xs font-bold text-green-600 uppercase tracking-wide">Término do Aviso</p>
+                        </div>
+                        <p className="text-2xl font-bold text-green-800">{fmtDt(dtFim)}</p>
+                        <p className="text-xs text-green-500 mt-1">{diasSemana[dtFim.getDay()]} | {diasAviso} dias de aviso</p>
+                      </div>
+                      <div className="text-center p-4 bg-white rounded-lg border border-red-100 shadow-sm">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <DollarSign className="h-5 w-5 text-red-600" />
+                          <p className="text-xs font-bold text-red-600 uppercase tracking-wide">Data de Pagamento</p>
+                        </div>
+                        <p className="text-2xl font-bold text-red-700">{fmtDt(dtPagamento)}</p>
+                        <p className="text-xs text-red-500 mt-1">{diasSemana[dtPagamento.getDay()]} | Art. 477 §6º CLT</p>
+                        <p className="text-[10px] text-gray-400 mt-1">10 dias corridos após término</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Seção 4: Observações */}
                 <div>
                   <label className="text-sm font-semibold text-gray-700 mb-2 block">Observações</label>
