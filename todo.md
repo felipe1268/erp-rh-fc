@@ -5158,3 +5158,4 @@
 - [x] Página de Portabilidade: backup do banco, listar documentos S3, credenciais, guia de migração
 - [x] Documentação completa de credenciais e variáveis de ambiente (MIGRATION_GUIDE.md)
 - [x] Link de Portabilidade no menu do ModuleHub (admin/admin_master)
+- [x] Processos Trabalhistas: Valor Causas = apenas em andamento, Total Pago = soma dos encerrados

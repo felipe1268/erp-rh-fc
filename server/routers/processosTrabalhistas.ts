@@ -339,8 +339,18 @@ export const processosTrabRouter = router({
         return parseFloat(clean) || 0;
       };
 
-      const totalValorCausa = processos.reduce((s, p) => s + parseBRL(p.valorCausa), 0);
-      const totalValorPago = processos.reduce((s, p) => s + parseBRL(p.valorPago), 0);
+      // Valor das Causas = apenas processos em andamento (exclui encerrados)
+      const totalValorCausa = processos
+        .filter(p => !isEncerrado(p))
+        .reduce((s, p) => s + parseBRL(p.valorCausa), 0);
+      // Total Pago = soma do valorCausa dos processos encerrados (considerados como pagos)
+      // + qualquer valorPago explícito em processos em andamento
+      const totalValorPago = processos
+        .filter(p => isEncerrado(p))
+        .reduce((s, p) => s + parseBRL(p.valorCausa), 0)
+        + processos
+          .filter(p => !isEncerrado(p))
+          .reduce((s, p) => s + parseBRL(p.valorPago), 0);
 
       const porRisco = {
         baixo: processos.filter(p => p.risco === 'baixo' && !isEncerrado(p)).length,
