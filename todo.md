@@ -5140,3 +5140,10 @@
 - [x] Auto-preencher data de validade ao selecionar tipo de treinamento + data de realização
 - [x] Permitir que o usuário altere a data sugerida (não bloquear)
 - [x] Indicador visual de que a data foi preenchida automaticamente pela norma (Zap icon + texto)
+
+## Rev. 222: Colaboradores - Suporte a CONSTRUTORAS
+- [ ] Mostrar todos os funcionários de JF e FC quando CONSTRUTORAS está selecionado
+- [ ] Remover mensagem "Selecione uma empresa" quando CONSTRUTORAS está ativo
+
+## Melhoria: Busca com Autocomplete em Selects
+- [x] Campo de funcionário na entrega de EPI com busca/autocomplete em tempo real (filtrar por nome, CPF, função)

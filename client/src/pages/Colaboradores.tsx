@@ -110,7 +110,7 @@ function formatDate(val: unknown): string {
 }
 
 export default function Colaboradores() {
-  const { selectedCompanyId, companies } = useCompany();
+  const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const { user } = useAuth();
   const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
@@ -130,8 +130,11 @@ export default function Colaboradores() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const companyId = selectedCompany ? parseInt(selectedCompany) : undefined;
-  const { data: obras } = trpc.obras.list.useQuery({ companyId: companyId ?? 0 }, { enabled: !!companyId });
+  const companyId = selectedCompany && !isConstrutoras ? parseInt(selectedCompany) : undefined;
+  const queryCompanyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (queryCompanyIds[0] ?? 0) : (companyId ?? 0);
+  const hasValidSelection = isConstrutoras ? queryCompanyIds.length > 0 : !!companyId;
+  const { data: obras } = trpc.obras.list.useQuery({ companyId: queryCompanyId }, { enabled: hasValidSelection });
   // Setores e Funções dinâmicos vinculados à empresa do formulário
   const formCompanyIdNum = form.companyId ? parseInt(form.companyId) : companyId;
   const { data: setoresList } = trpc.sectors.list.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
@@ -162,8 +165,8 @@ export default function Colaboradores() {
 
   const utils = trpc.useUtils();
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
-    { companyId: companyId!, search: search || undefined, status: statusFilter !== "Todos" ? statusFilter : undefined },
-    { enabled: !!companyId }
+    { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: statusFilter !== "Todos" ? statusFilter : undefined },
+    { enabled: hasValidSelection }
   );
 
   const createMut = trpc.employees.create.useMutation({
@@ -514,7 +517,7 @@ export default function Colaboradores() {
       .footer { margin-top: 30px; border-top: 2px solid #e2e8f0; padding-top: 10px; font-size: 9px; color: #999; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
       .footer .lgpd { font-style: italic; color: #b91c1c; }
     </style></head><body>
-      <div class="header-bar"><div><h1>${nomeEmpresa}</h1><div class="sub">Ficha do Colaborador</div></div><div class="sub">Emitido em: ${dataEmissao}</div></div>
+      <div class="header-bar"><div><h1>${empresa}</h1><div class="sub">Ficha do Colaborador</div></div><div class="sub">Emitido em: ${dataEmissao}</div></div>
       ${conteudo}
       <div class="footer">
         <span>ERP - Gestão Integrada</span>
@@ -537,10 +540,10 @@ export default function Colaboradores() {
           </div>
           <div className="flex items-center gap-3">
             <PrintActions title="Colaboradores" />
-            <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!companyId} className="gap-2">
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!hasValidSelection} className="gap-2">
               <Upload className="h-4 w-4" /> Importar Excel
             </Button>
-            <Button onClick={openNew} disabled={!companyId} className="gap-2">
+            <Button onClick={openNew} disabled={!hasValidSelection} className="gap-2">
               <Plus className="h-4 w-4" /> Novo
             </Button>
           </div>
@@ -595,7 +598,7 @@ export default function Colaboradores() {
         </div>
 
         {/* Table */}
-        {!companyId ? (
+        {!hasValidSelection ? (
           <Card className="bg-card border-border">
             <CardContent className="py-16 text-center">
               <p className="text-muted-foreground">Selecione uma empresa para visualizar os colaboradores.</p>

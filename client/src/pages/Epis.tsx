@@ -22,6 +22,7 @@ import {
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -1068,34 +1069,39 @@ export default function Epis() {
             <CardContent className="p-6 space-y-4 w-full">
               <div>
                 <Label>EPI *</Label>
-                <Select value={entregaForm.epiId || undefined} onValueChange={v => setEntregaForm(f => ({ ...f, epiId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o EPI..." /></SelectTrigger>
-                  <SelectContent>
-                    {episList.map((e: any) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {e.nome} {e.ca ? `(CA: ${e.ca})` : ""} — Estoque: {e.quantidadeEstoque ?? 0}
-                        {e.valorProduto ? ` — ${parseFloat(String(e.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={episList.map((e: any) => ({
+                    value: String(e.id),
+                    label: `${e.nome} ${e.ca ? `(CA: ${e.ca})` : ""}`,
+                    subtitle: `Estoque: ${e.quantidadeEstoque ?? 0}${e.valorProduto ? ` — ${parseFloat(String(e.valorProduto)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ""}`,
+                    searchExtra: `${e.ca || ""} ${e.nome || ""}`,
+                  }))}
+                  value={entregaForm.epiId || undefined}
+                  onValueChange={v => setEntregaForm(f => ({ ...f, epiId: v }))}
+                  placeholder="Selecione o EPI..."
+                  searchPlaceholder="Buscar por nome ou CA..."
+                  emptyMessage="Nenhum EPI encontrado."
+                />
               </div>
               <div>
                 <Label>Funcionário *</Label>
-                <Select value={entregaForm.employeeId || undefined} onValueChange={v => {
-                  const emp = employeesList.find((e: any) => String(e.id) === v);
-                  const obraId = emp?.obraAtualId ? String(emp.obraAtualId) : "";
-                  setEntregaForm(f => ({ ...f, employeeId: v, obraId }));
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o funcionário..." /></SelectTrigger>
-                  <SelectContent>
-                    {employeesList.map((e: any) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {e.nomeCompleto} — {e.funcao || "Sem função"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={employeesList.map((e: any) => ({
+                    value: String(e.id),
+                    label: `${e.nomeCompleto} — ${e.funcao || "Sem função"}`,
+                    subtitle: `${e.cpf || ""} ${e.codigoInterno ? `Mat: ${e.codigoInterno}` : ""}${e.obraAtualNome ? ` — ${e.obraAtualNome}` : ""}`,
+                    searchExtra: `${e.cpf || ""} ${e.codigoInterno || ""} ${e.rg || ""} ${e.funcao || ""} ${e.obraAtualNome || ""}`,
+                  }))}
+                  value={entregaForm.employeeId || undefined}
+                  onValueChange={v => {
+                    const emp = employeesList.find((e: any) => String(e.id) === v);
+                    const obraId = emp?.obraAtualId ? String(emp.obraAtualId) : "";
+                    setEntregaForm(f => ({ ...f, employeeId: v, obraId }));
+                  }}
+                  placeholder="Selecione o funcionário..."
+                  searchPlaceholder="Buscar por nome, CPF, matrícula, função..."
+                  emptyMessage="Nenhum funcionário encontrado."
+                />
               </div>
               {/* ORIGEM DA ENTREGA */}
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
