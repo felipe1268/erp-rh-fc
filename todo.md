@@ -5163,3 +5163,7 @@
 
 ## Bug: Último Dia Trabalhado - Aviso Prévio 7 dias
 - [x] Corrigir cálculo do Último Dia Trabalhado para descontar os 7 dias da redução no aviso de 7 dias
+
+## Correção: Preenchimento Automático NRs - Treinamentos
+- [x] Completar todas as NRs faltantes no preenchimento rápido
+- [x] Adicionar carga horária automática para cada NR ao selecionar
