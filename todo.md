@@ -5160,3 +5160,6 @@
 
 ## Bug: Total Pago Processos Trabalhistas
 - [x] Corrigir card "Total Pago" que mostra R$ 0,00 mesmo com processos encerrados (fallback: valorAcordo ou valorCondenacao)
+
+## Bug: Último Dia Trabalhado - Aviso Prévio 7 dias
+- [x] Corrigir cálculo do Último Dia Trabalhado para descontar os 7 dias da redução no aviso de 7 dias

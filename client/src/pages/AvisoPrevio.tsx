@@ -397,7 +397,15 @@ export default function AvisoPrevio() {
                         <td className="p-3 text-center">{formatDate(a.dataDiaTrabalhado)}</td>
                         <td className="p-3 text-center font-medium">{reducaoShort}</td>
                         <td className="p-3 text-center">{formatDate(a.dataInicio)}</td>
-                        <td className="p-3 text-center">{formatDate(a.dataFim)}</td>
+                        <td className="p-3 text-center">{(() => {
+                          // Se redução é 7 dias corridos, último dia trabalhado = dataFim - 7 dias
+                          if (a.reducaoJornada === '7_dias_corridos' && a.dataFim) {
+                            const dt = new Date(a.dataFim + 'T00:00:00');
+                            dt.setDate(dt.getDate() - 7);
+                            return formatDate(dt.toISOString().split('T')[0]);
+                          }
+                          return formatDate(a.dataFim);
+                        })()}</td>
                         <td className="p-3 text-center font-semibold text-red-600">{formatDate(a.dataLimitePagamento)}</td>
                         <td className="p-3 text-right font-semibold">{formatMoeda(a.valorEstimadoTotal)}</td>
                         <td className="p-3 text-center">
