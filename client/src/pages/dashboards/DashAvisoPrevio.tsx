@@ -84,6 +84,7 @@ export default function DashAvisoPrevio() {
   );
 
   const [drillDown, setDrillDown] = useState<{ type: string; label: string } | null>(null);
+  const [reducaoFilter, setReducaoFilter] = useState<string>("todos");
 
   // Filtra avisos pelo drill-down selecionado
   const drillDownAvisos = useMemo(() => {
@@ -476,15 +477,45 @@ export default function DashAvisoPrevio() {
             {/* ===== SEÇÃO 10: Tabela Detalhada ===== */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  Avisos Prévios Detalhados ({data.avisos.length})
-                </CardTitle>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Avisos Prévios Detalhados ({reducaoFilter === 'todos' ? data.avisos.length : data.avisos.filter((a: any) => {
+                      if (reducaoFilter === '7_dias_corridos') return a.reducaoJornada === '7_dias_corridos';
+                      if (reducaoFilter === '2h_dia') return a.reducaoJornada === '2h_dia';
+                      return true;
+                    }).length})
+                  </CardTitle>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Redução:</span>
+                    {['todos', '7_dias_corridos', '2h_dia'].map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setReducaoFilter(f)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                          reducaoFilter === f
+                            ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                            : 'bg-white text-muted-foreground border-border hover:bg-muted/50'
+                        }`}
+                      >
+                        {f === 'todos' ? 'Todos' : f === '7_dias_corridos' ? '7 Dias' : '2h/Dia'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {data.avisos.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">Nenhum aviso prévio registrado.</p>
-                ) : (
+                ) : (() => {
+                  const filteredAvisos = reducaoFilter === 'todos' ? data.avisos : data.avisos.filter((a: any) => {
+                    if (reducaoFilter === '7_dias_corridos') return a.reducaoJornada === '7_dias_corridos';
+                    if (reducaoFilter === '2h_dia') return a.reducaoJornada === '2h_dia';
+                    return true;
+                  });
+                  return filteredAvisos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">Nenhum aviso com esta redução.</p>
+                  ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -495,13 +526,38 @@ export default function DashAvisoPrevio() {
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Fim</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Dias</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Redução</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground min-w-[160px]">Evolução</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground">Setor</th>
                           <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Valor Est.</th>
                           <th className="py-2 font-medium text-muted-foreground">Status</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {data.avisos.map((a: any) => (
+                        {filteredAvisos.map((a: any) => {
+                          // Calcular progresso do aviso
+                          const hoje = new Date();
+                          const inicio = a.dataInicio ? new Date(a.dataInicio + 'T00:00:00') : null;
+                          const fim = a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
+                          let progresso = 0;
+                          let diasRestantes = 0;
+                          let barColor = 'bg-blue-500';
+                          if (a.status === 'concluido') {
+                            progresso = 100;
+                            barColor = 'bg-green-500';
+                          } else if (a.status === 'cancelado') {
+                            progresso = 100;
+                            barColor = 'bg-red-400';
+                          } else if (inicio && fim) {
+                            const totalDias = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+                            const diasPassados = Math.ceil((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+                            diasRestantes = Math.max(0, Math.ceil((fim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)));
+                            progresso = Math.min(100, Math.max(0, Math.round((diasPassados / totalDias) * 100)));
+                            if (progresso >= 90) barColor = 'bg-red-500';
+                            else if (progresso >= 70) barColor = 'bg-amber-500';
+                            else if (progresso >= 40) barColor = 'bg-blue-500';
+                            else barColor = 'bg-emerald-500';
+                          }
+                          return (
                           <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30">
                             <td className="py-2 pr-3 font-medium truncate max-w-[180px]">{a.nomeCompleto}</td>
                             <td className="py-2 pr-3 text-xs">{fmtTipoLabel(a.tipo)}</td>
@@ -509,6 +565,25 @@ export default function DashAvisoPrevio() {
                             <td className="py-2 pr-3 text-xs font-semibold">{a.dataFim ? new Date(a.dataFim + "T00:00:00").toLocaleDateString("pt-BR") : "-"}</td>
                             <td className="py-2 pr-3 text-center font-mono">{a.diasAviso}</td>
                             <td className="py-2 pr-3 text-xs">{fmtReducaoLabel(a.reducaoJornada || "nenhuma")}</td>
+                            <td className="py-2 pr-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden min-w-[80px]">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${barColor}`}
+                                    style={{ width: `${progresso}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap w-[52px] text-right">
+                                  {a.status === 'concluido' ? '100%' : a.status === 'cancelado' ? 'Canc.' : `${progresso}%`}
+                                </span>
+                              </div>
+                              {a.status === 'em_andamento' && diasRestantes > 0 && (
+                                <p className="text-[9px] text-muted-foreground mt-0.5">{diasRestantes}d restante{diasRestantes !== 1 ? 's' : ''}</p>
+                              )}
+                              {a.status === 'em_andamento' && diasRestantes === 0 && progresso >= 100 && (
+                                <p className="text-[9px] text-red-600 font-semibold mt-0.5">Vencido!</p>
+                              )}
+                            </td>
                             <td className="py-2 pr-3 text-xs text-muted-foreground">{a.setor || "-"}</td>
                             <td className="py-2 pr-3 text-xs font-semibold text-right tabular-nums">
                               {fmtValorStr(a.valorEstimadoTotal)}
@@ -519,11 +594,13 @@ export default function DashAvisoPrevio() {
                               </span>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
 

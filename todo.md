@@ -5170,3 +5170,10 @@
 
 ## Bug: Efetivo por Obra zerado na CONSTRUTORAS
 - [x] Corrigir Efetivo por Obra que mostra 0 alocados, 0 obras com efetivo na empresa CONSTRUTORAS (companyIds não era passado para as funções do backend)
+
+## Bug: Cards de filtro Aviso Prévio mostram totais filtrados
+- [x] Corrigir cards para mostrar totais globais independentes do filtro ativo (Total, Em Andamento, Concluídos, Cancelados)
+
+## Melhorias Dashboard Aviso Prévio
+- [x] Adicionar barra de evolução (progresso) responsiva em cada linha da tabela de avisos detalhados
+- [x] Adicionar filtro por tipo de redução (7 dias corridos / 2h dia / Todos)

@@ -68,8 +68,14 @@ export default function AvisoPrevio() {
   const [calculoPreview, setCalculoPreview] = useState<any>(null);
 
   // Queries
+  // Query filtrada para a tabela
   const { data: avisosList = [], refetch } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
     { companyId, companyIds, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
+    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
+  );
+  // Query sem filtro para os cards de resumo (totais globais)
+  const { data: allAvisosForStats = [] } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
+    { companyId, companyIds },
     { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
@@ -158,9 +164,9 @@ export default function AvisoPrevio() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Stats
+  // Stats - usa allAvisosForStats (sem filtro) para totais globais
   const stats = useMemo(() => {
-    const list = avisosList as any[];
+    const list = allAvisosForStats as any[];
     const emAndamentoList = list.filter(a => a.status === "em_andamento");
     const concluidosList = list.filter(a => a.status === "concluido");
     const canceladosList = list.filter(a => a.status === "cancelado");
@@ -173,7 +179,7 @@ export default function AvisoPrevio() {
       valorEmAndamento: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorConcluidos: concluidosList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
     };
-  }, [avisosList]);
+  }, [allAvisosForStats]);
 
   // Employee search for form (Popover + Command)
   const [empPopoverOpen, setEmpPopoverOpen] = useState(false);
