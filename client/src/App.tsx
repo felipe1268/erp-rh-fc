@@ -111,9 +111,6 @@ const PortalParceiro = lazy(() => import("./pages/parceiros/PortalParceiro"));
 // Sprint 6 - IA
 const ComparativoConvencoes = lazy(() => import("./pages/ComparativoConvencoes"));
 
-// Portabilidade
-const Portabilidade = lazy(() => import("./pages/Portabilidade"));
-
 // Pesquisa Pública
 const PesquisaPublicaPage = lazy(() => import("./pages/PesquisaPublica").then(m => ({ default: m.PesquisaPublicaPage })));
 const ClimaPublicoPage = lazy(() => import("./pages/PesquisaPublica").then(m => ({ default: m.ClimaPublicoPage })));
@@ -234,7 +231,6 @@ function Router() {
         <Route path="/parceiros/painel" component={PainelParceiros} />
         {/* Sprint 6 - IA */}
         <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
-        <Route path="/portabilidade" component={Portabilidade} />
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />

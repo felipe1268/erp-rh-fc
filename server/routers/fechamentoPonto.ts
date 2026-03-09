@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import {
   timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings
 } from "../../drizzle/schema";
-import { eq, and, sql, like, or, between, inArray, isNull, desc } from "drizzle-orm";
+import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
@@ -1152,7 +1152,7 @@ export const fechamentoPontoRouter = router({
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.data, input.data),
         ))
-        .orderBy(desc(timeRecords.id));
+        .limit(1);
 
       // Build justificativa with motivo
       const motivoPrefix = input.motivoAjuste ? `[${input.motivoAjuste}] ` : "";
@@ -1180,14 +1180,6 @@ export const fechamentoPontoRouter = router({
         ajustadoPor: ctx.user?.name || "RH",
         justificativa: justFinal || null,
       };
-
-      // Se já existe mais de 1 registro (duplicata), limpar antes
-      if (existing.length > 1) {
-        // Manter apenas o primeiro, deletar os demais
-        for (let i = 1; i < existing.length; i++) {
-          await db.delete(timeRecords).where(eq(timeRecords.id, existing[i].id));
-        }
-      }
 
       if (existing.length > 0) {
         await db.update(timeRecords).set(record as any).where(eq(timeRecords.id, existing[0].id));
@@ -2656,19 +2648,11 @@ export const fechamentoPontoRouter = router({
         }
       }
 
-      // Insert time records - deduplicar antes de inserir
-      // Remover duplicatas internas (mesmo employeeId+data)
-      const uniqueMap = new Map<string, typeof newTimeRecords[0]>();
-      for (const rec of newTimeRecords) {
-        const key = `${rec.employeeId}-${rec.data}-${rec.obraId || 0}`;
-        uniqueMap.set(key, rec); // último ganha (sobrescreve)
-      }
-      const dedupedRecords = Array.from(uniqueMap.values());
-
-      if (dedupedRecords.length > 0) {
+      // Inserir registros de ponto
+      if (newTimeRecords.length > 0) {
         const batchSize = 50;
-        for (let i = 0; i < dedupedRecords.length; i += batchSize) {
-          await db.insert(timeRecords).values(dedupedRecords.slice(i, i + batchSize));
+        for (let i = 0; i < newTimeRecords.length; i += batchSize) {
+          await db.insert(timeRecords).values(newTimeRecords.slice(i, i + batchSize));
         }
       }
 
@@ -2881,163 +2865,5 @@ export const fechamentoPontoRouter = router({
         totalFolha,
         totalFuncionarios: simulacao.length,
       };
-    }),
-
-  // ============================================================
-  // DELETAR REGISTRO INDIVIDUAL DE PONTO
-  // ============================================================
-  deleteSingleRecord: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      const db = (await getDb())!;
-      await db.delete(timeRecords).where(and(
-        eq(timeRecords.id, input.id),
-        companyFilter(timeRecords.companyId, input),
-      ));
-      return { success: true };
-    }),
-
-  // ============================================================
-  // EDITAR REGISTRO INDIVIDUAL DE PONTO
-  // ============================================================
-  editRecord: protectedProcedure
-    .input(z.object({
-      id: z.number(), companyId: z.number(),
-      entrada1: z.string().optional(),
-      saida1: z.string().optional(),
-      entrada2: z.string().optional(),
-      saida2: z.string().optional(),
-      entrada3: z.string().optional(),
-      saida3: z.string().optional(),
-      justificativa: z.string().optional(),
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const db = (await getDb())!;
-      let totalMinutes = 0;
-      if (input.entrada1 && input.saida1) totalMinutes += diffMinutes(input.entrada1, input.saida1);
-      if (input.entrada2 && input.saida2) totalMinutes += diffMinutes(input.entrada2, input.saida2);
-      if (input.entrada3 && input.saida3) totalMinutes += diffMinutes(input.entrada3, input.saida3);
-
-      await db.update(timeRecords).set({
-        entrada1: input.entrada1 || null,
-        saida1: input.saida1 || null,
-        entrada2: input.entrada2 || null,
-        saida2: input.saida2 || null,
-        entrada3: input.entrada3 || null,
-        saida3: input.saida3 || null,
-        horasTrabalhadas: minutesToHHMM(totalMinutes),
-        ajusteManual: 1,
-        ajustadoPor: ctx.user?.name || 'RH',
-        justificativa: input.justificativa || null,
-      } as any).where(and(
-        eq(timeRecords.id, input.id),
-        companyFilter(timeRecords.companyId, input),
-      ));
-      return { success: true };
-    }),
-
-  // ============================================================
-  // DETECTAR E LIMPAR DUPLICATAS
-  // ============================================================
-  getDuplicates: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
-    .query(async ({ input }) => {
-      const db = (await getDb())!;
-      // Encontrar combinações employeeId+data+obraId que aparecem mais de 1 vez
-      const dupes = await db.select({
-        employeeId: timeRecords.employeeId,
-        data: timeRecords.data,
-        obraId: timeRecords.obraId,
-        count: sql<number>`COUNT(*)`.as('cnt'),
-      }).from(timeRecords)
-        .where(and(
-          companyFilter(timeRecords.companyId, input),
-          eq(timeRecords.mesReferencia, input.mesReferencia),
-        ))
-        .groupBy(timeRecords.employeeId, timeRecords.data, timeRecords.obraId)
-        .having(sql`COUNT(*) > 1`);
-
-      // Para cada duplicata, buscar os registros detalhados
-      const results: any[] = [];
-      for (const d of dupes) {
-        const recs = await db.select({
-          id: timeRecords.id,
-          employeeId: timeRecords.employeeId,
-          data: timeRecords.data,
-          obraId: timeRecords.obraId,
-          entrada1: timeRecords.entrada1,
-          saida1: timeRecords.saida1,
-          entrada2: timeRecords.entrada2,
-          saida2: timeRecords.saida2,
-          horasTrabalhadas: timeRecords.horasTrabalhadas,
-          fonte: timeRecords.fonte,
-          ajusteManual: timeRecords.ajusteManual,
-        }).from(timeRecords)
-          .where(and(
-            companyFilter(timeRecords.companyId, input),
-            eq(timeRecords.employeeId, d.employeeId),
-            eq(timeRecords.data, d.data!),
-            d.obraId ? eq(timeRecords.obraId, d.obraId) : isNull(timeRecords.obraId),
-          ));
-
-        const emp = await db.select({ nomeCompleto: employees.nomeCompleto, cpf: employees.cpf })
-          .from(employees).where(eq(employees.id, d.employeeId)).limit(1);
-
-        results.push({
-          employeeId: d.employeeId,
-          employeeName: emp[0]?.nomeCompleto || `ID ${d.employeeId}`,
-          cpf: emp[0]?.cpf || '',
-          data: d.data,
-          obraId: d.obraId,
-          count: d.count,
-          records: recs,
-        });
-      }
-      return results;
-    }),
-
-  // Limpar duplicatas automaticamente - mantém o registro manual (se houver) ou o mais recente
-  cleanDuplicates: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const db = (await getDb())!;
-      const dupes = await db.select({
-        employeeId: timeRecords.employeeId,
-        data: timeRecords.data,
-        obraId: timeRecords.obraId,
-        count: sql<number>`COUNT(*)`.as('cnt'),
-      }).from(timeRecords)
-        .where(and(
-          companyFilter(timeRecords.companyId, input),
-          eq(timeRecords.mesReferencia, input.mesReferencia),
-        ))
-        .groupBy(timeRecords.employeeId, timeRecords.data, timeRecords.obraId)
-        .having(sql`COUNT(*) > 1`);
-
-      let removed = 0;
-      for (const d of dupes) {
-        const recs = await db.select()
-          .from(timeRecords)
-          .where(and(
-            companyFilter(timeRecords.companyId, input),
-            eq(timeRecords.employeeId, d.employeeId),
-            eq(timeRecords.data, d.data!),
-            d.obraId ? eq(timeRecords.obraId, d.obraId) : isNull(timeRecords.obraId),
-          ))
-          .orderBy(desc(timeRecords.id));
-
-        if (recs.length <= 1) continue;
-
-        // Prioridade: manter manual > manter o mais recente
-        const manual = recs.find(r => r.fonte === 'manual');
-        const keep = manual || recs[0]; // mais recente (maior id)
-        const toDelete = recs.filter(r => r.id !== keep.id);
-
-        for (const r of toDelete) {
-          await db.delete(timeRecords).where(eq(timeRecords.id, r.id));
-          removed++;
-        }
-      }
-      return { success: true, removed, duplicatesFound: dupes.length };
     }),
 });

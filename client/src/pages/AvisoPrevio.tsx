@@ -67,16 +67,11 @@ export default function AvisoPrevio() {
   const [form, setForm] = useState<any>({});
   const [calculoPreview, setCalculoPreview] = useState<any>(null);
 
-  // Queries - buscar TODOS os avisos (sem filtro de status) para stats corretos
-  const { data: allAvisos = [], refetch } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
-    { companyId, companyIds },
+  // Queries
+  const { data: avisosList = [], refetch } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
+    { companyId, companyIds, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
     { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
-  // Filtrar no frontend para a tabela
-  const avisosList = useMemo(() => {
-    if (statusFilter === 'todos') return allAvisos;
-    return (allAvisos as any[]).filter((a: any) => a.status === statusFilter);
-  }, [allAvisos, statusFilter]);
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
@@ -163,9 +158,9 @@ export default function AvisoPrevio() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Stats - sempre baseado na lista COMPLETA (allAvisos), não na filtrada
+  // Stats
   const stats = useMemo(() => {
-    const list = allAvisos as any[];
+    const list = avisosList as any[];
     const emAndamentoList = list.filter(a => a.status === "em_andamento");
     const concluidosList = list.filter(a => a.status === "concluido");
     const canceladosList = list.filter(a => a.status === "cancelado");
@@ -178,7 +173,7 @@ export default function AvisoPrevio() {
       valorEmAndamento: emAndamentoList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
       valorConcluidos: concluidosList.reduce((sum, a) => sum + (Number(a.valorEstimadoTotal) || 0), 0),
     };
-  }, [allAvisos]);
+  }, [avisosList]);
 
   // Employee search for form (Popover + Command)
   const [empPopoverOpen, setEmpPopoverOpen] = useState(false);
@@ -277,7 +272,7 @@ export default function AvisoPrevio() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === 'todos' ? 'ring-2 ring-gray-400 shadow-md' : ''}`} onClick={() => setStatusFilter("todos")}>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter("todos")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -289,7 +284,7 @@ export default function AvisoPrevio() {
               </div>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter === 'em_andamento' ? 'ring-2 ring-blue-400 shadow-md' : ''}`} onClick={() => setStatusFilter("em_andamento")}>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500" onClick={() => setStatusFilter("em_andamento")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -301,7 +296,7 @@ export default function AvisoPrevio() {
               </div>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500 ${statusFilter === 'concluido' ? 'ring-2 ring-green-400 shadow-md' : ''}`} onClick={() => setStatusFilter("concluido")}>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500" onClick={() => setStatusFilter("concluido")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -313,7 +308,7 @@ export default function AvisoPrevio() {
               </div>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500 ${statusFilter === 'cancelado' ? 'ring-2 ring-red-400 shadow-md' : ''}`} onClick={() => setStatusFilter("cancelado")}>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500" onClick={() => setStatusFilter("cancelado")}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -395,7 +390,7 @@ export default function AvisoPrevio() {
                     const reducaoShort = a.reducaoJornada === '2h_dia' ? '2 HORAS' : a.reducaoJornada === '7_dias_corridos' ? '7 DIAS' : '-';
                     return (
                       <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                        <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={async () => { setSelectedItem(a); setShowDetailDialog(true); try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) setSelectedItem(detail); } catch(e) { console.error('Erro ao buscar detalhes:', e); } }}>
+                        <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>
                           {a.employeeName}
                         </td>
                         <td className="p-3 text-xs">{formatCPF(a.employeeCpf)}</td>
