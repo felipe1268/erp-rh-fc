@@ -3,20 +3,19 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { pjMedicoes, pjContracts, employees } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 
 export const pjMedicoesRouter = router({
   // Listar medições
   listar: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(),
       status: z.string().optional(),
       contractId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const conditions: any[] = [eq(pjMedicoes.companyId, input.companyId)];
+      const conditions: any[] = [companyFilter(pjMedicoes.companyId, input)];
       if (input.mesReferencia) conditions.push(eq(pjMedicoes.mesReferencia, input.mesReferencia));
       if (input.status) conditions.push(eq(pjMedicoes.status, input.status as any));
       if (input.contractId) conditions.push(eq(pjMedicoes.contractId, input.contractId));
@@ -50,9 +49,7 @@ export const pjMedicoesRouter = router({
 
   // Criar medição
   criar: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      contractId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), contractId: z.number(),
       employeeId: z.number(),
       mesReferencia: z.string(),
       horasTrabalhadas: z.string(),
@@ -146,12 +143,12 @@ export const pjMedicoesRouter = router({
 
   // Resumo mensal de PJ
   resumoMensal: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const medicoes = await db.select().from(pjMedicoes)
         .where(and(
-          eq(pjMedicoes.companyId, input.companyId),
+          companyFilter(pjMedicoes.companyId, input),
           eq(pjMedicoes.mesReferencia, input.mesReferencia),
         ));
 

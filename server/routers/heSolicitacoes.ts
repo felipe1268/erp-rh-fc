@@ -4,6 +4,7 @@ import {
   heSolicitacoes, heSolicitacaoFuncionarios, employees, obras,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -16,9 +17,7 @@ import { z } from "zod";
 export const heSolicitacoesRouter = router({
 
   // ===================== CRIAR SOLICITAÇÃO =====================
-  create: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    obraId: z.number().optional(),
+  create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(),
     dataSolicitacao: z.string().min(10), // YYYY-MM-DD
     horaInicio: z.string().optional(),
     horaFim: z.string().optional(),
@@ -71,15 +70,13 @@ export const heSolicitacoesRouter = router({
   }),
 
   // ===================== LISTAR SOLICITAÇÕES =====================
-  list: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    status: z.enum(["pendente", "aprovada", "rejeitada", "cancelada", "todas"]).optional(),
+  list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.enum(["pendente", "aprovada", "rejeitada", "cancelada", "todas"]).optional(),
     mesReferencia: z.string().optional(), // YYYY-MM
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
 
-    const conditions = [eq(heSolicitacoes.companyId, input.companyId)];
+    const conditions = [companyFilter(heSolicitacoes.companyId, input)];
     if (input.status && input.status !== "todas") {
       conditions.push(eq(heSolicitacoes.status, input.status));
     }
@@ -275,9 +272,7 @@ export const heSolicitacoesRouter = router({
   }),
 
   // ===================== CONTADORES PARA BADGES =====================
-  counts: protectedProcedure.input(z.object({
-    companyId: z.number(),
-  })).query(async ({ input }) => {
+  counts: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return { pendentes: 0, aprovadas: 0, rejeitadas: 0, total: 0 };
 
@@ -287,7 +282,7 @@ export const heSolicitacoesRouter = router({
       rejeitadas: sql<number>`SUM(CASE WHEN status = 'rejeitada' THEN 1 ELSE 0 END)`,
       total: sql<number>`COUNT(*)`,
     }).from(heSolicitacoes)
-      .where(eq(heSolicitacoes.companyId, input.companyId));
+      .where(companyFilter(heSolicitacoes.companyId, input));
 
     return {
       pendentes: Number(result?.pendentes || 0),
@@ -299,9 +294,7 @@ export const heSolicitacoesRouter = router({
 
   // ===================== VERIFICAR HE AUTORIZADA PARA FUNCIONÁRIO/DATA =====================
   // Usado pelo motor CLT no fechamento para determinar se HE foi autorizada
-  checkAuthorized: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    employeeId: z.number(),
+  checkAuthorized: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
     data: z.string(), // YYYY-MM-DD
   })).query(async ({ input }) => {
     const db = await getDb();
@@ -317,7 +310,7 @@ export const heSolicitacoesRouter = router({
     }).from(heSolicitacoes)
       .innerJoin(heSolicitacaoFuncionarios, eq(heSolicitacaoFuncionarios.solicitacaoId, heSolicitacoes.id))
       .where(and(
-        eq(heSolicitacoes.companyId, input.companyId),
+        companyFilter(heSolicitacoes.companyId, input),
         eq(heSolicitacoes.dataSolicitacao, input.data),
         eq(heSolicitacoes.status, "aprovada"),
         eq(heSolicitacaoFuncionarios.employeeId, input.employeeId),
@@ -365,9 +358,7 @@ export const heSolicitacoesRouter = router({
   }),
 
   // ===================== BULK CHECK - Verificar HE autorizada para múltiplos funcionários/data =====================
-  bulkCheckAuthorized: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    mesReferencia: z.string(), // YYYY-MM
+  bulkCheckAuthorized: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(), // YYYY-MM
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -382,7 +373,7 @@ export const heSolicitacoesRouter = router({
     }).from(heSolicitacoes)
       .innerJoin(heSolicitacaoFuncionarios, eq(heSolicitacaoFuncionarios.solicitacaoId, heSolicitacoes.id))
       .where(and(
-        eq(heSolicitacoes.companyId, input.companyId),
+        companyFilter(heSolicitacoes.companyId, input),
         eq(heSolicitacoes.status, "aprovada"),
         sql`${heSolicitacoes.dataSolicitacao} LIKE ${input.mesReferencia + '%'}`,
       ));

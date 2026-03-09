@@ -16,8 +16,9 @@ import { useCompany } from "@/contexts/CompanyContext";
 import EpiAssinatura from "./EpiAssinatura";
 
 export default function EpiChecklist() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<"pendentes" | "concluidos" | "novo">("pendentes");
   const [search, setSearch] = useState("");
   const [expandedChecklist, setExpandedChecklist] = useState<number | null>(null);
@@ -31,7 +32,7 @@ export default function EpiChecklist() {
     { companyId, status: tab === "pendentes" ? undefined : tab === "concluidos" ? "concluido" : undefined },
     { enabled: !!companyId }
   );
-  const employeesQ = trpc.employees.list.useQuery({ companyId, status: "Ativo" }, { enabled: !!companyId });
+  const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds, status: "Ativo" }, { enabled: !!companyId });
 
   // Mutations
   const generateMut = trpc.epiAvancado.checklistGenerate.useMutation({
@@ -168,7 +169,7 @@ export default function EpiChecklist() {
               <Button className="bg-[#1B2A4A] hover:bg-[#243660]" disabled={generateMut.isPending}
                 onClick={() => {
                   if (!newForm.employeeId) return toast.error("Selecione um funcionário");
-                  generateMut.mutate({ companyId, employeeId: parseInt(newForm.employeeId), tipo: newForm.tipo });
+                  generateMut.mutate({ companyId, companyIds, employeeId: parseInt(newForm.employeeId), tipo: newForm.tipo });
                 }}>
                 {generateMut.isPending ? "Gerando..." : "Gerar Checklist"}
               </Button>

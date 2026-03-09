@@ -37,8 +37,9 @@ function flattenSn(raw: any) {
 }
 
 export default function RelogiosPonto() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
 
   const snsQ = trpc.obras.listSnsByCompany.useQuery(
     { companyId },
@@ -102,9 +103,7 @@ export default function RelogiosPonto() {
 
   const handleSave = () => {
     if (!form.sn.trim()) { toast.error("Número de série (SN) é obrigatório"); return; }
-    addSnMut.mutate({
-      companyId,
-      obraId: form.obraId ? parseInt(form.obraId, 10) : undefined,
+    addSnMut.mutate({ companyId, companyIds, obraId: form.obraId ? parseInt(form.obraId, 10) : undefined,
       sn: form.sn.trim(),
     });
   };

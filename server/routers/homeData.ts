@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods, terminationNotices } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 
 export const homeDataRouter = router({
   /**
@@ -11,7 +12,7 @@ export const homeDataRouter = router({
    * admissões/demissões recentes, advertências recentes, resumo geral
    */
   getData: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const hoje = new Date();
@@ -29,7 +30,7 @@ export const homeDataRouter = router({
       // 1. BUSCAR TODOS OS FUNCIONÁRIOS ATIVOS
       // ============================================================
       const allEmps = await db.select().from(employees)
-        .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+        .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       const ativos = allEmps.filter(e => e.status === "Ativo");
       const todosNaoDesligados = allEmps.filter(e => e.status !== "Desligado");
@@ -39,7 +40,7 @@ export const homeDataRouter = router({
       // ============================================================
       // Mapa de obras para nome
       const allObras = await db.select().from(obras)
-        .where(eq(obras.companyId, input.companyId));
+        .where(companyFilter(obras.companyId, input));
       const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
       const aniversariantes = ativos
@@ -101,7 +102,7 @@ export const homeDataRouter = router({
       // 3. ASOs VENCENDO (próximos 60 dias) ou VENCIDOS
       // ============================================================
       const allAsos = await db.select().from(asos)
-        .where(eq(asos.companyId, input.companyId));
+        .where(companyFilter(asos.companyId, input));
 
       // Pegar o ASO mais recente de cada funcionário ativo
       const asoMap = new Map<number, typeof allAsos[0]>();
@@ -203,7 +204,7 @@ export const homeDataRouter = router({
         valorTotal: vacationPeriods.valorTotal,
       }).from(vacationPeriods)
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           sql`${vacationPeriods.deletedAt} IS NULL`,
         ));
 
@@ -269,7 +270,7 @@ export const homeDataRouter = router({
       // 5. PRÓXIMAS AUDIÊNCIAS (Processos Trabalhistas)
       // ============================================================
       const processos = await db.select().from(processosTrabalhistas)
-        .where(eq(processosTrabalhistas.companyId, input.companyId));
+        .where(companyFilter(processosTrabalhistas.companyId, input));
 
       const proximasAudiencias = processos
         .filter(p => p.dataAudiencia && p.dataAudiencia >= hojeStr && !["encerrado", "arquivado"].includes(p.status))
@@ -314,7 +315,7 @@ export const homeDataRouter = router({
       // 7. ADVERTÊNCIAS RECENTES (últimos 30 dias)
       // ============================================================
       const allWarnings = await db.select().from(warnings)
-        .where(and(eq(warnings.companyId, input.companyId), isNull(warnings.deletedAt)));
+        .where(and(companyFilter(warnings.companyId, input), isNull(warnings.deletedAt)));
 
       const advertenciasRecentes = allWarnings
         .filter(w => w.dataOcorrencia && w.dataOcorrencia >= ha30diasStr)
@@ -433,7 +434,7 @@ export const homeDataRouter = router({
       // ============================================================
       const avisosAtivos = await db.select().from(terminationNotices)
         .where(and(
-          eq(terminationNotices.companyId, input.companyId),
+          companyFilter(terminationNotices.companyId, input),
           eq(terminationNotices.status, 'em_andamento'),
           sql`${terminationNotices.deletedAt} IS NULL`,
         ));

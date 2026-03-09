@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances } from "../../drizzle/schema";
 import { eq, and, sql, between, inArray, isNull } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 
@@ -143,7 +144,7 @@ export const payrollEngineRouter = router({
   // 1. ABRIR / LISTAR COMPETÊNCIAS
   // ============================================================
   listPeriods: protectedProcedure
-    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -157,7 +158,7 @@ export const payrollEngineRouter = router({
     }),
 
   getPeriod: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -172,7 +173,7 @@ export const payrollEngineRouter = router({
     }),
 
   openPeriod: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -217,7 +218,7 @@ export const payrollEngineRouter = router({
   // 2. PROCESSAR PONTO IMPORTADO + GERAR TIMECARD DAILY
   // ============================================================
   processarPonto: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -249,7 +250,7 @@ export const payrollEngineRouter = router({
         salarioBase: employees.salarioBase,
       }).from(employees).where(
         and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
           sql`${employees.status} IN ('Ativo', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
@@ -259,7 +260,7 @@ export const payrollEngineRouter = router({
       // Get time_records for the ponto period (may include multiple clocks/obras)
       const records = await db.select().from(timeRecords).where(
         and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           sql`${timeRecords.data} >= ${pontoInicio}`,
           sql`${timeRecords.data} <= ${pontoFim}`,
         )
@@ -477,7 +478,7 @@ export const payrollEngineRouter = router({
   // 2.1 LISTAR INCONSISTÊNCIAS DO PONTO
   // ============================================================
   listarInconsistencias: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -486,7 +487,7 @@ export const payrollEngineRouter = router({
         FROM timecard_daily td
         LEFT JOIN employees e ON td.employeeId = e.id
         LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId = ${input.companyId} 
+        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
         AND td.mesCompetencia = ${input.mesReferencia}
         AND td.is_inconsistente = 1
         ORDER BY td.data, e.nomeCompleto
@@ -572,7 +573,7 @@ export const payrollEngineRouter = router({
   // 2.3 RESUMO DE INCONSISTÊNCIAS (para o wizard)
   // ============================================================
   resumoInconsistencias: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -594,7 +595,7 @@ export const payrollEngineRouter = router({
   // 3. AFERIÇÃO - Cruzar ponto com período "no escuro" do mês anterior
   // ============================================================
   realizarAfericao: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -650,7 +651,7 @@ export const payrollEngineRouter = router({
 
       const actualRecords = await db.select().from(timeRecords).where(
         and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           sql`${timeRecords.data} >= ${escuroInicio}`,
           sql`${timeRecords.data} <= ${escuroFim}`,
         )
@@ -861,7 +862,7 @@ export const payrollEngineRouter = router({
   // 3b. LISTAR ALERTAS DA AFERIÇÃO (pendente_decisao)
   // ============================================================
   listarAlertasAfericao: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -869,7 +870,7 @@ export const payrollEngineRouter = router({
         SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_adjustments pa
         LEFT JOIN employees e ON pa.employeeId = e.id
-        WHERE pa.companyId = ${input.companyId} 
+        WHERE pa.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
         AND pa.mesDesconto = ${input.mesReferencia}
         AND pa.status = 'pendente_decisao'
         ORDER BY e.nomeCompleto, pa.data
@@ -881,9 +882,7 @@ export const payrollEngineRouter = router({
   // 3c. DECIDIR ALERTA DA AFERIÇÃO (erro relógio vs falta real)
   // ============================================================
   decidirAfericao: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       decisoes: z.array(z.object({
         adjustmentId: z.number(),
         decisao: z.enum(["erro_relogio", "falta_real"]),
@@ -960,7 +959,7 @@ export const payrollEngineRouter = router({
   // 4. GERAR VALE / ADIANTAMENTO
   // ============================================================
   gerarVale: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -978,7 +977,7 @@ export const payrollEngineRouter = router({
         dataAdmissao: employees.dataAdmissao,
       }).from(employees).where(
         and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
           sql`${employees.status} IN ('Ativo', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
@@ -1130,7 +1129,7 @@ export const payrollEngineRouter = router({
   // 5. LISTAR VALES DO MÊS
   // ============================================================
   listarVales: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1138,7 +1137,7 @@ export const payrollEngineRouter = router({
         SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_advances pa
         LEFT JOIN employees e ON pa.employeeId = e.id
-        WHERE pa.companyId = ${input.companyId} AND pa.mesReferencia = ${input.mesReferencia}
+        WHERE pa.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pa.mesReferencia = ${input.mesReferencia}
         ORDER BY e.nomeCompleto
       `) as any[];
       return rows || [];
@@ -1148,9 +1147,7 @@ export const payrollEngineRouter = router({
   // 5b. DECIDIR VALE (usuário aprova ou rejeita para funcionários com alerta)
   // ============================================================
   decidirVale: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       decisoes: z.array(z.object({
         employeeId: z.number(),
         pagar: z.boolean(),
@@ -1211,7 +1208,7 @@ export const payrollEngineRouter = router({
   // 6. SIMULAR PAGAMENTO
   // ============================================================
   simularPagamento: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1243,7 +1240,7 @@ export const payrollEngineRouter = router({
         obraAtualId: employees.obraAtualId,
       }).from(employees).where(
         and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
           sql`${employees.status} IN ('Ativo', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
@@ -1398,7 +1395,7 @@ export const payrollEngineRouter = router({
           SELECT obraId, COUNT(*) as dias, o.nome as obraNome
           FROM timecard_daily td
           LEFT JOIN obras o ON td.obraId = o.id
-          WHERE td.employeeId = ${emp.id} AND td.companyId = ${input.companyId}
+          WHERE td.employeeId = ${emp.id} AND td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           AND td.mesCompetencia = ${input.mesReferencia} AND td.statusDia = 'registrado'
           AND td.obraId IS NOT NULL
           GROUP BY td.obraId, o.nome
@@ -1515,7 +1512,7 @@ export const payrollEngineRouter = router({
   // 7. LISTAR PAGAMENTOS
   // ============================================================
   listarPagamentos: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1523,7 +1520,7 @@ export const payrollEngineRouter = router({
         SELECT pp.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
-        WHERE pp.companyId = ${input.companyId} AND pp.mesReferencia = ${input.mesReferencia}
+        WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
         ORDER BY e.nomeCompleto
       `) as any[];
       return rows || [];
@@ -1533,7 +1530,7 @@ export const payrollEngineRouter = router({
   // 8. CONSOLIDAR PAGAMENTO
   // ============================================================
   consolidarPagamento: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string(), ignorarConferencia: z.boolean().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(), ignorarConferencia: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1575,7 +1572,7 @@ export const payrollEngineRouter = router({
       const [payments] = await db.execute(sql`
         SELECT pp.*, e.nomeCompleto FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
-        WHERE pp.companyId = ${input.companyId} AND pp.mesReferencia = ${input.mesReferencia}
+        WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
       `) as any[];
 
       for (const p of (payments || [])) {
@@ -1601,7 +1598,7 @@ export const payrollEngineRouter = router({
   // 9. TRAVAR COMPETÊNCIA
   // ============================================================
   travarCompetencia: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1619,7 +1616,7 @@ export const payrollEngineRouter = router({
   // 10. TIMECARD DAILY - Listar registros diários
   // ============================================================
   listarTimecardDaily: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string(), employeeId: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(), employeeId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1630,7 +1627,7 @@ export const payrollEngineRouter = router({
           FROM timecard_daily td
           LEFT JOIN employees e ON td.employeeId = e.id
           LEFT JOIN obras o ON td.obraId = o.id
-          WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
+          WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
           AND td.employeeId = ${input.employeeId}
           ORDER BY td.data, e.nomeCompleto
         `;
@@ -1640,7 +1637,7 @@ export const payrollEngineRouter = router({
           FROM timecard_daily td
           LEFT JOIN employees e ON td.employeeId = e.id
           LEFT JOIN obras o ON td.obraId = o.id
-          WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
+          WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
           ORDER BY td.data, e.nomeCompleto
         `;
       }
@@ -1652,7 +1649,7 @@ export const payrollEngineRouter = router({
   // 11. RELATÓRIO DE DIVERGÊNCIAS
   // ============================================================
   relatorioDivergencias: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1660,7 +1657,7 @@ export const payrollEngineRouter = router({
         SELECT pa.*, e.nomeCompleto, e.funcao, e.codigoInterno
         FROM payroll_adjustments pa
         LEFT JOIN employees e ON pa.employeeId = e.id
-        WHERE pa.companyId = ${input.companyId} AND pa.mesDesconto = ${input.mesReferencia}
+        WHERE pa.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pa.mesDesconto = ${input.mesReferencia}
         ORDER BY pa.data, e.nomeCompleto
       `) as any[];
       return rows || [];
@@ -1670,7 +1667,7 @@ export const payrollEngineRouter = router({
   // 12. ALERTAS
   // ============================================================
   listarAlertas: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1712,7 +1709,7 @@ export const payrollEngineRouter = router({
   // 13. EVENTOS FINANCEIROS
   // ============================================================
   listarEventosFinanceiros: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), limit: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(), limit: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1728,7 +1725,7 @@ export const payrollEngineRouter = router({
     }),
 
   previsaoFinanceira: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesesAFrente: z.number().default(6) }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesesAFrente: z.number().default(6) }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1782,7 +1779,7 @@ export const payrollEngineRouter = router({
   // 14. DASHBOARD CUSTO POR OBRA
   // ============================================================
   custoPorObra: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1795,7 +1792,7 @@ export const payrollEngineRouter = router({
           COUNT(*) as totalDias
         FROM timecard_daily td
         LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
+        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
         GROUP BY td.obraId, o.nome
         ORDER BY totalFuncionarios DESC
       `) as any[];
@@ -1810,7 +1807,7 @@ export const payrollEngineRouter = router({
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
         LEFT JOIN obras o ON e.obraAtualId = o.id
-        WHERE pp.companyId = ${input.companyId} AND pp.mesReferencia = ${input.mesReferencia}
+        WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
         GROUP BY e.obraAtualId, o.nome
         ORDER BY totalBruto DESC
       `) as any[];
@@ -1825,7 +1822,7 @@ export const payrollEngineRouter = router({
   // 15. CRITÉRIOS CONFIGURÁVEIS
   // ============================================================
   getCriterios: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1833,9 +1830,7 @@ export const payrollEngineRouter = router({
     }),
 
   salvarCriterio: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      chave: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), chave: z.string(),
       valor: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1880,7 +1875,7 @@ export const payrollEngineRouter = router({
   // 17. RESUMO DA COMPETÊNCIA
   // ============================================================
   resumoCompetencia: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1967,7 +1962,7 @@ export const payrollEngineRouter = router({
   // 18. GERAR CONTRACHEQUE (HTML para impressão)
   // ============================================================
   gerarContracheque: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string(), employeeId: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(), employeeId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -1993,7 +1988,7 @@ export const payrollEngineRouter = router({
           e.pis, e.ctps, e.obraAtual
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp.employeeId = e.id
-        WHERE pp.companyId = ${input.companyId} AND pp.mesReferencia = ${input.mesReferencia} ${empFilter}
+        WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia} ${empFilter}
         ORDER BY e.nomeCompleto
       `) as any[];
 
@@ -2060,9 +2055,7 @@ export const payrollEngineRouter = router({
   // 20. ASSISTENTE IA DE INCONSISTÊNCIAS
   // ============================================================
   analisarInconsistenciaIA: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      timecardDailyId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), timecardDailyId: z.number(),
       mesReferencia: z.string(),
     }))
     .mutation(async ({ input }) => {
@@ -2209,9 +2202,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
   // LIMPAR ETAPA / LIMPAR COMPETÊNCIA
   // ============================================================
   resetarEtapa: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       etapa: z.enum(["ponto", "escuro", "vale", "pagamento", "consolidacao"]),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -2306,9 +2297,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     }),
 
   resetarCompetencia: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -2358,7 +2347,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
   // RESUMO DO PONTO POR FUNCIONÁRIO (para Etapa 2 do wizard)
   // ============================================================
   resumoPontoPorFuncionario: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -2387,7 +2376,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         FROM timecard_daily td
         LEFT JOIN employees e ON td.employeeId = e.id
         LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
+        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
         GROUP BY td.employeeId, e.nomeCompleto, e.cpf, e.funcao, e.codigoInterno, e.funcao, e.codigoInterno
         ORDER BY e.nomeCompleto
       `) as any[];
@@ -2405,7 +2394,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
   // ESPELHO DE PONTO POR FUNCIONÁRIO (para Etapa 2 do wizard)
   // ============================================================
   espelhoPontoFuncionario: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string(), employeeId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(), employeeId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -2415,7 +2404,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         FROM timecard_daily td
         LEFT JOIN employees e ON td.employeeId = e.id
         LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId = ${input.companyId} 
+        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
           AND td.mesCompetencia = ${input.mesReferencia}
           AND td.employeeId = ${input.employeeId}
         ORDER BY td.data ASC
@@ -2427,7 +2416,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
   // CONFLITOS DE OBRA (funcionário em 2+ obras no mesmo dia)
   // ============================================================
   conflitosObra: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -2442,7 +2431,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         FROM timecard_daily td
         LEFT JOIN employees e ON td.employeeId = e.id
         LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId = ${input.companyId} AND td.mesCompetencia = ${input.mesReferencia}
+        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
           AND td.obraId IS NOT NULL
         GROUP BY td.employeeId, e.nomeCompleto, td.data
         HAVING COUNT(DISTINCT td.obraId) > 1

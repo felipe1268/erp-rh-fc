@@ -3,21 +3,20 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { employeeDocuments, employees } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
 
 export const employeeDocumentsRouter = router({
   // Listar documentos de um funcionário
   listar: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number().optional(),
       tipo: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const conditions: any[] = [
-        eq(employeeDocuments.companyId, input.companyId),
+        companyFilter(employeeDocuments.companyId, input),
         sql`${employeeDocuments.deletedAt} IS NULL`,
       ];
       if (input.employeeId) conditions.push(eq(employeeDocuments.employeeId, input.employeeId));
@@ -30,9 +29,7 @@ export const employeeDocumentsRouter = router({
 
   // Upload de documento
   upload: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       tipo: z.enum(['rg','cnh','ctps','comprovante_residencia','certidao_nascimento','titulo_eleitor','reservista','pis','foto_3x4','contrato_trabalho','termo_rescisao','atestado_medico','diploma','certificado','outros']),
       nome: z.string(),
       descricao: z.string().optional(),
@@ -85,7 +82,7 @@ export const employeeDocumentsRouter = router({
 
   // Resumo de documentos por funcionário (para dashboard)
   resumoPorFuncionario: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const docs = await db.select({
@@ -94,7 +91,7 @@ export const employeeDocumentsRouter = router({
         count: sql<number>`COUNT(*)`,
       }).from(employeeDocuments)
         .where(and(
-          eq(employeeDocuments.companyId, input.companyId),
+          companyFilter(employeeDocuments.companyId, input),
           sql`${employeeDocuments.deletedAt} IS NULL`,
         ))
         .groupBy(employeeDocuments.employeeId, employeeDocuments.tipo);
@@ -116,7 +113,7 @@ export const employeeDocumentsRouter = router({
 
   // Documentos com validade vencida ou próxima do vencimento
   alertasVencimento: protectedProcedure
-    .input(z.object({ companyId: z.number(), diasAntecedencia: z.number().default(30) }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), diasAntecedencia: z.number().default(30) }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const hoje = new Date().toISOString().split('T')[0];
@@ -126,7 +123,7 @@ export const employeeDocumentsRouter = router({
 
       const docs = await db.select().from(employeeDocuments)
         .where(and(
-          eq(employeeDocuments.companyId, input.companyId),
+          companyFilter(employeeDocuments.companyId, input),
           sql`${employeeDocuments.deletedAt} IS NULL`,
           sql`${employeeDocuments.dataValidade} IS NOT NULL`,
           sql`${employeeDocuments.dataValidade} <= ${futuroStr}`,

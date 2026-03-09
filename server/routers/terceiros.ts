@@ -9,7 +9,8 @@ import {
   alertasTerceiros,
   obras,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, like, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, like, gte, lte, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 
@@ -19,11 +20,11 @@ export const terceirosRouter = router({
   // ============================================================
   empresas: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         return db.select().from(empresasTerceiras)
-          .where(and(eq(empresasTerceiras.companyId, input.companyId), isNull(empresasTerceiras.deletedAt)))
+          .where(and(companyFilter(empresasTerceiras.companyId, input), isNull(empresasTerceiras.deletedAt)))
           .orderBy(empresasTerceiras.razaoSocial);
       }),
 
@@ -36,9 +37,7 @@ export const terceirosRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        razaoSocial: z.string().min(1),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), razaoSocial: z.string().min(1),
         nomeFantasia: z.string().optional(),
         cnpj: z.string().min(1),
         inscricaoEstadual: z.string().optional(),
@@ -157,11 +156,11 @@ export const terceirosRouter = router({
 
     // Dashboard stats
     stats: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const all = await db.select().from(empresasTerceiras)
-          .where(and(eq(empresasTerceiras.companyId, input.companyId), isNull(empresasTerceiras.deletedAt)));
+          .where(and(companyFilter(empresasTerceiras.companyId, input), isNull(empresasTerceiras.deletedAt)));
         const ativas = all.filter((e: any) => e.statusTerceira === "ativa").length;
         const suspensas = all.filter((e: any) => e.statusTerceira === "suspensa").length;
         const inativas = all.filter((e: any) => e.statusTerceira === "inativa").length;
@@ -174,10 +173,10 @@ export const terceirosRouter = router({
   // ============================================================
   funcionarios: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), empresaTerceiraId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), empresaTerceiraId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions = [eq(funcionariosTerceiros.companyId, input.companyId), isNull(funcionariosTerceiros.deletedAt)];
+        const conditions = [companyFilter(funcionariosTerceiros.companyId, input), isNull(funcionariosTerceiros.deletedAt)];
         if (input.empresaTerceiraId) conditions.push(eq(funcionariosTerceiros.empresaTerceiraId, input.empresaTerceiraId));
         return db.select().from(funcionariosTerceiros).where(and(...conditions)).orderBy(funcionariosTerceiros.nome);
       }),
@@ -265,11 +264,11 @@ export const terceirosRouter = router({
       }),
 
     stats: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const all = await db.select().from(funcionariosTerceiros)
-          .where(and(eq(funcionariosTerceiros.companyId, input.companyId), isNull(funcionariosTerceiros.deletedAt)));
+          .where(and(companyFilter(funcionariosTerceiros.companyId, input), isNull(funcionariosTerceiros.deletedAt)));
         const aptos = all.filter((f: any) => f.statusAptidaoTerceiro === "apto").length;
         const inaptos = all.filter((f: any) => f.statusAptidaoTerceiro === "inapto").length;
         const pendentes = all.filter((f: any) => f.statusAptidaoTerceiro === "pendente").length;
@@ -282,10 +281,10 @@ export const terceirosRouter = router({
   // ============================================================
   obrigacoes: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), empresaTerceiraId: z.number().optional(), competencia: z.string().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), empresaTerceiraId: z.number().optional(), competencia: z.string().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions: any[] = [eq(obrigacoesMensaisTerceiros.companyId, input.companyId)];
+        const conditions: any[] = [companyFilter(obrigacoesMensaisTerceiros.companyId, input)];
         if (input.empresaTerceiraId) conditions.push(eq(obrigacoesMensaisTerceiros.empresaTerceiraId, input.empresaTerceiraId));
         if (input.competencia) conditions.push(eq(obrigacoesMensaisTerceiros.competencia, input.competencia));
         return db.select().from(obrigacoesMensaisTerceiros).where(and(...conditions)).orderBy(desc(obrigacoesMensaisTerceiros.competencia));
@@ -352,10 +351,10 @@ export const terceirosRouter = router({
   // ============================================================
   alertas: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), resolvido: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), resolvido: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions: any[] = [eq(alertasTerceiros.companyId, input.companyId)];
+        const conditions: any[] = [companyFilter(alertasTerceiros.companyId, input)];
         if (input.resolvido !== undefined) conditions.push(eq(alertasTerceiros.resolvido, input.resolvido));
         return db.select().from(alertasTerceiros).where(and(...conditions)).orderBy(desc(alertasTerceiros.createdAt));
       }),
@@ -372,9 +371,7 @@ export const terceirosRouter = router({
         return { success: true };
       }),
     enviar: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        empresaTerceiraId: z.number(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), empresaTerceiraId: z.number(),
         tipo: z.string(),
         titulo: z.string(),
         descricao: z.string().optional(),
@@ -395,19 +392,19 @@ export const terceirosRouter = router({
   // CONFORMIDADE / MEDIÇÃO
   // ============================================================
   conformidade: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const empresas = await db.select().from(empresasTerceiras)
-        .where(and(eq(empresasTerceiras.companyId, input.companyId), isNull(empresasTerceiras.deletedAt)));
+        .where(and(companyFilter(empresasTerceiras.companyId, input), isNull(empresasTerceiras.deletedAt)));
       const funcs = await db.select().from(funcionariosTerceiros)
-        .where(and(eq(funcionariosTerceiros.companyId, input.companyId), isNull(funcionariosTerceiros.deletedAt)));
+        .where(and(companyFilter(funcionariosTerceiros.companyId, input), isNull(funcionariosTerceiros.deletedAt)));
       const now = new Date();
       const competenciaAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const obrigacoes = await db.select().from(obrigacoesMensaisTerceiros)
-        .where(and(eq(obrigacoesMensaisTerceiros.companyId, input.companyId), eq(obrigacoesMensaisTerceiros.competencia, competenciaAtual)));
+        .where(and(companyFilter(obrigacoesMensaisTerceiros.companyId, input), eq(obrigacoesMensaisTerceiros.competencia, competenciaAtual)));
       const obrasList = await db.select().from(obras)
-        .where(and(eq(obras.companyId, input.companyId), isNull(obras.deletedAt)));
+        .where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt)));
       // Build conformidade per empresa
       const resultado = empresas.map((emp: any) => {
         const funcsDaEmpresa = funcs.filter((f: any) => f.empresaTerceiraId === emp.id);
@@ -439,20 +436,20 @@ export const terceirosRouter = router({
   // PAINEL / DASHBOARD
   // ============================================================
   painel: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const empresas = await db.select().from(empresasTerceiras)
-        .where(and(eq(empresasTerceiras.companyId, input.companyId), isNull(empresasTerceiras.deletedAt)));
+        .where(and(companyFilter(empresasTerceiras.companyId, input), isNull(empresasTerceiras.deletedAt)));
       const funcs = await db.select().from(funcionariosTerceiros)
-        .where(and(eq(funcionariosTerceiros.companyId, input.companyId), isNull(funcionariosTerceiros.deletedAt)));
+        .where(and(companyFilter(funcionariosTerceiros.companyId, input), isNull(funcionariosTerceiros.deletedAt)));
       const alertas = await db.select().from(alertasTerceiros)
-        .where(and(eq(alertasTerceiros.companyId, input.companyId), eq(alertasTerceiros.resolvido, 0)));
+        .where(and(companyFilter(alertasTerceiros.companyId, input), eq(alertasTerceiros.resolvido, 0)));
 
       const now = new Date();
       const competenciaAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const obrigacoes = await db.select().from(obrigacoesMensaisTerceiros)
-        .where(and(eq(obrigacoesMensaisTerceiros.companyId, input.companyId), eq(obrigacoesMensaisTerceiros.competencia, competenciaAtual)));
+        .where(and(companyFilter(obrigacoesMensaisTerceiros.companyId, input), eq(obrigacoesMensaisTerceiros.competencia, competenciaAtual)));
 
       return {
         empresas: {

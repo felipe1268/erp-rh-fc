@@ -37,7 +37,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function SolicitacaoHE() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("solicitar");
   const [filterStatus, setFilterStatus] = useState<string>("todas");
@@ -63,6 +63,7 @@ export default function SolicitacaoHE() {
   });
 
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const companyIds = getCompanyIdsForQuery();
 
   // Queries
   const obrasQuery = trpc.obras.listActive.useQuery(
@@ -189,9 +190,7 @@ export default function SolicitacaoHE() {
     if (!formData.motivo || formData.motivo.length < 5) { toast.error("Informe o motivo (mínimo 5 caracteres)"); return; }
     if (formData.funcionarioIds.length === 0) { toast.error("Selecione pelo menos 1 funcionário"); return; }
 
-    createMut.mutate({
-      companyId,
-      obraId: formData.obraId ? parseInt(formData.obraId) : undefined,
+    createMut.mutate({ companyId, companyIds, obraId: formData.obraId ? parseInt(formData.obraId) : undefined,
       dataSolicitacao: formData.dataSolicitacao,
       horaInicio: formData.horaInicio || undefined,
       horaFim: formData.horaFim || undefined,

@@ -13,8 +13,9 @@ import { removeAccents } from "@/lib/searchUtils";
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 export default function Feriados() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
   const [anoFiltro, setAnoFiltro] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
   const [showDialog, setShowDialog] = useState(false);
@@ -70,7 +71,7 @@ export default function Feriados() {
     if (editId) {
       atualizarMut.mutate({ id: editId, ...form, tipo: form.tipo as "nacional" | "estadual" | "compensado" | "municipal" | "ponto_facultativo", recorrente: form.recorrente === "1" });
     } else {
-      criarMut.mutate({ companyId, ...form, tipo: form.tipo as "nacional" | "estadual" | "compensado" | "municipal" | "ponto_facultativo", recorrente: form.recorrente === "1" });
+      criarMut.mutate({ companyId, companyIds, ...form, tipo: form.tipo as "nacional" | "estadual" | "compensado" | "municipal" | "ponto_facultativo", recorrente: form.recorrente === "1" });
     }
   };
 
@@ -96,7 +97,7 @@ export default function Feriados() {
           <p className="text-sm text-muted-foreground mt-1">Gerencie feriados nacionais, estaduais e municipais para cálculos de ponto e folha</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => seedMut.mutate({ companyId, ano: anoFiltro })} disabled={seedMut.isPending}>
+          <Button variant="outline" size="sm" onClick={() => seedMut.mutate({ companyId, companyIds, ano: anoFiltro })} disabled={seedMut.isPending}>
             {seedMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}
             Carregar Nacionais {anoFiltro}
           </Button>

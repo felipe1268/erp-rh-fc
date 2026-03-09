@@ -2,7 +2,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { fieldNotes, employees, obras, timeRecords } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, asc, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, asc, gte, lte, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { notifyOwner } from "../_core/notification";
 
 const tipoOcorrenciaEnum = z.enum(['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'insubordinacao', 'acidente', 'atestado_medico', 'desvio_conduta', 'elogio', 'outro']);
@@ -12,9 +13,7 @@ const acaoTomadaEnum = z.enum(['nenhuma', 'advertencia_verbal', 'advertencia_esc
 
 export const fieldNotesRouter = router({
   list: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      status: statusEnum.optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: statusEnum.optional(),
       employeeId: z.number().optional(),
       obraId: z.number().optional(),
       tipoOcorrencia: tipoOcorrenciaEnum.optional(),
@@ -23,7 +22,7 @@ export const fieldNotesRouter = router({
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const conds: any[] = [eq(fieldNotes.companyId, input.companyId), isNull(fieldNotes.deletedAt)];
+      const conds: any[] = [companyFilter(fieldNotes.companyId, input), isNull(fieldNotes.deletedAt)];
       if (input.status) conds.push(eq(fieldNotes.status, input.status));
       if (input.employeeId) conds.push(eq(fieldNotes.employeeId, input.employeeId));
       if (input.obraId) conds.push(eq(fieldNotes.obraId, input.obraId));
@@ -63,9 +62,7 @@ export const fieldNotesRouter = router({
     }),
 
   create: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       obraId: z.number().optional(),
       data: z.string(),
       tipoOcorrencia: tipoOcorrenciaEnum,
@@ -234,7 +231,7 @@ export const fieldNotesRouter = router({
     }),
 
   stats: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [rows] = await db.execute(sql`
@@ -261,9 +258,7 @@ export const fieldNotesRouter = router({
   // ============ DASHBOARD PROCEDURES ============
 
   statsPorObra: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      dataInicio: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }))
     .query(async ({ input }) => {
@@ -279,7 +274,7 @@ export const fieldNotesRouter = router({
           SUM(CASE WHEN fn.status = 'resolvido' THEN 1 ELSE 0 END) as resolvidos
         FROM field_notes fn
         LEFT JOIN obras o ON fn.obraId = o.id
-        WHERE fn.companyId = ${input.companyId} AND fn.deletedAt IS NULL ${extraWhere}
+        WHERE fn.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND fn.deletedAt IS NULL ${extraWhere}
         GROUP BY fn.obraId, o.nome
         ORDER BY total DESC
       `) as any[];
@@ -287,9 +282,7 @@ export const fieldNotesRouter = router({
     }),
 
   statsPorMes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      ano: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -308,9 +301,7 @@ export const fieldNotesRouter = router({
     }),
 
   taxaResolucao: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      dataInicio: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }))
     .query(async ({ input }) => {
@@ -348,9 +339,7 @@ export const fieldNotesRouter = router({
     }),
 
   statsPorTipo: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      dataInicio: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
     }))
     .query(async ({ input }) => {

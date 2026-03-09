@@ -56,7 +56,7 @@ const ACAO_LABELS: Record<string, string> = {
 };
 
 export default function ApontamentosCampo() {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const companyId = selectedCompany?.id;
 

@@ -8,7 +8,8 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { datajudAlerts, datajudAutoCheckConfig, processosTrabalhistas, companies } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================
@@ -185,19 +186,17 @@ export function startAutoCheckJob() {
 export const datajudAutoCheckRouter = router({
   // Obter configuração da empresa
   getConfig: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [config] = await db.select().from(datajudAutoCheckConfig)
-        .where(eq(datajudAutoCheckConfig.companyId, input.companyId));
+        .where(companyFilter(datajudAutoCheckConfig.companyId, input));
       return config || null;
     }),
 
   // Salvar/atualizar configuração
   saveConfig: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      isActive: z.boolean(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), isActive: z.boolean(),
       intervaloMinutos: z.number().min(30).max(1440),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -206,7 +205,7 @@ export const datajudAutoCheckRouter = router({
       }
       const db = (await getDb())!;
       const [existing] = await db.select().from(datajudAutoCheckConfig)
-        .where(eq(datajudAutoCheckConfig.companyId, input.companyId));
+        .where(companyFilter(datajudAutoCheckConfig.companyId, input));
 
       if (existing) {
         await db.update(datajudAutoCheckConfig).set({
@@ -226,12 +225,12 @@ export const datajudAutoCheckRouter = router({
 
   // Executar verificação manual
   executarVerificacao: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       // Garantir que existe config
       const [config] = await db.select().from(datajudAutoCheckConfig)
-        .where(eq(datajudAutoCheckConfig.companyId, input.companyId));
+        .where(companyFilter(datajudAutoCheckConfig.companyId, input));
 
       if (!config) {
         await db.insert(datajudAutoCheckConfig).values({
@@ -246,7 +245,7 @@ export const datajudAutoCheckRouter = router({
 
       const processos = await db.select().from(processosTrabalhistas)
         .where(and(
-          eq(processosTrabalhistas.companyId, input.companyId),
+          companyFilter(processosTrabalhistas.companyId, input),
           sql`${processosTrabalhistas.deletedAt} IS NULL`,
         ));
 
@@ -324,7 +323,7 @@ export const datajudAutoCheckRouter = router({
 
       // Atualizar config
       const [cfgNow] = await db.select().from(datajudAutoCheckConfig)
-        .where(eq(datajudAutoCheckConfig.companyId, input.companyId));
+        .where(companyFilter(datajudAutoCheckConfig.companyId, input));
       if (cfgNow) {
         await db.update(datajudAutoCheckConfig).set({
           ultimaVerificacao: sql`NOW()`,
@@ -338,14 +337,12 @@ export const datajudAutoCheckRouter = router({
 
   // Listar alertas
   listarAlertas: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      apenasNaoLidos: z.boolean().optional().default(false),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), apenasNaoLidos: z.boolean().optional().default(false),
       limit: z.number().optional().default(50),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      let where = eq(datajudAlerts.companyId, input.companyId);
+      let where = companyFilter(datajudAlerts.companyId, input);
       if (input.apenasNaoLidos) {
         where = and(where, eq(datajudAlerts.lido, 0)) as any;
       }
@@ -356,7 +353,7 @@ export const datajudAutoCheckRouter = router({
 
       const [countResult] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(datajudAlerts)
-        .where(and(eq(datajudAlerts.companyId, input.companyId), eq(datajudAlerts.lido, 0)));
+        .where(and(companyFilter(datajudAlerts.companyId, input), eq(datajudAlerts.lido, 0)));
 
       return {
         alertas,
@@ -379,7 +376,7 @@ export const datajudAutoCheckRouter = router({
 
   // Marcar todos como lidos
   marcarTodosLidos: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       await db.update(datajudAlerts).set({
@@ -387,7 +384,7 @@ export const datajudAutoCheckRouter = router({
         lidoPor: ctx.user.name || ctx.user.openId,
         lidoEm: sql`NOW()`,
       }).where(and(
-        eq(datajudAlerts.companyId, input.companyId),
+        companyFilter(datajudAlerts.companyId, input),
         eq(datajudAlerts.lido, 0),
       ));
       return { success: true };
@@ -404,13 +401,13 @@ export const datajudAutoCheckRouter = router({
 
   // Contar alertas não lidos (para badge)
   contarNaoLidos: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [result] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(datajudAlerts)
         .where(and(
-          eq(datajudAlerts.companyId, input.companyId),
+          companyFilter(datajudAlerts.companyId, input),
           eq(datajudAlerts.lido, 0),
         ));
       return { count: Number(result?.count || 0) };

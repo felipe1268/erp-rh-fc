@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { getDb, createAuditLog } from "../db";
 import { companyDocuments, convencaoColetiva, employeeAptidao, employees, asos, trainings, companies, obras } from "../../drizzle/schema";
 import { storagePut } from "../storage";
@@ -11,19 +12,15 @@ import { invokeLLM } from "../_core/llm";
 // SPRINT 1 - DOCUMENTOS REGULATÓRIOS DA EMPRESA
 // ============================================================
 const companyDocumentsRouter = router({
-  list: protectedProcedure.input(z.object({
-    companyId: z.number(),
-  })).query(async ({ input }) => {
+  list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(companyDocuments)
-      .where(eq(companyDocuments.companyId, input.companyId))
+      .where(companyFilter(companyDocuments.companyId, input))
       .orderBy(desc(companyDocuments.createdAt));
   }),
 
-  create: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    tipo: z.enum(['PGR','PCMSO','LTCAT','AET','LAUDO_INSALUBRIDADE','LAUDO_PERICULOSIDADE','ALVARA','CONTRATO_SOCIAL','CNPJ_CARTAO','CERTIDAO_NEGATIVA','OUTRO']),
+  create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), tipo: z.enum(['PGR','PCMSO','LTCAT','AET','LAUDO_INSALUBRIDADE','LAUDO_PERICULOSIDADE','ALVARA','CONTRATO_SOCIAL','CNPJ_CARTAO','CERTIDAO_NEGATIVA','OUTRO']),
     nome: z.string().min(1),
     descricao: z.string().optional(),
     dataEmissao: z.string().optional(),
@@ -157,13 +154,11 @@ const companyDocumentsRouter = router({
 // SPRINT 1 - CONVENÇÃO COLETIVA
 // ============================================================
 const convencaoRouter = router({
-  list: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    obraId: z.number().optional(),
+  list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(),
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    const conditions = [eq(convencaoColetiva.companyId, input.companyId)];
+    const conditions = [companyFilter(convencaoColetiva.companyId, input)];
     if (input.obraId !== undefined) {
       conditions.push(eq(convencaoColetiva.obraId, input.obraId));
     }
@@ -172,13 +167,11 @@ const convencaoRouter = router({
       .orderBy(desc(convencaoColetiva.createdAt));
   }),
 
-  listAll: protectedProcedure.input(z.object({
-    companyId: z.number(),
-  })).query(async ({ input }) => {
+  listAll: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(convencaoColetiva)
-      .where(eq(convencaoColetiva.companyId, input.companyId))
+      .where(companyFilter(convencaoColetiva.companyId, input))
       .orderBy(desc(convencaoColetiva.createdAt));
   }),
 
@@ -196,9 +189,7 @@ const convencaoRouter = router({
     return convs.map((c: any) => ({ ...c, nomeEmpresa: companyMap[c.companyId] || "N/A", nomeObra: c.obraId ? (obraMap[c.obraId] || null) : null }));
   }),
 
-  create: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    obraId: z.number().optional(),
+  create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(),
     nome: z.coerce.string().min(1),
     sindicato: z.coerce.string().optional(),
     cnpjSindicato: z.coerce.string().optional(),
@@ -530,9 +521,7 @@ const convencaoRouter = router({
 // ============================================================
 const aptidaoRouter = router({
   // Verificar aptidão de um colaborador específico
-  check: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    employeeId: z.number(),
+  check: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
@@ -545,7 +534,7 @@ const aptidaoRouter = router({
     const asosResult = await db.select().from(asos)
       .where(and(
         eq(asos.employeeId, input.employeeId),
-        eq(asos.companyId, input.companyId),
+        companyFilter(asos.companyId, input),
       ))
       .orderBy(desc(asos.dataExame));
     
@@ -556,7 +545,7 @@ const aptidaoRouter = router({
     const treinamentosResult = await db.select().from(trainings)
       .where(and(
         eq(trainings.employeeId, input.employeeId),
-        eq(trainings.companyId, input.companyId),
+        companyFilter(trainings.companyId, input),
       ));
     
     const treinamentosVigentes = treinamentosResult.filter((t: any) => 
@@ -580,7 +569,7 @@ const aptidaoRouter = router({
     const [existing] = await db.select().from(employeeAptidao)
       .where(and(
         eq(employeeAptidao.employeeId, input.employeeId),
-        eq(employeeAptidao.companyId, input.companyId),
+        companyFilter(employeeAptidao.companyId, input),
       ));
 
     if (existing) {
@@ -620,26 +609,22 @@ const aptidaoRouter = router({
   }),
 
   // Listar aptidão de todos os colaboradores de uma empresa
-  listByCompany: protectedProcedure.input(z.object({
-    companyId: z.number(),
-  })).query(async ({ input }) => {
+  listByCompany: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(employeeAptidao)
-      .where(eq(employeeAptidao.companyId, input.companyId))
+      .where(companyFilter(employeeAptidao.companyId, input))
       .orderBy(desc(employeeAptidao.updatedAt));
   }),
 
   // Recalcular aptidão de todos os colaboradores ativos de uma empresa
-  recalcAll: protectedProcedure.input(z.object({
-    companyId: z.number(),
-  })).mutation(async ({ input, ctx }) => {
+  recalcAll: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
     const emps = await db.select({ id: employees.id }).from(employees)
       .where(and(
-        eq(employees.companyId, input.companyId),
+        companyFilter(employees.companyId, input),
         eq(employees.status, 'Ativo'),
         isNull(employees.deletedAt),
       ));
@@ -652,13 +637,13 @@ const aptidaoRouter = router({
       const [empData] = await db.select().from(employees).where(eq(employees.id, emp.id));
       
       const asosResult = await db.select().from(asos)
-        .where(and(eq(asos.employeeId, emp.id), eq(asos.companyId, input.companyId)))
+        .where(and(eq(asos.employeeId, emp.id), companyFilter(asos.companyId, input)))
         .orderBy(desc(asos.dataExame));
       
       const asoVigente = asosResult.length > 0 && asosResult[0].dataValidade && asosResult[0].dataValidade >= hoje;
 
       const treinamentosResult = await db.select().from(trainings)
-        .where(and(eq(trainings.employeeId, emp.id), eq(trainings.companyId, input.companyId)));
+        .where(and(eq(trainings.employeeId, emp.id), companyFilter(trainings.companyId, input)));
       
       const treinamentosVigentes = treinamentosResult.filter((t: any) => t.dataValidade && t.dataValidade >= hoje);
       const treinamentosOk = treinamentosVigentes.length > 0;
@@ -674,7 +659,7 @@ const aptidaoRouter = router({
       if (statusCalc === 'apto') aptos++; else inaptos++;
 
       const [existing] = await db.select().from(employeeAptidao)
-        .where(and(eq(employeeAptidao.employeeId, emp.id), eq(employeeAptidao.companyId, input.companyId)));
+        .where(and(eq(employeeAptidao.employeeId, emp.id), companyFilter(employeeAptidao.companyId, input)));
 
       if (existing) {
         await db.update(employeeAptidao).set({

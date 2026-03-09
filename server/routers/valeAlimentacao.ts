@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { vrBenefits, employees, obras, obraFuncionarios, mealBenefitConfigs } from "../../drizzle/schema";
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 
 function parseBRL(v: string | null | undefined): number {
   if (!v) return 0;
@@ -18,9 +19,7 @@ export const valeAlimentacaoRouter = router({
   // LISTAR LANÇAMENTOS DO MÊS
   // ============================================================
   listLancamentos: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -31,7 +30,7 @@ export const valeAlimentacaoRouter = router({
             LEFT JOIN employees e ON vr.employeeId = e.id
             LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
             LEFT JOIN obras o ON of2.obraId = o.id
-            WHERE vr.companyId = ${input.companyId} AND vr.mesReferencia = ${input.mesReferencia}
+            WHERE vr.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr.mesReferencia = ${input.mesReferencia}
             AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)
             ORDER BY e.nomeCompleto ASC`
       ) as any[];
@@ -42,9 +41,7 @@ export const valeAlimentacaoRouter = router({
   // STATS DO MÊS
   // ============================================================
   getStats: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -66,7 +63,7 @@ export const valeAlimentacaoRouter = router({
           SUM(CASE WHEN vr.status != 'cancelado' THEN CAST(REPLACE(REPLACE(vr.valorTotal, '.', ''), ',', '.') AS DECIMAL(10,2)) ELSE 0 END) as totalValor
         FROM vr_benefits vr
         LEFT JOIN employees e ON vr.employeeId = e.id
-        WHERE vr.companyId = ${input.companyId} AND vr.mesReferencia = ${input.mesReferencia}
+        WHERE vr.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND vr.mesReferencia = ${input.mesReferencia}
         AND (e.status NOT IN ('Desligado', 'Lista_Negra') OR e.status IS NULL)`
       ) as any[];
       
@@ -86,9 +83,7 @@ export const valeAlimentacaoRouter = router({
   // GERAR LANÇAMENTOS DO MÊS (baseado nas configs de meal_benefit_configs)
   // ============================================================
   gerarMes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       diasUteis: z.number().default(22),
       geradoPor: z.string().optional(),
     }))
@@ -124,7 +119,7 @@ export const valeAlimentacaoRouter = router({
             of2.obraId
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
-            WHERE e.companyId = ${input.companyId} AND e.status = 'Ativo' AND e.deletedAt IS NULL
+            WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e.deletedAt IS NULL
             ORDER BY e.nomeCompleto ASC`
       ) as any[];
       const emps = empRows || [];
@@ -176,9 +171,7 @@ export const valeAlimentacaoRouter = router({
   // REGERAR MÊS (apaga e gera novamente)
   // ============================================================
   regerarMes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       diasUteis: z.number().default(22),
       geradoPor: z.string().optional(),
     }))
@@ -206,7 +199,7 @@ export const valeAlimentacaoRouter = router({
         sql`SELECT e.id, e.nomeCompleto, of2.obraId
             FROM employees e
             LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
-            WHERE e.companyId = ${input.companyId} AND e.status = 'Ativo' AND e.deletedAt IS NULL
+            WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND e.status = 'Ativo' AND e.deletedAt IS NULL
             ORDER BY e.nomeCompleto ASC`
       ) as any[];
       const emps = empRows || [];
@@ -294,9 +287,7 @@ export const valeAlimentacaoRouter = router({
   // APROVAR LANÇAMENTOS EM LOTE
   // ============================================================
   aprovarLote: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       ids: z.array(z.number()).optional(), // Se vazio, aprova todos pendentes
       aprovadoPor: z.string().optional(),
     }))
@@ -321,9 +312,7 @@ export const valeAlimentacaoRouter = router({
   // MARCAR COMO PAGO EM LOTE
   // ============================================================
   marcarPago: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       ids: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input }) => {
@@ -345,9 +334,7 @@ export const valeAlimentacaoRouter = router({
   // REVERTER PAGO → APROVADO (corrigir clique errado)
   // ============================================================
   reverterPago: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       ids: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input }) => {
@@ -385,9 +372,7 @@ export const valeAlimentacaoRouter = router({
   // HISTÓRICO POR COLABORADOR
   // ============================================================
   historicoColaborador: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -401,9 +386,7 @@ export const valeAlimentacaoRouter = router({
   // EXCLUIR TODOS OS LANÇAMENTOS DO MÊS (apenas pendentes)
   // ============================================================
   limparMes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;

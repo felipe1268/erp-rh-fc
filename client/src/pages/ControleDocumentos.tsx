@@ -54,8 +54,8 @@ function formatDate(d: string | null | undefined) {
 }
 
 // ============ PAINEL DE VALIDADE (Componente) ============
-function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onClickEmployee: (id: number) => void }) {
-  const { data, isLoading } = trpc.docs.painelValidade.useQuery({ companyId }, { enabled: !!companyId });
+function ValidadePanel({ companyId, companyIds, onClickEmployee }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void }) {
+  const { data, isLoading } = trpc.docs.painelValidade.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const [filterStatus, setFilterStatus] = useState("todos");
   const [filterTipo, setFilterTipo] = useState("todos");
   const [searchVal, setSearchVal] = useState("");
@@ -249,8 +249,8 @@ function ValidadePanel({ companyId, onClickEmployee }: { companyId: number; onCl
 }
 
 // ============ PAINEL SEM ASO (Componente) ============
-function SemASOPanel({ companyId, onClickEmployee, onCreateAso }: { companyId: number; onClickEmployee: (id: number) => void; onCreateAso: (empId: number) => void }) {
-  const { data: empsSemAso = [], isLoading } = trpc.docs.listSemASO.useQuery({ companyId }, { enabled: !!companyId });
+function SemASOPanel({ companyId, companyIds, onClickEmployee, onCreateAso }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void; onCreateAso: (empId: number) => void }) {
+  const { data: empsSemAso = [], isLoading } = trpc.docs.listSemASO.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const [searchSemAso, setSearchSemAso] = useState("");
 
   const filtered = useMemo(() => {
@@ -337,11 +337,11 @@ const EXAMES_PADRAO = [
 ];
 
 // ============ COMPONENTE: AUTOCOMPLETE MÉDICO ============
-function MedicoAutocomplete({ medicoValue, crmValue, onSelect, onChangeMedico, onChangeCrm, companyId }: {
+function MedicoAutocomplete({ medicoValue, crmValue, onSelect, onChangeMedico, onChangeCrm, companyId, companyIds }: {
   medicoValue: string; crmValue: string;
   onSelect: (nome: string, crm: string) => void;
   onChangeMedico: (v: string) => void; onChangeCrm: (v: string) => void;
-  companyId: number;
+  companyId: number; companyIds?: number[];
 }) {
   const [medicoSearch, setMedicoSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -353,8 +353,8 @@ function MedicoAutocomplete({ medicoValue, crmValue, onSelect, onChangeMedico, o
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { data: medicosList = [] } = trpc.medicosClinicas.listarMedicos.useQuery(
-    { companyId },
-    { enabled: !!companyId }
+    { companyId, companyIds },
+    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
   const criarMedico = trpc.medicosClinicas.criarMedico.useMutation();
   const atualizarMedico = trpc.medicosClinicas.atualizarMedico.useMutation();
@@ -470,8 +470,8 @@ function MedicoAutocomplete({ medicoValue, crmValue, onSelect, onChangeMedico, o
 }
 
 // ============ COMPONENTE: AUTOCOMPLETE CLÍNICA ============
-function ClinicaAutocomplete({ value, onChange, companyId }: {
-  value: string; onChange: (v: string) => void; companyId: number;
+function ClinicaAutocomplete({ value, onChange, companyId, companyIds }: {
+  value: string; onChange: (v: string) => void; companyId: number; companyIds?: number[];
 }) {
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -483,8 +483,8 @@ function ClinicaAutocomplete({ value, onChange, companyId }: {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { data: clinicasList = [] } = trpc.medicosClinicas.listarClinicas.useQuery(
-    { companyId },
-    { enabled: !!companyId }
+    { companyId, companyIds },
+    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
   const criarClinica = trpc.medicosClinicas.criarClinica.useMutation();
   const atualizarClinica = trpc.medicosClinicas.atualizarClinica.useMutation();
@@ -588,7 +588,7 @@ function ClinicaAutocomplete({ value, onChange, companyId }: {
 }
 
 // ============ COMPONENTE: EXAMES REALIZADOS (Checkboxes + Upload) ============
-function ExamesRealizadosField({ value, onChange, companyId }: { value: string; onChange: (v: string) => void; companyId: number }) {
+function ExamesRealizadosField({ value, onChange, companyId, companyIds }: { value: string; onChange: (v: string) => void; companyId: number; companyIds?: number[] }) {
   // Parse existing value: comma-separated string
   const selected = useMemo(() => {
     if (!value) return new Set<string>();
@@ -599,8 +599,8 @@ function ExamesRealizadosField({ value, onChange, companyId }: { value: string; 
 
   // Carregar exames customizados do banco de dados
   const { data: savedCustomExams = [] } = trpc.docs.customExams.list.useQuery(
-    { companyId },
-    { enabled: !!companyId }
+    { companyId, companyIds },
+    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
   const addCustomExamMutation = trpc.docs.customExams.add.useMutation();
 
@@ -674,8 +674,8 @@ const TIPOS_DOC_LABELS: Record<string, string> = {
   atestado_medico: "Atestado Médico", diploma: "Diploma", certificado: "Certificado", outros: "Outros"
 };
 
-function DocumentosPanel({ companyId, employees, onClickEmployee }: { companyId: number; employees: any[]; onClickEmployee: (id: number) => void }) {
-  const { data: docs = [], refetch } = trpc.employeeDocuments.listar.useQuery({ companyId }, { enabled: !!companyId });
+function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee }: { companyId: number; companyIds?: number[]; employees: any[]; onClickEmployee: (id: number) => void }) {
+  const { data: docs = [], refetch } = trpc.employeeDocuments.listar.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const uploadDoc = trpc.employeeDocuments.upload.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
   const deleteDoc = trpc.employeeDocuments.excluir.useMutation({ onSuccess: () => { refetch(); toast.success("Documento excluído!"); } });
 
@@ -705,9 +705,7 @@ function DocumentosPanel({ companyId, employees, onClickEmployee }: { companyId:
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
       try {
-        await uploadDoc.mutateAsync({
-          companyId,
-          employeeId: docForm.employeeId,
+        await uploadDoc.mutateAsync({ companyId, companyIds, employeeId: docForm.employeeId,
           tipo: docForm.tipo,
           nome: file.name,
           descricao: docForm.descricao || undefined,
@@ -867,8 +865,10 @@ function DocumentosPanel({ companyId, employees, onClickEmployee }: { companyId:
 }
 
 export default function ControleDocumentos() {
-  const { selectedCompanyId, companies } = useCompany();
+  const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
+  const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
   const selectedCompany = companies?.find((c: any) => String(c.id) === selectedCompanyId);
   const nomeEmpresaCompleto = selectedCompany?.razaoSocial || selectedCompany?.nomeFantasia || "Empresa";
   const nomeEmpresaCurto = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
@@ -877,12 +877,12 @@ export default function ControleDocumentos() {
   const [activeTab, setActiveTab] = useState("aso");
 
   // ============ QUERIES ============
-  const { data: resumo } = trpc.docs.resumo.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: asoList = [], refetch: refetchAso } = trpc.docs.asos.list.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: treinList = [], refetch: refetchTrein } = trpc.docs.treinamentos.list.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: atestList = [], refetch: refetchAtest } = trpc.docs.atestados.list.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: advList = [], refetch: refetchAdv } = trpc.docs.advertencias.list.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: allEmployees = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: resumo } = trpc.docs.resumo.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const { data: asoList = [], refetch: refetchAso } = trpc.docs.asos.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const { data: treinList = [], refetch: refetchTrein } = trpc.docs.treinamentos.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const { data: atestList = [], refetch: refetchAtest } = trpc.docs.atestados.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const { data: advList = [], refetch: refetchAdv } = trpc.docs.advertencias.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const { data: allEmployees = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
 
   // Filtrar APENAS funcionários ativos para os selects
   const activeEmployees = useMemo(() => {
@@ -1115,7 +1115,7 @@ export default function ControleDocumentos() {
       if (editingAsoId) {
         await updateAso.mutateAsync({ id: editingAsoId, ...formData, validadeDias: formData.validadeDias || 365 });
       } else {
-        const result = await createAso.mutateAsync({ companyId, ...formData, validadeDias: formData.validadeDias || 365 });
+        const result = await createAso.mutateAsync({ companyId, companyIds, ...formData, validadeDias: formData.validadeDias || 365 });
         asoId = (result as any)?.id || null;
       }
       if (_file && asoId) {
@@ -1141,7 +1141,7 @@ export default function ControleDocumentos() {
       if (editingTreinId) {
         await updateTrein.mutateAsync({ id: editingTreinId, ...formData });
       } else {
-        const result = await createTrein.mutateAsync({ companyId, ...formData });
+        const result = await createTrein.mutateAsync({ companyId, companyIds, ...formData });
         treinId = (result as any)?.id || null;
       }
       if (_file && treinId) {
@@ -1168,7 +1168,7 @@ export default function ControleDocumentos() {
     if (editingAtestId) {
       updateAtest.mutate({ id: editingAtestId, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
     } else {
-      createAtest.mutate({ companyId, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
+      createAtest.mutate({ companyId, companyIds, ...atestForm, diasAfastamento: atestForm.diasAfastamento || 0 });
     }
     setShowAtestDialog(false); setAtestForm({}); setEditingAtestId(null);
   };
@@ -1189,7 +1189,7 @@ export default function ControleDocumentos() {
     if (editingAdvId) {
       updateAdv.mutate({ id: editingAdvId, ...payload });
     } else {
-      createAdv.mutate({ companyId, ...payload, aplicadoPor: authUser?.name || authUser?.username || undefined });
+      createAdv.mutate({ companyId, companyIds, ...payload, aplicadoPor: authUser?.name || authUser?.username || undefined });
     }
     if (!editingAdvId && advForm.tipoAdvertencia !== "Verbal") {
       const emp = (allEmployees as any[]).find((e: any) => e.id === advForm.employeeId);
@@ -1507,17 +1507,17 @@ export default function ControleDocumentos() {
 
           {/* ===================== ABA SEM ASO ===================== */}
           <TabsContent value="semASO">
-            <SemASOPanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} onCreateAso={(empId: number) => { setEditingAsoId(null); setAsoForm({ employeeId: empId }); setShowAsoDialog(true); }} />
+            <SemASOPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} onCreateAso={(empId: number) => { setEditingAsoId(null); setAsoForm({ employeeId: empId }); setShowAsoDialog(true); }} />
           </TabsContent>
 
           {/* ===================== ABA PAINEL DE VALIDADE ===================== */}
           <TabsContent value="validade">
-            <ValidadePanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} />
+            <ValidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} />
           </TabsContent>
 
           {/* ===================== ABA DOCUMENTOS DO FUNCIONÁRIO ===================== */}
           <TabsContent value="documentos">
-            <DocumentosPanel companyId={companyId} employees={activeEmployees} onClickEmployee={setRaioXEmployeeId} />
+            <DocumentosPanel companyId={companyId} companyIds={companyIds} employees={activeEmployees} onClickEmployee={setRaioXEmployeeId} />
           </TabsContent>
 
           {/* ===================== ABA ASO ===================== */}
@@ -2027,6 +2027,7 @@ export default function ControleDocumentos() {
                 onChangeMedico={v => setAsoForm((prev: any) => ({ ...prev, medico: v }))}
                 onChangeCrm={v => setAsoForm((prev: any) => ({ ...prev, crm: v }))}
                 companyId={companyId}
+                companyIds={companyIds}
               />
             </div>
             <div className="col-span-2">
@@ -2034,11 +2035,12 @@ export default function ControleDocumentos() {
                 value={asoForm.clinica || ""}
                 onChange={v => setAsoForm({ ...asoForm, clinica: v })}
                 companyId={companyId}
+                companyIds={companyIds}
               />
             </div>
             <div className="col-span-2">
               <label className="text-sm font-medium">Exames Realizados</label>
-              <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} companyId={companyId} />
+              <ExamesRealizadosField value={asoForm.examesRealizados || ""} onChange={v => setAsoForm({ ...asoForm, examesRealizados: v })} companyId={companyId} companyIds={companyIds} />
             </div>
             <div className="col-span-2">
               <label className="text-sm font-medium">Observações</label>
@@ -2254,6 +2256,7 @@ export default function ControleDocumentos() {
                 onChangeMedico={v => setAtestForm((prev: any) => ({ ...prev, medico: v }))}
                 onChangeCrm={v => setAtestForm((prev: any) => ({ ...prev, crm: v }))}
                 companyId={companyId}
+                companyIds={companyIds}
               />
             </div>
             <div>

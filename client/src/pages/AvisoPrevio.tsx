@@ -51,8 +51,9 @@ const REDUCAO_LABELS: Record<string, string> = {
 };
 
 export default function AvisoPrevio() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -68,10 +69,10 @@ export default function AvisoPrevio() {
 
   // Queries
   const { data: avisosList = [], refetch } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
-    { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
-    { enabled: !!companyId }
+    { companyId, companyIds, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
+    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // tRPC utils for imperative queries & invalidation
@@ -199,9 +200,7 @@ export default function AvisoPrevio() {
       setForm({});
       setCalculoPreview(null);
     } else {
-      createAviso.mutate({
-        companyId,
-        employeeId: form.employeeId,
+      createAviso.mutate({ companyId, companyIds, employeeId: form.employeeId,
         tipo: form.tipo,
         dataInicio: form.dataDesligamento,
         dataDesligamento: form.dataDesligamento,
@@ -373,11 +372,11 @@ export default function AvisoPrevio() {
                   <tr className="border-b bg-muted/30">
                     <th className="p-3 text-left font-medium">Colaborador</th>
                     <th className="p-3 text-left font-medium">CPF</th>
-                    <th className="p-3 text-left font-medium">Tipo</th>
-                    <th className="p-3 text-left font-medium">Início</th>
-                    <th className="p-3 text-left font-medium">Término</th>
-                    <th className="p-3 text-center font-medium">Dias</th>
-                    <th className="p-3 text-left font-medium">Redução</th>
+                    <th className="p-3 text-center font-medium">Data Aviso</th>
+                    <th className="p-3 text-center font-medium">Redução</th>
+                    <th className="p-3 text-center font-medium">Dia Trabalhado</th>
+                    <th className="p-3 text-center font-medium">Último Dia</th>
+                    <th className="p-3 text-center font-medium">Data Pagamento</th>
                     <th className="p-3 text-right font-medium">Valor Estimado</th>
                     <th className="p-3 text-center font-medium">Status</th>
                     <th className="p-3 text-center font-medium">Ações</th>
@@ -388,20 +387,18 @@ export default function AvisoPrevio() {
                     <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">Nenhum aviso prévio encontrado</td></tr>
                   ) : filtered.map((a: any) => {
                     const st = STATUS_LABELS[a.status] || STATUS_LABELS.em_andamento;
-                    const tp = TIPO_LABELS[a.tipo] || { label: a.tipo, color: "text-gray-700", bg: "bg-gray-100" };
+                    const reducaoShort = a.reducaoJornada === '2h_dia' ? '2 HORAS' : a.reducaoJornada === '7_dias_corridos' ? '7 DIAS' : '-';
                     return (
                       <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                         <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>
                           {a.employeeName}
                         </td>
-                        <td className="p-3">{formatCPF(a.employeeCpf)}</td>
-                        <td className="p-3">
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${tp.bg} ${tp.color}`}>{tp.label}</span>
-                        </td>
-                        <td className="p-3">{formatDate(a.dataInicio)}</td>
-                        <td className="p-3">{formatDate(a.dataFim)}</td>
-                        <td className="p-3 text-center font-semibold">{a.diasAviso}</td>
-                        <td className="p-3 text-xs">{REDUCAO_LABELS[a.reducaoJornada] || "-"}</td>
+                        <td className="p-3 text-xs">{formatCPF(a.employeeCpf)}</td>
+                        <td className="p-3 text-center">{formatDate(a.dataDiaTrabalhado)}</td>
+                        <td className="p-3 text-center font-medium">{reducaoShort}</td>
+                        <td className="p-3 text-center">{formatDate(a.dataInicio)}</td>
+                        <td className="p-3 text-center">{formatDate(a.dataFim)}</td>
+                        <td className="p-3 text-center font-semibold text-red-600">{formatDate(a.dataLimitePagamento)}</td>
                         <td className="p-3 text-right font-semibold">{formatMoeda(a.valorEstimadoTotal)}</td>
                         <td className="p-3 text-center">
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>

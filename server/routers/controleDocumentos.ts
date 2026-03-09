@@ -2,7 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams } from "../../drizzle/schema";
-import { eq, and, desc, sql, ne, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, ne, isNull, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
 // Modelos de advertência padrão CLT
@@ -189,7 +190,7 @@ export const controleDocumentosRouter = router({
   // ===================== ASO =====================
   asos: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const rows = await db
@@ -216,7 +217,7 @@ export const controleDocumentosRouter = router({
           })
           .from(asos)
           .innerJoin(employees, eq(asos.employeeId, employees.id))
-          .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt)))
+          .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt)))
           .orderBy(employees.nomeCompleto);
 
         return rows.map((r: any) => ({
@@ -343,7 +344,7 @@ export const controleDocumentosRouter = router({
         const emps = await db
           .select({ id: employees.id, nomeCompleto: employees.nomeCompleto })
           .from(employees)
-          .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+          .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
         const nameMap = new Map<string, number>();
         emps.forEach((e: any) => {
@@ -431,7 +432,7 @@ export const controleDocumentosRouter = router({
   // ===================== ATESTADOS =====================
   atestados: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         return db
@@ -456,7 +457,7 @@ export const controleDocumentosRouter = router({
           })
           .from(atestados)
           .innerJoin(employees, eq(atestados.employeeId, employees.id))
-          .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt), isNull(atestados.deletedAt)))
+          .where(and(companyFilter(atestados.companyId, input), isNull(employees.deletedAt), isNull(atestados.deletedAt)))
           .orderBy(desc(atestados.dataEmissao));
       }),
 
@@ -545,7 +546,7 @@ export const controleDocumentosRouter = router({
   // ===================== TREINAMENTOS =====================
   treinamentos: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const rows = await db
@@ -569,7 +570,7 @@ export const controleDocumentosRouter = router({
           })
           .from(trainings)
           .innerJoin(employees, eq(trainings.employeeId, employees.id))
-          .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt), isNull(trainings.deletedAt)))
+          .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), isNull(trainings.deletedAt)))
           .orderBy(desc(trainings.dataRealizacao));
 
         return rows.map((r: any) => {
@@ -684,7 +685,7 @@ export const controleDocumentosRouter = router({
   // ===================== ADVERTÊNCIAS =====================
   advertencias: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         return db
@@ -709,7 +710,7 @@ export const controleDocumentosRouter = router({
           })
           .from(warnings)
           .innerJoin(employees, eq(warnings.employeeId, employees.id))
-          .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt), isNull(warnings.deletedAt)))
+          .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), isNull(warnings.deletedAt)))
           .orderBy(desc(warnings.dataOcorrencia));
       }),
 
@@ -733,7 +734,7 @@ export const controleDocumentosRouter = router({
         const db = (await getDb())!;
         // Calcular sequência automática
         const existentes = await db.select({ id: warnings.id }).from(warnings)
-          .where(and(eq(warnings.employeeId, input.employeeId), eq(warnings.companyId, input.companyId), isNull(warnings.deletedAt)));
+          .where(and(eq(warnings.employeeId, input.employeeId), companyFilter(warnings.companyId, input), isNull(warnings.deletedAt)));
         const sequencia = existentes.length + 1;
         
         await db.insert(warnings).values({
@@ -806,7 +807,7 @@ export const controleDocumentosRouter = router({
 
   // ===================== RESUMO GERAL =====================
   resumo: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
         const db = (await getDb())!;
       // Filtrar apenas documentos de funcionários não excluídos (deletedAt IS NULL)
@@ -814,25 +815,25 @@ export const controleDocumentosRouter = router({
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt)));
+        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt)));
 
       const [treinamentoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))
-        .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt), isNull(trainings.deletedAt)));
+        .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), isNull(trainings.deletedAt)));
 
       const [atestadoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(atestados)
         .innerJoin(employees, eq(atestados.employeeId, employees.id))
-        .where(and(eq(atestados.companyId, input.companyId), isNull(employees.deletedAt), isNull(atestados.deletedAt)));
+        .where(and(companyFilter(atestados.companyId, input), isNull(employees.deletedAt), isNull(atestados.deletedAt)));
 
       const [advertenciaCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(warnings)
         .innerJoin(employees, eq(warnings.employeeId, employees.id))
-        .where(and(eq(warnings.companyId, input.companyId), isNull(employees.deletedAt), isNull(warnings.deletedAt)));
+        .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), isNull(warnings.deletedAt)));
 
       // ASOs vencidos
       const hoje = new Date().toISOString().split("T")[0];
@@ -840,7 +841,7 @@ export const controleDocumentosRouter = router({
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${hoje}`));
+        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt), sql`${asos.dataValidade} < ${hoje}`));
 
       // ASOs a vencer em 30 dias
       const em30dias = new Date();
@@ -852,7 +853,7 @@ export const controleDocumentosRouter = router({
         .innerJoin(employees, eq(asos.employeeId, employees.id))
         .where(
           and(
-            eq(asos.companyId, input.companyId),
+            companyFilter(asos.companyId, input),
             isNull(employees.deletedAt),
             isNull(asos.deletedAt),
             sql`${asos.dataValidade} >= ${hoje}`,
@@ -865,7 +866,7 @@ export const controleDocumentosRouter = router({
         .select({ count: sql<number>`COUNT(*)` })
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))
-        .where(and(eq(trainings.companyId, input.companyId), isNull(employees.deletedAt), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${hoje}`));
+        .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${hoje}`));
 
       // Treinamentos a vencer em 30 dias
       const [treinAVencer] = await db
@@ -873,7 +874,7 @@ export const controleDocumentosRouter = router({
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))
         .where(and(
-          eq(trainings.companyId, input.companyId),
+          companyFilter(trainings.companyId, input),
           isNull(employees.deletedAt),
           isNull(trainings.deletedAt),
           sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} >= ${hoje} AND ${trainings.dataValidade} <= ${em30diasStr}`
@@ -882,7 +883,7 @@ export const controleDocumentosRouter = router({
       // Funcionários ativos SEM nenhum ASO
       const [semAsoCount] = await db.execute(sql`
         SELECT COUNT(*) as cnt FROM employees e
-        WHERE e.companyId = ${input.companyId}
+        WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           AND e.deletedAt IS NULL
           AND e.status = 'Ativo'
           AND NOT EXISTS (
@@ -905,7 +906,7 @@ export const controleDocumentosRouter = router({
 
   // ===================== FUNCIONÁRIOS SEM ASO =====================
   listSemASO: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [rows] = await db.execute(sql`
@@ -913,7 +914,7 @@ export const controleDocumentosRouter = router({
           o.nome as obraNome
         FROM employees e
         LEFT JOIN obras o ON e.obraAtualId = o.id
-        WHERE e.companyId = ${input.companyId}
+        WHERE e.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
           AND e.deletedAt IS NULL
           AND e.status = 'Ativo'
           AND NOT EXISTS (
@@ -1262,11 +1263,11 @@ export const controleDocumentosRouter = router({
   // ===================== MODELOS DE DOCUMENTOS (TEMPLATES) =====================
   templates: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         return db.select().from(documentTemplates)
-          .where(eq(documentTemplates.companyId, input.companyId))
+          .where(companyFilter(documentTemplates.companyId, input))
           .orderBy(documentTemplates.tipo);
       }),
 
@@ -1276,7 +1277,7 @@ export const controleDocumentosRouter = router({
         const db = (await getDb())!;
         const rows = await db.select().from(documentTemplates)
           .where(and(
-            eq(documentTemplates.companyId, input.companyId),
+            companyFilter(documentTemplates.companyId, input),
             eq(documentTemplates.tipo, input.tipo as any),
             eq(documentTemplates.ativo, 1),
           ));
@@ -1311,7 +1312,7 @@ export const controleDocumentosRouter = router({
         // Verificar se já existe
         const existing = await db.select().from(documentTemplates)
           .where(and(
-            eq(documentTemplates.companyId, input.companyId),
+            companyFilter(documentTemplates.companyId, input),
             eq(documentTemplates.tipo, input.tipo),
           ));
         if (existing.length > 0) {
@@ -1354,7 +1355,7 @@ export const controleDocumentosRouter = router({
 
   // ===================== PAINEL DE VALIDADE =====================
   painelValidade: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const hoje = new Date().toISOString().split("T")[0];
@@ -1375,7 +1376,7 @@ export const controleDocumentosRouter = router({
         })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(eq(asos.companyId, input.companyId), isNull(employees.deletedAt), isNull(asos.deletedAt)))
+        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt)))
         .orderBy(asos.dataValidade);
 
       // Treinamentos com validade
@@ -1395,7 +1396,7 @@ export const controleDocumentosRouter = router({
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))
         .where(and(
-          eq(trainings.companyId, input.companyId),
+          companyFilter(trainings.companyId, input),
           isNull(employees.deletedAt),
           isNull(trainings.deletedAt),
           sql`${trainings.dataValidade} IS NOT NULL`
@@ -1431,11 +1432,11 @@ export const controleDocumentosRouter = router({
   // ===================== EXAMES CUSTOMIZADOS =====================
   customExams: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const rows = await db.select().from(customExams)
-          .where(eq(customExams.companyId, input.companyId))
+          .where(companyFilter(customExams.companyId, input))
           .orderBy(customExams.nome);
         return rows;
       }),
@@ -1447,7 +1448,7 @@ export const controleDocumentosRouter = router({
         // Check if already exists (ignore case)
         const existing = await db.select().from(customExams)
           .where(and(
-            eq(customExams.companyId, input.companyId),
+            companyFilter(customExams.companyId, input),
             eq(customExams.nome, input.nome.trim()),
           ));
         if (existing.length > 0) return { id: existing[0].id, already: true };

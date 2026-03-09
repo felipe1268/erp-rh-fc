@@ -6,6 +6,7 @@ import {
   warnings,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull, between } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -163,9 +164,7 @@ export const pontoDescontosRouter = router({
 
   // ===================== CALCULAR DESCONTOS DO MÊS =====================
   // Analisa time_records + atestados + HE autorizadas e gera descontos
-  calcularMes: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    mesReferencia: z.string().regex(/^\d{4}-\d{2}$/, "Formato: YYYY-MM"),
+  calcularMes: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/, "Formato: YYYY-MM"),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
@@ -176,7 +175,7 @@ export const pontoDescontosRouter = router({
     // 1. Buscar todos os funcionários ativos da empresa
     const emps = await db.select().from(employees)
       .where(and(
-        eq(employees.companyId, input.companyId),
+        companyFilter(employees.companyId, input),
         eq(employees.status, "Ativo"),
         isNull(employees.deletedAt),
       ));
@@ -192,7 +191,7 @@ export const pontoDescontosRouter = router({
     // 2. Buscar registros de ponto do mês
     const records = await db.select().from(timeRecords)
       .where(and(
-        eq(timeRecords.companyId, input.companyId),
+        companyFilter(timeRecords.companyId, input),
         sql`${timeRecords.data} >= ${mesStart}`,
         sql`${timeRecords.data} <= ${mesEnd}`,
         inArray(timeRecords.employeeId, empIds),
@@ -201,7 +200,7 @@ export const pontoDescontosRouter = router({
     // 3. Buscar atestados do mês (para justificar faltas)
     const atests = await db.select().from(atestados)
       .where(and(
-        eq(atestados.companyId, input.companyId),
+        companyFilter(atestados.companyId, input),
         isNull(atestados.deletedAt),
         sql`${atestados.dataEmissao} >= ${mesStart}`,
         sql`${atestados.dataEmissao} <= ${mesEnd}`,
@@ -216,7 +215,7 @@ export const pontoDescontosRouter = router({
     }).from(heSolicitacoes)
       .innerJoin(heSolicitacaoFuncionarios, eq(heSolicitacaoFuncionarios.solicitacaoId, heSolicitacoes.id))
       .where(and(
-        eq(heSolicitacoes.companyId, input.companyId),
+        companyFilter(heSolicitacoes.companyId, input),
         eq(heSolicitacoes.status, "aprovada"),
         sql`${heSolicitacoes.dataSolicitacao} >= ${mesStart}`,
         sql`${heSolicitacoes.dataSolicitacao} <= ${mesEnd}`,
@@ -246,11 +245,11 @@ export const pontoDescontosRouter = router({
 
     // 5. Limpar descontos anteriores do mês (recalcular)
     await db.delete(pontoDescontos).where(and(
-      eq(pontoDescontos.companyId, input.companyId),
+      companyFilter(pontoDescontos.companyId, input),
       eq(pontoDescontos.mesReferencia, input.mesReferencia),
     ));
     await db.delete(pontoDescontosResumo).where(and(
-      eq(pontoDescontosResumo.companyId, input.companyId),
+      companyFilter(pontoDescontosResumo.companyId, input),
       eq(pontoDescontosResumo.mesReferencia, input.mesReferencia),
     ));
 
@@ -547,9 +546,7 @@ export const pontoDescontosRouter = router({
   }),
 
   // ===================== LISTAR DESCONTOS DO MÊS =====================
-  listByMonth: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    mesReferencia: z.string(),
+  listByMonth: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     tipo: z.string().optional(),
     status: z.string().optional(),
     employeeId: z.number().optional(),
@@ -558,7 +555,7 @@ export const pontoDescontosRouter = router({
     if (!db) return [];
 
     const conditions = [
-      eq(pontoDescontos.companyId, input.companyId),
+      companyFilter(pontoDescontos.companyId, input),
       eq(pontoDescontos.mesReferencia, input.mesReferencia),
     ];
     if (input.tipo) conditions.push(eq(pontoDescontos.tipo, input.tipo as any));
@@ -592,9 +589,7 @@ export const pontoDescontosRouter = router({
   }),
 
   // ===================== RESUMO MENSAL POR FUNCIONÁRIO =====================
-  listResumo: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    mesReferencia: z.string(),
+  listResumo: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
@@ -624,7 +619,7 @@ export const pontoDescontosRouter = router({
     }).from(pontoDescontosResumo)
       .leftJoin(employees, eq(pontoDescontosResumo.employeeId, employees.id))
       .where(and(
-        eq(pontoDescontosResumo.companyId, input.companyId),
+        companyFilter(pontoDescontosResumo.companyId, input),
         eq(pontoDescontosResumo.mesReferencia, input.mesReferencia),
       ))
       .orderBy(employees.nomeCompleto);
@@ -633,9 +628,7 @@ export const pontoDescontosRouter = router({
   }),
 
   // ===================== TOTAIS GERAIS DO MÊS =====================
-  totaisMes: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    mesReferencia: z.string(),
+  totaisMes: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
@@ -651,7 +644,7 @@ export const pontoDescontosRouter = router({
       funcionariosAfetados: sql<number>`COUNT(DISTINCT ${pontoDescontos.employeeId})`,
     }).from(pontoDescontos)
       .where(and(
-        eq(pontoDescontos.companyId, input.companyId),
+        companyFilter(pontoDescontos.companyId, input),
         eq(pontoDescontos.mesReferencia, input.mesReferencia),
       ));
 
@@ -718,9 +711,7 @@ export const pontoDescontosRouter = router({
   }),
 
   // ===================== FECHAR MÊS (bloquear alterações) =====================
-  fecharMes: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    mesReferencia: z.string(),
+  fecharMes: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
   })).mutation(async ({ input, ctx }) => {
     if (ctx.user.role !== "admin_master") {
       throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode fechar o mês de descontos" });
@@ -733,7 +724,7 @@ export const pontoDescontosRouter = router({
     await db.update(pontoDescontos).set({
       status: "fechado",
     }).where(and(
-      eq(pontoDescontos.companyId, input.companyId),
+      companyFilter(pontoDescontos.companyId, input),
       eq(pontoDescontos.mesReferencia, input.mesReferencia),
       sql`status != 'abonado'`, // Manter abonados como estão
     ));
@@ -744,7 +735,7 @@ export const pontoDescontosRouter = router({
       revisadoPor: ctx.user.name || "Sistema",
       revisadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
     }).where(and(
-      eq(pontoDescontosResumo.companyId, input.companyId),
+      companyFilter(pontoDescontosResumo.companyId, input),
       eq(pontoDescontosResumo.mesReferencia, input.mesReferencia),
     ));
 
@@ -765,16 +756,14 @@ export const pontoDescontosRouter = router({
   // Verifica critérios e sugere advertências automáticas
   // ============================================================
   sugestaoAdvertencias: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(), // YYYY-MM
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(), // YYYY-MM
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       // Buscar critérios
       const criterios = await db.select().from(systemCriteria)
-        .where(eq(systemCriteria.companyId, input.companyId));
+        .where(companyFilter(systemCriteria.companyId, input));
       const criterioMap = Object.fromEntries(criterios.map(c => [c.chave, c.valor]));
 
       const limiteAtrasos = parseInt(criterioMap['ponto_adv_atrasos_mes'] || '3');
@@ -784,7 +773,7 @@ export const pontoDescontosRouter = router({
       // Buscar descontos do mês
       const descontos = await db.select().from(pontoDescontos)
         .where(and(
-          eq(pontoDescontos.companyId, input.companyId),
+          companyFilter(pontoDescontos.companyId, input),
           eq(pontoDescontos.mesReferencia, input.mesReferencia),
         ));
 
@@ -811,7 +800,7 @@ export const pontoDescontosRouter = router({
       // Buscar advertências já existentes no mês
       const advExistentes = await db.select().from(warnings)
         .where(and(
-          eq(warnings.companyId, input.companyId),
+          companyFilter(warnings.companyId, input),
           sql`${warnings.dataOcorrencia} LIKE ${input.mesReferencia + '%'}`,
         ));
       const advSet = new Set(advExistentes.map(a => `${a.employeeId}-${a.motivo}`));

@@ -2,7 +2,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { insuranceAlertConfig, insuranceAlertRecipients, insuranceAlertsLog, employees } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 
 export const insuranceRouter = router({
@@ -10,12 +11,12 @@ export const insuranceRouter = router({
   // GET CONFIG - Buscar configuração de seguro de vida da empresa
   // ============================================================
   getConfig: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
       const rows = await db.select().from(insuranceAlertConfig)
-        .where(eq(insuranceAlertConfig.companyId, input.companyId))
+        .where(companyFilter(insuranceAlertConfig.companyId, input))
         .limit(1);
       return rows[0] || null;
     }),
@@ -24,9 +25,7 @@ export const insuranceRouter = router({
   // SAVE CONFIG - Salvar/atualizar configuração de seguro
   // ============================================================
   saveConfig: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      isActive: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), isActive: z.number().optional(),
       textoAdmissao: z.string().optional(),
       textoAfastamento: z.string().optional(),
       textoReclusao: z.string().optional(),
@@ -40,7 +39,7 @@ export const insuranceRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       const existing = await db.select().from(insuranceAlertConfig)
-        .where(eq(insuranceAlertConfig.companyId, input.companyId))
+        .where(companyFilter(insuranceAlertConfig.companyId, input))
         .limit(1);
 
       const data: any = {
@@ -71,21 +70,21 @@ export const insuranceRouter = router({
   // LIST RECIPIENTS - Listar destinatários dos alertas
   // ============================================================
   listRecipients: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       
       // Get config id first
       const config = await db.select().from(insuranceAlertConfig)
-        .where(eq(insuranceAlertConfig.companyId, input.companyId))
+        .where(companyFilter(insuranceAlertConfig.companyId, input))
         .limit(1);
       
       if (!config.length) return [];
       
       return db.select().from(insuranceAlertRecipients)
         .where(and(
-          eq(insuranceAlertRecipients.companyId, input.companyId),
+          companyFilter(insuranceAlertRecipients.companyId, input),
           eq(insuranceAlertRecipients.isActive, 1),
         ))
         .orderBy(insuranceAlertRecipients.tipoDestinatario);
@@ -95,9 +94,7 @@ export const insuranceRouter = router({
   // ADD RECIPIENT - Adicionar destinatário
   // ============================================================
   addRecipient: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      tipoDestinatario: z.enum(["corretor", "diretoria", "usuario_sistema", "outro"]),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), tipoDestinatario: z.enum(["corretor", "diretoria", "usuario_sistema", "outro"]),
       nome: z.string().min(1),
       email: z.string().email(),
       telefone: z.string().optional(),
@@ -113,7 +110,7 @@ export const insuranceRouter = router({
 
       // Get or create config
       let config = await db.select().from(insuranceAlertConfig)
-        .where(eq(insuranceAlertConfig.companyId, input.companyId))
+        .where(companyFilter(insuranceAlertConfig.companyId, input))
         .limit(1);
       
       let configId: number;
@@ -188,15 +185,13 @@ export const insuranceRouter = router({
   // LIST ALERTS LOG - Histórico de alertas enviados
   // ============================================================
   listAlertsLog: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      limit: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limit: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(insuranceAlertsLog)
-        .where(eq(insuranceAlertsLog.companyId, input.companyId))
+        .where(companyFilter(insuranceAlertsLog.companyId, input))
         .orderBy(desc(insuranceAlertsLog.createdAt))
         .limit(input.limit || 50);
     }),
@@ -205,9 +200,7 @@ export const insuranceRouter = router({
   // SEND ALERT - Enviar alerta manual de seguro de vida
   // ============================================================
   sendAlert: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       tipoMovimentacao: z.enum(["admissao", "afastamento", "reclusao", "desligamento"]),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -222,7 +215,7 @@ export const insuranceRouter = router({
 
       // Get config
       const config = await db.select().from(insuranceAlertConfig)
-        .where(eq(insuranceAlertConfig.companyId, input.companyId))
+        .where(companyFilter(insuranceAlertConfig.companyId, input))
         .limit(1);
       if (!config.length) throw new TRPCError({ code: "NOT_FOUND", message: "Configuração de seguro não encontrada. Configure primeiro em Configurações > Seguro de Vida." });
 
@@ -236,7 +229,7 @@ export const insuranceRouter = router({
 
       const recipients = await db.select().from(insuranceAlertRecipients)
         .where(and(
-          eq(insuranceAlertRecipients.companyId, input.companyId),
+          companyFilter(insuranceAlertRecipients.companyId, input),
           eq(insuranceAlertRecipients.isActive, 1),
         ));
 

@@ -23,8 +23,9 @@ interface EpiAssinaturaProps {
 }
 
 export default function EpiAssinatura({ employeeId, employeeName, deliveryId, tipo, epiNome, onComplete, onCancel }: EpiAssinaturaProps) {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -176,9 +177,7 @@ export default function EpiAssinatura({ employeeId, employeeName, deliveryId, ti
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
 
-    salvarMut.mutate({
-      companyId,
-      deliveryId,
+    salvarMut.mutate({ companyId, companyIds, deliveryId,
       employeeId,
       tipo,
       assinaturaBase64: dataUrl,

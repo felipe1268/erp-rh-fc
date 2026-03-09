@@ -32,7 +32,7 @@ const RISCO_COLORS: Record<string, string> = {
 export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { hasGroup, groupCanAccessRoute, groupOcultarValores, isAdminMaster, isSomenteVisualizacao, isOcultarDadosSensiveis } = usePermissions();
 
   // Hook de visibilidade do menu (Painel de Controle)
@@ -47,6 +47,7 @@ export default function Home() {
   };
   const hideValues = (route: string) => !isAdminMaster && hasGroup && groupOcultarValores(route);
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyIds = getCompanyIdsForQuery();
   const [alertasOpen, setAlertasOpen] = useState(false);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);

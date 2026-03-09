@@ -90,9 +90,10 @@ function CboAutocomplete({ value, onChange, onSelect }: { value: string; onChang
 type FilterType = "todas" | "incompletas" | "sem_cbo" | "sem_descricao" | "sem_os" | "com_cbo" | "com_descricao" | "com_os";
 
 export default function Funcoes() {
-  const { selectedCompanyId, selectedCompany } = useCompany();
+  const { selectedCompanyId, selectedCompany, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
-  const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: !!companyId });
+  const companyIds = getCompanyIdsForQuery();
+  const funcoesQ = trpc.jobFunctions.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const funcoes = funcoesQ.data ?? [];
 
   const createMut = trpc.jobFunctions.create.useMutation({ onSuccess: () => { funcoesQ.refetch(); setDialogOpen(false); toast.success("Função criada com sucesso!"); } });
@@ -188,7 +189,7 @@ export default function Funcoes() {
     if (editingId) {
       updateMut.mutate({ id: editingId, companyId, nome: form.nome, descricao: form.descricao, ordemServico: form.ordemServico || undefined, cbo: form.cbo || undefined });
     } else {
-      createMut.mutate({ companyId, nome: form.nome, descricao: form.descricao, ordemServico: form.ordemServico || undefined, cbo: form.cbo || undefined });
+      createMut.mutate({ companyId, companyIds, nome: form.nome, descricao: form.descricao, ordemServico: form.ordemServico || undefined, cbo: form.cbo || undefined });
     }
   };
 
@@ -202,9 +203,7 @@ export default function Funcoes() {
     if (!form.nome.trim()) { toast.error("Preencha o nome da função primeiro"); return; }
     setGeneratingDesc(true);
     try {
-      const result = await generateDescMut.mutateAsync({
-        companyId,
-        nomeFuncao: form.nome,
+      const result = await generateDescMut.mutateAsync({ companyId, companyIds, nomeFuncao: form.nome,
         cbo: form.cbo || undefined,
       });
       setForm(f => ({ ...f, descricao: result.descricao, ordemServico: result.ordemServico }));
@@ -220,9 +219,7 @@ export default function Funcoes() {
     if (!form.nome.trim()) { toast.error("Preencha o nome da função primeiro"); return; }
     setGeneratingOS(true);
     try {
-      const result = await generateDescMut.mutateAsync({
-        companyId,
-        nomeFuncao: form.nome,
+      const result = await generateDescMut.mutateAsync({ companyId, companyIds, nomeFuncao: form.nome,
         cbo: form.cbo || undefined,
       });
       setForm(f => ({ ...f, ordemServico: result.ordemServico, descricao: result.descricao }));

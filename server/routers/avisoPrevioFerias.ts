@@ -2,7 +2,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog } from "../db";
 import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios } from "../../drizzle/schema";
-import { eq, and, sql, isNull, lte, gte, desc, asc } from "drizzle-orm";
+import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 
@@ -343,7 +344,7 @@ export const avisoPrevioFeriasRouter = router({
   // ============================================================
   avisoPrevio: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), status: z.string().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
 
@@ -353,7 +354,7 @@ export const avisoPrevioFeriasRouter = router({
         await db.update(terminationNotices)
           .set({ status: 'concluido', dataConclusao: today, updatedAt: sql`NOW()` })
           .where(and(
-            eq(terminationNotices.companyId, input.companyId),
+            companyFilter(terminationNotices.companyId, input),
             eq(terminationNotices.status, 'em_andamento'),
             isNull(terminationNotices.deletedAt),
             sql`${terminationNotices.dataFim} IS NOT NULL AND ${terminationNotices.dataFim} < ${today}`,
@@ -361,7 +362,7 @@ export const avisoPrevioFeriasRouter = router({
           ));
 
         const conditions = [
-          eq(terminationNotices.companyId, input.companyId),
+          companyFilter(terminationNotices.companyId, input),
           isNull(terminationNotices.deletedAt),
         ];
         if (input.status) conditions.push(eq(terminationNotices.status, input.status as any));
@@ -421,9 +422,25 @@ export const avisoPrevioFeriasRouter = router({
           } catch (e) {
             // Se falhar o recálculo, mantém o valor armazenado
           }
+          // Calcular data limite de pagamento (Art. 477 §6º CLT: 10 dias corridos após término)
+          let dataLimitePagamento: string | null = null;
+          let dataDiaTrabalhado: string | null = null;
+          if (r.dataFim) {
+            const dtFim = new Date(r.dataFim + 'T00:00:00');
+            dtFim.setDate(dtFim.getDate() + 10);
+            dataLimitePagamento = dtFim.toISOString().split('T')[0];
+          }
+          // dataDiaTrabalhado = último dia trabalhado (dia anterior ao início do aviso)
+          if (r.dataInicio) {
+            const dtInicio = new Date(r.dataInicio + 'T00:00:00');
+            dtInicio.setDate(dtInicio.getDate() - 1);
+            dataDiaTrabalhado = dtInicio.toISOString().split('T')[0];
+          }
           results.push({
             ...r,
             valorEstimadoTotal: valorRecalculado,
+            dataLimitePagamento,
+            dataDiaTrabalhado,
             employeeName: r.employeeName || 'Funcionário excluído',
             employeeCpf: r.employeeCpf || '-',
             employeeCargo: r.employeeCargo || '-',
@@ -861,7 +878,7 @@ export const avisoPrevioFeriasRouter = router({
 
     /** Buscar configuração de benefícios de alimentação */
     getMealBenefitConfig: protectedProcedure
-      .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         try {
@@ -883,12 +900,12 @@ export const avisoPrevioFeriasRouter = router({
 
     /** Listar todas as configurações de benefícios de alimentação */
     listMealBenefitConfigs: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         try {
           const [rows] = await db.execute(
-            sql`SELECT mbc.*, o.nome as obraNome FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc.obraId = o.id WHERE mbc.companyId = ${input.companyId} ORDER BY mbc.obraId IS NULL DESC, o.nome ASC`
+            sql`SELECT mbc.*, o.nome as obraNome FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc.obraId = o.id WHERE mbc.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) ORDER BY mbc.obraId IS NULL DESC, o.nome ASC`
           ) as any[];
           return rows || [];
         } catch {
@@ -956,9 +973,7 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        employeeId: z.number(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
         tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']),
         dataInicio: z.string(),
         dataDesligamento: z.string().optional(),
@@ -976,7 +991,7 @@ export const avisoPrevioFeriasRouter = router({
         const [existente] = await db.select({ id: terminationNotices.id })
           .from(terminationNotices)
           .where(and(
-            eq(terminationNotices.companyId, input.companyId),
+            companyFilter(terminationNotices.companyId, input),
             eq(terminationNotices.employeeId, input.employeeId),
             eq(terminationNotices.status, 'em_andamento'),
             isNull(terminationNotices.deletedAt),
@@ -1113,13 +1128,13 @@ export const avisoPrevioFeriasRouter = router({
 
     /** Recalcular TODOS os avisos prévios em andamento de uma empresa */
     recalcularTodos: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         // Buscar todos os avisos em andamento da empresa
         const avisos = await db.select().from(terminationNotices)
           .where(and(
-            eq(terminationNotices.companyId, input.companyId),
+            companyFilter(terminationNotices.companyId, input),
             eq(terminationNotices.status, 'em_andamento'),
             isNull(terminationNotices.deletedAt),
           ));
@@ -1271,7 +1286,7 @@ export const avisoPrevioFeriasRouter = router({
 
     /** Alerta 80 dias - Obras próximas do fim com funcionários alocados */
     alertaObras80Dias: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const hoje = new Date();
@@ -1282,7 +1297,7 @@ export const avisoPrevioFeriasRouter = router({
 
         const obrasAtivas = await db.select().from(obras)
           .where(and(
-            eq(obras.companyId, input.companyId),
+            companyFilter(obras.companyId, input),
             sql`${obras.deletedAt} IS NULL`,
             sql`${obras.status} IN ('Em_Andamento', 'Em Andamento')`,
             sql`${obras.dataPrevisaoFim} IS NOT NULL`,
@@ -1291,7 +1306,7 @@ export const avisoPrevioFeriasRouter = router({
 
         const allEmps = await db.select().from(employees)
           .where(and(
-            eq(employees.companyId, input.companyId),
+            companyFilter(employees.companyId, input),
             sql`${employees.deletedAt} IS NULL`,
             eq(employees.status, 'Ativo'),
           ));
@@ -1330,11 +1345,11 @@ export const avisoPrevioFeriasRouter = router({
   // ============================================================
   ferias: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), status: z.string().optional(), employeeId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional(), employeeId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const conditions: any[] = [
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
@@ -1410,7 +1425,7 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     calendario: protectedProcedure
-      .input(z.object({ companyId: z.number(), ano: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const inicioAno = `${input.ano}-01-01`;
@@ -1431,7 +1446,7 @@ export const avisoPrevioFeriasRouter = router({
         .from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
@@ -1443,7 +1458,7 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     alertas: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const hoje = new Date().toISOString().split("T")[0];
@@ -1462,7 +1477,7 @@ export const avisoPrevioFeriasRouter = router({
         .from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
@@ -1481,7 +1496,7 @@ export const avisoPrevioFeriasRouter = router({
         .from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
@@ -1493,7 +1508,7 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     gerarPeriodos: protectedProcedure
-      .input(z.object({ companyId: z.number(), employeeId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
@@ -1504,7 +1519,7 @@ export const avisoPrevioFeriasRouter = router({
         const existentes = await db.select({ periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio })
           .from(vacationPeriods)
           .where(and(
-            eq(vacationPeriods.companyId, input.companyId),
+            companyFilter(vacationPeriods.companyId, input),
             eq(vacationPeriods.employeeId, input.employeeId),
             isNull(vacationPeriods.deletedAt),
           ));
@@ -1532,7 +1547,7 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     fluxoCaixa: protectedProcedure
-      .input(z.object({ companyId: z.number(), ano: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         
@@ -1546,7 +1561,7 @@ export const avisoPrevioFeriasRouter = router({
         })
         .from(employees)
         .where(and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.status, 'Ativo'),
           isNull(employees.deletedAt),
         ));
@@ -1562,7 +1577,7 @@ export const avisoPrevioFeriasRouter = router({
         })
         .from(vacationPeriods)
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           isNull(vacationPeriods.deletedAt),
         ));
         // Map: employeeId -> { periodoKey -> status }
@@ -1636,9 +1651,7 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        employeeId: z.number(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
         periodoAquisitivoInicio: z.string(),
         periodoAquisitivoFim: z.string(),
         periodoConcessivoFim: z.string(),
@@ -1744,7 +1757,7 @@ export const avisoPrevioFeriasRouter = router({
     // GERAR PERÍODOS PARA TODOS OS ATIVOS DE UMA VEZ
     // ============================================================
     gerarPeriodosTodos: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const ativos = await db.select({
@@ -1755,7 +1768,7 @@ export const avisoPrevioFeriasRouter = router({
         })
         .from(employees)
         .where(and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.status, 'Ativo'),
           isNull(employees.deletedAt),
         ));
@@ -1774,7 +1787,7 @@ export const avisoPrevioFeriasRouter = router({
           const existentes = await db.select({ periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio })
             .from(vacationPeriods)
             .where(and(
-              eq(vacationPeriods.companyId, input.companyId),
+              companyFilter(vacationPeriods.companyId, input),
               eq(vacationPeriods.employeeId, emp.id),
               isNull(vacationPeriods.deletedAt),
             ));
@@ -1845,13 +1858,13 @@ export const avisoPrevioFeriasRouter = router({
     // CONFIRMAR TODAS AS VENCIDAS DE UM FUNCIONÁRIO
     // ============================================================
     confirmarTodasVencidasFuncionario: protectedProcedure
-      .input(z.object({ companyId: z.number(), employeeId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const vencidas = await db.select({ id: vacationPeriods.id })
           .from(vacationPeriods)
           .where(and(
-            eq(vacationPeriods.companyId, input.companyId),
+            companyFilter(vacationPeriods.companyId, input),
             eq(vacationPeriods.employeeId, input.employeeId),
             eq(vacationPeriods.status, 'vencida'),
             isNull(vacationPeriods.deletedAt),
@@ -1921,7 +1934,7 @@ export const avisoPrevioFeriasRouter = router({
     // CALENDÁRIO COMPLETO (com dados sugeridos e status)
     // ============================================================
     calendarioCompleto: protectedProcedure
-      .input(z.object({ companyId: z.number(), ano: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const inicioAno = `${input.ano}-01-01`;
@@ -1953,7 +1966,7 @@ export const avisoPrevioFeriasRouter = router({
         .from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
@@ -1973,7 +1986,7 @@ export const avisoPrevioFeriasRouter = router({
     // LISTAR VENCIDAS PARA CONFIRMAÇÃO
     // ============================================================
     listarVencidas: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const rows = await db.select({
@@ -1992,7 +2005,7 @@ export const avisoPrevioFeriasRouter = router({
         .from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           eq(vacationPeriods.status, 'vencida'),
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
@@ -2031,7 +2044,7 @@ export const avisoPrevioFeriasRouter = router({
     // DETALHES COMPLETOS DE FÉRIAS DE UM FUNCIONÁRIO
     // ============================================================
     feriasDoFuncionario: protectedProcedure
-      .input(z.object({ companyId: z.number(), employeeId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         
@@ -2081,7 +2094,7 @@ export const avisoPrevioFeriasRouter = router({
         })
         .from(vacationPeriods)
         .where(and(
-          eq(vacationPeriods.companyId, input.companyId),
+          companyFilter(vacationPeriods.companyId, input),
           eq(vacationPeriods.employeeId, input.employeeId),
           isNull(vacationPeriods.deletedAt),
         ))

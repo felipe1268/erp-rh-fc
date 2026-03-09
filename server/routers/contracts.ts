@@ -2,7 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { contractTemplates, employeeContracts, employees, companies } from "../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
 // ==========================================
@@ -313,11 +314,11 @@ const TEMPLATE_INDETERMINADO = `<div style="font-family: 'Times New Roman', seri
 export const contractsRouter = router({
   // Listar templates
   listTemplates: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       return db.select().from(contractTemplates)
-        .where(and(eq(contractTemplates.companyId, input.companyId), eq(contractTemplates.ativo, 1)))
+        .where(and(companyFilter(contractTemplates.companyId, input), eq(contractTemplates.ativo, 1)))
         .orderBy(contractTemplates.tipo);
     }),
 
@@ -369,11 +370,11 @@ export const contractsRouter = router({
 
   // Inicializar templates padrão para uma empresa
   initTemplates: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const existing = await db.select().from(contractTemplates)
-        .where(and(eq(contractTemplates.companyId, input.companyId), eq(contractTemplates.ativo, 1)));
+        .where(and(companyFilter(contractTemplates.companyId, input), eq(contractTemplates.ativo, 1)));
       if (existing.length > 0) return { message: "Templates já existem", count: existing.length };
 
       await db.insert(contractTemplates).values([
@@ -399,9 +400,7 @@ export const contractsRouter = router({
 
   // Gerar contrato preenchido (preview)
   gerarContrato: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       tipo: z.enum(["experiencia", "indeterminado"]),
       templateId: z.number().optional(),
       prazoExperienciaDias: z.number().optional(),
@@ -529,9 +528,7 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
 
   // Salvar contrato gerado
   salvarContrato: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       templateId: z.number().optional(),
       tipo: z.enum(["experiencia", "indeterminado", "prorrogacao"]),
       dataInicio: z.string(),

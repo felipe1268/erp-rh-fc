@@ -33,9 +33,10 @@ function getNivelIcon(nivelKey: string | undefined) {
 
 interface EpiCapacidadeProps {
   companyId: number;
+  companyIds?: number[];
 }
 
-export default function EpiCapacidade({ companyId }: EpiCapacidadeProps) {
+export default function EpiCapacidade({ companyId, companyIds }: EpiCapacidadeProps) {
   const [showConfig, setShowConfig] = useState(false);
   const [showDetalhes, setShowDetalhes] = useState(false);
   const [showPorObra, setShowPorObra] = useState(false);
@@ -199,7 +200,7 @@ export default function EpiCapacidade({ companyId }: EpiCapacidadeProps) {
       toast.error("Adicione pelo menos um item ao kit.");
       return;
     }
-    salvarKit.mutate({ companyId, itens: valid as any });
+    salvarKit.mutate({ companyId, companyIds, itens: valid as any });
     setEditMode(false);
   };
 
@@ -209,9 +210,7 @@ export default function EpiCapacidade({ companyId }: EpiCapacidadeProps) {
       .map(e => e.trim())
       .filter(e => e && e.includes("@"));
     
-    salvarAlerta.mutate({
-      companyId,
-      limiar: alertaLimiar,
+    salvarAlerta.mutate({ companyId, companyIds, limiar: alertaLimiar,
       ativo: alertaAtivo ? 1 : 0,
       emailDestinatarios: emailsArray.length > 0 ? JSON.stringify(emailsArray) : undefined,
       intervaloMinHoras: alertaIntervalo,
@@ -219,7 +218,7 @@ export default function EpiCapacidade({ companyId }: EpiCapacidadeProps) {
   };
 
   const handleTestarAlerta = () => {
-    verificarAlerta.mutate({ companyId, forcar: true });
+    verificarAlerta.mutate({ companyId, companyIds, forcar: true });
   };
 
   // Proteção contra dados não carregados

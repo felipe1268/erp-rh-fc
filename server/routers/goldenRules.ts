@@ -2,26 +2,25 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { goldenRules, jobFunctions, companies } from "../../drizzle/schema";
-import { eq, and, desc, or, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, or, isNull, sql, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { invokeLLM } from "../_core/llm";
 
 export const goldenRulesRouter = router({
   // Listar regras de ouro por empresa
   list: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(goldenRules)
-        .where(eq(goldenRules.companyId, input.companyId))
+        .where(companyFilter(goldenRules.companyId, input))
         .orderBy(desc(goldenRules.prioridade), goldenRules.categoria);
     }),
 
   // Criar regra de ouro
   create: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      titulo: z.string().min(3),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), titulo: z.string().min(3),
       descricao: z.string().min(10),
       categoria: z.enum(['seguranca', 'qualidade', 'rh', 'operacional', 'juridico', 'financeiro', 'geral']),
       prioridade: z.enum(['critica', 'alta', 'media', 'baixa']),
@@ -58,15 +57,13 @@ export const goldenRulesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error('DB not available');
-      await db.update(goldenRules).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(and(eq(goldenRules.id, input.id), eq(goldenRules.companyId, input.companyId)));
+      await db.update(goldenRules).set({ deletedAt: sql`NOW()`, deletedBy: ctx.user.name ?? 'Sistema', deletedByUserId: ctx.user.id } as any).where(and(eq(goldenRules.id, input.id), companyFilter(goldenRules.companyId, input)));
       return { success: true };
     }),
 
   // IA: Gerar descrição de função + Ordem de Serviço NR-1
   generateJobDescription: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      nomeFuncao: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nomeFuncao: z.string(),
       cbo: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -81,7 +78,7 @@ export const goldenRulesRouter = router({
 
       // 2. Buscar todas as Regras de Ouro ativas da empresa
       const rules = await db.select().from(goldenRules)
-        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1)));
+        .where(and(companyFilter(goldenRules.companyId, input), eq(goldenRules.isActive, 1)));
 
       const regrasTexto = rules.length > 0
         ? rules.map((r: any) => `[${r.categoria.toUpperCase()} - ${r.prioridade.toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
@@ -156,7 +153,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
   // IA: Gerar descrição + OS em lote para todas as funções incompletas
   generateBatchJobDescriptions: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('DB not available');
@@ -169,7 +166,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       // 2. Buscar regras de ouro
       const rules = await db.select().from(goldenRules)
-        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1)));
+        .where(and(companyFilter(goldenRules.companyId, input), eq(goldenRules.isActive, 1)));
       const regrasTexto = rules.length > 0
         ? rules.map((r: any) => `[${r.categoria.toUpperCase()} - ${r.prioridade.toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
         : 'Nenhuma regra de ouro cadastrada.';
@@ -177,7 +174,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       // 3. Buscar funções incompletas (sem descrição OU sem ordemServico)
       const allFunctions = await db.select().from(jobFunctions)
         .where(and(
-          eq(jobFunctions.companyId, input.companyId),
+          companyFilter(jobFunctions.companyId, input),
           eq(jobFunctions.isActive, 1)
         ));
       const incomplete = allFunctions.filter((f: any) => !f.descricao || !f.ordemServico);

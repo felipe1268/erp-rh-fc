@@ -8,6 +8,7 @@ import {
   pontoDescontos, pontoDescontosResumo, heSolicitacoes, heSolicitacaoFuncionarios
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { PDFParse } from "pdf-parse";
 
@@ -496,15 +497,13 @@ export const folhaPagamentoRouter = router({
   // LISTAR LANÇAMENTOS DO MÊS
   // ============================================================
   listarLancamentos: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const lancamentos = await db.select().from(folhaLancamentos)
         .where(and(
-          eq(folhaLancamentos.companyId, input.companyId),
+          companyFilter(folhaLancamentos.companyId, input),
           eq(folhaLancamentos.mesReferencia, input.mesReferencia),
         ))
         .orderBy(desc(folhaLancamentos.createdAt));
@@ -565,16 +564,14 @@ export const folhaPagamentoRouter = router({
   // STATUS DO MÊS (resumo para o painel)
   // ============================================================
   statusMes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       const lancamentos = await db.select().from(folhaLancamentos)
         .where(and(
-          eq(folhaLancamentos.companyId, input.companyId),
+          companyFilter(folhaLancamentos.companyId, input),
           eq(folhaLancamentos.mesReferencia, input.mesReferencia),
         ));
 
@@ -586,14 +583,14 @@ export const folhaPagamentoRouter = router({
       // Check ponto consolidation
       const pontoConsolidado = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
         ));
 
       // Get uploads for this month
       const uploads = await db.select().from(payrollUploads)
         .where(and(
-          eq(payrollUploads.companyId, input.companyId),
+          companyFilter(payrollUploads.companyId, input),
           eq(payrollUploads.month, input.mesReferencia),
         ));
 
@@ -668,9 +665,7 @@ export const folhaPagamentoRouter = router({
   // Auto-detecta o mês de referência a partir do conteúdo do PDF
   // ============================================================
   importarFolhaAuto: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
       tipoLancamento: z.enum(["vale", "pagamento", "decimo_terceiro_1", "decimo_terceiro_2"]),
       arquivos: z.array(z.object({
         fileName: z.string(),
@@ -749,7 +744,7 @@ export const folhaPagamentoRouter = router({
 
       // Get all employees for matching
       const allEmployees = await db.select().from(employees)
-        .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+        .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       // ===== DETECTAR MÊS REAL DOS PDFs =====
       // Primeiro, extrair texto de todos os PDFs para detectar o mês
@@ -777,7 +772,7 @@ export const folhaPagamentoRouter = router({
       // Find or create lancamento for the CORRECT month
       let lancamento = await db.select().from(folhaLancamentos)
         .where(and(
-          eq(folhaLancamentos.companyId, input.companyId),
+          companyFilter(folhaLancamentos.companyId, input),
           eq(folhaLancamentos.mesReferencia, mesReal),
           eq(folhaLancamentos.tipoLancamento, input.tipoLancamento),
         ))
@@ -1008,9 +1003,7 @@ export const folhaPagamentoRouter = router({
   // Simplificado: apenas analítico e sintético
   // ============================================================
   importarFolha: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().regex(/^\d{4}-\d{2}$/),
       tipoLancamento: z.enum(["vale", "pagamento", "decimo_terceiro_1", "decimo_terceiro_2"]),
       tipoArquivo: z.enum(["analitico", "sintetico"]),
       fileName: z.string(),
@@ -1055,7 +1048,7 @@ export const folhaPagamentoRouter = router({
         // Find or create lancamento for this month/type
         let lancamento = await db.select().from(folhaLancamentos)
           .where(and(
-            eq(folhaLancamentos.companyId, input.companyId),
+            companyFilter(folhaLancamentos.companyId, input),
             eq(folhaLancamentos.mesReferencia, input.mesReferencia),
             eq(folhaLancamentos.tipoLancamento, input.tipoLancamento),
           ))
@@ -1083,7 +1076,7 @@ export const folhaPagamentoRouter = router({
 
         // Get all employees for matching
         const allEmployees = await db.select().from(employees)
-          .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+          .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
         let recordsProcessed = 0;
         let parseResult: any = {};
@@ -1235,7 +1228,7 @@ export const folhaPagamentoRouter = router({
         .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
 
       const allEmployees = await db.select().from(employees)
-        .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+        .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       const matchResult = await matchItensComCadastro(db, input.companyId, itens as any, allEmployees, true);
 
@@ -1279,7 +1272,7 @@ export const folhaPagamentoRouter = router({
       // Get time records for the month
       const pontoRecords = await db.select().from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.mesReferencia, input.mesReferencia),
         ));
 
@@ -1583,20 +1576,20 @@ export const folhaPagamentoRouter = router({
       // Get time records for the month
       const pontoRecords = await db.select().from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.mesReferencia, input.mesReferencia),
           inArray(timeRecords.employeeId, empIds),
         ));
 
       // Get all obras
       const allObras = await db.select().from(obras)
-        .where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
+        .where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
       // Get vinculações manuais para este mês
       const vinculacoesManuais = await db.select().from(manualObraAssignments)
         .where(and(
-          eq(manualObraAssignments.companyId, input.companyId),
+          companyFilter(manualObraAssignments.companyId, input),
           eq(manualObraAssignments.mesReferencia, input.mesReferencia)
         ));
       const vinculacaoManualMap = new Map(vinculacoesManuais.map(v => [v.employeeId, v]));
@@ -1758,7 +1751,7 @@ export const folhaPagamentoRouter = router({
       const calcComparativo = async (mesComp: string) => {
         const pontoComp = await db.select().from(timeRecords)
           .where(and(
-            eq(timeRecords.companyId, input.companyId),
+            companyFilter(timeRecords.companyId, input),
             eq(timeRecords.mesReferencia, mesComp),
           ));
         let horasN = 0, horasE = 0, custoTotal = 0;
@@ -1770,7 +1763,7 @@ export const folhaPagamentoRouter = router({
         // Buscar folha do mês comparativo para custo
         const folhaComp = await db.select().from(folhaLancamentos)
           .where(and(
-            eq(folhaLancamentos.companyId, input.companyId),
+            companyFilter(folhaLancamentos.companyId, input),
             eq(folhaLancamentos.mesReferencia, mesComp),
           ));
         if (folhaComp.length > 0) {
@@ -1832,16 +1825,14 @@ export const folhaPagamentoRouter = router({
   // HORAS EXTRAS POR FUNCIONÁRIO E OBRA
   // ============================================================
   horasExtrasPorFuncionario: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       const pontoRecords = await db.select().from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.mesReferencia, input.mesReferencia),
         ));
 
@@ -1851,13 +1842,13 @@ export const folhaPagamentoRouter = router({
       const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
       const empMap = new Map(emps.map(e => [e.id, e]));
 
-      const allObras = await db.select().from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
+      const allObras = await db.select().from(obras).where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
       // Buscar critérios de HE da empresa
       const criteriosHE = await db.select().from(systemCriteria)
         .where(and(
-          eq(systemCriteria.companyId, input.companyId),
+          companyFilter(systemCriteria.companyId, input),
           eq(systemCriteria.categoria, 'horas_extras')
         ));
       const criterioMap = new Map(criteriosHE.map(c => [c.chave, c.valor]));
@@ -1872,7 +1863,7 @@ export const folhaPagamentoRouter = router({
       }).from(folhaItens)
         .innerJoin(folhaLancamentos, eq(folhaItens.folhaLancamentoId, folhaLancamentos.id))
         .where(and(
-          eq(folhaItens.companyId, input.companyId),
+          companyFilter(folhaItens.companyId, input),
           eq(folhaLancamentos.mesReferencia, input.mesReferencia),
           eq(folhaLancamentos.tipoLancamento, 'pagamento'),
         ));
@@ -2039,9 +2030,7 @@ export const folhaPagamentoRouter = router({
   // LISTAR MESES COM LANÇAMENTOS (para o calendário)
   // ============================================================
   listarMesesComLancamentos: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      ano: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -2051,7 +2040,7 @@ export const folhaPagamentoRouter = router({
         status: folhaLancamentos.status,
       }).from(folhaLancamentos)
         .where(and(
-          eq(folhaLancamentos.companyId, input.companyId),
+          companyFilter(folhaLancamentos.companyId, input),
           sql`${folhaLancamentos.mesReferencia} LIKE ${`${input.ano}-%`}`,
         ));
 
@@ -2068,22 +2057,20 @@ export const folhaPagamentoRouter = router({
   // VINCULAÇÃO MANUAL DE OBRA
   // ============================================================
   listarVinculacoesManuais: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const vinculacoes = await db!.select()
         .from(manualObraAssignments)
         .where(and(
-          eq(manualObraAssignments.companyId, input.companyId),
+          companyFilter(manualObraAssignments.companyId, input),
           eq(manualObraAssignments.mesReferencia, input.mesReferencia)
         ));
       return vinculacoes;
     }),
 
   vincularObrasManualmente: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       obraId: z.number(),
       justificativa: z.string().min(5, "Justificativa deve ter pelo menos 5 caracteres"),
       employeeIds: z.array(z.number()).min(1),
@@ -2094,7 +2081,7 @@ export const folhaPagamentoRouter = router({
       // Remover vinculações anteriores desses funcionários neste mês
       for (const empId of input.employeeIds) {
         await db!.delete(manualObraAssignments).where(and(
-          eq(manualObraAssignments.companyId, input.companyId),
+          companyFilter(manualObraAssignments.companyId, input),
           eq(manualObraAssignments.employeeId, empId),
           eq(manualObraAssignments.mesReferencia, input.mesReferencia)
         ));
@@ -2148,17 +2135,17 @@ export const folhaPagamentoRouter = router({
 
       const pontoRecords = await db.select().from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.mesReferencia, input.mesReferencia),
           inArray(timeRecords.employeeId, empIds),
         ));
 
-      const allObras = await db.select().from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
+      const allObras = await db.select().from(obras).where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
       const obraMap = new Map(allObras.map(o => [o.id, o]));
 
       const vinculacoesManuais = await db.select().from(manualObraAssignments)
         .where(and(
-          eq(manualObraAssignments.companyId, input.companyId),
+          companyFilter(manualObraAssignments.companyId, input),
           eq(manualObraAssignments.mesReferencia, input.mesReferencia)
         ));
       const vinculacaoManualMap = new Map(vinculacoesManuais.map(v => [v.employeeId, v]));
@@ -2276,17 +2263,15 @@ export const folhaPagamentoRouter = router({
   // CONTAS BANCÁRIAS DA EMPRESA
   // ============================================================
   listarContasBancarias: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(companyBankAccounts)
-        .where(eq(companyBankAccounts.companyId, input.companyId));
+        .where(companyFilter(companyBankAccounts.companyId, input));
     }),
 
   criarContaBancaria: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      banco: z.string().min(1),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), banco: z.string().min(1),
       codigoBanco: z.string().optional(),
       agencia: z.string().min(1),
       conta: z.string().min(1),
@@ -2350,27 +2335,27 @@ export const folhaPagamentoRouter = router({
   // COMPARATIVO DESCONTOS: Sistema vs Contabilidade
   // ============================================================
   comparativoDescontos: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       // 1. Descontos calculados pelo sistema (motor CLT)
       const descontosSistema = await db.select().from(pontoDescontos)
         .where(and(
-          eq(pontoDescontos.companyId, input.companyId),
+          companyFilter(pontoDescontos.companyId, input),
           eq(pontoDescontos.mesReferencia, input.mesReferencia),
         ));
 
       const resumosSistema = await db.select().from(pontoDescontosResumo)
         .where(and(
-          eq(pontoDescontosResumo.companyId, input.companyId),
+          companyFilter(pontoDescontosResumo.companyId, input),
           eq(pontoDescontosResumo.mesReferencia, input.mesReferencia),
         ));
 
       // 2. Descontos da contabilidade (folha importada)
       const folhaLanc = await db.select().from(folhaLancamentos)
         .where(and(
-          eq(folhaLancamentos.companyId, input.companyId),
+          companyFilter(folhaLancamentos.companyId, input),
           eq(folhaLancamentos.mesReferencia, input.mesReferencia),
           eq(folhaLancamentos.tipoLancamento, 'pagamento'),
         ));
@@ -2456,14 +2441,14 @@ export const folhaPagamentoRouter = router({
   // CRUZAMENTO HE: Sistema (ponto) vs Contabilidade (folha)
   // ============================================================
   cruzamentoHE: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       // 1. HE calculadas pelo sistema (ponto)
       const pontoRecords = await db.select().from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.mesReferencia, input.mesReferencia),
         ));
 
@@ -2483,7 +2468,7 @@ export const folhaPagamentoRouter = router({
       // 2. HE da contabilidade (folha importada)
       const folhaLanc = await db.select().from(folhaLancamentos)
         .where(and(
-          eq(folhaLancamentos.companyId, input.companyId),
+          companyFilter(folhaLancamentos.companyId, input),
           eq(folhaLancamentos.mesReferencia, input.mesReferencia),
           eq(folhaLancamentos.tipoLancamento, 'pagamento'),
         ));
@@ -2511,7 +2496,7 @@ export const folhaPagamentoRouter = router({
       // 3. Solicitações de HE aprovadas
       const heAprovadas = await db.select().from(heSolicitacoes)
         .where(and(
-          eq(heSolicitacoes.companyId, input.companyId),
+          companyFilter(heSolicitacoes.companyId, input),
           eq(heSolicitacoes.status, 'aprovada'),
         ));
 

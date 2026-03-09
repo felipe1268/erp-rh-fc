@@ -3,7 +3,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { dissidios, dissidioFuncionarios, employees } from "../../drizzle/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
@@ -21,12 +22,10 @@ import { parseBRL } from "../utils/parseBRL";
 
 export const dissidioRouter = router({
   // Listar dissídios por empresa (histórico por ano)
-  listar: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    status: z.string().optional(),
+  listar: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional(),
   })).query(async ({ input }) => {
     const db = (await getDb())!;
-    let conditions = [eq(dissidios.companyId, input.companyId)];
+    let conditions = [companyFilter(dissidios.companyId, input)];
     if (input.status) {
       conditions.push(sql`${dissidios.status} = ${input.status}`);
     }
@@ -52,23 +51,19 @@ export const dissidioRouter = router({
   }),
 
   // Buscar dissídio por ano
-  buscarPorAno: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    ano: z.number(),
+  buscarPorAno: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number(),
   })).query(async ({ input }) => {
     const db = (await getDb())!;
     const [dissidio] = await db.select().from(dissidios)
       .where(and(
-        eq(dissidios.companyId, input.companyId),
+        companyFilter(dissidios.companyId, input),
         eq(dissidios.anoReferencia, input.ano),
       ));
     return dissidio || null;
   }),
 
   // Criar novo dissídio
-  criar: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    anoReferencia: z.number(),
+  criar: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), anoReferencia: z.number(),
     titulo: z.string().min(1),
     sindicato: z.string().optional(),
     numeroCct: z.string().optional(),
@@ -95,7 +90,7 @@ export const dissidioRouter = router({
     // Verificar se já existe dissídio para o mesmo ano
     const [existente] = await db.select().from(dissidios)
       .where(and(
-        eq(dissidios.companyId, input.companyId),
+        companyFilter(dissidios.companyId, input),
         eq(dissidios.anoReferencia, input.anoReferencia),
       ));
     if (existente) throw new TRPCError({ code: 'CONFLICT', message: `Já existe dissídio cadastrado para o ano ${input.anoReferencia}` });
@@ -107,7 +102,7 @@ export const dissidioRouter = router({
     const percentualNovo = parseFloat(input.percentualReajuste);
     const dissidiosAnteriores = await db.select().from(dissidios)
       .where(and(
-        eq(dissidios.companyId, input.companyId),
+        companyFilter(dissidios.companyId, input),
         sql`${dissidios.anoReferencia} < ${input.anoReferencia}`,
         sql`${dissidios.status} != 'cancelado'`,
       ))
@@ -211,7 +206,7 @@ export const dissidioRouter = router({
       dataAdmissao: employees.dataAdmissao,
     }).from(employees)
       .where(and(
-        eq(employees.companyId, input.companyId),
+        companyFilter(employees.companyId, input),
         sql`${employees.status} = 'Ativo'`,
         sql`${employees.tipoContrato} != 'PJ'`,
       ));
@@ -289,7 +284,7 @@ export const dissidioRouter = router({
     // Buscar funcionários ativos CLT
     const funcs = await db.select().from(employees)
       .where(and(
-        eq(employees.companyId, input.companyId),
+        companyFilter(employees.companyId, input),
         sql`${employees.status} = 'Ativo'`,
         sql`${employees.tipoContrato} != 'PJ'`,
       ));
@@ -419,12 +414,10 @@ export const dissidioRouter = router({
   }),
 
   // Resumo por ano — visão geral para dashboard
-  resumoPorAno: protectedProcedure.input(z.object({
-    companyId: z.number(),
-  })).query(async ({ input }) => {
+  resumoPorAno: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
     const db = (await getDb())!;
     const lista = await db.select().from(dissidios)
-      .where(eq(dissidios.companyId, input.companyId))
+      .where(companyFilter(dissidios.companyId, input))
       .orderBy(desc(dissidios.anoReferencia));
     
     const resumos = [];

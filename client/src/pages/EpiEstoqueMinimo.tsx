@@ -15,17 +15,18 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { fmtNum } from "@/lib/formatters";
 
 export default function EpiEstoqueMinimo() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<"alertas" | "config">("alertas");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({ epiId: "", obraId: "", quantidadeMinima: "20" });
 
   // Queries
-  const alertasQ = trpc.epiAvancado.alertasEstoque.useQuery({ companyId }, { enabled: !!companyId });
-  const minimoListQ = trpc.epiAvancado.estoqueMinList.useQuery({ companyId }, { enabled: !!companyId });
-  const episQ = trpc.epis.list.useQuery({ companyId }, { enabled: !!companyId });
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const alertasQ = trpc.epiAvancado.alertasEstoque.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const minimoListQ = trpc.epiAvancado.estoqueMinList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const episQ = trpc.epis.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId });
 
   // Mutations
   const upsertMut = trpc.epiAvancado.estoqueMinUpsert.useMutation({
@@ -234,9 +235,7 @@ export default function EpiEstoqueMinimo() {
                     <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]" disabled={upsertMut.isPending}
                       onClick={() => {
                         if (!addForm.epiId) return toast.error("Selecione um EPI");
-                        upsertMut.mutate({
-                          companyId,
-                          epiId: parseInt(addForm.epiId),
+                        upsertMut.mutate({ companyId, companyIds, epiId: parseInt(addForm.epiId),
                           obraId: addForm.obraId ? parseInt(addForm.obraId) : undefined,
                           quantidadeMinima: parseInt(addForm.quantidadeMinima) || 20,
                         });

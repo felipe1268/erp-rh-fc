@@ -221,12 +221,12 @@ export default function PainelSST() {
                         </div>
                         <div className="text-right">
                           <Badge className={`text-xs ${
-                            capData.nivel === 'OTIMO' ? 'bg-green-100 text-green-800 border-green-300' :
-                            capData.nivel === 'BOM' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                            capData.nivel === 'BAIXO' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                            capData.nivel === 'otimo' ? 'bg-green-100 text-green-800 border-green-300' :
+                            capData.nivel === 'bom' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                            capData.nivel === 'baixo' ? 'bg-orange-100 text-orange-800 border-orange-300' :
                             'bg-red-100 text-red-800 border-red-300'
                           }`}>
-                            {capData.nivel === 'OTIMO' ? 'ÓTIMO' : capData.nivel}
+                            {capData.nivel === 'otimo' ? 'ÓTIMO' : capData.nivel}
                           </Badge>
                           {capData.gargalo && (
                             <p className="text-[10px] text-muted-foreground mt-1 max-w-[140px]">

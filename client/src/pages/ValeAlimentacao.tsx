@@ -56,9 +56,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function ValeAlimentacao() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [mesAno, setMesAno] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [tab, setTab] = useState<TabKey>("lancamento");
@@ -79,10 +80,10 @@ export default function ValeAlimentacao() {
   const [histDialogName, setHistDialogName] = useState<string>("");
 
   // Queries
-  const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: !!companyId });
-  const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, mesReferencia: mesAno }, { enabled: !!companyId });
-  const configsQ = trpc.avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery({ companyId }, { enabled: !!companyId && tab === "configuracao" });
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId && tab === "configuracao" });
+  const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId });
+  const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId });
+  const configsQ = trpc.avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery({ companyId, companyIds }, { enabled: !!companyId && tab === "configuracao" });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId && tab === "configuracao" });
   const histQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
     { companyId, employeeId: histEmployeeId! },
     { enabled: !!companyId && !!histEmployeeId && tab === "historico" }
@@ -91,7 +92,7 @@ export default function ValeAlimentacao() {
     { companyId, employeeId: histDialogEmployeeId! },
     { enabled: !!companyId && !!histDialogEmployeeId }
   );
-  const employeesQ = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId && tab === "historico" });
+  const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId && tab === "historico" });
 
   // Mutations
   const gerarMut = trpc.valeAlimentacao.gerarMes.useMutation({
@@ -259,7 +260,7 @@ export default function ValeAlimentacao() {
                   <>
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => {
                       if (confirm("Regerar todos os lançamentos pendentes? Lançamentos já pagos serão mantidos.")) {
-                        regerarMut.mutate({ companyId, mesReferencia: mesAno, diasUteis });
+                        regerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
                       }
                     }} disabled={regerarMut.isPending}>
                       <RefreshCw className="h-3.5 w-3.5" /> Regerar
@@ -267,7 +268,7 @@ export default function ValeAlimentacao() {
                     {stats && stats.pendentes > 0 && (
                       <Button size="sm" className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white" onClick={() => {
                         if (confirm(`Aprovar todos os ${stats.pendentes} lançamentos pendentes?`)) {
-                          aprovarMut.mutate({ companyId, mesReferencia: mesAno });
+                          aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
                         }
                       }} disabled={aprovarMut.isPending}>
                         <CheckCircle className="h-3.5 w-3.5" /> Aprovar Todos ({stats.pendentes})
@@ -276,7 +277,7 @@ export default function ValeAlimentacao() {
                     {stats && stats.aprovados > 0 && (
                       <Button size="sm" className="gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => {
                         if (confirm(`Marcar ${stats.aprovados} lançamentos como pagos?`)) {
-                          pagarMut.mutate({ companyId, mesReferencia: mesAno });
+                          pagarMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
                         }
                       }} disabled={pagarMut.isPending}>
                         <DollarSign className="h-3.5 w-3.5" /> Marcar Pagos ({stats.aprovados})
@@ -285,7 +286,7 @@ export default function ValeAlimentacao() {
                     {stats && stats.pagos > 0 && (
                       <Button size="sm" variant="outline" className="gap-1.5 text-xs text-amber-700 border-amber-300 hover:bg-amber-50" onClick={() => {
                         if (confirm(`Reverter ${stats.pagos} lançamento(s) de 'Pago' para 'Aprovado'?`)) {
-                          reverterPagoMut.mutate({ companyId, mesReferencia: mesAno });
+                          reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
                         }
                       }} disabled={reverterPagoMut.isPending}>
                         <RefreshCw className="h-3.5 w-3.5" /> Reverter Pagos ({stats.pagos})
@@ -468,7 +469,7 @@ export default function ValeAlimentacao() {
                                       <Pencil className="h-3.5 w-3.5" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600" title="Aprovar" onClick={() => {
-                                      aprovarMut.mutate({ companyId, mesReferencia: mesAno, ids: [l.id] });
+                                      aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, ids: [l.id] });
                                     }}>
                                       <CheckCircle className="h-3.5 w-3.5" />
                                     </Button>
@@ -481,7 +482,7 @@ export default function ValeAlimentacao() {
                                 )}
                                 {l.status === "aprovado" && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Marcar como pago" onClick={() => {
-                                    pagarMut.mutate({ companyId, mesReferencia: mesAno, ids: [l.id] });
+                                    pagarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, ids: [l.id] });
                                   }}>
                                     <DollarSign className="h-3.5 w-3.5" />
                                   </Button>
@@ -489,7 +490,7 @@ export default function ValeAlimentacao() {
                                 {l.status === "pago" && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" title="Reverter para Aprovado" onClick={() => {
                                     if (confirm("Reverter este lançamento de 'Pago' para 'Aprovado'?")) {
-                                      reverterPagoMut.mutate({ companyId, mesReferencia: mesAno, ids: [l.id] });
+                                      reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, ids: [l.id] });
                                     }
                                   }}>
                                     <RefreshCw className="h-3.5 w-3.5" />
@@ -743,7 +744,7 @@ export default function ValeAlimentacao() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowGerarDialog(false)}>Cancelar</Button>
             <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={gerarMut.isPending} onClick={() => {
-              gerarMut.mutate({ companyId, mesReferencia: mesAno, diasUteis });
+              gerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
             }}>
               {gerarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Gerando...</> : "Gerar Lançamentos"}
             </Button>

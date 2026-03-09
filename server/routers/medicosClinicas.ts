@@ -2,29 +2,30 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { medicos, clinicas } from "../../drizzle/schema";
-import { eq, and, like, desc } from "drizzle-orm";
+import { eq, and, like, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 
 export const medicosClinicasRouter = router({
   // ========== MÉDICOS ==========
 
   listarMedicos: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(medicos)
-        .where(eq(medicos.companyId, input.companyId))
+        .where(companyFilter(medicos.companyId, input))
         .orderBy(medicos.nome);
     }),
 
   buscarMedicos: protectedProcedure
-    .input(z.object({ companyId: z.number(), termo: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), termo: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(medicos)
         .where(and(
-          eq(medicos.companyId, input.companyId),
+          companyFilter(medicos.companyId, input),
           eq(medicos.ativo, 1),
           like(medicos.nome, `%${input.termo}%`)
         ))
@@ -33,9 +34,7 @@ export const medicosClinicasRouter = router({
     }),
 
   criarMedico: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      nome: z.string().min(2),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(2),
       crm: z.string().min(1),
       especialidade: z.string().optional(),
     }))
@@ -75,30 +74,30 @@ export const medicosClinicasRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB not available");
       await db.delete(medicos)
-        .where(and(eq(medicos.id, input.id), eq(medicos.companyId, input.companyId)));
+        .where(and(eq(medicos.id, input.id), companyFilter(medicos.companyId, input)));
       return { success: true };
     }),
 
   // ========== CLÍNICAS ==========
 
   listarClinicas: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(clinicas)
-        .where(eq(clinicas.companyId, input.companyId))
+        .where(companyFilter(clinicas.companyId, input))
         .orderBy(clinicas.nome);
     }),
 
   buscarClinicas: protectedProcedure
-    .input(z.object({ companyId: z.number(), termo: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), termo: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(clinicas)
         .where(and(
-          eq(clinicas.companyId, input.companyId),
+          companyFilter(clinicas.companyId, input),
           eq(clinicas.ativo, 1),
           like(clinicas.nome, `%${input.termo}%`)
         ))
@@ -107,9 +106,7 @@ export const medicosClinicasRouter = router({
     }),
 
   criarClinica: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      nome: z.string().min(2),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(2),
       endereco: z.string().optional(),
       telefone: z.string().optional(),
     }))
@@ -149,7 +146,7 @@ export const medicosClinicasRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB not available");
       await db.delete(clinicas)
-        .where(and(eq(clinicas.id, input.id), eq(clinicas.companyId, input.companyId)));
+        .where(and(eq(clinicas.id, input.id), companyFilter(clinicas.companyId, input)));
       return { success: true };
     }),
 });

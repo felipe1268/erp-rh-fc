@@ -26,6 +26,7 @@ import {
   userProfiles,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql, count, avg, inArray, gte, isNull } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
 import bcrypt from "bcryptjs";
@@ -109,7 +110,7 @@ export const avaliacaoRouter = router({
     // Buscar avaliador vinculado ao usuário logado no ERP
     // Admin Master e Admin têm acesso total sem precisar de cadastro de avaliador
     getMyEvaluator: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         const db = await getDb();
         const userId = ctx.user?.id;
@@ -118,13 +119,13 @@ export const avaliacaoRouter = router({
         // Verificar se é admin_master ou admin - acesso automático
         const userRole = (ctx.user as any)?.role;
         const [profile] = await db.select().from(userProfiles)
-          .where(and(eq(userProfiles.userId, userId), eq(userProfiles.companyId, input.companyId), eq(userProfiles.isActive, 1)));
+          .where(and(eq(userProfiles.userId, userId), companyFilter(userProfiles.companyId, input), eq(userProfiles.isActive, 1)));
         const isAdmin = userRole === 'admin_master' || userRole === 'admin' || 
           profile?.profileType === 'adm_master' || profile?.profileType === 'adm';
         
         // Primeiro tentar encontrar avaliador cadastrado
         const [evaluator] = await db.select().from(evalAvaliadores)
-          .where(and(eq(evalAvaliadores.userId, userId), eq(evalAvaliadores.companyId, input.companyId), eq(evalAvaliadores.status, "ativo")));
+          .where(and(eq(evalAvaliadores.userId, userId), companyFilter(evalAvaliadores.companyId, input), eq(evalAvaliadores.status, "ativo")));
         if (evaluator) {
           return { id: evaluator.id, nome: evaluator.nome, email: evaluator.email, obraId: isAdmin ? null : evaluator.obraId, companyId: evaluator.companyId, evaluationFrequency: evaluator.evaluationFrequency, isAdmin };
         }
@@ -152,7 +153,7 @@ export const avaliacaoRouter = router({
       .input(z.object({ evaluatorId: z.number(), companyId: z.number() }))
       .query(async ({ input }) => {
         const db = await getDb();
-        const conditions: any[] = [eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")];
+        const conditions: any[] = [companyFilter(employees.companyId, input), eq(employees.status, "Ativo")];
         // Se evaluatorId > 0, buscar avaliador cadastrado e filtrar por obra
         if (input.evaluatorId > 0) {
           const [evaluator] = await db.select().from(evalAvaliadores).where(eq(evalAvaliadores.id, input.evaluatorId));
@@ -179,7 +180,7 @@ export const avaliacaoRouter = router({
           .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.mesReferencia, mesRef)));
         const evaluatedIds = new Set(alreadyEvaluated.map(e => e.employeeId));
         // Buscar todos os funcionários ATIVOS da empresa (e obra se aplicável)
-        const conditions: any[] = [eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")];
+        const conditions: any[] = [companyFilter(employees.companyId, input), eq(employees.status, "Ativo")];
         if (evaluator.obraId) conditions.push(eq(employees.obraAtualId, evaluator.obraId));
         const allEmployees = await db.select({ id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, obraId: employees.obraAtualId, fotoUrl: employees.fotoUrl })
           .from(employees).where(and(...conditions)).orderBy(asc(employees.nomeCompleto));
@@ -328,7 +329,7 @@ export const avaliacaoRouter = router({
           createdAt: evalAvaliacoes.createdAt,
           // NÃO retorna mediaGeral, recomendação - SIGILOSO
         }).from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), eq(evalAvaliacoes.companyId, input.companyId)))
+          .where(and(eq(evalAvaliacoes.evaluatorId, input.evaluatorId), companyFilter(evalAvaliacoes.companyId, input)))
           .orderBy(desc(evalAvaliacoes.createdAt));
         const enriched = [];
         for (const ev of evals) {
@@ -358,7 +359,7 @@ export const avaliacaoRouter = router({
 
         // Buscar todas as avaliações do funcionário ordenadas por mês
         const avaliacoes = await db.select().from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.employeeId, input.employeeId), eq(evalAvaliacoes.companyId, input.companyId)))
+          .where(and(eq(evalAvaliacoes.employeeId, input.employeeId), companyFilter(evalAvaliacoes.companyId, input)))
           .orderBy(asc(evalAvaliacoes.mesReferencia));
 
         if (avaliacoes.length === 0) return { employee: emp, avaliacoes: [], evolucaoMensal: [], mediasGerais: null, totalAvaliacoes: 0 };
@@ -463,11 +464,11 @@ export const avaliacaoRouter = router({
   // ============================================================
   avaliadores: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
         const avaliadores = await db.select().from(evalAvaliadores)
-          .where(eq(evalAvaliadores.companyId, input.companyId))
+          .where(companyFilter(evalAvaliadores.companyId, input))
           .orderBy(desc(evalAvaliadores.createdAt));
         const enriched = [];
         for (const a of avaliadores) {
@@ -479,9 +480,7 @@ export const avaliacaoRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        nome: z.string().min(1),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1),
         email: z.string().email(),
         userId: z.number().optional(), // vínculo com usuário do ERP
         obraId: z.number().optional(),
@@ -491,12 +490,12 @@ export const avaliacaoRouter = router({
         const db = await getDb();
         // Verificar se e-mail já existe
         const [existing] = await db.select().from(evalAvaliadores)
-          .where(and(eq(evalAvaliadores.email, input.email.toLowerCase()), eq(evalAvaliadores.companyId, input.companyId)));
+          .where(and(eq(evalAvaliadores.email, input.email.toLowerCase()), companyFilter(evalAvaliadores.companyId, input)));
         if (existing) throw new TRPCError({ code: "BAD_REQUEST", message: "E-mail já cadastrado nesta empresa." });
         // Se userId fornecido, verificar se já não está vinculado
         if (input.userId) {
           const [existingUser] = await db.select().from(evalAvaliadores)
-            .where(and(eq(evalAvaliadores.userId, input.userId), eq(evalAvaliadores.companyId, input.companyId)));
+            .where(and(eq(evalAvaliadores.userId, input.userId), companyFilter(evalAvaliadores.companyId, input)));
           if (existingUser) throw new TRPCError({ code: "BAD_REQUEST", message: "Este usuário já está vinculado como avaliador nesta empresa." });
         }
         const [result] = await db.insert(evalAvaliadores).values({
@@ -575,9 +574,7 @@ export const avaliacaoRouter = router({
   // ============================================================
   avaliacoes: router({
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        employeeId: z.number(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
         obraId: z.number().optional(),
         // Pilar 1 - Postura e Disciplina
         comportamento: z.number().min(1).max(5),
@@ -664,9 +661,7 @@ export const avaliacaoRouter = router({
     // Gestor que avaliou NÃO vê as notas (apenas que avaliou)
     // Apenas RH/ADM/ADM Master veem resultados completos
     list: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        employeeId: z.number().optional(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number().optional(),
         evaluatorId: z.number().optional(),
         mesReferencia: z.string().optional(),
         limit: z.number().default(50),
@@ -674,7 +669,7 @@ export const avaliacaoRouter = router({
       }))
       .query(async ({ input, ctx }) => {
         const db = await getDb();
-        const conditions: any[] = [eq(evalAvaliacoes.companyId, input.companyId)];
+        const conditions: any[] = [companyFilter(evalAvaliacoes.companyId, input)];
         if (input.employeeId) conditions.push(eq(evalAvaliacoes.employeeId, input.employeeId));
         if (input.evaluatorId) conditions.push(eq(evalAvaliacoes.evaluatorId, input.evaluatorId));
         if (input.mesReferencia) conditions.push(eq(evalAvaliacoes.mesReferencia, input.mesReferencia));
@@ -788,7 +783,7 @@ export const avaliacaoRouter = router({
         const canView = canViewResults(ctx.user?.role);
 
         const avaliacoes = await db.select().from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.employeeId, input.employeeId), eq(evalAvaliacoes.companyId, input.companyId)))
+          .where(and(eq(evalAvaliacoes.employeeId, input.employeeId), companyFilter(evalAvaliacoes.companyId, input)))
           .orderBy(desc(evalAvaliacoes.createdAt));
 
         const enriched = [];
@@ -888,15 +883,15 @@ Gere um resumo executivo em português brasileiro com:
   // ============================================================
   dashboard: router({
     globalStats: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         const db = await getDb();
-        const [totalAvaliacoes] = await db.select({ count: count() }).from(evalAvaliacoes).where(eq(evalAvaliacoes.companyId, input.companyId));
-        const [totalAvaliadores] = await db.select({ count: count() }).from(evalAvaliadores).where(eq(evalAvaliadores.companyId, input.companyId));
+        const [totalAvaliacoes] = await db.select({ count: count() }).from(evalAvaliacoes).where(companyFilter(evalAvaliacoes.companyId, input));
+        const [totalAvaliadores] = await db.select({ count: count() }).from(evalAvaliadores).where(companyFilter(evalAvaliadores.companyId, input));
 
         // Contar pesquisas ativas
-        const [totalPesquisas] = await db.select({ count: count() }).from(evalSurveys).where(eq(evalSurveys.companyId, input.companyId));
-        const [totalClima] = await db.select({ count: count() }).from(evalClimateSurveys).where(eq(evalClimateSurveys.companyId, input.companyId));
+        const [totalPesquisas] = await db.select({ count: count() }).from(evalSurveys).where(companyFilter(evalSurveys.companyId, input));
+        const [totalClima] = await db.select({ count: count() }).from(evalClimateSurveys).where(companyFilter(evalClimateSurveys.companyId, input));
 
         const canView = canViewResults(ctx.user?.role);
 
@@ -912,14 +907,14 @@ Gere um resumo executivo em português brasileiro com:
           };
         }
 
-        const [mediaGeralResult] = await db.select({ avg: avg(evalAvaliacoes.mediaGeral) }).from(evalAvaliacoes).where(eq(evalAvaliacoes.companyId, input.companyId));
+        const [mediaGeralResult] = await db.select({ avg: avg(evalAvaliacoes.mediaGeral) }).from(evalAvaliacoes).where(companyFilter(evalAvaliacoes.companyId, input));
 
         const porMes = await db.select({
           mes: evalAvaliacoes.mesReferencia,
           count: count(),
           media: avg(evalAvaliacoes.mediaGeral),
         }).from(evalAvaliacoes)
-          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .where(companyFilter(evalAvaliacoes.companyId, input))
           .groupBy(evalAvaliacoes.mesReferencia)
           .orderBy(desc(evalAvaliacoes.mesReferencia))
           .limit(6);
@@ -928,7 +923,7 @@ Gere um resumo executivo em português brasileiro com:
           recomendacao: evalAvaliacoes.recomendacao,
           count: count(),
         }).from(evalAvaliacoes)
-          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .where(companyFilter(evalAvaliacoes.companyId, input))
           .groupBy(evalAvaliacoes.recomendacao);
 
         return {
@@ -943,7 +938,7 @@ Gere um resumo executivo em português brasileiro com:
       }),
 
     employeeRanking: protectedProcedure
-      .input(z.object({ companyId: z.number(), limit: z.number().default(20) }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limit: z.number().default(20) }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) {
           return [];
@@ -954,7 +949,7 @@ Gere um resumo executivo em português brasileiro com:
           mediaGeral: avg(evalAvaliacoes.mediaGeral),
           totalAvaliacoes: count(),
         }).from(evalAvaliacoes)
-          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .where(companyFilter(evalAvaliacoes.companyId, input))
           .groupBy(evalAvaliacoes.employeeId)
           .orderBy(desc(avg(evalAvaliacoes.mediaGeral)))
           .limit(input.limit);
@@ -978,7 +973,7 @@ Gere um resumo executivo em português brasileiro com:
       }),
 
     evaluatorStats: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) return [];
         const db = await getDb();
@@ -987,7 +982,7 @@ Gere um resumo executivo em português brasileiro com:
           totalAvaliacoes: count(),
           avgDuration: avg(evalAvaliacoes.durationSeconds),
         }).from(evalAvaliacoes)
-          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .where(companyFilter(evalAvaliacoes.companyId, input))
           .groupBy(evalAvaliacoes.evaluatorId)
           .orderBy(desc(count()));
 
@@ -1011,7 +1006,7 @@ Gere um resumo executivo em português brasileiro com:
 
     // Comparativo por pilar e critério
     pillarComparison: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) return null;
         const db = await getDb();
@@ -1028,7 +1023,7 @@ Gere um resumo executivo em português brasileiro com:
           iniciativaProatividade: avg(evalAvaliacoes.iniciativaProatividade),
           disponibilidadeFlexibilidade: avg(evalAvaliacoes.disponibilidadeFlexibilidade),
           organizacaoLimpeza: avg(evalAvaliacoes.organizacaoLimpeza),
-        }).from(evalAvaliacoes).where(eq(evalAvaliacoes.companyId, input.companyId));
+        }).from(evalAvaliacoes).where(companyFilter(evalAvaliacoes.companyId, input));
         if (!result[0]) return null;
         const r = result[0];
         const parse = (v: any) => v ? parseFloat(String(v)) : 0;
@@ -1042,7 +1037,7 @@ Gere um resumo executivo em português brasileiro com:
 
     // Comparativo por obra
     byObra: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) return [];
         const db = await getDb();
@@ -1051,7 +1046,7 @@ Gere um resumo executivo em português brasileiro com:
           media: avg(evalAvaliacoes.mediaGeral),
           total: count(),
         }).from(evalAvaliacoes)
-          .where(and(eq(evalAvaliacoes.companyId, input.companyId), sql`${evalAvaliacoes.obraId} IS NOT NULL`))
+          .where(and(companyFilter(evalAvaliacoes.companyId, input), sql`${evalAvaliacoes.obraId} IS NOT NULL`))
           .groupBy(evalAvaliacoes.obraId)
           .orderBy(desc(avg(evalAvaliacoes.mediaGeral)));
         const enriched = [];
@@ -1065,7 +1060,7 @@ Gere um resumo executivo em português brasileiro com:
 
     // Evolução mensal com pilares
     monthlyEvolution: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) return [];
         const db = await getDb();
@@ -1077,7 +1072,7 @@ Gere um resumo executivo em português brasileiro com:
           mediaPilar2: avg(evalAvaliacoes.mediaPilar2),
           mediaPilar3: avg(evalAvaliacoes.mediaPilar3),
         }).from(evalAvaliacoes)
-          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .where(companyFilter(evalAvaliacoes.companyId, input))
           .groupBy(evalAvaliacoes.mesReferencia)
           .orderBy(asc(evalAvaliacoes.mesReferencia))
           .limit(12);
@@ -1085,12 +1080,12 @@ Gere um resumo executivo em português brasileiro com:
 
     // Clima organizacional consolidado
     climaConsolidated: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) return null;
         const db = await getDb();
         const surveys = await db.select().from(evalClimateSurveys)
-          .where(eq(evalClimateSurveys.companyId, input.companyId));
+          .where(companyFilter(evalClimateSurveys.companyId, input));
         if (!surveys.length) return null;
         const surveyIds = surveys.map(s => s.id);
         const questions = await db.select().from(evalClimateQuestions)
@@ -1119,7 +1114,7 @@ Gere um resumo executivo em português brasileiro com:
 
     // Top e Bottom funcionários
     topBottomEmployees: protectedProcedure
-      .input(z.object({ companyId: z.number(), limit: z.number().default(5) }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limit: z.number().default(5) }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) return { top: [], bottom: [] };
         const db = await getDb();
@@ -1131,7 +1126,7 @@ Gere um resumo executivo em português brasileiro com:
           mediaPilar3: avg(evalAvaliacoes.mediaPilar3),
           total: count(),
         }).from(evalAvaliacoes)
-          .where(eq(evalAvaliacoes.companyId, input.companyId))
+          .where(companyFilter(evalAvaliacoes.companyId, input))
           .groupBy(evalAvaliacoes.employeeId);
         const enriched = [];
         for (const r of all) {
@@ -1157,7 +1152,7 @@ Gere um resumo executivo em português brasileiro com:
 
     // Distribuição de notas (histograma)
     scoreDistribution: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input, ctx }) => {
         if (!canViewResults(ctx.user?.role)) return [];
         const db = await getDb();
@@ -1174,11 +1169,11 @@ Gere um resumo executivo em português brasileiro com:
   // ============================================================
   criterios: router({
     getActiveRevision: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
         const [revision] = await db.select().from(evalCriteriaRevisions)
-          .where(and(eq(evalCriteriaRevisions.companyId, input.companyId), eq(evalCriteriaRevisions.isActive, 1)));
+          .where(and(companyFilter(evalCriteriaRevisions.companyId, input), eq(evalCriteriaRevisions.isActive, 1)));
         if (!revision) return null;
 
         const pillars = await db.select().from(evalPillars)
@@ -1197,9 +1192,7 @@ Gere um resumo executivo em português brasileiro com:
       }),
 
     createRevision: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        descricao: z.string().optional(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), descricao: z.string().optional(),
         pillars: z.array(z.object({
           nome: z.string(),
           ordem: z.number(),
@@ -1214,7 +1207,7 @@ Gere um resumo executivo em português brasileiro com:
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         const existing = await db.select({ count: count() }).from(evalCriteriaRevisions)
-          .where(eq(evalCriteriaRevisions.companyId, input.companyId));
+          .where(companyFilter(evalCriteriaRevisions.companyId, input));
         const version = ((existing[0]?.count as number) || 0) + 1;
 
         const [rev] = await db.insert(evalCriteriaRevisions).values({
@@ -1250,22 +1243,22 @@ Gere um resumo executivo em português brasileiro com:
       .input(z.object({ id: z.number(), companyId: z.number() }))
       .mutation(async ({ input }) => {
         const db = await getDb();
-        await db.update(evalCriteriaRevisions).set({ isActive: 0 }).where(eq(evalCriteriaRevisions.companyId, input.companyId));
+        await db.update(evalCriteriaRevisions).set({ isActive: 0 }).where(companyFilter(evalCriteriaRevisions.companyId, input));
         await db.update(evalCriteriaRevisions).set({ isActive: 1 }).where(eq(evalCriteriaRevisions.id, input.id));
         return { success: true };
       }),
 
     listRevisions: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
         return db.select().from(evalCriteriaRevisions)
-          .where(eq(evalCriteriaRevisions.companyId, input.companyId))
+          .where(companyFilter(evalCriteriaRevisions.companyId, input))
           .orderBy(desc(evalCriteriaRevisions.version));
       }),
 
     createDefaultRevision: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         const [rev] = await db.insert(evalCriteriaRevisions).values({
@@ -1324,9 +1317,7 @@ Gere um resumo executivo em português brasileiro com:
   // ============================================================
   pesquisas: router({
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        titulo: z.string().min(1),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), titulo: z.string().min(1),
         descricao: z.string().optional(),
         tipo: z.enum(["setor", "cliente", "outro"]).default("outro"),
         anonimo: z.boolean().default(false),
@@ -1374,10 +1365,10 @@ Gere um resumo executivo em português brasileiro com:
       }),
 
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), isEvaluation: z.boolean().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), isEvaluation: z.boolean().optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
-        const conditions = [eq(evalSurveys.companyId, input.companyId)];
+        const conditions = [companyFilter(evalSurveys.companyId, input)];
         if (input.isEvaluation !== undefined) {
           conditions.push(eq(evalSurveys.isEvaluation, input.isEvaluation ? 1 : 0));
         }
@@ -1709,9 +1700,7 @@ Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para 
   // ============================================================
   clima: router({
     createSurvey: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        titulo: z.string().min(1),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), titulo: z.string().min(1),
         descricao: z.string().optional(),
         questions: z.array(z.object({
           texto: z.string(),
@@ -1732,11 +1721,11 @@ Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para 
       }),
 
     listSurveys: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
         const surveys = await db.select().from(evalClimateSurveys)
-          .where(eq(evalClimateSurveys.companyId, input.companyId))
+          .where(companyFilter(evalClimateSurveys.companyId, input))
           .orderBy(desc(evalClimateSurveys.createdAt));
         const enriched = [];
         for (const s of surveys) {
@@ -1918,18 +1907,16 @@ Gere 2-3 perguntas por categoria (total ~15 perguntas). Contexto: empresa de con
   // ============================================================
   participantes: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
         return db.select().from(evalExternalParticipants)
-          .where(eq(evalExternalParticipants.companyId, input.companyId))
+          .where(companyFilter(evalExternalParticipants.companyId, input))
           .orderBy(desc(evalExternalParticipants.createdAt));
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        nome: z.string().min(1),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1),
         empresa: z.string().optional(),
         tipo: z.enum(["cliente", "fornecedor"]).default("cliente"),
         email: z.string().optional(),
@@ -1988,13 +1975,13 @@ Gere 2-3 perguntas por categoria (total ~15 perguntas). Contexto: empresa de con
   // ============================================================
   obras: router({
     listActive: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
         return db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, status: obras.status })
           .from(obras)
           .where(and(
-            eq(obras.companyId, input.companyId),
+            companyFilter(obras.companyId, input),
             eq(obras.isActive, 1),
             isNull(obras.deletedAt),
           ))
@@ -2007,20 +1994,18 @@ Gere 2-3 perguntas por categoria (total ~15 perguntas). Contexto: empresa de con
   // ============================================================
   auditoria: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), limit: z.number().default(50), offset: z.number().default(0) }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limit: z.number().default(50), offset: z.number().default(0) }))
       .query(async ({ input }) => {
         const db = await getDb();
         return db.select().from(evalAuditLog)
-          .where(eq(evalAuditLog.companyId, input.companyId))
+          .where(companyFilter(evalAuditLog.companyId, input))
           .orderBy(desc(evalAuditLog.createdAt))
           .limit(input.limit)
           .offset(input.offset);
       }),
 
     log: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        action: z.string(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), action: z.string(),
         actorType: z.enum(["admin", "evaluator", "system", "anonymous"]).default("admin"),
         actorId: z.number().optional(),
         actorName: z.string().optional(),

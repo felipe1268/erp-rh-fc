@@ -3,7 +3,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { dissidios, dissidioFuncionarios, employees } from "../../drizzle/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { parseBRL } from "../utils/parseBRL";
 
 // ============================================================
@@ -15,20 +16,16 @@ import { parseBRL } from "../utils/parseBRL";
 
 export const sindicalRouter = router({
   // Listar todos os dissídios cadastrados (ano + percentual + status)
-  listar: protectedProcedure.input(z.object({
-    companyId: z.number(),
-  })).query(async ({ input }) => {
+  listar: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
     const db = (await getDb())!;
     const result = await db.select().from(dissidios)
-      .where(eq(dissidios.companyId, input.companyId))
+      .where(companyFilter(dissidios.companyId, input))
       .orderBy(desc(dissidios.anoReferencia));
     return result;
   }),
 
   // Cadastrar novo ano de dissídio (ano + percentual)
-  cadastrar: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    anoReferencia: z.number().min(2020).max(2050),
+  cadastrar: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), anoReferencia: z.number().min(2020).max(2050),
     percentualReajuste: z.string(),
   })).mutation(async ({ input, ctx }) => {
     if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode cadastrar dissídios' });
@@ -37,7 +34,7 @@ export const sindicalRouter = router({
     // Verificar duplicidade
     const [existente] = await db.select().from(dissidios)
       .where(and(
-        eq(dissidios.companyId, input.companyId),
+        companyFilter(dissidios.companyId, input),
         eq(dissidios.anoReferencia, input.anoReferencia),
       ));
     if (existente) throw new TRPCError({ code: 'CONFLICT', message: `Já existe dissídio cadastrado para o ano ${input.anoReferencia}` });
@@ -50,7 +47,7 @@ export const sindicalRouter = router({
 
     const dissidiosAnteriores = await db.select().from(dissidios)
       .where(and(
-        eq(dissidios.companyId, input.companyId),
+        companyFilter(dissidios.companyId, input),
         sql`${dissidios.anoReferencia} < ${input.anoReferencia}`,
         sql`${dissidios.status} != 'cancelado'`,
       ))
@@ -82,9 +79,7 @@ export const sindicalRouter = router({
   }),
 
   // Aplicar dissídio — reajusta TODOS os CLT ativos da empresa (sem exclusão individual)
-  aplicar: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    anoReferencia: z.number(),
+  aplicar: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), anoReferencia: z.number(),
   })).mutation(async ({ input, ctx }) => {
     if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode aplicar dissídios' });
     const db = (await getDb())!;
@@ -92,7 +87,7 @@ export const sindicalRouter = router({
     // Buscar o dissídio do ano
     const [dissidio] = await db.select().from(dissidios)
       .where(and(
-        eq(dissidios.companyId, input.companyId),
+        companyFilter(dissidios.companyId, input),
         eq(dissidios.anoReferencia, input.anoReferencia),
       ));
     if (!dissidio) throw new TRPCError({ code: 'NOT_FOUND', message: `Dissídio do ano ${input.anoReferencia} não encontrado` });
@@ -104,7 +99,7 @@ export const sindicalRouter = router({
     // Buscar TODOS os funcionários CLT ativos (é lei, não tem exclusão)
     const funcs = await db.select().from(employees)
       .where(and(
-        eq(employees.companyId, input.companyId),
+        companyFilter(employees.companyId, input),
         sql`${employees.status} = 'Ativo'`,
         sql`${employees.tipoContrato} != 'PJ'`,
         sql`${employees.deletedAt} IS NULL`,
@@ -161,15 +156,13 @@ export const sindicalRouter = router({
   }),
 
   // Excluir dissídio (apenas rascunho)
-  excluir: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    anoReferencia: z.number(),
+  excluir: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), anoReferencia: z.number(),
   })).mutation(async ({ input, ctx }) => {
     if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN' });
     const db = (await getDb())!;
     const [dissidio] = await db.select().from(dissidios)
       .where(and(
-        eq(dissidios.companyId, input.companyId),
+        companyFilter(dissidios.companyId, input),
         eq(dissidios.anoReferencia, input.anoReferencia),
       ));
     if (!dissidio) throw new TRPCError({ code: 'NOT_FOUND' });

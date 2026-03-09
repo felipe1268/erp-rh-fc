@@ -6,6 +6,7 @@ import {
   obraHorasRateio, systemCriteria, terminationNotices, obraFuncionarios,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull, like, or, between } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -158,9 +159,7 @@ export const dixiPontoRouter = router({
   // ===================== PREVIEW AFD =====================
   // Parse AFD file and return preview data without importing
   previewAFD: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      fileContent: z.string(), // text content of AFD file
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), fileContent: z.string(), // text content of AFD file
       fileName: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -186,7 +185,7 @@ export const dixiPontoRouter = router({
         obraNome: obras.nome,
       }).from(obraSns)
         .leftJoin(obras, eq(obraSns.obraId, obras.id))
-        .where(and(eq(obraSns.companyId, input.companyId), eq(obraSns.status, "ativo")));
+        .where(and(companyFilter(obraSns.companyId, input), eq(obraSns.status, "ativo")));
 
       const snMatch = activeSns.find(s => s.sn === header.sn);
       if (snMatch) {
@@ -196,7 +195,7 @@ export const dixiPontoRouter = router({
 
       // 2. Fallback: dixi_devices
       if (!obraId) {
-        const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
+        const devices = await db.select().from(dixiDevices).where(companyFilter(dixiDevices.companyId, input));
         const device = devices.find(d => d.serialNumber === header.sn);
         if (device && device.obraId) {
           obraId = device.obraId;
@@ -209,7 +208,7 @@ export const dixiPontoRouter = router({
       if (!obraId) {
         const obrasList = await db.select({ id: obras.id, nome: obras.nome, snRelogioPonto: obras.snRelogioPonto })
           .from(obras)
-          .where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
+          .where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
         const obra = obrasList.find(o => o.snRelogioPonto === header.sn);
         if (obra) {
           obraId = obra.id;
@@ -225,7 +224,7 @@ export const dixiPontoRouter = router({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
         cpf: employees.cpf,
-      }).from(employees).where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+      }).from(employees).where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       // Match CPFs to employees
       const cpfToEmployee: Record<string, { id: number; nome: string } | null> = {};
@@ -285,9 +284,7 @@ export const dixiPontoRouter = router({
 
   // ===================== IMPORTAR AFD =====================
   importAFD: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      fileContent: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), fileContent: z.string(),
       fileName: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -310,13 +307,13 @@ export const dixiPontoRouter = router({
         sn: obraSns.sn, obraId: obraSns.obraId, obraNome: obras.nome,
       }).from(obraSns)
         .leftJoin(obras, eq(obraSns.obraId, obras.id))
-        .where(and(eq(obraSns.companyId, input.companyId), eq(obraSns.status, "ativo")));
+        .where(and(companyFilter(obraSns.companyId, input), eq(obraSns.status, "ativo")));
 
       const snMatch = activeSns.find(s => s.sn === header.sn);
       if (snMatch) { obraId = snMatch.obraId; obraNome = snMatch.obraNome || ""; }
 
       if (!obraId) {
-        const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
+        const devices = await db.select().from(dixiDevices).where(companyFilter(dixiDevices.companyId, input));
         const device = devices.find(d => d.serialNumber === header.sn);
         if (device?.obraId) {
           obraId = device.obraId;
@@ -327,7 +324,7 @@ export const dixiPontoRouter = router({
 
       if (!obraId) {
         const obrasList = await db.select({ id: obras.id, nome: obras.nome, snRelogioPonto: obras.snRelogioPonto })
-          .from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
+          .from(obras).where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
         const obra = obrasList.find(o => o.snRelogioPonto === header.sn);
         if (obra) { obraId = obra.id; obraNome = obra.nome; }
       }
@@ -346,7 +343,7 @@ export const dixiPontoRouter = router({
         cpf: employees.cpf,
         jornadaTrabalho: employees.jornadaTrabalho,
         matricula: employees.matricula,
-      }).from(employees).where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+      }).from(employees).where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       // Build CPF lookup map
       const cpfMap: Record<string, typeof empList[0]> = {};
@@ -357,7 +354,7 @@ export const dixiPontoRouter = router({
       }
 
       // ===== BUSCAR CRITÉRIOS =====
-      const criteriaRows = await db.select().from(systemCriteria).where(eq(systemCriteria.companyId, input.companyId));
+      const criteriaRows = await db.select().from(systemCriteria).where(companyFilter(systemCriteria.companyId, input));
       const criteriaMap: Record<string, string> = {};
       for (const c of criteriaRows) { criteriaMap[c.chave] = c.valor; }
       const tolAtraso = parseInt(criteriaMap['ponto_tolerancia_atraso'] || '10');
@@ -404,7 +401,7 @@ export const dixiPontoRouter = router({
       const [lastInsert] = await db.select({ id: dixiAfdImportacoes.id })
         .from(dixiAfdImportacoes)
         .where(and(
-          eq(dixiAfdImportacoes.companyId, input.companyId),
+          companyFilter(dixiAfdImportacoes.companyId, input),
           eq(dixiAfdImportacoes.arquivoNome, input.fileName),
         ))
         .orderBy(desc(dixiAfdImportacoes.id))
@@ -572,7 +569,7 @@ export const dixiPontoRouter = router({
       for (const mesRef of Array.from(mesesAfetados)) {
         await db.delete(timeRecords).where(
           and(
-            eq(timeRecords.companyId, input.companyId),
+            companyFilter(timeRecords.companyId, input),
             eq(timeRecords.mesReferencia, mesRef),
             eq(timeRecords.obraId, obraId!),
             eq(timeRecords.fonte, "dixi"),
@@ -580,7 +577,7 @@ export const dixiPontoRouter = router({
         );
         await db.delete(timeInconsistencies).where(
           and(
-            eq(timeInconsistencies.companyId, input.companyId),
+            companyFilter(timeInconsistencies.companyId, input),
             eq(timeInconsistencies.mesReferencia, mesRef),
             eq(timeInconsistencies.obraId, obraId!),
           )
@@ -607,7 +604,7 @@ export const dixiPontoRouter = router({
       for (const mesRef of Array.from(mesesAfetados)) {
         await db.delete(obraHorasRateio).where(
           and(
-            eq(obraHorasRateio.companyId, input.companyId),
+            companyFilter(obraHorasRateio.companyId, input),
             eq(obraHorasRateio.mesAno, mesRef),
             eq(obraHorasRateio.obraId, obraId!),
           )
@@ -663,7 +660,7 @@ export const dixiPontoRouter = router({
           obraId: obraFuncionarios.obraId,
         }).from(obraFuncionarios)
           .where(and(
-            eq(obraFuncionarios.companyId, input.companyId),
+            companyFilter(obraFuncionarios.companyId, input),
             eq(obraFuncionarios.isActive, 1),
             sql`${obraFuncionarios.employeeId} IN (${sql.raw(uniqueEmpIds.join(","))})`,
           ));
@@ -725,25 +722,23 @@ export const dixiPontoRouter = router({
 
   // ===================== HISTÓRICO DE IMPORTAÇÕES =====================
   listImportacoes: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(dixiAfdImportacoes)
-        .where(eq(dixiAfdImportacoes.companyId, input.companyId))
+        .where(companyFilter(dixiAfdImportacoes.companyId, input))
         .orderBy(desc(dixiAfdImportacoes.dataImportacao));
     }),
 
   // ===================== MARCAÇÕES AFD (BRUTAS) =====================
   listMarcacoes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      importacaoId: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), importacaoId: z.number().optional(),
       data: z.string().optional(),
       cpf: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const conditions = [eq(dixiAfdMarcacoes.companyId, input.companyId)];
+      const conditions = [companyFilter(dixiAfdMarcacoes.companyId, input)];
       if (input.importacaoId) conditions.push(eq(dixiAfdMarcacoes.importacaoId, input.importacaoId));
       if (input.data) conditions.push(eq(dixiAfdMarcacoes.data, input.data));
       if (input.cpf) conditions.push(eq(dixiAfdMarcacoes.cpf, normalizeCPF(input.cpf)));
@@ -755,34 +750,34 @@ export const dixiPontoRouter = router({
 
   // ===================== DASHBOARD STATS =====================
   dashboardStats: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       // Total obras ativas
       const obrasAtivas = await db.select({ count: sql<number>`count(*)` })
         .from(obras)
-        .where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`, sql`${obras.status} = 'Em_Andamento'`));
+        .where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`, sql`${obras.status} = 'Em_Andamento'`));
 
       // Total relógios (SNs ativos)
       const relogios = await db.select({ count: sql<number>`count(*)` })
         .from(obraSns)
-        .where(and(eq(obraSns.companyId, input.companyId), eq(obraSns.status, 'ativo')));
+        .where(and(companyFilter(obraSns.companyId, input), eq(obraSns.status, 'ativo')));
 
       // Total funcionários ativos
       const funcs = await db.select({ count: sql<number>`count(*)` })
         .from(employees)
-        .where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+        .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       // Total importações
       const imports = await db.select({ count: sql<number>`count(*)` })
         .from(dixiAfdImportacoes)
-        .where(eq(dixiAfdImportacoes.companyId, input.companyId));
+        .where(companyFilter(dixiAfdImportacoes.companyId, input));
 
       // Última importação
       const lastImport = await db.select()
         .from(dixiAfdImportacoes)
-        .where(eq(dixiAfdImportacoes.companyId, input.companyId))
+        .where(companyFilter(dixiAfdImportacoes.companyId, input))
         .orderBy(desc(dixiAfdImportacoes.dataImportacao))
         .limit(1);
 
@@ -790,14 +785,14 @@ export const dixiPontoRouter = router({
       const pendentes = await db.select({ count: sql<number>`count(*)` })
         .from(timeInconsistencies)
         .where(and(
-          eq(timeInconsistencies.companyId, input.companyId),
+          companyFilter(timeInconsistencies.companyId, input),
           eq(timeInconsistencies.status, 'pendente'),
         ));
 
       // Total marcações AFD
       const totalMarcacoes = await db.select({ count: sql<number>`count(*)` })
         .from(dixiAfdMarcacoes)
-        .where(eq(dixiAfdMarcacoes.companyId, input.companyId));
+        .where(companyFilter(dixiAfdMarcacoes.companyId, input));
 
       return {
         obrasAtivas: obrasAtivas[0]?.count || 0,
@@ -817,11 +812,11 @@ export const dixiPontoRouter = router({
       const db = (await getDb())!;
       // Delete associated marcações
       await db.delete(dixiAfdMarcacoes).where(
-        and(eq(dixiAfdMarcacoes.importacaoId, input.id), eq(dixiAfdMarcacoes.companyId, input.companyId))
+        and(eq(dixiAfdMarcacoes.importacaoId, input.id), companyFilter(dixiAfdMarcacoes.companyId, input))
       );
       // Delete import log
       await db.delete(dixiAfdImportacoes).where(
-        and(eq(dixiAfdImportacoes.id, input.id), eq(dixiAfdImportacoes.companyId, input.companyId))
+        and(eq(dixiAfdImportacoes.id, input.id), companyFilter(dixiAfdImportacoes.companyId, input))
       );
       return { success: true };
     }),

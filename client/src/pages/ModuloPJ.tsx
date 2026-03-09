@@ -52,9 +52,10 @@ const STATUS_PAGAMENTO: Record<string, { label: string; color: string; bg: strin
 };
 
 export default function ModuloPJ() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("contratos");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -83,7 +84,7 @@ export default function ModuloPJ() {
     { companyId, mesReferencia: mesRef },
     { enabled: !!companyId && tab === "pagamentos" }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const pjEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.tipoContrato === "PJ" && e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // Mutations
@@ -222,9 +223,7 @@ export default function ModuloPJ() {
       toast.error("Preencha os campos obrigatórios");
       return;
     }
-    createContrato.mutate({
-      companyId,
-      employeeId: form.employeeId,
+    createContrato.mutate({ companyId, companyIds, employeeId: form.employeeId,
       cnpjPrestador: form.cnpjPrestador,
       razaoSocialPrestador: form.razaoSocialPrestador,
       objetoContrato: form.objetoContrato,
@@ -439,7 +438,7 @@ export default function ModuloPJ() {
                 <Input type="month" value={mesRef} onChange={e => setMesRef(e.target.value)} className="w-48" />
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, mesReferencia: mesRef })} disabled={gerarMensal.isPending}>
+                <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds, mesReferencia: mesRef })} disabled={gerarMensal.isPending}>
                   <RefreshCw className={`h-4 w-4 mr-2 ${gerarMensal.isPending ? "animate-spin" : ""}`} /> Gerar Lançamentos
                 </Button>
                 <Button onClick={() => { setPagForm({ mesReferencia: mesRef }); setShowPagamentoDialog(true); }}>
@@ -760,7 +759,7 @@ export default function ModuloPJ() {
               <Button variant="outline" onClick={() => { setShowPagamentoDialog(false); setPagForm({}); }}>Cancelar</Button>
               <Button onClick={() => {
                 if (!pagForm.contractId || !pagForm.tipo || !pagForm.valor) { toast.error("Preencha os campos obrigatórios"); return; }
-                createPagamento.mutate({ companyId, ...pagForm });
+                createPagamento.mutate({ companyId, companyIds, ...pagForm });
               }} disabled={createPagamento.isPending}>
                 {createPagamento.isPending ? "Salvando..." : "Criar Lançamento"}
               </Button>

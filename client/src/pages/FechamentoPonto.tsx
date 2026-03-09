@@ -83,7 +83,7 @@ const STATUS_DESC_COLORS: Record<string, string> = {
   fechado: "bg-gray-200 text-gray-700",
 };
 
-function DescontosCLTPanel({ companyId, mesAno, isMaster }: { companyId: number; mesAno: string; isMaster: boolean }) {
+function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { companyId: number; companyIds?: number[]; mesAno: string; isMaster: boolean }) {
   const [activeSubTab, setActiveSubTab] = useState<"resumo" | "detalhes">("resumo");
   const [filterTipo, setFilterTipo] = useState<string>("all");
   const [filterEmpId, setFilterEmpId] = useState<number | undefined>(undefined);
@@ -91,8 +91,8 @@ function DescontosCLTPanel({ companyId, mesAno, isMaster }: { companyId: number;
   const [abonoMotivo, setAbonoMotivo] = useState("");
 
   const utils = trpc.useUtils();
-  const totais = trpc.pontoDescontos.totaisMes.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const resumo = trpc.pontoDescontos.listResumo.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const totais = trpc.pontoDescontos.totaisMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const resumo = trpc.pontoDescontos.listResumo.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
   const detalhes = trpc.pontoDescontos.listByMonth.useQuery(
     { companyId, mesReferencia: mesAno, tipo: filterTipo !== "all" ? filterTipo : undefined, employeeId: filterEmpId },
     { enabled: companyId > 0 }
@@ -132,12 +132,12 @@ function DescontosCLTPanel({ companyId, mesAno, isMaster }: { companyId: number;
 
   function handleCalcular() {
     if (!confirm("Deseja calcular/recalcular os descontos CLT do mês? Os cálculos anteriores serão substituídos.")) return;
-    calcularMut.mutate({ companyId, mesReferencia: mesAno });
+    calcularMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
   }
 
   function handleFechar() {
     if (!confirm("Deseja FECHAR os descontos do mês? Após o fechamento, não será possível alterar.")) return;
-    fecharMut.mutate({ companyId, mesReferencia: mesAno });
+    fecharMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
   }
 
   function handleAbonar() {
@@ -430,12 +430,13 @@ function DescontosCLTPanel({ companyId, mesAno, isMaster }: { companyId: number;
 }
 
 export default function FechamentoPonto() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const isMaster = user?.role === "admin_master";
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth() + 1);
@@ -520,18 +521,18 @@ export default function FechamentoPonto() {
   ];
 
   // ===== QUERIES =====
-  const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const summary = trpc.fechamentoPonto.getSummary.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const inconsistencies = trpc.fechamentoPonto.listInconsistencies.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const summary = trpc.fechamentoPonto.getSummary.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const inconsistencies = trpc.fechamentoPonto.listInconsistencies.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
   const employeeDetail = trpc.fechamentoPonto.getEmployeeDetail.useQuery(
     { companyId, employeeId: selectedEmployeeId!, mesReferencia: mesAno },
     { enabled: companyId > 0 && selectedEmployeeId !== null }
   );
-  const obrasList = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
-  const employeesList = trpc.employees.list.useQuery({ companyId }, { enabled: companyId > 0 });
-  const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, ano: anoSelecionado }, { enabled: companyId > 0 });
-  const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const obrasList = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
+  const employeesList = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
+  const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 });
+  const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
   const unmatchedData = trpc.fechamentoPonto.getUnmatchedRecords.useQuery(
     { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 }
   );
@@ -753,7 +754,7 @@ export default function FechamentoPonto() {
           return { fileName: f.name, fileBase64: base64 };
         })
       );
-      const result = await validateMut.mutateAsync({ companyId, files: filesData });
+      const result = await validateMut.mutateAsync({ companyId, companyIds, files: filesData });
       setValidationResult(result);
     } catch (e: any) {
       toast.error("Erro na validação: " + e.message);
@@ -777,7 +778,7 @@ export default function FechamentoPonto() {
           return { fileName: f.name, fileBase64: base64 };
         })
       );
-      await uploadMut.mutateAsync({ companyId, files: filesData });
+      await uploadMut.mutateAsync({ companyId, companyIds, files: filesData });
     } catch (e) { /* handled */ } finally {
       setUploading(false);
     }
@@ -1685,7 +1686,7 @@ export default function FechamentoPonto() {
                           disabled={resolveAllMut.isPending}
                           onClick={() => {
                             if (confirm(`Resolver TODAS as ${totalPendentes} inconsistências pendentes como JUSTIFICADAS?`)) {
-                              resolveAllMut.mutate({ companyId, mesReferencia: mesAno, status: "justificado", justificativa: "Resolvido em lote — todas as inconsistências" });
+                              resolveAllMut.mutate({ companyId, companyIds, mesReferencia: mesAno, status: "justificado", justificativa: "Resolvido em lote — todas as inconsistências" });
                             }
                           }}>
                           <Zap className="h-3.5 w-3.5" />
@@ -1741,7 +1742,7 @@ export default function FechamentoPonto() {
                               disabled={resolveBatchMut.isPending}
                               onClick={() => {
                                 if (confirm(`Resolver todas as ${pendentesDeTipo.length} inconsistências de "${label}" como JUSTIFICADAS?`)) {
-                                  resolveBatchMut.mutate({ companyId, mesReferencia: mesAno, tipoInconsistencia: tipo as any, status: "justificado", justificativa: `Resolvido em lote (${label})` });
+                                  resolveBatchMut.mutate({ companyId, companyIds, mesReferencia: mesAno, tipoInconsistencia: tipo as any, status: "justificado", justificativa: `Resolvido em lote (${label})` });
                                 }
                               }}>
                               <ListChecks className="h-3.5 w-3.5" />
@@ -1994,7 +1995,7 @@ export default function FechamentoPonto() {
                           disabled={resolveAllConflitosMut.isPending}
                           onClick={() => {
                             if (confirm(`Confirmar DESLOCAMENTO para todos os ${conflitosList.length} conflitos de obra?`)) {
-                              resolveAllConflitosMut.mutate({ companyId, mesReferencia: mesAno, acao: "confirmar_deslocamento", justificativa: "Deslocamento confirmado em lote" });
+                              resolveAllConflitosMut.mutate({ companyId, companyIds, mesReferencia: mesAno, acao: "confirmar_deslocamento", justificativa: "Deslocamento confirmado em lote" });
                             }
                           }}>
                           <ListChecks className="h-3.5 w-3.5" />
@@ -2068,7 +2069,7 @@ export default function FechamentoPonto() {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             if (confirm(`Confirmar deslocamento entre obras para ${c.employeeName} em ${c.data ? new Date(c.data + "T12:00:00").toLocaleDateString("pt-BR") : c.data}?`)) {
-                                              resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: "Deslocamento confirmado" });
+                                              resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: "Deslocamento confirmado" });
                                             }
                                           }}>
                                           <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirmar
@@ -2188,7 +2189,7 @@ export default function FechamentoPonto() {
                                                       onClick={() => {
                                                         if (!o.obraId) return toast.error("Obra sem ID");
                                                         if (confirm(`Manter APENAS na obra "${o.obraNome}" e remover registros das outras obras?`)) {
-                                                          resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: o.obraId, justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome} (sobreposição resolvida)` });
+                                                          resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: o.obraId, justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome} (sobreposição resolvida)` });
                                                         }
                                                       }}
                                                       disabled={resolveConflitoMut.isPending}>
@@ -2202,7 +2203,7 @@ export default function FechamentoPonto() {
                                                       onClick={() => {
                                                         if (!o.obraId) return toast.error("Obra sem ID");
                                                         if (confirm(`Excluir TODOS os registros da obra "${o.obraNome}" neste dia?`)) {
-                                                          resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "excluir_registro", obraIdExcluir: o.obraId, justificativa: conflictJustificativa || `Excluído registro de ${o.obraNome} (erro de lançamento)` });
+                                                          resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "excluir_registro", obraIdExcluir: o.obraId, justificativa: conflictJustificativa || `Excluído registro de ${o.obraNome} (erro de lançamento)` });
                                                         }
                                                       }}
                                                       disabled={resolveConflitoMut.isPending}>
@@ -2226,12 +2227,12 @@ export default function FechamentoPonto() {
                                                 )}
                                                 <div className="flex gap-2">
                                                   <Button size="sm" className="gap-1.5 text-xs bg-green-600 hover:bg-green-700"
-                                                    onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Deslocamento confirmado" })}
+                                                    onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "confirmar_deslocamento", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Deslocamento confirmado" })}
                                                     disabled={resolveConflitoMut.isPending}>
                                                     <MapPin className="h-3.5 w-3.5" /> Confirmar Deslocamento (Rateio Proporcional)
                                                   </Button>
                                                   <Button size="sm" variant="outline" className="gap-1.5 text-xs"
-                                                    onClick={() => resolveConflitoMut.mutate({ companyId, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Manter obra principal" })}
+                                                    onClick={() => resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data, acao: "manter_obra", obraIdManter: (c.records?.[0]?.obraId || 0), justificativa: conflictJustificativa || "Manter obra principal" })}
                                                     disabled={resolveConflitoMut.isPending}>
                                                     <Building2 className="h-3.5 w-3.5" /> Manter Obra Principal
                                                   </Button>
@@ -2520,8 +2521,7 @@ export default function FechamentoPonto() {
                                         onClick={() => {
                                           if (!o.obraId) return toast.error("Obra sem ID");
                                           if (confirm(`Manter APENAS na obra "${o.obraNome}" e remover registros das outras obras?`)) {
-                                            resolveConflitoMut.mutate({
-                                              companyId, employeeId: c.employeeId, data: c.data,
+                                            resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data,
                                               acao: "manter_obra", obraIdManter: o.obraId,
                                               justificativa: conflictJustificativa || `Mantido na obra ${o.obraNome}${isOverlap ? " (sobreposição resolvida)" : ""}`,
                                             });
@@ -2544,8 +2544,7 @@ export default function FechamentoPonto() {
                                         size="sm"
                                         className="flex-1 border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
                                         onClick={() => {
-                                          resolveConflitoMut.mutate({
-                                            companyId, employeeId: c.employeeId, data: c.data,
+                                          resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data,
                                             acao: "confirmar_deslocamento",
                                             justificativa: conflictJustificativa || "Deslocamento real entre obras confirmado",
                                           });
@@ -2565,8 +2564,7 @@ export default function FechamentoPonto() {
                                         className="flex-1 border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
                                         onClick={() => {
                                           if (!o.obraId) return toast.error("Obra sem ID");
-                                          resolveConflitoMut.mutate({
-                                            companyId, employeeId: c.employeeId, data: c.data,
+                                          resolveConflitoMut.mutate({ companyId, companyIds, employeeId: c.employeeId, data: c.data,
                                             acao: "excluir_registro", obraIdExcluir: o.obraId,
                                             justificativa: conflictJustificativa || `Excluído registro de ${o.obraNome} (erro de lançamento)`,
                                           });
@@ -2859,7 +2857,7 @@ export default function FechamentoPonto() {
                               </Button>
                               <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => {
                                 if (confirm(`Descartar todos os ${group.totalDias} registros de "${group.dixiName}"?`)) {
-                                  discardUnmatchedMut.mutate({ companyId, dixiName: group.dixiName, mesReferencia: mesAno });
+                                  discardUnmatchedMut.mutate({ companyId, companyIds, dixiName: group.dixiName, mesReferencia: mesAno });
                                 }
                               }}>
                                 <Trash2 className="h-4 w-4" />
@@ -2903,7 +2901,7 @@ export default function FechamentoPonto() {
                           </div>
                           {linkSelectedEmpId && (
                             <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" onClick={() => {
-                              linkUnmatchedMut.mutate({ companyId, dixiName: group.dixiName, employeeId: linkSelectedEmpId, mesReferencia: mesAno });
+                              linkUnmatchedMut.mutate({ companyId, companyIds, dixiName: group.dixiName, employeeId: linkSelectedEmpId, mesReferencia: mesAno });
                             }} disabled={linkUnmatchedMut.isPending}>
                               {linkUnmatchedMut.isPending ? "Vinculando..." : `Vincular ${group.totalDias} registro(s) ao colaborador selecionado`}
                             </Button>
@@ -3061,7 +3059,7 @@ export default function FechamentoPonto() {
                       onClick={() => {
                         const emp = (employeesList.data || []).find((e: any) => e.id === newMappingEmpId);
                         if (!emp) return;
-                        addDixiMappingMut.mutate({ companyId, dixiName: newMappingDixiName.trim(), employeeId: newMappingEmpId!, employeeName: emp.nomeCompleto });
+                        addDixiMappingMut.mutate({ companyId, companyIds, dixiName: newMappingDixiName.trim(), employeeId: newMappingEmpId!, employeeName: emp.nomeCompleto });
                       }}>
                       {addDixiMappingMut.isPending ? "Salvando..." : "Salvar"}
                     </Button>
@@ -3173,7 +3171,7 @@ export default function FechamentoPonto() {
 
         {/* ===== DESCONTOS CLT VIEW ===== */}
         {viewMode === "descontos_clt" && (
-          <DescontosCLTPanel companyId={companyId} mesAno={mesAno} isMaster={isMaster} />
+          <DescontosCLTPanel companyId={companyId} companyIds={companyIds} mesAno={mesAno} isMaster={isMaster} />
         )}
 
         {/* ===== UPLOAD DIALOG (FULL SCREEN) ===== */}
@@ -3313,8 +3311,7 @@ export default function FechamentoPonto() {
               <Button variant="outline" onClick={() => setShowManualDialog(false)}>Cancelar</Button>
               <Button onClick={() => {
                 if (!manualData.employeeId || !manualData.data) return toast.error("Selecione o colaborador e a data");
-                manualMut.mutate({
-                  companyId, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined,
+                manualMut.mutate({ companyId, companyIds, employeeId: manualData.employeeId, obraId: manualData.obraId || undefined,
                   mesReferencia: manualData.data.substring(0, 7), data: manualData.data,
                   entrada1: manualData.entrada1 || undefined, saida1: manualData.saida1 || undefined,
                   entrada2: manualData.entrada2 || undefined, saida2: manualData.saida2 || undefined,
@@ -3504,7 +3501,7 @@ export default function FechamentoPonto() {
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowConsolidarDialog(false)}>Cancelar</Button>
               <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => {
-                consolidarMut.mutate({ companyId, mesReferencia: mesAno, observacoes: consolidarObs || undefined });
+                consolidarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, observacoes: consolidarObs || undefined });
               }} disabled={consolidarMut.isPending}>
                 {consolidarMut.isPending ? "Consolidando..." : "Consolidar Mês"}
               </Button>
@@ -3528,7 +3525,7 @@ export default function FechamentoPonto() {
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowDesconsolidarDialog(false)}>Cancelar</Button>
               <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => {
-                desconsolidarMut.mutate({ companyId, mesReferencia: mesAno });
+                desconsolidarMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
               }} disabled={desconsolidarMut.isPending}>
                 {desconsolidarMut.isPending ? "Desconsolidando..." : "Desconsolidar"}
               </Button>
@@ -3562,7 +3559,7 @@ export default function FechamentoPonto() {
             </div>
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowClearDialog(false)}>Cancelar</Button>
-              <Button variant="destructive" onClick={() => clearMut.mutate({ companyId, mesReferencia: mesAno, tipo: clearType as any })} disabled={clearMut.isPending}>
+              <Button variant="destructive" onClick={() => clearMut.mutate({ companyId, companyIds, mesReferencia: mesAno, tipo: clearType as any })} disabled={clearMut.isPending}>
                 {clearMut.isPending ? "Limpando..." : "Confirmar Exclusão"}
               </Button>
             </div>
@@ -3682,9 +3679,7 @@ export default function FechamentoPonto() {
                   : quickFixData.descricaoMotivo
                     ? `${quickFixData.descricaoMotivo}`
                     : "";
-                manualMut.mutate({
-                  companyId,
-                  employeeId: selectedEmployeeId,
+                manualMut.mutate({ companyId, companyIds, employeeId: selectedEmployeeId,
                   obraId: quickFixRec.obraId || undefined,
                   mesReferencia: mesAno,
                   data: quickFixRec.data,

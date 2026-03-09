@@ -2,7 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { notificationRecipients, notificationLogs, menuLabels, companies } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { dispararNotificacao, gerarTextoNotificacao } from "../services/emailNotification";
 
 export const notificationsRouter = router({
@@ -10,20 +11,18 @@ export const notificationsRouter = router({
   // DESTINATÁRIOS
   // ============================================================
   listRecipients: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const rows = await db!
         .select()
         .from(notificationRecipients)
-        .where(eq(notificationRecipients.companyId, input.companyId));
+        .where(companyFilter(notificationRecipients.companyId, input));
       return rows;
     }),
 
   createRecipient: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      nome: z.string().min(1, "Nome é obrigatório"),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1, "Nome é obrigatório"),
       email: z.string().email("E-mail inválido"),
       notificarContratacao: z.boolean().default(true),
       notificarDemissao: z.boolean().default(true),
@@ -80,9 +79,7 @@ export const notificationsRouter = router({
   // LOG DE NOTIFICAÇÕES ENVIADAS
   // ============================================================
   listLogs: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      limit: z.number().default(50),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limit: z.number().default(50),
       tipoFiltro: z.enum(["todos", "contratacao", "demissao", "transferencia", "afastamento"]).default("todos"),
       statusFiltro: z.enum(["todos", "enviado", "erro", "pendente"]).default("todos"),
     }))
@@ -91,7 +88,7 @@ export const notificationsRouter = router({
       let query = db!
         .select()
         .from(notificationLogs)
-        .where(eq(notificationLogs.companyId, input.companyId))
+        .where(companyFilter(notificationLogs.companyId, input))
         .orderBy(desc(notificationLogs.enviadoEm))
         .limit(input.limit);
       
@@ -109,7 +106,7 @@ export const notificationsRouter = router({
     }),
 
   logStats: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const rows = await db!.select({
@@ -117,7 +114,7 @@ export const notificationsRouter = router({
         enviados: sql<number>`SUM(CASE WHEN statusEnvio = 'enviado' THEN 1 ELSE 0 END)`,
         erros: sql<number>`SUM(CASE WHEN statusEnvio = 'erro' THEN 1 ELSE 0 END)`,
         lidos: sql<number>`SUM(CASE WHEN lido = true THEN 1 ELSE 0 END)`,
-      }).from(notificationLogs).where(eq(notificationLogs.companyId, input.companyId));
+      }).from(notificationLogs).where(companyFilter(notificationLogs.companyId, input));
       return rows[0] || { total: 0, enviados: 0, erros: 0, lidos: 0 };
     }),
 
@@ -169,9 +166,7 @@ export const notificationsRouter = router({
 
   // Teste de envio de notificação
   testeEnvio: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      tipo: z.enum(["contratacao", "demissao", "transferencia", "afastamento"]),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), tipo: z.enum(["contratacao", "demissao", "transferencia", "afastamento"]),
     }))
     .mutation(async ({ input, ctx }) => {
       const result = await dispararNotificacao(
@@ -200,20 +195,18 @@ export const notificationsRouter = router({
   // MENU LABELS (Critérios - renomear itens do menu)
   // ============================================================
   listMenuLabels: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const rows = await db!
         .select()
         .from(menuLabels)
-        .where(eq(menuLabels.companyId, input.companyId));
+        .where(companyFilter(menuLabels.companyId, input));
       return rows;
     }),
 
   upsertMenuLabel: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      originalLabel: z.string().min(1),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), originalLabel: z.string().min(1),
       customLabel: z.string().min(1),
     }))
     .mutation(async ({ input }) => {
@@ -223,7 +216,7 @@ export const notificationsRouter = router({
         .select()
         .from(menuLabels)
         .where(and(
-          eq(menuLabels.companyId, input.companyId),
+          companyFilter(menuLabels.companyId, input),
           eq(menuLabels.originalLabel, input.originalLabel),
         ));
       
@@ -238,15 +231,13 @@ export const notificationsRouter = router({
     }),
 
   resetMenuLabel: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      originalLabel: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), originalLabel: z.string(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       await db!.delete(menuLabels)
         .where(and(
-          eq(menuLabels.companyId, input.companyId),
+          companyFilter(menuLabels.companyId, input),
           eq(menuLabels.originalLabel, input.originalLabel),
         ));
       return { success: true };

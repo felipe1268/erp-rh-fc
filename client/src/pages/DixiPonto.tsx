@@ -26,7 +26,7 @@ const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
 ];
 
 export default function DixiPonto() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
 
   if (!selectedCompanyId) {
@@ -72,11 +72,11 @@ export default function DixiPonto() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === "dashboard" && <DashboardTab companyId={Number(selectedCompanyId)} />}
-      {activeTab === "importar" && <ImportarTab companyId={Number(selectedCompanyId)} />}
-      {activeTab === "historico" && <HistoricoTab companyId={Number(selectedCompanyId)} />}
-      {activeTab === "marcacoes" && <MarcacoesTab companyId={Number(selectedCompanyId)} />}
-      {activeTab === "alertas" && <AlertasTab companyId={Number(selectedCompanyId)} />}
+      {activeTab === "dashboard" && <DashboardTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "importar" && <ImportarTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "historico" && <HistoricoTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "marcacoes" && <MarcacoesTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "alertas" && <AlertasTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
     </div>
   );
 }
@@ -84,8 +84,8 @@ export default function DixiPonto() {
 // ============================================================
 // DASHBOARD TAB
 // ============================================================
-function DashboardTab({ companyId }: { companyId: number }) {
-  const { data: stats, isLoading } = trpc.dixiPonto.dashboardStats.useQuery({ companyId });
+function DashboardTab({ companyId, companyIds }: { companyId: number; companyIds?: number[] }) {
+  const { data: stats, isLoading } = trpc.dixiPonto.dashboardStats.useQuery({ companyId, companyIds });
 
   if (isLoading) {
     return (
@@ -204,7 +204,7 @@ function DashboardTab({ companyId }: { companyId: number }) {
 // ============================================================
 // IMPORTAR TAB
 // ============================================================
-function ImportarTab({ companyId }: { companyId: number }) {
+function ImportarTab({ companyId, companyIds }: { companyId: number; companyIds?: number[] }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState("");
   const [fileContent, setFileContent] = useState("");
@@ -228,9 +228,7 @@ function ImportarTab({ companyId }: { companyId: number }) {
       const text = await file.text();
       setFileContent(text);
 
-      const result = await previewMut.mutateAsync({
-        companyId,
-        fileContent: text,
+      const result = await previewMut.mutateAsync({ companyId, companyIds, fileContent: text,
         fileName: file.name,
       });
       setPreviewData(result);
@@ -243,9 +241,7 @@ function ImportarTab({ companyId }: { companyId: number }) {
     if (!fileContent || !fileName) return;
     setImporting(true);
     try {
-      const result = await importMut.mutateAsync({
-        companyId,
-        fileContent,
+      const result = await importMut.mutateAsync({ companyId, companyIds, fileContent,
         fileName,
       });
       setImportResult(result);
@@ -546,8 +542,8 @@ function ImportarTab({ companyId }: { companyId: number }) {
 // ============================================================
 // HISTÓRICO TAB
 // ============================================================
-function HistoricoTab({ companyId }: { companyId: number }) {
-  const { data: importacoes, isLoading } = trpc.dixiPonto.listImportacoes.useQuery({ companyId });
+function HistoricoTab({ companyId, companyIds }: { companyId: number; companyIds?: number[] }) {
+  const { data: importacoes, isLoading } = trpc.dixiPonto.listImportacoes.useQuery({ companyId, companyIds });
   const utils = trpc.useUtils();
   const deleteMut = trpc.dixiPonto.deleteImportacao.useMutation({
     onSuccess: () => {
@@ -698,15 +694,13 @@ function HistoricoTab({ companyId }: { companyId: number }) {
 // ============================================================
 // MARCAÇÕES TAB
 // ============================================================
-function MarcacoesTab({ companyId }: { companyId: number }) {
+function MarcacoesTab({ companyId, companyIds }: { companyId: number; companyIds?: number[] }) {
   const [searchCpf, setSearchCpf] = useState("");
   const [searchDate, setSearchDate] = useState("");
   const [selectedImportId, setSelectedImportId] = useState<number | undefined>(undefined);
 
-  const { data: importacoes } = trpc.dixiPonto.listImportacoes.useQuery({ companyId });
-  const { data: marcacoes, isLoading } = trpc.dixiPonto.listMarcacoes.useQuery({
-    companyId,
-    importacaoId: selectedImportId,
+  const { data: importacoes } = trpc.dixiPonto.listImportacoes.useQuery({ companyId, companyIds });
+  const { data: marcacoes, isLoading } = trpc.dixiPonto.listMarcacoes.useQuery({ companyId, companyIds, importacaoId: selectedImportId,
     data: searchDate || undefined,
     cpf: searchCpf || undefined,
   });
@@ -825,8 +819,8 @@ function MarcacoesTab({ companyId }: { companyId: number }) {
 // ============================================================
 // ALERTAS TAB
 // ============================================================
-function AlertasTab({ companyId }: { companyId: number }) {
-  const { data: marcacoes } = trpc.dixiPonto.listMarcacoes.useQuery({ companyId });
+function AlertasTab({ companyId, companyIds }: { companyId: number; companyIds?: number[] }) {
+  const { data: marcacoes } = trpc.dixiPonto.listMarcacoes.useQuery({ companyId, companyIds });
 
   // Filter only unmatched CPFs
   const alertas = useMemo(() => {

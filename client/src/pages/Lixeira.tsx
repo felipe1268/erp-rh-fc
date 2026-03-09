@@ -84,7 +84,7 @@ export default function Lixeira() {
 }
 
 function LixeiraContent() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const [search, setSearch] = useState("");
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [confirmRestore, setConfirmRestore] = useState<any>(null);

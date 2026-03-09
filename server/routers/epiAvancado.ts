@@ -13,6 +13,7 @@ import {
 } from "../../drizzle/schema";
 import { sendEmail } from "../services/smtpService";
 import { eq, and, desc, sql, isNull, gte, lte, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 
@@ -109,11 +110,11 @@ export const epiAvancadoRouter = router({
   // KITS DE EPI POR FUNÇÃO
   // ============================================================
   kitsList: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const kits = await db.select().from(epiKits)
-        .where(eq(epiKits.companyId, input.companyId))
+        .where(companyFilter(epiKits.companyId, input))
         .orderBy(epiKits.funcao);
       
       // Get items for each kit
@@ -132,9 +133,7 @@ export const epiAvancadoRouter = router({
     }),
 
   kitsCreate: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      nome: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string(),
       funcao: z.string(),
       descricao: z.string().optional(),
       items: z.array(z.object({
@@ -230,12 +229,12 @@ export const epiAvancadoRouter = router({
 
   // Seed kits padrão
   kitsSeedDefaults: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       
       // Check if already seeded
-      const existing = await db.select().from(epiKits).where(eq(epiKits.companyId, input.companyId));
+      const existing = await db.select().from(epiKits).where(companyFilter(epiKits.companyId, input));
       if (existing.length > 0) return { message: "Kits já configurados", created: 0 };
 
       let created = 0;
@@ -286,18 +285,16 @@ export const epiAvancadoRouter = router({
   // CORES DE CAPACETE
   // ============================================================
   coresCapaceteList: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(epiCoresCapacete)
-        .where(eq(epiCoresCapacete.companyId, input.companyId))
+        .where(companyFilter(epiCoresCapacete.companyId, input))
         .orderBy(epiCoresCapacete.cor);
     }),
 
   coresCapaceteUpsert: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      cores: z.array(z.object({
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), cores: z.array(z.object({
         id: z.number().optional(),
         cor: z.string(),
         hexColor: z.string().optional(),
@@ -308,7 +305,7 @@ export const epiAvancadoRouter = router({
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       // Delete existing and replace
-      await db.delete(epiCoresCapacete).where(eq(epiCoresCapacete.companyId, input.companyId));
+      await db.delete(epiCoresCapacete).where(companyFilter(epiCoresCapacete.companyId, input));
       if (input.cores.length > 0) {
         await db.insert(epiCoresCapacete).values(
           input.cores.map(c => ({
@@ -324,10 +321,10 @@ export const epiAvancadoRouter = router({
     }),
 
   coresCapaceteSeedDefaults: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const existing = await db.select().from(epiCoresCapacete).where(eq(epiCoresCapacete.companyId, input.companyId));
+      const existing = await db.select().from(epiCoresCapacete).where(companyFilter(epiCoresCapacete.companyId, input));
       if (existing.length > 0) return { message: "Cores já configuradas", created: 0 };
       
       await db.insert(epiCoresCapacete).values(
@@ -338,11 +335,11 @@ export const epiAvancadoRouter = router({
 
   // Determinar cor do capacete pela função
   corCapacetePorFuncao: protectedProcedure
-    .input(z.object({ companyId: z.number(), funcao: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), funcao: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const cores = await db.select().from(epiCoresCapacete)
-        .where(eq(epiCoresCapacete.companyId, input.companyId));
+        .where(companyFilter(epiCoresCapacete.companyId, input));
       
       const funcaoLower = input.funcao.toLowerCase();
       for (const c of cores) {
@@ -358,18 +355,16 @@ export const epiAvancadoRouter = router({
   // VIDA ÚTIL DE EPIs
   // ============================================================
   vidaUtilList: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(epiVidaUtil)
-        .where(eq(epiVidaUtil.companyId, input.companyId))
+        .where(companyFilter(epiVidaUtil.companyId, input))
         .orderBy(epiVidaUtil.nomeEpi);
     }),
 
   vidaUtilUpsert: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      items: z.array(z.object({
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), items: z.array(z.object({
         id: z.number().optional(),
         nomeEpi: z.string(),
         categoriaEpi: z.string().optional(),
@@ -379,7 +374,7 @@ export const epiAvancadoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      await db.delete(epiVidaUtil).where(eq(epiVidaUtil.companyId, input.companyId));
+      await db.delete(epiVidaUtil).where(companyFilter(epiVidaUtil.companyId, input));
       if (input.items.length > 0) {
         await db.insert(epiVidaUtil).values(
           input.items.map(i => ({
@@ -395,10 +390,10 @@ export const epiAvancadoRouter = router({
     }),
 
   vidaUtilSeedDefaults: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const existing = await db.select().from(epiVidaUtil).where(eq(epiVidaUtil.companyId, input.companyId));
+      const existing = await db.select().from(epiVidaUtil).where(companyFilter(epiVidaUtil.companyId, input));
       if (existing.length > 0) return { message: "Vida útil já configurada", created: 0 };
       
       await db.insert(epiVidaUtil).values(
@@ -411,18 +406,16 @@ export const epiAvancadoRouter = router({
   // TREINAMENTOS VINCULADOS A EPIs
   // ============================================================
   treinamentosVinculadosList: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(epiTreinamentosVinculados)
-        .where(eq(epiTreinamentosVinculados.companyId, input.companyId))
+        .where(companyFilter(epiTreinamentosVinculados.companyId, input))
         .orderBy(epiTreinamentosVinculados.nomeEpi);
     }),
 
   treinamentosVinculadosUpsert: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      items: z.array(z.object({
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), items: z.array(z.object({
         nomeEpi: z.string(),
         categoriaEpi: z.string().optional(),
         normaExigida: z.string(),
@@ -433,7 +426,7 @@ export const epiAvancadoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      await db.delete(epiTreinamentosVinculados).where(eq(epiTreinamentosVinculados.companyId, input.companyId));
+      await db.delete(epiTreinamentosVinculados).where(companyFilter(epiTreinamentosVinculados.companyId, input));
       if (input.items.length > 0) {
         await db.insert(epiTreinamentosVinculados).values(
           input.items.map(i => ({
@@ -451,10 +444,10 @@ export const epiAvancadoRouter = router({
     }),
 
   treinamentosVinculadosSeedDefaults: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const existing = await db.select().from(epiTreinamentosVinculados).where(eq(epiTreinamentosVinculados.companyId, input.companyId));
+      const existing = await db.select().from(epiTreinamentosVinculados).where(companyFilter(epiTreinamentosVinculados.companyId, input));
       if (existing.length > 0) return { message: "Treinamentos já configurados", created: 0 };
       
       await db.insert(epiTreinamentosVinculados).values(
@@ -465,9 +458,7 @@ export const epiAvancadoRouter = router({
 
   // Verificar treinamentos do funcionário antes da entrega
   verificarTreinamentosFuncionario: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       nomeEpi: z.string(),
     }))
     .query(async ({ input }) => {
@@ -475,7 +466,7 @@ export const epiAvancadoRouter = router({
       // Get required trainings for this EPI
       const vinculos = await db.select().from(epiTreinamentosVinculados)
         .where(and(
-          eq(epiTreinamentosVinculados.companyId, input.companyId),
+          companyFilter(epiTreinamentosVinculados.companyId, input),
         ));
       
       const epiLower = input.nomeEpi.toLowerCase();
@@ -534,9 +525,7 @@ export const epiAvancadoRouter = router({
   // CHECKLISTS DE EPI (Contratação / Devolução)
   // ============================================================
   checklistGenerate: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       tipo: z.enum(["contratacao", "devolucao"]).default("contratacao"),
       kitId: z.number().optional(),
     }))
@@ -564,7 +553,7 @@ export const epiAvancadoRouter = router({
           // Try to find by function
           const funcaoLower = (emp.funcao || "").toLowerCase();
           const allKits = await db.select().from(epiKits)
-            .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+            .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
           
           kitToUse = allKits.find(k => funcaoLower.includes(k.funcao.toLowerCase()) || k.funcao.toLowerCase().includes(funcaoLower));
           if (!kitToUse) {
@@ -654,15 +643,13 @@ export const epiAvancadoRouter = router({
     }),
 
   checklistList: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number().optional(),
       tipo: z.enum(["contratacao", "devolucao"]).optional(),
       status: z.enum(["pendente", "parcial", "concluido", "cancelado"]).optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const conds: any[] = [eq(epiChecklists.companyId, input.companyId)];
+      const conds: any[] = [companyFilter(epiChecklists.companyId, input)];
       if (input.employeeId) conds.push(eq(epiChecklists.employeeId, input.employeeId));
       if (input.tipo) conds.push(eq(epiChecklists.tipo, input.tipo));
       if (input.status) conds.push(eq(epiChecklists.status, input.status));
@@ -760,7 +747,7 @@ export const epiAvancadoRouter = router({
       const db = (await getDb())!;
       // Verificar se o checklist pertence à empresa
       const [checklist] = await db.select().from(epiChecklists)
-        .where(and(eq(epiChecklists.id, input.checklistId), eq(epiChecklists.companyId, input.companyId)));
+        .where(and(eq(epiChecklists.id, input.checklistId), companyFilter(epiChecklists.companyId, input)));
       if (!checklist) throw new TRPCError({ code: "NOT_FOUND", message: "Checklist não encontrado" });
       // Excluir itens do checklist primeiro
       await db.delete(epiChecklistItems).where(eq(epiChecklistItems.checklistId, input.checklistId));
@@ -773,9 +760,7 @@ export const epiAvancadoRouter = router({
   // ASSINATURAS DIGITAIS
   // ============================================================
   salvarAssinatura: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      deliveryId: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), deliveryId: z.number().optional(),
       employeeId: z.number(),
       tipo: z.enum(["entrega", "devolucao"]),
       assinaturaBase64: z.string(),
@@ -922,9 +907,7 @@ export const epiAvancadoRouter = router({
   // CONTROLE DE VALIDADE
   // ============================================================
   episProximosVencimento: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      diasAntecedencia: z.number().default(30),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), diasAntecedencia: z.number().default(30),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -949,7 +932,7 @@ export const epiAvancadoRouter = router({
         .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
         .leftJoin(employees, eq(epiDeliveries.employeeId, employees.id))
         .where(and(
-          eq(epiDeliveries.companyId, input.companyId),
+          companyFilter(epiDeliveries.companyId, input),
           isNull(epiDeliveries.deletedAt),
           isNull(epiDeliveries.dataDevolucao),
           sql`${epiDeliveries.dataValidade} IS NOT NULL`,
@@ -970,7 +953,7 @@ export const epiAvancadoRouter = router({
   // ESTOQUE MÍNIMO E ALERTAS DE REPOSIÇÃO
   // ============================================================
   estoqueMinList: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select({
@@ -984,21 +967,19 @@ export const epiAvancadoRouter = router({
         .from(epiEstoqueMinimo)
         .leftJoin(epis, eq(epiEstoqueMinimo.epiId, epis.id))
         .leftJoin(obras, eq(epiEstoqueMinimo.obraId, obras.id))
-        .where(eq(epiEstoqueMinimo.companyId, input.companyId))
+        .where(companyFilter(epiEstoqueMinimo.companyId, input))
         .orderBy(epis.nome);
     }),
 
   estoqueMinUpsert: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      epiId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), epiId: z.number(),
       obraId: z.number().optional(),
       quantidadeMinima: z.number().min(1),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       const conds: any[] = [
-        eq(epiEstoqueMinimo.companyId, input.companyId),
+        companyFilter(epiEstoqueMinimo.companyId, input),
         eq(epiEstoqueMinimo.epiId, input.epiId),
       ];
       if (input.obraId) {
@@ -1025,7 +1006,7 @@ export const epiAvancadoRouter = router({
 
   // Check stock alerts (items below minimum)
   alertasEstoque: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const minimos = await db.select({
@@ -1039,7 +1020,7 @@ export const epiAvancadoRouter = router({
       })
         .from(epiEstoqueMinimo)
         .leftJoin(epis, eq(epiEstoqueMinimo.epiId, epis.id))
-        .where(eq(epiEstoqueMinimo.companyId, input.companyId));
+        .where(companyFilter(epiEstoqueMinimo.companyId, input));
 
       const alertas: any[] = [];
       
@@ -1088,13 +1069,13 @@ export const epiAvancadoRouter = router({
   // INDICADOR DE CAPACIDADE (quantos kits completos possíveis)
   // ============================================================
   capacidadeEstoque: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       
       // Get all kits
       const kits = await db.select().from(epiKits)
-        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+        .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
       
       if (kits.length === 0) return { kits: [], totalKitsCompletos: 0 };
 
@@ -1112,14 +1093,14 @@ export const epiAvancadoRouter = router({
         })
           .from(epiEstoqueObra)
           .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
-          .where(and(eq(epiEstoqueObra.companyId, input.companyId), eq(epiEstoqueObra.obraId, input.obraId)));
+          .where(and(companyFilter(epiEstoqueObra.companyId, input), eq(epiEstoqueObra.obraId, input.obraId)));
         
         for (const e of estoqueObra) {
           if (e.nomeEpi) estoque[e.nomeEpi.toLowerCase()] = (estoque[e.nomeEpi.toLowerCase()] || 0) + e.quantidade;
         }
       } else {
         const allEpis = await db.select({ nome: epis.nome, quantidadeEstoque: epis.quantidadeEstoque })
-          .from(epis).where(eq(epis.companyId, input.companyId));
+          .from(epis).where(companyFilter(epis.companyId, input));
         for (const e of allEpis) {
           estoque[e.nome.toLowerCase()] = (estoque[e.nome.toLowerCase()] || 0) + (e.quantidadeEstoque || 0);
         }
@@ -1171,9 +1152,7 @@ export const epiAvancadoRouter = router({
   // RELATÓRIOS DE CUSTO
   // ============================================================
   relatorioCusto: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      tipo: z.enum(["funcionario", "obra", "mensal"]),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), tipo: z.enum(["funcionario", "obra", "mensal"]),
       employeeId: z.number().optional(),
       obraId: z.number().optional(),
       dataInicio: z.string().optional(),
@@ -1183,7 +1162,7 @@ export const epiAvancadoRouter = router({
       const db = (await getDb())!;
       
       const conds: any[] = [
-        eq(epiDeliveries.companyId, input.companyId),
+        companyFilter(epiDeliveries.companyId, input),
         isNull(epiDeliveries.deletedAt),
       ];
       if (input.employeeId) conds.push(eq(epiDeliveries.employeeId, input.employeeId));
@@ -1272,7 +1251,7 @@ export const epiAvancadoRouter = router({
   // IA - ANÁLISE DE ESTOQUE E SUGESTÕES DE TRANSFERÊNCIA
   // ============================================================
   analisarEstoqueIA: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       
@@ -1285,7 +1264,7 @@ export const epiAvancadoRouter = router({
         estado: obras.estado,
         status: obras.status,
       }).from(obras)
-        .where(and(eq(obras.companyId, input.companyId), eq(obras.isActive, 1)));
+        .where(and(companyFilter(obras.companyId, input), eq(obras.isActive, 1)));
 
       // Get stock per obra
       const estoqueObras = await db.select({
@@ -1297,18 +1276,18 @@ export const epiAvancadoRouter = router({
       })
         .from(epiEstoqueObra)
         .leftJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
-        .where(eq(epiEstoqueObra.companyId, input.companyId));
+        .where(companyFilter(epiEstoqueObra.companyId, input));
 
       // Get central stock
       const estoqueCentral = await db.select({
         id: epis.id,
         nome: epis.nome,
         quantidadeEstoque: epis.quantidadeEstoque,
-      }).from(epis).where(eq(epis.companyId, input.companyId));
+      }).from(epis).where(companyFilter(epis.companyId, input));
 
       // Get minimum stock configs
       const minimos = await db.select().from(epiEstoqueMinimo)
-        .where(eq(epiEstoqueMinimo.companyId, input.companyId));
+        .where(companyFilter(epiEstoqueMinimo.companyId, input));
 
       // Get active employees per obra
       const funcPorObra = await db.select({
@@ -1316,7 +1295,7 @@ export const epiAvancadoRouter = router({
         total: sql<number>`COUNT(*)`,
       })
         .from(employees)
-        .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo"), isNull(employees.deletedAt)))
+        .where(and(companyFilter(employees.companyId, input), eq(employees.status, "Ativo"), isNull(employees.deletedAt)))
         .groupBy(employees.obraAtualId);
 
       // Build context for LLM
@@ -1451,11 +1430,11 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Get latest AI analysis
   ultimaAnaliseIA: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [latest] = await db.select().from(epiAiAnalises)
-        .where(eq(epiAiAnalises.companyId, input.companyId))
+        .where(companyFilter(epiAiAnalises.companyId, input))
         .orderBy(desc(epiAiAnalises.createdAt))
         .limit(1);
       return latest || null;
@@ -1463,24 +1442,24 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // List all AI analyses
   analisesIAList: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(epiAiAnalises)
-        .where(eq(epiAiAnalises.companyId, input.companyId))
+        .where(companyFilter(epiAiAnalises.companyId, input))
         .orderBy(desc(epiAiAnalises.createdAt))
         .limit(20);
     }),
 
   // Seed all defaults at once
   seedAllDefaults: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       const results: string[] = [];
 
       // Kits
-      const existingKits = await db.select().from(epiKits).where(eq(epiKits.companyId, input.companyId));
+      const existingKits = await db.select().from(epiKits).where(companyFilter(epiKits.companyId, input));
       if (existingKits.length === 0) {
         // Create basic kit
         const [basicResult] = await db.insert(epiKits).values({
@@ -1501,21 +1480,21 @@ Forneça sugestões concretas com quantidades específicas.`;
       }
 
       // Cores
-      const existingCores = await db.select().from(epiCoresCapacete).where(eq(epiCoresCapacete.companyId, input.companyId));
+      const existingCores = await db.select().from(epiCoresCapacete).where(companyFilter(epiCoresCapacete.companyId, input));
       if (existingCores.length === 0) {
         await db.insert(epiCoresCapacete).values(DEFAULT_CORES_CAPACETE.map(c => ({ companyId: input.companyId, ...c })));
         results.push("7 cores de capacete configuradas");
       }
 
       // Vida útil
-      const existingVida = await db.select().from(epiVidaUtil).where(eq(epiVidaUtil.companyId, input.companyId));
+      const existingVida = await db.select().from(epiVidaUtil).where(companyFilter(epiVidaUtil.companyId, input));
       if (existingVida.length === 0) {
         await db.insert(epiVidaUtil).values(DEFAULT_VIDA_UTIL.map(v => ({ companyId: input.companyId, ...v })));
         results.push("9 configurações de vida útil criadas");
       }
 
       // Treinamentos vinculados
-      const existingTreino = await db.select().from(epiTreinamentosVinculados).where(eq(epiTreinamentosVinculados.companyId, input.companyId));
+      const existingTreino = await db.select().from(epiTreinamentosVinculados).where(companyFilter(epiTreinamentosVinculados.companyId, input));
       if (existingTreino.length === 0) {
         await db.insert(epiTreinamentosVinculados).values(DEFAULT_TREINAMENTOS_VINCULADOS.map(t => ({ companyId: input.companyId, ...t })));
         results.push("7 vínculos de treinamento criados");
@@ -1530,13 +1509,13 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Configurar kit básico de contratação (lista editável)
   kitBasicoContratacao: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       // Buscar kit "Básico" ou "Kit Básico" da empresa
       const kits = await db.select().from(epiKits)
         .where(and(
-          eq(epiKits.companyId, input.companyId),
+          companyFilter(epiKits.companyId, input),
           eq(epiKits.ativo, 1),
         ));
       // Procurar kit com nome contendo "básico" ou "basico" ou "contratação"
@@ -1557,9 +1536,7 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Salvar/Criar kit básico de contratação
   salvarKitBasicoContratacao: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      itens: z.array(z.object({
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), itens: z.array(z.object({
         epiId: z.number().nullable(),
         nomeEpi: z.string(),
         categoria: z.enum(['EPI', 'Uniforme', 'Calcado']),
@@ -1572,7 +1549,7 @@ Forneça sugestões concretas com quantidades específicas.`;
       // Buscar ou criar kit básico
       const existingKits = await db.select().from(epiKits)
         .where(and(
-          eq(epiKits.companyId, input.companyId),
+          companyFilter(epiKits.companyId, input),
           eq(epiKits.ativo, 1),
         ));
       let kitBasico = existingKits.find(k => 
@@ -1618,9 +1595,7 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Calcular capacidade de contratação
   capacidadeContratacao: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      obraId: z.number().optional(), // Se informado, calcula só para essa obra
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(), // Se informado, calcula só para essa obra
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -1628,7 +1603,7 @@ Forneça sugestões concretas com quantidades específicas.`;
       // 1. Buscar kit básico de contratação
       const kits = await db.select().from(epiKits)
         .where(and(
-          eq(epiKits.companyId, input.companyId),
+          companyFilter(epiKits.companyId, input),
           eq(epiKits.ativo, 1),
         ));
       let kitBasico = kits.find(k => 
@@ -1667,7 +1642,7 @@ Forneça sugestões concretas com quantidades específicas.`;
         nome: epis.nome,
         categoria: epis.categoria,
         estoqueCentral: epis.quantidadeEstoque,
-      }).from(epis).where(eq(epis.companyId, input.companyId));
+      }).from(epis).where(companyFilter(epis.companyId, input));
 
       // 4. Buscar estoque por obra (se filtro de obra ou total)
       let estoqueObras: { epiId: number; obraId: number; quantidade: number | null; nomeObra: string | null }[] = [];
@@ -1680,7 +1655,7 @@ Forneça sugestões concretas com quantidades específicas.`;
         }).from(epiEstoqueObra)
           .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
           .where(and(
-            eq(epiEstoqueObra.companyId, input.companyId),
+            companyFilter(epiEstoqueObra.companyId, input),
             eq(epiEstoqueObra.obraId, input.obraId),
           ));
       } else {
@@ -1691,7 +1666,7 @@ Forneça sugestões concretas com quantidades específicas.`;
           nomeObra: obras.nome,
         }).from(epiEstoqueObra)
           .leftJoin(obras, eq(epiEstoqueObra.obraId, obras.id))
-          .where(eq(epiEstoqueObra.companyId, input.companyId));
+          .where(companyFilter(epiEstoqueObra.companyId, input));
       }
 
       // 5. Para cada item do kit, calcular quantos funcionários podem ser equipados
@@ -1838,18 +1813,18 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Capacidade por obra (resumo de todas as obras)
   capacidadePorObra: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       // Buscar todas as obras ativas
       const obrasAtivas = await db.select({ id: obras.id, nome: obras.nome })
         .from(obras)
-        .where(and(eq(obras.companyId, input.companyId), eq(obras.isActive, 1)));
+        .where(and(companyFilter(obras.companyId, input), eq(obras.isActive, 1)));
 
       // Buscar kit básico
       const kits = await db.select().from(epiKits)
-        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+        .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
       let kitBasico = kits.find(k => 
         k.nome.toLowerCase().includes('básico') || k.nome.toLowerCase().includes('basico') || 
         k.nome.toLowerCase().includes('contratação') || k.nome.toLowerCase().includes('contratacao')
@@ -1868,12 +1843,12 @@ Forneça sugestões concretas com quantidades específicas.`;
           quantidade: epiEstoqueObra.quantidade,
         }).from(epiEstoqueObra)
           .where(and(
-            eq(epiEstoqueObra.companyId, input.companyId),
+            companyFilter(epiEstoqueObra.companyId, input),
             eq(epiEstoqueObra.obraId, obra.id),
           ));
 
         const todosEpis = await db.select({ id: epis.id, nome: epis.nome })
-          .from(epis).where(eq(epis.companyId, input.companyId));
+          .from(epis).where(companyFilter(epis.companyId, input));
 
         // Matching inteligente por tipo de EPI (mesma lógica de capacidadeContratacao)
         const MATCHING_KEYWORDS_OBRA: Record<string, { must: string[]; mustNot?: string[]; category?: string }> = {
@@ -1935,12 +1910,12 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Auto-seed kit básico de contratação se não existir
   autoSeedKitBasico: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       // Verificar se já existe kit
       const existingKits = await db.select().from(epiKits)
-        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+        .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
       if (existingKits.length > 0) {
         return { created: false, message: 'Kit já existe' };
       }
@@ -1964,19 +1939,17 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Buscar configuração de alerta
   getAlertaCapacidade: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [config] = await db.select().from(epiAlertaCapacidade)
-        .where(eq(epiAlertaCapacidade.companyId, input.companyId));
+        .where(companyFilter(epiAlertaCapacidade.companyId, input));
       return config || null;
     }),
 
   // Salvar configuração de alerta
   salvarAlertaCapacidade: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      limiar: z.number().min(1).max(100),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limiar: z.number().min(1).max(100),
       ativo: z.number().min(0).max(1),
       emailDestinatarios: z.string().optional(), // JSON array
       intervaloMinHoras: z.number().min(1).max(168).optional(),
@@ -1984,7 +1957,7 @@ Forneça sugestões concretas com quantidades específicas.`;
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       const [existing] = await db.select().from(epiAlertaCapacidade)
-        .where(eq(epiAlertaCapacidade.companyId, input.companyId));
+        .where(companyFilter(epiAlertaCapacidade.companyId, input));
       
       if (existing) {
         await db.update(epiAlertaCapacidade)
@@ -2010,25 +1983,25 @@ Forneça sugestões concretas com quantidades específicas.`;
 
   // Buscar logs de alertas enviados
   getAlertaCapacidadeLogs: protectedProcedure
-    .input(z.object({ companyId: z.number(), limit: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limit: z.number().optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(epiAlertaCapacidadeLog)
-        .where(eq(epiAlertaCapacidadeLog.companyId, input.companyId))
+        .where(companyFilter(epiAlertaCapacidadeLog.companyId, input))
         .orderBy(desc(epiAlertaCapacidadeLog.enviadoEm))
         .limit(input.limit || 20);
     }),
 
   // Verificar e disparar alerta de capacidade (chamado manualmente ou por cron)
   verificarAlertaCapacidade: protectedProcedure
-    .input(z.object({ companyId: z.number(), forcar: z.boolean().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), forcar: z.boolean().optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
       
       // 1. Buscar configuração
       const [config] = await db.select().from(epiAlertaCapacidade)
         .where(and(
-          eq(epiAlertaCapacidade.companyId, input.companyId),
+          companyFilter(epiAlertaCapacidade.companyId, input),
           eq(epiAlertaCapacidade.ativo, 1),
         ));
       
@@ -2051,7 +2024,7 @@ Forneça sugestões concretas com quantidades específicas.`;
 
       // 3. Calcular capacidade atual
       const kits = await db.select().from(epiKits)
-        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+        .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
       let kitBasico = kits.find(k => 
         k.nome.toLowerCase().includes('básico') || k.nome.toLowerCase().includes('basico') || 
         k.nome.toLowerCase().includes('contratação') || k.nome.toLowerCase().includes('contratacao')
@@ -2069,13 +2042,13 @@ Forneça sugestões concretas com quantidades específicas.`;
 
       const todosEpis = await db.select({
         id: epis.id, nome: epis.nome, quantidadeEstoque: epis.quantidadeEstoque,
-      }).from(epis).where(eq(epis.companyId, input.companyId));
+      }).from(epis).where(companyFilter(epis.companyId, input));
 
       const estoqueObras = await db.select({
         epiId: epiEstoqueObra.epiId,
         total: sql<number>`SUM(${epiEstoqueObra.quantidade})`,
       }).from(epiEstoqueObra)
-        .where(eq(epiEstoqueObra.companyId, input.companyId))
+        .where(companyFilter(epiEstoqueObra.companyId, input))
         .groupBy(epiEstoqueObra.epiId);
 
       const detalhes = itensKit.filter(i => i.obrigatorio === 1).map(itemKit => {
@@ -2109,7 +2082,7 @@ Forneça sugestões concretas com quantidades específicas.`;
       // 5. DISPARAR ALERTA! Buscar destinatários
       const recipients = await db.select().from(notificationRecipients)
         .where(and(
-          eq(notificationRecipients.companyId, input.companyId),
+          companyFilter(notificationRecipients.companyId, input),
           eq(notificationRecipients.ativo, 1),
         ));
 
@@ -2255,19 +2228,19 @@ Forneça sugestões concretas com quantidades específicas.`;
   // (não é rota, é usado internamente pelas rotas de IA abaixo)
 
   iaSugerirKitsPorFuncao: protectedProcedure
-    .input(z.object({ companyId: z.number(), funcao: z.string().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), funcao: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
 
       // Buscar funções da empresa
       const funcoes = await db.select({ nome: jobFunctions.nome, descricao: jobFunctions.descricao, cbo: jobFunctions.cbo })
         .from(jobFunctions)
-        .where(and(eq(jobFunctions.companyId, input.companyId), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
+        .where(and(companyFilter(jobFunctions.companyId, input), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
 
       // Buscar regras de ouro
       const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
         .from(goldenRules)
-        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+        .where(and(companyFilter(goldenRules.companyId, input), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
       const regrasTexto = rules.length > 0
         ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
         : 'Nenhuma regra de ouro cadastrada.';
@@ -2275,13 +2248,13 @@ Forneça sugestões concretas com quantidades específicas.`;
       // Buscar EPIs existentes no catálogo
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
         .from(epis)
-        .where(eq(epis.companyId, input.companyId));
+        .where(companyFilter(epis.companyId, input));
       const episUnicos = [...new Set(episCatalogo.map(e => `${e.nome} (${e.categoria || 'EPI'})`))].slice(0, 50);
 
       // Buscar kits já existentes
       const kitsExistentes = await db.select({ nome: epiKits.nome, funcao: epiKits.funcao })
         .from(epiKits)
-        .where(and(eq(epiKits.companyId, input.companyId), eq(epiKits.ativo, 1)));
+        .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
 
       const funcoesAlvo = input.funcao
         ? [input.funcao]
@@ -2361,23 +2334,23 @@ Cada item deve ter: nomeEpi, categoria (EPI, Uniforme ou Calcado), quantidade po
     }),
 
   iaSugerirCoresCapacete: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
 
       const funcoes = await db.select({ nome: jobFunctions.nome })
         .from(jobFunctions)
-        .where(and(eq(jobFunctions.companyId, input.companyId), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
+        .where(and(companyFilter(jobFunctions.companyId, input), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
 
       const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
         .from(goldenRules)
-        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+        .where(and(companyFilter(goldenRules.companyId, input), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
       const regrasTexto = rules.length > 0
         ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
         : 'Nenhuma regra de ouro cadastrada.';
 
       const coresExistentes = await db.select().from(epiCoresCapacete)
-        .where(eq(epiCoresCapacete.companyId, input.companyId));
+        .where(companyFilter(epiCoresCapacete.companyId, input));
 
       const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
 
@@ -2432,25 +2405,25 @@ Considere as funções reais da empresa e o padrão: Branco (engenheiros/mestres
     }),
 
   iaSugerirVidaUtil: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
 
       // Buscar EPIs do catálogo
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
         .from(epis)
-        .where(eq(epis.companyId, input.companyId));
+        .where(companyFilter(epis.companyId, input));
       const episUnicos = [...new Map(episCatalogo.map(e => [e.nome.toLowerCase().trim(), e])).values()].slice(0, 50);
 
       const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
         .from(goldenRules)
-        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+        .where(and(companyFilter(goldenRules.companyId, input), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
       const regrasTexto = rules.length > 0
         ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
         : 'Nenhuma regra de ouro cadastrada.';
 
       const vidaExistente = await db.select().from(epiVidaUtil)
-        .where(eq(epiVidaUtil.companyId, input.companyId));
+        .where(companyFilter(epiVidaUtil.companyId, input));
 
       const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
 
@@ -2508,29 +2481,29 @@ Inclua: nome do EPI, categoria, vida útil em meses e observações.`;
     }),
 
   iaSugerirTreinamentos: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
 
       // Buscar EPIs do catálogo
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
         .from(epis)
-        .where(eq(epis.companyId, input.companyId));
+        .where(companyFilter(epis.companyId, input));
       const episUnicos = [...new Map(episCatalogo.map(e => [e.nome.toLowerCase().trim(), e])).values()].slice(0, 50);
 
       const funcoes = await db.select({ nome: jobFunctions.nome })
         .from(jobFunctions)
-        .where(and(eq(jobFunctions.companyId, input.companyId), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
+        .where(and(companyFilter(jobFunctions.companyId, input), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
 
       const rules = await db.select({ titulo: goldenRules.titulo, descricao: goldenRules.descricao, categoria: goldenRules.categoria })
         .from(goldenRules)
-        .where(and(eq(goldenRules.companyId, input.companyId), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
+        .where(and(companyFilter(goldenRules.companyId, input), eq(goldenRules.isActive, 1), sql`${goldenRules.deletedAt} IS NULL`));
       const regrasTexto = rules.length > 0
         ? rules.map(r => `[${(r.categoria || '').toUpperCase()}] ${r.titulo}: ${r.descricao}`).join('\n')
         : 'Nenhuma regra de ouro cadastrada.';
 
       const treinExistentes = await db.select().from(epiTreinamentosVinculados)
-        .where(eq(epiTreinamentosVinculados.companyId, input.companyId));
+        .where(companyFilter(epiTreinamentosVinculados.companyId, input));
 
       const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
 

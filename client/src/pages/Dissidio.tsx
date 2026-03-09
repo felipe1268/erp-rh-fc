@@ -17,8 +17,9 @@ import { fmtNum } from "@/lib/formatters";
 type ViewMode = "lista" | "detalhes" | "simular" | "aplicar";
 
 export default function Dissidio() {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompany ? parseInt(selectedCompany) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [viewMode, setViewMode] = useState<ViewMode>("lista");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCriarDialog, setShowCriarDialog] = useState(false);
@@ -45,7 +46,7 @@ export default function Dissidio() {
   });
 
   const utils = trpc.useUtils();
-  const dissidiosQuery = trpc.dissidio.listar.useQuery({ companyId }, { enabled: !!companyId });
+  const dissidiosQuery = trpc.dissidio.listar.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const detalhesQuery = trpc.dissidio.buscarPorId.useQuery(
     { id: selectedId || 0 },
     { enabled: !!selectedId && (viewMode === "detalhes" || viewMode === "aplicar") }
@@ -82,9 +83,7 @@ export default function Dissidio() {
 
   const handleCriar = () => {
     if (!form.percentualReajuste || !form.dataBaseInicio || !form.titulo) return toast.error("Preencha título, percentual e data-base");
-    criarMut.mutate({
-      companyId,
-      anoReferencia: form.anoReferencia,
+    criarMut.mutate({ companyId, companyIds, anoReferencia: form.anoReferencia,
       titulo: form.titulo,
       mesDataBase: form.mesDataBase,
       percentualReajuste: form.percentualReajuste,

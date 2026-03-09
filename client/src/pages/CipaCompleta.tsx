@@ -45,8 +45,9 @@ const CARGO_CIPA: Record<string, string> = {
 };
 
 export default function CipaCompleta() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("visao");
   const [selectedEleicaoId, setSelectedEleicaoId] = useState<number | null>(null);
   const [showEleicaoDialog, setShowEleicaoDialog] = useState(false);
@@ -74,7 +75,7 @@ export default function CipaCompleta() {
     { companyId, electionId: selectedEleicaoId || undefined },
     { enabled: !!companyId }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // Mutations
@@ -508,7 +509,7 @@ export default function CipaCompleta() {
               <Button variant="outline" onClick={() => { setShowEleicaoDialog(false); setEleicaoForm({}); }}>Cancelar</Button>
               <Button onClick={() => {
                 if (!eleicaoForm.mandatoInicio || !eleicaoForm.mandatoFim) { toast.error("Informe início e fim do mandato"); return; }
-                createEleicao.mutate({ companyId, ...eleicaoForm });
+                createEleicao.mutate({ companyId, companyIds, ...eleicaoForm });
               }} disabled={createEleicao.isPending}>
                 {createEleicao.isPending ? "Salvando..." : "Criar Mandato"}
               </Button>
@@ -588,7 +589,7 @@ export default function CipaCompleta() {
               <Button variant="outline" onClick={() => { setShowMembroDialog(false); setMembroForm({}); }}>Cancelar</Button>
               <Button onClick={() => {
                 if (!membroForm.employeeId || !membroForm.cargoCipa || !membroForm.representacao) { toast.error("Preencha todos os campos"); return; }
-                createMembro.mutate({ companyId, electionId: selectedEleicaoId!, ...membroForm });
+                createMembro.mutate({ companyId, companyIds, electionId: selectedEleicaoId!, ...membroForm });
               }} disabled={createMembro.isPending}>
                 {createMembro.isPending ? "Salvando..." : "Adicionar Membro"}
               </Button>

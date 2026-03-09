@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { getDb } from "../db";
 import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies } from "../../drizzle/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
 function generateTempPassword(): string {
@@ -272,12 +273,10 @@ export const portalExternoRouter = router({
       return { senhaTemporaria: "mudar123", cnpj: cnpjClean, nomeEmpresa: input.nomeEmpresa || "" };
     }),
 
-    listarAcessos: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      tipo: z.enum(["terceiro", "parceiro"]).optional(),
+    listarAcessos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), tipo: z.enum(["terceiro", "parceiro"]).optional(),
     })).query(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      let conditions: any[] = [eq(portalCredentials.companyId, input.companyId)];
+      let conditions: any[] = [companyFilter(portalCredentials.companyId, input)];
       if (input.tipo) conditions.push(eq(portalCredentials.tipo, input.tipo));
       const creds = await db.select().from(portalCredentials).where(and(...conditions));
       return creds.map((c: any) => ({ ...c, senhaHash: undefined }));
@@ -337,17 +336,15 @@ export const portalExternoRouter = router({
     }),
 
     // List all pending funcionarios for approval panel
-    listarPendentes: protectedProcedure.input(z.object({
-      companyId: z.number(),
-    })).query(async ({ input, ctx }) => {
+    listarPendentes: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const funcs = await db.select().from(funcionariosTerceiros).where(
-        eq(funcionariosTerceiros.companyId, input.companyId)
+        companyFilter(funcionariosTerceiros.companyId, input)
       );
       // Get empresa names
       const empresaIds = Array.from(new Set(funcs.map((f: any) => f.empresaTerceiraId)));
       const empresas = empresaIds.length > 0 ? await db.select().from(empresasTerceiras).where(
-        eq(empresasTerceiras.companyId, input.companyId)
+        companyFilter(empresasTerceiras.companyId, input)
       ) : [];
       const empresaMap = Object.fromEntries(empresas.map((e: any) => [e.id, e.razaoSocial || e.nomeFantasia]));
       return funcs.map((f: any) => ({ ...f, nomeEmpresa: empresaMap[f.empresaTerceiraId] || "Desconhecida" }));

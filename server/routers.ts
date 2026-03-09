@@ -41,6 +41,7 @@ import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
 import { obraSns, employees, blacklistReactivationRequests } from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
 import { validateCNPJ } from "../shared/cnpj";
@@ -96,7 +97,7 @@ function crudRouter(opts: {
   extraListInput?: z.ZodTypeAny;
 }) {
   return router({
-    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => opts.listFn(input.companyId)),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => opts.listFn(input.companyId)),
     create: protectedProcedure.input(z.any()).mutation(({ input }) => opts.createFn(input)),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { opts.deleteFn(input.id); return { success: true }; }),
     ...(opts.updateFn ? { update: protectedProcedure.input(z.any()).mutation(({ input }: any) => { opts.updateFn!(input.id, input); return { success: true }; }) } : {}),
@@ -147,9 +148,7 @@ export const appRouter = router({
     construtoras: protectedProcedure.query(async () => getConstrutoras()),
     construtorasIds: protectedProcedure.query(async () => getConstrutorasIds()),
     // Toggle compartilhaRecursos (só Admin Master)
-    toggleCompartilhaRecursos: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      compartilhaRecursos: z.boolean(),
+    toggleCompartilhaRecursos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), compartilhaRecursos: z.boolean(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode alterar esta configuração' });
       const db = (await getDb())!;
@@ -192,9 +191,7 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "empresas", entityType: "company", entityId: input.id, details: `Empresa excluída (lixeira)` });
       return { success: true };
     }),
-    uploadLogo: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      base64: z.string(),
+    uploadLogo: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), base64: z.string(),
       mimeType: z.string(),
       fileName: z.string(),
     })).mutation(async ({ input, ctx }) => {
@@ -208,9 +205,7 @@ export const appRouter = router({
       return { url };
     }),
     // Numeração Interna - Configuração
-    getNumbering: protectedProcedure.input(z.object({
-      companyId: z.number(),
-    })).query(async ({ input }) => {
+    getNumbering: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
       const company = await getCompanyById(input.companyId);
       if (!company) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada" });
       return {
@@ -219,9 +214,7 @@ export const appRouter = router({
         numerosProibidos: (company as any).numerosProibidos || '13,17,22,24,69,171,666',
       };
     }),
-    updateNumbering: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      prefixoCodigo: z.string().min(1).max(10),
+    updateNumbering: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), prefixoCodigo: z.string().min(1).max(10),
       nextCodigoInterno: z.number().min(1),
       numerosProibidos: z.string().max(500).optional(),
     })).mutation(async ({ input, ctx }) => {
@@ -232,9 +225,7 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna alterada: prefixo=${input.prefixoCodigo}, próximo=${input.nextCodigoInterno}${input.numerosProibidos !== undefined ? `, proibidos=${input.numerosProibidos}` : ''}` });
       return { success: true };
     }),
-    resetNumbering: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      confirmPassword: z.string(),
+    resetNumbering: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), confirmPassword: z.string(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode resetar a numeração" });
       if (input.confirmPassword.trim() !== "RESETAR2026") throw new TRPCError({ code: "BAD_REQUEST", message: "Senha de confirmação incorreta. Digite exatamente: RESETAR2026" });
@@ -248,9 +239,8 @@ export const appRouter = router({
   // SETORES
   // ============================================================
   sectors: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => listSectors(input.companyId)),
-    create: protectedProcedure.input(z.object({
-      companyId: z.number(), nome: z.string().min(1), descricao: z.string().optional(),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => listSectors(input.companyId)),
+    create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1), descricao: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
       const result = await createSector(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "cadastro", entityType: "sector", entityId: result.id, details: `Setor criado: ${input.nome}` });
@@ -275,9 +265,8 @@ export const appRouter = router({
   // FUNÇÕES (JOB FUNCTIONS)
   // ============================================================
   jobFunctions: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => listJobFunctions(input.companyId)),
-    create: protectedProcedure.input(z.object({
-      companyId: z.number(), nome: z.string().min(1), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => listJobFunctions(input.companyId)),
+    create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1), descricao: z.string().optional(), ordemServico: z.string().optional(), cbo: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
       const result = await createJobFunction(input);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "CREATE", module: "cadastro", entityType: "jobFunction", entityId: result.id, details: `Função criada: ${input.nome}` });
@@ -304,7 +293,7 @@ export const appRouter = router({
   employees: router({
     list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional() })).query(({ input }) => getEmployees(input.companyId, input.search, input.status, input.companyIds)),
     getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeById(input.id, input.companyId)),
-    stats: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getEmployeeStats(input.companyId)),
+    stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEmployeeStats(input.companyId)),
     create: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }) => {
       // === REGRA-MÃE DE UNICIDADE ===
       // Valida CPF em TODAS as empresas do grupo (não apenas na empresa atual)
@@ -615,7 +604,7 @@ export const appRouter = router({
   // ============================================================
   profiles: router({
     list: protectedProcedure.query(({ ctx }) => getUserProfiles(ctx.user.id)),
-    listByCompany: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getUserProfilesByCompany(input.companyId)),
+    listByCompany: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getUserProfilesByCompany(input.companyId)),
     create: protectedProcedure.input(z.object({
       userId: z.number(), companyId: z.number(), profileType: z.string(),
     })).mutation(async ({ input, ctx }) => {
@@ -670,12 +659,12 @@ export const appRouter = router({
   // ============================================================
   timesheet: router({
     records: router({
-      list: protectedProcedure.input(z.object({ companyId: z.number(), employeeId: z.number(), month: z.string().optional() })).query(({ input }) => getTimeRecords(input.companyId, input.employeeId, input.month)),
+      list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(), month: z.string().optional() })).query(({ input }) => getTimeRecords(input.companyId, input.employeeId, input.month)),
       create: protectedProcedure.input(z.any()).mutation(({ input }) => createTimeRecord(input)),
       bulkCreate: protectedProcedure.input(z.object({ records: z.array(z.any()) })).mutation(({ input }) => { bulkCreateTimeRecords(input.records); return { success: true }; }),
     }),
     payroll: router({
-      list: protectedProcedure.input(z.object({ companyId: z.number(), month: z.string().optional(), employeeId: z.number().optional() })).query(({ input }) => getPayrolls(input.companyId, input.month, input.employeeId)),
+      list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), month: z.string().optional(), employeeId: z.number().optional() })).query(({ input }) => getPayrolls(input.companyId, input.month, input.employeeId)),
       create: protectedProcedure.input(z.any()).mutation(({ input }) => createPayroll(input)),
       update: protectedProcedure.input(z.any()).mutation(({ input }: any) => { updatePayroll(input.id, input); return { success: true }; }),
       delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { deletePayroll(input.id); return { success: true }; }),
@@ -686,7 +675,7 @@ export const appRouter = router({
   // UPLOADS DE FOLHA (Cartão de Ponto, Folha, Vale)
   // ============================================================
   payrollUploads: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number(), month: z.string().optional(), category: z.string().optional() })).query(({ input }) => getPayrollUploads(input.companyId, input.month, input.category)),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), month: z.string().optional(), category: z.string().optional() })).query(({ input }) => getPayrollUploads(input.companyId, input.month, input.category)),
     create: protectedProcedure.input(z.any()).mutation(({ input }) => createPayrollUpload(input)),
     updateStatus: protectedProcedure.input(z.object({ id: z.number(), status: z.string(), recordsProcessed: z.number().optional(), errorMessage: z.string().optional() })).mutation(({ input }) => { updatePayrollUploadStatus(input.id, input.status, input.recordsProcessed, input.errorMessage); return { success: true }; }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => { deletePayrollUpload(input.id); return { success: true }; }),
@@ -696,7 +685,7 @@ export const appRouter = router({
   // DISPOSITIVOS DIXI (Vinculação Sn -> Obra)
   // ============================================================
   dixiDevices: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getDixiDevices(input.companyId)),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDixiDevices(input.companyId)),
     create: protectedProcedure.input(z.any()).mutation(({ input }) => createDixiDevice(input)),
     update: protectedProcedure.input(z.any()).mutation(({ input }: any) => { updateDixiDevice(input.id, input); return { success: true }; }),
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
@@ -787,9 +776,7 @@ export const appRouter = router({
     }),
     listActive: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getObrasByCompanyActive(input.companyId, input.companyIds)),
     getById: protectedProcedure.input(z.object({ id: z.number() })).query(({ input }) => getObraById(input.id)),
-    create: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      nome: z.string().min(1),
+    create: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1),
       codigo: z.string().optional(),
       numOrcamento: z.string().optional(),
       snRelogioPonto: z.string().optional(),
@@ -876,42 +863,34 @@ export const appRouter = router({
     // Histórico de alocações de um funcionário
     employeeHistory: protectedProcedure.input(z.object({ employeeId: z.number() })).query(({ input }) => getEmployeeSiteHistory(input.employeeId)),
     // Efetivo atual por obra
-    efetivoPorObra: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getEfetivoPorObra(input.companyId)),
+    efetivoPorObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEfetivoPorObra(input.companyId)),
     // Efetivo histórico (evolução mensal)
-    efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses)),
+    efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses)),
     // Funcionários sem obra
-    semObra: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getFuncionariosSemObra(input.companyId)),
+    semObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosSemObra(input.companyId)),
     equipeObra: protectedProcedure.input(z.object({ obraId: z.number(), companyId: z.number() })).query(({ input }) => getEquipeObra(input.obraId, input.companyId)),
-    efetivoDashMensal: protectedProcedure.input(z.object({ companyId: z.number(), mesRef: z.string() })).query(({ input }) => getEfetivoDashboardMensal(input.companyId, input.mesRef)),
+    efetivoDashMensal: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesRef: z.string() })).query(({ input }) => getEfetivoDashboardMensal(input.companyId, input.mesRef)),
     // Transferência em lote
-    transferirEmLote: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      obraDestinoId: z.number(),
+    transferirEmLote: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraDestinoId: z.number(),
       employeeIds: z.array(z.number()),
       dataInicio: z.string(),
       motivo: z.string().optional(),
     })).mutation(({ input, ctx }) => transferirFuncionariosEmLote({ ...input, registradoPor: ctx.user.name ?? 'Sistema', registradoPorUserId: ctx.user.id })),
     // Rateio de horas
-    horasRateio: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      mesAno: z.string(),
+    horasRateio: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesAno: z.string(),
       obraId: z.number().optional(),
     })).query(({ input }) => getObraHorasRateio(input.companyId, input.mesAno, input.obraId)),
     // ============================================================
     // SNs (Relógios de Ponto) por Obra
     // ============================================================
     listSns: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraSns(input.obraId)),
-    listSnsByCompany: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getObraSnsByCompany(input.companyId)),
-    listActiveSns: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getActiveSnsByCompany(input.companyId)),
-    listAvailableSns: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getAvailableSns(input.companyId)),
-    checkSnAvailability: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      sn: z.string().min(1),
+    listSnsByCompany: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getObraSnsByCompany(input.companyId)),
+    listActiveSns: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getActiveSnsByCompany(input.companyId)),
+    listAvailableSns: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getAvailableSns(input.companyId)),
+    checkSnAvailability: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), sn: z.string().min(1),
       excludeObraId: z.number().optional(),
     })).query(({ input }) => checkSnAvailability(input.companyId, input.sn, input.excludeObraId)),
-    addSn: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      obraId: z.number().optional(),
+    addSn: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(),
       sn: z.string().min(1),
       apelido: z.string().optional(),
     })).mutation(async ({ input }) => {
@@ -944,11 +923,11 @@ export const appRouter = router({
     // ============================================================
     // INCONSISTÊNCIAS PONTO x OBRA
     // ============================================================
-    inconsistencias: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => getInconsistenciasPendentes(input.companyId)),
-    inconsistenciasCount: protectedProcedure.input(z.object({ companyId: z.number() })).query(({ input }) => countInconsistenciasPendentes(input.companyId)),
+    inconsistencias: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getInconsistenciasPendentes(input.companyId)),
+    inconsistenciasCount: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => countInconsistenciasPendentes(input.companyId)),
     resolverEsporadico: protectedProcedure.input(z.object({ id: z.number(), observacoes: z.string().optional() })).mutation(({ input, ctx }) => resolverInconsistenciaEsporadico(input.id, ctx.user.id, ctx.user.name ?? 'Sistema', input.observacoes)),
     resolverTransferir: protectedProcedure.input(z.object({ id: z.number(), observacoes: z.string().optional() })).mutation(({ input, ctx }) => resolverInconsistenciaTransferir(input.id, ctx.user.id, ctx.user.name ?? 'Sistema', input.observacoes)),
-    ondeTrabalhou: protectedProcedure.input(z.object({ companyId: z.number(), employeeId: z.number(), mesAno: z.string() })).query(({ input }) => getOndeTrabalhouNoMes(input.companyId, input.employeeId, input.mesAno)),
+    ondeTrabalhou: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(), mesAno: z.string() })).query(({ input }) => getOndeTrabalhouNoMes(input.companyId, input.employeeId, input.mesAno)),
   }),
 
   // ============================================================
@@ -1294,23 +1273,19 @@ export const appRouter = router({
   // CRITÉRIOS DO SISTEMA
   // ============================================================
   criteria: router({
-    getAll: protectedProcedure.input(z.object({
-      companyId: z.number(),
-    })).query(async ({ input }) => {
+    getAll: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { systemCriteria } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
       const rows = await db.select().from(systemCriteria)
-        .where(eq(systemCriteria.companyId, input.companyId))
+        .where(companyFilter(systemCriteria.companyId, input))
         .orderBy(systemCriteria.categoria, systemCriteria.chave);
       return rows;
     }),
 
-    getByCategory: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      categoria: z.string(),
+    getByCategory: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), categoria: z.string(),
     })).query(async ({ input }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
@@ -1319,15 +1294,13 @@ export const appRouter = router({
       const { eq, and } = await import("drizzle-orm");
       const rows = await db.select().from(systemCriteria)
         .where(and(
-          eq(systemCriteria.companyId, input.companyId),
+          companyFilter(systemCriteria.companyId, input),
           eq(systemCriteria.categoria, input.categoria)
         ));
       return rows;
     }),
 
-    updateBatch: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      criterios: z.array(z.object({
+    updateBatch: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), criterios: z.array(z.object({
         chave: z.string(),
         valor: z.string(),
       })),
@@ -1342,7 +1315,7 @@ export const appRouter = router({
       for (const c of input.criterios) {
         const existing = await db.select().from(systemCriteria)
           .where(and(
-            eq(systemCriteria.companyId, input.companyId),
+            companyFilter(systemCriteria.companyId, input),
             eq(systemCriteria.chave, c.chave)
           )).limit(1);
         if (existing.length > 0) {
@@ -1356,9 +1329,7 @@ export const appRouter = router({
       return { success: true, updated };
     }),
 
-    resetToDefault: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      categoria: z.string(),
+    resetToDefault: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), categoria: z.string(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode restaurar padrões" });
       const { getDb } = await import("./db");
@@ -1368,7 +1339,7 @@ export const appRouter = router({
       const { eq, and } = await import("drizzle-orm");
       const rows = await db.select().from(systemCriteria)
         .where(and(
-          eq(systemCriteria.companyId, input.companyId),
+          companyFilter(systemCriteria.companyId, input),
           eq(systemCriteria.categoria, input.categoria)
         ));
       let reset = 0;
@@ -1384,16 +1355,14 @@ export const appRouter = router({
       return { success: true, reset };
     }),
 
-    initDefaults: protectedProcedure.input(z.object({
-      companyId: z.number(),
-    })).mutation(async ({ input, ctx }) => {
+    initDefaults: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).mutation(async ({ input, ctx }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { systemCriteria } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
       const existing = await db.select().from(systemCriteria)
-        .where(eq(systemCriteria.companyId, input.companyId));
+        .where(companyFilter(systemCriteria.companyId, input));
       // Get existing chaves to avoid duplicates
       const existingChaves = new Set(existing.map((e: any) => e.chave));
 
@@ -1539,9 +1508,7 @@ export const appRouter = router({
     }),
 
     // Listar funcionários com HE diferente dos critérios da empresa
-    listHEDivergentes: protectedProcedure.input(z.object({
-      companyId: z.number(),
-    })).query(async ({ input }) => {
+    listHEDivergentes: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) return { criterios: { heDiasUteis: '50', heDomingosFeriados: '100', heAdicionalNoturno: '20' }, funcionarios: [] };
@@ -1550,7 +1517,7 @@ export const appRouter = router({
 
       // Buscar critérios HE da empresa
       const criteriaRows = await db.select().from(systemCriteria)
-        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.categoria, 'horas_extras')));
+        .where(and(companyFilter(systemCriteria.companyId, input), eq(systemCriteria.categoria, 'horas_extras')));
       const map = new Map(criteriaRows.map(c => [c.chave, c.valor]));
       const criterios = {
         heDiasUteis: map.get('he_dias_uteis') || '50',
@@ -1571,7 +1538,7 @@ export const appRouter = router({
         heNoturna: employees.heNoturna,
       }).from(employees)
         .where(and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           isNull(employees.deletedAt)
         ));
 
@@ -1596,9 +1563,7 @@ export const appRouter = router({
     }),
 
     // Sincronizar HE de funcionários selecionados com critérios da empresa
-    syncHE: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      employeeIds: z.array(z.number()),
+    syncHE: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeIds: z.array(z.number()),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode sincronizar" });
       const { getDb } = await import("./db");
@@ -1609,7 +1574,7 @@ export const appRouter = router({
 
       // Buscar critérios HE da empresa
       const criteriaRows = await db.select().from(systemCriteria)
-        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.categoria, 'horas_extras')));
+        .where(and(companyFilter(systemCriteria.companyId, input), eq(systemCriteria.categoria, 'horas_extras')));
       const map = new Map(criteriaRows.map(c => [c.chave, c.valor]));
       const heDiasUteis = map.get('he_dias_uteis') || '50';
       const heDomingosFeriados = map.get('he_domingos_feriados') || '100';
@@ -1622,7 +1587,7 @@ export const appRouter = router({
           heNormal50: heDiasUteis,
           he100: heDomingosFeriados,
           heNoturna: heAdicionalNoturno,
-        }).where(and(eq(employees.id, empId), eq(employees.companyId, input.companyId)));
+        }).where(and(eq(employees.id, empId), companyFilter(employees.companyId, input)));
         updated++;
       }
 
@@ -1646,7 +1611,7 @@ export const appRouter = router({
   // ============================================================
   trash: router({
     // Listar todos os itens excluídos de todas as entidades
-    listAll: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
+    listAll: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) return [];
@@ -1660,51 +1625,51 @@ export const appRouter = router({
       delCompanies.forEach((c: any) => items.push({ id: c.id, entity: 'company', label: c.razaoSocial || c.nomeFantasia, deletedAt: c.deletedAt, deletedBy: c.deletedBy }));
 
       // Funcionários excluídos
-      const delEmployees = await db.select().from(employees).where(and(eq(employees.companyId, input.companyId), isNotNull(employees.deletedAt)));
+      const delEmployees = await db.select().from(employees).where(and(companyFilter(employees.companyId, input), isNotNull(employees.deletedAt)));
       delEmployees.forEach((e: any) => items.push({ id: e.id, entity: 'employee', label: e.nomeCompleto || e.cpf, deletedAt: e.deletedAt, deletedBy: e.deletedBy }));
 
       // Obras excluídas
-      const delObras = await db.select().from(obras).where(and(eq(obras.companyId, input.companyId), isNotNull(obras.deletedAt)));
+      const delObras = await db.select().from(obras).where(and(companyFilter(obras.companyId, input), isNotNull(obras.deletedAt)));
       delObras.forEach((o: any) => items.push({ id: o.id, entity: 'obra', label: o.nome, deletedAt: o.deletedAt, deletedBy: o.deletedBy }));
 
       // Setores excluídos
-      const delSectors = await db.select().from(sectors).where(and(eq(sectors.companyId, input.companyId), isNotNull(sectors.deletedAt)));
+      const delSectors = await db.select().from(sectors).where(and(companyFilter(sectors.companyId, input), isNotNull(sectors.deletedAt)));
       delSectors.forEach((s: any) => items.push({ id: s.id, entity: 'sector', label: s.nome, deletedAt: s.deletedAt, deletedBy: s.deletedBy }));
 
       // Funções excluídas
-      const delFunctions = await db.select().from(jobFunctions).where(and(eq(jobFunctions.companyId, input.companyId), isNotNull(jobFunctions.deletedAt)));
+      const delFunctions = await db.select().from(jobFunctions).where(and(companyFilter(jobFunctions.companyId, input), isNotNull(jobFunctions.deletedAt)));
       delFunctions.forEach((f: any) => items.push({ id: f.id, entity: 'jobFunction', label: f.nome, deletedAt: f.deletedAt, deletedBy: f.deletedBy }));
 
       // Relógios de ponto excluídos
-      const delDevices = await db.select().from(dixiDevices).where(and(eq(dixiDevices.companyId, input.companyId), isNotNull(dixiDevices.deletedAt)));
+      const delDevices = await db.select().from(dixiDevices).where(and(companyFilter(dixiDevices.companyId, input), isNotNull(dixiDevices.deletedAt)));
       delDevices.forEach((d: any) => items.push({ id: d.id, entity: 'dixiDevice', label: d.nome || d.serialNumber, deletedAt: d.deletedAt, deletedBy: d.deletedBy }));
 
       // ASOs excluídos
-      const delAsos = await db.select().from(asos).where(and(eq(asos.companyId, input.companyId), isNotNull(asos.deletedAt)));
+      const delAsos = await db.select().from(asos).where(and(companyFilter(asos.companyId, input), isNotNull(asos.deletedAt)));
       delAsos.forEach((a: any) => items.push({ id: a.id, entity: 'aso', label: `ASO #${a.id} (Func. #${a.employeeId})`, deletedAt: a.deletedAt, deletedBy: a.deletedBy }));
 
       // Atestados excluídos
-      const delAtestados = await db.select().from(atestados).where(and(eq(atestados.companyId, input.companyId), isNotNull(atestados.deletedAt)));
+      const delAtestados = await db.select().from(atestados).where(and(companyFilter(atestados.companyId, input), isNotNull(atestados.deletedAt)));
       delAtestados.forEach((a: any) => items.push({ id: a.id, entity: 'atestado', label: `Atestado #${a.id} (Func. #${a.employeeId})`, deletedAt: a.deletedAt, deletedBy: a.deletedBy }));
 
       // Treinamentos excluídos
-      const delTrainings = await db.select().from(trainings).where(and(eq(trainings.companyId, input.companyId), isNotNull(trainings.deletedAt)));
+      const delTrainings = await db.select().from(trainings).where(and(companyFilter(trainings.companyId, input), isNotNull(trainings.deletedAt)));
       delTrainings.forEach((t: any) => items.push({ id: t.id, entity: 'training', label: `Treinamento #${t.id} — ${t.nome || ''}`, deletedAt: t.deletedAt, deletedBy: t.deletedBy }));
 
       // Advertências excluídas
-      const delWarnings = await db.select().from(warnings).where(and(eq(warnings.companyId, input.companyId), isNotNull(warnings.deletedAt)));
+      const delWarnings = await db.select().from(warnings).where(and(companyFilter(warnings.companyId, input), isNotNull(warnings.deletedAt)));
       delWarnings.forEach((w: any) => items.push({ id: w.id, entity: 'warning', label: `Advertência #${w.id} (Func. #${w.employeeId})`, deletedAt: w.deletedAt, deletedBy: w.deletedBy }));
 
       // Regras de ouro excluídas
-      const delRules = await db.select().from(goldenRules).where(and(eq(goldenRules.companyId, input.companyId), isNotNull(goldenRules.deletedAt)));
+      const delRules = await db.select().from(goldenRules).where(and(companyFilter(goldenRules.companyId, input), isNotNull(goldenRules.deletedAt)));
       delRules.forEach((r: any) => items.push({ id: r.id, entity: 'goldenRule', label: r.titulo, deletedAt: r.deletedAt, deletedBy: r.deletedBy }));
 
       // Modelos de documentos excluídos
-      const delTemplates = await db.select().from(documentTemplates).where(and(eq(documentTemplates.companyId, input.companyId), isNotNull(documentTemplates.deletedAt)));
+      const delTemplates = await db.select().from(documentTemplates).where(and(companyFilter(documentTemplates.companyId, input), isNotNull(documentTemplates.deletedAt)));
       delTemplates.forEach((t: any) => items.push({ id: t.id, entity: 'documentTemplate', label: `Modelo: ${t.nome || t.tipo}`, deletedAt: t.deletedAt, deletedBy: t.deletedBy }));
 
       // Entregas de EPI excluídas
-      const delEpiDeliveries = await db.select().from(epiDeliveries).where(and(eq(epiDeliveries.companyId, input.companyId), isNotNull(epiDeliveries.deletedAt)));
+      const delEpiDeliveries = await db.select().from(epiDeliveries).where(and(companyFilter(epiDeliveries.companyId, input), isNotNull(epiDeliveries.deletedAt)));
       delEpiDeliveries.forEach((e: any) => items.push({ id: e.id, entity: 'epiDelivery', label: `Entrega EPI #${e.id}`, deletedAt: e.deletedAt, deletedBy: e.deletedBy }));
 
       // Usuários excluídos
@@ -1949,15 +1914,13 @@ export const appRouter = router({
   }),
   // ===================== CONFIGURAÇÃO DE MÓDULOS =====================
   moduleConfig: router({
-    list: protectedProcedure.input(z.object({
-      companyId: z.number(),
-    })).query(async ({ input, ctx }) => {
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input, ctx }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { moduleConfig } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
-      const rows = await db.select().from(moduleConfig).where(eq(moduleConfig.companyId, input.companyId));
+      const rows = await db.select().from(moduleConfig).where(companyFilter(moduleConfig.companyId, input));
       // Módulos padrão - todos habilitados por default
       const ALL_MODULES = ["rh", "sst", "juridico", "avaliacao", "terceiros", "parceiros"];
       const moduleMap: Record<string, any> = {};
@@ -1970,9 +1933,7 @@ export const appRouter = router({
         updatedAt: moduleMap[key]?.updatedAt ?? null,
       }));
     }),
-    toggle: protectedProcedure.input(z.object({
-      companyId: z.number(),
-      moduleKey: z.string(),
+    toggle: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), moduleKey: z.string(),
       enabled: z.boolean(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin pode alterar módulos" });
@@ -1982,7 +1943,7 @@ export const appRouter = router({
       const { moduleConfig } = await import("../drizzle/schema");
       const { eq, and } = await import("drizzle-orm");
       const existing = await db.select().from(moduleConfig).where(
-        and(eq(moduleConfig.companyId, input.companyId), eq(moduleConfig.moduleKey, input.moduleKey))
+        and(companyFilter(moduleConfig.companyId, input), eq(moduleConfig.moduleKey, input.moduleKey))
       );
       if (existing.length > 0) {
         await db.update(moduleConfig).set({

@@ -2,7 +2,8 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { cipaElections, cipaMembers, cipaMeetings, employees, companies } from "../../drizzle/schema";
-import { eq, and, sql, isNull, desc, asc, count } from "drizzle-orm";
+import { eq, and, sql, isNull, desc, asc, count, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================
@@ -37,13 +38,13 @@ function getDimensionamento(numFuncionarios: number) {
 export const cipaRouter = router({
   // Verificar se a empresa precisa de CIPA
   verificarNecessidade: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [result] = await db.select({ total: count() })
         .from(employees)
         .where(and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.status, 'Ativo'),
           isNull(employees.deletedAt),
         ));
@@ -56,7 +57,7 @@ export const cipaRouter = router({
       const [mandatoAtivo] = await db.select()
         .from(cipaElections)
         .where(and(
-          eq(cipaElections.companyId, input.companyId),
+          companyFilter(cipaElections.companyId, input),
           sql`${cipaElections.mandatoFim} >= ${hoje}`,
         ))
         .orderBy(desc(cipaElections.mandatoFim))
@@ -90,12 +91,12 @@ export const cipaRouter = router({
   // ============================================================
   eleicoes: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const rows = await db.select()
           .from(cipaElections)
-          .where(eq(cipaElections.companyId, input.companyId))
+          .where(companyFilter(cipaElections.companyId, input))
           .orderBy(desc(cipaElections.mandatoInicio));
         return rows;
       }),
@@ -109,9 +110,7 @@ export const cipaRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        mandatoInicio: z.string(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mandatoInicio: z.string(),
         mandatoFim: z.string(),
         statusEleicao: z.string().default('Planejamento'),
         dataEdital: z.string().optional(),
@@ -199,9 +198,7 @@ export const cipaRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        electionId: z.number(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number(),
         employeeId: z.number(),
         cargoCipa: z.enum(['Presidente','Vice_Presidente','Secretario','Membro_Titular','Membro_Suplente']),
         representacao: z.enum(['Empregador','Empregados']),
@@ -268,10 +265,10 @@ export const cipaRouter = router({
   // ============================================================
   reunioes: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), electionId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions = [eq(cipaMeetings.companyId, input.companyId)];
+        const conditions = [companyFilter(cipaMeetings.companyId, input)];
         if (input.electionId) conditions.push(eq(cipaMeetings.mandateId, input.electionId));
         
         const rows = await db.select()
@@ -389,7 +386,7 @@ export const cipaRouter = router({
 
   /** Cronograma completo da CIPA */
   cronograma: protectedProcedure
-    .input(z.object({ companyId: z.number(), electionId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       

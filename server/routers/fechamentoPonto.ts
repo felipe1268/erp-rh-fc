@@ -6,6 +6,7 @@ import {
   timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 
@@ -594,9 +595,7 @@ export const fechamentoPontoRouter = router({
   // Upload auto-detecta mês dos registros do arquivo. Não depende do filtro de mês.
   // Valida SN obrigatoriamente - bloqueia se SN não estiver vinculado a obra.
   uploadDixi: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      files: z.array(z.object({
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), files: z.array(z.object({
         fileName: z.string(),
         fileBase64: z.string(),
       })),
@@ -610,10 +609,10 @@ export const fechamentoPontoRouter = router({
         nomeCompleto: employees.nomeCompleto,
         jornadaTrabalho: employees.jornadaTrabalho,
         matricula: employees.matricula,
-      }).from(employees).where(and(eq(employees.companyId, input.companyId), sql`${employees.deletedAt} IS NULL`));
+      }).from(employees).where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       // Get all dixi devices for this company (to match SN -> obra)
-      const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
+      const devices = await db.select().from(dixiDevices).where(companyFilter(dixiDevices.companyId, input));
       // Get active SNs from obra_sns table
       const activeSns = await db.select({
         sn: obraSns.sn,
@@ -621,13 +620,13 @@ export const fechamentoPontoRouter = router({
         obraNome: obras.nome,
       }).from(obraSns)
         .leftJoin(obras, eq(obraSns.obraId, obras.id))
-        .where(and(eq(obraSns.companyId, input.companyId), eq(obraSns.status, "ativo")));
+        .where(and(companyFilter(obraSns.companyId, input), eq(obraSns.status, "ativo")));
       // Also get obras list for fallback (legacy snRelogioPonto field)
       const obrasList = await db.select({
         id: obras.id,
         nome: obras.nome,
         snRelogioPonto: obras.snRelogioPonto,
-      }).from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
+      }).from(obras).where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
 
       let totalImported = 0;
       let totalInconsistencies = 0;
@@ -696,7 +695,7 @@ export const fechamentoPontoRouter = router({
           reducaoJornada: terminationNotices.reducaoJornada,
         }).from(terminationNotices).where(
           and(
-            eq(terminationNotices.companyId, input.companyId),
+            companyFilter(terminationNotices.companyId, input),
             eq(terminationNotices.status, 'em_andamento'),
             sql`${terminationNotices.tipo} IN ('empregador_trabalhado', 'empregado_trabalhado')`,
             sql`${terminationNotices.deletedAt} IS NULL`,
@@ -707,7 +706,7 @@ export const fechamentoPontoRouter = router({
         const memMappings = await db.select({
           dixiName: dixiNameMappings.dixiName,
           employeeId: dixiNameMappings.employeeId,
-        }).from(dixiNameMappings).where(eq(dixiNameMappings.companyId, input.companyId));
+        }).from(dixiNameMappings).where(companyFilter(dixiNameMappings.companyId, input));
 
         // Process records - mesReferencia is auto-detected from each record's date
         const { timeRecordsToInsert, inconsistencies, unmatchedNames, unmatchedRecordsToInsert } = processRecords(
@@ -721,7 +720,7 @@ export const fechamentoPontoRouter = router({
           for (const mesRef of unmatchedMeses) {
             await db.delete(unmatchedDixiRecords).where(
               and(
-                eq(unmatchedDixiRecords.companyId, input.companyId),
+                companyFilter(unmatchedDixiRecords.companyId, input),
                 eq(unmatchedDixiRecords.mesReferencia, mesRef as string),
                 obraId ? eq(unmatchedDixiRecords.obraId, obraId) : sql`1=1`,
               )
@@ -754,7 +753,7 @@ export const fechamentoPontoRouter = router({
           // Delete existing DIXI records for this company/mesRef/obra
           await db.delete(timeRecords).where(
             and(
-              eq(timeRecords.companyId, input.companyId),
+              companyFilter(timeRecords.companyId, input),
               eq(timeRecords.mesReferencia, mesRef),
               eq(timeRecords.obraId, obraId!),
               eq(timeRecords.fonte, "dixi"),
@@ -762,7 +761,7 @@ export const fechamentoPontoRouter = router({
           );
           await db.delete(timeInconsistencies).where(
             and(
-              eq(timeInconsistencies.companyId, input.companyId),
+              companyFilter(timeInconsistencies.companyId, input),
               eq(timeInconsistencies.mesReferencia, mesRef),
               eq(timeInconsistencies.obraId, obraId!),
             )
@@ -790,7 +789,7 @@ export const fechamentoPontoRouter = router({
           // ===== RATEIO AUTOMÁTICO POR OBRA (por mês) =====
           await db.delete(obraHorasRateio).where(
             and(
-              eq(obraHorasRateio.companyId, input.companyId),
+              companyFilter(obraHorasRateio.companyId, input),
               eq(obraHorasRateio.mesAno, mesRef),
               eq(obraHorasRateio.obraId, obraId!),
             )
@@ -878,16 +877,14 @@ export const fechamentoPontoRouter = router({
 
   // List time records for a month
   listRecords: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       obraId: z.number().optional(),
       employeeId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const conditions: any[] = [
-        eq(timeRecords.companyId, input.companyId),
+        companyFilter(timeRecords.companyId, input),
         eq(timeRecords.mesReferencia, input.mesReferencia),
       ];
       if (input.obraId) conditions.push(eq(timeRecords.obraId, input.obraId));
@@ -909,15 +906,13 @@ export const fechamentoPontoRouter = router({
 
   // Get summary by employee for a month
   getSummary: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       obraId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const conditions: any[] = [
-        eq(timeRecords.companyId, input.companyId),
+        companyFilter(timeRecords.companyId, input),
         eq(timeRecords.mesReferencia, input.mesReferencia),
       ];
       if (input.obraId) conditions.push(eq(timeRecords.obraId, input.obraId));
@@ -984,7 +979,7 @@ export const fechamentoPontoRouter = router({
         reducaoJornada: terminationNotices.reducaoJornada,
       }).from(terminationNotices).where(
         and(
-          eq(terminationNotices.companyId, input.companyId),
+          companyFilter(terminationNotices.companyId, input),
           eq(terminationNotices.status, 'em_andamento'),
           sql`${terminationNotices.tipo} IN ('empregador_trabalhado', 'empregado_trabalhado')`,
           sql`${terminationNotices.deletedAt} IS NULL`,
@@ -1022,16 +1017,14 @@ export const fechamentoPontoRouter = router({
 
   // List inconsistencies
   listInconsistencies: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       obraId: z.number().optional(),
       status: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const conditions: any[] = [
-        eq(timeInconsistencies.companyId, input.companyId),
+        companyFilter(timeInconsistencies.companyId, input),
         eq(timeInconsistencies.mesReferencia, input.mesReferencia),
       ];
       if (input.obraId) conditions.push(eq(timeInconsistencies.obraId, input.obraId));
@@ -1059,7 +1052,7 @@ export const fechamentoPontoRouter = router({
           .from(timeRecords)
           .leftJoin(obras, eq(timeRecords.obraId, obras.id))
           .where(and(
-            eq(timeRecords.companyId, input.companyId),
+            companyFilter(timeRecords.companyId, input),
             eq(timeRecords.employeeId, r.inconsistency.employeeId),
             eq(timeRecords.data, r.inconsistency.data),
           ))
@@ -1132,9 +1125,7 @@ export const fechamentoPontoRouter = router({
 
   // Manual time record entry/update
   manualEntry: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       obraId: z.number().optional(),
       mesReferencia: z.string(),
       data: z.string(),
@@ -1157,7 +1148,7 @@ export const fechamentoPontoRouter = router({
 
       const existing = await db.select().from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.data, input.data),
         ))
@@ -1207,9 +1198,7 @@ export const fechamentoPontoRouter = router({
 
   // Get employee detail for a month (day by day) — NOW includes obra info per record
   getEmployeeDetail: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
@@ -1221,7 +1210,7 @@ export const fechamentoPontoRouter = router({
         .from(timeRecords)
         .leftJoin(obras, eq(timeRecords.obraId, obras.id))
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.mesReferencia, input.mesReferencia),
         ))
@@ -1230,7 +1219,7 @@ export const fechamentoPontoRouter = router({
       const incons = await db.select()
         .from(timeInconsistencies)
         .where(and(
-          eq(timeInconsistencies.companyId, input.companyId),
+          companyFilter(timeInconsistencies.companyId, input),
           eq(timeInconsistencies.employeeId, input.employeeId),
           eq(timeInconsistencies.mesReferencia, input.mesReferencia),
           eq(timeInconsistencies.status, "pendente"),
@@ -1268,14 +1257,12 @@ export const fechamentoPontoRouter = router({
 
   // Stats for dashboard cards
   getStats: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const conditions = [
-        eq(timeRecords.companyId, input.companyId),
+        companyFilter(timeRecords.companyId, input),
         eq(timeRecords.mesReferencia, input.mesReferencia),
       ];
 
@@ -1288,7 +1275,7 @@ export const fechamentoPontoRouter = router({
       const [totalIncons] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(timeInconsistencies)
         .where(and(
-          eq(timeInconsistencies.companyId, input.companyId),
+          companyFilter(timeInconsistencies.companyId, input),
           eq(timeInconsistencies.mesReferencia, input.mesReferencia),
           eq(timeInconsistencies.status, "pendente"),
         ));
@@ -1310,45 +1297,39 @@ export const fechamentoPontoRouter = router({
 
   // ===================== LIMPAR BASE DO MÊS (ADMIN ONLY) =====================
   clearMonthData: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       tipo: z.enum(["tudo", "registros", "inconsistencias", "rateio"]),
     }))
     .mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new Error("Apenas administradores podem limpar a base de dados");
       const db = (await getDb())!;
       if (input.tipo === "tudo" || input.tipo === "registros") {
-        await db.delete(timeRecords).where(and(eq(timeRecords.companyId, input.companyId), eq(timeRecords.mesReferencia, input.mesReferencia)));
+        await db.delete(timeRecords).where(and(companyFilter(timeRecords.companyId, input), eq(timeRecords.mesReferencia, input.mesReferencia)));
       }
       if (input.tipo === "tudo" || input.tipo === "inconsistencias") {
-        await db.delete(timeInconsistencies).where(and(eq(timeInconsistencies.companyId, input.companyId), eq(timeInconsistencies.mesReferencia, input.mesReferencia)));
+        await db.delete(timeInconsistencies).where(and(companyFilter(timeInconsistencies.companyId, input), eq(timeInconsistencies.mesReferencia, input.mesReferencia)));
       }
       if (input.tipo === "tudo" || input.tipo === "rateio") {
-        await db.delete(obraHorasRateio).where(and(eq(obraHorasRateio.companyId, input.companyId), eq(obraHorasRateio.mesAno, input.mesReferencia)));
+        await db.delete(obraHorasRateio).where(and(companyFilter(obraHorasRateio.companyId, input), eq(obraHorasRateio.mesAno, input.mesReferencia)));
       }
       return { success: true };
     }),
 
   // ===================== VERIFICAÇÃO DE DUPLICIDADE =====================
   checkDuplicates: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const [existing] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(timeRecords)
-        .where(and(eq(timeRecords.companyId, input.companyId), eq(timeRecords.mesReferencia, input.mesReferencia)));
+        .where(and(companyFilter(timeRecords.companyId, input), eq(timeRecords.mesReferencia, input.mesReferencia)));
       return { existingCount: Number(existing?.count || 0), hasData: Number(existing?.count || 0) > 0 };
     }),
 
   // ===================== RATEIO POR OBRA =====================
   getRateioPorObra: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -1369,7 +1350,7 @@ export const fechamentoPontoRouter = router({
         .from(obraHorasRateio)
         .leftJoin(obras, eq(obraHorasRateio.obraId, obras.id))
         .leftJoin(employees, eq(obraHorasRateio.employeeId, employees.id))
-        .where(and(eq(obraHorasRateio.companyId, input.companyId), eq(obraHorasRateio.mesAno, input.mesReferencia)))
+        .where(and(companyFilter(obraHorasRateio.companyId, input), eq(obraHorasRateio.mesAno, input.mesReferencia)))
         .orderBy(obras.nome, employees.nomeCompleto);
 
       // Check if obras have SNs linked (from obra_sns table)
@@ -1383,7 +1364,7 @@ export const fechamentoPontoRouter = router({
           status: obraSns.status,
         }).from(obraSns).where(
           and(
-            eq(obraSns.companyId, input.companyId),
+            companyFilter(obraSns.companyId, input),
             inArray(obraSns.obraId, obraIds as number[]),
           )
         );
@@ -1426,9 +1407,7 @@ export const fechamentoPontoRouter = router({
 
   // ===================== CONSOLIDAÇÃO MENSAL =====================
   getMonthStatuses: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      ano: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -1443,7 +1422,7 @@ export const fechamentoPontoRouter = router({
         count: sql<number>`COUNT(*)`,
       }).from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           like(timeRecords.mesReferencia, `${input.ano}-%`),
         ))
         .groupBy(timeRecords.mesReferencia);
@@ -1457,7 +1436,7 @@ export const fechamentoPontoRouter = router({
       // Check consolidation status
       const consolidacoes = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           like(pontoConsolidacao.mesReferencia, `${input.ano}-%`),
         ));
       for (const c of consolidacoes) {
@@ -1471,9 +1450,7 @@ export const fechamentoPontoRouter = router({
     }),
 
   consolidarMes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1482,7 +1459,7 @@ export const fechamentoPontoRouter = router({
       const [pendingIncons] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(timeInconsistencies)
         .where(and(
-          eq(timeInconsistencies.companyId, input.companyId),
+          companyFilter(timeInconsistencies.companyId, input),
           eq(timeInconsistencies.mesReferencia, input.mesReferencia),
           eq(timeInconsistencies.status, 'pendente'),
         ));
@@ -1495,7 +1472,7 @@ export const fechamentoPontoRouter = router({
       // Check if already consolidated
       const existing = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
         )).limit(1);
       const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
@@ -1559,7 +1536,7 @@ export const fechamentoPontoRouter = router({
         const { timeRecords: trSchema, systemCriteria: scSchema } = await import('../../drizzle/schema');
         
         // Get criteria
-        const criteriaRows = await db.select().from(scSchema).where(eq(scSchema.companyId, input.companyId));
+        const criteriaRows = await db.select().from(scSchema).where(companyFilter(scSchema.companyId, input));
         const criteriaMap: Record<string, string> = {};
         for (const r of criteriaRows) criteriaMap[r.chave] = r.valor;
         const diaCorte = parseInt(criteriaMap['ponto_dia_corte'] || '15');
@@ -1581,11 +1558,11 @@ export const fechamentoPontoRouter = router({
         // Get employees
         const empList = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, valorHora: employees.valorHora, salarioBase: employees.salarioBase })
           .from(employees)
-          .where(and(eq(employees.companyId, input.companyId), eq(employees.tipoContrato, 'CLT'), sql`${employees.status} IN ('Ativo', 'Ferias')`, sql`${employees.deletedAt} IS NULL`));
+          .where(and(companyFilter(employees.companyId, input), eq(employees.tipoContrato, 'CLT'), sql`${employees.status} IN ('Ativo', 'Ferias')`, sql`${employees.deletedAt} IS NULL`));
         
         // Get time_records for ponto period
         const records = await db.select().from(trSchema)
-          .where(and(eq(trSchema.companyId, input.companyId), sql`${trSchema.data} >= ${pontoInicio2}`, sql`${trSchema.data} <= ${pontoFim2}`));
+          .where(and(companyFilter(trSchema.companyId, input), sql`${trSchema.data} >= ${pontoInicio2}`, sql`${trSchema.data} <= ${pontoFim2}`));
         
         const recordMap = new Map<string, any[]>();
         for (const r of records) {
@@ -1723,9 +1700,7 @@ export const fechamentoPontoRouter = router({
     }),
 
   desconsolidarMes: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
       // Verificação robusta de permissão para desconsolidação
@@ -1749,22 +1724,20 @@ export const fechamentoPontoRouter = router({
         desconsolidadoPor: ctx.user?.name || 'Admin',
         desconsolidadoEm: now,
       }).where(and(
-        eq(pontoConsolidacao.companyId, input.companyId),
+        companyFilter(pontoConsolidacao.companyId, input),
         eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
       ));
       return { success: true };
     }),
 
   getConsolidacaoStatus: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const rows = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
         )).limit(1);
       if (rows.length === 0) return { consolidado: false };
@@ -1779,16 +1752,14 @@ export const fechamentoPontoRouter = router({
 
   // ===================== CONFLITOS OBRA/DIA =====================
   getConflitosObraDia: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       employeeId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       // Find employees with records in multiple obras on the same day
       const conditions: any[] = [
-        eq(timeRecords.companyId, input.companyId),
+        companyFilter(timeRecords.companyId, input),
         eq(timeRecords.mesReferencia, input.mesReferencia),
       ];
       if (input.employeeId) conditions.push(eq(timeRecords.employeeId, input.employeeId));
@@ -1949,16 +1920,14 @@ export const fechamentoPontoRouter = router({
 
   // ===================== VALIDAR SN ANTES DO UPLOAD =====================
   validateSN: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      files: z.array(z.object({
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), files: z.array(z.object({
         fileName: z.string(),
         fileBase64: z.string(),
       })),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const devices = await db.select().from(dixiDevices).where(eq(dixiDevices.companyId, input.companyId));
+      const devices = await db.select().from(dixiDevices).where(companyFilter(dixiDevices.companyId, input));
       // Get active SNs from obra_sns table
       const activeSns = await db.select({
         sn: obraSns.sn,
@@ -1966,12 +1935,12 @@ export const fechamentoPontoRouter = router({
         obraNome: obras.nome,
       }).from(obraSns)
         .leftJoin(obras, eq(obraSns.obraId, obras.id))
-        .where(and(eq(obraSns.companyId, input.companyId), eq(obraSns.status, "ativo")));
+        .where(and(companyFilter(obraSns.companyId, input), eq(obraSns.status, "ativo")));
       const obrasList = await db.select({
         id: obras.id,
         nome: obras.nome,
         snRelogioPonto: obras.snRelogioPonto,
-      }).from(obras).where(and(eq(obras.companyId, input.companyId), sql`${obras.deletedAt} IS NULL`));
+      }).from(obras).where(and(companyFilter(obras.companyId, input), sql`${obras.deletedAt} IS NULL`));
 
       const results: Array<{
         fileName: string;
@@ -2050,9 +2019,7 @@ export const fechamentoPontoRouter = router({
 
   // ===================== RESOLVER CONFLITO DE OBRA/DIA =====================
   resolveConflito: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       data: z.string(), // YYYY-MM-DD
       acao: z.enum(["manter_obra", "confirmar_deslocamento", "excluir_registro", "marcar_falta"]),
       obraIdManter: z.number().optional(), // para manter_obra: qual obra manter
@@ -2066,7 +2033,7 @@ export const fechamentoPontoRouter = router({
       const mesRef = input.data.substring(0, 7);
       const consolidacao = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, mesRef),
           eq(pontoConsolidacao.status, "consolidado"),
         )).limit(1);
@@ -2079,7 +2046,7 @@ export const fechamentoPontoRouter = router({
       if (input.acao === "manter_obra" && input.obraIdManter) {
         // Excluir registros de OUTRAS obras neste dia para este funcionário
         await db.delete(timeRecords).where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.data, input.data),
           sql`${timeRecords.obraId} != ${input.obraIdManter}`,
@@ -2089,7 +2056,7 @@ export const fechamentoPontoRouter = router({
           await db.update(timeRecords)
             .set({ justificativa: `[Conflito resolvido por ${resolvidoPor}] ${input.justificativa}` })
             .where(and(
-              eq(timeRecords.companyId, input.companyId),
+              companyFilter(timeRecords.companyId, input),
               eq(timeRecords.employeeId, input.employeeId),
               eq(timeRecords.data, input.data),
               eq(timeRecords.obraId, input.obraIdManter),
@@ -2101,7 +2068,7 @@ export const fechamentoPontoRouter = router({
       if (input.acao === "confirmar_deslocamento") {
         // Buscar todos os registros deste dia para este funcionário
         const registros = await db.select().from(timeRecords).where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.data, input.data),
         ));
@@ -2172,7 +2139,7 @@ export const fechamentoPontoRouter = router({
       if (input.acao === "excluir_registro" && input.obraIdExcluir) {
         // Excluir registro específico de uma obra
         await db.delete(timeRecords).where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.data, input.data),
           eq(timeRecords.obraId, input.obraIdExcluir),
@@ -2183,7 +2150,7 @@ export const fechamentoPontoRouter = router({
       if (input.acao === "marcar_falta") {
         // Remover TODOS os registros do dia e registrar como falta
         await db.delete(timeRecords).where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.employeeId, input.employeeId),
           eq(timeRecords.data, input.data),
         ));
@@ -2210,9 +2177,7 @@ export const fechamentoPontoRouter = router({
 
   // ===================== RESOLVER EM LOTE POR TIPO =====================
   resolveBatchByType: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       tipoInconsistencia: z.enum(["batida_impar", "falta_batida", "horario_divergente", "batida_duplicada", "sem_registro"]),
       status: z.enum(["justificado", "ajustado"]),
       justificativa: z.string().optional(),
@@ -2225,7 +2190,7 @@ export const fechamentoPontoRouter = router({
       // Verificar consolidação
       const consolidacao = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
           eq(pontoConsolidacao.status, "consolidado"),
         )).limit(1);
@@ -2236,7 +2201,7 @@ export const fechamentoPontoRouter = router({
       // Buscar todas as inconsistências pendentes deste tipo
       const pendentes = await db.select().from(timeInconsistencies)
         .where(and(
-          eq(timeInconsistencies.companyId, input.companyId),
+          companyFilter(timeInconsistencies.companyId, input),
           eq(timeInconsistencies.mesReferencia, input.mesReferencia),
           eq(timeInconsistencies.tipoInconsistencia, input.tipoInconsistencia),
           eq(timeInconsistencies.status, "pendente"),
@@ -2259,9 +2224,7 @@ export const fechamentoPontoRouter = router({
 
   // ===================== RESOLVER TODAS AS INCONSISTÊNCIAS =====================
   resolveAllInconsistencies: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       status: z.enum(["justificado", "ajustado"]),
       justificativa: z.string().optional(),
     }))
@@ -2273,7 +2236,7 @@ export const fechamentoPontoRouter = router({
       // Verificar consolidação
       const consolidacao = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
           eq(pontoConsolidacao.status, "consolidado"),
         )).limit(1);
@@ -2284,7 +2247,7 @@ export const fechamentoPontoRouter = router({
       // Resolver TODAS as inconsistências pendentes
       const pendentes = await db.select().from(timeInconsistencies)
         .where(and(
-          eq(timeInconsistencies.companyId, input.companyId),
+          companyFilter(timeInconsistencies.companyId, input),
           eq(timeInconsistencies.mesReferencia, input.mesReferencia),
           eq(timeInconsistencies.status, "pendente"),
         ));
@@ -2335,9 +2298,7 @@ export const fechamentoPontoRouter = router({
 
   // ===================== RESOLVER TODOS OS CONFLITOS DE OBRA =====================
   resolveAllConflitos: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       acao: z.enum(["confirmar_deslocamento"]), // Em lote só permite confirmar deslocamento
       justificativa: z.string().optional(),
     }))
@@ -2348,7 +2309,7 @@ export const fechamentoPontoRouter = router({
       // Verificar consolidação
       const consolidacao = await db.select().from(pontoConsolidacao)
         .where(and(
-          eq(pontoConsolidacao.companyId, input.companyId),
+          companyFilter(pontoConsolidacao.companyId, input),
           eq(pontoConsolidacao.mesReferencia, input.mesReferencia),
           eq(pontoConsolidacao.status, "consolidado"),
         )).limit(1);
@@ -2364,7 +2325,7 @@ export const fechamentoPontoRouter = router({
         data: timeRecords.data,
       }).from(timeRecords)
         .where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           between(timeRecords.data, mesStart, mesEnd),
         ));
 
@@ -2408,7 +2369,7 @@ export const fechamentoPontoRouter = router({
       for (const c of conflitos) {
         // Buscar registros completos
         const registros = await db.select().from(timeRecords).where(and(
-          eq(timeRecords.companyId, input.companyId),
+          companyFilter(timeRecords.companyId, input),
           eq(timeRecords.employeeId, c.employeeId),
           eq(timeRecords.data, c.data!),
         ));
@@ -2458,14 +2419,12 @@ export const fechamentoPontoRouter = router({
   // REGISTROS NÃO IDENTIFICADOS (UNMATCHED)
   // ============================================================
   getUnmatchedRecords: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
-      const conditions = [eq(unmatchedDixiRecords.companyId, input.companyId)];
+      const conditions = [companyFilter(unmatchedDixiRecords.companyId, input)];
       if (input.mesReferencia) {
         conditions.push(eq(unmatchedDixiRecords.mesReferencia, input.mesReferencia));
       }
@@ -2528,9 +2487,7 @@ export const fechamentoPontoRouter = router({
     }),
 
   linkUnmatchedToEmployee: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      dixiName: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dixiName: z.string(),
       employeeId: z.number(),
       mesReferencia: z.string().optional(),
     }))
@@ -2540,7 +2497,7 @@ export const fechamentoPontoRouter = router({
       
       // Buscar todos os registros pendentes deste nome
       const conditions = [
-        eq(unmatchedDixiRecords.companyId, input.companyId),
+        companyFilter(unmatchedDixiRecords.companyId, input),
         eq(unmatchedDixiRecords.dixiName, input.dixiName),
         eq(unmatchedDixiRecords.status, 'pendente'),
       ];
@@ -2568,7 +2525,7 @@ export const fechamentoPontoRouter = router({
 
       // Buscar critérios do sistema
       const criteriaRows = await db.select().from(systemCriteria)
-        .where(eq(systemCriteria.companyId, input.companyId));
+        .where(companyFilter(systemCriteria.companyId, input));
       const criteria: CriteriaMap = { ...DEFAULT_CRITERIA };
       for (const c of criteriaRows) {
         (criteria as any)[c.chave] = parseFloat(String(c.valor));
@@ -2719,7 +2676,7 @@ export const fechamentoPontoRouter = router({
       // Verifica se já existe um mapeamento para este nome
       const existingMapping = await db.select().from(dixiNameMappings)
         .where(and(
-          eq(dixiNameMappings.companyId, input.companyId),
+          companyFilter(dixiNameMappings.companyId, input),
           eq(dixiNameMappings.dixiName, input.dixiName),
         ));
       
@@ -2753,16 +2710,14 @@ export const fechamentoPontoRouter = router({
     }),
 
   discardUnmatched: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      dixiName: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dixiName: z.string(),
       mesReferencia: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
       const conditions = [
-        eq(unmatchedDixiRecords.companyId, input.companyId),
+        companyFilter(unmatchedDixiRecords.companyId, input),
         eq(unmatchedDixiRecords.dixiName, input.dixiName),
         eq(unmatchedDixiRecords.status, 'pendente'),
       ];
@@ -2783,7 +2738,7 @@ export const fechamentoPontoRouter = router({
   // MEMÓRIA DE VINCULAÇÃO DIXI - CRUD
   // ============================================================
   getDixiMappings: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
@@ -2798,16 +2753,14 @@ export const fechamentoPontoRouter = router({
         createdBy: dixiNameMappings.createdBy,
         createdAt: dixiNameMappings.createdAt,
       }).from(dixiNameMappings)
-        .where(eq(dixiNameMappings.companyId, input.companyId))
+        .where(companyFilter(dixiNameMappings.companyId, input))
         .orderBy(dixiNameMappings.dixiName);
       
       return mappings;
     }),
 
   addDixiMapping: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      dixiName: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), dixiName: z.string(),
       dixiId: z.string().optional(),
       employeeId: z.number(),
       employeeName: z.string(),
@@ -2819,7 +2772,7 @@ export const fechamentoPontoRouter = router({
       // Verificar se já existe
       const existing = await db.select().from(dixiNameMappings)
         .where(and(
-          eq(dixiNameMappings.companyId, input.companyId),
+          companyFilter(dixiNameMappings.companyId, input),
           eq(dixiNameMappings.dixiName, input.dixiName),
         ));
       
@@ -2853,9 +2806,7 @@ export const fechamentoPontoRouter = router({
   // SIMULADOR DE FOLHA POR MÊS (HORISTAS)
   // ============================================================
   simularFolhaHoristas: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      diasUteis: z.number().min(1).max(31),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), diasUteis: z.number().min(1).max(31),
       horasPorDia: z.number().min(1).max(24).default(8),
     }))
     .query(async ({ input }) => {
@@ -2875,7 +2826,7 @@ export const fechamentoPontoRouter = router({
         codigoInterno: employees.codigoInterno,
       }).from(employees).where(
         and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, 'CLT'),
           sql`${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != ''`,
           sql`${employees.status} IN ('Ativo', 'Ferias')`,

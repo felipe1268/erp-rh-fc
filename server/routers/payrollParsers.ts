@@ -5,7 +5,8 @@ import {
   payrollUploads, advances, extraPayments, vrBenefits,
   monthlyPayrollSummary, timeRecords, payroll
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { PDFParse } from "pdf-parse";
 
@@ -396,9 +397,7 @@ function parseEspelhoAnaliticoPDF(text: string): Array<{
 export const payrollParsersRouter = router({
   // Upload and process file
   uploadAndParse: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      category: z.enum([
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), category: z.enum([
         "cartao_ponto",
         "espelho_adiantamento_analitico",
         "adiantamento_sintetico",
@@ -530,13 +529,11 @@ export const payrollParsersRouter = router({
 
   // List uploads by company and month
   listUploads: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      month: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), month: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      let conditions = [eq(payrollUploads.companyId, input.companyId)];
+      let conditions = [companyFilter(payrollUploads.companyId, input)];
       if (input.month) {
         conditions.push(eq(payrollUploads.month, input.month));
       }
@@ -558,13 +555,11 @@ export const payrollParsersRouter = router({
   // VALE / ADIANTAMENTO: Aprovação
   // ============================================================
   listAdvances: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      let conditions = [eq(advances.companyId, input.companyId)];
+      let conditions = [companyFilter(advances.companyId, input)];
       if (input.mesReferencia) {
         conditions.push(eq(advances.mesReferencia, input.mesReferencia));
       }
@@ -592,9 +587,7 @@ export const payrollParsersRouter = router({
   // PAGAMENTOS EXTRAS (diferença salário, horas extras por fora)
   // ============================================================
   createExtraPayment: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       mesReferencia: z.string(),
       tipo: z.enum(["Diferenca_Salario", "Horas_Extras", "Reembolso", "Bonus", "Outro"]),
       descricao: z.string().optional(),
@@ -613,13 +606,11 @@ export const payrollParsersRouter = router({
     }),
 
   listExtraPayments: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      let conditions = [eq(extraPayments.companyId, input.companyId)];
+      let conditions = [companyFilter(extraPayments.companyId, input)];
       if (input.mesReferencia) {
         conditions.push(eq(extraPayments.mesReferencia, input.mesReferencia));
       }
@@ -630,9 +621,7 @@ export const payrollParsersRouter = router({
   // VR / IFOOD BENEFÍCIOS
   // ============================================================
   createVrBenefit: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      employeeId: z.number(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
       mesReferencia: z.string(),
       valorDiario: z.string().optional(),
       diasUteis: z.number().optional(),
@@ -647,13 +636,11 @@ export const payrollParsersRouter = router({
     }),
 
   listVrBenefits: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      let conditions = [eq(vrBenefits.companyId, input.companyId)];
+      let conditions = [companyFilter(vrBenefits.companyId, input)];
       if (input.mesReferencia) {
         conditions.push(eq(vrBenefits.mesReferencia, input.mesReferencia));
       }
@@ -664,15 +651,13 @@ export const payrollParsersRouter = router({
   // RESUMO MENSAL (custo total do funcionário)
   // ============================================================
   getMonthlySummary: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      mesReferencia: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       return db.select().from(monthlyPayrollSummary)
         .where(and(
-          eq(monthlyPayrollSummary.companyId, input.companyId),
+          companyFilter(monthlyPayrollSummary.companyId, input),
           eq(monthlyPayrollSummary.mesReferencia, input.mesReferencia),
         ));
     }),

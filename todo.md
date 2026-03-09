@@ -5142,8 +5142,12 @@
 - [x] Indicador visual de que a data foi preenchida automaticamente pela norma (Zap icon + texto)
 
 ## Rev. 222: Colaboradores - Suporte a CONSTRUTORAS
-- [ ] Mostrar todos os funcionários de JF e FC quando CONSTRUTORAS está selecionado
-- [ ] Remover mensagem "Selecione uma empresa" quando CONSTRUTORAS está ativo
+- [x] Mostrar todos os funcionários de JF e FC quando CONSTRUTORAS está selecionado
+- [x] Remover mensagem "Selecione uma empresa" quando CONSTRUTORAS está ativo
 
 ## Melhoria: Busca com Autocomplete em Selects
 - [x] Campo de funcionário na entrega de EPI com busca/autocomplete em tempo real (filtrar por nome, CPF, função)
+- [x] Controle de Documentos: unificar dados de FC + JF quando CONSTRUTORAS selecionado
+- [x] TODAS as páginas: unificar dados quando CONSTRUTORAS selecionado (companyIds para grupo empresarial)
+- [x] Aviso Prévio: ajustar tabela conforme planilha (Nome, Data Aviso, Redução, Dia Trabalhado, Último Dia, Data de Pagamento)
+- [x] Aviso Prévio: renomear "Rescisão" para "Data de Pagamento" na tabela

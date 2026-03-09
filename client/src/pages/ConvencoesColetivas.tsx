@@ -47,7 +47,7 @@ const EMPTY_FORM = {
 };
 
 export default function ConvencoesColetivas() {
-  const { companies, selectedCompanyId } = useCompany();
+  const { companies, selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const [search, setSearch] = useState("");
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>("todas");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");

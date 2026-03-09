@@ -2,7 +2,8 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { pjContracts, pjPayments, employees, companies } from "../../drizzle/schema";
-import { eq, and, sql, isNull, desc, asc, lte, gte } from "drizzle-orm";
+import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
 
@@ -83,11 +84,11 @@ export const pjContractsRouter = router({
   // ============================================================
   contratos: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), status: z.string().optional(), employeeId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional(), employeeId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const conditions = [
-          eq(pjContracts.companyId, input.companyId),
+          companyFilter(pjContracts.companyId, input),
           isNull(pjContracts.deletedAt),
         ];
         if (input.status) conditions.push(eq(pjContracts.status, input.status as any));
@@ -179,7 +180,7 @@ export const pjContractsRouter = router({
 
     /** Alertas de contratos vencendo nos próximos 30 dias */
     alertas: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const hoje = new Date().toISOString().split("T")[0];
@@ -199,7 +200,7 @@ export const pjContractsRouter = router({
         .from(pjContracts)
         .innerJoin(employees, eq(pjContracts.employeeId, employees.id))
         .where(and(
-          eq(pjContracts.companyId, input.companyId),
+          companyFilter(pjContracts.companyId, input),
           isNull(pjContracts.deletedAt),
           eq(pjContracts.status, 'ativo'),
           sql`${pjContracts.dataFim} BETWEEN ${hoje} AND ${em30diasStr}`,
@@ -216,7 +217,7 @@ export const pjContractsRouter = router({
         .from(pjContracts)
         .innerJoin(employees, eq(pjContracts.employeeId, employees.id))
         .where(and(
-          eq(pjContracts.companyId, input.companyId),
+          companyFilter(pjContracts.companyId, input),
           isNull(pjContracts.deletedAt),
           eq(pjContracts.status, 'ativo'),
           sql`${pjContracts.dataFim} < ${hoje}`,
@@ -230,7 +231,7 @@ export const pjContractsRouter = router({
         })
         .from(employees)
         .where(and(
-          eq(employees.companyId, input.companyId),
+          companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, 'PJ'),
           eq(employees.status, 'Ativo'),
           isNull(employees.deletedAt),
@@ -289,9 +290,7 @@ export const pjContractsRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        employeeId: z.number(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number(),
         cnpjPrestador: z.string().optional(),
         razaoSocialPrestador: z.string().optional(),
         objetoContrato: z.string().optional(),
@@ -312,7 +311,7 @@ export const pjContractsRouter = router({
         const ano = new Date().getFullYear();
         const [countResult] = await db.select({ total: sql<number>`COUNT(*)` })
           .from(pjContracts)
-          .where(eq(pjContracts.companyId, input.companyId));
+          .where(companyFilter(pjContracts.companyId, input));
         const numero = `PJ-${ano}-${String((countResult?.total || 0) + 1).padStart(4, '0')}`;
         
         const [result] = await db.insert(pjContracts).values({
@@ -450,10 +449,10 @@ export const pjContractsRouter = router({
   // ============================================================
   pagamentos: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), contractId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional(), contractId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions = [eq(pjPayments.companyId, input.companyId)];
+        const conditions = [companyFilter(pjPayments.companyId, input)];
         if (input.mesReferencia) conditions.push(eq(pjPayments.mesReferencia, input.mesReferencia));
         if (input.contractId) conditions.push(eq(pjPayments.contractId, input.contractId));
         
@@ -483,7 +482,7 @@ export const pjContractsRouter = router({
 
     /** Gerar lançamentos mensais para todos os PJs ativos */
     gerarMensal: protectedProcedure
-      .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         
@@ -491,7 +490,7 @@ export const pjContractsRouter = router({
         const contratosAtivos = await db.select()
           .from(pjContracts)
           .where(and(
-            eq(pjContracts.companyId, input.companyId),
+            companyFilter(pjContracts.companyId, input),
             eq(pjContracts.status, 'ativo'),
             isNull(pjContracts.deletedAt),
           ));
@@ -594,7 +593,7 @@ export const pjContractsRouter = router({
 
   /** Relatório consolidado PJ para exportação PDF (retorna HTML formatado) */
   relatorioPJ: protectedProcedure
-    .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       
@@ -615,7 +614,7 @@ export const pjContractsRouter = router({
       .from(pjPayments)
       .innerJoin(employees, eq(pjPayments.employeeId, employees.id))
       .where(and(
-        eq(pjPayments.companyId, input.companyId),
+        companyFilter(pjPayments.companyId, input),
         eq(pjPayments.mesReferencia, input.mesReferencia),
       ))
       .orderBy(sql`${employees.nomeCompleto} ASC, ${pjPayments.tipo} ASC`);
@@ -634,7 +633,7 @@ export const pjContractsRouter = router({
       .from(pjContracts)
       .innerJoin(employees, eq(pjContracts.employeeId, employees.id))
       .where(and(
-        eq(pjContracts.companyId, input.companyId),
+        companyFilter(pjContracts.companyId, input),
         isNull(pjContracts.deletedAt),
       ));
 

@@ -2,7 +2,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { feriados } from "../../drizzle/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 
 // Feriados nacionais fixos do Brasil
@@ -61,9 +62,7 @@ function feriadosMoveis(ano: number): Array<{ nome: string; data: string; tipo: 
 export const feriadosRouter = router({
   // Listar feriados de um ano
   listar: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      ano: z.number().optional(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -133,9 +132,7 @@ export const feriadosRouter = router({
 
   // Criar feriado personalizado
   criar: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      nome: z.string().min(1),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string().min(1),
       data: z.string(),
       tipo: z.enum(['nacional','estadual','municipal','ponto_facultativo','compensado']),
       recorrente: z.boolean().default(true),
@@ -191,7 +188,7 @@ export const feriadosRouter = router({
 
   // Seed feriados nacionais para um ano
   seedNacionais: protectedProcedure
-    .input(z.object({ companyId: z.number(), ano: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const ano = input.ano;
@@ -243,7 +240,7 @@ export const feriadosRouter = router({
 
   // Verificar se uma data é feriado
   verificarData: protectedProcedure
-    .input(z.object({ companyId: z.number(), data: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), data: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const mmdd = input.data.substring(5); // MM-DD

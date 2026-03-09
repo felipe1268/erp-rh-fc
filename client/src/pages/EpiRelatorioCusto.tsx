@@ -18,8 +18,9 @@ function formatCurrency(value: number) {
 }
 
 export default function EpiRelatorioCusto() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [tipo, setTipo] = useState<ReportType>("funcionario");
   const [dataInicio, setDataInicio] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 6);

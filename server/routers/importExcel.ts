@@ -3,7 +3,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import { employees } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 
 // Mapeamento de colunas da planilha para campos do banco
 const COLUMN_MAP = [
@@ -288,9 +289,7 @@ export const importExcelRouter = router({
 
   // Parse planilha enviada (base64)
   parseUpload: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      base64: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), base64: z.string(),
     }))
     .mutation(async ({ input }) => {
       const buffer = Buffer.from(input.base64, "base64");
@@ -334,9 +333,7 @@ export const importExcelRouter = router({
 
   // Upload + Parse + Import em uma única chamada (usado pelo frontend)
   uploadExcel: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      fileBase64: z.string(),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), fileBase64: z.string(),
       fileName: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -405,9 +402,7 @@ export const importExcelRouter = router({
 
   // Importar em lote
   importBatch: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      rows: z.array(z.record(z.string(), z.any())),
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), rows: z.array(z.record(z.string(), z.any())),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

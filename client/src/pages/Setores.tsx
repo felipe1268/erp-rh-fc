@@ -21,9 +21,10 @@ type SetorForm = { nome: string; descricao: string };
 const emptyForm: SetorForm = { nome: "", descricao: "" };
 
 export default function Setores() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
-const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyId });
+  const companyIds = getCompanyIdsForQuery();
+const setoresQ = trpc.sectors.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const setores = setoresQ.data ?? [];
 
   const createMut = trpc.sectors.create.useMutation({ onSuccess: () => { setoresQ.refetch(); setDialogOpen(false); toast.success("Setor criado com sucesso!"); } });
@@ -53,7 +54,7 @@ const setoresQ = trpc.sectors.list.useQuery({ companyId }, { enabled: !!companyI
     if (editingId) {
       updateMut.mutate({ id: editingId, companyId, nome: form.nome, descricao: form.descricao });
     } else {
-      createMut.mutate({ companyId, nome: form.nome, descricao: form.descricao });
+      createMut.mutate({ companyId, companyIds, nome: form.nome, descricao: form.descricao });
     }
   };
 

@@ -110,9 +110,10 @@ function StatCard({ label, value, icon: Icon, color = "blue" }: { label: string;
 // ============================================================
 export default function PayrollCompetencias() {
   const { user } = useAuth();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const utils = trpc.useUtils();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
 
   const now = new Date();
   const [mesAtual, setMesAtual] = useState(now.getMonth() + 1);
@@ -276,7 +277,7 @@ export default function PayrollCompetencias() {
         const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
         return { fileName: f.name, fileBase64: base64 };
       }));
-      validateSN.mutate({ companyId, files: filesData });
+      validateSN.mutate({ companyId, companyIds, files: filesData });
     } catch { setDixiValidating(false); }
   };
   const handleDixiUpload = async () => {
@@ -292,7 +293,7 @@ export default function PayrollCompetencias() {
         toast.info(`Importando arquivo ${i + 1} de ${dixiFiles.length}: ${f.name}...`);
         const buffer = await f.arrayBuffer();
         const base64 = btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""));
-        const result = await uploadDixi.mutateAsync({ companyId, files: [{ fileName: f.name, fileBase64: base64 }] });
+        const result = await uploadDixi.mutateAsync({ companyId, companyIds, files: [{ fileName: f.name, fileBase64: base64 }] });
         totalImported += result.totalImported || 0;
         totalInconsistencies += result.totalInconsistencies || 0;
       }
@@ -330,7 +331,7 @@ export default function PayrollCompetencias() {
     if (!resolveDialog.record) return;
     setIaLoading(true);
     setIaAnalysis(null);
-    analisarIA.mutate({ companyId, timecardDailyId: resolveDialog.record.id, mesReferencia: mesRef });
+    analisarIA.mutate({ companyId, companyIds, timecardDailyId: resolveDialog.record.id, mesReferencia: mesRef });
   };
 
   // ============================================================
@@ -376,9 +377,9 @@ export default function PayrollCompetencias() {
 
   const executarLimpar = () => {
     if (limparDialog.tipo === "competencia") {
-      resetarCompetencia.mutate({ companyId, mesReferencia: mesRef });
+      resetarCompetencia.mutate({ companyId, companyIds, mesReferencia: mesRef });
     } else if (limparDialog.etapa) {
-      resetarEtapa.mutate({ companyId, mesReferencia: mesRef, etapa: limparDialog.etapa as any });
+      resetarEtapa.mutate({ companyId, companyIds, mesReferencia: mesRef, etapa: limparDialog.etapa as any });
     }
   };
 
@@ -471,7 +472,7 @@ export default function PayrollCompetencias() {
               anoAtual={anoAtual}
               mesRef={mesRef}
               resumo={resumo.data}
-              onAbrir={() => confirmAction("Abrir Competência", () => openPeriod.mutate({ companyId, mesReferencia: mesRef }))}
+              onAbrir={() => confirmAction("Abrir Competência", () => openPeriod.mutate({ companyId, companyIds, mesReferencia: mesRef }))}
               isLoading={openPeriod.isPending}
               onNext={() => setActiveStep(1)}
             />
@@ -479,7 +480,7 @@ export default function PayrollCompetencias() {
           {activeStep === 1 && (
             <StepProcessarPonto
               currentStatus={currentStatus}
-              onProcessar={() => confirmAction("Processar Ponto", () => processarPonto.mutate({ companyId, mesReferencia: mesRef }))}
+              onProcessar={() => confirmAction("Processar Ponto", () => processarPonto.mutate({ companyId, companyIds, mesReferencia: mesRef }))}
               isLoading={processarPonto.isPending}
               onNext={() => setActiveStep(2)}
               dixiFiles={dixiFiles}
@@ -510,7 +511,7 @@ export default function PayrollCompetencias() {
             <StepAferirEscuro
               currentStatus={currentStatus}
               resumo={resumo.data}
-              onAferir={() => confirmAction("Aferir Escuro", () => realizarAfericao.mutate({ companyId, mesReferencia: mesRef }))}
+              onAferir={() => confirmAction("Aferir Escuro", () => realizarAfericao.mutate({ companyId, companyIds, mesReferencia: mesRef }))}
               isLoading={realizarAfericao.isPending}
               onNext={() => setActiveStep(3)}
               onLimparEtapa={() => handleLimparEtapa(2)}
@@ -524,7 +525,7 @@ export default function PayrollCompetencias() {
               resumo={resumo.data}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              onGerar={() => confirmAction("Gerar Vale", () => gerarVale.mutate({ companyId, mesReferencia: mesRef }))}
+              onGerar={() => confirmAction("Gerar Vale", () => gerarVale.mutate({ companyId, companyIds, mesReferencia: mesRef }))}
               isLoading={gerarVale.isPending}
               onNext={() => setActiveStep(4)}
               onLimparEtapa={() => handleLimparEtapa(3)}
@@ -538,7 +539,7 @@ export default function PayrollCompetencias() {
               resumo={resumo.data}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              onSimular={() => confirmAction("Simular Pagamento", () => simularPagamento.mutate({ companyId, mesReferencia: mesRef }))}
+              onSimular={() => confirmAction("Simular Pagamento", () => simularPagamento.mutate({ companyId, companyIds, mesReferencia: mesRef }))}
               isLoading={simularPagamento.isPending}
               onContracheque={() => setShowContracheque(true)}
               onNext={() => setActiveStep(5)}
@@ -550,7 +551,7 @@ export default function PayrollCompetencias() {
             <StepConsolidar
               currentStatus={currentStatus}
               resumo={resumo.data}
-              onConsolidar={() => confirmAction("Consolidar Pagamento", () => consolidarPagamento.mutate({ companyId, mesReferencia: mesRef }))}
+              onConsolidar={() => confirmAction("Consolidar Pagamento", () => consolidarPagamento.mutate({ companyId, companyIds, mesReferencia: mesRef }))}
               isLoading={consolidarPagamento.isPending}
               onNext={() => setActiveStep(6)}
               onLimparEtapa={() => handleLimparEtapa(5)}
@@ -560,7 +561,7 @@ export default function PayrollCompetencias() {
           {activeStep === 6 && (
             <StepTravar
               currentStatus={currentStatus}
-              onTravar={() => confirmAction("Travar Competência", () => travarCompetencia.mutate({ companyId, mesReferencia: mesRef }))}
+              onTravar={() => confirmAction("Travar Competência", () => travarCompetencia.mutate({ companyId, companyIds, mesReferencia: mesRef }))}
               isLoading={travarCompetencia.isPending}
             />
           )}

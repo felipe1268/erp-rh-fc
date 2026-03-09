@@ -25,8 +25,9 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { fmtNum } from "@/lib/formatters";
 
 export default function ObraEfetivo() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
 
   const [activeTab, setActiveTab] = useState("efetivo");
   const [search, setSearch] = useState("");
@@ -48,15 +49,15 @@ export default function ObraEfetivo() {
   const [equipeSearch, setEquipeSearch] = useState("");
 
   // Queries
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const obrasAtivas = obrasQ.data ?? [];
-  const efetivoQ = trpc.obras.efetivoPorObra.useQuery({ companyId }, { enabled: !!companyId });
+  const efetivoQ = trpc.obras.efetivoPorObra.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const efetivo = efetivoQ.data ?? [];
-  const semObraQ = trpc.obras.semObra.useQuery({ companyId }, { enabled: !!companyId });
+  const semObraQ = trpc.obras.semObra.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const semObra = semObraQ.data ?? [];
-  const inconsistenciasQ = trpc.obras.inconsistencias.useQuery({ companyId }, { enabled: !!companyId });
+  const inconsistenciasQ = trpc.obras.inconsistencias.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const inconsistencias = inconsistenciasQ.data ?? [];
-  const inconsistenciasCountQ = trpc.obras.inconsistenciasCount.useQuery({ companyId }, { enabled: !!companyId });
+  const inconsistenciasCountQ = trpc.obras.inconsistenciasCount.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const inconsistenciasCount = inconsistenciasCountQ.data ?? 0;
 
   // Funcionários da obra selecionada
@@ -64,7 +65,7 @@ export default function ObraEfetivo() {
   const funcObra = funcObraQ.data ?? [];
 
   // All active employees for multi-select
-  const allEmpsQ = trpc.employees.list.useQuery({ companyId, status: "ativo" }, { enabled: !!companyId });
+  const allEmpsQ = trpc.employees.list.useQuery({ companyId, companyIds, status: "ativo" }, { enabled: !!companyId });
   const allEmps = allEmpsQ.data ?? [];
 
   // Histórico de alocações

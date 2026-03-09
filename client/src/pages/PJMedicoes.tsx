@@ -20,8 +20,9 @@ import { useAuth } from "@/_core/hooks/useAuth";
 const MESES_LABEL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 export default function PJMedicoes() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin_master' || user?.role === 'admin';
   const now = new Date();
@@ -71,9 +72,7 @@ export default function PJMedicoes() {
     const selectedContract = contratos?.find((c: any) => c.id === form.contractId);
     if (!selectedContract?.employeeId) return toast.error("Contrato sem funcionário vinculado");
     const total = calcTotal(form.horasTrabalhadas, form.valorHora);
-    criarMut.mutate({
-      companyId,
-      contractId: form.contractId,
+    criarMut.mutate({ companyId, companyIds, contractId: form.contractId,
       employeeId: selectedContract.employeeId,
       mesReferencia: form.mesReferencia,
       horasTrabalhadas: form.horasTrabalhadas,

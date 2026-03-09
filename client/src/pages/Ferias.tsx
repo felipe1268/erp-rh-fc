@@ -44,13 +44,11 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 // ============================================================
 // DIALOG: Detalhes completos de férias do funcionário (Gantt click)
 // ============================================================
-function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirData, refetch: parentRefetch }: {
-  companyId: number;
+function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirData, refetch: parentRefetch, companyIds}: {companyId: number;
   employeeId: number;
   onClose: () => void;
   onDefinirData: (item: any) => void;
-  refetch: () => void;
-}) {
+  refetch: () => void; companyIds?: number[]}) {
   const { data, isLoading } = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
     { companyId, employeeId },
     { enabled: !!companyId && !!employeeId }
@@ -138,7 +136,7 @@ function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirDa
                 size="sm"
                 variant="outline"
                 className="border-green-300 text-green-700 hover:bg-green-50"
-                onClick={() => gerarPeriodos.mutate({ companyId, employeeId })}
+                onClick={() => gerarPeriodos.mutate({ companyId, companyIds, employeeId })}
                 disabled={gerarPeriodos.isPending}
               >
                 <Zap className="h-4 w-4 mr-1" />
@@ -294,8 +292,9 @@ function GanttEmployeeFeriasDialog({ companyId, employeeId, onClose, onDefinirDa
 }
 
 export default function Ferias() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [tab, setTab] = useState("lista");
@@ -344,7 +343,7 @@ export default function Ferias() {
     { companyId },
     { enabled: !!companyId && tab === "vencidas" }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // tRPC utils for invalidation
@@ -456,9 +455,7 @@ export default function Ferias() {
       toast.error("Preencha os campos obrigatórios");
       return;
     }
-    createFerias.mutate({
-      companyId,
-      employeeId: form.employeeId,
+    createFerias.mutate({ companyId, companyIds, employeeId: form.employeeId,
       periodoAquisitivoInicio: form.periodoAquisitivoInicio,
       periodoAquisitivoFim: form.periodoAquisitivoFim,
       periodoConcessivoFim: form.periodoConcessivoFim,
@@ -472,7 +469,7 @@ export default function Ferias() {
   };
 
   const handleGerarPeriodos = (employeeId: number) => {
-    gerarPeriodos.mutate({ companyId, employeeId });
+    gerarPeriodos.mutate({ companyId, companyIds, employeeId });
   };
 
   const handleDefinirData = (item: any) => {
@@ -801,7 +798,7 @@ export default function Ferias() {
                             className="border-green-300 text-green-700 hover:bg-green-50"
                             onClick={() => {
                               if (confirm(`Confirmar TODOS os ${grupo.periodos.length} períodos de ${grupo.employee.nome} como pagos?`)) {
-                                confirmarTodasVencidas.mutate({ companyId, employeeId: grupo.employee.id });
+                                confirmarTodasVencidas.mutate({ companyId, companyIds, employeeId: grupo.employee.id });
                               }
                             }}
                             disabled={confirmarTodasVencidas.isPending}
@@ -1593,6 +1590,7 @@ export default function Ferias() {
       {ganttEmployeeId && (
         <GanttEmployeeFeriasDialog
           companyId={companyId}
+          companyIds={companyIds}
           employeeId={ganttEmployeeId}
           onClose={() => setGanttEmployeeId(null)}
           onDefinirData={(item: any) => { setGanttEmployeeId(null); handleDefinirData(item); }}

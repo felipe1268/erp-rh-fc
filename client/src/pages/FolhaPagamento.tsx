@@ -48,11 +48,12 @@ function parseBRLNum(val: string | number | null | undefined): number {
 type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao";
 
 export default function FolhaPagamento() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const isMaster = user?.role === "admin_master";
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth() + 1);
@@ -85,9 +86,9 @@ export default function FolhaPagamento() {
   const [heObraFilter, setHeObraFilter] = useState<string>("all");
 
   // ===== QUERIES =====
-  const statusMes = trpc.folha.statusMes.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const mesesComLanc = trpc.folha.listarMesesComLancamentos.useQuery({ companyId, ano: anoSelecionado }, { enabled: companyId > 0 });
-  const lancamentos = trpc.folha.listarLancamentos.useQuery({ companyId, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const statusMes = trpc.folha.statusMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const mesesComLanc = trpc.folha.listarMesesComLancamentos.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 });
+  const lancamentos = trpc.folha.listarLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
   const itensDetail = trpc.folha.listarItens.useQuery(
     { folhaLancamentoId: viewLancId! },
     { enabled: !!viewLancId && (viewMode === "detalhes" || viewMode === "verificacao"), refetchOnWindowFocus: true }
@@ -170,7 +171,7 @@ export default function FolhaPagamento() {
     onSuccess: (data) => {
       toast.success(data.message);
       // Recalculate vale to refresh the view
-      gerarValeMut.mutate({ companyId, mesReferencia: mesAno });
+      gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
     },
     onError: (err) => toast.error(`Erro ao registrar decisão: ${err.message}`),
   });
@@ -306,9 +307,7 @@ export default function FolhaPagamento() {
     if (selectedSemObra.size === 0) return toast.error("Selecione pelo menos um funcionário");
     if (!vinculacaoObraId) return toast.error("Selecione uma obra");
     if (vinculacaoJustificativa.trim().length < 5) return toast.error("Justificativa deve ter pelo menos 5 caracteres");
-    vincularObraMut.mutate({
-      companyId,
-      mesReferencia: mesAno,
+    vincularObraMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
       obraId: vinculacaoObraId,
       justificativa: vinculacaoJustificativa.trim(),
       employeeIds: Array.from(selectedSemObra),
@@ -332,9 +331,7 @@ export default function FolhaPagamento() {
       arquivos.push({ fileName: file.name, fileBase64: base64, mimeType: file.type || "application/pdf" });
     }
 
-    importarAutoMut.mutate({
-      companyId,
-      mesReferencia: mesAno,
+    importarAutoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
       tipoLancamento: tipo,
       arquivos,
     });
@@ -1426,7 +1423,7 @@ export default function FolhaPagamento() {
                     <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50"
                       onClick={() => {
                         const decisoes = funcionariosComAlerta.map((f: any) => ({ employeeId: f.employeeId, pagar: true }));
-                        decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes });
+                        decidirValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes });
                       }}
                       disabled={decidirValeMut.isPending}>
                       <CheckCircle className="h-3 w-3 mr-1" /> Aprovar Todos
@@ -1434,7 +1431,7 @@ export default function FolhaPagamento() {
                     <Button size="sm" variant="outline" className="border-red-500 text-red-700 hover:bg-red-50"
                       onClick={() => {
                         const decisoes = funcionariosComAlerta.map((f: any) => ({ employeeId: f.employeeId, pagar: false }));
-                        decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes });
+                        decidirValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes });
                       }}
                       disabled={decidirValeMut.isPending}>
                       <XCircle className="h-3 w-3 mr-1" /> Rejeitar Todos
@@ -1471,12 +1468,12 @@ export default function FolhaPagamento() {
                             <div className="flex items-center justify-center gap-1">
                               <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-green-500 text-green-700 hover:bg-green-50"
                                 disabled={decidirValeMut.isPending}
-                                onClick={() => decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: true }] })}>
+                                onClick={() => decidirValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: true }] })}>
                                 <CheckCircle className="h-3 w-3 mr-0.5" /> Pagar
                               </Button>
                               <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-red-500 text-red-700 hover:bg-red-50"
                                 disabled={decidirValeMut.isPending}
-                                onClick={() => decidirValeMut.mutate({ companyId, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: false }] })}>
+                                onClick={() => decidirValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: false }] })}>
                                 <XCircle className="h-3 w-3 mr-0.5" /> Não Pagar
                               </Button>
                             </div>
@@ -1599,16 +1596,14 @@ export default function FolhaPagamento() {
               <div className="flex gap-2 justify-end">
                 <Button size="sm" variant="outline" className="text-green-700 border-green-300"
                   disabled={decidirAfericaoMut.isPending}
-                  onClick={() => decidirAfericaoMut.mutate({
-                    companyId, mesReferencia: mesAno,
+                  onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
                     decisoes: alertas.map((a: any) => ({ adjustmentId: a.id, decisao: "erro_relogio" as const }))
                   })}>
                   <CheckCircle className="h-3 w-3 mr-1" /> Todos: Erro do Relógio
                 </Button>
                 <Button size="sm" variant="outline" className="text-red-700 border-red-300"
                   disabled={decidirAfericaoMut.isPending}
-                  onClick={() => decidirAfericaoMut.mutate({
-                    companyId, mesReferencia: mesAno,
+                  onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
                     decisoes: alertas.map((a: any) => ({ adjustmentId: a.id, decisao: "falta_real" as const }))
                   })}>
                   <XCircle className="h-3 w-3 mr-1" /> Todos: Falta Real
@@ -1640,16 +1635,14 @@ export default function FolhaPagamento() {
                           <div className="flex gap-1 justify-center">
                             <Button size="sm" variant="outline" className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50"
                               disabled={decidirAfericaoMut.isPending}
-                              onClick={() => decidirAfericaoMut.mutate({
-                                companyId, mesReferencia: mesAno,
+                              onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
                                 decisoes: [{ adjustmentId: a.id, decisao: "erro_relogio" }]
                               })}>
                               Erro Relógio
                             </Button>
                             <Button size="sm" variant="outline" className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
                               disabled={decidirAfericaoMut.isPending}
-                              onClick={() => decidirAfericaoMut.mutate({
-                                companyId, mesReferencia: mesAno,
+                              onClick={() => decidirAfericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno,
                                 decisoes: [{ adjustmentId: a.id, decisao: "falta_real" }]
                               })}>
                               Falta Real
@@ -1917,7 +1910,7 @@ export default function FolhaPagamento() {
                 <p className="text-xs text-muted-foreground mb-3">40% do salário + horas extras do ponto real (15 a 15)</p>
                 <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-700"
                   disabled={gerarValeMut.isPending}
-                  onClick={() => gerarValeMut.mutate({ companyId, mesReferencia: mesAno })}>
+                  onClick={() => gerarValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
                   {gerarValeMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><Zap className="h-3 w-3 mr-1" /> Calcular Vale</>}
                 </Button>
                 {valeResult && (
@@ -1945,7 +1938,7 @@ export default function FolhaPagamento() {
                 <p className="text-xs text-muted-foreground mb-3">100% salário − adiantamento − faltas − INSS − descontos</p>
                 <Button size="sm" className="w-full bg-green-600 hover:bg-green-700"
                   disabled={simularPagamentoMut.isPending}
-                  onClick={() => simularPagamentoMut.mutate({ companyId, mesReferencia: mesAno })}>
+                  onClick={() => simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
                   {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
                 </Button>
                 {pagamentoResult && (
@@ -1964,7 +1957,7 @@ export default function FolhaPagamento() {
                 <p className="text-xs text-muted-foreground mb-3">Compara o escuro do mês anterior com o ponto real importado</p>
                 <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700"
                   disabled={afericaoMut.isPending}
-                  onClick={() => afericaoMut.mutate({ companyId, mesReferencia: mesAno })}>
+                  onClick={() => afericaoMut.mutate({ companyId, companyIds, mesReferencia: mesAno })}>
                   {afericaoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Aferindo...</> : <><Zap className="h-3 w-3 mr-1" /> Aferir Escuro</>}
                 </Button>
                 {afericaoResult && (

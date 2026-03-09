@@ -7,7 +7,8 @@ import {
   pagamentosParceiros,
   employees,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
+import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 
 export const parceirosRouter = router({
@@ -16,11 +17,11 @@ export const parceirosRouter = router({
   // ============================================================
   cadastro: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         return db.select().from(parceirosConveniados)
-          .where(and(eq(parceirosConveniados.companyId, input.companyId), isNull(parceirosConveniados.deletedAt)))
+          .where(and(companyFilter(parceirosConveniados.companyId, input), isNull(parceirosConveniados.deletedAt)))
           .orderBy(parceirosConveniados.razaoSocial);
       }),
 
@@ -33,9 +34,7 @@ export const parceirosRouter = router({
       }),
 
     create: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        razaoSocial: z.string().min(1),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), razaoSocial: z.string().min(1),
         nomeFantasia: z.string().optional(),
         cnpj: z.string().min(1),
         inscricaoEstadual: z.string().optional(),
@@ -157,15 +156,13 @@ export const parceirosRouter = router({
   // ============================================================
   lancamentos: router({
     list: protectedProcedure
-      .input(z.object({
-        companyId: z.number(),
-        parceiroId: z.number().optional(),
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), parceiroId: z.number().optional(),
         competencia: z.string().optional(),
         status: z.enum(["pendente", "aprovado", "rejeitado"]).optional(),
       }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions: any[] = [eq(lancamentosParceiros.companyId, input.companyId)];
+        const conditions: any[] = [companyFilter(lancamentosParceiros.companyId, input)];
         if (input.parceiroId) conditions.push(eq(lancamentosParceiros.parceiroId, input.parceiroId));
         if (input.competencia) conditions.push(eq(lancamentosParceiros.competenciaDesconto, input.competencia));
         if (input.status) conditions.push(eq(lancamentosParceiros.status, input.status));
@@ -272,12 +269,12 @@ export const parceirosRouter = router({
   // GUIA DE DESCONTOS
   // ============================================================
   guiaDescontos: protectedProcedure
-    .input(z.object({ companyId: z.number(), competencia: z.string() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), competencia: z.string() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const lancamentos = await db.select().from(lancamentosParceiros)
         .where(and(
-          eq(lancamentosParceiros.companyId, input.companyId),
+          companyFilter(lancamentosParceiros.companyId, input),
           eq(lancamentosParceiros.competenciaDesconto, input.competencia),
           eq(lancamentosParceiros.status, "aprovado"),
         ))
@@ -307,10 +304,10 @@ export const parceirosRouter = router({
   // ============================================================
   pagamentos: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), parceiroId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), parceiroId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        const conditions: any[] = [eq(pagamentosParceiros.companyId, input.companyId)];
+        const conditions: any[] = [companyFilter(pagamentosParceiros.companyId, input)];
         if (input.parceiroId) conditions.push(eq(pagamentosParceiros.parceiroId, input.parceiroId));
         return db.select().from(pagamentosParceiros).where(and(...conditions)).orderBy(desc(pagamentosParceiros.createdAt));
       }),
@@ -352,19 +349,19 @@ export const parceirosRouter = router({
   // PAINEL / DASHBOARD
   // ============================================================
   painel: protectedProcedure
-    .input(z.object({ companyId: z.number() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const parceiros = await db.select().from(parceirosConveniados)
-        .where(and(eq(parceirosConveniados.companyId, input.companyId), isNull(parceirosConveniados.deletedAt)));
+        .where(and(companyFilter(parceirosConveniados.companyId, input), isNull(parceirosConveniados.deletedAt)));
 
       const now = new Date();
       const competenciaAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const lancamentos = await db.select().from(lancamentosParceiros)
-        .where(and(eq(lancamentosParceiros.companyId, input.companyId), eq(lancamentosParceiros.competenciaDesconto, competenciaAtual)));
+        .where(and(companyFilter(lancamentosParceiros.companyId, input), eq(lancamentosParceiros.competenciaDesconto, competenciaAtual)));
 
       const pagamentos = await db.select().from(pagamentosParceiros)
-        .where(and(eq(pagamentosParceiros.companyId, input.companyId), eq(pagamentosParceiros.competencia, competenciaAtual)));
+        .where(and(companyFilter(pagamentosParceiros.companyId, input), eq(pagamentosParceiros.competencia, competenciaAtual)));
 
       return {
         parceiros: {

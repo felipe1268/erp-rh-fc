@@ -47,8 +47,9 @@ const BANCOS_COMUNS = [
 ];
 
 export default function ContasBancarias() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
 
   const contasQ = trpc.folha.listarContasBancarias.useQuery(
     { companyId },
@@ -128,9 +129,7 @@ export default function ContasBancarias() {
 
       });
     } else {
-      createMut.mutate({
-        companyId,
-        banco: form.banco,
+      createMut.mutate({ companyId, companyIds, banco: form.banco,
         codigoBanco: form.codigoBanco || undefined,
         agencia: form.agencia,
         conta: form.conta,

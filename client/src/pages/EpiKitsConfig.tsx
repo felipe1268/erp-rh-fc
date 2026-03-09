@@ -17,8 +17,9 @@ import { useCompany } from "@/contexts/CompanyContext";
 type ConfigTab = "kits" | "cores" | "vida_util" | "treinamentos";
 
 export default function EpiKitsConfig() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<ConfigTab>("kits");
   const [showKitForm, setShowKitForm] = useState(false);
   const [editingKit, setEditingKit] = useState<any>(null);
@@ -31,10 +32,10 @@ export default function EpiKitsConfig() {
   const [iaSugestaoTreino, setIaSugestaoTreino] = useState<any[] | null>(null);
 
   // Queries
-  const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId }, { enabled: !!companyId });
-  const coresQ = trpc.epiAvancado.coresCapaceteList.useQuery({ companyId }, { enabled: !!companyId });
-  const vidaUtilQ = trpc.epiAvancado.vidaUtilList.useQuery({ companyId }, { enabled: !!companyId });
-  const treinamentosQ = trpc.epiAvancado.treinamentosVinculadosList.useQuery({ companyId }, { enabled: !!companyId });
+  const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const coresQ = trpc.epiAvancado.coresCapaceteList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const vidaUtilQ = trpc.epiAvancado.vidaUtilList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const treinamentosQ = trpc.epiAvancado.treinamentosVinculadosList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
 
   // Mutations
   const seedAllMut = trpc.epiAvancado.seedAllDefaults.useMutation({
@@ -202,9 +203,7 @@ export default function EpiKitsConfig() {
     setSavingKits(true);
     try {
       for (const kit of iaSugestaoKits) {
-        await createKitMut.mutateAsync({
-          companyId,
-          nome: kit.nome,
+        await createKitMut.mutateAsync({ companyId, companyIds, nome: kit.nome,
           funcao: kit.funcao,
           descricao: kit.descricao || undefined,
           items: kit.items.map((i: any) => ({
@@ -319,9 +318,7 @@ export default function EpiKitsConfig() {
                         </Button>
                         <Button size="sm" variant="ghost" className="h-7 text-green-600 hover:bg-green-50" onClick={async () => {
                           try {
-                            await createKitMut.mutateAsync({
-                              companyId,
-                              nome: kit.nome,
+                            await createKitMut.mutateAsync({ companyId, companyIds, nome: kit.nome,
                               funcao: kit.funcao,
                               descricao: kit.descricao || undefined,
                               items: kit.items.map((i: any) => ({
@@ -502,7 +499,7 @@ export default function EpiKitsConfig() {
                         if (editingKit) {
                           updateKitMut.mutate({ id: editingKit.id, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
                         } else {
-                          createKitMut.mutate({ companyId, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
+                          createKitMut.mutate({ companyId, companyIds, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
                         }
                       }}>
                       {(createKitMut.isPending || updateKitMut.isPending) ? "Salvando..." : editingKit ? "Atualizar" : "Criar Kit"}
@@ -612,7 +609,7 @@ export default function EpiKitsConfig() {
                   <Button size="sm" className="bg-[#1B2A4A] hover:bg-[#243660]" disabled={coresUpsertMut.isPending}
                     onClick={() => {
                       const valid = (coresForm.length > 0 ? coresForm : coresFormInit).filter(c => c.cor.trim() && c.funcoes.trim());
-                      coresUpsertMut.mutate({ companyId, cores: valid });
+                      coresUpsertMut.mutate({ companyId, companyIds, cores: valid });
                     }}>
                     {coresUpsertMut.isPending ? "Salvando..." : "Salvar Cores"}
                   </Button>
@@ -711,7 +708,7 @@ export default function EpiKitsConfig() {
                   <Button size="sm" className="bg-[#1B2A4A] hover:bg-[#243660]" disabled={vidaUtilUpsertMut.isPending}
                     onClick={() => {
                       const valid = (vidaForm.length > 0 ? vidaForm : vidaFormInit).filter(v => v.nomeEpi.trim());
-                      vidaUtilUpsertMut.mutate({ companyId, items: valid });
+                      vidaUtilUpsertMut.mutate({ companyId, companyIds, items: valid });
                     }}>
                     {vidaUtilUpsertMut.isPending ? "Salvando..." : "Salvar Vida Útil"}
                   </Button>
@@ -805,7 +802,7 @@ export default function EpiKitsConfig() {
                   <Button size="sm" className="bg-[#1B2A4A] hover:bg-[#243660]" disabled={treinamentosUpsertMut.isPending}
                     onClick={() => {
                       const valid = (treinoForm.length > 0 ? treinoForm : treinoFormInit).filter(t => t.nomeEpi.trim() && t.normaExigida.trim());
-                      treinamentosUpsertMut.mutate({ companyId, items: valid });
+                      treinamentosUpsertMut.mutate({ companyId, companyIds, items: valid });
                     }}>
                     {treinamentosUpsertMut.isPending ? "Salvando..." : "Salvar Treinamentos"}
                   </Button>

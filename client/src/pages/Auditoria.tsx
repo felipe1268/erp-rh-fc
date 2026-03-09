@@ -45,8 +45,9 @@ function formatDate(d: string | null | undefined): string {
 }
 
 export default function Auditoria() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyIds = getCompanyIdsForQuery();
   const [activeTab, setActiveTab] = useState("logs");
   const [searchLogs, setSearchLogs] = useState("");
   const [confirmRestore, setConfirmRestore] = useState<number | null>(null);
