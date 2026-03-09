@@ -1,0 +1,64 @@
+{
+  "query": "SELECT id, valorCausa, valorCondenacao, valorAcordo, valorPago, status, fase FROM processos_trabalhistas WHERE (status IN ('encerrado', 'arquivado') OR fase = 'encerrado');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, valorCausa, valorCondenacao, valorAcordo, valorPago, status, fase FROM processos_trabalhistas WHERE (status IN ('encerrado', 'arquivado') OR fase = 'encerrado');",
+  "rows": [
+    {
+      "id": "30003",
+      "valorCausa": "5000",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL",
+      "valorPago": "NULL",
+      "status": "acordo",
+      "fase": "encerrado"
+    },
+    {
+      "id": "60001",
+      "valorCausa": "14000",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL",
+      "valorPago": "NULL",
+      "status": "acordo",
+      "fase": "encerrado"
+    },
+    {
+      "id": "60010",
+      "valorCausa": "NULL",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL",
+      "valorPago": "NULL",
+      "status": "acordo",
+      "fase": "encerrado"
+    },
+    {
+      "id": "60012",
+      "valorCausa": "NULL",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL",
+      "valorPago": "NULL",
+      "status": "acordo",
+      "fase": "encerrado"
+    },
+    {
+      "id": "60013",
+      "valorCausa": "NULL",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL",
+      "valorPago": "NULL",
+      "status": "arquivado",
+      "fase": "encerrado"
+    },
+    {
+      "id": "60016",
+      "valorCausa": "50000",
+      "valorCondenacao": "NULL",
+      "valorAcordo": "NULL",
+      "valorPago": "NULL",
+      "status": "acordo",
+      "fase": "encerrado"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tvalorCausa\tvalorCondenacao\tvalorAcordo\tvalorPago\tstatus\tfase\n30003\t5000\tNULL\tNULL\tNULL\tacordo\tencerrado\n60001\t14000\tNULL\tNULL\tNULL\tacordo\tencerrado\n60010\tNULL\tNULL\tNULL\tNULL\tacordo\tencerrado\n60012\tNULL\tNULL\tNULL\tNULL\tacordo\tencerrado\n60013\tNULL\tNULL\tNULL\tNULL\tarquivado\tencerrado\n60016\t50000\tNULL\tNULL\tNULL\tacordo\tencerrado\n",
+  "stderr": "",
+  "execution_time_ms": 68
+}

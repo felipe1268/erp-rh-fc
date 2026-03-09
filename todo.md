@@ -5157,3 +5157,6 @@
 - [x] Auto-selecionar "Obra" como origem quando funcionário está em obra com estoque do EPI
 - [x] Permitir transferência obra→central (devolver EPI ao catálogo/escritório)
 - [x] Corrigir deleteDelivery para devolver ao estoque correto (obra ou central) conforme origemEntrega
+
+## Bug: Total Pago Processos Trabalhistas
+- [x] Corrigir card "Total Pago" que mostra R$ 0,00 mesmo com processos encerrados (fallback: valorAcordo ou valorCondenacao)

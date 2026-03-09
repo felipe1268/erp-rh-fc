@@ -340,7 +340,13 @@ export const processosTrabRouter = router({
       };
 
       const totalValorCausa = processos.reduce((s, p) => s + parseBRL(p.valorCausa), 0);
-      const totalValorPago = processos.reduce((s, p) => s + parseBRL(p.valorPago), 0);
+      // Fallback: se processo encerrado não tem valorPago, usar valorAcordo ou valorCondenacao
+      const getValorPago = (p: any) => {
+        if (p.valorPago) return parseBRL(p.valorPago);
+        if (isEncerrado(p)) return parseBRL(p.valorAcordo) || parseBRL(p.valorCondenacao);
+        return 0;
+      };
+      const totalValorPago = processos.reduce((s, p) => s + getValorPago(p), 0);
 
       const porRisco = {
         baixo: processos.filter(p => p.risco === 'baixo' && !isEncerrado(p)).length,
