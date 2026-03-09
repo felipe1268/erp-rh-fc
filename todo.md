@@ -5119,3 +5119,12 @@
 - [x] BUG: Após ajuste manual, status continua 'Inconsistente' - corrigido filtrando por status=pendente
 - [x] BUG: Edição de treinamentos não salva as modificações - corrigido tratamento de strings vazias
 - [x] Dashboards CONSTRUTORAS: mostrar dados unificados de todas as empresas do grupo - backend e frontend atualizados
+
+## Rev. 219: Sistema de Exportação e Importação Completa
+- [x] Backend: Exportar todas as tabelas do banco em JSON organizado
+- [x] Backend: Exportar todos os documentos/arquivos anexados (ASOs, certificados, fotos, etc.)
+- [x] Backend: Gerar pacote ZIP com banco + arquivos organizados por pasta
+- [x] Backend: Importar dados de pacote ZIP (restaurar banco + arquivos)
+- [x] Frontend: Página de Backup/Migração com botões Exportar e Importar
+- [x] Frontend: Progresso de exportação/importação com feedback visual
+- [x] Documentação: README com instruções para migrar para Railway + banco independente

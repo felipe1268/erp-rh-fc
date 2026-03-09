@@ -82,6 +82,7 @@ import { payrollEngineRouter } from "./routers/payrollEngine";
 import { fieldNotesRouter } from "./routers/fieldNotes";
 import { epiAvancadoRouter } from "./routers/epiAvancado";
 import { backupRouter } from "./routers/backup";
+import { migrationRouter } from "./routers/migration";
 import { contractsRouter } from "./routers/contracts";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
@@ -122,6 +123,7 @@ export const appRouter = router({
   fieldNotes: fieldNotesRouter,
   epiAvancado: epiAvancadoRouter,
   backup: backupRouter,
+  migration: migrationRouter,
   contracts: contractsRouter,
   auth: router({
     me: publicProcedure.query(opts => {

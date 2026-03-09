@@ -28,6 +28,7 @@ const Usuarios = lazy(() => import("./pages/Usuarios"));
 const GruposUsuarios = lazy(() => import("./pages/GruposUsuarios"));
 const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
+const Migration = lazy(() => import("./pages/Migration"));
 const Obras = lazy(() => import("./pages/Obras"));
 const ObraEfetivo = lazy(() => import("./pages/ObraEfetivo"));
 const FechamentoPonto = lazy(() => import("./pages/FechamentoPonto"));
@@ -166,6 +167,7 @@ function Router() {
         <Route path={"/controle-documentos"} component={ControleDocumentos} />
         <Route path={"/vale-alimentacao"} component={ValeAlimentacao} />
         <Route path={"/configuracoes"} component={Configuracoes} />
+        <Route path={"/migracao"} component={Migration} />
         <Route path={"/lixeira"} component={Lixeira} />
         <Route path={"/aviso-previo"} component={AvisoPrevio} />
         <Route path={"/ferias"} component={Ferias} />

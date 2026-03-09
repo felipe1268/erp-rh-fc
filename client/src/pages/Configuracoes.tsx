@@ -16,7 +16,7 @@ import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -2284,6 +2284,26 @@ function BackupTab() {
               </table>
             </div>
           )}
+        </CardContent>
+      </Card>
+      {/* Card de Migração */}
+      <Card className="border-purple-200 bg-purple-50/50 dark:bg-purple-950/20 dark:border-purple-800">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <HardDrive className="w-5 h-5 text-purple-600" />
+              <div>
+                <p className="font-semibold text-purple-800 dark:text-purple-200">Migração Completa</p>
+                <p className="text-sm text-purple-600 dark:text-purple-400">
+                  Exporte ou importe todos os dados + documentos para migrar o ERP para outra plataforma
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-100" onClick={() => window.location.href = '/migracao'}>
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Abrir Migração
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
