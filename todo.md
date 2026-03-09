@@ -5133,3 +5133,10 @@
 - [x] BUG: Exportação retorna tabelas vazias (totalRecords: 0) - corrigido rows[0] do mysql2
 - [x] Gerar exportação em formato ZIP organizado com pastas (archiver)
 - [x] ZIP contém: /banco/*.json + banco-completo.json + manifesto-arquivos.json + README-MIGRACAO.md
+
+## Rev. 221: Auto-preenchimento de validade em treinamentos por NR
+- [x] Pesquisar prazos de validade oficiais de cada NR (NR-35, NR-10, NR-33, NR-18, etc.)
+- [x] Criar constante/tabela com regras de validade por tipo de treinamento (shared/trainingRules.ts)
+- [x] Auto-preencher data de validade ao selecionar tipo de treinamento + data de realização
+- [x] Permitir que o usuário altere a data sugerida (não bloquear)
+- [x] Indicador visual de que a data foi preenchida automaticamente pela norma (Zap icon + texto)

@@ -16,7 +16,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
 
 // ============ HELPERS ============
 function StatusBadge({ status, diasRestantes }: { status: string; diasRestantes: number }) {
@@ -2075,6 +2076,69 @@ export default function ControleDocumentos() {
               <label className="text-sm font-medium">Colaborador * <span className="text-xs text-muted-foreground">(apenas ativos do cadastro)</span></label>
               <EmployeeSelect value={treinForm.employeeId} onChange={id => setTreinForm({ ...treinForm, employeeId: id })} />
             </div>
+
+            {/* ===== SELEÇÃO RÁPIDA POR NR ===== */}
+            <div className="col-span-2">
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-amber-500" />
+                Preenchimento Rápido por NR
+                <span className="text-xs text-muted-foreground font-normal">(selecione para preencher automaticamente)</span>
+              </label>
+              <Select
+                value={treinForm._selectedRule || ""}
+                onValueChange={(val) => {
+                  if (val === "_custom") {
+                    setTreinForm({ ...treinForm, _selectedRule: "", nome: "", norma: "", cargaHoraria: "", _autoValidade: false });
+                    return;
+                  }
+                  const idx = parseInt(val);
+                  const rule = TRAINING_RULES[idx];
+                  if (!rule) return;
+                  const updates: any = {
+                    ...treinForm,
+                    _selectedRule: val,
+                    nome: rule.nome,
+                    norma: rule.norma,
+                    cargaHoraria: rule.cargaHorariaInicial,
+                    _autoValidade: !!rule.validadeMeses,
+                    _validadeMeses: rule.validadeMeses,
+                  };
+                  // Se já tem data de realização, calcula validade automaticamente
+                  if (treinForm.dataRealizacao && rule.validadeMeses) {
+                    updates.dataValidade = calcularDataValidade(treinForm.dataRealizacao, rule.validadeMeses);
+                  }
+                  setTreinForm(updates);
+                  toast.success(`Preenchido: ${rule.nome} (${rule.norma || "Sem NR"})${rule.validadeMeses ? ` — Validade: ${rule.validadeMeses} meses` : ""}`);
+                }}
+              >
+                <SelectTrigger className="bg-amber-50/50 border-amber-200">
+                  <SelectValue placeholder="Selecione um treinamento padrão ou preencha manualmente abaixo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_custom">✏️ Preencher manualmente</SelectItem>
+                  {Object.entries(TRAINING_CATEGORIES).map(([key, label]) => {
+                    const rules = TRAINING_RULES.filter(r => r.categoria === key);
+                    if (rules.length === 0) return null;
+                    return [
+                      <div key={`cat-${key}`} className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1">{label}</div>,
+                      ...rules.map((rule) => {
+                        const globalIdx = TRAINING_RULES.indexOf(rule);
+                        return (
+                          <SelectItem key={globalIdx} value={String(globalIdx)}>
+                            <span className="flex items-center gap-2">
+                              <span className="font-medium">{rule.nome}</span>
+                              {rule.norma && <span className="text-xs text-muted-foreground">({rule.norma})</span>}
+                              {rule.validadeMeses && <span className="text-xs text-amber-600">• {rule.validadeMeses}m</span>}
+                            </span>
+                          </SelectItem>
+                        );
+                      })
+                    ];
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div>
               <label className="text-sm font-medium">Nome do Treinamento *</label>
               <Input value={treinForm.nome || ""} onChange={e => setTreinForm({ ...treinForm, nome: e.target.value })} />
@@ -2089,11 +2153,23 @@ export default function ControleDocumentos() {
             </div>
             <div>
               <label className="text-sm font-medium">Data Realização *</label>
-              <Input type="date" value={treinForm.dataRealizacao || ""} onChange={e => setTreinForm({ ...treinForm, dataRealizacao: e.target.value })} />
+              <Input type="date" value={treinForm.dataRealizacao || ""} onChange={e => {
+                const newDate = e.target.value;
+                const updates: any = { ...treinForm, dataRealizacao: newDate };
+                // Auto-calcular validade se tem regra selecionada
+                if (treinForm._autoValidade && treinForm._validadeMeses && newDate) {
+                  updates.dataValidade = calcularDataValidade(newDate, treinForm._validadeMeses);
+                }
+                setTreinForm(updates);
+              }} />
             </div>
             <div>
-              <label className="text-sm font-medium">Data Validade</label>
-              <Input type="date" value={treinForm.dataValidade || ""} onChange={e => setTreinForm({ ...treinForm, dataValidade: e.target.value })} />
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                Data Validade
+                {treinForm._autoValidade && <span className="text-xs text-amber-600 flex items-center gap-0.5"><Zap className="h-3 w-3" /> Auto ({treinForm._validadeMeses}m)</span>}
+              </label>
+              <Input type="date" value={treinForm.dataValidade || ""} onChange={e => setTreinForm({ ...treinForm, dataValidade: e.target.value, _autoValidade: false })} />
+              {treinForm._autoValidade && <p className="text-xs text-amber-600 mt-0.5">Calculada automaticamente pela norma. Você pode alterar se necessário.</p>}
             </div>
             <div>
               <label className="text-sm font-medium">Instrutor</label>
