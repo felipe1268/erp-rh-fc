@@ -800,7 +800,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-2 block flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-amber-600" />
-                      Último Dia Trabalhado <span className="text-red-500">*</span>
+                      Data do Aviso <span className="text-red-500">*</span>
                     </label>
                     <Input type="date" className="h-12 border-2 border-gray-200 hover:border-amber-400 transition-colors" value={form.dataDesligamento || ""} onChange={e => setForm({ ...form, dataDesligamento: e.target.value })} />
                   </div>
