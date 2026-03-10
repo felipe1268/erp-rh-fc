@@ -12,7 +12,7 @@ import {
   Clock, DollarSign, HardHat, Calendar, MapPin, Phone, Building2, Briefcase, CreditCard,
   Printer, FileDown, X, AlertTriangle, FileText, ArrowLeft, Gift, Timer,
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
-  Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText
+  Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -122,6 +122,12 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   }, [open]);
 
   // Avaliações de desempenho - MUST be called before any conditional return to avoid hooks order violation
+  const empSkillsQuery = trpc.skills.employeeSkills.useQuery(
+    { employeeId: employeeId! },
+    { enabled: !!employeeId && open }
+  );
+  const empSkills = empSkillsQuery.data || [];
+
   const avaliacoesQuery = trpc.avaliacao.avaliacoes.getByEmployee.useQuery(
     { employeeId: employeeId!, companyId: selectedCompany?.id || 0 },
     { enabled: !!employeeId && open && !!selectedCompany?.id }
@@ -381,6 +387,17 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     }
 
     // TIMELINE
+    // HABILIDADES
+    if (empSkills.length > 0) {
+      html += `<div class="section"><div class="section-title">\u{1F527} Habilidades e Compet\u00EAncias (${empSkills.length})</div><table><thead><tr><th>Habilidade</th><th>Categoria</th><th>N\u00EDvel</th><th>Experi\u00EAncia</th><th>Observa\u00E7\u00E3o</th></tr></thead><tbody>`;
+      empSkills.forEach((sk: any) => {
+        const nivelLabel: Record<string, string> = { Basico: 'B\u00E1sico', Intermediario: 'Intermedi\u00E1rio', Avancado: 'Avan\u00E7ado' };
+        const nivelBadge: Record<string, string> = { Basico: 'badge-blue', Intermediario: 'badge-yellow', Avancado: 'badge-green' };
+        html += `<tr><td>${sk.skillNome}</td><td>${sk.skillCategoria || '-'}</td><td><span class="badge ${nivelBadge[sk.nivel] || 'badge-blue'}">${nivelLabel[sk.nivel] || sk.nivel}</span></td><td>${sk.tempoExperiencia || '-'}</td><td>${sk.observacao || '-'}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
     if (timeline.length > 0) {
       html += `<div class="section"><div class="section-title">\u{1F4C5} Timeline (${timeline.length} eventos)</div><table><thead><tr><th>Data</th><th>Tipo</th><th>Descri\u00E7\u00E3o</th></tr></thead><tbody>`;
       timeline.forEach((ev: any) => {
@@ -604,6 +621,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   ...(emp?.tipoContrato === 'PJ'
                     ? [{ label: "Adicionais", value: horasExtras.length, tab: "he", bg: "bg-purple-50 border-purple-200", textColor: "text-purple-700", iconColor: "text-purple-400", icon: Zap }]
                     : [{ label: "Horas Extras", value: horasExtras.length, tab: "he", bg: "bg-amber-50 border-amber-200", textColor: "text-amber-700", iconColor: "text-amber-400", icon: Zap }]),
+                  { label: "Habilidades", value: empSkills.length, tab: "habilidades", bg: "bg-purple-50 border-purple-200", textColor: "text-purple-700", iconColor: "text-purple-400", icon: Wrench },
                   { label: "Histórico", value: timeline.length, tab: "timeline", bg: "bg-indigo-50 border-indigo-200", textColor: "text-indigo-700", iconColor: "text-indigo-400", icon: History },
                 ].map(c => {
                   const Icon = c.icon;
@@ -698,6 +716,13 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     ],
                   },
                   {
+                    label: "Habilidades",
+                    color: "purple",
+                    tabs: [
+                      { value: "habilidades", label: "Habilidades", icon: Wrench, count: empSkills.length },
+                    ],
+                  },
+                  {
                     label: "Avaliação",
                     color: "amber",
                     tabs: [
@@ -731,6 +756,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   red: "bg-red-600 text-white shadow-sm",
                   amber: "bg-amber-600 text-white shadow-sm",
                   cyan: "bg-cyan-600 text-white shadow-sm",
+                  purple: "bg-purple-600 text-white shadow-sm",
                 };
                 const labelColorMap: Record<string, string> = {
                   indigo: "text-indigo-700 border-indigo-300",
@@ -739,6 +765,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   red: "text-red-700 border-red-300",
                   amber: "text-amber-700 border-amber-300",
                   cyan: "text-cyan-700 border-cyan-300",
+                  purple: "text-purple-700 border-purple-300",
                 };
 
                 return (
@@ -1896,6 +1923,65 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     })()}
                   </div>
                 )}
+              </TabsContent>
+
+              {/* ============ HABILIDADES ============ */}
+              <TabsContent value="habilidades" className="mt-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                      <Wrench className="w-5 h-5 text-purple-600" />
+                      Habilidades e Competências ({empSkills.length})
+                    </h3>
+                  </div>
+                  {empSkills.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <Wrench className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">Nenhuma habilidade atribuída</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-purple-50 text-purple-800">
+                            <th className="text-left px-3 py-2 font-semibold">Habilidade</th>
+                            <th className="text-left px-3 py-2 font-semibold">Categoria</th>
+                            <th className="text-center px-3 py-2 font-semibold">Nível</th>
+                            <th className="text-left px-3 py-2 font-semibold">Experiência</th>
+                            <th className="text-left px-3 py-2 font-semibold">Observação</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {empSkills.map((sk: any) => {
+                            const nivelColors: Record<string, string> = {
+                              Basico: "bg-blue-100 text-blue-800",
+                              Intermediario: "bg-amber-100 text-amber-800",
+                              Avancado: "bg-green-100 text-green-800",
+                            };
+                            const nivelLabels: Record<string, string> = {
+                              Basico: "Básico",
+                              Intermediario: "Intermediário",
+                              Avancado: "Avançado",
+                            };
+                            return (
+                              <tr key={sk.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="px-3 py-2 font-medium">{sk.skillNome}</td>
+                                <td className="px-3 py-2 text-gray-600">{sk.skillCategoria || "-"}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${nivelColors[sk.nivel] || "bg-gray-100 text-gray-700"}`}>
+                                    {nivelLabels[sk.nivel] || sk.nivel}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-gray-600">{sk.tempoExperiencia || "-"}</td>
+                                <td className="px-3 py-2 text-gray-500 text-xs">{sk.observacao || "-"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               {/* ============ CONTRATOS CLT ============ */}

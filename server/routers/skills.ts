@@ -509,7 +509,7 @@ export const skillsRouter = router({
 
       // KPIs
       const [totalSkillsRows] = await db.execute(sql`
-        SELECT COUNT(*) as total FROM skills WHERE companyId IN (${sql.raw(ids.join(','))}) AND deleted_at IS NULL
+        SELECT COUNT(DISTINCT UPPER(TRIM(nome))) as total FROM skills WHERE companyId IN (${sql.raw(ids.join(','))}) AND deleted_at IS NULL
       `);
       const [totalAssignmentsRows] = await db.execute(sql`
         SELECT COUNT(*) as total FROM employee_skills es
@@ -556,7 +556,7 @@ export const skillsRouter = router({
 
       // Skills per obra - group by obra name to consolidate construtoras
       const [byObraRaw] = await db.execute(sql`
-        SELECT o.nome as obraNome, 
+        SELECT UPPER(TRIM(o.nome)) as obraNome, 
           COUNT(DISTINCT es.employeeId) as empComSkill,
           COUNT(DISTINCT s.id) as skillsDistintas
         FROM employee_skills es

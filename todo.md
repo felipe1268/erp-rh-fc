@@ -5384,3 +5384,6 @@
 - [x] BUG: Botão Confirmar Atribuição na importação em massa não salva (não faz nada)
 - [x] BUG: Desligados ainda aparecem na lista de seleção de funcionários (importação em massa) - deploy não atualizou
 - [x] BUG: Checkbox na tabela de funcionários só funciona clicando no nome, não na linha toda
+- [x] BUG: Dashboard de Habilidades trava (loading infinito) no modo CONSTRUTORAS
+- [x] BUG: Dashboard de Habilidades mostra tudo zerado na FC Engenharia (dados não carregam)
+- [x] FEATURE: Adicionar aba de Habilidades no Raio-X do Colaborador
