@@ -138,10 +138,11 @@ export default function ImportacaoHabilidades() {
 
   const handleConfirm = () => {
     if (!selectedSkillId || selectedEmployees.size === 0) return;
+    const effectiveCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
     assignBulkMut.mutate({
       skillId: selectedSkillId,
       employeeIds: Array.from(selectedEmployees),
-      companyId,
+      companyId: effectiveCompanyId,
       nivel: nivel as any,
       tempoExperiencia: tempoExperiencia || undefined,
       observacao: observacao || undefined,
@@ -364,7 +365,6 @@ export default function ImportacaoHabilidades() {
                           <th className="w-10 px-3 py-2"></th>
                           <th className="text-left px-3 py-2">Nome</th>
                           <th className="text-left px-3 py-2">Função</th>
-                          <th className="text-center px-3 py-2">Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -374,8 +374,11 @@ export default function ImportacaoHabilidades() {
                           return (
                             <tr
                               key={emp.id}
-                              className={`border-t transition-colors ${alreadyHas ? 'opacity-50 bg-muted/30' : 'hover:bg-muted/30 cursor-pointer'}`}
-                              onClick={() => !alreadyHas && toggleEmployee(emp.id)}
+                              className={`border-t transition-colors ${alreadyHas ? 'opacity-50 bg-muted/30' : 'hover:bg-muted/30 cursor-pointer select-none'}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (!alreadyHas) toggleEmployee(emp.id);
+                              }}
                             >
                               <td className="px-3 py-2 text-center">
                                 {alreadyHas ? (
@@ -383,6 +386,7 @@ export default function ImportacaoHabilidades() {
                                 ) : (
                                   <Checkbox
                                     checked={isSelected}
+                                    onClick={(e) => e.stopPropagation()}
                                     onCheckedChange={() => toggleEmployee(emp.id)}
                                   />
                                 )}
@@ -392,9 +396,6 @@ export default function ImportacaoHabilidades() {
                                 {alreadyHas && <span className="text-[10px] text-green-600">Já possui esta habilidade</span>}
                               </td>
                               <td className="px-3 py-2 text-muted-foreground">{emp.funcao || '-'}</td>
-                              <td className="px-3 py-2 text-center">
-                                <Badge variant="outline" className="text-[10px]">{emp.status}</Badge>
-                              </td>
                             </tr>
                           );
                         })}

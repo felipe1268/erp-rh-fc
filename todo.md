@@ -5381,3 +5381,6 @@
 ## Bugs - Módulo de Habilidades
 - [x] BUG: Obras duplicadas no Relatório de Habilidades por Obra quando no modo CONSTRUTORAS
 - [x] BUG: Funcionários desligados e lista negra aparecem nas telas de atribuição de habilidades (importação em massa e atribuição individual)
+- [x] BUG: Botão Confirmar Atribuição na importação em massa não salva (não faz nada)
+- [x] BUG: Desligados ainda aparecem na lista de seleção de funcionários (importação em massa) - deploy não atualizou
+- [x] BUG: Checkbox na tabela de funcionários só funciona clicando no nome, não na linha toda
