@@ -5388,3 +5388,8 @@
 - [x] BUG: Dashboard de Habilidades mostra tudo zerado na FC Engenharia (dados não carregam)
 - [x] FEATURE: Adicionar aba de Habilidades no Raio-X do Colaborador
 - [x] BUG: Raio-X do Funcionário não carrega funcionários no modo CONSTRUTORAS (mostra 0 em todos os status)
+- [x] FEATURE: Botão de editar na tabela de funcionários com habilidade (alterar nível, experiência, observação sem excluir)
+- [x] Backend: endpoint updateEmployeeSkill para atualizar nível, experiência e observação
+- [x] Frontend: botão editar + dialog de edição na lista de funcionários por habilidade
+- [x] Coluna de Observação adicionada na tabela de funcionários por habilidade
+- [x] Botão de excluir agora funciona diretamente (usa ID da atribuição)

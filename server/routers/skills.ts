@@ -250,10 +250,12 @@ export const skillsRouter = router({
 
       const rows = await db
         .select({
+          id: employeeSkills.id,
           employeeId: employeeSkills.employeeId,
           skillId: employeeSkills.skillId,
           nivel: employeeSkills.nivel,
           tempoExperiencia: employeeSkills.tempoExperiencia,
+          observacao: employeeSkills.observacao,
           skillNome: skills.nome,
           skillCategoria: skills.categoria,
           empNome: employees.nomeCompleto,
