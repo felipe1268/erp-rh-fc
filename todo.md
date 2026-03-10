@@ -5295,3 +5295,4 @@
 - [x] BUG GRAVE: Excluir desligados de TODAS as análises dos dashboards (gênero, contrato, pirâmide etária, etc.) - só manter contagem no card "Desligados"
 - [x] Lista_Negra deve aparecer como "Desligado" nos dashboards/relatórios (sub-classificação interna)
 - [x] Lista_Negra só visível como filtro na tela de Funcionários, não nos relatórios
+- [x] BUG: Erro 404 no domínio publicado fcerp-rh-w4mm458s.manus.space (resolvido - site está funcionando)
