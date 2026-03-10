@@ -19,9 +19,10 @@ import {
   Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
   Users, Trash2, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, Ban, CalendarDays, TrendingUp,
-  Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square,
+  Zap, CheckCheck, PenLine, Info, Loader2, ArrowRight, Play, Square, Undo2,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -44,11 +45,11 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 // ============================================================
 // DIALOG: Detalhes completos de férias do funcionário (Gantt click)
 // ============================================================
-function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirData, refetch: parentRefetch, companyIds}: {companyId: number;
+function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirData, refetch: parentRefetch, companyIds, isMaster, onCancelarConclusao}: {companyId: number;
   employeeId: number;
   onClose: () => void;
   onDefinirData: (item: any) => void;
-  refetch: () => void; companyIds?: number[]}) {
+  refetch: () => void; companyIds?: number[]; isMaster?: boolean; onCancelarConclusao?: (periodo: any) => void}) {
   const { data, isLoading } = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
     { companyId, employeeId },
     { enabled: (!!companyId || (companyIds?.length ?? 0) > 0) && !!employeeId }
@@ -217,6 +218,11 @@ function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirDat
                                     <PenLine className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
+                                {p.status === 'concluida' && isMaster && onCancelarConclusao && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-orange-600 hover:bg-orange-50 font-medium text-xs" title="Cancelar Conclusão (ADM Master)" onClick={() => onCancelarConclusao(p)}>
+                                    <Undo2 className="h-3.5 w-3.5 mr-1" /> Cancelar
+                                  </Button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -292,6 +298,8 @@ function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirDat
 }
 
 export default function Ferias() {
+  const { user } = useAuth();
+  const isMaster = user?.role === 'admin_master';
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -316,6 +324,11 @@ export default function Ferias() {
   const [showDefinirDialog, setShowDefinirDialog] = useState(false);
   const [definirItem, setDefinirItem] = useState<any>(null);
   const [definirForm, setDefinirForm] = useState<any>({});
+
+  // Dialog para cancelar conclusão de férias (ADM Master)
+  const [showCancelarDialog, setShowCancelarDialog] = useState(false);
+  const [cancelarItem, setCancelarItem] = useState<any>(null);
+  const [cancelarMotivo, setCancelarMotivo] = useState("");
 
   // Queries
   // Query SEPARADA para stats (sem filtro) — garante que os cards nunca mudem ao clicar filtros
@@ -397,6 +410,16 @@ export default function Ferias() {
       setDefinirItem(null);
       setDefinirForm({});
       toast.success(data.foiAlterada ? "Data definida (alterada da sugerida)!" : "Data de férias definida!");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const cancelarConclusaoFerias = trpc.avisoPrevio.ferias.cancelarConclusaoFerias.useMutation({
+    onSuccess: (data: any) => {
+      refetch(); refetchVencidas();
+      setShowCancelarDialog(false);
+      setCancelarItem(null);
+      setCancelarMotivo("");
+      toast.success(`Conclusão cancelada! Status voltou para: ${data.novoStatus === 'vencida' ? 'Vencida' : 'Pendente'}`);
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -715,6 +738,15 @@ export default function Ferias() {
                                     }
                                   }}>
                                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Concluir
+                                  </Button>
+                                )}
+                                {f.status === "concluida" && isMaster && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-orange-600 hover:bg-orange-50 font-medium text-xs" title="Cancelar Conclusão (ADM Master)" onClick={() => {
+                                    setCancelarItem(f);
+                                    setCancelarMotivo("");
+                                    setShowCancelarDialog(true);
+                                  }}>
+                                    <Undo2 className="h-3.5 w-3.5 mr-1" /> Cancelar
                                   </Button>
                                 )}
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhes" onClick={() => { setSelectedItem(f); setShowDetailDialog(true); }}>
@@ -1595,10 +1627,65 @@ export default function Ferias() {
           onClose={() => setGanttEmployeeId(null)}
           onDefinirData={(item: any) => { setGanttEmployeeId(null); handleDefinirData(item); }}
           refetch={refetch}
+          isMaster={isMaster}
+          onCancelarConclusao={(p: any) => { setCancelarItem(p); setCancelarMotivo(""); setShowCancelarDialog(true); }}
         />
       )}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {/* ===== DIALOG: CANCELAR CONCLUSÃO DE FÉRIAS (ADM Master) ===== */}
+      <Dialog open={showCancelarDialog} onOpenChange={(open) => { if (!open) { setShowCancelarDialog(false); setCancelarItem(null); setCancelarMotivo(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <Undo2 className="h-5 w-5" /> Cancelar Conclusão de Férias
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-orange-800">Atenção: Esta ação é restrita ao ADM Master</p>
+              <p className="text-xs text-orange-600 mt-1">O período voltará para o status anterior (Pendente ou Vencida) e poderá ser reprocessado.</p>
+            </div>
+            {cancelarItem && (
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-xs text-muted-foreground">Período: {cancelarItem.numeroPeriodo || '-'}º</p>
+                <p className="text-sm font-medium">
+                  {cancelarItem.employeeName || cancelarItem.periodoAquisitivoInicio && `${formatDate(cancelarItem.periodoAquisitivoInicio)} a ${formatDate(cancelarItem.periodoAquisitivoFim)}`}
+                </p>
+                {cancelarItem.valorTotal && <p className="text-sm text-muted-foreground">Valor: {formatMoeda(parseFloat(cancelarItem.valorTotal || '0'))}</p>}
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Motivo do cancelamento <span className="text-red-500">*</span></label>
+              <Textarea
+                placeholder="Descreva o motivo do cancelamento da conclusão..."
+                value={cancelarMotivo}
+                onChange={(e) => setCancelarMotivo(e.target.value)}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowCancelarDialog(false); setCancelarItem(null); setCancelarMotivo(""); }}>Voltar</Button>
+            <Button
+              variant="destructive"
+              className="bg-orange-600 hover:bg-orange-700"
+              disabled={!cancelarMotivo.trim() || cancelarConclusaoFerias.isPending}
+              onClick={() => {
+                if (cancelarItem) {
+                  cancelarConclusaoFerias.mutate({ id: cancelarItem.id, motivo: cancelarMotivo.trim() });
+                }
+              }}
+            >
+              {cancelarConclusaoFerias.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
+              Confirmar Cancelamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     <PrintFooterLGPD />
     </DashboardLayout>
   );

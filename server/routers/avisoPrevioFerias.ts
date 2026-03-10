@@ -1897,6 +1897,39 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     // ============================================================
+    // CANCELAR CONCLUSÃO DE FÉRIAS (somente ADM Master)
+    // ============================================================
+    cancelarConclusaoFerias: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        motivo: z.string().min(1, 'Motivo é obrigatório'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Restrito a ADM Master
+        if (ctx.user.role !== 'admin_master') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o ADM Master pode cancelar férias concluídas.' });
+        }
+        const db = (await getDb())!;
+        const [periodo] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, input.id));
+        if (!periodo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período de férias não encontrado.' });
+        if (periodo.status !== 'concluida') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas férias com status Concluída podem ser canceladas.' });
+        }
+        // Determinar novo status: se período concessivo já venceu, volta como vencida; senão, pendente
+        const hoje = new Date();
+        const fimConcessivo = new Date(periodo.periodoConcessivoFim + 'T00:00:00');
+        const novoStatus = fimConcessivo < hoje ? 'vencida' : 'pendente';
+        const obsAnterior = periodo.observacoes || '';
+        const novaObs = `[CONCLUSÃO CANCELADA] por ${ctx.user.name} em ${new Date().toLocaleDateString('pt-BR')}. Motivo: ${input.motivo}${obsAnterior ? '\n---\n' + obsAnterior : ''}`;
+        await db.update(vacationPeriods).set({
+          status: novoStatus,
+          observacoes: novaObs,
+          vencida: novoStatus === 'vencida' ? 1 : 0,
+        } as any).where(eq(vacationPeriods.id, input.id));
+        return { success: true, novoStatus };
+      }),
+
+    // ============================================================
     // RH DEFINE/ALTERA DATA DE FÉRIAS (com tracking de alteração)
     // ============================================================
     definirDataFerias: protectedProcedure
