@@ -5377,3 +5377,6 @@
 - [x] Tela frontend do Dashboard de Competências
 - [x] Adicionar rotas e navegação no menu lateral
 - [x] Testes unitários para os novos endpoints (18 testes passando)
+
+## Bugs - Módulo de Habilidades
+- [x] BUG: Obras duplicadas no Relatório de Habilidades por Obra quando no modo CONSTRUTORAS

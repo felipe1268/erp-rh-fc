@@ -381,9 +381,10 @@ export const skillsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       const ids = resolveCompanyIds(input);
+      const isMultiCompany = ids.length > 1;
 
       // Get all obras
-      const obraRows = await db
+      let obraRows = await db
         .select({
           id: obras.id,
           nome: obras.nome,
@@ -397,6 +398,25 @@ export const skillsRouter = router({
           ...(input.obraId ? [eq(obras.id, input.obraId)] : []),
         ))
         .orderBy(asc(obras.nome));
+
+      // Consolidate obras by name when in CONSTRUTORAS mode (multiple companies)
+      // Same obra may exist in both FC Engenharia and Julio Ferraz
+      let obraIdMapping = new Map<number, number>(); // maps duplicate obraId -> primary obraId
+      if (isMultiCompany && !input.obraId) {
+        const seen = new Map<string, any>();
+        for (const r of obraRows) {
+          const key = (r.nome || '').trim().toUpperCase();
+          if (seen.has(key)) {
+            const existing = seen.get(key)!;
+            if (!existing.obraIds) existing.obraIds = [existing.id];
+            existing.obraIds.push(r.id);
+            obraIdMapping.set(r.id, existing.id);
+          } else {
+            seen.set(key, { ...r, obraIds: [r.id] });
+          }
+        }
+        obraRows = Array.from(seen.values());
+      }
 
       // Get skills per obra with employee details
       const [skillRows] = await db.execute(sql`
@@ -422,6 +442,12 @@ export const skillsRouter = router({
         ORDER BY of2.obraId, s.categoria, s.nome, e.nomeCompleto
       `);
 
+      // Remap skill rows obraId to primary obraId for consolidated obras
+      const remappedSkillRows = (skillRows || []).map((r: any) => {
+        const mapped = obraIdMapping.get(Number(r.obraId));
+        return mapped ? { ...r, obraId: mapped } : r;
+      });
+
       // Get all available skills for gap analysis
       const allSkills = await db
         .select({
@@ -435,6 +461,13 @@ export const skillsRouter = router({
           isNull(skills.deletedAt),
         ));
 
+      // Deduplicate allSkills by name (same skill may exist in both companies)
+      const uniqueSkills = new Map<string, any>();
+      for (const s of allSkills) {
+        const key = (s.nome || '').trim().toUpperCase();
+        if (!uniqueSkills.has(key)) uniqueSkills.set(key, s);
+      }
+
       // Get total employees per obra
       const [empCountRows] = await db.execute(sql`
         SELECT of2.obraId, COUNT(DISTINCT of2.employeeId) as total
@@ -446,11 +479,22 @@ export const skillsRouter = router({
         GROUP BY of2.obraId
       `);
 
+      // Consolidate employee counts for merged obras
+      const consolidatedEmpCounts: any[] = [];
+      const empCountMap = new Map<number, number>();
+      for (const row of (empCountRows || []) as any[]) {
+        const primaryId = obraIdMapping.get(Number(row.obraId)) || Number(row.obraId);
+        empCountMap.set(primaryId, (empCountMap.get(primaryId) || 0) + Number(row.total));
+      }
+      for (const [obraId, total] of empCountMap) {
+        consolidatedEmpCounts.push({ obraId, total });
+      }
+
       return {
         obras: obraRows,
-        skillDetails: skillRows || [],
-        allSkills,
-        employeeCounts: empCountRows || [],
+        skillDetails: remappedSkillRows,
+        allSkills: Array.from(uniqueSkills.values()),
+        employeeCounts: consolidatedEmpCounts,
       };
     }),
 
@@ -510,9 +554,10 @@ export const skillsRouter = router({
         GROUP BY s.id, s.nome, s.categoria ORDER BY qtd DESC LIMIT 15
       `);
 
-      // Skills per obra
-      const [byObra] = await db.execute(sql`
-        SELECT o.id as obraId, o.nome as obraNome, COUNT(DISTINCT es.employeeId) as empComSkill,
+      // Skills per obra - group by obra name to consolidate construtoras
+      const [byObraRaw] = await db.execute(sql`
+        SELECT o.nome as obraNome, 
+          COUNT(DISTINCT es.employeeId) as empComSkill,
           COUNT(DISTINCT s.id) as skillsDistintas
         FROM employee_skills es
         INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
@@ -520,8 +565,9 @@ export const skillsRouter = router({
         INNER JOIN obras o ON o.id = of2.obraId AND o.deletedAt IS NULL
         INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
         WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
-        GROUP BY o.id, o.nome ORDER BY empComSkill DESC
+        GROUP BY UPPER(TRIM(o.nome)) ORDER BY empComSkill DESC
       `);
+      const byObra = byObraRaw || [];
 
       // Employees without any skill
       const [noSkillRows] = await db.execute(sql`

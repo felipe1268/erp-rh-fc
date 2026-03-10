@@ -86,6 +86,7 @@ export default function Obras() {
     { enabled: hasCompany }
   );
   const skillsByObraData = (skillsByObraQ.data ?? []) as any[];
+  const obrasData = obrasQ.data;
   const skillsByObraMap = useMemo(() => {
     const map: Record<number, { skillNome: string; qtd: number }[]> = {};
     for (const r of skillsByObraData) {
@@ -93,8 +94,26 @@ export default function Obras() {
       if (!map[oid]) map[oid] = [];
       map[oid].push({ skillNome: r.skillNome, qtd: Number(r.qtd) });
     }
+    // For consolidated obras (construtoras mode), merge skills from all obraIds
+    if (obrasData) {
+      for (const obra of obrasData as any[]) {
+        if (obra.obraIds && obra.obraIds.length > 1) {
+          const merged: Record<string, { skillNome: string; qtd: number }> = {};
+          for (const oid of obra.obraIds) {
+            for (const sk of (map[oid] || [])) {
+              if (merged[sk.skillNome]) {
+                merged[sk.skillNome].qtd += sk.qtd;
+              } else {
+                merged[sk.skillNome] = { ...sk };
+              }
+            }
+          }
+          map[obra.id] = Object.values(merged);
+        }
+      }
+    }
     return map;
-  }, [skillsByObraData]);
+  }, [skillsByObraData, obrasData]);
 
   // Mapa de SNs por obra para exibição nos cards
   const snsByObra = useMemo(() => {
