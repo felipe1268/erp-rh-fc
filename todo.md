@@ -5327,3 +5327,4 @@
 - [ ] Investigar e corrigir por que funcionários de férias não aparecem no grupo Férias na equipe da obra
 - [ ] Adicionar badges de Férias/Afastado nos cards de cada obra na visão geral
 - [x] BUG: Painel RH mostra 3 Férias ao invés de 4 quando CONSTRUTORAS selecionado (FC+JF) - query não conta corretamente
+- [x] BUG: ELIAS VIEIRA DO NASCIMENTO aparecendo como Aviso Prévio indevidamente - corrigido: queries em db.ts não filtravam deletedAt IS NULL para termination_notices

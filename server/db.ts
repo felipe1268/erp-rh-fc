@@ -1384,6 +1384,7 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   }).from(terminationNotices).where(and(
     inArray(terminationNotices.companyId, companyIdsArr),
     eq(terminationNotices.status, 'em_andamento'),
+    sql`${terminationNotices.deletedAt} IS NULL`,
     sql`${terminationNotices.dataInicio} <= ${today}`,
     sql`${terminationNotices.dataFim} >= ${today}`,
     sql`${terminationNotices.employeeId} IN (${sql.raw(empIds.join(","))})`
@@ -2318,6 +2319,7 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
   }).from(terminationNotices).where(and(
     inArray(terminationNotices.companyId, idsCompany),
     eq(terminationNotices.status, 'em_andamento'),
+    sql`${terminationNotices.deletedAt} IS NULL`,
     sql`${terminationNotices.dataInicio} <= ${today}`,
     sql`${terminationNotices.dataFim} >= ${today}`,
     sql`${terminationNotices.employeeId} IN (${sql.raw(empIds.join(","))})`
