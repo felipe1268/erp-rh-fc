@@ -693,6 +693,10 @@ function SkillEmployeesDialog({
   onClose: () => void;
 }) {
   const utils = trpc.useUtils();
+  const [editingEmp, setEditingEmp] = useState<any>(null);
+  const [editNivel, setEditNivel] = useState<"Basico" | "Intermediario" | "Avancado">("Basico");
+  const [editTempo, setEditTempo] = useState("");
+  const [editObs, setEditObs] = useState("");
 
   const employeesQuery = trpc.skills.searchBySkill.useQuery(
     { companyId, companyIds, skillId: skill.id },
@@ -705,9 +709,38 @@ function SkillEmployeesDialog({
       utils.skills.searchBySkill.invalidate();
       utils.skills.skillSummaryGlobal.invalidate();
       utils.skills.employeeSkills.invalidate();
+      utils.skills.list.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const updateMut = trpc.skills.updateEmployeeSkill.useMutation({
+    onSuccess: () => {
+      toast.success("Habilidade do funcionário atualizada!");
+      utils.skills.searchBySkill.invalidate();
+      utils.skills.skillSummaryGlobal.invalidate();
+      utils.skills.employeeSkills.invalidate();
+      setEditingEmp(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function startEdit(emp: any) {
+    setEditingEmp(emp);
+    setEditNivel(emp.nivel || "Basico");
+    setEditTempo(emp.tempoExperiencia || "");
+    setEditObs(emp.observacao || "");
+  }
+
+  function handleSaveEdit() {
+    if (!editingEmp) return;
+    updateMut.mutate({
+      id: editingEmp.id,
+      nivel: editNivel,
+      tempoExperiencia: editTempo || undefined,
+      observacao: editObs || undefined,
+    });
+  }
 
   const employees = employeesQuery.data ?? [];
 
@@ -740,6 +773,7 @@ function SkillEmployeesDialog({
                   <th className="text-left p-3 font-semibold">Função</th>
                   <th className="text-left p-3 font-semibold">Nível</th>
                   <th className="text-left p-3 font-semibold">Experiência</th>
+                  <th className="text-left p-3 font-semibold">Observação</th>
                   <th className="text-left p-3 font-semibold">Status</th>
                   <th className="text-center p-3 font-semibold">Ações</th>
                 </tr>
@@ -755,25 +789,35 @@ function SkillEmployeesDialog({
                       </Badge>
                     </td>
                     <td className="p-3 text-muted-foreground">{emp.tempoExperiencia || "—"}</td>
+                    <td className="p-3 text-muted-foreground max-w-[200px] truncate" title={emp.observacao || ""}>{emp.observacao || "—"}</td>
                     <td className="p-3">
                       <Badge variant="outline">{emp.empStatus}</Badge>
                     </td>
                     <td className="p-3 text-center">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-700"
-                        onClick={() => {
-                          if (confirm("Remover esta habilidade do funcionário?")) {
-                            // We need the employee_skill id - search by skill returns employeeId, not the assignment id
-                            // For now, we'll use a workaround
-                            toast.info("Use a tela do perfil do funcionário para remover habilidades individuais");
-                          }
-                        }}
-                        title="Remover"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-blue-500 hover:text-blue-700"
+                          onClick={() => startEdit(emp)}
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-700"
+                          onClick={() => {
+                            if (confirm(`Remover habilidade "${skill.nome}" de ${emp.empNome}?`)) {
+                              removeMut.mutate({ id: emp.id });
+                            }
+                          }}
+                          title="Remover"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -782,6 +826,66 @@ function SkillEmployeesDialog({
           </div>
         )}
       </div>
+
+      {/* ─── Edit Employee Skill Dialog ──────────────────────── */}
+      {editingEmp && (
+        <Dialog open onOpenChange={() => setEditingEmp(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-blue-600" />
+                Editar Habilidade
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="font-medium">{editingEmp.empNome}</p>
+                <p className="text-sm text-muted-foreground">{editingEmp.empFuncao} • {skill.nome}</p>
+              </div>
+              <div>
+                <Label>Nível de Proficiência</Label>
+                <Select value={editNivel} onValueChange={(v) => setEditNivel(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Basico">Básico</SelectItem>
+                    <SelectItem value="Intermediario">Intermediário</SelectItem>
+                    <SelectItem value="Avancado">Avançado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tempo de Experiência</Label>
+                <Input
+                  value={editTempo}
+                  onChange={(e) => setEditTempo(e.target.value)}
+                  placeholder="Ex: 2 anos, 6 meses, 10 anos..."
+                />
+              </div>
+              <div>
+                <Label>Observação</Label>
+                <Textarea
+                  value={editObs}
+                  onChange={(e) => setEditObs(e.target.value)}
+                  placeholder="Observações sobre a habilidade do funcionário..."
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingEmp(null)}>Cancelar</Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={updateMut.isPending}
+              >
+                {updateMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Salvar Alterações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </FullScreenDialog>
   );
 }
