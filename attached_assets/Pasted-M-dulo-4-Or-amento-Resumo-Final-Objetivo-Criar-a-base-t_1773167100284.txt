@@ -1,0 +1,203 @@
+Módulo 4 — Orçamento (Resumo Final)
+Objetivo
+
+Criar a base técnica e financeira da obra e gerar automaticamente todas as informações necessárias para:
+
+planejamento
+
+compras
+
+operações
+
+financeiro
+
+análise de margem
+
+Origem do orçamento
+
+O orçamento nasce da última revisão aprovada da proposta no módulo Comercial.
+
+Exemplo:
+
+Orc_768_Rev03
+
+Essa versão vira o Orçamento Base da Obra.
+
+Importação da planilha (100% automatizado)
+
+Quando o usuário faz upload da planilha, o sistema deve automaticamente:
+
+ler a EAP
+
+importar composições
+
+importar insumos
+
+importar produtividades
+
+importar quantidades
+
+calcular custos
+
+estruturar o orçamento
+
+Criação da base da obra (automatizado)
+
+O sistema cria automaticamente:
+
+base de insumos da obra
+
+base de composições da obra
+
+base de produtividades
+
+Comparação com base central (automatizado com alerta)
+
+O sistema verifica automaticamente:
+
+se o insumo já existe na base central
+
+se a composição já existe
+
+Se existir:
+
+reutiliza
+
+Se não existir:
+
+cria automaticamente na base da obra
+
+alerta o usuário para validar inclusão na base central
+
+Controle de unidades (automatizado)
+
+Cada insumo possui:
+
+unidade base
+
+unidades alternativas
+
+conversão automática
+
+Exemplo:
+
+ton → kg
+barra → kg
+
+Controle de perdas (automatizado)
+
+Se houver percentual de perda cadastrado:
+
+Sistema calcula automaticamente.
+
+Curva ABC (automatizado)
+
+O sistema gera automaticamente:
+
+curva ABC de insumos
+
+identificação de itens críticos
+
+Lista consolidada de insumos (automatizado)
+
+Sistema gera automaticamente:
+
+lista de materiais
+
+lista de mão de obra
+
+lista de equipamentos
+
+Base para cronograma de compras (automatizado)
+
+O sistema gera automaticamente:
+
+lista de compras
+
+previsão de compra
+
+materiais críticos
+
+análise de lead time
+
+Curva de custo da obra (automatizado)
+
+O sistema calcula automaticamente:
+
+custo total da obra
+
+distribuição de custo no tempo
+
+Estrutura de orçamento
+
+Três níveis:
+
+Orçamento de venda
+
+Usado na proposta.
+
+Orçamento de custo
+
+Custo técnico real.
+
+Orçamento meta
+
+Versão usada por compras e operações.
+
+Fluxo de autorização
+Automático
+
+importação da planilha
+
+criação da base da obra
+
+conversão de unidades
+
+cálculo de perdas
+
+curva ABC
+
+lista de insumos
+
+curva de custo
+
+base do cronograma de compras
+
+controle de saldo por item
+
+Requer validação do usuário
+
+inclusão de novos insumos na base central
+
+inclusão de novas composições estratégicas
+
+Requer aprovação da diretoria
+
+definição do orçamento meta
+
+realocação de saldo entre itens
+
+utilização de saldo extraordinário
+
+alterações fora do orçamento base
+
+Regra importante
+
+Após a obra ser fechada:
+
+🚫 o orçamento base não pode ser alterado.
+
+Qualquer alteração vira:
+
+SEC_768_01
+SEC_768_02
+
+Resultado esperado
+
+O módulo Orçamento deve permitir que o usuário apenas:
+
+1️⃣ faça upload da planilha
+2️⃣ valide alertas
+3️⃣ defina a meta
+
+Todo o restante é automatizado.
