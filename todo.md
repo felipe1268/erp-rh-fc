@@ -5380,3 +5380,4 @@
 
 ## Bugs - Módulo de Habilidades
 - [x] BUG: Obras duplicadas no Relatório de Habilidades por Obra quando no modo CONSTRUTORAS
+- [x] BUG: Funcionários desligados e lista negra aparecem nas telas de atribuição de habilidades (importação em massa e atribuição individual)
