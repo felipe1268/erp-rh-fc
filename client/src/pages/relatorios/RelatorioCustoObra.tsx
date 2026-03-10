@@ -205,47 +205,52 @@ export default function RelatorioCustoObra() {
                 {isExpanded && funcionarios.length > 0 && (
                   <div className="border-t bg-gray-50/50">
                     <div className="px-4 py-2 bg-gray-100 border-b">
-                      <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground uppercase">
-                        <div className="col-span-4">Funcionário</div>
-                        <div className="col-span-2">Função</div>
-                        <div className="col-span-2 text-right">Sal. Bruto</div>
-                        <div className="col-span-2 text-right">Sal. Líquido</div>
-                        <div className="col-span-1 text-right">Dias</div>
-                        <div className="col-span-1 text-right">Faltas</div>
+                      <div className="grid grid-cols-14 gap-2 text-xs font-semibold text-muted-foreground uppercase" style={{ gridTemplateColumns: '3fr 2fr 2fr 1.5fr 2fr 1fr 1fr' }}>
+                        <div>Funcionário</div>
+                        <div>Função</div>
+                        <div className="text-right">Sal. Bruto</div>
+                        <div className="text-right">H. Extras</div>
+                        <div className="text-right">Sal. Líquido</div>
+                        <div className="text-right">Dias</div>
+                        <div className="text-right">Faltas</div>
                       </div>
                     </div>
                     <div className="divide-y">
                       {funcionarios.map((func: any, fIdx: number) => (
                         <div key={fIdx} className="px-4 py-2 hover:bg-gray-50 transition-colors">
-                          <div className="grid grid-cols-12 gap-2 items-center text-sm">
-                            <div className="col-span-4 flex items-center gap-2">
+                          <div className="grid gap-2 items-center text-sm" style={{ gridTemplateColumns: '3fr 2fr 2fr 1.5fr 2fr 1fr 1fr' }}>
+                            <div className="flex items-center gap-2">
                               <User className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                               <span className="font-medium truncate">{func.nomeCompleto}</span>
                             </div>
-                            <div className="col-span-2 text-muted-foreground truncate text-xs">{func.funcao || func.cargo || "—"}</div>
-                            <div className="col-span-2 text-right font-medium text-green-700">{formatBRL(parseFloat(func.salarioBruto || "0"))}</div>
-                            <div className="col-span-2 text-right font-medium text-emerald-700">{formatBRL(parseFloat(func.salarioLiquido || "0"))}</div>
-                            <div className="col-span-1 text-right">{func.diasTrabalhados ?? "—"}</div>
-                            <div className="col-span-1 text-right text-red-600">{func.faltas || 0}</div>
+                            <div className="text-muted-foreground truncate text-xs">{func.funcao || func.cargo || "—"}</div>
+                            <div className="text-right font-medium text-green-700">{formatBRL(parseFloat(func.salarioBruto || "0"))}</div>
+                            <div className="text-right font-medium text-blue-700">{formatBRL(parseFloat(func.horasExtrasValor || "0"))}</div>
+                            <div className="text-right font-medium text-emerald-700">{formatBRL(parseFloat(func.salarioLiquido || "0"))}</div>
+                            <div className="text-right">{func.diasTrabalhados ?? "—"}</div>
+                            <div className="text-right text-red-600">{func.faltas || 0}</div>
                           </div>
                         </div>
                       ))}
                     </div>
                     {/* Employee totals */}
                     <div className="px-4 py-2 bg-gray-100 border-t">
-                      <div className="grid grid-cols-12 gap-2 items-center text-sm font-bold">
-                        <div className="col-span-4">Total ({funcionarios.length} funcionários)</div>
-                        <div className="col-span-2"></div>
-                        <div className="col-span-2 text-right text-green-700">
+                      <div className="grid gap-2 items-center text-sm font-bold" style={{ gridTemplateColumns: '3fr 2fr 2fr 1.5fr 2fr 1fr 1fr' }}>
+                        <div>Total ({funcionarios.length} funcionários)</div>
+                        <div></div>
+                        <div className="text-right text-green-700">
                           {formatBRL(funcionarios.reduce((s: number, f: any) => s + parseFloat(f.salarioBruto || "0"), 0))}
                         </div>
-                        <div className="col-span-2 text-right text-emerald-700">
+                        <div className="text-right text-blue-700">
+                          {formatBRL(funcionarios.reduce((s: number, f: any) => s + parseFloat(f.horasExtrasValor || "0"), 0))}
+                        </div>
+                        <div className="text-right text-emerald-700">
                           {formatBRL(funcionarios.reduce((s: number, f: any) => s + parseFloat(f.salarioLiquido || "0"), 0))}
                         </div>
-                        <div className="col-span-1 text-right">
+                        <div className="text-right">
                           {funcionarios.reduce((s: number, f: any) => s + (Number(f.diasTrabalhados) || 0), 0)}
                         </div>
-                        <div className="col-span-1 text-right text-red-600">
+                        <div className="text-right text-red-600">
                           {funcionarios.reduce((s: number, f: any) => s + (Number(f.faltas) || 0), 0)}
                         </div>
                       </div>

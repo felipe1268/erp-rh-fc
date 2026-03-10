@@ -5305,3 +5305,4 @@
 - [x] BUG: Filtros dos cards do Painel RH & DP não estão filtrando ao clicar (Ativos, Férias, Afastados, Licença, Desligados)
 - [x] BUG: Custo por Obra não mostra dados quando selecionado "CONSTRUTORAS" (deveria somar todas)
 - [x] Custo por Obra: ao clicar em cada obra, expandir e mostrar valores segregados por funcionário
+- [x] Incluir coluna de horas extras por funcionário na expansão detalhada do Custo por Obra
