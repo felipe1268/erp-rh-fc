@@ -5403,3 +5403,9 @@
 
 ## Bug: Badge VENCIDA aparecendo na coluna Concessivo Até mesmo quando status é Concluída
 - [x] Corrigir lógica do badge VENCIDA para não exibir quando status for concluída
+
+## Bug: Status do colaborador não muda para "Férias" quando em gozo
+- [x] Quando férias muda para em_gozo, atualizar status do colaborador para "Férias" (sync imediato no update mutation)
+- [x] Quando férias é concluída ou cancelada, reverter status do colaborador para "Ativo" (sync em confirmarVencidasLote e confirmarTodasVencidasFuncionario)
+- [x] Regra geral: sincronizar status do colaborador com status de férias em_gozo (StatusSync job já existia, agora sync imediato também)
+- [x] Dados existentes corrigidos via SQL (MATEUS e outros com em_gozo agora mostram status Férias)
