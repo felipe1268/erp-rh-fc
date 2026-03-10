@@ -1752,6 +1752,33 @@ export const avisoPrevioFeriasRouter = router({
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
         await db.update(vacationPeriods).set(updateData).where(eq(vacationPeriods.id, id));
+
+        // Sincronizar status do colaborador com status de férias
+        if (input.status) {
+          const [periodo] = await db.select({ employeeId: vacationPeriods.employeeId })
+            .from(vacationPeriods).where(eq(vacationPeriods.id, id));
+          if (periodo) {
+            if (input.status === 'em_gozo') {
+              // Colaborador entra em férias
+              await db.update(employees).set({ status: 'Ferias' } as any)
+                .where(eq(employees.id, periodo.employeeId));
+            } else if (input.status === 'concluida') {
+              // Férias concluídas: verificar se não tem outra férias em_gozo antes de reverter
+              const outrasEmGozo = await db.select({ id: vacationPeriods.id })
+                .from(vacationPeriods)
+                .where(and(
+                  eq(vacationPeriods.employeeId, periodo.employeeId),
+                  eq(vacationPeriods.status, 'em_gozo'),
+                  isNull(vacationPeriods.deletedAt),
+                ));
+              if (outrasEmGozo.length === 0) {
+                await db.update(employees).set({ status: 'Ativo' } as any)
+                  .where(and(eq(employees.id, periodo.employeeId), eq(employees.status, 'Ferias')));
+              }
+            }
+          }
+        }
+
         return { success: true };
       }),
 
@@ -1856,14 +1883,26 @@ export const avisoPrevioFeriasRouter = router({
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         let confirmados = 0;
+        const employeeIdsProcessados = new Set<number>();
         for (const id of input.ids) {
+          const [p] = await db.select({ employeeId: vacationPeriods.employeeId }).from(vacationPeriods).where(eq(vacationPeriods.id, id));
           await db.update(vacationPeriods).set({
             status: 'concluida',
             observacoes: input.observacao || `Férias confirmadas como pagas por ${ctx.user.name} em ${new Date().toLocaleDateString('pt-BR')}`,
             aprovadoPor: ctx.user.name ?? 'Sistema',
             aprovadoPorUserId: ctx.user.id,
           } as any).where(eq(vacationPeriods.id, id));
+          if (p) employeeIdsProcessados.add(p.employeeId);
           confirmados++;
+        }
+        // Sincronizar status dos colaboradores: reverter de Ferias para Ativo se não tem mais em_gozo
+        for (const empId of employeeIdsProcessados) {
+          const outrasEmGozo = await db.select({ id: vacationPeriods.id }).from(vacationPeriods)
+            .where(and(eq(vacationPeriods.employeeId, empId), eq(vacationPeriods.status, 'em_gozo'), isNull(vacationPeriods.deletedAt)));
+          if (outrasEmGozo.length === 0) {
+            await db.update(employees).set({ status: 'Ativo' } as any)
+              .where(and(eq(employees.id, empId), eq(employees.status, 'Ferias')));
+          }
         }
         return { success: true, confirmados };
       }),
@@ -1892,6 +1931,13 @@ export const avisoPrevioFeriasRouter = router({
             aprovadoPorUserId: ctx.user.id,
           } as any).where(eq(vacationPeriods.id, v.id));
           confirmados++;
+        }
+        // Sincronizar status do colaborador: reverter de Ferias para Ativo se não tem mais em_gozo
+        const outrasEmGozo = await db.select({ id: vacationPeriods.id }).from(vacationPeriods)
+          .where(and(eq(vacationPeriods.employeeId, input.employeeId), eq(vacationPeriods.status, 'em_gozo'), isNull(vacationPeriods.deletedAt)));
+        if (outrasEmGozo.length === 0) {
+          await db.update(employees).set({ status: 'Ativo' } as any)
+            .where(and(eq(employees.id, input.employeeId), eq(employees.status, 'Ferias')));
         }
         return { success: true, confirmados };
       }),

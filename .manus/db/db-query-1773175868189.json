@@ -1,0 +1,19 @@
+{
+  "query": "SELECT e.id, e.nomeCompleto, e.status as empStatus, vp.id as vpId, vp.status as feriaStatus, vp.dataInicio, vp.dataFim \nFROM employees e \nLEFT JOIN vacation_periods vp ON vp.employeeId = e.id AND vp.status = 'em_gozo' AND vp.deletedAt IS NULL\nWHERE e.nomeCompleto LIKE '%MATEUS OLIVEIRA%' AND e.deletedAt IS NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT e.id, e.nomeCompleto, e.status as empStatus, vp.id as vpId, vp.status as feriaStatus, vp.dataInicio, vp.dataFim \nFROM employees e \nLEFT JOIN vacation_periods vp ON vp.employeeId = e.id AND vp.status = 'em_gozo' AND vp.deletedAt IS NULL\nWHERE e.nomeCompleto LIKE '%MATEUS OLIVEIRA%' AND e.deletedAt IS NULL;",
+  "rows": [
+    {
+      "id": "420066",
+      "nomeCompleto": "MATEUS OLIVEIRA BRITO PIRES",
+      "empStatus": "Ferias",
+      "vpId": "60076",
+      "feriaStatus": "em_gozo",
+      "dataInicio": "2026-03-10",
+      "dataFim": "2026-03-19"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tempStatus\tvpId\tferiaStatus\tdataInicio\tdataFim\n420066\tMATEUS OLIVEIRA BRITO PIRES\tFerias\t60076\tem_gozo\t2026-03-10\t2026-03-19\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

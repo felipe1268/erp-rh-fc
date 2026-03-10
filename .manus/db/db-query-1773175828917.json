@@ -1,0 +1,58 @@
+{
+  "query": "SELECT e.id, e.nomeCompleto, e.status, vp.status as feriaStatus, vp.dataInicio, vp.dataFim \nFROM employees e \nINNER JOIN vacation_periods vp ON vp.employeeId = e.id \nWHERE vp.status = 'em_gozo' AND vp.deletedAt IS NULL AND e.deletedAt IS NULL \nLIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT e.id, e.nomeCompleto, e.status, vp.status as feriaStatus, vp.dataInicio, vp.dataFim \nFROM employees e \nINNER JOIN vacation_periods vp ON vp.employeeId = e.id \nWHERE vp.status = 'em_gozo' AND vp.deletedAt IS NULL AND e.deletedAt IS NULL \nLIMIT 20;",
+  "rows": [
+    {
+      "id": "420059",
+      "nomeCompleto": "ELIAS VIEIRA DO NASCIMENTO",
+      "status": "Ferias",
+      "feriaStatus": "em_gozo",
+      "dataInicio": "2026-02-23",
+      "dataFim": "2026-03-24"
+    },
+    {
+      "id": "420062",
+      "nomeCompleto": "WILLIAN GUSTAVO FARIA DA SILVA",
+      "status": "Ferias",
+      "feriaStatus": "em_gozo",
+      "dataInicio": "2026-02-09",
+      "dataFim": "2026-03-10"
+    },
+    {
+      "id": "420066",
+      "nomeCompleto": "MATEUS OLIVEIRA BRITO PIRES",
+      "status": "Ferias",
+      "feriaStatus": "em_gozo",
+      "dataInicio": "2026-03-10",
+      "dataFim": "2026-03-19"
+    },
+    {
+      "id": "420099",
+      "nomeCompleto": "NAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS",
+      "status": "Ferias",
+      "feriaStatus": "em_gozo",
+      "dataInicio": "2026-03-09",
+      "dataFim": "2026-04-09"
+    },
+    {
+      "id": "420100",
+      "nomeCompleto": "KELLEN LARISSA LOURENCO CLARO",
+      "status": "Ferias",
+      "feriaStatus": "em_gozo",
+      "dataInicio": "2026-03-04",
+      "dataFim": "2026-04-04"
+    },
+    {
+      "id": "1200013",
+      "nomeCompleto": "ENIVALDO DA SILVA ANDRIONI",
+      "status": "Ferias",
+      "feriaStatus": "em_gozo",
+      "dataInicio": "2026-02-11",
+      "dataFim": "2026-03-12"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tstatus\tferiaStatus\tdataInicio\tdataFim\n420059\tELIAS VIEIRA DO NASCIMENTO\tFerias\tem_gozo\t2026-02-23\t2026-03-24\n420062\tWILLIAN GUSTAVO FARIA DA SILVA\tFerias\tem_gozo\t2026-02-09\t2026-03-10\n420066\tMATEUS OLIVEIRA BRITO PIRES\tFerias\tem_gozo\t2026-03-10\t2026-03-19\n420099\tNAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS\tFerias\tem_gozo\t2026-03-09\t2026-04-09\n420100\tKELLEN LARISSA LOURENCO CLARO\tFerias\tem_gozo\t2026-03-04\t2026-04-04\n1200013\tENIVALDO DA SILVA ANDRIONI\tFerias\tem_gozo\t2026-02-11\t2026-03-12\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

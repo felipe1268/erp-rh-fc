@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, nomeCompleto, status FROM employees WHERE status = 'Ferias' AND deletedAt IS NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, status FROM employees WHERE status = 'Ferias' AND deletedAt IS NULL;",
+  "rows": [
+    {
+      "id": "420059",
+      "nomeCompleto": "ELIAS VIEIRA DO NASCIMENTO",
+      "status": "Ferias"
+    },
+    {
+      "id": "420062",
+      "nomeCompleto": "WILLIAN GUSTAVO FARIA DA SILVA",
+      "status": "Ferias"
+    },
+    {
+      "id": "420066",
+      "nomeCompleto": "MATEUS OLIVEIRA BRITO PIRES",
+      "status": "Ferias"
+    },
+    {
+      "id": "420099",
+      "nomeCompleto": "NAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS",
+      "status": "Ferias"
+    },
+    {
+      "id": "420100",
+      "nomeCompleto": "KELLEN LARISSA LOURENCO CLARO",
+      "status": "Ferias"
+    },
+    {
+      "id": "1200013",
+      "nomeCompleto": "ENIVALDO DA SILVA ANDRIONI",
+      "status": "Ferias"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tstatus\n420059\tELIAS VIEIRA DO NASCIMENTO\tFerias\n420062\tWILLIAN GUSTAVO FARIA DA SILVA\tFerias\n420066\tMATEUS OLIVEIRA BRITO PIRES\tFerias\n420099\tNAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS\tFerias\n420100\tKELLEN LARISSA LOURENCO CLARO\tFerias\n1200013\tENIVALDO DA SILVA ANDRIONI\tFerias\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}
