@@ -695,7 +695,7 @@ export default function Ferias() {
                         <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">Nenhuma férias encontrada</td></tr>
                       ) : filtered.map((f: any) => {
                         const st = STATUS_LABELS[f.status] || STATUS_LABELS.pendente;
-                        const isVencida = f.vencida || f.status === "vencida";
+                        const isVencida = (f.vencida || f.status === "vencida") && f.status !== "concluida";
                         return (
                           <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : ""}`}>
                             <td className="p-3">

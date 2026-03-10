@@ -5400,3 +5400,6 @@
 - [x] Frontend: dialog de confirmação com motivo obrigatório
 - [x] Registrar observação com quem cancelou, data e motivo
 - [x] Botão cancelar também adicionado no GanttEmployeeFeriasDialog (detalhe do funcionário)
+
+## Bug: Badge VENCIDA aparecendo na coluna Concessivo Até mesmo quando status é Concluída
+- [x] Corrigir lógica do badge VENCIDA para não exibir quando status for concluída
