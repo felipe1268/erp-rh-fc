@@ -2,6 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { fechamentoPontoRouter } from "./routers/fechamentoPonto";
+import { syncEmployeeStatus } from "./services/statusSyncJob";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import {
@@ -596,6 +597,10 @@ export const appRouter = router({
         }
       } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
       return { success: true };
+    }),
+    syncStatus: protectedProcedure.mutation(async () => {
+      const result = await syncEmployeeStatus();
+      return result;
     }),
   }),
 

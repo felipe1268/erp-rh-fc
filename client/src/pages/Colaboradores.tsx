@@ -17,7 +17,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import { EMPLOYEE_STATUS } from "../../../shared/modules";
+import { EMPLOYEE_STATUS, EMPLOYEE_STATUS_MANUAL } from "../../../shared/modules";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTituloEleitor, formatMoedaInput, formatMoedaSemPrefixo, parseMoedaBR, formatMoeda } from "@/lib/formatters";
 import { nowBrasilia } from "@/lib/dateUtils";
@@ -1102,9 +1102,12 @@ export default function Colaboradores() {
                   }}>
                     <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {EMPLOYEE_STATUS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                      {EMPLOYEE_STATUS_MANUAL.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {['Ferias', 'Afastado', 'Licenca'].includes(form.status || '') && (
+                    <p className="text-xs text-blue-600 mt-1">Status calculado automaticamente pelo sistema</p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Função</Label>

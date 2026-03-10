@@ -442,6 +442,7 @@ export default function ObraEfetivo() {
                           <th className="text-left p-3 font-medium">Funcionário</th>
                           <th className="text-left p-3 font-medium">Função / Cargo</th>
                           <th className="text-left p-3 font-medium">Setor</th>
+                          <th className="text-left p-3 font-medium">Status</th>
                           <th className="text-left p-3 font-medium">Admissão</th>
                           <th className="text-right p-3 font-medium">Ações</th>
                         </tr>
@@ -452,6 +453,20 @@ export default function ObraEfetivo() {
                             <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
                             <td className="p-3 text-muted-foreground">{emp.funcao || emp.cargo || "—"}</td>
                             <td className="p-3 text-muted-foreground">{emp.setor || "—"}</td>
+                            <td className="p-3">
+                              {(() => {
+                                const st = emp.status || 'Ativo';
+                                const cfg: Record<string, { label: string; bg: string; text: string }> = {
+                                  Ativo: { label: 'Ativo', bg: 'bg-green-100', text: 'text-green-800' },
+                                  Ferias: { label: 'Férias', bg: 'bg-blue-100', text: 'text-blue-800' },
+                                  Afastado: { label: 'Afastado', bg: 'bg-purple-100', text: 'text-purple-800' },
+                                  Licenca: { label: 'Licença', bg: 'bg-teal-100', text: 'text-teal-800' },
+                                  Recluso: { label: 'Recluso', bg: 'bg-red-100', text: 'text-red-800' },
+                                };
+                                const c = cfg[st] || { label: st, bg: 'bg-gray-100', text: 'text-gray-800' };
+                                return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${c.bg} ${c.text}`}>{c.label}</span>;
+                              })()}
+                            </td>
                             <td className="p-3 text-muted-foreground">
                               {emp.dataAdmissao ? new Date(emp.dataAdmissao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
                             </td>

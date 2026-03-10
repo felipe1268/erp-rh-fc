@@ -5277,3 +5277,21 @@
 - [x] Fix: NaN companyId em 22+ páginas - script automatizado corrigiu parseInt/Number(selectedCompanyId) em todas
 
 - [x] BUG: Dropdown de obras duplica no modo CONSTRUTORAS - corrigido consolidação por nome em obras.list e obras.listActive
+
+## Rev. 231: Status automático do funcionário
+- [ ] Status Férias, Afastado, Licença devem ser calculados automaticamente
+- [ ] Apenas Ativo, Recluso e Desligado podem ser editados manualmente
+- [ ] Remover opções Férias/Afastado/Licença do dropdown de status manual
+- [ ] Calcular status com base em: férias em gozo, afastamentos ativos, etc.
+- [ ] Mostrar status calculado como badge visual não editável
+
+## Fase: Atualização Automática de Status de Funcionários
+- [ ] Criar job de sincronização automática de status (statusSyncJob)
+- [ ] Limitar dropdown de status manual para Ativo/Recluso/Desligado no Colaboradores.tsx
+- [ ] Executar atualização imediata dos status (Férias em gozo, Afastados, Avisos Prévios)
+- [ ] Adicionar endpoint tRPC para sincronizar status manualmente
+- [ ] Testar sincronização automática de status
+- [x] Adicionar coluna Status na tabela "Sem Obra" (ObraEfetivo.tsx) com cores por status
+- [x] BUG GRAVE: Excluir desligados de TODAS as análises dos dashboards (gênero, contrato, pirâmide etária, etc.) - só manter contagem no card "Desligados"
+- [x] Lista_Negra deve aparecer como "Desligado" nos dashboards/relatórios (sub-classificação interna)
+- [x] Lista_Negra só visível como filtro na tela de Funcionários, não nos relatórios

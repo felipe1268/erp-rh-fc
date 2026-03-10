@@ -77,6 +77,8 @@ async function startServer() {
     import("../routers/rescisaoNotification").then(m => m.startRescisaoCheckJob()).catch(e => console.error("[RescisaoCheck] Falha ao iniciar:", e));
     // Iniciar job de backup diário automático (03:00 Brasília)
     import("../services/backupService").then(m => m.startBackupJob()).catch(e => console.error("[Backup] Falha ao iniciar job:", e));
+    // Iniciar job de sincronização automática de status de funcionários (a cada 1h)
+    import("../services/statusSyncJob").then(m => m.startStatusSyncJob()).catch(e => console.error("[StatusSync] Falha ao iniciar job:", e));
   });
 }
 

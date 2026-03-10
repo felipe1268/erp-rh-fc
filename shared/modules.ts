@@ -63,6 +63,14 @@ export const EMPLOYEE_STATUS = [
 
 export type EmployeeStatus = typeof EMPLOYEE_STATUS[number]["value"];
 
+// Status que podem ser definidos manualmente pelo usuário (dropdown limitado)
+// Férias, Afastado e Licença são calculados automaticamente pelo sistema
+export const EMPLOYEE_STATUS_MANUAL = [
+  { value: "Ativo", label: "Ativo", color: "#22c55e" },
+  { value: "Recluso", label: "Recluso", color: "#6b7280" },
+  { value: "Desligado", label: "Desligado", color: "#ef4444" },
+] as const;
+
 // ============================================================
 // MAPA DE MÓDULOS E FUNCIONALIDADES GRANULARES
 // Usado para controle de acesso por usuário na sidebar e rotas

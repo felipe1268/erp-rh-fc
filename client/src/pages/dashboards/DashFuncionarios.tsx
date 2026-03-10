@@ -99,7 +99,7 @@ export default function DashFuncionarios() {
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <DashKpi label="Ativos" value={data.resumo.totalAtivos} icon={UserCheck} color="green" />
-          <DashKpi label="Desligados" value={data.resumo.totalGeral - data.resumo.totalAtivos} icon={UserX} color="red" />
+          <DashKpi label="Desligados" value={data.resumo.totalDesligados ?? (data.resumo.totalGeral - data.resumo.totalAtivos)} icon={UserX} color="red" />
           <DashKpi label="Advertências" value={data.rankingAdvertencias.reduce((s, r) => s + r.total, 0)} icon={AlertTriangle} color="orange" />
           <DashKpi label="Atestados" value={data.rankingAtestados.reduce((s, r) => s + r.totalAtestados, 0)} icon={Calendar} color="blue" />
         </div>
@@ -146,14 +146,18 @@ export default function DashFuncionarios() {
 
         {/* Gráficos - Linha 1 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <DashChart
-            title="Status dos Funcionários"
-            type="doughnut"
-            labels={data.statusDist.map(s => s.label)}
-            datasets={[{ data: data.statusDist.map(s => s.value), backgroundColor: data.statusDist.map(s => STATUS_COLORS[s.label] || SEMANTIC_COLORS.neutro) }]}
-            height={240}
-            onChartClick={(info) => openDrillDown(`Status: ${info.label}`, "status", info.label)}
-          />
+          {(() => {
+            // Gráfico de status mostra apenas ativos (Desligado já está no card KPI)
+            const activeStatuses = data.statusDist.filter(s => s.label !== 'Desligado');
+            return <DashChart
+              title="Status dos Funcionários Ativos"
+              type="doughnut"
+              labels={activeStatuses.map(s => s.label)}
+              datasets={[{ data: activeStatuses.map(s => s.value), backgroundColor: activeStatuses.map(s => STATUS_COLORS[s.label] || SEMANTIC_COLORS.neutro) }]}
+              height={240}
+              onChartClick={(info) => openDrillDown(`Status: ${info.label}`, "status", info.label)}
+            />;
+          })()}
           <DashChart
             title="Distribuição por Gênero"
             type="pie"
