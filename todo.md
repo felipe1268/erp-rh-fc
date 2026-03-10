@@ -5303,3 +5303,5 @@
 - [x] Job de sincronização NÃO deve reverter Afastado manual para Ativo
 - [x] Restaurar funcionários que estavam Afastado e foram revertidos indevidamente pelo job (6 restaurados)
 - [x] BUG: Filtros dos cards do Painel RH & DP não estão filtrando ao clicar (Ativos, Férias, Afastados, Licença, Desligados)
+- [x] BUG: Custo por Obra não mostra dados quando selecionado "CONSTRUTORAS" (deveria somar todas)
+- [x] Custo por Obra: ao clicar em cada obra, expandir e mostrar valores segregados por funcionário

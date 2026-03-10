@@ -1812,9 +1812,25 @@ export const payrollEngineRouter = router({
         ORDER BY totalBruto DESC
       `) as any[];
 
+      // Get employee-level detail per obra for expandable breakdown
+      const [detailRows] = await db.execute(sql`
+        SELECT of2.obraId as obraId, pp.employeeId, e.nomeCompleto,
+          e.funcao, e.cargo,
+          CAST(pp.salarioBrutoMes AS DECIMAL(15,2)) as salarioBruto,
+          CAST(pp.salarioLiquido AS DECIMAL(15,2)) as salarioLiquido,
+          CAST(pp.horasExtrasValor AS DECIMAL(15,2)) as horasExtrasValor,
+          pp.diasTrabalhados, pp.faltas
+        FROM payroll_payments pp
+        LEFT JOIN employees e ON pp.employeeId = e.id
+        LEFT JOIN obra_funcionarios of2 ON of2.employeeId = e.id AND of2.isActive = 1
+        WHERE pp.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND pp.mesReferencia = ${input.mesReferencia}
+        ORDER BY of2.obraId, e.nomeCompleto
+      `) as any[];
+
       return {
         porObra: payRows || [],
         timecardPorObra: obraRows || [],
+        detalhePorFuncionario: detailRows || [],
       };
     }),
 
