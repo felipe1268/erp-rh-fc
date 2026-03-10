@@ -1,7 +1,23 @@
 # ERP RH & DP — FC Engenharia
 
 ## Project Overview
-A full-stack HR/ERP system built for FC Engenharia. It handles employees, payroll, time tracking, training, safety (SST), legal cases, and administrative functions.
+A full-stack HR/ERP system built for FC Engenharia. It handles employees, payroll, time tracking, training, safety (SST), legal cases, administrative functions, and budget management.
+
+## Active Modules (6)
+1. **RH & DP** — Payroll, time tracking, employees, benefits
+2. **SST** — Safety (EPIs, ASOs, CIPA, NRs)
+3. **Jurídico** — Labor lawsuits, deadlines, risk analysis
+4. **Terceiros** — Third-party companies and contractors
+5. **Parceiros** — Benefits partners (pharmacy, gas station, etc.)
+6. **Orçamento** — Excel import, 3 budget versions (Venda/Custo/Meta), ABC curve, BDI, EAP tree
+
+## Orçamento Module
+- Routes: `/orcamento/painel`, `/orcamento/lista`, `/orcamento/importar`, `/orcamento/:id`
+- Backend: `server/routers/orcamento.ts`
+- Schema tables: `orcamentos`, `orcamento_itens`, `orcamento_insumos`, `orcamento_bdi`
+- Excel import: reads "Orçamento" tab (cols 9–32) + "BDI" tab + optional "Insumos" tab
+- 3 versions: Venda (BDI applied), Custo (direct cost), Meta (cost × (1-metaPerc), default 20%)
+- Meta % adjustable by admin_master role, recalculates all items
 
 ## Architecture
 - **Frontend**: React 19 + Tailwind CSS 4 + shadcn/ui + Wouter (routing)

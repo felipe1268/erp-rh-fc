@@ -3798,3 +3798,109 @@ export const employeeSkills = mysqlTable("employee_skills", {
 	index("es_skill").on(table.skillId),
 	index("es_company").on(table.companyId),
 ]);
+
+// ============================================================
+// MÓDULO ORÇAMENTO
+// ============================================================
+
+export const orcamentos = mysqlTable("orcamentos", {
+  id: int().autoincrement().notNull(),
+  companyId: int().notNull(),
+  obraId: int(),
+  codigo: varchar({ length: 100 }).notNull(),
+  descricao: varchar({ length: 500 }),
+  revisao: varchar({ length: 20 }),
+  cliente: varchar({ length: 255 }),
+  local: varchar({ length: 255 }),
+  dataBase: varchar({ length: 20 }),
+  tempoObraMeses: int(),
+  areaIntervencao: decimal({ precision: 14, scale: 2 }),
+  bdiPercentual: decimal({ precision: 8, scale: 4 }),
+  metaPercentual: decimal({ precision: 8, scale: 4 }).default('0.2000'),
+  totalVenda: decimal({ precision: 18, scale: 2 }),
+  totalCusto: decimal({ precision: 18, scale: 2 }),
+  totalMeta: decimal({ precision: 18, scale: 2 }),
+  totalMateriais: decimal({ precision: 18, scale: 2 }),
+  totalMdo: decimal({ precision: 18, scale: 2 }),
+  totalEquipamentos: decimal({ precision: 18, scale: 2 }),
+  status: mysqlEnum(['rascunho', 'aguardando_aprovacao', 'aprovado', 'fechado']).default('rascunho'),
+  metaAprovadaPor: varchar({ length: 255 }),
+  metaAprovadaEm: timestamp({ mode: 'string' }),
+  metaAprovadaUserId: int(),
+  importadoPor: varchar({ length: 255 }),
+  importadoEm: timestamp({ mode: 'string' }),
+  deletedAt: timestamp("deleted_at", { mode: 'string' }),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("orc_company").on(table.companyId),
+  index("orc_obra").on(table.obraId),
+  index("orc_status").on(table.status),
+]);
+
+export const orcamentoItens = mysqlTable("orcamento_itens", {
+  id: int().autoincrement().notNull(),
+  orcamentoId: int().notNull(),
+  companyId: int().notNull(),
+  eapCodigo: varchar({ length: 50 }).notNull(),
+  nivel: int().notNull(),
+  tipo: varchar({ length: 50 }),
+  composicaoTipo: varchar({ length: 20 }),
+  servicoCodigo: varchar({ length: 50 }),
+  descricao: varchar({ length: 1000 }).notNull(),
+  unidade: varchar({ length: 30 }),
+  quantidade: decimal({ precision: 18, scale: 4 }),
+  custoUnitMat: decimal({ precision: 18, scale: 4 }),
+  custoUnitMdo: decimal({ precision: 18, scale: 4 }),
+  custoUnitTotal: decimal({ precision: 18, scale: 4 }),
+  vendaUnitTotal: decimal({ precision: 18, scale: 4 }),
+  metaUnitTotal: decimal({ precision: 18, scale: 4 }),
+  custoTotalMat: decimal({ precision: 18, scale: 2 }),
+  custoTotalMdo: decimal({ precision: 18, scale: 2 }),
+  custoTotal: decimal({ precision: 18, scale: 2 }),
+  vendaTotal: decimal({ precision: 18, scale: 2 }),
+  metaTotal: decimal({ precision: 18, scale: 2 }),
+  abcServico: varchar({ length: 5 }),
+  ordem: int(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("orci_orcamento").on(table.orcamentoId),
+  index("orci_company").on(table.companyId),
+  index("orci_eap").on(table.eapCodigo),
+]);
+
+export const orcamentoInsumos = mysqlTable("orcamento_insumos", {
+  id: int().autoincrement().notNull(),
+  orcamentoId: int().notNull(),
+  companyId: int().notNull(),
+  codigo: varchar({ length: 50 }),
+  descricao: varchar({ length: 500 }).notNull(),
+  unidade: varchar({ length: 30 }),
+  tipo: varchar({ length: 100 }),
+  precoUnitBase: decimal({ precision: 18, scale: 4 }),
+  precoUnitComEncargos: decimal({ precision: 18, scale: 4 }),
+  quantidadeTotal: decimal({ precision: 18, scale: 4 }),
+  custoTotal: decimal({ precision: 18, scale: 2 }),
+  percentualTotal: decimal({ precision: 8, scale: 6 }),
+  percentualAcumulado: decimal({ precision: 8, scale: 6 }),
+  curvaAbc: varchar({ length: 1 }),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("orins_orcamento").on(table.orcamentoId),
+  index("orins_company").on(table.companyId),
+  index("orins_tipo").on(table.tipo),
+]);
+
+export const orcamentoBdi = mysqlTable("orcamento_bdi", {
+  id: int().autoincrement().notNull(),
+  orcamentoId: int().notNull(),
+  companyId: int().notNull(),
+  codigo: varchar({ length: 30 }),
+  descricao: varchar({ length: 255 }),
+  percentual: decimal({ precision: 10, scale: 6 }),
+  valorAbsoluto: decimal({ precision: 18, scale: 2 }),
+  ordem: int(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("orbdi_orcamento").on(table.orcamentoId),
+]);

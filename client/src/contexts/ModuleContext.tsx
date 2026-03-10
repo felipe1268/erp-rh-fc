@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -62,6 +62,9 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/parceiros/pagamentos": "parceiros" as ModuleId,
   "/parceiros/portal": "parceiros" as ModuleId,
   "/terceiros/validacao-ia": "terceiros" as ModuleId,
+  "/orcamento/painel":   "orcamento" as ModuleId,
+  "/orcamento/lista":    "orcamento" as ModuleId,
+  "/orcamento/importar": "orcamento" as ModuleId,
   "/comparativo-convencoes": "rh-dp" as ModuleId,
   // Shared routes (appear in all modules)
   "/empresas": "all",
@@ -82,6 +85,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "avaliacao": "Avaliação",
   "terceiros": "Terceiros",
   "parceiros": "Parceiros",
+  "orcamento": "Orçamento",
   "all": "Todos os Módulos",
 };
 

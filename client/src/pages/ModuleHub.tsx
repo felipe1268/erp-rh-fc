@@ -145,8 +145,9 @@ const MODULES: Module[] = [
   },
   {
     id: "orcamento", title: "Orçamento", subtitle: "Orçamento de Obras",
-    description: "Composição de custos, BDI e propostas comerciais.",
-    icon: Calculator, accentFrom: "#06B6D4", accentTo: "#0891B2", accentGlow: "", iconBg: "", path: "", active: false, features: [],
+    description: "Importação de planilhas Excel com BDI, 3 versões (Venda, Custo, Meta) e curva ABC.",
+    icon: Calculator, accentFrom: "#06B6D4", accentTo: "#0891B2", accentGlow: "", iconBg: "", path: "/orcamento/painel", active: true,
+    features: ["Importação Excel", "Venda / Custo / Meta", "Curva ABC", "EAP Interativa"],
   },
   {
     id: "compras", title: "Compras", subtitle: "Suprimentos",

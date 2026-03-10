@@ -34,7 +34,7 @@ import {
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
-  Warehouse, Wrench,
+  Warehouse, Wrench, Calculator, Upload, Target,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -301,13 +301,25 @@ const menuSectionsParceiros: MenuSection[] = [
   },
 ];
 
+const menuSectionsOrcamento: MenuSection[] = [
+  {
+    title: "Orçamento",
+    items: [
+      { icon: LayoutDashboard, label: "Painel Orçamento",  path: "/orcamento/painel"   },
+      { icon: FolderOpen,      label: "Orçamentos",        path: "/orcamento/lista"    },
+      { icon: Upload,          label: "Importar Planilha", path: "/orcamento/importar" },
+    ],
+  },
+];
+
 const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
   "juridico": menuSectionsJuridico,
   "avaliacao": menuSectionsAvaliacao,
-  "terceiros": menuSectionsTerceiros,
-  "parceiros": menuSectionsParceiros,
+  "terceiros":  menuSectionsTerceiros,
+  "parceiros":  menuSectionsParceiros,
+  "orcamento":  menuSectionsOrcamento,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
 
@@ -364,8 +376,9 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "sst": "/painel/sst",
   "juridico": "/painel/juridico",
   "avaliacao": "/avaliacao-desempenho",
-  "terceiros": "/terceiros/painel",
-  "parceiros": "/parceiros/painel",
+  "terceiros":  "/terceiros/painel",
+  "parceiros":  "/parceiros/painel",
+  "orcamento":  "/orcamento/painel",
   "all": "/painel",
 };
 
@@ -375,8 +388,9 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "sst": { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/20" },
   "juridico": { icon: Gavel, color: "text-slate-300", bg: "bg-slate-400/20" },
   "avaliacao": { icon: Star, color: "text-amber-400", bg: "bg-amber-500/20" },
-  "terceiros": { icon: HardHat, color: "text-orange-400", bg: "bg-orange-500/20" },
-  "parceiros": { icon: Handshake, color: "text-purple-400", bg: "bg-purple-500/20" },
+  "terceiros":  { icon: HardHat,    color: "text-orange-400", bg: "bg-orange-500/20" },
+  "parceiros":  { icon: Handshake,  color: "text-purple-400", bg: "bg-purple-500/20" },
+  "orcamento":  { icon: Calculator, color: "text-cyan-400",   bg: "bg-cyan-500/20"   },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
 
@@ -455,7 +469,7 @@ function DashboardLayoutContent({
   const { isModuleEnabled } = useModuleConfig();
   const hubToConfigKey: Record<string, string> = {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
-    "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
+    "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros", "orcamento": "orcamento",
   };
   const isModEnabled = (modId: string) => isModuleEnabled(hubToConfigKey[modId] ?? modId);
   const isCollapsed = state === "collapsed";
@@ -819,6 +833,14 @@ function DashboardLayoutContent({
                       Parceiros
                     </div>
                   </SelectItem>}
+                  {isModEnabled("orcamento") && <SelectItem value="orcamento">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded bg-cyan-500/20 flex items-center justify-center">
+                        <Calculator className="h-3 w-3 text-cyan-400" />
+                      </div>
+                      Orçamento
+                    </div>
+                  </SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -863,6 +885,11 @@ function DashboardLayoutContent({
                   {isModEnabled("parceiros") && (
                     <DropdownMenuItem onClick={() => { setActiveModule("parceiros" as ModuleId); setLocation("/parceiros/painel"); }} className="cursor-pointer">
                       <Handshake className="mr-2 h-4 w-4 text-purple-400" /> Parceiros
+                    </DropdownMenuItem>
+                  )}
+                  {isModEnabled("orcamento") && (
+                    <DropdownMenuItem onClick={() => { setActiveModule("orcamento" as ModuleId); setLocation("/orcamento/painel"); }} className="cursor-pointer">
+                      <Calculator className="mr-2 h-4 w-4 text-cyan-400" /> Orçamento
                     </DropdownMenuItem>
                   )}
                 </DropdownMenuContent>
