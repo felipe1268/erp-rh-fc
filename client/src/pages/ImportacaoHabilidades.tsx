@@ -89,6 +89,8 @@ export default function ImportacaoHabilidades() {
   const filteredEmployees = useMemo(() => {
     const emps = (employeesQuery.data || []) as any[];
     return emps.filter((e: any) => {
+      // Nunca mostrar desligados ou lista negra
+      if (e.status === 'Desligado' || e.status === 'Lista_Negra') return false;
       if (searchEmp) {
         const s = searchEmp.toLowerCase();
         if (!e.nomeCompleto?.toLowerCase().includes(s) && !e.funcao?.toLowerCase().includes(s)) return false;
