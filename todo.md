@@ -5393,3 +5393,10 @@
 - [x] Frontend: botão editar + dialog de edição na lista de funcionários por habilidade
 - [x] Coluna de Observação adicionada na tabela de funcionários por habilidade
 - [x] Botão de excluir agora funciona diretamente (usa ID da atribuição)
+
+## Cancelar Férias Pagas (Concluídas)
+- [x] Backend: endpoint cancelarConclusaoFerias (reverte concluída para pendente/vencida, restrito a ADM Master)
+- [x] Frontend: botão "Cancelar Conclusão" na tabela de períodos (só aparece para status concluída e role ADM Master)
+- [x] Frontend: dialog de confirmação com motivo obrigatório
+- [x] Registrar observação com quem cancelou, data e motivo
+- [x] Botão cancelar também adicionado no GanttEmployeeFeriasDialog (detalhe do funcionário)
