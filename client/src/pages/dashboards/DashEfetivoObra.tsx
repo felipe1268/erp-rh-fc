@@ -647,27 +647,29 @@ export default function DashEfetivoObra() {
 
 /* ─── Componente: FullScreen Equipe da Obra ─── */
 const STATUS_BAR_COLORS: Record<string, string> = {
-  Ativo: '#2563eb',       // azul
-  Aviso: '#f87171',       // vermelho claro
-  Ferias: '#f97316',      // laranja
-  Afastado: '#eab308',    // amarelo
-  Licenca: '#8b5cf6',     // roxo
-  Recluso: '#6b7280',     // cinza
-  Desligado: '#374151',   // cinza escuro
-  Lista_Negra: '#111827', // preto
+  Ativo: '#2563eb',            // azul
+  Aviso: '#ef4444',            // vermelho
+  AvisoDispensado: '#f97316',  // laranja
+  Ferias: '#f59e0b',           // âmbar
+  Afastado: '#a855f7',         // roxo
+  Licenca: '#06b6d4',          // ciano
+  Recluso: '#6b7280',          // cinza
+  Desligado: '#374151',        // cinza escuro
+  Lista_Negra: '#111827',      // preto
 };
 const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   Ativo: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-  Aviso: { bg: 'bg-red-50', text: 'text-red-400', border: 'border-red-200' },
-  Ferias: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
-  Afastado: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
-  Licenca: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  Aviso: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+  AvisoDispensado: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+  Ferias: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  Afastado: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  Licenca: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
   Recluso: { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' },
   Desligado: { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' },
   Lista_Negra: { bg: 'bg-gray-200', text: 'text-gray-900', border: 'border-gray-400' },
 };
 const STATUS_LABELS: Record<string, string> = {
-  Ativo: 'Ativos', Aviso: 'Aviso Prévio', Ferias: 'Férias', Afastado: 'Afastados',
+  Ativo: 'Ativos', Aviso: 'Aviso Prévio', AvisoDispensado: 'Dispensado (7d)', Ferias: 'Férias', Afastado: 'Afastados',
   Licenca: 'Licença', Recluso: 'Reclusos', Desligado: 'Desligados', Lista_Negra: 'Lista Negra',
 };
 

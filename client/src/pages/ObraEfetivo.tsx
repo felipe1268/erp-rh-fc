@@ -379,16 +379,17 @@ export default function ObraEfetivo() {
 
         {/* Global Status Badges - clickable filters */}
         {(() => {
-          const statusConfig: { key: string; label: string; bgColor: string; textColor: string; borderColor: string; icon: string }[] = [
-            { key: 'Ativo', label: 'Ativos', bgColor: 'bg-green-50', textColor: 'text-green-700', borderColor: 'border-green-200', icon: '🟢' },
-            { key: 'Aviso', label: 'Aviso Prévio', bgColor: 'bg-amber-50', textColor: 'text-amber-700', borderColor: 'border-amber-200', icon: '🟡' },
-            { key: 'AvisoDispensado', label: 'Dispensado', bgColor: 'bg-orange-50', textColor: 'text-orange-700', borderColor: 'border-orange-200', icon: '🟠' },
-            { key: 'Ferias', label: 'Férias', bgColor: 'bg-blue-50', textColor: 'text-blue-700', borderColor: 'border-blue-200', icon: '🔵' },
-            { key: 'Afastado', label: 'Afastados', bgColor: 'bg-yellow-50', textColor: 'text-yellow-700', borderColor: 'border-yellow-200', icon: '🟡' },
-            { key: 'Licenca', label: 'Licença', bgColor: 'bg-cyan-50', textColor: 'text-cyan-700', borderColor: 'border-cyan-200', icon: '🩵' },
-            { key: 'Recluso', label: 'Reclusos', bgColor: 'bg-gray-50', textColor: 'text-gray-700', borderColor: 'border-gray-200', icon: '⚪' },
+          const statusConfig: { key: string; label: string; bgColor: string; textColor: string; borderColor: string; icon: string; dotColor: string }[] = [
+            { key: 'Ativo', label: 'Ativos', bgColor: 'bg-green-50', textColor: 'text-green-700', borderColor: 'border-green-200', icon: '🟢', dotColor: 'bg-green-500' },
+            { key: 'Aviso', label: 'Aviso Prévio', bgColor: 'bg-red-50', textColor: 'text-red-700', borderColor: 'border-red-200', icon: '🔴', dotColor: 'bg-red-500' },
+            { key: 'AvisoDispensado', label: 'Dispensado', bgColor: 'bg-orange-50', textColor: 'text-orange-700', borderColor: 'border-orange-200', icon: '🟠', dotColor: 'bg-orange-500' },
+            { key: 'Ferias', label: 'Férias', bgColor: 'bg-amber-50', textColor: 'text-amber-700', borderColor: 'border-amber-200', icon: '🟡', dotColor: 'bg-amber-500' },
+            { key: 'Afastado', label: 'Afastados', bgColor: 'bg-purple-50', textColor: 'text-purple-700', borderColor: 'border-purple-200', icon: '🟣', dotColor: 'bg-purple-500' },
+            { key: 'Licenca', label: 'Licença', bgColor: 'bg-cyan-50', textColor: 'text-cyan-700', borderColor: 'border-cyan-200', icon: '🩵', dotColor: 'bg-cyan-500' },
+            { key: 'Recluso', label: 'Reclusos', bgColor: 'bg-gray-50', textColor: 'text-gray-700', borderColor: 'border-gray-200', icon: '⚪', dotColor: 'bg-gray-500' },
           ];
           return (
+            <>
             <div className="flex flex-wrap gap-2 items-center">
               {statusConfig.filter(s => (globalStatusTotals[s.key] || 0) > 0).map(s => (
                 <button
@@ -418,6 +419,16 @@ export default function ObraEfetivo() {
                 </button>
               )}
             </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-4 items-center">
+              {statusConfig.map(s => (
+                <div key={s.key} className="flex items-center gap-1.5">
+                  <span className={`h-2.5 w-2.5 rounded-full ${s.dotColor}`} />
+                  <span className="text-xs text-muted-foreground">{s.label}</span>
+                </div>
+              ))}
+            </div>
+            </>
           );
         })()}
 
@@ -1090,10 +1101,10 @@ export default function ObraEfetivo() {
                 return a.nome.localeCompare(b.nome);
               });
               const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", AvisoDispensado: "Dispensado (7d)", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
-              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', AvisoDispensado: '#fed7aa', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
-              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', AvisoDispensado: '#9a3412', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
-              const rowBg: Record<string, string> = { Aviso: '#fffbeb', AvisoDispensado: '#fff7ed', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
-              // Summary counts
+const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', AvisoDispensado: '#fed7aa', Ferias: '#fef3c7', Afastado: '#ede9fe', Licenca: '#cffafe', Recluso: '#f3f4f6' };
+               const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#b91c1c', AvisoDispensado: '#9a3412', Ferias: '#92400e', Afastado: '#7c3aed', Licenca: '#0c5460', Recluso: '#374151' };
+               const rowBg: Record<string, string> = { Aviso: '#fef2f2', AvisoDispensado: '#fff7ed', Ferias: '#fffbeb', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#f9fafb' };
+               // Summary counts
               const statusCounts: Record<string, number> = {};
               rows.forEach((r: any) => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
               const summaryHtml = Object.entries(statusCounts).map(([s, c]) => `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:${statusBg[s] || '#f8f9fa'};color:${statusFg[s] || '#333'};border:1px solid ${statusBg[s] || '#dee2e6'};margin-right:8px;"><strong>${c}</strong> ${statusLabels[s] || s}</span>`).join('') + `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#f8f9fa;color:#333;border:1px solid #dee2e6;"><strong>${rows.length}</strong> Total</span>`;
@@ -1141,9 +1152,9 @@ export default function ObraEfetivo() {
                 return a.nome.localeCompare(b.nome);
               });
               const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", AvisoDispensado: "Dispensado (7d)", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
-              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', AvisoDispensado: '#fed7aa', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
-              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', AvisoDispensado: '#9a3412', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
-              const rowBg: Record<string, string> = { Aviso: '#fffbeb', AvisoDispensado: '#fff7ed', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
+const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', AvisoDispensado: '#fed7aa', Ferias: '#fef3c7', Afastado: '#ede9fe', Licenca: '#cffafe', Recluso: '#f3f4f6' };
+               const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#b91c1c', AvisoDispensado: '#9a3412', Ferias: '#92400e', Afastado: '#7c3aed', Licenca: '#0c5460', Recluso: '#374151' };
+               const rowBg: Record<string, string> = { Aviso: '#fef2f2', AvisoDispensado: '#fff7ed', Ferias: '#fffbeb', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#f9fafb' };
               const statusCounts: Record<string, number> = {};
               rows.forEach((r: any) => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
               const summaryHtml = Object.entries(statusCounts).map(([s, c]) => `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:${statusBg[s] || '#f8f9fa'};color:${statusFg[s] || '#333'};border:1px solid ${statusBg[s] || '#dee2e6'};margin-right:8px;"><strong>${c}</strong> ${statusLabels[s] || s}</span>`).join('') + `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#f8f9fa;color:#333;border:1px solid #dee2e6;"><strong>${rows.length}</strong> Total</span>`;
@@ -1202,11 +1213,11 @@ export default function ObraEfetivo() {
           {(() => {
             const statusGroups: Record<string, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
               Ativo: { label: "Ativos", color: "text-green-700", bgColor: "bg-green-50", borderColor: "border-green-200", icon: "🟢" },
-              Aviso: { label: "Aviso Prévio", color: "text-amber-700", bgColor: "bg-amber-50", borderColor: "border-amber-200", icon: "🟡" },
+              Aviso: { label: "Aviso Prévio", color: "text-red-700", bgColor: "bg-red-50", borderColor: "border-red-200", icon: "🔴" },
               AvisoDispensado: { label: "Dispensado (7d)", color: "text-orange-700", bgColor: "bg-orange-50", borderColor: "border-orange-200", icon: "🟠" },
-              Ferias: { label: "Férias", color: "text-blue-700", bgColor: "bg-blue-50", borderColor: "border-blue-200", icon: "🔵" },
+              Ferias: { label: "Férias", color: "text-amber-700", bgColor: "bg-amber-50", borderColor: "border-amber-200", icon: "🟡" },
               Afastado: { label: "Afastados", color: "text-purple-700", bgColor: "bg-purple-50", borderColor: "border-purple-200", icon: "🟣" },
-              Recluso: { label: "Reclusos", color: "text-red-700", bgColor: "bg-red-50", borderColor: "border-red-200", icon: "🔴" },
+              Recluso: { label: "Reclusos", color: "text-gray-700", bgColor: "bg-gray-50", borderColor: "border-gray-200", icon: "⚪" },
               Licenca: { label: "Licença", color: "text-cyan-700", bgColor: "bg-cyan-50", borderColor: "border-cyan-200", icon: "🩵" },
             };
             const filteredFuncObra = funcObra.filter((f: any) => {
@@ -1292,18 +1303,18 @@ export default function ObraEfetivo() {
                             <tbody className="divide-y">
                               {items.map((f: any) => {
                                 const empStatus = f.employee?.status || st;
-                                const rowBg = empStatus === 'Aviso' ? 'bg-amber-50/60' : empStatus === 'AvisoDispensado' ? 'bg-orange-50/60' : empStatus === 'Ferias' ? 'bg-blue-50/60' : empStatus === 'Afastado' ? 'bg-purple-50/60' : empStatus === 'Licenca' ? 'bg-cyan-50/60' : empStatus === 'Recluso' ? 'bg-red-50/60' : '';
+                                const rowBg = empStatus === 'Aviso' ? 'bg-red-50/60' : empStatus === 'AvisoDispensado' ? 'bg-orange-50/60' : empStatus === 'Ferias' ? 'bg-amber-50/60' : empStatus === 'Afastado' ? 'bg-purple-50/60' : empStatus === 'Licenca' ? 'bg-cyan-50/60' : empStatus === 'Recluso' ? 'bg-gray-50/60' : '';
                                 return (
                                 <tr key={f.id} className={`hover:bg-slate-50/50 ${rowBg}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                   <td className="px-4 py-2.5">
                                     <div className="flex items-center gap-3">
                                       <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
-                                        empStatus === 'Aviso' ? 'bg-gradient-to-br from-amber-500 to-amber-600' :
+                                        empStatus === 'Aviso' ? 'bg-gradient-to-br from-red-500 to-red-600' :
                                         empStatus === 'AvisoDispensado' ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
-                                        empStatus === 'Ferias' ? 'bg-gradient-to-br from-blue-400 to-blue-500' :
+                                        empStatus === 'Ferias' ? 'bg-gradient-to-br from-amber-400 to-amber-500' :
                                         empStatus === 'Afastado' ? 'bg-gradient-to-br from-purple-500 to-purple-600' :
                                         empStatus === 'Licenca' ? 'bg-gradient-to-br from-cyan-500 to-cyan-600' :
-                                        empStatus === 'Recluso' ? 'bg-gradient-to-br from-red-500 to-red-600' :
+                                        empStatus === 'Recluso' ? 'bg-gradient-to-br from-gray-500 to-gray-600' :
                                         'bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a]'
                                       }`}>
                                         <span className="text-white text-[11px] font-bold">{(f.employee?.nomeCompleto || '?')[0]}</span>
