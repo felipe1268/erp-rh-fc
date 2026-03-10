@@ -112,6 +112,12 @@ const PagamentosParceiros = lazy(() => import("./pages/parceiros/PagamentosParce
 const AprovacoesParceiros = lazy(() => import("./pages/parceiros/AprovacoesParceiros"));
 const PortalParceiro = lazy(() => import("./pages/parceiros/PortalParceiro"));
 
+// Orçamento
+const PainelOrcamento   = lazy(() => import("./pages/orcamento/PainelOrcamento"));
+const OrcamentoLista    = lazy(() => import("./pages/orcamento/OrcamentoLista"));
+const OrcamentoDetalhe  = lazy(() => import("./pages/orcamento/OrcamentoDetalhe"));
+const OrcamentoImportar = lazy(() => import("./pages/orcamento/OrcamentoImportar"));
+
 // Sprint 6 - IA
 const ComparativoConvencoes = lazy(() => import("./pages/ComparativoConvencoes"));
 
@@ -237,6 +243,11 @@ function Router() {
         <Route path="/parceiros/aprovacoes" component={AprovacoesParceiros} />
         <Route path="/parceiros/portal" component={PortalParceiro} />
         <Route path="/parceiros/painel" component={PainelParceiros} />
+        {/* Orçamento */}
+        <Route path="/orcamento/painel"           component={PainelOrcamento} />
+        <Route path="/orcamento/lista"            component={OrcamentoLista} />
+        <Route path="/orcamento/importar"         component={OrcamentoImportar} />
+        <Route path="/orcamento/:id"              component={OrcamentoDetalhe} />
         {/* Sprint 6 - IA */}
         <Route path="/comparativo-convencoes" component={ComparativoConvencoes} />
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />

@@ -79,7 +79,7 @@ export const EMPLOYEE_STATUS_MANUAL = [
 // REGRA: Toda funcionalidade listada na sidebar DEVE ter entrada aqui
 // ============================================================
 
-export type ActiveModuleId = "rh-dp" | "sst" | "juridico" | "terceiros" | "parceiros";
+export type ActiveModuleId = "rh-dp" | "sst" | "juridico" | "terceiros" | "parceiros" | "orcamento";
 
 export interface ModuleFeature {
   key: string;
@@ -217,6 +217,18 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "parceiros-portal", label: "Portal Externo", route: "/parceiros/portal", icon: "Globe" },
       { key: "parceiros-guia-descontos", label: "Guia de Descontos", route: "/parceiros/guia-descontos", icon: "FileText" },
       { key: "parceiros-pagamentos", label: "Pagamentos", route: "/parceiros/pagamentos", icon: "Wallet" },
+    ],
+  },
+  {
+    id: "orcamento",
+    label: "Orçamento",
+    description: "Importação de planilhas Excel, 3 versões de orçamento (Venda, Custo, Meta), curva ABC de insumos.",
+    color: "cyan",
+    icon: "Calculator",
+    features: [
+      { key: "orcamento-painel",   label: "Painel Orçamento",  route: "/orcamento/painel",   icon: "LayoutDashboard" },
+      { key: "orcamento-lista",    label: "Orçamentos",        route: "/orcamento/lista",    icon: "FolderOpen" },
+      { key: "orcamento-importar", label: "Importar Planilha", route: "/orcamento/importar", icon: "Upload" },
     ],
   },
 ];
