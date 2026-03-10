@@ -5336,3 +5336,4 @@
 - [x] Frontend: exibir "Aviso - Dispensado" com cor diferenciada na equipe da obra
 - [x] Frontend: separar dispensados do efetivo ativo nos cards de obra
 - [x] Frontend: manter dispensados na contagem contábil (folha, custos)
+- [x] Implementar filtro por status nos badges do Efetivo por Obra (clicar em Ativos, Aviso Prévio, etc. filtra as obras)

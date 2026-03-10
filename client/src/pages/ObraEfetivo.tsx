@@ -51,6 +51,8 @@ export default function ObraEfetivo() {
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [equipeDialogOpen, setEquipeDialogOpen] = useState(false);
   const [equipeSearch, setEquipeSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [equipeStatusFilter, setEquipeStatusFilter] = useState<string | null>(null);
 
   // Queries
   const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId });
@@ -128,15 +130,42 @@ export default function ObraEfetivo() {
   const totalObrasComEfetivo = efetivo.length;
   const totalSemObra = (semObra as any[]).length;
 
+  // Status totals across all obras
+  const globalStatusTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    (efetivo as any[]).forEach((o: any) => {
+      totals.Ativo = (totals.Ativo || 0) + (o.qtdAtivo || 0);
+      totals.Aviso = (totals.Aviso || 0) + (o.qtdAviso || 0);
+      totals.AvisoDispensado = (totals.AvisoDispensado || 0) + (o.qtdAvisoDispensado || 0);
+      totals.Ferias = (totals.Ferias || 0) + (o.qtdFerias || 0);
+      totals.Afastado = (totals.Afastado || 0) + (o.qtdAfastado || 0);
+      totals.Licenca = (totals.Licenca || 0) + (o.qtdLicenca || 0);
+      totals.Recluso = (totals.Recluso || 0) + (o.qtdRecluso || 0);
+    });
+    return totals;
+  }, [efetivo]);
+  const globalTotal = Object.values(globalStatusTotals).reduce((s, v) => s + v, 0);
+
   // Helper: remove acentos para busca
   const removeAccents = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   // Filtro
   const filteredEfetivo = useMemo(() => {
-    if (!search) return efetivo;
-    const s = removeAccents(search);
-    return efetivo.filter((e: any) => removeAccents(e.obraNome || '').includes(s) || removeAccents(e.obraCodigo || '').includes(s));
-  }, [efetivo, search]);
+    let list = efetivo as any[];
+    if (search) {
+      const s = removeAccents(search);
+      list = list.filter((e: any) => removeAccents(e.obraNome || '').includes(s) || removeAccents(e.obraCodigo || '').includes(s));
+    }
+    if (statusFilter) {
+      const fieldMap: Record<string, string> = {
+        Ativo: 'qtdAtivo', Aviso: 'qtdAviso', AvisoDispensado: 'qtdAvisoDispensado',
+        Ferias: 'qtdFerias', Afastado: 'qtdAfastado', Licenca: 'qtdLicenca', Recluso: 'qtdRecluso',
+      };
+      const field = fieldMap[statusFilter];
+      if (field) list = list.filter((e: any) => (e[field] || 0) > 0);
+    }
+    return list;
+  }, [efetivo, search, statusFilter]);
 
   const filteredSemObra = useMemo(() => {
     const base = semObra as any[];
@@ -348,6 +377,50 @@ export default function ObraEfetivo() {
           <Input placeholder="Buscar obra ou funcionário..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
         </div>
 
+        {/* Global Status Badges - clickable filters */}
+        {(() => {
+          const statusConfig: { key: string; label: string; bgColor: string; textColor: string; borderColor: string; icon: string }[] = [
+            { key: 'Ativo', label: 'Ativos', bgColor: 'bg-green-50', textColor: 'text-green-700', borderColor: 'border-green-200', icon: '🟢' },
+            { key: 'Aviso', label: 'Aviso Prévio', bgColor: 'bg-amber-50', textColor: 'text-amber-700', borderColor: 'border-amber-200', icon: '🟡' },
+            { key: 'AvisoDispensado', label: 'Dispensado', bgColor: 'bg-orange-50', textColor: 'text-orange-700', borderColor: 'border-orange-200', icon: '🟠' },
+            { key: 'Ferias', label: 'Férias', bgColor: 'bg-blue-50', textColor: 'text-blue-700', borderColor: 'border-blue-200', icon: '🔵' },
+            { key: 'Afastado', label: 'Afastados', bgColor: 'bg-yellow-50', textColor: 'text-yellow-700', borderColor: 'border-yellow-200', icon: '🟡' },
+            { key: 'Licenca', label: 'Licença', bgColor: 'bg-cyan-50', textColor: 'text-cyan-700', borderColor: 'border-cyan-200', icon: '🩵' },
+            { key: 'Recluso', label: 'Reclusos', bgColor: 'bg-gray-50', textColor: 'text-gray-700', borderColor: 'border-gray-200', icon: '⚪' },
+          ];
+          return (
+            <div className="flex flex-wrap gap-2 items-center">
+              {statusConfig.filter(s => (globalStatusTotals[s.key] || 0) > 0).map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setStatusFilter(prev => prev === s.key ? null : s.key)}
+                  className={`${s.bgColor} ${s.borderColor} border rounded-lg px-4 py-2 flex items-center gap-2 transition-all cursor-pointer hover:shadow-md ${
+                    statusFilter === s.key ? 'ring-2 ring-offset-1 ring-blue-500 shadow-md' : 'opacity-90 hover:opacity-100'
+                  }`}
+                >
+                  <span className="text-sm">{s.icon}</span>
+                  <span className={`font-bold text-lg ${s.textColor}`}>{globalStatusTotals[s.key] || 0}</span>
+                  <span className={`text-xs ${s.textColor}`}>{s.label}</span>
+                </button>
+              ))}
+              <div className={`bg-slate-100 border border-slate-200 rounded-lg px-4 py-2 flex items-center gap-2 ${
+                statusFilter ? 'cursor-pointer hover:shadow-md' : ''
+              }`} onClick={() => statusFilter && setStatusFilter(null)}>
+                <span className="font-bold text-lg text-slate-800">{globalTotal}</span>
+                <span className="text-xs text-slate-600">Total</span>
+              </div>
+              {statusFilter && (
+                <button
+                  onClick={() => setStatusFilter(null)}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted transition-colors"
+                >
+                  <X className="h-3 w-3" /> Limpar filtro
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">
@@ -383,7 +456,7 @@ export default function ObraEfetivo() {
                   <Card
                     key={item.obraId}
                     className="cursor-pointer hover:shadow-md transition-shadow hover:ring-2 hover:ring-[#1B2A4A]/50"
-                    onClick={() => { setSelectedObraId(item.obraId); setSelectedObraIds(item.obraIds || [item.obraId]); setEquipeDialogOpen(true); setEquipeSearch(""); }}
+                    onClick={() => { setSelectedObraId(item.obraId); setSelectedObraIds(item.obraIds || [item.obraId]); setEquipeDialogOpen(true); setEquipeSearch(""); setEquipeStatusFilter(null); }}
                   >
                     <CardContent className="p-5">
                       <div className="flex items-start justify-between mb-2">
@@ -1137,6 +1210,10 @@ export default function ObraEfetivo() {
               Licenca: { label: "Licença", color: "text-cyan-700", bgColor: "bg-cyan-50", borderColor: "border-cyan-200", icon: "🩵" },
             };
             const filteredFuncObra = funcObra.filter((f: any) => {
+              if (equipeStatusFilter) {
+                const st = f.employee?.status || 'Ativo';
+                if (st !== equipeStatusFilter) return false;
+              }
               if (!equipeSearch) return true;
               const s = equipeSearch.toLowerCase();
               return (f.employee?.nomeCompleto || "").toLowerCase().includes(s) ||
@@ -1161,17 +1238,24 @@ export default function ObraEfetivo() {
                   {sortedKeys.map(st => {
                     const cfg = statusGroups[st] || { label: st, color: "text-gray-700", bgColor: "bg-gray-50", borderColor: "border-gray-200", icon: "⚪" };
                     return (
-                      <div key={st} className={`${cfg.bgColor} ${cfg.borderColor} border rounded-lg px-4 py-2 flex items-center gap-2`}>
+                      <button key={st} onClick={() => setEquipeStatusFilter(prev => prev === st ? null : st)} className={`${cfg.bgColor} ${cfg.borderColor} border rounded-lg px-4 py-2 flex items-center gap-2 transition-all cursor-pointer hover:shadow-md ${
+                        equipeStatusFilter === st ? 'ring-2 ring-offset-1 ring-blue-500 shadow-md' : 'opacity-90 hover:opacity-100'
+                      }`}>
                         <span className="text-sm">{cfg.icon}</span>
                         <span className={`font-bold text-lg ${cfg.color}`}>{grouped[st].length}</span>
                         <span className={`text-xs ${cfg.color}`}>{cfg.label}</span>
-                      </div>
+                      </button>
                     );
                   })}
-                  <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 py-2 flex items-center gap-2">
+                  <div className={`bg-slate-100 border border-slate-200 rounded-lg px-4 py-2 flex items-center gap-2 ${equipeStatusFilter ? 'cursor-pointer hover:shadow-md' : ''}`} onClick={() => equipeStatusFilter && setEquipeStatusFilter(null)}>
                     <span className="font-bold text-lg text-slate-800">{filteredFuncObra.length}</span>
                     <span className="text-xs text-slate-600">Total</span>
                   </div>
+                  {equipeStatusFilter && (
+                    <button onClick={() => setEquipeStatusFilter(null)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted transition-colors">
+                      <X className="h-3 w-3" /> Limpar filtro
+                    </button>
+                  )}
                 </div>
 
                 {/* Employee list grouped by status */}
