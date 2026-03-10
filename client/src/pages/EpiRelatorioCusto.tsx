@@ -19,7 +19,7 @@ function formatCurrency(value: number) {
 
 export default function EpiRelatorioCusto() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tipo, setTipo] = useState<ReportType>("funcionario");
   const [dataInicio, setDataInicio] = useState(() => {
@@ -32,7 +32,7 @@ export default function EpiRelatorioCusto() {
 
   const relatorioQ = trpc.epiAvancado.relatorioCusto.useQuery(
     { companyId, tipo, dataInicio, dataFim },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
 
   const dados = relatorioQ.data?.dados ?? [];

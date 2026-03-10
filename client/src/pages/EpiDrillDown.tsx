@@ -29,7 +29,7 @@ const TITLES: Record<string, { title: string; subtitle: string; color: string; i
 
 export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery, companies } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = isConstrutoras ? getCompanyIdsForQuery() : undefined;
   const queryCompanyId = isConstrutoras ? (companyIds?.[0] || companyId) : companyId;
   const [search, setSearch] = useState("");

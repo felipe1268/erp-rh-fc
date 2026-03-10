@@ -15,8 +15,9 @@ const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Ag
 // formatBRL imported from @/lib/formatBRL
 
 export default function RelatorioCustoObra() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
@@ -24,7 +25,7 @@ export default function RelatorioCustoObra() {
 
   const custoObra = trpc.payrollEngine.custoPorObra.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const data = custoObra.data as any;

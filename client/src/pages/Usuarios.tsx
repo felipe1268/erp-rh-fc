@@ -39,8 +39,9 @@ export default function Usuarios() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
   const isAdmin = user?.role === "admin" || isMaster;
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
 
   // States
   const [searchTerm, setSearchTerm] = useState("");

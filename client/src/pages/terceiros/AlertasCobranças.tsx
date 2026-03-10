@@ -33,8 +33,9 @@ type AlertaItem = {
 
 export default function AlertasCobrancas() {
   const { user } = useAuth();
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroStatus, setFiltroStatus] = useState<"pendentes" | "resolvidos" | "todos">("pendentes");
@@ -43,12 +44,12 @@ export default function AlertasCobrancas() {
 
   const { data: alertas, isLoading, refetch } = trpc.terceiros.alertas.list.useQuery(
     { companyId: companyId ?? 0, resolvido: filtroStatus === "todos" ? undefined : filtroStatus === "pendentes" ? 0 : 1 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: empresasData } = trpc.terceiros.empresas.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const resolverMutation = trpc.terceiros.alertas.resolver.useMutation({

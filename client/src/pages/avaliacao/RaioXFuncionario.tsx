@@ -165,9 +165,10 @@ function EvolutionTable({ evaluations }: { evaluations: any[] }) {
 
 // ─── Raio-X Detail View ───
 function RaioXDetail({ employeeId, onBack }: { employeeId: number; onBack: () => void }) {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
-  const raioX = trpc.avaliacao.raioX.getByEmployee.useQuery({ employeeId, companyId }, { enabled: !!companyId });
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
+  const raioX = trpc.avaliacao.raioX.getByEmployee.useQuery({ employeeId, companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
 
   if (raioX.isLoading) return <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1e3a5f]" /></div>;
   if (!raioX.data?.employee) return <div className="text-center py-12 text-[#94A3B8]"><User className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>Funcionário não encontrado.</p><Button variant="outline" onClick={onBack} className="mt-4"><ArrowLeft className="w-4 h-4 mr-2" /> Voltar</Button></div>;
@@ -320,12 +321,13 @@ function RaioXDetail({ employeeId, onBack }: { employeeId: number; onBack: () =>
 
 // ─── Employee List for Raio-X ───
 export default function RaioXFuncionario() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const ranking = trpc.avaliacao.dashboard.employeeRanking.useQuery({ companyId, limit: 200 }, { enabled: !!companyId });
+  const ranking = trpc.avaliacao.dashboard.employeeRanking.useQuery({ companyId, limit: 200 }, { enabled: companyId > 0 || companyIds.length > 0 });
 
   if (selectedEmployeeId) {
     return <RaioXDetail employeeId={selectedEmployeeId} onBack={() => setSelectedEmployeeId(null)} />;

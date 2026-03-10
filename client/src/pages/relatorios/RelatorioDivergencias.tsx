@@ -23,8 +23,9 @@ const TIPO_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function RelatorioDivergencias() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
@@ -35,15 +36,15 @@ export default function RelatorioDivergencias() {
 
   const inconsistencias = trpc.payrollEngine.listarInconsistencias.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const divergencias = trpc.payrollEngine.relatorioDivergencias.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const resumoIncon = trpc.payrollEngine.resumoInconsistencias.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const incon = (inconsistencias.data || []) as any[];

@@ -111,8 +111,9 @@ interface BadgeData {
 
 export default function Crachas() {
   const { user } = useAuth();
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [activeTab, setActiveTab] = useState<"clt" | "pj" | "terceiro">("clt");
   const [search, setSearch] = useState("");
   const [selectedBadge, setSelectedBadge] = useState<BadgeData | null>(null);
@@ -130,19 +131,19 @@ export default function Crachas() {
   // Fetch employees (CLT + PJ)
   const { data: employeesData, isLoading: loadingEmployees } = trpc.employees.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   // Fetch terceiros
   const { data: terceirosData, isLoading: loadingTerceiros } = trpc.terceiros.funcionarios.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   // Fetch empresas terceiras
   const { data: empresasTerceiras } = trpc.terceiros.empresas.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   // Fetch companies for name

@@ -22,8 +22,9 @@ const CLIMA_CATEGORIAS: Record<string, { label: string; icon: any; cor: string }
 };
 
 export default function AvalClima() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const utils = trpc.useUtils();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -35,7 +36,7 @@ export default function AvalClima() {
   const [descricao, setDescricao] = useState("");
   const [perguntas, setPerguntas] = useState<{ texto: string; categoria: string }[]>([]);
 
-  const surveys = trpc.avaliacao.clima.listSurveys.useQuery({ companyId }, { enabled: !!companyId });
+  const surveys = trpc.avaliacao.clima.listSurveys.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
   const results = trpc.avaliacao.clima.getResults.useQuery({ surveyId: showResults || 0 }, { enabled: !!showResults });
 
   const createMut = trpc.avaliacao.clima.createSurvey.useMutation({

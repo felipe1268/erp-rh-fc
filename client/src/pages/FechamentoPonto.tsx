@@ -91,11 +91,11 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
   const [abonoMotivo, setAbonoMotivo] = useState("");
 
   const utils = trpc.useUtils();
-  const totais = trpc.pontoDescontos.totaisMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const resumo = trpc.pontoDescontos.listResumo.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const totais = trpc.pontoDescontos.totaisMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const resumo = trpc.pontoDescontos.listResumo.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const detalhes = trpc.pontoDescontos.listByMonth.useQuery(
     { companyId, mesReferencia: mesAno, tipo: filterTipo !== "all" ? filterTipo : undefined, employeeId: filterEmpId },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const calcularMut = trpc.pontoDescontos.calcularMes.useMutation({
@@ -435,7 +435,7 @@ export default function FechamentoPonto() {
   const [, setLocation] = useLocation();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const isMaster = user?.role === "admin_master";
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -521,30 +521,30 @@ export default function FechamentoPonto() {
   ];
 
   // ===== QUERIES =====
-  const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const summary = trpc.fechamentoPonto.getSummary.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const inconsistencies = trpc.fechamentoPonto.listInconsistencies.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const summary = trpc.fechamentoPonto.getSummary.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const inconsistencies = trpc.fechamentoPonto.listInconsistencies.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const employeeDetail = trpc.fechamentoPonto.getEmployeeDetail.useQuery(
     { companyId, employeeId: selectedEmployeeId!, mesReferencia: mesAno },
-    { enabled: companyId > 0 && selectedEmployeeId !== null }
+    { enabled: (companyId > 0 || companyIds.length > 0) && selectedEmployeeId !== null }
   );
-  const obrasList = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
-  const employeesList = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: companyId > 0 });
-  const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 });
-  const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const obrasList = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const employeesList = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const unmatchedData = trpc.fechamentoPonto.getUnmatchedRecords.useQuery(
-    { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 }
+    { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const rateioData = trpc.fechamentoPonto.getRateioPorObra.useQuery(
-    { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 && viewMode === "rateio" }
+    { companyId, mesReferencia: mesAno }, { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "rateio" }
   );
   const dixiMappings = trpc.fechamentoPonto.getDixiMappings.useQuery(
-    { companyId }, { enabled: companyId > 0 && viewMode === "memoria_dixi" }
+    { companyId }, { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "memoria_dixi" }
   );
   const simuladorData = trpc.fechamentoPonto.simularFolhaHoristas.useQuery(
     { companyId, diasUteis: simDiasUteis, horasPorDia: simHorasDia },
-    { enabled: companyId > 0 && viewMode === "simulador_horistas" }
+    { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "simulador_horistas" }
   );
 
   const isConsolidado = consolidacaoStatus.data?.consolidado === true;

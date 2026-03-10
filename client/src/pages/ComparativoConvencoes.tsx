@@ -33,7 +33,7 @@ type ComparisonResult = {
 export default function ComparativoConvencoes() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const [, navigate] = useLocation();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : undefined;
   const companyIds = getCompanyIdsForQuery();
   const [open, setOpen] = useState(true);
 
@@ -48,7 +48,7 @@ export default function ComparativoConvencoes() {
 
   const { data: convencoes } = trpc.sprint1.convencao.listAll.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
 
   const compararMut = trpc.sprint1.convencao.compararIA.useMutation();

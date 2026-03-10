@@ -15,8 +15,9 @@ import { toast } from "sonner";
 import { Plus, Search, FileText, Trash2, Edit2, Eye, Copy, Link2, ToggleLeft, ToggleRight } from "lucide-react";
 
 export default function AvalPesquisas() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const utils = trpc.useUtils();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -30,7 +31,7 @@ export default function AvalPesquisas() {
   const [descricao, setDescricao] = useState("");
   const [perguntas, setPerguntas] = useState<{ texto: string; tipo: string; obrigatoria: boolean }[]>([]);
 
-  const surveys = trpc.avaliacao.pesquisas.list.useQuery({ companyId }, { enabled: !!companyId });
+  const surveys = trpc.avaliacao.pesquisas.list.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
   const createMut = trpc.avaliacao.pesquisas.create.useMutation({
     onSuccess: () => { toast.success("Pesquisa criada"); utils.avaliacao.pesquisas.list.invalidate(); resetForm(); },
     onError: (e) => toast.error(e.message),

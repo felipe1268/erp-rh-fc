@@ -19,8 +19,9 @@ import {
 
 export default function PortalParceiro() {
   const { user } = useAuth();
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [simulacaoOpen, setSimulacaoOpen] = useState(false);
   const [simulacaoParceiro, setSimulacaoParceiro] = useState<any>(null);
@@ -40,22 +41,22 @@ export default function PortalParceiro() {
 
   const { data: parceirosData, isLoading } = trpc.parceiros.cadastro.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: employeesData } = trpc.employees.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: lancamentosData, refetch: refetchLancamentos } = trpc.parceiros.lancamentos.list.useQuery(
     { companyId: companyId ?? 0, competencia },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: acessosData, refetch: refetchAcessos } = trpc.portalExterno.admin.listarAcessos.useQuery(
     { companyId: companyId ?? 0, tipo: "parceiro" },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const createMutation = trpc.parceiros.lancamentos.create.useMutation({

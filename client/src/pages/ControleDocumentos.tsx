@@ -866,7 +866,7 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee }: 
 
 export default function ControleDocumentos() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
   const selectedCompany = companies?.find((c: any) => String(c.id) === selectedCompanyId);

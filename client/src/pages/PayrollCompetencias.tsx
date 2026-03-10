@@ -112,7 +112,7 @@ export default function PayrollCompetencias() {
   const { user } = useAuth();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const utils = trpc.useUtils();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
 
   const now = new Date();
@@ -135,49 +135,49 @@ export default function PayrollCompetencias() {
   // ============================================================
   const resumo = trpc.payrollEngine.resumoCompetencia.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const period = trpc.payrollEngine.getPeriod.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const vales = trpc.payrollEngine.listarVales.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && activeStep >= 3 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && activeStep >= 3 }
   );
   const pagamentos = trpc.payrollEngine.listarPagamentos.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && activeStep >= 4 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && activeStep >= 4 }
   );
   const timecards = trpc.payrollEngine.listarTimecardDaily.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && activeStep >= 1 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && activeStep >= 1 }
   );
   const inconsistencias = trpc.payrollEngine.listarInconsistencias.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && activeStep >= 1 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && activeStep >= 1 }
   );
   const resumoIncon = trpc.payrollEngine.resumoInconsistencias.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && activeStep >= 1 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && activeStep >= 1 }
   );
   const contracheque = trpc.payrollEngine.gerarContracheque.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && showContracheque }
+    { enabled: (companyId > 0 || companyIds.length > 0) && showContracheque }
   );
   // --- Fechamento de Ponto queries (reutilizados na Etapa 2) ---
   const pontoSummary = trpc.payrollEngine.resumoPontoPorFuncionario.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && activeStep >= 1 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && activeStep >= 1 }
   );
   const pontoConflitos = trpc.payrollEngine.conflitosObra.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 && activeStep >= 1 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && activeStep >= 1 }
   );
   const [selectedEmpId, setSelectedEmpId] = useState<number | null>(null);
   const pontoEspelho = trpc.payrollEngine.espelhoPontoFuncionario.useQuery(
     { companyId, employeeId: selectedEmpId!, mesReferencia: mesRef },
-    { enabled: companyId > 0 && selectedEmpId !== null }
+    { enabled: (companyId > 0 || companyIds.length > 0) && selectedEmpId !== null }
   );
 
   // ============================================================

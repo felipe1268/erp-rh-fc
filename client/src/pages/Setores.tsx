@@ -22,9 +22,9 @@ const emptyForm: SetorForm = { nome: "", descricao: "" };
 
 export default function Setores() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
-const setoresQ = trpc.sectors.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+const setoresQ = trpc.sectors.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const setores = setoresQ.data ?? [];
 
   const createMut = trpc.sectors.create.useMutation({ onSuccess: () => { setoresQ.refetch(); setDialogOpen(false); toast.success("Setor criado com sucesso!"); } });

@@ -58,7 +58,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function ValeAlimentacao() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [mesAno, setMesAno] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -80,19 +80,19 @@ export default function ValeAlimentacao() {
   const [histDialogName, setHistDialogName] = useState<string>("");
 
   // Queries
-  const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId });
-  const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId });
-  const configsQ = trpc.avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery({ companyId, companyIds }, { enabled: !!companyId && tab === "configuracao" });
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId && tab === "configuracao" });
+  const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId || companyIds?.length > 0 });
+  const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId || companyIds?.length > 0 });
+  const configsQ = trpc.avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "configuracao" });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "configuracao" });
   const histQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
     { companyId, employeeId: histEmployeeId! },
-    { enabled: !!companyId && !!histEmployeeId && tab === "historico" }
+    { enabled: (!!companyId || companyIds?.length > 0) && !!histEmployeeId && tab === "historico" }
   );
   const histDialogQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
     { companyId, employeeId: histDialogEmployeeId! },
-    { enabled: !!companyId && !!histDialogEmployeeId }
+    { enabled: (!!companyId || companyIds?.length > 0) && !!histDialogEmployeeId }
   );
-  const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId && tab === "historico" });
+  const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "historico" });
 
   // Mutations
   const gerarMut = trpc.valeAlimentacao.gerarMes.useMutation({

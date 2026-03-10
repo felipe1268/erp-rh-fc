@@ -16,17 +16,17 @@ import { fmtNum } from "@/lib/formatters";
 
 export default function EpiEstoqueMinimo() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<"alertas" | "config">("alertas");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({ epiId: "", obraId: "", quantidadeMinima: "20" });
 
   // Queries
-  const alertasQ = trpc.epiAvancado.alertasEstoque.useQuery({ companyId, companyIds }, { enabled: !!companyId });
-  const minimoListQ = trpc.epiAvancado.estoqueMinList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
-  const episQ = trpc.epis.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const alertasQ = trpc.epiAvancado.alertasEstoque.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const minimoListQ = trpc.epiAvancado.estoqueMinList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const episQ = trpc.epis.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
 
   // Mutations
   const upsertMut = trpc.epiAvancado.estoqueMinUpsert.useMutation({

@@ -36,8 +36,9 @@ const ORIGEM_COLORS: Record<string, string> = {
 };
 
 export default function RelatorioPonto() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
@@ -47,11 +48,11 @@ export default function RelatorioPonto() {
 
   const timecards = trpc.payrollEngine.listarTimecardDaily.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const resumo = trpc.payrollEngine.resumoCompetencia.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const data = (timecards.data || []) as any[];

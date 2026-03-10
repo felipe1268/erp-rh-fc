@@ -44,8 +44,9 @@ function getMediaColor(media: number): string {
 }
 
 export default function AvalAvaliacoes() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const utils = trpc.useUtils();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,7 +54,7 @@ export default function AvalAvaliacoes() {
   const [selectedEval, setSelectedEval] = useState<any>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
-  const avaliacoes = trpc.avaliacao.avaliacoes.list.useQuery({ companyId }, { enabled: !!companyId });
+  const avaliacoes = trpc.avaliacao.avaliacoes.list.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
   const deleteMut = trpc.avaliacao.avaliacoes.delete.useMutation({
     onSuccess: () => { toast.success("Avaliação excluída"); utils.avaliacao.avaliacoes.list.invalidate(); setDeleteConfirm(null); },
     onError: (e) => toast.error(e.message),

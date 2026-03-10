@@ -21,7 +21,7 @@ const MESES_LABEL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","J
 
 export default function PJMedicoes() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = Number(selectedCompanyId) || 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? Number(selectedCompanyId) : 0;
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin_master' || user?.role === 'admin';
@@ -33,12 +33,12 @@ export default function PJMedicoes() {
 
   const { data: medicoes, isLoading, refetch } = trpc.pjMedicoes.listar.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: contratos } = trpc.pj.contratos.list.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const criarMut = trpc.pjMedicoes.criar.useMutation({

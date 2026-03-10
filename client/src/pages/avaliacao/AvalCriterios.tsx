@@ -10,12 +10,13 @@ import { Plus, CheckCircle, Layers, Clock, Star, Shield } from "lucide-react";
 const PILAR_CORES: Record<number, string> = { 1: "#1e3a5f", 2: "#059669", 3: "#D97706" };
 
 export default function AvalCriterios() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const utils = trpc.useUtils();
 
-  const activeRevision = trpc.avaliacao.criterios.getActiveRevision.useQuery({ companyId }, { enabled: !!companyId });
-  const revisions = trpc.avaliacao.criterios.listRevisions.useQuery({ companyId }, { enabled: !!companyId });
+  const activeRevision = trpc.avaliacao.criterios.getActiveRevision.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const revisions = trpc.avaliacao.criterios.listRevisions.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
 
   const createDefault = trpc.avaliacao.criterios.createDefaultRevision.useMutation({
     onSuccess: () => {

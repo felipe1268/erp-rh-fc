@@ -93,7 +93,7 @@ export default function ContratoPJView() {
   const [, navigate] = useLocation();
   const contratoId = params?.id ? parseInt(params.id, 10) : 0;
   const { selectedCompany, selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = Number(selectedCompanyId) || 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0;
   const companyIds = getCompanyIdsForQuery();
 
   const { data: contrato, isLoading, error } = (trpc as any).pj.contratos.getById.useQuery(

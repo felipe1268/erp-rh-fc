@@ -126,7 +126,7 @@ export default function ObraEfetivo() {
   // Totais
   const totalAlocados = efetivo.reduce((sum, e) => sum + ((e as any).efetivo || 0), 0);
   const totalObrasComEfetivo = efetivo.length;
-  const totalSemObra = allEmps.filter((e: any) => !e.obraAtualId || e.obraAtualId === 0).length;
+  const totalSemObra = (semObra as any[]).length;
 
   // Helper: remove acentos para busca
   const removeAccents = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -139,11 +139,11 @@ export default function ObraEfetivo() {
   }, [efetivo, search]);
 
   const filteredSemObra = useMemo(() => {
-    const base = allEmps.filter((e: any) => !e.obraAtualId || e.obraAtualId === 0);
+    const base = semObra as any[];
     if (!search) return base;
     const s = removeAccents(search);
     return base.filter((e: any) => removeAccents(e.nomeCompleto || '').includes(s) || removeAccents(e.funcao || '').includes(s));
-  }, [allEmps, search]);
+  }, [semObra, search]);
 
   // Filtered employees for search in dialog
   const filteredAllEmps = useMemo(() => {
@@ -537,6 +537,7 @@ export default function ObraEfetivo() {
       <FullScreenDialog
         open={allocDialogOpen}
         onClose={() => { setAllocDialogOpen(false); setSelectedEmployees([]); setEmpSearch(""); setEmpFilter("sem-obra"); }}
+        zIndex={60}
         title="Alocar Funcionários"
         subtitle="Selecione os funcionários e defina a obra de destino."
         icon={<UserPlus className="h-5 w-5" />}
@@ -966,6 +967,7 @@ export default function ObraEfetivo() {
                 funcao: f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—",
                 status: f.employee?.status || "Ativo",
                 desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
+                infoStatus: f.avisoDataFim ? `Fim: ${new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : f.feriasDataFim ? `Retorno: ${new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : '',
               }));
               const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
               rows.sort((a: any, b: any) => {
@@ -975,29 +977,31 @@ export default function ObraEfetivo() {
                 return a.nome.localeCompare(b.nome);
               });
               const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
+              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
+              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
+              const rowBg: Record<string, string> = { Aviso: '#fffbeb', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
+              // Summary counts
+              const statusCounts: Record<string, number> = {};
+              rows.forEach((r: any) => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
+              const summaryHtml = Object.entries(statusCounts).map(([s, c]) => `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:${statusBg[s] || '#f8f9fa'};color:${statusFg[s] || '#333'};border:1px solid ${statusBg[s] || '#dee2e6'};margin-right:8px;"><strong>${c}</strong> ${statusLabels[s] || s}</span>`).join('') + `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#f8f9fa;color:#333;border:1px solid #dee2e6;"><strong>${rows.length}</strong> Total</span>`;
               const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Equipe - ${obraNome}</title><style>
                 @page { size: A4 landscape; margin: 15mm; }
                 body { font-family: Arial, sans-serif; font-size: 11px; color: #333; }
                 .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #1B2A4A; padding-bottom: 8px; }
                 .header h1 { font-size: 18px; color: #1B2A4A; margin: 0; }
                 .header p { font-size: 12px; color: #666; margin: 4px 0 0; }
-                .summary { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-                .summary-item { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 10px; font-size: 11px; }
-                .summary-item strong { font-size: 14px; }
+                .summary { margin-bottom: 12px; }
                 table { width: 100%; border-collapse: collapse; }
                 th { background: #1B2A4A; color: white; padding: 6px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
                 td { padding: 5px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
-                tr:nth-child(even) { background: #f8f9fa; }
                 .status { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
-                .status-Ativo { background: #d4edda; color: #155724; }
-                .status-Aviso { background: #fff3cd; color: #856404; }
-                .status-Ferias { background: #cce5ff; color: #004085; }
-                .status-Afastado { background: #f8d7da; color: #721c24; }
+                .info-status { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: 600; }
                 .footer { text-align: center; margin-top: 16px; font-size: 9px; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
               </style></head><body>
                 <div class="header"><h1>Equipe — ${obraNome}</h1><p>${rows.length} funcionário(s) alocado(s) | Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></div>
-                <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Desde</th></tr></thead><tbody>
-                ${rows.map((r: any, i: number) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status status-${r.status}">${statusLabels[r.status] || r.status}</span></td><td>${r.desde}</td></tr>`).join("")}
+                <div class="summary">${summaryHtml}</div>
+                <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Info Status</th><th>Desde</th></tr></thead><tbody>
+                ${rows.map((r: any, i: number) => `<tr style="background:${rowBg[r.status] || (i % 2 === 0 ? '#fff' : '#f8f9fa')}"><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${statusLabels[r.status] || r.status}</span></td><td>${r.infoStatus ? `<span class="info-status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${r.infoStatus}</span>` : '—'}</td><td>${r.desde}</td></tr>`).join("")}
                 </tbody></table>
                 <div class="footer">FC Engenharia — Sistema ERP RH & DP — Documento gerado automaticamente</div>
               </body></html>`;
@@ -1014,6 +1018,7 @@ export default function ObraEfetivo() {
                 funcao: f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—",
                 status: f.employee?.status || "Ativo",
                 desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
+                infoStatus: f.avisoDataFim ? `Fim: ${new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : f.feriasDataFim ? `Retorno: ${new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : '',
               }));
               const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
               rows.sort((a: any, b: any) => {
@@ -1023,26 +1028,30 @@ export default function ObraEfetivo() {
                 return a.nome.localeCompare(b.nome);
               });
               const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
+              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
+              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
+              const rowBg: Record<string, string> = { Aviso: '#fffbeb', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
+              const statusCounts: Record<string, number> = {};
+              rows.forEach((r: any) => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
+              const summaryHtml = Object.entries(statusCounts).map(([s, c]) => `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:${statusBg[s] || '#f8f9fa'};color:${statusFg[s] || '#333'};border:1px solid ${statusBg[s] || '#dee2e6'};margin-right:8px;"><strong>${c}</strong> ${statusLabels[s] || s}</span>`).join('') + `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#f8f9fa;color:#333;border:1px solid #dee2e6;"><strong>${rows.length}</strong> Total</span>`;
               const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Equipe - ${obraNome}</title><style>
                 @page { size: A4 landscape; margin: 15mm; }
                 body { font-family: Arial, sans-serif; font-size: 11px; color: #333; }
                 .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #1B2A4A; padding-bottom: 8px; }
                 .header h1 { font-size: 18px; color: #1B2A4A; margin: 0; }
                 .header p { font-size: 12px; color: #666; margin: 4px 0 0; }
+                .summary { margin-bottom: 12px; }
                 table { width: 100%; border-collapse: collapse; }
                 th { background: #1B2A4A; color: white; padding: 6px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
                 td { padding: 5px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
-                tr:nth-child(even) { background: #f8f9fa; }
                 .status { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
-                .status-Ativo { background: #d4edda; color: #155724; }
-                .status-Aviso { background: #fff3cd; color: #856404; }
-                .status-Ferias { background: #cce5ff; color: #004085; }
-                .status-Afastado { background: #f8d7da; color: #721c24; }
+                .info-status { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: 600; }
                 .footer { text-align: center; margin-top: 16px; font-size: 9px; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
               </style></head><body>
                 <div class="header"><h1>Equipe — ${obraNome}</h1><p>${rows.length} funcionário(s) alocado(s) | Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></div>
-                <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Desde</th></tr></thead><tbody>
-                ${rows.map((r: any, i: number) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status status-${r.status}">${statusLabels[r.status] || r.status}</span></td><td>${r.desde}</td></tr>`).join("")}
+                <div class="summary">${summaryHtml}</div>
+                <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Info Status</th><th>Desde</th></tr></thead><tbody>
+                ${rows.map((r: any, i: number) => `<tr style="background:${rowBg[r.status] || (i % 2 === 0 ? '#fff' : '#f8f9fa')}"><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${statusLabels[r.status] || r.status}</span></td><td>${r.infoStatus ? `<span class="info-status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${r.infoStatus}</span>` : '—'}</td><td>${r.desde}</td></tr>`).join("")}
                 </tbody></table>
                 <div class="footer">FC Engenharia — Sistema ERP RH & DP — Documento gerado automaticamente</div>
               </body></html>`;
@@ -1151,15 +1160,26 @@ export default function ObraEfetivo() {
                                 <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Funcionário</th>
                                 <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Função na Obra</th>
                                 <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Desde</th>
-                                <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Ações</th>
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Info Status</th>
+                                <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500 print:hidden">Ações</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y">
-                              {items.map((f: any) => (
-                                <tr key={f.id} className="hover:bg-slate-50/50">
+                              {items.map((f: any) => {
+                                const empStatus = f.employee?.status || st;
+                                const rowBg = empStatus === 'Aviso' ? 'bg-amber-50/60' : empStatus === 'Ferias' ? 'bg-blue-50/60' : empStatus === 'Afastado' ? 'bg-purple-50/60' : empStatus === 'Licenca' ? 'bg-cyan-50/60' : empStatus === 'Recluso' ? 'bg-red-50/60' : '';
+                                return (
+                                <tr key={f.id} className={`hover:bg-slate-50/50 ${rowBg}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                   <td className="px-4 py-2.5">
                                     <div className="flex items-center gap-3">
-                                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a] flex items-center justify-center shrink-0">
+                                      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
+                                        empStatus === 'Aviso' ? 'bg-gradient-to-br from-amber-500 to-amber-600' :
+                                        empStatus === 'Ferias' ? 'bg-gradient-to-br from-blue-400 to-blue-500' :
+                                        empStatus === 'Afastado' ? 'bg-gradient-to-br from-purple-500 to-purple-600' :
+                                        empStatus === 'Licenca' ? 'bg-gradient-to-br from-cyan-500 to-cyan-600' :
+                                        empStatus === 'Recluso' ? 'bg-gradient-to-br from-red-500 to-red-600' :
+                                        'bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a]'
+                                      }`}>
                                         <span className="text-white text-[11px] font-bold">{(f.employee?.nomeCompleto || '?')[0]}</span>
                                       </div>
                                       <div>
@@ -1178,7 +1198,28 @@ export default function ObraEfetivo() {
                                   <td className="px-4 py-2.5 text-sm text-muted-foreground hidden md:table-cell">
                                     {f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
                                   </td>
-                                  <td className="px-4 py-2.5">
+                                  <td className="px-4 py-2.5 text-sm hidden md:table-cell">
+                                    {empStatus === 'Aviso' && f.avisoDataFim ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                        Fim: {new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                      </span>
+                                    ) : empStatus === 'Ferias' && f.feriasDataFim ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                        Retorno: {new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                      </span>
+                                    ) : empStatus === 'Afastado' ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                        Afastado
+                                      </span>
+                                    ) : empStatus === 'Licenca' ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-800 border border-cyan-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                        Em Licença
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2.5 print:hidden">
                                     <div className="flex items-center justify-end gap-1">
                                       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openHistory(f.employeeId)}>
                                         <History className="h-3.5 w-3.5 mr-1" /> Histórico
@@ -1192,7 +1233,8 @@ export default function ObraEfetivo() {
                                     </div>
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>

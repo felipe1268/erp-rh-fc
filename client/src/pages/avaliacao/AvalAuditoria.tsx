@@ -23,11 +23,12 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export default function AvalAuditoria() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [searchTerm, setSearchTerm] = useState("");
 
-  const logs = trpc.avaliacao.auditoria.list.useQuery({ companyId, limit: 100 }, { enabled: !!companyId });
+  const logs = trpc.avaliacao.auditoria.list.useQuery({ companyId, limit: 100 }, { enabled: companyId > 0 || companyIds.length > 0 });
 
   const filtered = useMemo(() => {
     if (!logs.data) return [];

@@ -91,7 +91,7 @@ function LixeiraContent() {
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
-  const companyIdNum = selectedCompanyId ? Number(selectedCompanyId) : 0;
+  const companyIdNum = (selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0;
 
   const trashQuery = trpc.trash.listAll.useQuery(
     { companyId: companyIdNum },

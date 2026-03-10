@@ -51,7 +51,7 @@ function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirDat
   refetch: () => void; companyIds?: number[]}) {
   const { data, isLoading } = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
     { companyId, employeeId },
-    { enabled: !!companyId && !!employeeId }
+    { enabled: (!!companyId || (companyIds?.length ?? 0) > 0) && !!employeeId }
   );
   const confirmarVencidasLote = trpc.avisoPrevio.ferias.confirmarVencidasLote.useMutation({
     onSuccess: (d: any) => { parentRefetch(); toast.success(`${d.confirmados} férias confirmada(s)!`); },
@@ -293,7 +293,7 @@ function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirDat
 
 export default function Ferias() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -320,30 +320,30 @@ export default function Ferias() {
   // Queries
   // Query SEPARADA para stats (sem filtro) — garante que os cards nunca mudem ao clicar filtros
   const { data: allFeriasList = [] } = trpc.avisoPrevio.ferias.list.useQuery(
-    { companyId },
-    { enabled: !!companyId }
+    { companyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: feriasList = [], refetch } = trpc.avisoPrevio.ferias.list.useQuery(
-    { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
-    { enabled: !!companyId }
+    { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}), ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: alertas } = trpc.avisoPrevio.ferias.alertas.useQuery(
-    { companyId },
-    { enabled: !!companyId }
+    { companyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: calendarioCompleto = [] } = trpc.avisoPrevio.ferias.calendarioCompleto.useQuery(
-    { companyId, ano: anoCalendario },
-    { enabled: !!companyId && tab === "calendario" }
+    { companyId, ano: anoCalendario, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: (isConstrutoras ? companyIds.length > 0 : companyId > 0) && tab === "calendario" }
   );
   const { data: fluxoCaixa = [] } = trpc.avisoPrevio.ferias.fluxoCaixa.useQuery(
-    { companyId, ano: anoCalendario },
-    { enabled: !!companyId && tab === "fluxo" }
+    { companyId, ano: anoCalendario, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: (isConstrutoras ? companyIds.length > 0 : companyId > 0) && tab === "fluxo" }
   );
   const { data: vencidasAgrupadas = [], refetch: refetchVencidas } = trpc.avisoPrevio.ferias.listarVencidas.useQuery(
-    { companyId },
-    { enabled: !!companyId && tab === "vencidas" }
+    { companyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: (isConstrutoras ? companyIds.length > 0 : companyId > 0) && tab === "vencidas" }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // tRPC utils for invalidation

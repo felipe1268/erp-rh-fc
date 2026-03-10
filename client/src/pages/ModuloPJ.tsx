@@ -54,7 +54,7 @@ const STATUS_PAGAMENTO: Record<string, { label: string; color: string; bg: strin
 export default function ModuloPJ() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const { user } = useAuth();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("contratos");
   const [search, setSearch] = useState("");
@@ -74,17 +74,17 @@ export default function ModuloPJ() {
   // Queries
   const { data: contratos = [], refetch: refetchContratos } = trpc.pj.contratos.list.useQuery(
     { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: alertas } = trpc.pj.contratos.alertas.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: pagamentos = [], refetch: refetchPagamentos } = trpc.pj.pagamentos.list.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: !!companyId && tab === "pagamentos" }
+    { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const pjEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.tipoContrato === "PJ" && e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // Mutations
@@ -116,7 +116,7 @@ export default function ModuloPJ() {
   // Relatório PJ para exportação PDF
   const { data: relatorio } = trpc.pj.relatorioPJ.useQuery(
     { companyId, mesReferencia: mesRef },
-    { enabled: !!companyId && tab === "pagamentos" }
+    { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
 
   function exportarPDF() {

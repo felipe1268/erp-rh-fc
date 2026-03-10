@@ -62,30 +62,30 @@ export default function SolicitacaoHE() {
     funcionarioIds: [] as number[],
   });
 
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
 
   // Queries
   const obrasQuery = trpc.obras.listActive.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const employeesQuery = trpc.employees.list.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const listQuery = trpc.heSolicitacoes.list.useQuery(
     { companyId, status: filterStatus as any, mesReferencia: filterMes || undefined },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   // Query separada para pendentes SEM filtro de mês (para aba Aprovações)
   const pendentesQuery = trpc.heSolicitacoes.list.useQuery(
     { companyId, status: "pendente" as any },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const countsQuery = trpc.heSolicitacoes.counts.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const utils = trpc.useUtils();

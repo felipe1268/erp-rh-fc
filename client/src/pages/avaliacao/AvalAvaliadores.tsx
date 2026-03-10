@@ -14,8 +14,9 @@ import { toast } from "sonner";
 import { Plus, Search, UserCheck, Trash2, Edit2, Shield, Users } from "lucide-react";
 
 export default function AvalAvaliadores() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const utils = trpc.useUtils();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,8 +32,8 @@ export default function AvalAvaliadores() {
   const [ativo, setAtivo] = useState(true);
   const [userId, setUserId] = useState<string>("");
 
-  const avaliadores = trpc.avaliacao.avaliadores.list.useQuery({ companyId }, { enabled: !!companyId });
-  const obras = trpc.avaliacao.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const avaliadores = trpc.avaliacao.avaliadores.list.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const obras = trpc.avaliacao.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
 
   const createMut = trpc.avaliacao.avaliadores.create.useMutation({
     onSuccess: () => { toast.success("Avaliador criado"); utils.avaliacao.avaliadores.list.invalidate(); resetForm(); },

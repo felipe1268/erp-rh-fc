@@ -19,8 +19,9 @@ import {
 
 export default function AprovacoesParceiros() {
   const { user } = useAuth();
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"pendente" | "aprovado" | "rejeitado" | "todos">("pendente");
   const [filtroParceiroId, setFiltroParceiroId] = useState<string>("todos");
@@ -40,12 +41,12 @@ export default function AprovacoesParceiros() {
       parceiroId: filtroParceiroId !== "todos" ? parseInt(filtroParceiroId) : undefined,
       competencia: competencia || undefined,
     },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: parceirosData } = trpc.parceiros.cadastro.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const aprovarMutation = trpc.parceiros.lancamentos.aprovar.useMutation({

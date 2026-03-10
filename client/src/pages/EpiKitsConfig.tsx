@@ -18,7 +18,7 @@ type ConfigTab = "kits" | "cores" | "vida_util" | "treinamentos";
 
 export default function EpiKitsConfig() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState<ConfigTab>("kits");
   const [showKitForm, setShowKitForm] = useState(false);
@@ -32,10 +32,10 @@ export default function EpiKitsConfig() {
   const [iaSugestaoTreino, setIaSugestaoTreino] = useState<any[] | null>(null);
 
   // Queries
-  const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
-  const coresQ = trpc.epiAvancado.coresCapaceteList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
-  const vidaUtilQ = trpc.epiAvancado.vidaUtilList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
-  const treinamentosQ = trpc.epiAvancado.treinamentosVinculadosList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const coresQ = trpc.epiAvancado.coresCapaceteList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const vidaUtilQ = trpc.epiAvancado.vidaUtilList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const treinamentosQ = trpc.epiAvancado.treinamentosVinculadosList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
 
   // Mutations
   const seedAllMut = trpc.epiAvancado.seedAllDefaults.useMutation({

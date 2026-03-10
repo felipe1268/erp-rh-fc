@@ -48,12 +48,12 @@ const BANCOS_COMUNS = [
 
 export default function ContasBancarias() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
 
   const contasQ = trpc.folha.listarContasBancarias.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const contas = contasQ.data ?? [];
 

@@ -38,8 +38,9 @@ type ValidationResult = {
 
 export default function ValidacaoIA() {
   const [, navigate] = useLocation();
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [open, setOpen] = useState(true);
   const [selectedEmpresa, setSelectedEmpresa] = useState<string>("");
   const [selectedCompetencia, setSelectedCompetencia] = useState<string>("");
@@ -49,12 +50,12 @@ export default function ValidacaoIA() {
 
   const { data: empresas } = trpc.terceiros.empresas.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: obrigacoes } = trpc.terceiros.obrigacoes.list.useQuery(
     { companyId: companyId ?? 0, empresaTerceiraId: selectedEmpresa ? parseInt(selectedEmpresa) : undefined },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const validarMut = trpc.terceiros.ia.validarDocumento.useMutation();

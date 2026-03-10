@@ -12,11 +12,11 @@ import { useCompany } from "@/contexts/CompanyContext";
 
 export default function EpiIA() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
 
-  const ultimaQ = trpc.epiAvancado.ultimaAnaliseIA.useQuery({ companyId, companyIds }, { enabled: !!companyId });
-  const analisesQ = trpc.epiAvancado.analisesIAList.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const ultimaQ = trpc.epiAvancado.ultimaAnaliseIA.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const analisesQ = trpc.epiAvancado.analisesIAList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const analisarMut = trpc.epiAvancado.analisarEstoqueIA.useMutation({
     onSuccess: (data) => {
       if (data.erro) {

@@ -16,8 +16,9 @@ import {
 
 export default function PortalTerceiro() {
   const { user } = useAuth();
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [selectedEmpresa, setSelectedEmpresa] = useState<any>(null);
   const [simulacaoOpen, setSimulacaoOpen] = useState(false);
@@ -29,12 +30,12 @@ export default function PortalTerceiro() {
 
   const { data: empresasData, isLoading } = trpc.terceiros.empresas.list.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const { data: obrigacoesData, refetch: refetchObrigacoes } = trpc.terceiros.obrigacoes.list.useQuery(
     { companyId: companyId ?? 0, competencia },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const uploadMutation = trpc.terceiros.obrigacoes.uploadDoc.useMutation({

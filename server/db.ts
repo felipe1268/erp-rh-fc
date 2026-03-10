@@ -1354,9 +1354,58 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   ));
   if (allocs.length === 0) return [];
   const empIds = allocs.map(a => a.employeeId);
+  const companyIdsSet = new Set(allocs.map(a => a.companyId));
+  const companyIdsArr = Array.from(companyIdsSet);
   const emps = await db.select().from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
   const empMap = Object.fromEntries(emps.map(e => [e.id, e]));
-  return allocs.map(a => ({ ...a, employee: empMap[a.employeeId] || null }));
+
+  // Cross-reference termination_notices for Aviso Prévio
+  const today = new Date().toISOString().split('T')[0];
+  const avisoRows = await db.select({
+    employeeId: terminationNotices.employeeId,
+    dataFim: terminationNotices.dataFim,
+    tipo: terminationNotices.tipo,
+  }).from(terminationNotices).where(and(
+    inArray(terminationNotices.companyId, companyIdsArr),
+    eq(terminationNotices.status, 'em_andamento'),
+    sql`${terminationNotices.dataInicio} <= ${today}`,
+    sql`${terminationNotices.dataFim} >= ${today}`,
+    sql`${terminationNotices.employeeId} IN (${sql.raw(empIds.join(","))})`
+  ));
+  const avisoMap = new Map<number, { dataFim: string | null; tipo: string | null }>();
+  for (const r of avisoRows) avisoMap.set(r.employeeId, { dataFim: r.dataFim, tipo: r.tipo });
+
+  // Cross-reference vacation_periods for Férias em gozo
+  const feriasRows = await db.select({
+    employeeId: vacationPeriods.employeeId,
+    dataInicio: vacationPeriods.dataInicio,
+    dataFim: vacationPeriods.dataFim,
+  }).from(vacationPeriods).where(and(
+    inArray(vacationPeriods.companyId, companyIdsArr),
+    eq(vacationPeriods.status, 'em_gozo'),
+    sql`${vacationPeriods.dataInicio} <= ${today}`,
+    sql`${vacationPeriods.dataFim} >= ${today}`,
+    sql`${vacationPeriods.employeeId} IN (${sql.raw(empIds.join(","))})`
+  ));
+  const feriasMap = new Map<number, { dataInicio: string | null; dataFim: string | null }>();
+  for (const r of feriasRows) feriasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
+
+  return allocs.map(a => {
+    const emp = empMap[a.employeeId] || null;
+    const avisoInfo = avisoMap.get(a.employeeId);
+    const feriasInfo = feriasMap.get(a.employeeId);
+    let effectiveStatus: string = emp?.status || 'Ativo';
+    if (avisoInfo) effectiveStatus = 'Aviso';
+    else if (feriasInfo) effectiveStatus = 'Ferias';
+    return {
+      ...a,
+      employee: emp ? { ...emp, status: effectiveStatus as any } : null,
+      avisoDataFim: avisoInfo?.dataFim || null,
+      avisoTipo: avisoInfo?.tipo || null,
+      feriasDataInicio: feriasInfo?.dataInicio || null,
+      feriasDataFim: feriasInfo?.dataFim || null,
+    };
+  });
 }
 
 /** Check which employees from a list already have active obra allocations */
@@ -2248,6 +2297,8 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
   const today = new Date().toISOString().split('T')[0];
   const avisoRows = await db.select({
     employeeId: terminationNotices.employeeId,
+    dataFim: terminationNotices.dataFim,
+    tipo: terminationNotices.tipo,
   }).from(terminationNotices).where(and(
     inArray(terminationNotices.companyId, idsCompany),
     eq(terminationNotices.status, 'em_andamento'),
@@ -2255,11 +2306,16 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     sql`${terminationNotices.dataFim} >= ${today}`,
     sql`${terminationNotices.employeeId} IN (${sql.raw(empIds.join(","))})`
   ));
-  const avisoSet = new Set(avisoRows.map(r => r.employeeId));
+  const avisoMap = new Map<number, { dataFim: string | null; tipo: string | null }>();
+  for (const r of avisoRows) {
+    avisoMap.set(r.employeeId, { dataFim: r.dataFim, tipo: r.tipo });
+  }
 
   // Cross-reference vacation_periods for Férias em gozo
   const feriasRows = await db.select({
     employeeId: vacationPeriods.employeeId,
+    dataFim: vacationPeriods.dataFim,
+    dataInicio: vacationPeriods.dataInicio,
   }).from(vacationPeriods).where(and(
     inArray(vacationPeriods.companyId, idsCompany),
     eq(vacationPeriods.status, 'em_gozo'),
@@ -2267,18 +2323,27 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     sql`${vacationPeriods.dataFim} >= ${today}`,
     sql`${vacationPeriods.employeeId} IN (${sql.raw(empIds.join(","))})`
   ));
-  const feriasSet = new Set(feriasRows.map(r => r.employeeId));
+  const feriasMap = new Map<number, { dataInicio: string | null; dataFim: string | null }>();
+  for (const r of feriasRows) {
+    feriasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
+  }
 
   const allocMap = Object.fromEntries(allocs.map(a => [a.employeeId, a]));
   return emps.map(e => {
     // Determine effective status: Aviso > Ferias > original status
     let effectiveStatus: string = e.status || 'Ativo';
-    if (avisoSet.has(e.id)) effectiveStatus = 'Aviso';
-    else if (feriasSet.has(e.id)) effectiveStatus = 'Ferias';
+    const avisoInfo = avisoMap.get(e.id);
+    const feriasInfo = feriasMap.get(e.id);
+    if (avisoInfo) effectiveStatus = 'Aviso';
+    else if (feriasInfo) effectiveStatus = 'Ferias';
     return {
       ...e,
       status: effectiveStatus,
       dataInicioObra: allocMap[e.id]?.dataInicio || null,
+      avisoDataFim: avisoInfo?.dataFim || null,
+      avisoTipo: avisoInfo?.tipo || null,
+      feriasDataInicio: feriasInfo?.dataInicio || null,
+      feriasDataFim: feriasInfo?.dataFim || null,
     };
   }).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || ''));
 }
@@ -2339,7 +2404,7 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
   
   // Build reverse map: obraId -> consolidated key
   const obraIdToKey = new Map<number, string>();
-  for (const [key, entry] of porObraMap) {
+  for (const [key, entry] of Array.from(porObraMap)) {
     for (const oid of entry.obraIds) obraIdToKey.set(oid, key);
   }
   

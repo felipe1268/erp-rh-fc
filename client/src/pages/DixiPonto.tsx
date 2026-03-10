@@ -72,11 +72,11 @@ export default function DixiPonto() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === "dashboard" && <DashboardTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
-      {activeTab === "importar" && <ImportarTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
-      {activeTab === "historico" && <HistoricoTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
-      {activeTab === "marcacoes" && <MarcacoesTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
-      {activeTab === "alertas" && <AlertasTab companyId={Number(selectedCompanyId)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "dashboard" && <DashboardTab companyId={((selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "importar" && <ImportarTab companyId={((selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "historico" && <HistoricoTab companyId={((selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "marcacoes" && <MarcacoesTab companyId={((selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0)} companyIds={getCompanyIdsForQuery()} />}
+      {activeTab === "alertas" && <AlertasTab companyId={((selectedCompanyId && selectedCompanyId !== "construtoras") ? Number(selectedCompanyId) : 0)} companyIds={getCompanyIdsForQuery()} />}
     </div>
   );
 }

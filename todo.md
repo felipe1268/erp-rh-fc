@@ -5258,3 +5258,20 @@
 - [x] getEquipeObra: aceita obraIds[] e companyIds[] para buscar equipe consolidada
 - [x] DashEfetivoObra: passa obraIds ao clicar "Ver equipe" em obra consolidada
 - [x] ObraEfetivo: fix companyId para usar construtorasIds[0] no modo CONSTRUTORAS
+
+## Rev. 230: Consolidação CONSTRUTORAS - Testes e Melhorias
+- [x] Testar "Ver equipe" em obras consolidadas (Escritório Central, Luciana) para validar funcionários de ambas empresas
+- [x] Implementar Imprimir/PDF da equipe por obra (abre nova janela com HTML formatado, inclui status e datas)
+- [x] Corrigir bug NaN companyId em TODOS os módulos no modo CONSTRUTORAS (Folha, Ponto, Férias, etc.)
+
+- [x] Equipe por Obra: mostrar funcionários de Aviso Prévio, Férias e Afastados com cores diferentes
+- [x] Equipe por Obra: para quem está de Aviso, mostrar data final de trabalho
+- [x] Equipe por Obra: badges coloridos por status (verde=Ativo, amarelo=Aviso, azul=Férias, vermelho=Afastado)
+
+- [x] BUG: Impressão da equipe - corrigido para abrir nova janela com HTML formatado (não usa window.print da página)
+- [x] Corrigir Imprimir/PDF para imprimir apenas o conteúdo da equipe (FullScreenDialog)
+
+- [x] BUG: Botão Transferir na equipe - corrigido z-index do FullScreenDialog para abrir por cima da equipe
+- [x] Fix: Sem Obra Vinculada contagem errada - corrigido para usar query semObra em vez de allEmps.filter
+- [x] Fix: Férias no modo CONSTRUTORAS não carregava - corrigido para passar companyIds nas queries
+- [x] Fix: NaN companyId em 22+ páginas - script automatizado corrigiu parseInt/Number(selectedCompanyId) em todas

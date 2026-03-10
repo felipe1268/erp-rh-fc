@@ -42,21 +42,22 @@ const STATUS_AVATAR_COLORS: Record<string, string> = {
 };
 
 export default function RaioXPage() {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
 
   const { data: allEmployees = [] } = trpc.employees.list.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   // Buscar avisos prévios em andamento para identificar quem está em aviso prévio
   const { data: avisosAtivos = [] } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   // IDs de funcionários com aviso prévio em andamento

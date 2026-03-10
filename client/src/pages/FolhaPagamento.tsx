@@ -52,7 +52,7 @@ export default function FolhaPagamento() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const isMaster = user?.role === "admin_master";
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const now = new Date();
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -86,9 +86,9 @@ export default function FolhaPagamento() {
   const [heObraFilter, setHeObraFilter] = useState<string>("all");
 
   // ===== QUERIES =====
-  const statusMes = trpc.folha.statusMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
-  const mesesComLanc = trpc.folha.listarMesesComLancamentos.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 });
-  const lancamentos = trpc.folha.listarLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 });
+  const statusMes = trpc.folha.statusMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const mesesComLanc = trpc.folha.listarMesesComLancamentos.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const lancamentos = trpc.folha.listarLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const itensDetail = trpc.folha.listarItens.useQuery(
     { folhaLancamentoId: viewLancId! },
     { enabled: !!viewLancId && (viewMode === "detalhes" || viewMode === "verificacao"), refetchOnWindowFocus: true }
@@ -103,11 +103,11 @@ export default function FolhaPagamento() {
   );
   const horasExtras = trpc.folha.horasExtrasPorFuncionario.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: companyId > 0 && viewMode === "horas_extras" }
+    { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "horas_extras" }
   );
   const obrasListQuery = trpc.folha.listarVinculacoesManuais.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: companyId > 0 && viewMode === "custos_obra" }
+    { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "custos_obra" }
   );
   // Lista de obras para o select de vinculação
   const obrasParaSelect = useMemo(() => {
@@ -118,7 +118,7 @@ export default function FolhaPagamento() {
   // ===== PAYROLL ENGINE (Cálculo Interno) =====
   const payrollPeriod = trpc.payrollEngine.getPeriod.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const [valeResult, setValeResult] = useState<any>(null);
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
@@ -2720,7 +2720,7 @@ export default function FolhaPagamento() {
 function DescontosCLTView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
   const { data: comparativo, isLoading } = trpc.folha.comparativoDescontos.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   return (
@@ -2798,7 +2798,7 @@ function DescontosCLTView({ companyId, mesAno, lancamentoId, onBack }: { company
 function CruzamentoHEView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
   const { data: cruzamento, isLoading } = trpc.folha.cruzamentoHE.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   return (
@@ -2902,7 +2902,7 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
 
   const { data: alertas, isLoading, refetch } = trpc.epis.listDiscountAlerts.useQuery(
     { companyId, status: statusFilter === "all" ? undefined : statusFilter as any },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const validateMut = trpc.epis.validateDiscount.useMutation({

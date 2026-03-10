@@ -15,15 +15,16 @@ import {
 
 export default function PainelConformidade() {
   const { user } = useAuth();
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "conforme" | "nao_conforme">("todos");
   const [selectedEmpresa, setSelectedEmpresa] = useState<any>(null);
 
   const { data, isLoading } = trpc.terceiros.conformidade.useQuery(
     { companyId: companyId ?? 0 },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const empresas = useMemo(() => {

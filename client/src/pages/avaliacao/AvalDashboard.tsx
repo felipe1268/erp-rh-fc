@@ -23,12 +23,13 @@ function getMediaColor(media: number): string {
 }
 
 export default function AvalDashboard({ onNavigateEmployee }: { onNavigateEmployee?: (id: number) => void }) {
-  const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
+  const companyIds = getCompanyIdsForQuery();
 
-  const stats = trpc.avaliacao.dashboard.globalStats.useQuery({ companyId }, { enabled: !!companyId });
-  const ranking = trpc.avaliacao.dashboard.employeeRanking.useQuery({ companyId, limit: 10 }, { enabled: !!companyId });
-  const topBottom = trpc.avaliacao.dashboard.topBottomEmployees.useQuery({ companyId, limit: 5 }, { enabled: !!companyId });
+  const stats = trpc.avaliacao.dashboard.globalStats.useQuery({ companyId }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const ranking = trpc.avaliacao.dashboard.employeeRanking.useQuery({ companyId, limit: 10 }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const topBottom = trpc.avaliacao.dashboard.topBottomEmployees.useQuery({ companyId, limit: 5 }, { enabled: companyId > 0 || companyIds.length > 0 });
 
   const s = stats.data;
 

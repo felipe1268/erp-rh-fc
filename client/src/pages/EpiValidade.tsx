@@ -10,14 +10,14 @@ import { fmtNum } from "@/lib/formatters";
 
 export default function EpiValidade() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [diasAntecedencia, setDiasAntecedencia] = useState(30);
   const [search, setSearch] = useState("");
 
   const vencimentoQ = trpc.epiAvancado.episProximosVencimento.useQuery(
     { companyId, diasAntecedencia },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
 
   const items = vencimentoQ.data ?? [];

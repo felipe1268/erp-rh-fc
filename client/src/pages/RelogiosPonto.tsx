@@ -38,19 +38,19 @@ function flattenSn(raw: any) {
 
 export default function RelogiosPonto() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
 
   const snsQ = trpc.obras.listSnsByCompany.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const snsRaw = snsQ.data ?? [];
   const sns = useMemo(() => snsRaw.map(flattenSn), [snsRaw]);
 
   const obrasQ = trpc.obras.list.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const obrasAtivas = useMemo(() =>
     (obrasQ.data ?? []).filter((o: any) => o.status === "Em Andamento"),

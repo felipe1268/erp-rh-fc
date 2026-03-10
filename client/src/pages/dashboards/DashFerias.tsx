@@ -33,7 +33,7 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 
 export default function DashFerias() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [ano, setAno] = useState(new Date().getFullYear());
@@ -47,7 +47,7 @@ export default function DashFerias() {
 
   const { data, isLoading } = trpc.dashboards.ferias.useQuery(
     { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
-    { enabled: !!companyId }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const anoOptions = useMemo(() => {

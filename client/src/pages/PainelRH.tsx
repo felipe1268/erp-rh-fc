@@ -45,7 +45,7 @@ export default function PainelRH() {
   const [selectedAvisoId, setSelectedAvisoId] = useState<number | null>(null);
   const [, navigate] = useLocation();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : undefined;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : (companyId || 0);
   const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;

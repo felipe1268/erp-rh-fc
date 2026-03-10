@@ -46,7 +46,7 @@ export default function Home() {
     return isAdminMaster || !hasGroup || groupCanAccessRoute(route);
   };
   const hideValues = (route: string) => !isAdminMaster && hasGroup && groupOcultarValores(route);
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : undefined;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : undefined;
   const companyIds = getCompanyIdsForQuery();
   const [alertasOpen, setAlertasOpen] = useState(false);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
@@ -66,11 +66,11 @@ export default function Home() {
 
   const { data: homeData, isLoading } = trpc.home.getData.useQuery(
     { companyId: companyId! },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: logs } = trpc.audit.list.useQuery(
     { companyId, limit: 6 },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
 
   const s = homeData?.stats;

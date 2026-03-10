@@ -13,11 +13,13 @@ interface FullScreenDialogProps {
   children: ReactNode;
   footer?: ReactNode;
   headerActions?: ReactNode;
+  zIndex?: number;
 }
 
 export default function FullScreenDialog({
   open,
   onClose,
+  zIndex,
   title,
   subtitle,
   icon,
@@ -46,7 +48,7 @@ export default function FullScreenDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ width: "100vw", height: "100vh" }}>
+    <div className="fixed inset-0 bg-background flex flex-col" style={{ width: "100vw", height: "100vh", zIndex: zIndex ?? 50 }}>
       {/* HEADER */}
       <div className={`shrink-0 ${headerStyle ? '' : headerColor} text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-lg`} style={headerStyle}>
         <div className="flex items-center gap-3">

@@ -46,7 +46,7 @@ const CARGO_CIPA: Record<string, string> = {
 
 export default function CipaCompleta() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("visao");
   const [selectedEleicaoId, setSelectedEleicaoId] = useState<number | null>(null);
@@ -61,11 +61,11 @@ export default function CipaCompleta() {
   // Queries
   const { data: necessidade } = trpc.cipa.verificarNecessidade.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: eleicoes = [], refetch: refetchEleicoes } = trpc.cipa.eleicoes.list.useQuery(
     { companyId },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: membros = [], refetch: refetchMembros } = trpc.cipa.membros.list.useQuery(
     { electionId: selectedEleicaoId || 0 },
@@ -73,9 +73,9 @@ export default function CipaCompleta() {
   );
   const { data: reunioes = [], refetch: refetchReunioes } = trpc.cipa.reunioes.list.useQuery(
     { companyId, electionId: selectedEleicaoId || undefined },
-    { enabled: !!companyId }
+    { enabled: !!companyId || companyIds?.length > 0 }
   );
-  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
 
   // Mutations

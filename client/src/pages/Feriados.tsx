@@ -14,7 +14,7 @@ const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov"
 
 export default function Feriados() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = Number(selectedCompanyId) || 0;
+  const companyId = (selectedCompanyId && selectedCompanyId !== 'construtoras') ? Number(selectedCompanyId) : 0;
   const companyIds = getCompanyIdsForQuery();
   const [anoFiltro, setAnoFiltro] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
@@ -24,7 +24,7 @@ export default function Feriados() {
 
   const { data: feriados, isLoading, refetch } = trpc.feriados.listar.useQuery(
     { companyId, ano: anoFiltro },
-    { enabled: companyId > 0 }
+    { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
   const seedMut = trpc.feriados.seedNacionais.useMutation({
