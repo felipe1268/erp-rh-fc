@@ -5309,3 +5309,14 @@
 - [x] BUG: Custo por Obra não mostra dados - query quebrada após alterações (coluna pp.diasTrabalhados/pp.faltas não existia)
 - [x] Adicionar coluna Total de Descontos na expansão detalhada do Custo por Obra
 - [x] Ao clicar no valor de Descontos de cada funcionário no Custo por Obra, abrir popup com detalhamento dos descontos
+- [ ] Limpar cadastros de teste (camila, teste, renan teste, etc.) do sistema
+
+## Fase: Alerta Divergência Ativos vs Folha Processada
+- [x] Criar endpoint backend `payrollEngine.divergenciaAtivosSemFolha` que cruza ativos com folha processada
+- [x] Criar componente reutilizável `AlertaDivergenciaFolha` com variantes full e compact
+- [x] Adicionar alerta no Relatório Custo por Obra (variant full)
+- [x] Adicionar alerta no Relatório de Folha de Pagamento (variant full)
+- [x] Adicionar alerta no módulo Folha de Pagamento (variant full, entre cálculo interno e conferência)
+- [x] Adicionar alerta no Dashboard Folha de Pagamento (variant compact)
+- [x] Separar CLT sem folha (crítico) de PJ sem lançamento (informativo)
+- [x] Exibir tabela detalhada com código, nome, função e status de cada funcionário sem folha

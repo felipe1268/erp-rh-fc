@@ -11,6 +11,7 @@ import { DollarSign, TrendingUp, TrendingDown, Users, Wallet, Building2, Briefca
 import { Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
+import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -80,6 +81,9 @@ export default function DashFolhaPagamento() {
               <DashKpi label="INSS" value={fmtBRL(data.resumo.totalInssMes)} icon={Building2} color="purple" />
               <DashKpi label="IRRF" value={fmtBRL(data.resumo.totalIrrfMes)} icon={DollarSign} color="slate" />
             </div>
+
+            {/* Alerta de Divergência */}
+            <AlertaDivergenciaFolha mesReferencia={mes} mesLabel={mesLabel} variant="compact" />
 
             {/* Evolução mensal */}
             {data.evolucaoMensal.length > 0 && (

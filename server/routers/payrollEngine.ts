@@ -2472,6 +2472,89 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         obraNomes: r.obraNomes ? r.obraNomes.split(',') : [],
       }));
     }),
+
+  // ============================================================
+  // DIVERGÊNCIA: ATIVOS SEM FOLHA PROCESSADA
+  // Cruza funcionários ativos com folha processada no mês
+  // Retorna lista de quem ficou de fora do processamento
+  // ============================================================
+  divergenciaAtivosSemFolha: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const ids = resolveCompanyIds(input);
+
+      // 1. Buscar todos os funcionários ativos (não desligados/lista_negra) que são CLT
+      const [ativosRows] = await db.execute(sql`
+        SELECT id, nomeCompleto, funcao, tipoContrato, companyId, status, codigoInterno
+        FROM employees
+        WHERE companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND status NOT IN ('Desligado', 'Lista_Negra')
+          AND deletedAt IS NULL
+        ORDER BY nomeCompleto
+      `) as any[];
+
+      // 2. Buscar employeeIds que têm pagamento processado neste mês
+      const [pagosRows] = await db.execute(sql`
+        SELECT DISTINCT employeeId
+        FROM payroll_payments
+        WHERE companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND mesReferencia = ${input.mesReferencia}
+      `) as any[];
+      const pagosSet = new Set((pagosRows || []).map((r: any) => r.employeeId));
+
+      // 3. Buscar employeeIds que têm lançamento na folha importada (folha_itens) neste mês
+      const [folhaRows] = await db.execute(sql`
+        SELECT DISTINCT fi.employeeId
+        FROM folha_itens fi
+        INNER JOIN folha_lancamentos fl ON fi.folhaLancamentoId = fl.id
+        WHERE fl.companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND fl.mesReferencia = ${input.mesReferencia}
+          AND fi.employeeId IS NOT NULL
+      `) as any[];
+      const folhaSet = new Set((folhaRows || []).map((r: any) => r.employeeId));
+
+      // 4. Unir os dois conjuntos (quem tem folha processada = payroll_payments OU folha_itens)
+      const processadosSet = new Set([...Array.from(pagosSet), ...Array.from(folhaSet)]);
+
+      // 5. Separar ativos CLT e PJ
+      const ativosCLT = (ativosRows || []).filter((e: any) => e.tipoContrato === 'CLT');
+      const ativosPJ = (ativosRows || []).filter((e: any) => e.tipoContrato === 'PJ');
+      const ativosOutros = (ativosRows || []).filter((e: any) => !['CLT', 'PJ'].includes(e.tipoContrato || ''));
+
+      // 6. Identificar CLTs sem folha
+      const cltSemFolha = ativosCLT.filter((e: any) => !processadosSet.has(e.id));
+
+      // 7. Identificar PJs sem folha (informativo)
+      const pjSemFolha = ativosPJ.filter((e: any) => !processadosSet.has(e.id));
+
+      return {
+        totalAtivos: ativosRows.length,
+        totalAtivosCLT: ativosCLT.length,
+        totalAtivosPJ: ativosPJ.length,
+        totalAtivosOutros: ativosOutros.length,
+        totalProcessados: processadosSet.size,
+        totalCltComFolha: ativosCLT.filter((e: any) => processadosSet.has(e.id)).length,
+        totalCltSemFolha: cltSemFolha.length,
+        totalPjSemFolha: pjSemFolha.length,
+        cltSemFolha: cltSemFolha.map((e: any) => ({
+          id: e.id,
+          nome: e.nomeCompleto,
+          funcao: e.funcao || '—',
+          status: e.status,
+          codigo: e.codigoInterno || '—',
+        })),
+        pjSemFolha: pjSemFolha.map((e: any) => ({
+          id: e.id,
+          nome: e.nomeCompleto,
+          funcao: e.funcao || '—',
+          status: e.status,
+          codigo: e.codigoInterno || '—',
+        })),
+        temDivergencia: cltSemFolha.length > 0 || pjSemFolha.length > 0,
+      };
+    }),
 });
 // ============================================================
 // HELPER FUNCTIONS

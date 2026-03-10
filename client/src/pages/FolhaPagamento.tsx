@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Textarea } from "@/components/ui/textarea";
 import { fmtNum } from "@/lib/formatters";
+import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -1994,7 +1995,10 @@ export default function FolhaPagamento() {
           </CardContent>
         </Card>
 
-        {/* CONFERÊNCIA COM CONTABILIDADE (Compacta / Colapsável) */}
+        {/* ALERTA DE DIVERGÊNCIA: ATIVOS SEM FOLHA */}
+        <AlertaDivergenciaFolha mesReferencia={mesAno} mesLabel={formatMesAno(mesAno)} variant="full" />
+
+        {/* CONFERÊNCIA COM CONTABILIDADE (Compacta / Colasável) */}
         <Card className="border border-gray-200">
           <CardContent className="p-0">
             <button
@@ -2720,7 +2724,7 @@ export default function FolhaPagamento() {
 function DescontosCLTView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
   const { data: comparativo, isLoading } = trpc.folha.comparativoDescontos.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { enabled: companyId > 0 }
   );
 
   return (
@@ -2798,7 +2802,7 @@ function DescontosCLTView({ companyId, mesAno, lancamentoId, onBack }: { company
 function CruzamentoHEView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
   const { data: cruzamento, isLoading } = trpc.folha.cruzamentoHE.useQuery(
     { companyId, mesReferencia: mesAno },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { enabled: companyId > 0 }
   );
 
   return (
@@ -2902,7 +2906,7 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
 
   const { data: alertas, isLoading, refetch } = trpc.epis.listDiscountAlerts.useQuery(
     { companyId, status: statusFilter === "all" ? undefined : statusFilter as any },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { enabled: companyId > 0 }
   );
 
   const validateMut = trpc.epis.validateDiscount.useMutation({

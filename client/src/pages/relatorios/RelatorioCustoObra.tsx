@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Construction, Users, DollarSign, TrendingUp, XCircle, Building2, ChevronDown, ChevronRight, User, Receipt } from "lucide-react";
+import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -158,6 +159,9 @@ export default function RelatorioCustoObra() {
             <div className="text-xl font-bold text-emerald-700">{formatBRL(totals.liquido)}</div>
           </div>
         </div>
+
+        {/* Alerta de Divergência */}
+        <AlertaDivergenciaFolha mesReferencia={mesRef} mesLabel={`${MESES[mes - 1]}/${ano}`} variant="full" />
 
         {/* Obra Cards */}
         <div className="space-y-4">

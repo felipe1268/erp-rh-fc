@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wallet, Search, Users, DollarSign, TrendingDown, TrendingUp } from "lucide-react";
+import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -112,6 +113,9 @@ export default function RelatorioFolha() {
             <div className="text-xl font-bold text-emerald-700">{formatBRL(totals.liquido)}</div>
           </div>
         </div>
+
+        {/* Alerta de Divergência */}
+        <AlertaDivergenciaFolha mesReferencia={mesRef} mesLabel={`${MESES[mes - 1]}/${ano}`} variant="full" />
 
         {/* Table */}
         <div className="border rounded-lg overflow-hidden">
