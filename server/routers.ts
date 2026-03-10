@@ -1057,8 +1057,8 @@ export const appRouter = router({
         openId, name: input.name, email: input.email || null,
         username: input.username, password: hashed,
         mustChangePassword: 1, loginMethod: "local", role: input.role,
-      });
-      const newUserId = Number(result[0].insertId);
+      }).returning();
+      const newUserId = Number(result[0].id);
       // Se companyIds foram passados, vincular o usuário às empresas
       if (input.companyIds && input.companyIds.length > 0) {
         await setUserCompanies(newUserId, input.companyIds);

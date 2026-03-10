@@ -38,7 +38,7 @@ export const notificationsRouter = router({
         notificarTransferencia: input.notificarTransferencia ? 1 : 0,
         notificarAfastamento: input.notificarAfastamento ? 1 : 0,
       });
-      return { id: result.insertId, success: true };
+      return { id: result[0].id, success: true };
     }),
 
   updateRecipient: protectedProcedure

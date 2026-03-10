@@ -963,7 +963,7 @@ export const avisoPrevioFeriasRouter = router({
             sql`INSERT INTO meal_benefit_configs (companyId, obraId, nome, cafeManhaDia, lancheTardeDia, valeAlimentacaoMes, jantaDia, totalVA_iFood, diasUteisRef, cafeAtivo, lancheAtivo, jantaAtivo, observacoes)
             VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.observacoes || null})`
           ) as any;
-          return { success: true, id: result.insertId };
+          return { success: true, id: result[0].id };
         }
       }),
 
@@ -1049,7 +1049,7 @@ export const avisoPrevioFeriasRouter = router({
           criadoPorUserId: ctx.user.id,
         });
         
-        return { success: true, id: result.insertId, diasAviso, dataFim, previsao };
+        return { success: true, id: result[0].id, diasAviso, dataFim, previsao };
       }),
 
     update: protectedProcedure

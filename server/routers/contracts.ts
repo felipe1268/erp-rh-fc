@@ -356,7 +356,7 @@ export const contractsRouter = router({
         criadoPor: ctx.user.name || ctx.user.email,
         criadoPorUserId: ctx.user.id,
       });
-      return { id: result.insertId };
+      return { id: result[0].id };
     }),
 
   // Deletar template
@@ -567,7 +567,7 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
         criadoPor: ctx.user.name || ctx.user.email,
         criadoPorUserId: ctx.user.id,
       });
-      return { id: result.insertId };
+      return { id: result[0].id };
     }),
 
   // Listar contratos de um funcionário

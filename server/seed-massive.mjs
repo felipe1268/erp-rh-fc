@@ -111,8 +111,8 @@ async function seed() {
         `INSERT INTO companies (cnpj, razaoSocial, nomeFantasia, cidade, estado, cep, telefone, email, isActive) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [emp.cnpj, emp.razaoSocial, emp.nomeFantasia, emp.cidade, emp.estado, emp.cep, emp.telefone, emp.email]
       );
-      companyIds.push(result.insertId);
-      console.log(`  Empresa: ${emp.nomeFantasia} (ID: ${result.insertId})`);
+      companyIds.push(result[0].id);
+      console.log(`  Empresa: ${emp.nomeFantasia} (ID: ${result[0].id})`);
     }
 
     // 3. Inserir funcionários (15 por empresa)
@@ -165,7 +165,7 @@ async function seed() {
         );
 
         allEmployees.push({
-          id: result.insertId, companyId, nome, cargo, setor, salarioBase, valorHora, dataAdm, status
+          id: result[0].id, companyId, nome, cargo, setor, salarioBase, valorHora, dataAdm, status
         });
       }
     }
@@ -234,7 +234,7 @@ async function seed() {
           `INSERT INTO epis (companyId, nome, ca, fabricante, quantidadeEstoque) VALUES (?, ?, ?, ?, ?)`,
           [cId, epi.nome, epi.ca, randomItem(["3M", "MSA", "Honeywell", "Delta Plus", "Vonder"]), randomInt(10, 200)]
         );
-        epiIds[cId].push(result.insertId);
+        epiIds[cId].push(result[0].id);
         epiCount++;
       }
     }
@@ -516,7 +516,7 @@ async function seed() {
           `INSERT INTO audits (companyId, titulo, tipoAuditoria, dataAuditoria, auditor, setor, resultadoAuditoria, descricao) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [cId, `Auditoria ${randomItem(["ISO 9001", "ISO 14001", "ISO 45001", "Interna SST", "Cliente"])} - ${randomItem(["Q1", "Q2", "Q3", "Q4"])} 2025`, randomItem(["Interna", "Externa", "Cliente", "Certificadora"]), formatDate(randomDate(new Date(2025, 0, 1), new Date(2025, 11, 30))), randomItem(["João Auditor", "Maria Auditora", "Carlos Perito"]), randomItem(SETORES), randomItem(["Conforme", "Nao_Conforme", "Observacao", "Pendente"]), "Auditoria realizada conforme procedimento interno."]
         );
-        auditIds[cId].push(result.insertId);
+        auditIds[cId].push(result[0].id);
         auditCount++;
       }
     }
@@ -534,7 +534,7 @@ async function seed() {
           `INSERT INTO deviations (companyId, auditId, titulo, tipoDesvio, setor, descricao, causaRaiz, statusDesvio, responsavel, prazo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [cId, auditId, `Desvio ${randomItem(["Procedimento", "Documentação", "EPI", "Sinalização", "Treinamento"])} - ${randomItem(SETORES)}`, randomItem(["NC_Maior", "NC_Menor", "Observacao", "Oportunidade_Melhoria"]), randomItem(SETORES), "Desvio identificado durante auditoria.", randomItem(["Falta de treinamento", "Procedimento desatualizado", "Falha de comunicação", "Equipamento inadequado"]), randomItem(["Aberto", "Em_Andamento", "Fechado"]), randomItem(allEmployees.filter(e => e.companyId === cId)).nome, formatDate(randomDate(new Date(2025, 6, 1), new Date(2026, 5, 30)))]
         );
-        devIds[cId].push(result.insertId);
+        devIds[cId].push(result[0].id);
         devCount++;
       }
     }
@@ -579,7 +579,7 @@ async function seed() {
         `INSERT INTO cipa_elections (companyId, mandatoInicio, mandatoFim, statusEleicao, dataEdital, dataEleicao, dataPosse) VALUES (?, ?, ?, 'Concluida', ?, ?, ?)`,
         [cId, "2025-01-01", "2026-12-31", "2024-10-01", "2024-11-15", "2025-01-02"]
       );
-      const electionId = elResult.insertId;
+      const electionId = elResult[0].id;
       const cargos = ["Presidente", "Vice_Presidente", "Secretario", "Membro_Titular", "Membro_Titular", "Membro_Suplente"];
       const compEmps = allEmployees.filter(e => e.companyId === cId && e.status === "Ativo");
       const numMembros = Math.min(randomInt(4, 6), compEmps.length);

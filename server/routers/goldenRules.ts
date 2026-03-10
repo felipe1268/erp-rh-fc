@@ -29,7 +29,7 @@ export const goldenRulesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('DB not available');
       const [result] = await db.insert(goldenRules).values(input);
-      return { id: result.insertId };
+      return { id: result[0].id };
     }),
 
   // Atualizar regra de ouro

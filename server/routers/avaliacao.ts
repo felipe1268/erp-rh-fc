@@ -325,12 +325,12 @@ export const avaliacaoRouter = router({
           actorId: input.evaluatorId,
           actorName: evaluator.nome,
           targetType: "avaliacao",
-          targetId: result.insertId,
+          targetId: result[0].id,
           details: JSON.stringify({ employeeId: input.employeeId, employeeName: employee.nomeCompleto, mesReferencia: mesRef }),
         });
 
         // Retorno SIGILOSO: avaliador NÃO vê nota final nem recomendação
-        return { success: true, evaluationId: result.insertId };
+        return { success: true, evaluationId: result[0].id };
       }),
 
     // Listar avaliações do avaliador (SEM mediaGeral, SEM recomendação - SIGILOSO)
@@ -526,7 +526,7 @@ export const avaliacaoRouter = router({
           evaluationFrequency: input.evaluationFrequency,
           mustChangePassword: 0,
         });
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     update: protectedProcedure
@@ -668,11 +668,11 @@ export const avaliacaoRouter = router({
           actorId: evaluatorId,
           actorName: evaluatorName,
           targetType: "avaliacao",
-          targetId: result.insertId,
+          targetId: result[0].id,
           details: JSON.stringify({ employeeId: input.employeeId, mediaGeral: mediaGeral.toFixed(1), recomendacao }),
         });
 
-        return { id: result.insertId, mediaGeral: parseFloat(mediaGeral.toFixed(1)), recomendacao };
+        return { id: result[0].id, mediaGeral: parseFloat(mediaGeral.toFixed(1)), recomendacao };
       }),
 
     // Lista avaliações - com controle de visibilidade
@@ -1238,14 +1238,14 @@ Gere um resumo executivo em português brasileiro com:
 
         for (const pillar of input.pillars) {
           const [p] = await db.insert(evalPillars).values({
-            revisionId: rev.insertId,
+            revisionId: rev[0].id,
             nome: pillar.nome,
             ordem: pillar.ordem,
           });
           for (const criterion of pillar.criteria) {
             await db.insert(evalCriteria).values({
-              pillarId: p.insertId,
-              revisionId: rev.insertId,
+              pillarId: p[0].id,
+              revisionId: rev[0].id,
               nome: criterion.nome,
               descricao: criterion.descricao || null,
               fieldKey: criterion.fieldKey || null,
@@ -1254,7 +1254,7 @@ Gere um resumo executivo em português brasileiro com:
           }
         }
 
-        return { id: rev.insertId, version };
+        return { id: rev[0].id, version };
       }),
 
     activateRevision: protectedProcedure
@@ -1310,14 +1310,14 @@ Gere um resumo executivo em português brasileiro com:
 
         for (const pilar of pilares) {
           const [p] = await db.insert(evalPillars).values({
-            revisionId: rev.insertId,
+            revisionId: rev[0].id,
             nome: pilar.nome,
             ordem: pilar.ordem,
           });
           for (const c of pilar.criterios) {
             await db.insert(evalCriteria).values({
-              pillarId: p.insertId,
-              revisionId: rev.insertId,
+              pillarId: p[0].id,
+              revisionId: rev[0].id,
               nome: c.nome,
               descricao: c.descricao,
               fieldKey: c.fieldKey,
@@ -1326,7 +1326,7 @@ Gere um resumo executivo em português brasileiro com:
           }
         }
 
-        return { id: rev.insertId };
+        return { id: rev[0].id };
       }),
   }),
 
@@ -1363,7 +1363,7 @@ Gere um resumo executivo em português brasileiro com:
         });
         for (const q of questions) {
           await db.insert(evalSurveyQuestions).values({
-            surveyId: survey.insertId,
+            surveyId: survey[0].id,
             texto: q.texto,
             tipo: q.tipo,
             ordem: q.ordem,
@@ -1374,12 +1374,12 @@ Gere um resumo executivo em português brasileiro com:
         if (evaluatorIds && evaluatorIds.length > 0) {
           for (const evId of evaluatorIds) {
             await db.insert(evalSurveyEvaluators).values({
-              surveyId: survey.insertId,
+              surveyId: survey[0].id,
               evaluatorId: evId,
             });
           }
         }
-        return { id: survey.insertId, publicToken };
+        return { id: survey[0].id, publicToken };
       }),
 
     list: protectedProcedure
@@ -1472,7 +1472,7 @@ Gere um resumo executivo em português brasileiro com:
         });
         for (const a of input.answers) {
           await db.insert(evalSurveyAnswers).values({
-            responseId: response.insertId,
+            responseId: response[0].id,
             questionId: a.questionId,
             valor: a.valor || null,
             textoLivre: a.textoLivre || null,
@@ -1733,9 +1733,9 @@ Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para 
         const publicToken = generateToken();
         const [survey] = await db.insert(evalClimateSurveys).values({ ...data, publicToken });
         for (const q of questions) {
-          await db.insert(evalClimateQuestions).values({ surveyId: survey.insertId, ...q });
+          await db.insert(evalClimateQuestions).values({ surveyId: survey[0].id, ...q });
         }
-        return { id: survey.insertId, publicToken };
+        return { id: survey[0].id, publicToken };
       }),
 
     listSurveys: protectedProcedure
@@ -1805,7 +1805,7 @@ Inclua uma mistura de tipos. As perguntas devem ser objetivas e relevantes para 
           cpfHash: input.cpfHash || null,
         });
         for (const a of input.answers) {
-          await db.insert(evalClimateAnswers).values({ responseId: response.insertId, questionId: a.questionId, valor: a.valor || null, textoLivre: a.textoLivre || null });
+          await db.insert(evalClimateAnswers).values({ responseId: response[0].id, questionId: a.questionId, valor: a.valor || null, textoLivre: a.textoLivre || null });
         }
         return { success: true };
       }),
@@ -1943,7 +1943,7 @@ Gere 2-3 perguntas por categoria (total ~15 perguntas). Contexto: empresa de con
       .mutation(async ({ input }) => {
         const db = await getDb();
         const [result] = await db.insert(evalExternalParticipants).values(input);
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     update: protectedProcedure

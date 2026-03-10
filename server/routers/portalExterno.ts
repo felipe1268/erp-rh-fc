@@ -154,7 +154,7 @@ export const portalExternoRouter = router({
         statusAptidao: "pendente",
         cadastradoPor: "portal",
       });
-      return { id: result.insertId, success: true };
+      return { id: result[0].id, success: true };
     }),
 
     atualizarFuncionario: publicProcedure.input(z.object({
@@ -404,7 +404,7 @@ export const portalExternoRouter = router({
         companyId: decoded.companyId,
         status: "pendente",
       });
-      return { id: result.insertId, success: true };
+      return { id: result[0].id, success: true };
     }),
 
     uploadNotaFiscal: publicProcedure.input(z.object({

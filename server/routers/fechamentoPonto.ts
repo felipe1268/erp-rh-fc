@@ -1107,7 +1107,7 @@ export const fechamentoPontoRouter = router({
             origemModulo: "fechamento_ponto",
             origemId: inc.id,
           });
-          warningId = Number(result[0].insertId);
+          warningId = Number(result[0].id);
         }
       }
 

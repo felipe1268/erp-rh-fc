@@ -42,7 +42,7 @@ export const heSolicitacoesRouter = router({
       solicitadoPorId: ctx.user.id,
     });
 
-    const solicitacaoId = result.insertId;
+    const solicitacaoId = result[0].id;
 
     // Vincular funcionários
     if (input.funcionarioIds.length > 0) {

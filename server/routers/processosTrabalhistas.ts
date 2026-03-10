@@ -178,8 +178,8 @@ export const processosTrabRouter = router({
         clienteNomeFantasia: emptyToNull(input.clienteNomeFantasia),
         observacoes: emptyToNull(input.observacoes),
         criadoPor: emptyToNull(input.criadoPor),
-      });
-      return { id: result[0].insertId };
+      }).returning();
+      return { id: result[0].id };
     }),
 
   // ============================================================
@@ -302,8 +302,8 @@ export const processosTrabRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const result = await db.insert(processosAndamentos).values(input);
-      return { id: result[0].insertId };
+      const result = await db.insert(processosAndamentos).values(input).returning();
+      return { id: result[0].id };
     }),
 
   excluirAndamento: protectedProcedure

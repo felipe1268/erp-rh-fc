@@ -65,7 +65,7 @@ export const episRouter = router({
         condicao: input.condicao,
         criadoPor: userName,
       } as any);
-      return { id: result[0].insertId };
+      return { id: result[0].id };
     }),
 
   update: protectedProcedure
@@ -259,7 +259,7 @@ export const episRouter = router({
         fotoEstadoUrl,
         origemEntrega: input.origemEntrega,
         obraId: input.obraId || null,
-      } as any);
+      } as any).returning();
 
       // Update stock based on origin
       if (input.origemEntrega === 'obra' && input.obraId) {
@@ -285,7 +285,7 @@ export const episRouter = router({
         await db.insert(epiDiscountAlerts).values({
           companyId: input.companyId,
           employeeId: input.employeeId,
-          epiDeliveryId: result[0].insertId,
+          epiDeliveryId: result[0].id,
           epiNome: epi?.nome || 'EPI',
           ca: epi?.ca || null,
           quantidade: input.quantidade,
@@ -297,7 +297,7 @@ export const episRouter = router({
         } as any);
       }
 
-      return { id: result[0].insertId, valorCobrado };
+      return { id: result[0].id, valorCobrado };
     }),
 
   deleteDelivery: protectedProcedure
@@ -1055,8 +1055,8 @@ Exemplos de referência:
         email: input.email || null,
         endereco: input.endereco || null,
         observacoes: input.observacoes || null,
-      });
-      return { id: result[0].insertId };
+      }).returning();
+      return { id: result[0].id };
     }),
 
   fornecedoresUpdate: protectedProcedure

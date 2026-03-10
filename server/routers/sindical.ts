@@ -75,7 +75,7 @@ export const sindicalRouter = router({
       status: 'rascunho',
       criadoPor: ctx.user.name || 'Sistema',
     });
-    return { success: true, id: result.insertId };
+    return { success: true, id: result[0].id };
   }),
 
   // Aplicar dissídio — reajusta TODOS os CLT ativos da empresa (sem exclusão individual)
