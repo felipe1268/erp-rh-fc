@@ -5241,3 +5241,20 @@
 - [x] epis.ts - import obraFuncionarios adicionado
 - [x] Causa raiz: ao substituir obraAtualId por queries em obraFuncionarios, os imports não foram adicionados em todos os arquivos
 - [x] 720 testes passando
+
+## Rev. 229: Botões Imprimir/PDF na Equipe da Obra
+- [ ] Adicionar botão "Imprimir" na tela de Equipe da Obra
+- [ ] Adicionar botão "Gerar PDF" na tela de Equipe da Obra
+- [ ] Imprimir/PDF deve mostrar apenas a listagem da equipe (sem ações, sem busca)
+
+## BUG: Efetivo por Obra duplica obras no modo CONSTRUTORAS
+- [x] Obras aparecem duplicadas quando FC + JF têm funcionários na mesma obra
+- [x] Consolidar por nome da obra (não por obraId) para unificar entre empresas
+- [x] Garantir que "Sem Obra Vinculada" também consolide
+- [x] Fix: companyId NaN quando CONSTRUTORAS selecionado (parseInt('construtoras') = NaN desabilitava queries)
+- [x] getEfetivoPorObra: consolida por nome da obra no modo CONSTRUTORAS
+- [x] getEfetivoDashboardMensal: consolida por nome da obra no modo CONSTRUTORAS
+- [x] getEfetivoHistorico: consolida por nome da obra no modo CONSTRUTORAS
+- [x] getEquipeObra: aceita obraIds[] e companyIds[] para buscar equipe consolidada
+- [x] DashEfetivoObra: passa obraIds ao clicar "Ver equipe" em obra consolidada
+- [x] ObraEfetivo: fix companyId para usar construtorasIds[0] no modo CONSTRUTORAS

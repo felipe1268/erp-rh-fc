@@ -18,6 +18,7 @@ import {
   HardHat, Users, Search, ArrowRightLeft, UserPlus, AlertTriangle,
   Building2, CheckCircle, XCircle, Clock, MapPin, ChevronRight,
   Loader2, UserMinus, History, BarChart3, X, ArrowRight, Shield,
+  Printer, FileDown,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -25,13 +26,16 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { fmtNum } from "@/lib/formatters";
 
 export default function ObraEfetivo() {
-  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
-  const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0;
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery, construtorasIds } = useCompany();
   const companyIds = getCompanyIdsForQuery();
+  // Quando CONSTRUTORAS está selecionado, selectedCompanyId = "construtoras" (string)
+  // parseInt("construtoras") = NaN, que desabilita queries. Usar primeiro ID das construtoras.
+  const companyId = isConstrutoras ? (construtorasIds[0] || 0) : (selectedCompanyId ? parseInt(selectedCompanyId, 10) : 0);
 
   const [activeTab, setActiveTab] = useState("efetivo");
   const [search, setSearch] = useState("");
   const [selectedObraId, setSelectedObraId] = useState<number | null>(null);
+  const [selectedObraIds, setSelectedObraIds] = useState<number[]>([]);
   const [allocDialogOpen, setAllocDialogOpen] = useState(false);
   const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
   const [employeesWithAllocation, setEmployeesWithAllocation] = useState<any[]>([]);
@@ -61,7 +65,7 @@ export default function ObraEfetivo() {
   const inconsistenciasCount = inconsistenciasCountQ.data ?? 0;
 
   // Funcionários da obra selecionada
-  const funcObraQ = trpc.obras.funcionarios.useQuery({ obraId: selectedObraId || 0 }, { enabled: !!selectedObraId });
+  const funcObraQ = trpc.obras.funcionarios.useQuery({ obraId: selectedObraId || 0, obraIds: selectedObraIds.length > 1 ? selectedObraIds : undefined }, { enabled: !!selectedObraId });
   const funcObra = funcObraQ.data ?? [];
 
   // All active employees for multi-select
@@ -379,7 +383,7 @@ export default function ObraEfetivo() {
                   <Card
                     key={item.obraId}
                     className="cursor-pointer hover:shadow-md transition-shadow hover:ring-2 hover:ring-[#1B2A4A]/50"
-                    onClick={() => { setSelectedObraId(item.obraId); setEquipeDialogOpen(true); setEquipeSearch(""); }}
+                    onClick={() => { setSelectedObraId(item.obraId); setSelectedObraIds(item.obraIds || [item.obraId]); setEquipeDialogOpen(true); setEquipeSearch(""); }}
                   >
                     <CardContent className="p-5">
                       <div className="flex items-start justify-between mb-2">
@@ -953,6 +957,104 @@ export default function ObraEfetivo() {
         title={`Equipe — ${efetivo.find((e: any) => e.obraId === selectedObraId)?.obraNome || ""}`}
         subtitle={`${funcObra.length} funcionário(s) alocado(s) nesta obra`}
         icon={<Users className="h-5 w-5" />}
+        headerActions={
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 gap-1.5 border border-white/30 text-xs h-8" onClick={() => {
+              const obraNome = efetivo.find((e: any) => e.obraId === selectedObraId)?.obraNome || "";
+              const rows = funcObra.map((f: any) => ({
+                nome: f.employee?.nomeCompleto || "—",
+                funcao: f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—",
+                status: f.employee?.status || "Ativo",
+                desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
+              }));
+              const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
+              rows.sort((a: any, b: any) => {
+                const ia = statusOrder.indexOf(a.status); const ib = statusOrder.indexOf(b.status);
+                const sa = (ia === -1 ? 99 : ia); const sb = (ib === -1 ? 99 : ib);
+                if (sa !== sb) return sa - sb;
+                return a.nome.localeCompare(b.nome);
+              });
+              const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
+              const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Equipe - ${obraNome}</title><style>
+                @page { size: A4 landscape; margin: 15mm; }
+                body { font-family: Arial, sans-serif; font-size: 11px; color: #333; }
+                .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #1B2A4A; padding-bottom: 8px; }
+                .header h1 { font-size: 18px; color: #1B2A4A; margin: 0; }
+                .header p { font-size: 12px; color: #666; margin: 4px 0 0; }
+                .summary { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+                .summary-item { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px 10px; font-size: 11px; }
+                .summary-item strong { font-size: 14px; }
+                table { width: 100%; border-collapse: collapse; }
+                th { background: #1B2A4A; color: white; padding: 6px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
+                td { padding: 5px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
+                tr:nth-child(even) { background: #f8f9fa; }
+                .status { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+                .status-Ativo { background: #d4edda; color: #155724; }
+                .status-Aviso { background: #fff3cd; color: #856404; }
+                .status-Ferias { background: #cce5ff; color: #004085; }
+                .status-Afastado { background: #f8d7da; color: #721c24; }
+                .footer { text-align: center; margin-top: 16px; font-size: 9px; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
+              </style></head><body>
+                <div class="header"><h1>Equipe — ${obraNome}</h1><p>${rows.length} funcionário(s) alocado(s) | Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></div>
+                <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Desde</th></tr></thead><tbody>
+                ${rows.map((r: any, i: number) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status status-${r.status}">${statusLabels[r.status] || r.status}</span></td><td>${r.desde}</td></tr>`).join("")}
+                </tbody></table>
+                <div class="footer">FC Engenharia — Sistema ERP RH & DP — Documento gerado automaticamente</div>
+              </body></html>`;
+              const w = window.open("", "_blank");
+              if (w) { w.document.write(printHtml); w.document.close(); w.focus(); setTimeout(() => w.print(), 300); }
+            }}>
+              <Printer className="h-3.5 w-3.5" /> Imprimir
+            </Button>
+            <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 gap-1.5 border border-white/30 text-xs h-8" onClick={() => {
+              toast.info("A janela de impressão será aberta. Selecione 'Salvar como PDF'.", { duration: 4000 });
+              const obraNome = efetivo.find((e: any) => e.obraId === selectedObraId)?.obraNome || "";
+              const rows = funcObra.map((f: any) => ({
+                nome: f.employee?.nomeCompleto || "—",
+                funcao: f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—",
+                status: f.employee?.status || "Ativo",
+                desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
+              }));
+              const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
+              rows.sort((a: any, b: any) => {
+                const ia = statusOrder.indexOf(a.status); const ib = statusOrder.indexOf(b.status);
+                const sa = (ia === -1 ? 99 : ia); const sb = (ib === -1 ? 99 : ib);
+                if (sa !== sb) return sa - sb;
+                return a.nome.localeCompare(b.nome);
+              });
+              const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
+              const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Equipe - ${obraNome}</title><style>
+                @page { size: A4 landscape; margin: 15mm; }
+                body { font-family: Arial, sans-serif; font-size: 11px; color: #333; }
+                .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #1B2A4A; padding-bottom: 8px; }
+                .header h1 { font-size: 18px; color: #1B2A4A; margin: 0; }
+                .header p { font-size: 12px; color: #666; margin: 4px 0 0; }
+                table { width: 100%; border-collapse: collapse; }
+                th { background: #1B2A4A; color: white; padding: 6px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
+                td { padding: 5px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
+                tr:nth-child(even) { background: #f8f9fa; }
+                .status { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+                .status-Ativo { background: #d4edda; color: #155724; }
+                .status-Aviso { background: #fff3cd; color: #856404; }
+                .status-Ferias { background: #cce5ff; color: #004085; }
+                .status-Afastado { background: #f8d7da; color: #721c24; }
+                .footer { text-align: center; margin-top: 16px; font-size: 9px; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
+              </style></head><body>
+                <div class="header"><h1>Equipe — ${obraNome}</h1><p>${rows.length} funcionário(s) alocado(s) | Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></div>
+                <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Desde</th></tr></thead><tbody>
+                ${rows.map((r: any, i: number) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status status-${r.status}">${statusLabels[r.status] || r.status}</span></td><td>${r.desde}</td></tr>`).join("")}
+                </tbody></table>
+                <div class="footer">FC Engenharia — Sistema ERP RH & DP — Documento gerado automaticamente</div>
+              </body></html>`;
+              setTimeout(() => {
+                const w = window.open("", "_blank");
+                if (w) { w.document.write(printHtml); w.document.close(); w.focus(); setTimeout(() => w.print(), 300); }
+              }, 500);
+            }}>
+              <FileDown className="h-3.5 w-3.5" /> PDF
+            </Button>
+          </div>
+        }
         footer={
           <div className="flex items-center justify-between w-full">
             <Button variant="outline" onClick={() => setEquipeDialogOpen(false)}>Fechar</Button>

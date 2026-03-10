@@ -1344,10 +1344,14 @@ export async function getObrasByCompanyActive(companyId: number, companyIds?: nu
 }
 
 // Funcionários alocados na obra
-export async function getObraFuncionarios(obraId: number) {
+export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
-  const allocs = await db.select().from(obraFuncionarios).where(and(eq(obraFuncionarios.obraId, obraId), eq(obraFuncionarios.isActive, 1)));
+  const idsToQuery = obraIds && obraIds.length > 0 ? obraIds : [obraId];
+  const allocs = await db.select().from(obraFuncionarios).where(and(
+    idsToQuery.length === 1 ? eq(obraFuncionarios.obraId, idsToQuery[0]) : inArray(obraFuncionarios.obraId, idsToQuery),
+    eq(obraFuncionarios.isActive, 1)
+  ));
   if (allocs.length === 0) return [];
   const empIds = allocs.map(a => a.employeeId);
   const emps = await db.select().from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
@@ -1829,20 +1833,25 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
     ));
   const empIdsEmFerias = new Set(feriasAtivas.map(f => f.employeeId));
 
-  // 4. Agregar por obra com status real
-  const obraMap = new Map<number, {
-    obraId: number; obraNome: string; obraCodigo: string | null; obraStatus: string | null; obraCidade: string | null;
+  // 4. Agregar por obra — quando múltiplas construtoras, consolidar por NOME da obra
+  //    (FC e JF podem ter obras com mesmo nome mas IDs diferentes)
+  const isMultiCompany = ids.length > 1;
+  const obraMap = new Map<string, {
+    obraId: number; obraIds: number[]; obraNome: string; obraCodigo: string | null; obraStatus: string | null; obraCidade: string | null;
     efetivo: number; qtdAtivo: number; qtdAviso: number; qtdFerias: number; qtdAfastado: number; qtdRecluso: number;
   }>();
 
   for (const a of alocacoes) {
-    if (!obraMap.has(a.obraId)) {
-      obraMap.set(a.obraId, {
-        obraId: a.obraId, obraNome: a.obraNome, obraCodigo: a.obraCodigo, obraStatus: a.obraStatus, obraCidade: a.obraCidade,
+    // Chave: por nome (trim) quando multi-company, por obraId quando single
+    const key = isMultiCompany ? (a.obraNome || '').trim().toUpperCase() : String(a.obraId);
+    if (!obraMap.has(key)) {
+      obraMap.set(key, {
+        obraId: a.obraId, obraIds: [a.obraId], obraNome: a.obraNome, obraCodigo: a.obraCodigo, obraStatus: a.obraStatus, obraCidade: a.obraCidade,
         efetivo: 0, qtdAtivo: 0, qtdAviso: 0, qtdFerias: 0, qtdAfastado: 0, qtdRecluso: 0,
       });
     }
-    const o = obraMap.get(a.obraId)!;
+    const o = obraMap.get(key)!;
+    if (!o.obraIds.includes(a.obraId)) o.obraIds.push(a.obraId);
     o.efetivo++;
 
     // Prioridade: Aviso Prévio > Férias > Status do employees
@@ -1888,6 +1897,8 @@ export async function getEfetivoHistorico(companyId: number, meses: number = 12,
     .where(inArray(obraFuncionarios.companyId, ids));
   
   // Calcular efetivo por obra por mês
+  // When multi-company (CONSTRUTORAS), consolidate by obra name
+  const isMultiCompany = ids.length > 1;
   const obrasMap: Record<number, string> = {};
   allAlocs.forEach(a => { obrasMap[a.obraId] = a.obraNome; });
   
@@ -1900,25 +1911,45 @@ export async function getEfetivoHistorico(companyId: number, meses: number = 12,
     const primDiaStr = primeiroDia.toISOString().split('T')[0];
     const ultDiaStr = ultimoDia.toISOString().split('T')[0];
     
-    // Contar funcionários por obra que estavam alocados nesse mês
-    const porObra: Record<number, Set<number>> = {};
-    for (const a of allAlocs) {
-      const inicio = a.dataInicio || '2000-01-01';
-      const fim = a.dataFim || '2099-12-31';
-      // Funcionário estava na obra se: início <= último dia do mês E fim >= primeiro dia do mês
-      if (inicio <= ultDiaStr && fim >= primDiaStr) {
-        if (!porObra[a.obraId]) porObra[a.obraId] = new Set();
-        porObra[a.obraId].add(a.employeeId);
+    if (isMultiCompany) {
+      // Consolidate by obra name
+      const porObraNome: Record<string, { obraId: number; empSet: Set<number> }> = {};
+      for (const a of allAlocs) {
+        const inicio = a.dataInicio || '2000-01-01';
+        const fim = a.dataFim || '2099-12-31';
+        if (inicio <= ultDiaStr && fim >= primDiaStr) {
+          const key = (a.obraNome || '').trim().toUpperCase();
+          if (!porObraNome[key]) porObraNome[key] = { obraId: a.obraId, empSet: new Set() };
+          porObraNome[key].empSet.add(a.employeeId);
+        }
       }
-    }
-    
-    for (const [obraId, empSet] of Object.entries(porObra)) {
-      result.push({
-        mes,
-        obraId: Number(obraId),
-        obraNome: obrasMap[Number(obraId)] || 'Desconhecida',
-        efetivo: empSet.size,
-      });
+      for (const [nameKey, data] of Object.entries(porObraNome)) {
+        result.push({
+          mes,
+          obraId: data.obraId,
+          obraNome: obrasMap[data.obraId] || nameKey,
+          efetivo: data.empSet.size,
+        });
+      }
+    } else {
+      // Single company: group by obraId
+      const porObra: Record<number, Set<number>> = {};
+      for (const a of allAlocs) {
+        const inicio = a.dataInicio || '2000-01-01';
+        const fim = a.dataFim || '2099-12-31';
+        if (inicio <= ultDiaStr && fim >= primDiaStr) {
+          if (!porObra[a.obraId]) porObra[a.obraId] = new Set();
+          porObra[a.obraId].add(a.employeeId);
+        }
+      }
+      for (const [obraId, empSet] of Object.entries(porObra)) {
+        result.push({
+          mes,
+          obraId: Number(obraId),
+          obraNome: obrasMap[Number(obraId)] || 'Desconhecida',
+          efetivo: empSet.size,
+        });
+      }
     }
   }
   
@@ -2187,15 +2218,17 @@ export async function getOndeTrabalhouNoMes(companyId: number, employeeId: numbe
 
 
 /** Get team members of a specific obra (with employee details) */
-export async function getEquipeObra(obraId: number, companyId: number) {
+export async function getEquipeObra(obraId: number, companyId: number, obraIds?: number[], companyIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
+  const idsObra = obraIds && obraIds.length > 0 ? obraIds : [obraId];
+  const idsCompany = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   const allocs = await db.select({
     employeeId: obraFuncionarios.employeeId,
     dataInicio: obraFuncionarios.dataInicio,
   }).from(obraFuncionarios).where(and(
-    eq(obraFuncionarios.obraId, obraId),
-    eq(obraFuncionarios.companyId, companyId),
+    idsObra.length === 1 ? eq(obraFuncionarios.obraId, idsObra[0]) : inArray(obraFuncionarios.obraId, idsObra),
+    inArray(obraFuncionarios.companyId, idsCompany),
     eq(obraFuncionarios.isActive, 1),
   ));
   if (allocs.length === 0) return [];
@@ -2216,7 +2249,7 @@ export async function getEquipeObra(obraId: number, companyId: number) {
   const avisoRows = await db.select({
     employeeId: terminationNotices.employeeId,
   }).from(terminationNotices).where(and(
-    eq(terminationNotices.companyId, companyId),
+    inArray(terminationNotices.companyId, idsCompany),
     eq(terminationNotices.status, 'em_andamento'),
     sql`${terminationNotices.dataInicio} <= ${today}`,
     sql`${terminationNotices.dataFim} >= ${today}`,
@@ -2228,7 +2261,7 @@ export async function getEquipeObra(obraId: number, companyId: number) {
   const feriasRows = await db.select({
     employeeId: vacationPeriods.employeeId,
   }).from(vacationPeriods).where(and(
-    eq(vacationPeriods.companyId, companyId),
+    inArray(vacationPeriods.companyId, idsCompany),
     eq(vacationPeriods.status, 'em_gozo'),
     sql`${vacationPeriods.dataInicio} <= ${today}`,
     sql`${vacationPeriods.dataFim} >= ${today}`,
@@ -2286,24 +2319,39 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
   const primDia = `${mesRef}-01`;
   const ultDia = new Date(anoNum, mesNum, 0).toISOString().split('T')[0];
   
-  const porObra: Record<number, { obraNome: string; alocados: Set<number>; comPonto: Set<number>; diasPonto: number }> = {};
+  // When multi-company (CONSTRUTORAS), consolidate by obra name
+  const isMultiCompany = ids.length > 1;
+  const porObraMap = new Map<string, { obraId: number; obraIds: number[]; obraNome: string; alocados: Set<number>; comPonto: Set<number>; diasPonto: number }>();
   
   for (const a of alocacoes) {
     const inicio = a.dataInicio || '2000-01-01';
     const fim = a.dataFim || '2099-12-31';
     if (inicio <= ultDia && fim >= primDia) {
-      if (!porObra[a.obraId]) {
-        porObra[a.obraId] = { obraNome: a.obraNome, alocados: new Set(), comPonto: new Set(), diasPonto: 0 };
+      const key = isMultiCompany ? (a.obraNome || '').trim().toUpperCase() : String(a.obraId);
+      if (!porObraMap.has(key)) {
+        porObraMap.set(key, { obraId: a.obraId, obraIds: [a.obraId], obraNome: a.obraNome, alocados: new Set(), comPonto: new Set(), diasPonto: 0 });
       }
-      porObra[a.obraId].alocados.add(a.employeeId);
+      const entry = porObraMap.get(key)!;
+      if (!entry.obraIds.includes(a.obraId)) entry.obraIds.push(a.obraId);
+      entry.alocados.add(a.employeeId);
     }
+  }
+  
+  // Build reverse map: obraId -> consolidated key
+  const obraIdToKey = new Map<number, string>();
+  for (const [key, entry] of porObraMap) {
+    for (const oid of entry.obraIds) obraIdToKey.set(oid, key);
   }
   
   // 4. Cross-reference with ponto
   for (const p of pontoRecords) {
-    if (p.obraId && porObra[p.obraId]) {
-      porObra[p.obraId].comPonto.add(p.employeeId);
-      porObra[p.obraId].diasPonto += p.diasTrabalhados;
+    if (p.obraId) {
+      const key = obraIdToKey.get(p.obraId);
+      if (key && porObraMap.has(key)) {
+        const entry = porObraMap.get(key)!;
+        entry.comPonto.add(p.employeeId);
+        entry.diasPonto += p.diasTrabalhados;
+      }
     }
   }
   
@@ -2320,8 +2368,9 @@ export async function getEfetivoDashboardMensal(companyId: number, mesRef: strin
   const alocadosSet = new Set(alocadosIds.map(a => a.employeeId));
   const activeEmps = allActiveEmps.filter(e => !alocadosSet.has(e.id));
   
-  const result = Object.entries(porObra).map(([obraId, data]) => ({
-    obraId: Number(obraId),
+  const result = Array.from(porObraMap.values()).map(data => ({
+    obraId: data.obraId,
+    obraIds: data.obraIds,
     obraNome: data.obraNome,
     alocados: data.alocados.size,
     comPonto: data.comPonto.size,

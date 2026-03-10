@@ -38,7 +38,7 @@ export default function DashEfetivoObra() {
 
   // Dialog states
   const [equipeDialogOpen, setEquipeDialogOpen] = useState(false);
-  const [selectedObra, setSelectedObra] = useState<{ id: number; nome: string } | null>(null);
+  const [selectedObra, setSelectedObra] = useState<{ id: number; nome: string; obraIds?: number[] } | null>(null);
   const [drillDialogOpen, setDrillDialogOpen] = useState(false);
   const [drillData, setDrillData] = useState<{ title: string; items: any[] } | null>(null);
 
@@ -66,8 +66,8 @@ export default function DashEfetivoObra() {
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: equipeData, isLoading: loadingEquipe } = trpc.obras.equipeObra.useQuery(
-    { obraId: selectedObra?.id || 0, companyId: queryCompanyId },
-    { enabled: !!selectedObra && companyId > 0 }
+    { obraId: selectedObra?.id || 0, companyId: queryCompanyId, ...(selectedObra?.obraIds && selectedObra.obraIds.length > 1 ? { obraIds: selectedObra.obraIds } : {}), ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: !!selectedObra && (isConstrutoras ? companyIds.length > 0 : companyId > 0) }
   );
 
   const isLoading = loadingEfetivo || loadingHistorico || loadingSemObra;
@@ -198,8 +198,8 @@ export default function DashEfetivoObra() {
     }
   };
 
-  const openEquipe = (obraId: number, obraNome: string) => {
-    setSelectedObra({ id: obraId, nome: obraNome });
+  const openEquipe = (obraId: number, obraNome: string, obraIds?: number[]) => {
+    setSelectedObra({ id: obraId, nome: obraNome, obraIds });
     setEquipeDialogOpen(true);
   };
 
@@ -361,7 +361,7 @@ export default function DashEfetivoObra() {
                         </td>
                         <td className="p-2 text-center text-xs text-muted-foreground">{o.diasPonto || '—'}</td>
                         <td className="p-2 text-right">
-                          <Button variant="ghost" size="sm" className="text-xs text-blue-700 gap-1" onClick={() => openEquipe(o.obraId, o.obraNome)}>
+                          <Button variant="ghost" size="sm" className="text-xs text-blue-700 gap-1" onClick={() => openEquipe(o.obraId, o.obraNome, o.obraIds)}>
                             <Eye className="h-3 w-3" /> Ver equipe
                           </Button>
                         </td>
@@ -530,7 +530,7 @@ export default function DashEfetivoObra() {
                             variant="ghost"
                             size="sm"
                             className="text-xs gap-1 text-blue-700 hover:text-blue-900"
-                            onClick={() => openEquipe(obra.obraId, obra.obraNome)}
+                            onClick={() => openEquipe(obra.obraId, obra.obraNome, obra.obraIds)}
                           >
                             <Eye className="h-3 w-3" /> Ver equipe
                           </Button>

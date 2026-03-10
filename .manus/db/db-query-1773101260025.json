@@ -1,0 +1,142 @@
+{
+  "query": "SELECT o.id, o.nome, o.companyId, c.nomeFantasia as empresa FROM obras o JOIN companies c ON o.companyId = c.id WHERE o.nome IN (SELECT nome FROM obras GROUP BY nome HAVING COUNT(DISTINCT companyId) > 1) ORDER BY o.nome;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT o.id, o.nome, o.companyId, c.nomeFantasia as empresa FROM obras o JOIN companies c ON o.companyId = c.id WHERE o.nome IN (SELECT nome FROM obras GROUP BY nome HAVING COUNT(DISTINCT companyId) > 1) ORDER BY o.nome;",
+  "rows": [
+    {
+      "id": "270004",
+      "nome": "CARAMURU - HH - CACHOEIRA PAULISTA",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "90003",
+      "nome": "CARAMURU - HH - CACHOEIRA PAULISTA",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270010",
+      "nome": "DEPÓSITO ITAGUAÇU",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "240004",
+      "nome": "DEPÓSITO ITAGUAÇU",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "90005",
+      "nome": "ESCRITÓRIO CENTRAL",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270005",
+      "nome": "ESCRITÓRIO CENTRAL",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "90004",
+      "nome": "HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270003",
+      "nome": "HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "180001",
+      "nome": "IGREJA SANTA RITA ",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270008",
+      "nome": "IGREJA SANTA RITA ",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "90002",
+      "nome": "LUCIANA - FINAL BLOCO B",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270002",
+      "nome": "LUCIANA - FINAL BLOCO B",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "150001",
+      "nome": "PALES ",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270007",
+      "nome": "PALES ",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "240001",
+      "nome": "POS OBRA",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270009",
+      "nome": "POS OBRA",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "270001",
+      "nome": "QIU 2 - FASE 4",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "90001",
+      "nome": "QIU 2 - FASE 4",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "60001",
+      "nome": "QIU 2 - FASE 4",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "270006",
+      "nome": "UTC - UNIDADE DE COMPOSTAGEM",
+      "companyId": "60005",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "120001",
+      "nome": "UTC - UNIDADE DE COMPOSTAGEM",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "60004",
+      "nome": "UTC - UNIDADE DE COMPOSTAGEM",
+      "companyId": "60002",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\tcompanyId\tempresa\n270004\tCARAMURU - HH - CACHOEIRA PAULISTA\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n90003\tCARAMURU - HH - CACHOEIRA PAULISTA\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270010\tDEPÓSITO ITAGUAÇU\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n240004\tDEPÓSITO ITAGUAÇU\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n90005\tESCRITÓRIO CENTRAL\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270005\tESCRITÓRIO CENTRAL\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n90004\tHOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270003\tHOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n180001\tIGREJA SANTA RITA \t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270008\tIGREJA SANTA RITA \t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n90002\tLUCIANA - FINAL BLOCO B\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270002\tLUCIANA - FINAL BLOCO B\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n150001\tPALES \t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270007\tPALES \t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n240001\tPOS OBRA\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270009\tPOS OBRA\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n270001\tQIU 2 - FASE 4\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n90001\tQIU 2 - FASE 4\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n60001\tQIU 2 - FASE 4\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n270006\tUTC - UNIDADE DE COMPOSTAGEM\t60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n120001\tUTC - UNIDADE DE COMPOSTAGEM\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n60004\tUTC - UNIDADE DE COMPOSTAGEM\t60002\tFC ENGENHARIA PROJETOS E OBRAS\n",
+  "stderr": "",
+  "execution_time_ms": 66
+}

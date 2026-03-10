@@ -654,7 +654,7 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
   // Filtro por obra (filtrar allHE se obraId)
   let filteredHE = allHE;
   if (filters?.obraId) {
-    const empIdsNaObra = new Set(allEmps.filter(e => e.obraAtualId === filters.obraId).map(e => e.id));
+    const empIdsNaObra = new Set(allEmps.filter(e => empObraIdMap.get(e.id) === filters.obraId).map(e => e.id));
     filteredHE = allHE.filter(he => empIdsNaObra.has(he.employeeId));
     // Recalcular totais com filtro
     totalHoras = 0; totalValor = 0;
@@ -1763,7 +1763,7 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
   }
 
   // Férias por obra (via obra_funcionarios)
-  const feriasEmpIds = [...new Set(allPeriods.map(p => p.employeeId))];
+  const feriasEmpIds = Array.from(new Set(allPeriods.map(p => p.employeeId)));
   const feriasEmpAlocs = feriasEmpIds.length > 0
     ? await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
         .from(obraFuncionarios).where(and(companyWhere(obraFuncionarios, companyId, companyIds), eq(obraFuncionarios.isActive, 1)))
@@ -2230,7 +2230,7 @@ async function getDashDocumentos(companyId: number, companyIds?: number[]) {
     .where(and(
       companyWhere(employees, companyId, companyIds), isNull(employees.deletedAt),
       sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`,
-      sql`${employees.id} NOT IN (SELECT employeeId FROM asos WHERE companyId IN (${sql.join(companyIds.map(id => sql`${id}`), sql`, `)}) AND deletedAt IS NULL AND dataValidade >= ${today})`,
+      sql`${employees.id} NOT IN (SELECT employeeId FROM asos WHERE companyId IN (${sql.join((companyIds || [companyId]).map(id => sql`${id}`), sql`, `)}) AND deletedAt IS NULL AND dataValidade >= ${today})`,
     ));
 
   // ── TREINAMENTOS ──
@@ -2672,7 +2672,7 @@ async function getDashCompetenciasAnual(companyId: number, ano?: number, company
       SUM(CAST(COALESCE(td.totalHorasExtras,'0') AS DECIMAL(10,2))) as horasExtras
     FROM timecard_daily td
     LEFT JOIN obras o ON td.obraId = o.id
-  WHERE td.companyId IN (${sql.join(companyIds.map(id => sql`${id}`), sql`, `)}) AND td.mesCompetencia LIKE ${year + '%'}
+  WHERE td.companyId IN (${sql.join((companyIds || [companyId]).map(id => sql`${id}`), sql`, `)}) AND td.mesCompetencia LIKE ${year + '%'}
     AND td.obraId IS NOT NULL
     GROUP BY o.id, o.nome
     ORDER BY horasNormais DESC

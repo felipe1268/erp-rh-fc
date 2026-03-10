@@ -39,7 +39,7 @@ import {
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb } from "./db";
-import { obraSns, employees, blacklistReactivationRequests } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies } from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -846,7 +846,7 @@ export const appRouter = router({
       return { success: true };
     }),
     // Funcionários alocados
-    funcionarios: protectedProcedure.input(z.object({ obraId: z.number() })).query(({ input }) => getObraFuncionarios(input.obraId)),
+    funcionarios: protectedProcedure.input(z.object({ obraId: z.number(), obraIds: z.array(z.number()).optional() })).query(({ input }) => getObraFuncionarios(input.obraId, input.obraIds)),
     // Check if employees already have active allocations (pre-validation)
     checkAllocations: protectedProcedure.input(z.object({
       employeeIds: z.array(z.number()),
@@ -868,7 +868,7 @@ export const appRouter = router({
     efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses, input.companyIds)),
     // Funcionários sem obra
     semObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosSemObra(input.companyId, input.companyIds)),
-    equipeObra: protectedProcedure.input(z.object({ obraId: z.number(), companyId: z.number() })).query(({ input }) => getEquipeObra(input.obraId, input.companyId)),
+    equipeObra: protectedProcedure.input(z.object({ obraId: z.number(), companyId: z.number(), obraIds: z.array(z.number()).optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEquipeObra(input.obraId, input.companyId, input.obraIds, input.companyIds)),
     efetivoDashMensal: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesRef: z.string() })).query(({ input }) => getEfetivoDashboardMensal(input.companyId, input.mesRef, input.companyIds)),
     // Transferência em lote
     transferirEmLote: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraDestinoId: z.number(),

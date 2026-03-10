@@ -549,9 +549,9 @@ export const avisoPrevioFeriasRouter = router({
         let vrDiario = 0;
         let vrConfigNome = '';
         let vrExtra: any = {};
+        // Buscar obra via alocação ativa (fora do try para uso posterior)
+        const [empObraAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, emp.id), eq(obraFuncionarios.isActive, 1)));
         try {
-          // Buscar obra via alocação ativa
-          const [empObraAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, emp.id), eq(obraFuncionarios.isActive, 1)));
           const obraId = empObraAloc?.obraId || null;
           let cfgRows: any[] = [];
           if (obraId) {
