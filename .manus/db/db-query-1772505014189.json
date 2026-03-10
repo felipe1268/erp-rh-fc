@@ -1,0 +1,25 @@
+{
+  "query": "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_NAME LIKE '%processo%' AND TABLE_SCHEMA = DATABASE();",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_NAME LIKE '%processo%' AND TABLE_SCHEMA = DATABASE();",
+  "rows": [
+    {
+      "TABLE_NAME": "processos_trabalhistas"
+    },
+    {
+      "TABLE_NAME": "processos_andamentos"
+    },
+    {
+      "TABLE_NAME": "processo_documentos"
+    },
+    {
+      "TABLE_NAME": "processo_aprendizado"
+    },
+    {
+      "TABLE_NAME": "processo_analises"
+    }
+  ],
+  "messages": [],
+  "stdout": "TABLE_NAME\nprocessos_trabalhistas\nprocessos_andamentos\nprocesso_documentos\nprocesso_aprendizado\nprocesso_analises\n",
+  "stderr": "",
+  "execution_time_ms": 372
+}

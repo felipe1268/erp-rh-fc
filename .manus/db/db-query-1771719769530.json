@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS company_bank_accounts (\n  id INT AUTO_INCREMENT NOT NULL,\n  companyId INT NOT NULL,\n  banco VARCHAR(100) NOT NULL,\n  codigoBanco VARCHAR(10),\n  agencia VARCHAR(20) NOT NULL,\n  conta VARCHAR(30) NOT NULL,\n  tipoConta ENUM('corrente','poupanca') NOT NULL DEFAULT 'corrente',\n  apelido VARCHAR(100),\n  cnpjTitular VARCHAR(20),\n  ativo TINYINT NOT NULL DEFAULT 1,\n  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (id),\n  INDEX cba_company (companyId)\n);\n\nALTER TABLE employees ADD COLUMN IF NOT EXISTS contaBancariaEmpresaId INT DEFAULT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS company_bank_accounts (\n  id INT AUTO_INCREMENT NOT NULL,\n  companyId INT NOT NULL,\n  banco VARCHAR(100) NOT NULL,\n  codigoBanco VARCHAR(10),\n  agencia VARCHAR(20) NOT NULL,\n  conta VARCHAR(30) NOT NULL,\n  tipoConta ENUM('corrente','poupanca') NOT NULL DEFAULT 'corrente',\n  apelido VARCHAR(100),\n  cnpjTitular VARCHAR(20),\n  ativo TINYINT NOT NULL DEFAULT 1,\n  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (id),\n  INDEX cba_company (companyId)\n);\n\nALTER TABLE employees ADD COLUMN IF NOT EXISTS contaBancariaEmpresaId INT DEFAULT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 322
+}

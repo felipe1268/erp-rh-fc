@@ -1,0 +1,8 @@
+{
+  "query": "SELECT o.id, o.nome, o.companyId, c.nome as empresa FROM obras o JOIN companies c ON o.companyId = c.id WHERE o.nome IN (SELECT nome FROM obras GROUP BY nome HAVING COUNT(DISTINCT companyId) > 1) ORDER BY o.nome;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT o.id, o.nome, o.companyId, c.nome as empresa FROM obras o JOIN companies c ON o.companyId = c.id WHERE o.nome IN (SELECT nome FROM obras GROUP BY nome HAVING COUNT(DISTINCT companyId) > 1) ORDER BY o.nome;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'c.nome' in 'field list'"
+  ]
+}

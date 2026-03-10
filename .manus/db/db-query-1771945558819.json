@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, HEX(SUBSTRING(nomeCompleto, 1, 2)) as hex2, nomeCompleto FROM employees WHERE id = 450001;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, HEX(SUBSTRING(nomeCompleto, 1, 2)) as hex2, nomeCompleto FROM employees WHERE id = 450001;",
+  "rows": [
+    {
+      "id": "450001",
+      "hex2": "4D41",
+      "nomeCompleto": "MATHEUS DONIZETTI ALVES RODRIGUES"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\thex2\tnomeCompleto\n450001\t4D41\tMATHEUS DONIZETTI ALVES RODRIGUES\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

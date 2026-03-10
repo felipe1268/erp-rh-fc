@@ -1,0 +1,5382 @@
+# ERP RH & DP - FC Engenharia - TODO
+
+## Fase 1: Infraestrutura e Core RH
+
+### Design e Tema
+- [x] Configurar tema escuro azul (#0A192F) com design system corporativo
+- [x] Configurar fontes (Roboto/Inter) e paleta de cores
+
+### Multi-Tenant
+- [x] Schema de empresas (tenants) com CNPJ, razão social, dados
+- [x] Isolamento de dados por tenant em todas as queries
+
+### Autenticação e Permissões
+- [x] Schema de perfis: ADM Master, ADM, Operacional, Avaliador, Consulta
+- [x] Tabela de permissões granulares por módulo e funcionalidade
+- [x] Middleware de verificação de permissões no backend
+- [x] Tela de gestão de usuários e atribuição de perfis
+
+### Core RH - Cadastro de Colaboradores
+- [x] Schema completo de colaboradores (dados pessoais, documentos, endereço, contato)
+- [x] Controle de status: Ativo, Férias, Afastado, Licença, Desligado, Recluso
+- [x] Histórico funcional (promoções, mudanças de setor/função)
+- [x] CRUD completo de colaboradores com formulário detalhado
+- [x] Pesquisa por Nome, CPF ou RG
+- [x] Ficha do colaborador para visualização
+
+### Layout e Navegação
+- [x] DashboardLayout com sidebar de módulos
+- [x] Rotas protegidas por perfil de acesso
+- [x] Página inicial com resumo/dashboard geral
+
+### Auditoria de Sistema
+- [x] Tabela de log de ações (quem, o quê, quando)
+- [x] Registro automático de alterações em registros críticos
+
+### Testes
+- [x] Testes unitários para rotas de autenticação
+- [x] Testes para estrutura de rotas e permissões (10 testes passando)
+
+## Fase 2: Módulos Operacionais (futuro)
+- [ ] Módulo SST (ASO, Treinamentos, EPIs, Acidentes, Riscos, OSS, Advertências)
+- [ ] Módulo Ponto e Folha (Integração Dixi, Espelho SCI)
+- [ ] Módulo Gestão de Ativos (Frota, Equipamentos, Extintores, Hidrantes)
+- [ ] Módulo Auditoria e Qualidade (Auditorias, Desvios, 5W2H, Químicos, DDS)
+- [ ] Módulo CIPA (Cronograma Eleitoral, Estabilidade)
+- [ ] Módulo Avaliação de Desempenho (integração do sistema existente)
+- [ ] Módulo Dashboards (10 dashboards interativos + pendências)
+- [ ] Manual de Utilização
+
+## Fase 2: Desenvolvimento em Andamento
+- [x] Ajustar tema para claro (branco/azul) igual ao sistema de avaliação
+- [x] Adicionar logo FC Engenharia na sidebar
+- [x] Criar páginas SST: ASO, Treinamentos, EPIs, Acidentes, Advertências, Riscos
+- [x] Criar páginas Ponto e Folha
+- [x] Criar páginas Gestão de Ativos: Veículos, Equipamentos, Extintores, Hidrantes
+- [x] Criar páginas Auditoria e Qualidade: Auditorias, Desvios, 5W2H, Químicos, DDS
+- [x] Criar páginas CIPA: Eleições e Membros
+- [x] Criar rotas tRPC para todos os novos módulos
+- [x] Atualizar Dashboard Home com cards de todos os módulos
+- [x] Registrar versão com descrição clara das melhorias
+- [x] Busca automática de dados pelo CNPJ (BrasilAPI) na tela de Empresas
+
+## Fase 3: Redesenho Ponto e Folha
+- [x] Corrigir erro removeChild na tela de Ponto e Folha
+- [x] Redesenhar página com upload separado por categoria (Vale, Folha, Cartão de Ponto)
+- [x] Implementar upload de arquivos XLS (cartão de ponto Dixi) - estrutura criada
+- [x] Implementar upload de arquivos PDF (folha/adiantamento contabilidade) - estrutura criada
+- [x] Vincular código Sn do cartão de ponto à obra para alocação automática do funcionário (aba Equipamentos Dixi)
+- [ ] Criar backend de processamento e armazenamento dos arquivos enviados
+- [ ] Tela de visualização dos dados processados por competência
+- [x] BUG CRÍTICO: Erro removeChild em todas as telas - RESOLVIDO (cache Vite corrompido, restart resolveu)
+- [x] Atualizar logo FC para versão em alta qualidade
+
+## Novas Funcionalidades Solicitadas
+- [x] Upload de documentos/certificados por treinamento do funcionário
+- [x] Ficha completa do colaborador com histórico de treinamentos, ASOs, advertências
+- [x] Busca por treinamento (pesquisar quem tem NR-35, NR-10, etc.)
+- [x] Lista Negra de funcionários demitidos que não podem ser recontratados
+- [x] Alerta automático ao tentar cadastrar funcionário da Lista Negra
+- [x] Status "Lista Negra" com mensagem de proibição visível
+- [x] BUG: Cards do Dashboard com texto cortado - corrigido layout vertical com bordas coloridas
+
+## Bugs Reportados - Produção
+- [x] BUG CRÍTICO: Erro removeChild persiste em produção - RESOLVIDO (import dinâmico do sonner no DashboardLayout convertido para estático, sonner.tsx corrigido para usar ThemeContext local ao invés de next-themes)
+- [x] BUG: Layout confuso e sobreposto em telas - RESOLVIDO (layout do Dashboard verificado e funcionando corretamente)
+- [x] BUG: Select com value vazio causando warnings - RESOLVIDO (corrigido para usar undefined)
+
+## Fase 4: 10 Dashboards Interativos
+- [x] Analisar planilha Excel original para mapear os 10 dashboards
+- [x] Criar rotas tRPC de dados agregados para dashboards
+- [x] Dashboard 1: Quadro de Pessoal (headcount por status, setor, cargo)
+- [x] Dashboard 2: Pendências (ASOs, treinamentos, auditorias, extintores vencidos)
+- [x] Dashboard 3: Treinamentos (realizados, vencidos por norma, evolução mensal)
+- [x] Dashboard 4: EPI (estoque, movimentação mensal, top EPIs)
+- [x] Dashboard 5: Acidentes (total, afastamentos, meta de dias, gravidade)
+- [x] Dashboard 6: Auditorias (status, NC, tipos, desvios)
+- [x] Dashboard 7: 5W2H (planos de ação, status, prioridades)
+- [x] Dashboard 8: Riscos (tipo, grau, setor, filtro por setor)
+- [x] Dashboard 9: Extintores e Hidrantes (status, validade, tipos)
+- [x] Dashboard 10: Desvios (status, tipos, setores, taxa resolução)
+- [x] Filtros dinâmicos por empresa e período em todos os dashboards
+- [x] Navegação integrada no menu lateral
+- [x] Testes unitários para rotas de dashboards (20 testes passando)
+
+## Fase 5: Importação em Massa via Excel
+- [x] Analisar schema de colaboradores para definir colunas da planilha modelo
+- [ ] Criar geração de planilha modelo Excel (.xlsx) para download
+- [ ] Criar rota tRPC de upload e parsing da planilha Excel
+- [ ] Criar rota tRPC de importação em lote dos colaboradores
+- [ ] Criar componente de importação no frontend (upload, preview, confirmação)
+- [ ] Integrar botão de importação na página de Colaboradores
+- [ ] Validação de dados (CPF, datas, campos obrigatórios)
+
+## Fase 6: Redesign Dashboard Acidentes (igual planilha original)
+- [ ] Atualizar backend com agregações: turno, tipo acidente, sexo, parte corpo, setor, lesão
+- [ ] Calcular taxa de frequência e índice relativo
+- [ ] Redesenhar frontend: meta circular, cards tipo/turno/sexo, top 5 setor, top 5 lesão, partes do corpo
+
+## Fase 7: Correção Geral de Bugs - Todas as Telas
+- [x] Corrigir erros de TypeScript pendentes (importExcel.ts)
+- [x] Verificar e corrigir cadastro de colaboradores (todos os campos) - 83 testes passando
+- [x] Verificar e corrigir todas as telas de CRUD (ASOs, Treinamentos, EPI, Acidentes, etc.) - TODOS PASSANDO
+- [x] Criar testes automatizados para validar cada módulo CRUD (63 testes CRUD + 20 outros)
+- [x] Verificar routers.ts por inconsistências de schema/input
+- [x] Testar build de produção sem erros - BUILD LIMPO
+- [x] Verificar formulários frontend para nomes de campos corretos
+- [x] Corrigir Ativos.tsx: Veículos (anoFabricacao, renavam, chassi), Equipamentos (marca, modelo, numeroSerie, localizacao)
+- [x] Corrigir SST.tsx: Acidentes (horaAcidente, parteCorpoAtingida, diasAfastamento, catData, testemunhas, acaoCorretiva)
+- [x] Corrigir AuditoriaQualidade.tsx: Auditorias (titulo, tipo Certificadora, resultado Observacao)
+- [x] Corrigir AuditoriaQualidade.tsx: Desvios (titulo, tipo NC_Maior/NC_Menor, responsavel, prazo)
+- [x] Corrigir AuditoriaQualidade.tsx: 5W2H (oQue, porQue, quantoCusta)
+- [x] Corrigir AuditoriaQualidade.tsx: DDS (dataRealizacao, descricao)
+- [x] Corrigir Cipa.tsx: Membros (electionId, representacao, inicioEstabilidade, fimEstabilidade, status)
+- [x] Corrigir Cipa.tsx: Eleições (mandatoInicio, mandatoFim, statusEleicao, dataInscricaoInicio, dataInscricaoFim)
+
+## Fase 8: Seed de Dados Completos para Validação
+- [x] Verificar/criar 4 empresas: FC Engenharia, Lock Naul, Hotel Consagrado, Júlio Ferraz
+- [x] Criar 8 colaboradores fictícios (2 por empresa) com dados pessoais completos
+- [x] Lançar treinamentos para todos os colaboradores (20 treinamentos)
+- [x] Lançar ASOs para todos os colaboradores (16 ASOs)
+- [x] Lançar advertências para alguns colaboradores (6 advertências)
+- [x] Lançar EPIs e entregas de EPIs (24 EPIs + 24 entregas)
+- [x] Lançar acidentes de trabalho (4 acidentes)
+- [x] Lançar riscos por setor (8 riscos)
+- [x] Lançar auditorias e desvios (5 auditorias + 5 desvios)
+- [x] Lançar planos de ação 5W2H (5 planos)
+- [x] Lançar DDS (5 DDS)
+- [x] Lançar membros e eleições CIPA (3 eleições + 4 membros)
+- [x] Lançar extintores e hidrantes (9 extintores + 5 hidrantes)
+- [ ] Validar visualmente todos os módulos com os dados
+
+## Fase 9: Seleção Múltipla, Ações em Lote e Upload Múltiplo
+- [ ] Criar componente reutilizável de tabela com checkbox de seleção múltipla
+- [ ] Barra de ações em lote (editar selecionados, excluir selecionados, selecionar todos)
+- [ ] Aplicar em Colaboradores
+- [ ] Aplicar em SST (ASOs, Treinamentos, Acidentes, Advertências, Riscos)
+- [ ] Aplicar em Ativos (Veículos, Equipamentos, Extintores, Hidrantes)
+- [ ] Aplicar em Auditoria e Qualidade (Auditorias, Desvios, 5W2H, DDS)
+- [ ] Aplicar em CIPA (Membros, Eleições)
+- [ ] Suporte a upload de múltiplos arquivos em Ponto e Folha
+- [ ] Suporte a upload de múltiplos arquivos em Treinamentos (certificados)
+- [x] Criar rota tRPC de exclusão em lote (deleteBatch)
+- [x] Seleção múltipla com checkbox em Uploads e Folha de Pagamento
+- [x] Upload de múltiplos arquivos simultaneamente (input multiple)
+
+## Fase 10: Validação de CNPJ
+- [x] Criar função de validação de CNPJ (algoritmo oficial de dígitos verificadores)
+- [x] Aplicar validação no backend (rota de criação de empresa)
+- [ ] Aplicar validação no frontend (formulário de cadastro de empresa)
+- [ ] Formatar CNPJ automaticamente no campo de input (XX.XXX.XXX/XXXX-XX)
+
+## Fase 11: Módulo Completo de Ponto e Folha de Pagamento
+### Schema / Banco de Dados
+- [x] Adicionar campo valorHora no employees (pessoal é horista)
+- [x] Adicionar campo banco (Caixa/Santander) e dados bancários no employees
+- [x] Criar tabela overtime_records (horas extras por pessoa/obra com % acréscimo)
+- [x] Criar tabela advance_payments (vales/adiantamentos com aprovação)
+- [x] Criar tabela vr_benefits (VR/iFood benefícios - custo separado)
+- [x] Criar tabela payroll_files (upload de arquivos da contabilidade - payrollUploads ampliada com 9 categorias)
+- [x] Criar tabela extra_payments (pagamentos por fora: diferença salário, HE)
+
+### Regras de Negócio
+- [x] Cálculo automático de horas extras (valor hora × % acréscimo × quantidade horas)
+- [ ] Verificação automática de ano bissexto para cálculo correto de dias
+- [x] Campo de % acréscimo de horas extras para cálculo correto
+- [x] Validação de vale: se funcionário faltou >10 dias, alerta + campo aprovação sim/não
+- [x] Separação vale vs pagamento na folha
+- [x] Relatório de pagamento separado por banco (Caixa x Santander)
+- [x] Upload múltiplo de arquivos de ponto (um por obra)
+
+### Frontend - Abas do Módulo
+- [x] Aba Uploads: upload múltiplo de arquivos por categoria (9 tipos)
+- [x] Aba Cartão de Ponto: visualização por funcionário/mês
+- [x] Aba Folha de Pagamento: espelho analítico + sintético da contabilidade
+- [x] Aba Pagamentos Extras: diferença salário, horas extras (com % acréscimo e cálculo automático)
+- [x] Aba Vales/Adiantamentos: lista com aprovação, alerta >10 faltas
+- [x] Aba VR/iFood Benefícios: custo separado por funcionário
+- [x] Aba Custo Total Funcionário: previsão desembolso (folha + extras + VR)
+
+### Dashboards
+- [ ] Dashboard de Horas Extras por obra
+- [ ] Dashboard de Horas Extras por pessoa (campeão de HE)
+- [ ] Dashboard de Previsão de Desembolso da folha
+
+### Parsers de Arquivos
+- [x] Parser Dixi XLS (cartão de ponto)
+- [x] Parser Espelho Adiantamento Analítico PDF
+- [x] Parser Adiantamento Sintético PDF
+- [x] Parser Adiantamento por Banco (CEF/Santander) PDF
+- [x] Parser Espelho Folha Analítico PDF
+- [x] Parser Folha Sintético PDF
+- [x] Parser Pagamento por Banco (CEF/Santander) PDF
+
+## Fase 12: Dashboard de Horas Extras
+- [x] Criar rota tRPC de dados agregados de horas extras (por obra, por pessoa, por mês)
+- [x] Dashboard com gráfico de HE por obra (barras horizontais)
+- [x] Ranking dos "campeões" de horas extras (top 10 por pessoa)
+- [x] Impacto financeiro total (custo de HE por obra e por pessoa)
+- [x] Evolução mensal de HE (gráfico de linha)
+- [x] Filtros por empresa e período
+- [x] Integrar na navegação dos dashboards
+
+## Bugs Reportados - Produção (Fase 13)
+- [ ] BUG: Erro removeChild na página de Colaboradores em produção
+- [ ] BUG: Erro removeChild na página de Ponto e Folha em produção
+
+## Fase 14: Correção removeChild + Seed Massivo
+- [x] BUG CRÍTICO: Corrigir erro removeChild em TODAS as telas (produção)
+- [x] Seed massivo: 15 funcionários por empresa (60 total)
+- [x] Seed: treinamentos, ASOs, advertências, faltas, EPIs para todos
+- [x] Seed: acidentes, riscos, auditorias, desvios, 5W2H, DDS
+- [x] Seed: extintores, hidrantes, veículos, equipamentos
+- [x] Seed: horas extras, folha de pagamento, vales
+- [x] Seed: membros CIPA, eleições
+- [x] Validar todas as telas no navegador sem erro
+- [x] Validar todos os dashboards com dados populados
+
+## Fase 15: Login + Seed Massivo
+- [x] Corrigir erro removeChild (removido Portal do Select, Dialog e DropdownMenu)
+- [x] Criar tela de login com usuário e senha
+- [x] Senha padrão inicial para novos usuários (fc2026)
+- [x] Funcionalidade de troca de senha
+- [x] Seed massivo: 15 funcionários por empresa (60 total)
+- [x] Seed: dados completos em todos os módulos para teste (2068 pontos, 150 ASOs, 184 treinamentos, 244 EPIs, etc.)
+- [x] Criar opção de limpeza geral do banco de dados em Configurações
+- [x] Proteger limpeza com senha de confirmação (LIMPAR2026)
+- [x] Permitir limpeza seletiva por módulo (colaboradores, treinamentos, etc.)
+- [x] Testes unitários para settings e userManagement (87 testes passando)
+
+## Fase 16: Melhorias no Formulário de Colaboradores
+- [x] Adicionar campo de seleção de empresa no formulário de cadastro/edição de colaborador
+- [x] Redesenhar layout do formulário para ficar organizado e profissional (tabs com espaçamento correto)
+- [x] Corrigir tabs sobrepostas (Pessoal, Documentos, Endereço, Profissional, Bancário)
+- [x] Melhorar espaçamento e alinhamento dos campos em grid 2-3 colunas
+- [x] BUG CRÍTICO: Erro React #31 (objeto Date renderizado no JSX) ao clicar em Ver funcionário
+- [x] Corrigir dialog de visualização de funcionário para formatar datas corretamente
+- [x] Adicionar campo Valor da Hora no formulário (base para cálculo da folha)
+- [x] Melhorar aba Bancário: banco de recebimento (Caixa/Santander/Bradesco/Itaú/BB/Nubank/Inter/C6), tipo conta (Salário/Corrente/Poupança), dados PIX completos com tipo de chave
+
+## Fase 17: Correção Bug removeChild na SST
+- [x] BUG CRÍTICO: Erro removeChild na página /sst (produção)
+- [x] Investigar e corrigir causa raiz em TODAS as páginas e componentes (44 padrões && convertidos para ternário ? : null)
+
+## Fase 18: Correção Definitiva removeChild - Portais Radix UI
+- [x] Diagnóstico: erro causado por Radix UI Portals montando no document.body e conflitando com React reconciler em produção
+- [x] Criar container fixo #radix-portal no index.html para todos os portais
+- [x] Corrigir Dialog Portal para usar container fixo
+- [x] Corrigir Sheet Portal para usar container fixo (usado pelo Sidebar mobile)
+- [x] Corrigir DropdownMenu Portal para usar container fixo
+- [x] Corrigir Tooltip Portal para usar container fixo
+- [x] Corrigir Popover Portal para usar container fixo
+- [x] Corrigir AlertDialog Portal para usar container fixo
+- [x] Corrigir ContextMenu Portal para usar container fixo
+- [x] Corrigir HoverCard Portal para usar container fixo
+- [x] Corrigir Menubar Portal para usar container fixo
+- [x] Build de produção compilando sem erros
+
+## Dashboard Aviso Prévio - Melhorias
+- [x] Adicionar KPI "Custo Concluído" no dashboard
+- [x] Reorganizar KPIs para visão rápida (uma batida de olho)
+- [x] Tornar todos os gráficos responsivos
+
+## Fase: Calendário Automático de Férias
+- [x] Backend: cálculo automático de períodos aquisitivos e concessivos por colaborador
+- [x] Backend: endpoint para gerar calendário de férias automático
+- [x] Backend: endpoint para RH definir/alterar datas de férias
+- [x] Frontend: calendário visual com cores diferenciadas (1º período azul, 2º período laranja)
+- [x] Frontend: indicador visual quando RH altera data sugerida (badge "Alterado")
+- [x] Frontend: RH pode confirmar ou alterar datas de férias obrigatórias
+- [x] Frontend: experiência agradável e fácil leitura dos dados
+- [x] Backend: gerar períodos automáticos de TODOS os ativos de uma vez
+- [x] Backend: confirmar férias vencidas em lote (1 clique "Já foi pago")
+- [x] Frontend: botão "Confirmar todos anteriores" para validar períodos antigos em lote
+
+## Bug Fixes - 2026-02-27
+- [x] Fix RaioXFuncionario crash: "Rendered more hooks than during the previous render" - moved avaliacoesQuery hook before conditional return
+- [x] Fix drizzle schema: replaced default('CURRENT_TIMESTAMP') with defaultNow() for proper SQL generation
+- [x] Fix dashboard test: updated expected procedure count from 6 to 7
+
+## Fase 19: Solução Definitiva removeChild - Abordagem Diferente
+- [x] Investigar causa raiz real nos logs do browser (erro só em produção, não no dev)
+- [x] Implementar patch no React DOM (dom-patch.ts) para ignorar removeChild/insertBefore em nós órfãos
+- [x] Melhorar Error Boundary para recuperar automaticamente de erros de DOM
+- [x] Build compilando sem erros, ficha do colaborador abrindo OK
+- [ ] Testar em produção após publicação
+
+## Fase 20: Expandir Ficha do Colaborador
+- [ ] Expandir dialog de visualização da ficha para ser maior (max-w-4xl ou 5xl)
+- [ ] Melhorar espaçamento entre campos para não parecer amontoado
+- [ ] Layout em grid mais espaçado com labels e valores bem separados
+
+## Fase 21: Cálculo Automático Valor da Hora
+- [x] Calcular valor da hora automaticamente ao digitar salário base (salário ÷ horas mensais)
+- [x] Campo valor da hora agora é somente leitura (calculado automaticamente)
+- [x] Alterar horas mensais também recalcula o valor da hora
+
+## Fase 22: Bug toISOString ao Editar Colaborador
+- [x] BUG: Erro "value.toISOString is not a function" ao salvar edição de colaborador (mudar empresa)
+- [x] Corrigido: openEdit agora trata datas como string e exclui createdAt/updatedAt
+- [x] Corrigido: handleSubmit remove id, createdAt, updatedAt antes de enviar ao backend
+
+## Fase 23: Expandir Dialog Edição + PDF/Impressão/WhatsApp
+- [ ] Expandir grids do formulário de edição para 4 colunas
+- [ ] Adicionar botões de PDF, Impressão e Compartilhar via WhatsApp na ficha de visualização
+- [ ] Gerar PDF da ficha completa do colaborador
+- [x] Adicionar checkbox de seleção múltipla na tabela de colaboradores
+- [x] Botão "Excluir Selecionados" para exclusão em massa
+- [x] Checkbox "Selecionar Todos" no cabeçalho da tabela
+- [x] Endpoint de exclusão em massa no backend
+- [x] Sidebar fixa (sticky) - já é fixa pelo componente Sidebar do shadcn/ui
+- [x] Remover 5W2H do menu lateral (fora do escopo por enquanto)
+- [x] Remover Extintores/Hidrantes do menu lateral (fora do escopo por enquanto)
+- [x] Verificação de CPF duplicado ao cadastrar colaborador (BLOQUEAR cadastro, mostrar erro com nome e empresa)
+- [x] Remover módulo Auditoria e Qualidade completo (menu, rota, página, dashboards)
+- [x] Auto-preenchimento de dados ao digitar CPF - CANCELADO (CPF não tem API pública gratuita)
+
+## Fase 24: Corrigir Dialog de Cadastro/Edição
+- [x] Dialog cortando campos - ajustar para tela cheia responsiva (!max-w-7xl w-[95vw])
+- [x] Importação em massa via Excel - planilha modelo para download
+- [x] Endpoint backend para processar upload de Excel
+- [x] Botão "Importar Excel" na tela de Colaboradores
+- [x] Relatório de importação (sucesso/erros)
+
+## Fase 25: Módulo de Obras + Rateio de Ponto
+- [x] Tabela `obras` no schema (nome, endereço, cliente, status, datas)
+- [x] Tabela `obra_funcionarios` para vincular funcionários à obra
+- [x] Campo `obraAtualId` no employee para saber onde está alocado
+- [x] Funções de banco (CRUD) para obras
+- [x] Rotas tRPC para obras
+- [x] Página frontend de Obras (cadastro, listagem, edição)
+- [x] Menu "Obras" na sidebar (GESTÃO DE PESSOAL)
+- [x] Campo "Obra Atual" no cadastro/edição de colaborador
+- [ ] Rateio automático de horas por obra no upload de ponto (lê código do relógio)
+- [x] Importação em massa via Excel - botão na tela de Colaboradores
+- [x] Correção do dialog cortando campos (tamanho da tela)
+- [x] Reorganizar menu OPERACIONAL: separar Ponto e Folha
+- [x] Menu Fechamento de Ponto (substituir Ponto e Folha)
+- [x] Menu Folha de Pagamento (com sub-itens Vale e Pagamento)
+- [x] Menu Controle de Documentos (Treinamentos, Exames, etc.)
+- [x] Menu Vale Alimentação (IFood Benefícios)
+- [x] Remover Gestão de Ativos do menu OPERACIONAL
+- [x] Remover categoria SST separada do menu (mover para Controle de Documentos)
+- [x] Página de Fechamento de Ponto
+- [x] Página de Folha de Pagamento (Vale + Pagamento)
+- [x] Página de Controle de Documentos
+- [x] Página de Vale Alimentação
+
+## Fase 26: Controle de Revisões do ERP
+- [x] Criar changelog completo de todas as revisões (CHANGELOG.md)
+- [x] Adicionar indicador de versão/revisão no rodapé do sistema
+- [x] Exibir número da revisão atual na sidebar ou footer
+- [x] Seed: 131 funcionários reais da FC Engenharia cadastrados
+- [x] Corrigir placeholder de busca: "carga" → "função"
+- [x] Busca automática de endereço pelo CEP (ViaCEP) no formulário de Colaboradores
+- [x] BUG: Erro ao salvar/editar colaborador - Failed query UPDATE employees
+
+## Fase 28: Cadastro de Setores e Reorganização do Menu
+- [ ] Criar tabela de setores no banco de dados (vinculada à empresa)
+- [ ] CRUD backend de setores (listar, criar, editar, excluir)
+- [ ] Página de gestão de Setores
+- [ ] Reorganizar menu PRINCIPAL: Empresas, Setores, Colaboradores, Obras
+- [ ] Remover campo "Cargo" do formulário de colaboradores (deixar só Função)
+- [ ] Campo Setor no formulário de colaboradores como Select (puxando da tabela de setores)
+
+## Fase 28: Cadastro de Setores/Funções e Reorganização do Menu
+- [ ] Criar tabela de setores no banco (vinculada à empresa)
+- [ ] Criar tabela de funções no banco (vinculada à empresa)
+- [ ] CRUD backend de setores e funções
+- [ ] Página de gestão de Setores
+- [ ] Página de gestão de Funções
+- [ ] Reorganizar menu: CADASTROS (Empresas, Setores, Funções, Colaboradores, Obras)
+- [ ] Remover campo "Cargo" do formulário de colaboradores
+- [ ] Campo Setor como Select no formulário de colaboradores
+- [ ] Campo Função como Select no formulário de colaboradores
+- [x] Empresa padrão: botão estrela para definir empresa padrão na página de Empresas
+- [x] Empresa padrão: ao entrar no sistema abre na empresa definida como padrão (manter seletor para trocar)
+- [x] Empresa padrão aplicada em: Home, Colaboradores, Usuários, DashboardFilters (todos os dashboards)
+- [x] Bug: título do diálogo de edição mostra "Órgão" ao invés de "Editar Colaborador" - corrigido com DialogDescription
+- [x] Jornada de Trabalho: separar em dois campos (Entrada e Saída) com seleção rápida de horários
+- [x] Bug: erro SQL ao atualizar colaborador - corrigido com whitelist de campos e conversão de tipos
+- [x] Bug: campo "Cargo" removido da aba Profissional (ficou apenas "Função")
+- [x] Bug: Select "SelecioneCLT" concatenado no Tipo de Contrato - corrigido via sanitização
+- [x] Lançar ~130 funcionários da FC Engenharia (CNPJ 29.353.906/0001-71) no sistema via script - 131 inseridos com sucesso
+- [x] Reorganizar menu: criar grupo CADASTRO com Empresa, Colaboradores, Obras, Setores, Função
+- [x] Criar página CRUD de Setores (por empresa)
+- [x] Criar página CRUD de Funções (por empresa)
+- [x] Registrar rotas de Setores e Funções no App.tsx
+- [x] Bug: Selects concatenando placeholder com valor - corrigido usando value="none" ao invés de undefined
+- [x] Jornada de Trabalho: separada em 3 campos (Entrada, Intervalo, Saída)
+- [x] Reescrever Setores.tsx com layout padrão igual Obras (título, subtítulo, seletor empresa, busca, card)
+- [x] Reescrever Funcoes.tsx com layout padrão igual Obras
+- [x] Criar seletor de empresa global fixo no topo (header) que vale para todas as páginas
+- [x] Remover seletores de empresa locais de cada página (usar Context global)
+- [x] VARREDURA COMPLETA: corrigir TODOS os Selects com placeholder concatenado em TODAS as páginas do sistema
+## Fase 29: Bugs Obras
+- [x] BUG: Não é possível criar uma nova obra (erro ao salvar) - corrigido (cleanForm converte strings vazias para undefined)
+- [x] BUG: Select de status da obra sobrepondo nomes - corrigido (valor padrão Planejamento em vez de "none")
+- [x] BUG: Botão "Nova noite" - era tradução automática do Safari/iOS, adicionado lang=pt-BR e translate=no
+- [x] VARREDURA: Verificar textos de botões e títulos em TODAS as páginas - todos corretos no código
+## Fase 30: Limpeza de Módulos e Dados
+- [x] Remover módulos fora do escopo: SST, CIPA, Ativos, Auditoria Qualidade, Químicos
+- [x] Remover dashboards dos módulos removidos (mantidos: Colaboradores e Horas Extras)
+- [x] Remover rotas tRPC e funções de banco dos módulos removidos
+- [x] Limpar todos os funcionários cadastrados do banco de dados
+- [x] Corrigir bug de criação de obra (strings vazias em campos date)
+- [x] Corrigir bug de Select de status sobrepondo nomes
+- [x] Atualizar menu lateral para refletir apenas módulos ativos
+## Fase 31: Selects Dinâmicos de Setor e Função
+- [x] Transformar campo Função em Select dinâmico (puxando da tabela funcoes da empresa selecionada)
+- [x] Transformar campo Setor em Select dinâmico (puxando da tabela setores da empresa selecionada)
+- [x] Atualizar ao trocar empresa no formulário
+## Fase 32: Jornada de Trabalho Dia a Dia
+- [x] Reestruturar campo jornada para tabela dia a dia (Seg-Dom) com Entrada, Intervalo (duração), Saída
+- [x] Atualizar backend para salvar/carregar jornada como JSON
+- [x] Atualizar visualização do colaborador para mostrar jornada dia a dia
+## Fase 33: Simplificar Obras + Bug Select Setor
+- [x] BUG: Select Setor concatenando valor duplicado - removido setor duplicado do banco + validação de duplicata
+- [x] Simplificar formulário de Obras: Nome, Nº Orçamento, Sn, Status, Endereço (CEP), Data Início, Data Término, Observações
+- [x] Remover campos desnecessários: Código, Cliente, Responsável, Cidade, Estado, Valor Contrato, Data Conclusão Real
+- [x] Adicionar campo Sn (código de identificação do relógio de ponto)
+- [x] Busca automática de endereço pelo CEP (ViaCEP)
+## Fase 34: Linha Padrão na Jornada
+- [x] Adicionar linha "Padrão" no topo da tabela de jornada que preenche todos os dias ao ser alterada
+## Fase 35: Bug - Dados de Colaboradores não salvando
+- [x] Investigar por que dados inseridos/editados nos colaboradores não estão sendo persistidos
+- [x] Corrigir o problema de salvamento (create e update)
+- [x] Verificar que a linha Padrão da jornada está funcionando corretamente
+- [x] Formatar exibição da jornada na ficha do colaborador (resumida e bonita, não JSON bruto)
+- [x] Formatar CPF (000.000.000-00) em TODAS as telas do sistema
+- [x] Formatar RG, CEP, PIS, CNPJ, Telefone e demais documentos em TODAS as telas
+- [x] REGRA PERMANENTE: Todos os números de documentos devem ser exibidos formatados conforme padrão brasileiro
+## Fase 36: Bug - Importação de colaboradores via Excel não funciona
+- [x] Investigar por que a importação retorna 0 importados e 0 erros
+- [x] Corrigir o código de importação para funcionar com a planilha modelo
+- [x] Criar rota uploadExcel unificada (parse + import em uma chamada)
+- [x] Corrigir parseDate para não depender de XLSX.SSF.parse_date_code
+- [x] Adicionar credentials: include nos fetch calls
+- [x] Melhorar tratamento de erros no frontend (detectar erros tRPC)
+
+## Fase 37: Módulo Completo de Tratamento de Cartão de Ponto
+### Análise e Schema
+- [x] Analisar estrutura dos 4 arquivos DIXI reais para mapear campos
+- [x] Criar/atualizar schema de registros de ponto (time_records) com campos completos
+- [x] Vincular SN do relógio à obra automaticamente (tabela obras.snRelogioPonto)
+
+### Backend - Parser e Regras de Negócio
+- [x] Parser DIXI robusto: ler múltiplos arquivos XLS e extrair batidas por funcionário/dia
+- [x] Identificação automática de obra pelo número SN do relógio
+- [x] Vincular funcionário pelo nome/CPF ao cadastro de colaboradores
+- [x] Cálculo de horas trabalhadas por dia (entrada/saída, descontando intervalo)
+- [x] Cálculo automático de horas extras (comparar com jornada cadastrada do colaborador)
+- [x] Detecção de inconsistências: falta de batida, batida ímpar, horário fora do padrão
+- [x] Gerar lista de inconsistências com status (pendente, justificado, advertência)
+
+### Frontend - Tela de Fechamento de Ponto
+- [x] Upload múltiplo de arquivos DIXI (um por obra)
+- [x] Visualização por competência (mês/ano) com resumo geral
+- [x] Tabela de funcionários com horas trabalhadas, HE, faltas, inconsistências
+- [x] Detalhe por funcionário: batidas dia a dia com destaque de problemas
+- [x] Lançamento manual de batidas (destacado visualmente como "ajuste RH")
+- [x] Lista de inconsistências com link para gerar advertência
+- [x] Exportação de relatório de ponto por funcionário/obra
+
+### Integração
+- [x] Base de dados pronta para consulta pela Folha de Pagamento
+- [x] Funcionários com lançamento manual destacados para avaliação futura
+
+## Fase 38: Redesign Controle de Documentos
+### Schema e Backend
+- [x] Atualizar tabela ASOs com campos: tipo exame, validade em dias, data vencimento, apto/não apto, médico, CRM, exames realizados, upload PDF
+- [x] Criar tabela de Atestados (data, tipo, CID, dias afastamento, médico, upload PDF)
+- [x] Atualizar tabela Advertências com upload PDF
+- [x] Atualizar tabela Treinamentos com upload PDF de certificado
+- [x] Cadastro de Tipos de ASO (Admissional, Periódico, Retorno ao Trabalho, Mudança de Função, Demissional)
+- [x] Cálculo automático de status (Válido, X dias para vencer, Vencido)
+- [x] Rotas tRPC para CRUD de cada tipo de documento com upload S3
+
+### Frontend
+- [x] Tela de Controle de Documentos com 4 abas: ASO, Treinamentos, Atestados, Advertências
+- [x] Tabela de ASOs no estilo da planilha (NÚM, Colaborador, Tipo, Data Emissão, Validade, Status, Vencimento, Apto, Médico, CRM, Exames)
+- [x] Status com cores: verde (Válido), amarelo (X dias para vencer), vermelho (Vencido)
+- [x] Upload de PDF em cada registro (botão Anexar PDF + upload S3)
+- [x] Botão de download/visualização do PDF (ícone olho quando PDF anexado)
+- [x] Filtros por status, tipo de exame, colaborador
+- [x] Importação em massa dos dados da planilha ASO enviada (110 ASOs importados com sucesso)
+
+### Cadastro (menu lateral)
+- [ ] Adicionar item "ASO" no menu Cadastro para gerenciar tipos de exame padrão
+
+## Fase 39: Cards de Resumo Clicáveis e Responsivos
+- [ ] Cards de resumo (ASOs, Vencidos, A Vencer, Treinamentos, Atestados, Advertências) clicáveis
+- [ ] Ao clicar em um card, filtrar automaticamente a tabela/aba correspondente
+- [ ] Feedback visual no card selecionado (borda, sombra ou destaque)
+- [ ] Clicar novamente no card ativo remove o filtro (volta a mostrar todos)
+- [ ] Layout responsivo dos cards em telas menores (empilhar em 2 ou 3 colunas)
+
+## Fase 39b: Edição de ASOs e Vínculo com Cadastro de Colaboradores
+- [ ] Botão de editar em cada linha da tabela de ASOs (ícone lápis)
+- [ ] Dialog de edição de ASO com todos os campos preenchidos
+- [ ] Rota tRPC de update para ASOs
+- [ ] Seleção de colaborador vinculada ao cadastro de funcionários ATIVOS (não permitir inativos)
+- [ ] Não permitir criar ASO para funcionário não cadastrado
+- [ ] Aplicar mesma lógica para Treinamentos (edição + colaborador do cadastro)
+- [ ] Aplicar mesma lógica para Atestados (edição + colaborador do cadastro)
+- [ ] Aplicar mesma lógica para Advertências (edição + colaborador do cadastro)
+
+## Fase 39c: Correção - Colaborador SEMPRE do cadastro + Edição
+- [x] Backend: rotas update para Atestados, Treinamentos e Advertências
+- [x] Frontend: dropdown de colaborador filtra APENAS ativos do cadastro (employees)
+- [x] Frontend: botão editar (lápis) em cada linha de ASO, Treinamentos, Atestados, Advertências
+- [x] Frontend: dialog de edição reutiliza mesmo formulário de criação preenchido com dados existentes
+- [x] Frontend: mutation de update no frontend para todas as 4 abas
+
+## REVISÃO_01: Melhorias Fechamento de Ponto e Controle de Documentos
+### Fechamento de Ponto
+- [x] Botão limpar base do mês (apenas ADM)
+- [x] Rateio de mão de obra por obra com filtro por equipamento/obra
+- [x] Indicadores/cards clicáveis como filtros
+- [x] Verificação de duplicidade antes de importar dados (perguntar se quer sobrescrever)
+- [x] Auditoria de ajustes manuais (salvar nome do usuário que fez o ajuste)
+### Controle de Documentos
+- [x] Abas coloridas para melhor identificação visual
+- [x] Sistema de advertências progressivas conforme CLT (3 advertências → suspensão → justa causa)
+- [x] Modelos de texto normatizados para advertência verbal, escrita, suspensão e justa causa
+### Raio-X do Funcionário
+- [x] Raio-X completo consolidando TODOS os módulos (ASOs, treinamentos, atestados, advertências, ponto, folha, EPIs)
+- [x] Nome do colaborador clicável em TODAS as telas abrindo o Raio-X (Colaboradores, Controle de Documentos, Fechamento de Ponto, Vale Alimentação)
+- [x] Desligados não aparecem nas contagens de vencidos/a vencer
+### Pendente
+- [ ] Geração de PDF por obra e por funcionário para análise ponto a ponto
+
+## REVISÃO_01b: Rateio Automático por Obra no Upload DIXI
+- [x] No upload DIXI, ler o número Sn do equipamento de cada registro
+- [x] Cruzar Sn com a tabela de Equipamentos Dixi vinculados a Obras
+- [x] Gerar rateio automático de horas por obra no momento do upload
+- [x] Calcular custo por obra (horas × valor hora do funcionário)
+- [x] Exibir rateio na aba "Rateio por Obra" com dados reais gerados automaticamente
+
+## REVISÃO_02: Expandir Telas e Filtro por Obra
+### Raio-X do Funcionário
+- [x] Expandir modal Raio-X para fullscreen/maximizado (ocupa toda a tela)
+- [x] Melhorar layout interno com mais espaço para tabelas e dados
+- [x] Cards de resumo maiores e mais legíveis
+### Fechamento de Ponto
+- [x] Adicionar filtro/select por Obra (Todas as Obras ou obra específica)
+- [x] Filtrar Resumo por Colaborador pela obra selecionada
+- [x] Filtrar Rateio por Obra pela obra selecionada
+### Regra Geral
+- [x] SEMPRE expandir telas ao máximo para melhor visualização em todas as telas futuras
+
+## REVISÃO_02b: Alerta Múltiplas Obras
+- [x] Detectar funcionários que trabalharam em mais de uma obra no mês
+- [x] Exibir alerta visual (amarelo/vermelho) no Resumo e no Rateio
+- [x] Indicar quais obras o funcionário trabalhou para verificação
+
+## REVISÃO_03: Upload DIXI Inteligente + Filtro Dinâmico + Validação SN
+### Upload DIXI
+- [ ] Upload não depende mais do mês selecionado - sistema lê as datas do arquivo e aloca na competência correta automaticamente
+- [ ] Se arquivo contém dados de múltiplos meses, distribuir registros por competência correta
+- [ ] Remover campo de competência do dialog de upload (botão serve apenas para subir arquivos)
+### Filtro de Data
+- [x] Substituir input type=month por seletor dinâmico com botões < > de navegação mês a mês
+- [x] Design mais intuitivo e bonito para o filtro de competência
+### Validação de SN
+- [x] Bloquear upload se SN do arquivo não estiver vinculado a nenhuma obra cadastrada
+- [x] Mensagem de erro clara solicitando cadastro prévio do SN antes do upload
+- [x] Exibir número SN no rateio por obra
+### Alerta de Alteração de SN
+- [x] Ao alterar SN no cadastro de obras/equipamentos, exibir alerta sobre impacto no rateio
+- [x] No relatório de rateio, indicar erro quando SN não tem obra definida
+
+## REVISÃO_03: Upload DIXI Inteligente + Filtro Dinâmico + Validação SN + Detalhe por Obra
+### Upload DIXI Inteligente (REGRA MÃE)
+- [x] REGRA MÃE: NUNCA alocar registro no mês errado — sempre respeitar data do arquivo
+- [x] Upload auto-detecta mês dos registros do arquivo (não depende do filtro de mês)
+- [x] Distribuir registros por competência correta baseado na data do arquivo
+- [x] Remover campo de competência do dialog de upload
+- [x] Pré-validação: mostrar resumo de meses detectados antes de importar
+- [x] Alerta informativo quando arquivo contém registros de múltiplos meses
+### Filtro de Data Dinâmico
+- [x] Substituir input type=month por seletor com botões < > de navegação mês a mês
+- [x] Design intuitivo e bonito para o filtro de competência
+### Validação de SN Obrigatória
+- [x] Bloquear upload se SN do arquivo não estiver vinculado a nenhuma obra cadastrada
+- [x] Mensagem de erro clara solicitando cadastro prévio do SN antes do upload
+### Detalhe do Funcionário por Obra
+- [x] Na tela de detalhe (Registro Diário), separar registros por obra
+- [x] Mostrar nome da obra como header de cada grupo de registros
+### SN no Rateio
+- [x] Exibir número SN do equipamento no rateio por obra
+### Alertas de Alteração de SN
+- [x] Ao alterar SN no cadastro de obras, exibir alerta sobre impacto no rateio
+- [x] No relatório de rateio, indicar erro quando SN não tem obra definida
+
+## FIX: Dialog de Upload DIXI cortado
+- [x] Expandir dialog de upload e adicionar scroll interno para conteúdo longo
+
+## REVISÃO_04: Filtro Visual Ano/Mês + Consolidação Mensal
+### Filtro Visual de Ano/Mês
+- [x] Seletor de ano no topo
+- [x] 12 botões de meses com cores: Azul (com lançamento), Cinza (sem lançamento), Verde (consolidado)
+- [x] Substituir filtro atual por novo layout visual
+### Consolidação Mensal
+- [x] Criar tabela pontoConsolidacao no schema (companyId, mesReferencia, consolidadoPor, consolidadoEm, status)
+- [x] Rota consolidar: marca mês como consolidado, registra quem e quando
+- [x] Rota desconsolidar: apenas admin master pode desconsolidar
+- [x] Bloqueio de upload DIXI quando mês consolidado
+- [x] Bloqueio de lançamento manual quando mês consolidado
+- [x] Bloqueio de limpar base quando mês consolidado
+- [x] Botão "Consolidar Mês" visível na interface
+- [x] Nome do responsável pela consolidação visível no filtro e relatório
+- [x] Rota getMonthStatuses: retorna status de todos os meses de um ano (sem dados, com dados, consolidado)
+
+## REVISÃO_04b: Conflito Obra/Dia + Consolidação + SN Vinculado
+### Conflito de Obras no Mesmo Dia
+- [x] Detectar funcionário com registro em 2+ obras na mesma data
+- [x] Marcar como "Conflito de Obra" com alerta vermelho no detalhe
+- [x] Card de alerta mostrando dias com conflito e quais obras
+- [x] Opção de validar (deslocamento real) ou rejeitar (erro de lançamento)
+### SN Sempre Vinculado
+- [x] SN nunca digitado, sempre puxado da base de cadastro da obra
+- [x] Exibir SN junto ao nome da obra em todas as telas (detalhe, rateio)
+### Consolidação Mensal
+- [x] Rotas consolidar/desconsolidar no backend
+- [x] Bloqueio de upload/lançamento/limpar quando consolidado
+- [x] Botão "Consolidar Mês" na interface
+- [x] Nome do responsável pela consolidação visível
+### Filtro Visual Ano/Mês
+- [x] Seletor de ano + 12 botões de meses
+- [x] Azul = com lançamento, Cinza = sem lançamento, Verde = consolidado
+- [x] Rota getMonthStatuses retornando status de cada mês
+
+## REVISÃO_05: Botão de Impressão/PDF
+- [x] Adicionar botão de impressão na barra de ações do Fechamento de Ponto
+- [x] Gerar PDF/imprimir do Resumo por Colaborador
+- [x] Gerar PDF/imprimir do Rateio por Obra (separado por obra)
+- [x] Gerar PDF/imprimir do Detalhe do Funcionário (registro diário)
+- [x] Layout de impressão profissional com cabeçalho FC Engenharia, data, competência
+
+## REVISÃO_05b: Resolução Fluida de Conflitos e Inconsistências
+
+### Conflitos de Obra/Dia — Ações Inline
+- [x] Cada conflito clicável expande inline mostrando registros lado a lado
+- [x] Botão "Manter na Obra A" — remove registro da obra errada
+- [x] Botão "Manter na Obra B" — remove registro da obra errada
+- [x] Botão "Confirmar Deslocamento" — valida que esteve nas duas obras
+- [x] Botão "Excluir Duplicado" — remove registro duplicado (erro de lançamento)
+- [x] Backend: rota resolveConflito com ações (manter_obra, confirmar_deslocamento, excluir_duplicado)
+
+### Inconsistências — Ações Inline
+- [x] Cada inconsistência clicável expande inline com detalhes + ações rápidas
+- [x] Ações rápidas: Justificar, Corrigir (lançar manual), Advertência — tudo inline
+- [x] Sem dialog separado — fluxo fluido no mesmo lugar
+
+### Botão de Impressão/PDF
+- [x] Botão Imprimir/PDF na barra de ações
+- [x] Impressão do Resumo por Colaborador
+- [x] Impressão do Rateio por Obra
+- [x] Impressão do Detalhe do Funcionário
+- [x] Layout profissional A4 paisagem com header FC Engenharia
+
+## FIX: Formatação de Valores Monetários
+- [x] Formatar campos de Salário Base e Valor da Hora no padrão brasileiro (ponto milhares, vírgula centavos)
+- [x] Aplicar formatação em todos os campos monetários do sistema
+
+## REVISÃO_06: Impressão Ficha + Rodapé LGPD
+- [x] Botão de impressão/PDF na Ficha do Colaborador
+- [x] Rodapé LGPD em TODOS os documentos: nome do usuário, data/hora, aviso confidencialidade
+- [x] Aplicar rodapé LGPD no Fechamento de Ponto (Resumo, Rateio, Detalhe)
+- [x] Aplicar rodapé LGPD na Ficha do Colaborador
+
+## REVISÃO_07: Melhoria de Navegação nas Inconsistências
+- [x] Exibir registros do dia da inconsistência ao expandir (batidas registradas)
+- [x] Adicionar link/botão para navegar ao detalhe do funcionário diretamente da inconsistência
+- [x] Mostrar informações contextuais (obra, horários registrados) na área expandida
+- [x] Melhorar layout da área expandida com mais informações úteis para resolução
+
+## REVISÃO_08: Múltiplos SNs por Obra + Regras de Negócio
+- [x] Criar tabela obra_sns (obraId, sn, status ativo/inativo, dataVinculo, dataLiberacao)
+- [x] Migrar campo snRelogioPonto existente para nova tabela
+- [x] Validação de unicidade: SN nunca pode estar em 2 obras "Em Andamento" ao mesmo tempo
+- [x] Liberação automática: quando obra muda para Concluída/Paralisada/Cancelada, SNs ficam disponíveis
+- [x] Backend: CRUD de SNs por obra com validação
+- [x] Frontend: gerenciamento de múltiplos SNs no formulário de obras (adicionar/remover)
+- [x] Frontend: exibir SNs na listagem de obras e no card da obra
+- [x] Atualizar integração DIXI: lookup de SN busca na nova tabela obra_sns
+- [x] Atualizar rateio por obra para exibir todos os SNs vinculados
+- [x] Testes de validação de unicidade de SN
+
+## REVISÃO_09: Raio-X Full Screen + Advertências CLT + Upload Atestados
+- [x] Raio-X do Funcionário em tela cheia (full screen) com layout responsivo
+- [x] Botões de Impressão e Gerar PDF no Raio-X com footer LGPD
+- [x] Centralizar advertências: toda advertência vai para ficha do funcionário
+- [x] Contador de advertências com alerta de suspensão após 3ª advertência
+- [x] Modelo de Advertência conforme CLT, texto editável pelo Admin Master
+- [x] Modelo de Suspensão conforme CLT, texto editável pelo Admin Master
+- [x] Schema: tabela de modelos de documentos (advertência, suspensão, etc.)
+- [x] Upload de atestado médico (arquivo) no formulário de atestados
+- [x] Multi-seleção para deletar atestados em lote
+- [x] Integração: advertências do Fechamento de Ponto aparecem no Raio-X
+
+## REVISÃO_10: Seção Relatórios no Menu + Raio-X como Página Dedicada
+- [x] Criar seção "Relatórios" no menu lateral (abaixo de Operacional ou Dashboards)
+- [x] Criar página dedicada de Raio-X do Funcionário com seleção de colaborador
+- [x] Registrar rota no App.tsx
+- [x] Manter o Raio-X como componente reutilizável (dialog em outras telas + página dedicada)
+
+## REVISÃO_11: Bug Fix - Integração Advertências + Modelo CLT para Impressão
+- [x] Bug: botão Advertência nas inconsistências não cria registro no warnings do funcionário
+- [x] Conectar advertência da inconsistência ao sistema de warnings (Controle de Documentos)
+- [x] Criar modelo CLT padrão de advertência para impressão com campos de assinatura
+- [x] Criar modelo CLT padrão de suspensão para impressão com campos de assinatura
+- [x] Botão para imprimir/gerar PDF do documento de advertência formatado
+- [x] Garantir que advertência criada em qualquer tela apareça no Raio-X e no Controle de Documentos
+- [x] Tela de edição de modelos de documentos acessível pelo Admin Master
+
+## REVISÃO_11B: Raio-X FULL SCREEN REAL + Impressão Advertência CLT
+- [x] BUG: Raio-X abre como dialog pequeno, precisa ser FULL SCREEN (100vw x 100vh)
+- [x] Reescrever RaioXFuncionario como overlay fixo ocupando tela inteira
+- [x] Botão de imprimir documento CLT de advertência na tabela de advertências
+- [x] Garantir que advertência das inconsistências cria registro no warnings
+
+## REVISÃO_11C: Visualização Documento CLT + Upload Assinado
+- [x] Dialog de visualização do documento CLT completo após salvar advertência
+- [x] Botão de Imprimir para Assinatura direto do dialog de visualização
+- [x] Botão de Upload do documento assinado para registro
+- [x] Integrar no fluxo: salvar → visualizar → imprimir → upload assinado
+
+## REVISÃO_12: 3 Testemunhas com Nome + CPF/RG
+- [x] Substituir campo único de testemunhas por 3 campos individuais (Nome + CPF/RG)
+- [x] Atualizar documento CLT de impressão com 3 testemunhas
+- [x] Atualizar dialog de visualização com 3 testemunhas
+
+## REVISÃO_12B: Dialog Advertência FULL SCREEN + Numeração
+- [x] Dialog de visualização do documento CLT em FULL SCREEN (não dialog pequeno)
+- [x] Incluir numeração da advertência no documento (1ª, 2ª, 3ª...)
+- [x] Incluir 3 testemunhas com Nome e CPF/RG no documento CLT
+- [x] Todas as telas/dialogs do sistema devem ser FULL SCREEN
+
+## REVISÃO_12C: Logo FC Engenharia + FULL SCREEN + Numeração + 3 Testemunhas
+- [x] Adicionar logo FC Engenharia no cabeçalho do documento de advertência
+- [x] Dialog de visualização em FULL SCREEN
+- [x] Numeração da advertência (1ª, 2ª, 3ª...) no documento
+- [x] 3 testemunhas com Nome e CPF/RG no documento de impressão
+
+## REVISÃO_13: Botão Voltar no Raio-X
+- [x] Adicionar botão de voltar à tela de seleção no Raio-X do Funcionário (página Relatórios)
+
+## REVISÃO_14: Remover redundância - Botão Advertência nas Inconsistências
+- [x] Remover dialog "Gerar Advertência" do Fechamento de Ponto (redundante)
+- [x] Botão Advertência deve navegar direto para Controle de Documentos > aba Advertências
+- [x] Pré-preencher dados do colaborador e inconsistência ao navegar
+
+## REVISÃO_15: Varredura Full Screen + Busca + Voltar + Legenda Cores + Verbal
+- [x] Busca por nome/CPF no select de colaborador (advertência e outros formulários)
+- [x] Varredura: converter TODOS os dialogs para FULL SCREEN em todas as telas (22 dialogs em 9 páginas)
+- [x] Botão Voltar em todas as telas full screen para facilitar navegação
+- [x] Remover dialog redundante de advertência no Fechamento de Ponto (navegar direto ao Controle de Documentos)
+- [x] Legenda de cores por sequência de advertência (1ª verde/amarelo, 2ª laranja, 3ª+ vermelho)
+- [x] Advertência Verbal: apenas registro, sem documento CLT/impressão/visualização
+- [x] Componente FullScreenDialog reutilizável criado para padronizar todas as telas
+- [x] Páginas convertidas: ControleDocumentos (5), FechamentoPonto (6), Colaboradores (3), Empresas (1), Obras (1), Funções (1), Setores (1), Usuários (2), Configurações (2)
+
+## REVISÃO_16: Validação de Dados + Tempo de Empresa + Aniversário
+- [x] Corrigir exibição de Salário (R$ 2,50 está errado — parseBRNumber para formato brasileiro)
+- [x] Corrigir Valor/Hora: R$ NaN — parseBRNumber trata vírgula e ponto corretamente
+- [x] Adicionar Tempo de Empresa (ex: "3 anos e 5 meses") no Raio-X
+- [x] Adicionar Data de Aniversário e dias faltando para o próximo aniversário
+- [x] Validação geral: tratar nulos, NaN, undefined antes de exibir qualquer dado
+- [x] REGRA: Sempre verificar informações antes de exibir ao usuário
+- [x] Varredura: corrigir Number() direto em valores monetários em FolhaPagamento e Raio-X (folha)
+
+## REVISÃO_17: Aniversário em meses e dias
+- [x] Alterar exibição de dias faltando para aniversário de "em X dias" para "em X meses e Y dias"
+
+## REVISÃO_18: Módulo Folha de Pagamento Completo (Redesign)
+- [x] Adicionar campo codigoContabil no schema do funcionário (+ campo no formulário de cadastro e visualização)
+- [x] Criar tabelas: folha_lancamentos e folha_itens no banco de dados
+- [x] Backend: parser de PDF analítico (espelho) para extrair dados por funcionário
+- [x] Backend: parser de PDF sintético (líquido) para extrair lista resumida
+- [x] Backend: parser de PDF resumo por banco (CEF/Santander)
+- [x] Backend: router de importação com validação cruzada (cadastro, status, salário, ponto)
+- [x] Frontend: redesenhar página Folha de Pagamento com layout similar ao Fechamento de Ponto
+- [x] Frontend: seletor ano/mês com legenda de status (sem lançamentos, com lançamentos, consolidado)
+- [x] Frontend: cards Vale/Adiantamento e Pagamento separados com resumo
+- [x] Frontend: upload de 4 arquivos por lançamento (analítico, sintético, banco CEF, banco Santander)
+- [x] Frontend: tela de detalhes com busca/filtro + tela de verificação cruzada
+- [x] Verificação cruzada: funcionários da folha vs cadastro (match código contábil + nome)
+- [x] Verificação cruzada: status ativo (alertar férias, afastado, demitido)
+- [x] Verificação cruzada: salário base folha vs salário cadastrado
+- [x] Verificação cruzada: horas ponto consolidado vs horas folha
+- [x] Consolidar/desconsolidar lançamentos + excluir + re-match
+- [x] FullScreenDialog para todos os dialogs (upload, detalhes, verificação cruzada)
+
+## REVISÃO_19: Fluxo Intuitivo de Tratamento de Inconsistências
+- [x] Backend: rota resolveBatchByType para resolver inconsistências em lote por tipo
+- [x] Backend: rota resolveAllInconsistencies para resolver TODAS as inconsistências de uma vez
+- [x] Backend: rota resolveAllConflitos para resolver todos os conflitos de obra em lote
+- [x] Backend: rota resolveSelectedInconsistencies para resolver IDs selecionados
+- [x] Frontend: organizar inconsistências por tópico/seção com cards coloridos por tipo (Batida Ímpar=vermelho, Falta Batida=âmbar, Horário Divergente=azul, Sem Registro=cinza)
+- [x] Frontend: botões de ação rápida (Justificar/Corrigir/Advertência) direto na tabela + expandível com detalhes
+- [x] Frontend: botão "Resolver Tipo (N)" em cada seção/tópico para resolver em lote por tipo
+- [x] Frontend: botão "Resolver Todas (N)" geral no topo para resolver todas as inconsistências
+- [x] Frontend: seção separada de Conflitos de Obra com botão "Resolver Todos" em lote
+- [x] Frontend: filtros por status (Pendentes/Resolvidas/Todas) e por tipo de inconsistência
+- [x] Frontend: resumo visual com contadores (pendentes, resolvidas, conflitos de obra)
+- [x] Frontend: fluxo intuitivo de validação antes de permitir consolidar o mês
+
+## REVISÃO_20: Redesenho Folha de Pagamento (Modelo Correto 4 Arquivos)
+- [x] Simplificar modelo: apenas 4 arquivos (2 adiantamento dia 20 + 2 pagamento 5º dia útil)
+- [x] Cada lançamento recebe: 1 Analítico (006 espelho detalhado) + 1 Sintético (007 lista resumida)
+- [x] Remover categorias extras de upload (banco CEF, banco Santander, etc.)
+- [x] Atualizar schema/enum de categorias de arquivo no banco de dados
+- [x] Atualizar parser do PDF analítico (006) para extrair dados corretos por funcionário
+- [x] Atualizar parser do PDF sintético (007) para extrair lista resumida
+- [x] Atualizar routers de importação da folha
+- [x] Redesenhar frontend: cards Adiantamento (dia 20) e Pagamento (5º dia útil) com 2 uploads cada
+- [x] Verificação cruzada: funcionários da folha vs cadastro (match código contábil + nome)
+- [x] Testar com PDFs reais (006 e 007 de janeiro)
+- [x] Cadastro automático de código contábil nos funcionários ao importar folha
+- [x] Verificação cruzada completa: salário, função, dados admissão, ponto
+- [x] Teste real com PDFs 006 e 007 de janeiro via upload no sistema
+
+## REVISÃO_21: Código Interno JFC (Identificação Única do Funcionário)
+- [x] Schema: adicionar campo codigoInterno (varchar único) na tabela employees
+- [x] Backend: gerar automaticamente JFC001, JFC002... ao criar funcionário
+- [x] Backend: garantir que código é único e nunca reutilizado (mesmo após desligamento)
+- [x] Backend: somente ADM Master pode alterar o código interno
+- [x] Frontend: exibir campo JFC na aba Profissional (primeiro campo, antes da Matrícula)
+- [x] Frontend: campo read-only para usuários normais, editável apenas por ADM Master com ícone Lock
+- [x] Migração: gerar códigos JFC001-JFC132 para todos os 132 funcionários existentes
+- [x] Teste visual: campo JFC002 aparecendo corretamente na edição do funcionário ACACIO LESCURA DE CAMARGO
+
+## REVISÃO_22: Melhorias Massivas na Folha de Pagamento
+### Layout e UX
+- [ ] Redesenhar layout da tela de detalhes da folha - mais agradável e responsivo
+- [ ] Adicionar coluna "Função" de cada colaborador na listagem
+- [ ] Filtros avançados de inconsistências (por tipo, por status, por obra)
+- [ ] Verificação dinâmica: ao atualizar dados, re-verificar se inconsistências persistem
+
+### Custos por Obra
+- [ ] Separar custos do funcionário por obra (baseado no controle de ponto)
+- [ ] Filtro por obra na folha de pagamento (como no controle de ponto)
+- [ ] Alocar custo de mão de obra no projeto correto (vale e pagamento)
+
+### Horas Extras
+- [ ] Separar valores de horas extras de cada funcionário
+- [ ] Ranking de obra que mais faz horas extras por período (dia, semana, mês, trimestre, semestre, ano)
+- [ ] Relatório de horas extras por funcionário e por obra
+
+### Complemento Salarial (Pagamento por Fora)
+- [ ] Schema: campos recebeComplemento (boolean) e valorComplemento (decimal) no cadastro do funcionário
+- [ ] Frontend: botão/toggle no cadastro perguntando se recebe complemento
+- [ ] Se sim, habilitar aba/campo para digitar o valor do complemento
+- [ ] Somar complemento ao valor da contabilidade na folha
+
+### Acordo Individual de Horas Extras
+- [ ] Schema: campos acordoHoraExtra (boolean) e configuração de % por tipo de HE
+- [ ] Frontend: botão/toggle no cadastro perguntando se tem acordo de HE
+- [ ] Se sim, abrir janela para configurar critérios (% de acréscimo customizado)
+- [ ] Valores padrão CLT congelados: HE 50%, HE 100%, Noturno 20%, etc.
+- [ ] Se acordo marcado, liberar edição dos % para zerar ou reduzir
+- [ ] Aplicar percentuais customizados no cálculo de horas extras do funcionário
+
+## REVISÃO_23: Bloqueio de Consolidação + Resolução em Lote (Múltiplas Obras e Conflitos)
+- [ ] Backend: bloquear consolidação se houver inconsistências pendentes, múltiplas obras ou conflitos não resolvidos
+- [ ] Backend: rota para resolver todas as múltiplas obras de uma vez
+- [ ] Backend: rota para resolver todos os conflitos de obra de uma vez
+- [ ] Frontend: botão "Resolver Todas" na seção de Múltiplas Obras
+- [ ] Frontend: botão "Resolver Todos" na seção de Conflitos de Obra/Dia
+- [ ] Frontend: bloqueio visual do botão Consolidar com mensagem explicativa das pendências
+- [ ] Frontend: seleção múltipla para resolver várias de uma vez
+
+## REVISÃO_23: Correções Críticas Fechamento de Ponto + Folha
+- [x] Fix: Total Líquido do Pagamento mostra R$ 0,00 (parser com fallback para Líquido standalone)
+- [x] Fix: Botão "Confirmar Deslocamento Real" funciona corretamente (com validação de sobreposição)
+- [ ] Implementar rateio proporcional por tempo em cada obra ao confirmar deslocamento real
+- [ ] Botão "Resolver Todas" na seção de Múltiplas Obras (resolver em lote)
+- [ ] Botão "Resolver Todos" na seção de Conflitos de Obra (resolver em lote)
+- [ ] Bloqueio de consolidação se houver inconsistências pendentes, múltiplas obras ou conflitos não resolvidos
+
+## Fase 23: Validação de Sobreposição de Horários em Conflitos de Obra
+- [x] Validação de sobreposição de horários: barrar "Confirmar Deslocamento" quando horários se sobrepõem entre obras
+- [x] Resolução em lote (resolveAllConflitos) deve pular conflitos com sobreposição e retornar lista dos que precisam resolução manual
+- [x] Frontend: exibir erro claro quando há sobreposição, indicar que o usuário deve escolher manualmente qual obra manter
+- [x] Frontend: diferenciar visualmente conflitos com sobreposição (vermelho) vs deslocamento real válido (verde)
+
+## FIX: pdftotext not found em produção
+- [x] Substituir comando pdftotext (sistema) por biblioteca Node.js pdf-parse para extração de texto de PDFs
+- [x] Garantir compatibilidade com produção (sem dependência de binários do sistema)
+
+## REVISÃO_24: Aba Critérios do Sistema em Configurações
+### Schema e Backend
+- [ ] Criar tabela system_criteria (chave-valor por empresa) no banco de dados
+- [ ] Rotas tRPC: getCriteria, updateCriteria (protegidas por ADM/ADM Master)
+- [ ] Valores padrão CLT pré-configurados ao criar empresa
+### Categorias de Critérios
+- [ ] Horas Extras: % HE dias úteis, % HE domingos/feriados, % adicional noturno, horário noturno (início/fim), limite mensal HE
+- [ ] Jornada de Trabalho: horas diárias padrão, horas semanais, tolerância atraso (min), tolerância saída antecipada (min), intervalo almoço (min)
+- [ ] Folha de Pagamento: dia do vale/adiantamento, dia do pagamento, % adiantamento sobre salário
+- [ ] Advertências CLT: nº advertências para suspensão, dias de suspensão padrão, nº suspensões para justa causa
+- [ ] Benefícios: valor padrão VR/VA diário, dias úteis para cálculo VR
+- [ ] Ponto: tolerância batida ímpar (min), considerar falta após X min atraso
+### Frontend
+- [ ] Nova aba "Critérios" na página de Configurações com layout organizado por seções
+- [ ] Formulário editável com valores atuais e indicação do padrão CLT
+- [ ] Botão "Restaurar Padrão CLT" por seção
+- [ ] Apenas ADM Master pode alterar critérios
+### Integração
+- [ ] Usar critérios de HE nos cálculos de horas extras (substituir valores hardcoded)
+- [ ] Usar critérios de jornada no fechamento de ponto (tolerâncias, horário noturno)
+- [ ] Usar critérios de advertência no fluxo CLT progressivo
+### Fix pendente
+- [x] Fix: pdftotext not found em produção (substituir por pdf-parse)
+
+## REVISÃO_25: Nº Interno na tabela de Colaboradores
+- [x] Adicionar coluna "Nº Interno" (codigoInterno JFC) na tabela de listagem de colaboradores
+- [x] Incluir número interno na busca/pesquisa de colaboradores
+
+## REVISÃO_26: Melhorar cores dos cards de métricas no Raio-X
+- [x] Cards de ASOs, Treinamentos, Atestados, Advertências, Meses Ponto, EPIs com cores mais vibrantes e aparência de botão clicável
+
+## FIX_27: Importação de PDFs mostra 0 funcionários e R$ 0,00
+- [x] Analisar texto extraído dos PDFs reais com pdf-parse v2
+- [x] Corrigir parser para funcionar com o formato de texto do pdf-parse v2
+- [x] Testar com PDFs reais (006 analítico e 007 sintético de janeiro)
+- [x] Destacar período de afastamento em vermelho no documento de suspensão
+
+## REVISÃO_28: Integração Critérios de HE nos Cálculos
+- [ ] Criar função helper getCriteriaForCompany() para buscar critérios do banco
+- [ ] Substituir valores hardcoded de % HE no fechamento de ponto pelos critérios configurados
+- [ ] Aplicar critérios de tolerância de atraso/saída antecipada no cálculo de ponto
+- [ ] Aplicar critérios de horário noturno e adicional noturno nos cálculos
+- [ ] Aplicar critérios na folha de pagamento (verificação cruzada)
+- [ ] Respeitar acordo individual do funcionário (override dos critérios globais)
+- [ ] Incrementar revisão para Rev. 37
+
+## REVISÃO_28: Filtros clicáveis nos cards de resumo + Integração critérios HE
+- [x] Cards de resumo da Folha de Pagamento (Total, Vinculados, Divergentes, Não Encontrados) como filtros clicáveis
+- [ ] Criar helper getCriteriaMap() para buscar critérios do banco
+- [ ] Integrar critérios de HE no cálculo do fechamento de ponto (tolerância, % HE, noturno)
+- [ ] Respeitar acordo individual do funcionário (override dos critérios globais)
+- [ ] Incrementar revisão para Rev. 37
+
+## REVISÃO_29: Rateio proporcional de custos por obra baseado no ponto
+- [x] Refatorar getCustosPorObra para cruzar time_records com folha de pagamento
+- [x] Calcular horas trabalhadas por obra para cada funcionário usando time_records
+- [x] Distribuir custo proporcionalmente (ex: 60% Obra A, 40% Obra B)
+- [x] Funcionários sem ponto ficam em "Sem Obra Vinculada"
+- [x] Exibir % de alocação e horas por obra no frontend
+
+## REVISÃO_30: Detecção automática de mês na importação de PDF
+- [x] Extrair data de referência do conteúdo do PDF (ex: "Adiantamento em: 20/01/2026")
+- [x] Alocar automaticamente no mês correto, independente do mês selecionado pelo usuário
+- [x] Exibir alerta quando o mês detectado for diferente do mês selecionado
+- [x] Criar/buscar folha_lancamento do mês correto automaticamente
+
+## Rev. 37: Detecção automática de mês + Percentual de alocação por obra
+- [x] Implementar função detectMesReferencia() no backend (5 estratégias de detecção)
+- [x] Integrar detecção automática na rota importarFolhaAuto
+- [x] Redirecionar importação para o mês correto automaticamente
+- [x] Exibir toast de alerta (warning) quando mês detectado difere do selecionado
+- [x] Navegar automaticamente para o mês correto após importação redirecionada
+- [x] Otimizar extração de texto PDF (extrair uma vez, reutilizar no loop)
+- [x] Adicionar coluna "% Aloc." na tabela de custos por obra
+- [x] Exibir percentual de alocação por funcionário em cada obra
+- [x] Incrementar versão para Rev. 37
+
+## FIX Rev. 37: Detecção de mês pegando data de admissão no PDF de pagamento
+- [x] Analisar texto extraído do PDF de pagamento para identificar padrão correto
+- [x] Priorizar padrão "referente ao mês de JANEIRO/2026" na detecção
+- [x] Mover detecção de data DD/MM/YYYY genérica para último recurso (evitar pegar admissão)
+- [x] Testar com PDFs de vale e pagamento
+
+## Rev. 38: Botões Imprimir/PDF/Excel na tela de Custos por Obra
+- [x] Botão Imprimir (window.print com CSS @media print)
+- [x] Botão Gerar PDF (html2canvas + jsPDF ou print-to-pdf)
+- [x] Botão Exportar Excel (xlsx com dados de custos por obra)
+- [x] Rota backend para gerar Excel de custos por obra
+- [x] Fix: detecção de mês no PDF de pagamento (priorizar "referente ao mês de NOME/ANO")
+
+## Rev. 38: Vinculação manual de obra + Bloqueio consolidação + Exportações
+- [x] Criar tabela manual_obra_assignments para vincular funcionário sem ponto a uma obra com justificativa
+- [x] Rota backend vincularObrasManualmente (employeeIds[], obraId, justificativa, mesReferencia)
+- [x] Rota backend removerVinculacaoManual
+- [x] Rota backend listarVinculacoesManuais
+- [x] UI: seleção múltipla com checkboxes + select de obra + justificativa na seção "Sem Obra Vinculada"
+- [x] UI: botão Imprimir (window.print com CSS @media print)
+- [x] UI: botão Gerar PDF
+- [x] UI: botão Exportar Excel com dados de custos por obra
+- [x] Fix: detecção de mês no PDF de pagamento (priorizar "referente ao mês de NOME/ANO")
+
+## Rev. 38: Verificação Cruzada filtros + Vinculação obra + Exportações
+- [x] Card "Sem Ponto" na Verificação Cruzada mostrando quantidade de funcionários sem registro de ponto
+- [x] Transformar todos os cards (Total, OK, Com Alertas, Com Ponto, Sem Ponto) em filtros clicáveis
+- [x] Vinculação manual de obra para funcionários sem obra (seleção múltipla + justificativa)
+- [ ] Bloqueio de consolidação se houver funcionários sem obra (pendente integração no backend)
+- [x] Botões Imprimir/PDF/Excel na tela de Custos por Obra
+- [x] Fix detecção de mês no PDF de pagamento
+
+## REGRA DE OURO: Botões Imprimir/PDF em TODAS as telas
+- [x] Criar componente reutilizável PrintActions (Imprimir + PDF + Excel opcional)
+- [x] Aplicar em: Colaboradores, Fechamento de Ponto, Folha de Pagamento (todas as sub-telas)
+- [x] Aplicar em: Controle de Documentos, Obras, ValeAlimentacao
+- [x] Aplicar em: Custos por Obra, Verificação Cruzada, Horas Extras
+- [x] Aplicar em: Configurações, Empresas, Setores, Funções, Auditoria, Usuários
+- [x] CSS @media print para ocultar sidebar, botões e elementos de UI
+
+## Rev. 39: Bloqueio consolidação + Integração vinculações manuais + Excel
+- [x] Integrar vinculações manuais no cálculo de custos por obra (funcionários vinculados manualmente saem de "Sem Obra")
+- [x] Bloqueio de consolidação se houver funcionários sem obra vinculada
+- [x] Rota backend para exportação Excel (.xlsx) de custos por obra
+- [ ] Frontend: botão Excel na tela de custos chama rota backend dedicada
+- [ ] Frontend: mensagem de bloqueio na consolidação quando há funcionários sem obra
+- [x] Incrementar versão para Rev. 39
+
+## Rev. 39 (atualizado): Filtro HE por obra + Botões responsivos + Bloqueio + Vinculações + Excel
+- [x] Filtro por obra na tela de Horas Extras (clicar na obra no ranking filtra a tabela)
+- [ ] Botões responsivos ao clique (feedback visual loading/active)
+- [x] Integrar vinculações manuais no cálculo de custos por obra
+- [x] Bloqueio de consolidação se houver funcionários sem obra vinculada
+- [x] Rota backend para exportação Excel (.xlsx) de custos por obra
+- [ ] Frontend: botão Excel chama rota backend dedicada
+- [x] Incrementar versão para Rev. 39
+- [x] Card Resumo Total do Mês abaixo dos cards Vale/Pagamento (Vale + Pagamento + HE = Total)
+- [x] Rodapé somatório dinâmico nos Detalhes (Proventos, Descontos, Líquido) que atualiza com filtros
+- [x] Cadastro de Contas Bancárias da empresa (schema + rotas backend)
+- [x] Campo contaBancariaEmpresaId no cadastro do funcionário
+- [ ] Separação/agrupamento por banco na folha de pagamento
+
+## Rev. 40: Contas Bancárias + Excel funcional + Agrupamento por banco
+- [x] Tela de Contas Bancárias no menu lateral (CRUD completo)
+- [x] Adicionar rota /contas-bancarias no App.tsx
+- [x] Adicionar item no menu lateral (DashboardLayout)
+- [x] Botão Excel funcional na tela de Custos por Obra (conectar à rota backend)
+- [x] Agrupamento/filtro por banco na tela de Detalhes da folha (enriquecido listarItens com info de conta bancária)
+- [x] Incrementar versão para Rev. 40
+- [x] Tela Relógios de Ponto (Sn) na seção Operacional com CRUD e vinculação à obra
+- [ ] Mover Contas Bancárias para seção CADASTRO (não Financeiro)
+
+## BUG Rev. 39: Horas Extras
+- [x] BUG: Valor Estimado HE mostrando R$ 0,00 para todos os funcionários (corrigido cálculo no backend)
+- [x] BUG: Obra mostrando "—" para todos os funcionários na tela de Horas Extras (corrigido)
+
+## Rev. 40: Sistema de Perfis de Usuário (3 níveis)
+- [ ] Expandir enum de roles para: usuario, adm, adm_master
+- [ ] Criar tabela de permissões granulares por perfil (módulo, ação: visualizar/preencher/editar/excluir/aprovar)
+- [ ] Tela de configuração de permissões por perfil (ADM Master define o que cada perfil pode fazer)
+- [ ] Alçadas de aprovação configuráveis por perfil
+- [ ] Middleware de verificação de permissões granulares no backend
+- [ ] Frontend: ocultar/desabilitar ações conforme permissão do usuário logado
+- [ ] Atualizar select de Perfil no cadastro de usuário (Usuário, ADM, ADM Master)
+
+## Rev. 40: Módulo Processos Trabalhistas
+- [x] Criar tabela processos_trabalhistas (funcionarioId, numeroProcesso, vara, comarca, advogado, valorCausa, status, dataDistribuicao, etc.)
+- [x] Criar tabela processos_movimentacoes (processoId, data, descricao, tipo, anexo)
+- [x] Vincular apenas a funcionários com status "Desligado"
+- [x] CRUD completo de processos trabalhistas no backend
+- [x] CRUD de movimentações/andamentos do processo
+- [x] Tela de Processos Trabalhistas no menu lateral
+- [x] Dashboard de processos (total ativo, valor total em risco, por status)
+- [x] Alertas de prazos e audiências (próximas audiências destacadas)
+- [x] Botões Imprimir/PDF (via PrintActions)
+
+## Rev. 40: Liberdade nos campos de HE (sem restrição CLT)
+- [x] Verificado: campos de HE já são livres (type=text sem max/min)
+- [x] Verificado: backend aceita qualquer valor string sem validação numérica
+
+## BUG Rev. 40: Valor Estimado HE incorreto
+- [x] BUG: Valor Estimado de HE retornando valores absurdos (corrigido: folhaSalarioMap usava salárioBase como valorHora)
+- [x] Investigar fórmula de cálculo no backend (horasExtrasPorFuncionario)
+- [x] Corrigir cálculo: valorHora = salário / (jornada mensal em horas), valorHE = horas × valorHora × (1 + percentual)
+
+## Rev. 40 fix: Contas Bancárias
+- [x] Remover campo "Apelido (identificação interna)" da tela de Contas Bancárias
+- [x] Remover campo "CNPJ do Titular" da tela de Contas Bancárias
+
+## Rev. 40 fix: Conta da Empresa para Pagamento
+- [x] Adicionar campo "Conta da Empresa para Pagamento" na aba Bancário do colaborador
+- [x] Select com as contas bancárias ativas da empresa (módulo Contas Bancárias)
+- [ ] Permitir gerar relatório agrupado por banco de pagamento
+
+## Rev. 40 fix: Custos por Obra - Horas e Comparativos
+- [x] Adicionar card de Total Horas Normais nos resumos de Custos por Obra
+- [x] Adicionar percentual de horas normais e extras em relação ao total
+- [x] Comparativo com mês anterior (acréscimo/redução)
+- [x] Comparativo com mesmo mês do ano anterior (acréscimo/redução)
+
+## Rev. 41: Melhorias Gerais - Home, EPIs, Dashboards, Processos Trabalhistas, Relógios de Ponto
+### Schema e Backend
+- [x] Adicionar campos clienteCnpj, clienteRazaoSocial, clienteNomeFantasia na tabela processos_trabalhistas
+- [x] Atualizar rotas tRPC de processos trabalhistas para incluir campos de cliente
+- [x] Criar router completo de EPIs (CRUD + entregas + stats)
+- [x] Criar rota homeData para alimentar Home reestruturada (KPIs + alertas)
+- [x] Criar 8 novos dashboards no backend (Pendências, Treinamentos, EPI, Acidentes, Auditorias, 5W2H, Extintores/Hidrantes, Desvios)
+
+### Frontend
+- [x] Corrigir bug de Relógios de Ponto (dados nested: sn.obraSn.xxx → acesso correto)
+- [x] Reestruturar Home com KPIs acionáveis (RH, Operacional, Alertas, Aniversariantes, Movimentações)
+- [x] Adicionar campos Cliente/CNPJ no form de criação e detalhe de Processos Trabalhistas
+- [x] Criar página completa de EPIs (catálogo + entregas + stats)
+- [x] Adicionar EPIs no menu lateral do DashboardLayout
+- [x] Criar componente reutilizável DashChart (gráficos Chart.js + KPI cards)
+- [x] Criar 8 páginas de dashboards (Pendências, Treinamentos, EPI, Acidentes, Auditorias, 5W2H, Extintores/Hidrantes, Desvios)
+- [x] Dashboard de Riscos (placeholder - em desenvolvimento)
+- [x] Registrar todas as rotas de dashboards no App.tsx
+
+### Testes
+- [x] Testes unitários para rotas de dashboards (10 procedures), EPIs e homeData (4 testes passando)
+
+## Rev. 42: Menu Configurável, Logo da Empresa, Reorganização Sidebar
+### Reorganização do Menu Lateral
+- [x] Mover "Relógios de Ponto" da seção Operacional para Cadastro
+- [x] Configuração personalizável do menu lateral (ADM Master pode reorganizar itens entre seções e reordenar)
+- [x] Salvar configuração do menu no banco de dados por usuário
+- [x] Tela de configuração do menu nas Configurações do sistema (tab Painel de Controle)
+
+### Logo da Empresa
+- [x] Adicionar campo logoUrl na tabela de empresas
+- [x] Upload de logo da empresa no cadastro de empresas (S3)
+- [x] Exibir logo da empresa selecionada no cabeçalho/sidebar do sistema
+- [x] Usar logo da empresa em todos os relatórios e impressões automaticamente (PrintHeader)
+- [x] Ao alterar o logo, todo o sistema reflete a mudança imediatamente
+
+## Rev. 42: REFORMULAÇÃO COMPLETA DOS DASHBOARDS
+### Apagar dashboards antigos que não funcionam
+- [x] Remover DashPendencias, DashTreinamentos, DashEpi, DashAcidentes, DashAuditorias, Dash5w2h, DashExtintoresHidrantes, DashDesvios, DashRiscos
+- [x] Remover rotas backend antigas dos dashboards que não funcionam
+
+### Novos Dashboards (6 dashboards completos)
+- [x] Dashboard Funcionários: idade, gênero, endereço (cidade/estado), função, tempo de empresa, mais velho/novo, ranking faltas, ranking advertências
+- [x] Dashboard Cartão de Ponto: frequência, atrasos, faltas, horas trabalhadas, por período/obra
+- [x] Dashboard Folha de Pagamento: custos totais, por empresa, por obra, evolução mensal, comparativos
+- [x] Dashboard Horas Extras: por funcionário, por obra, por período, custo total, ranking, tendências, % sobre folha
+- [x] Dashboard EPIs: entregas, vencimentos, por tipo, por funcionário, estoque
+- [x] Dashboard Jurídico: processos trabalhistas, valores em risco, status, prazos, audiências próximas
+
+### Atualizar sidebar e DashboardIndex
+- [x] Atualizar menu lateral com os 6 novos dashboards
+- [x] Recriar DashboardIndex como hub central com cards para cada dashboard
+- [x] Limpar rotas antigas do App.tsx
+
+## Rev. 43: Funções com IA + Demitidos
+- [x] Campo descrição obrigatório no cadastro de funções
+- [x] Botão IA "Gerar Descrição" no cadastro de funções (usa LLM para gerar descritivo baseado no nome/CBO)
+- [x] Preencher descrições de todas as 40 funções existentes via IA (atividades, responsabilidades, requisitos conforme CBO)
+- [x] Alterar campo descricao de varchar(255) para TEXT
+- [x] Pente fino: unificar funções duplicadas e preencher CBOs de todas (32 funções únicas)
+- [x] Inserir 102 funcionários demitidos (Out/2025 a Fev/2026) com código contábil e função (101 novos + 1 atualizado)
+- [x] Cadastrar 18 funções novas que vieram nos PDFs de demitidos
+- [x] Criar tabela e CRUD de Regras de Ouro da empresa em Configurações
+- [x] IA consulta Regras de Ouro antes de gerar qualquer sugestão (nunca quebra regras da empresa)
+- [x] Adicionar campo Ordem de Serviço (NR-1) no cadastro de funções (riscos, EPIs obrigatórios, procedimentos de segurança)
+- [x] IA gera Ordem de Serviço automaticamente junto com a descrição da função
+
+## Rev. 44: 13º Salário na Folha de Pagamento
+- [ ] Novembro: campo adicional para upload da 1ª parcela do 13º (prazo até 30/11)
+- [ ] Dezembro: campo adicional para upload da 2ª parcela do 13º (prazo até 20/12)
+- [ ] Backend: suportar tipo de folha (normal, 13_primeira, 13_segunda)
+- [ ] Frontend: exibir campos extras de 13º nos meses de Nov e Dez
+- [ ] Dashboard Folha: incluir custos do 13º nos totais
+
+## Rev. 44b: Corrigir Dashboard Funcionários (tela em branco)
+- [ ] Diagnosticar e corrigir bug que faz dashboard aparecer em branco
+- [ ] Status dos Colaboradores (Ativos, Afastados, Férias, Desligados) - gráfico de barras
+- [ ] Setor dos Colaboradores (Obra, Escritório Central, Escritório Local)
+- [ ] Gênero (Masculinos vs Femininos com destaque visual)
+- [ ] Pirâmide etária por sexo e idade (14-20, 21-25, 26-30, 31-40, 41-50, 51-60, 61+)
+- [ ] Estatísticas: mais tempo de empresa, menos tempo, maior idade, menor idade
+- [ ] Ranking de funções (horizontal bars)
+- [ ] Ranking de advertências e faltas
+
+## Rev. 44c: Gráficos Interativos + Fix Dashboard Funcionários
+- [ ] Corrigir Dashboard Funcionários (tela em branco)
+- [ ] Tornar TODOS os gráficos interativos (clique filtra e atualiza KPIs/dados)
+- [ ] Regra de ouro: gráficos responsivos com drill-down em todos os dashboards
+
+## Rev. 45: Dashboard Horas Extras - Filtros Avançados
+- [ ] Filtro por Ano
+- [ ] Filtro por Mês
+- [ ] Filtro por Semana
+- [ ] Filtro por Dia
+- [ ] Filtro por Trimestre
+- [ ] Filtro por Semestre
+- [ ] Filtro por Obra
+- [ ] Filtro por Colaborador
+- [ ] Layout responsivo para análise clara
+- [ ] Gráficos interativos com drill-down
+- [ ] KPIs atualizados dinamicamente conforme filtros
+
+## Rev. 46: Raio-X do Funcionário - Dossiê Completo
+- [ ] Aba Horas Extras: todas HE do funcionário com detalhes (data, obra, horas, valor, %)
+- [ ] Descrição da Função completa no cabeçalho
+- [ ] Fichas de EPIs assinadas (entregas com data, CA, quantidade)
+- [ ] Histórico de Atrasos (dias, horários)
+- [ ] Histórico de Aumentos de Salário
+- [ ] Histórico de Faltas
+- [ ] Histórico de Atestados detalhado
+- [ ] Processos Trabalhistas vinculados
+- [ ] Histórico Funcional completo (promoções, mudanças de setor/função)
+- [ ] Timeline cronológica de TODOS os eventos
+- [ ] Cards de métricas atualizados com todas as informações
+
+## Rev. 47: Regras de Ouro - Seed no Banco
+- [x] Inserir as 10 Regras de Ouro no banco de dados (tabela golden_rules)
+- [x] Regras ficam disponíveis para uso futuro no Guia de Integração do Funcionário (40 registros: 10 por empresa)
+
+## Rev. 48: Importação Lista de Funcionários Ativos (PDF)
+- [x] Extrair dados do PDF de funcionários ativos (193 funcionários processados)
+- [x] Cruzar com base atual: identificar novos e ausentes
+- [x] Cadastrar funcionários novos que não estão no sistema
+- [x] Marcar como "Desligado" os que não estão na lista de ativos
+- [x] Preservar funcionários já marcados como Desligado/Lista_Negra
+
+## Rev. 49: Remover campo Apelido dos Relógios de Ponto
+- [x] Remover coluna "Apelido" da tabela de Relógios de Ponto no frontend
+
+## Rev. 50: Editar Relógio de Ponto
+- [x] Clicar na linha do relógio abre edição inline
+- [x] Tela de edição com campos: SN, Obra Vinculada, Status (Ativo/Inativo)
+- [x] Remover coluna Apelido da tabela
+- [x] Criar rota tRPC para update de relógio de ponto (updateSnObra)
+
+## Rev. 51: Funções clicáveis + Responsividade
+- [x] Clicar na função abre tela com informações completas (CBO, Descrição, OS NR-1, funcionários vinculados)
+- [ ] Garantir responsividade em todas as telas
+
+## Rev. 52: CBO Autocomplete na Função
+- [x] Campo Nome da Função digitável com autocomplete consultando base CBO do governo (2.450 ocupações)
+- [x] Campo CBO travado (somente leitura) preenchido automaticamente conforme função selecionada
+
+## Rev. 53: Cores suaves no Raio-X do Funcionário
+- [x] Trocar cores dos cards de métricas para tons pastel/leves (azul claro, verde suave, cinza, etc.)
+- [x] Manter visual agradável e profissional sem cores chamativas
+
+## Rev. 54: Painel de Alertas Detalhado
+- [x] Clicar no botão "X alertas requerem atenção" abre painel com todos os alertas
+- [x] Painel responsivo (desktop, tablet, mobile)
+- [x] Alertas categorizados (ASOs Vencidos, ASOs Vencendo, Sem ASO, Férias, Processos)
+- [x] Possibilidade de navegar direto para o item do alerta (botão por categoria)
+- [x] Botão Imprimir no painel de alertas
+
+## Rev. 55: Correção de dados + Gráficos clicáveis
+- [ ] Verificar e corrigir demissões erradas em março/2026
+- [ ] Preencher sexo M/F automaticamente por análise de nome
+- [ ] Definir setor OBRA para maioria, ESCRITÓRIO CENTRAL para funções administrativas
+- [ ] Gráficos clicáveis: ao clicar em qualquer item, abre lista de nomes (responsivo)
+- [ ] Aplicar em todos os gráficos do sistema (Dashboard Funcionários, Dashboard HE, etc.)
+
+## Rev. 56: Folha Pagamento + Alertas Full Screen + Dados
+- [ ] Diagnosticar por que não consolida folha de janeiro
+- [ ] Diagnosticar por que Dashboard Folha não mostra dados de janeiro
+- [ ] Central de Alertas converter para FULL SCREEN (não dialog pequeno)
+- [ ] Todas as telas/modais devem ser FULL SCREEN
+- [ ] Corrigir demissões erradas em março/2026
+- [ ] Preencher sexo M/F automaticamente por análise de nome
+- [ ] Definir setor OBRA/ESCRITÓRIO CENTRAL por função
+- [ ] Gráficos clicáveis: ao clicar em qualquer item, abre lista de nomes (responsivo)
+
+## Rev. 57: Alertas Automáticos de Seguro de Vida
+- [ ] Criar tabela insurance_alert_config (configuração de alertas de seguro por empresa)
+- [ ] Criar tabela insurance_alert_recipients (destinatários: corretor, diretoria, etc.)
+- [ ] Criar tabela insurance_alerts_log (histórico de alertas enviados)
+- [ ] Textos padrão editáveis para cada tipo de movimentação (Admissão, Afastamento, Reclusão, Desligamento)
+- [ ] Backend: rotas tRPC CRUD para configuração de seguro de vida
+- [ ] Backend: função de disparo automático de alerta ao mudar status do funcionário
+- [ ] Backend: integração com notificações (notifyOwner + registro interno)
+- [ ] Frontend: aba "Seguro de Vida" em Configurações → Critérios do Sistema
+- [ ] Frontend: formulário de destinatários (Corretor, Usuário, Diretoria)
+- [ ] Frontend: histórico de alertas enviados com filtros
+- [ ] Integrar disparo automático em: updateEmployee (mudança de status)
+- [ ] Integrar disparo automático em: createEmployee (admissão)
+- [ ] Testes unitários para fluxo de alertas de seguro
+
+## Rev. 58: Melhorar Dashboard Horas Extras - Filtros + Dados
+- [ ] Redesenhar filtros do Dashboard HE: barra de meses estilo Cartão de Ponto (Jan-Dez + setas ano)
+- [ ] Filtros avançados (Semestre, Trimestre, Semana, Dia) como opção secundária discreta
+- [ ] Investigar e corrigir valores zerados no Dashboard HE (Total Horas, Total HE, Pessoas, Média)
+- [ ] Manter filtros de Obra e Colaborador como selects compactos
+
+## Rev. 59: Drag & Drop no Gerenciador de Menu
+- [ ] Implementar arrastar e soltar itens do menu entre categorias (ex: Financeiro → Operacional)
+- [ ] Implementar arrastar e soltar para reordenar itens dentro da mesma categoria
+- [ ] Implementar arrastar e soltar para reordenar categorias inteiras
+- [ ] Visual feedback durante arrasto (highlight da zona de destino)
+- [ ] Remover botões "Mover para..." e setas, substituir por drag & drop intuitivo
+
+## Rev. 60: Consulta Automática de CA (Certificado de Aprovação) do MTE
+- [x] Pesquisar e integrar API/base do MTE para consulta de CA (site oficial caepi.mte.gov.br)
+- [x] Criar rota tRPC para consultar CA no backend
+- [x] Autopreenchimento no cadastro de EPI ao digitar número do CA (nome, fabricante, validade, natureza)
+- [x] Feedback visual durante a consulta (loading, sucesso, erro)
+- [ ] Cache de consultas CA para evitar requisições repetidas (futuro)
+
+## Rev. 61: Tela de Login/Apresentação Profissional
+- [ ] Redesenhar Home.tsx com layout split-screen profissional
+- [ ] Formulário visual de login (e-mail + senha) com botão Entrar via OAuth
+- [ ] Aba "Esqueci minha senha" com campo de e-mail e envio de recuperação
+- [ ] Visual impactante com branding FC Engenharia (gradiente, logo, animações sutis)
+- [ ] Responsivo para mobile
+
+## Rev. 62: Todas as Telas Full Screen
+-- [x] Auditar TODAS as páginas do sistema para verificar quais não são full screenn
+- [ ] Corrigir Funções (detalhe/modal) para full screen
+- [ ] Corrigir todas as demais páginas que não estão full screen
+- [ ] Garantir padrão consistente em todas as telas
+
+## Rev. 63: Funções - Filtro Incompletas + Responsivo
+- [ ] Adicionar filtro "Incompletas" na tela de Funções (sem CBO, sem descrição, sem OS)
+- [ ] Tornar tela de Funções responsiva (KPIs, tabela, formulários)
+- [x] Remover max-w limitante dos formulários de Funções
+- [x] Aplicar responsividade e full screen em todas as outras páginas com limitação (Colaboradores, ContasBancarias, ControleDocumentos, Empresas, Usuarios, FechamentoPonto, Configuracoes, Epis, Obras, RelogiosPonto, Setores)
+
+## Rev. 64: Corrigir Status dos Funcionários
+- [x] Colocar TODOS os funcionários da FC como Ativos (remover datas de demissão incorretas) — 170 corrigidos, total 295 ativos
+- [ ] Aguardar lista atualizada do usuário para fazer baixas corretas (pendente)
+
+## Rev. 65: Relógios de Ponto - Exclusão e SN Único
+- [ ] Permitir exclusão de relógios de ponto (botão lixeira funcional com confirmação)
+- [ ] Impedir SN duplicado — não permitir mesmo número SN vinculado a duas obras ativas
+- [ ] Validação no backend ao criar/editar relógio
+
+## Rev. 66: Upload DIXI - SN Não Identificado
+- [ ] Investigar por que o upload DIXI não identifica o SN do arquivo XLS
+- [ ] Corrigir lógica de extração de SN do arquivo DIXI
+
+## Rev. 67: Conflitos de Obra - Melhorias
+- [ ] Clicar na obra para ver ponto detalhado do dia (entrada/saída, horas)
+- [ ] Restaurar botão "Dividir custos proporcional ao tempo" para obras sem sobreposição de horário
+- [ ] Regra obrigatória: sobreposição de horário (mesmo dia + mesma hora em 2 obras) → usuário DEVE escolher uma obra ou marcar como falta
+- [ ] Adicionar opção "Marcar como Falta" além de escolher obra
+
+## Rev. 68: Ranking de Ponto + Score de Qualidade
+- [ ] Backend: calcular ranking de ponto por funcionário (erros vs acertos)
+- [ ] Backend: score de qualidade de ponto (% acerto, nota A-D)
+- [ ] Dashboard Funcionários: cards "Melhor Ponto" e "Mais Erros de Ponto"
+- [ ] Raio-X: seção "Qualidade de Ponto" com histórico mensal e score
+- [ ] Registrar score na ficha do funcionário para tomada de decisão futura
+
+## Rev. 69: Filtro de Período com Comparativo no Dashboard Funcionários
+- [ ] Adicionar filtro discreto de período: Dia, Semana, Mês, Trimestre, Ano (toggle compacto)
+- [ ] Backend: aceitar parâmetro de período e calcular dados para período atual + anterior
+- [ ] KPIs com indicadores de variação (↑↓ % vs período anterior)
+- [ ] Comparativo automático nos gráficos de turnover, advertências, atestados
+- [ ] Manter dados estáticos (total geral, gênero, função) sem filtro de período
+- [x] Substituir seletor de calendário complexo por setas simples ◀ ▶ em todos os dashboards
+- [x] Adicionar % de HE vs Horas Normais no card de Horas Extras do Dashboard Cartão de Ponto
+- [x] Ranking de Faltas em DIAS (não horas) no Dashboard Cartão de Ponto
+- [x] Cards e rankings clicáveis no Dashboard Cartão de Ponto (navegar para origem dos dados)
+- [x] Atrasos com tolerância CLT Art.58 §1º (10min/dia) no Dashboard Cartão de Ponto - formato hh:mm
+- [x] Exibir nome completo do funcionário em todas as abas do cadastro (espelho da aba Pessoal)
+- [x] Aumentar largura da coluna CPF na tabela de colaboradores
+- [x] Adicionar campos de 13º Salário (1ª e 2ª parcela) na Folha de Pagamento
+- [x] Corrigir número de revisão que não está atualizando (Rev. 49)
+- [x] Ranking faltas/atrasos deve navegar para Fechamento de Ponto filtrado pelo funcionário (não para cadastro)
+- [x] Cards 13º Salário na Folha de Pagamento (1ª parcela=Nov, 2ª parcela=Dez)
+- [x] Notificações por e-mail de contratação/demissão em Configurações
+- [x] Substituir filtros avançados do Dashboard Horas Extras por seletor simples de mês com setas (igual Folha de Pagamento)
+- [ ] Nomes de funcionários clicáveis no Dashboard Funcionários (abre ficha de cadastro)
+- [ ] Reformular Resumo Total do Mês na Folha para formato tabela profissional (Colaboradores/Empregadores/Autônomos/Estagiários + Ativos/Admitidos/Demitidos/etc)
+- [ ] Nomes de funcionários clicáveis no Dashboard Funcionários (abre ficha de cadastro) - backend com employeeId
+- [ ] Sistema completo de gestão de usuários (criar, editar, excluir, desativar, alterar senhas)
+- [ ] Perfis de usuário com permissões granulares por módulo (Admin Master, Admin, Gestor, Operador, Consulta)
+- [ ] E-mails automáticos humanizados com saudação por horário (Excelente dia/tarde/noite)
+- [ ] Templates de e-mail editáveis na aba Notificações (Contratação, Demissão, Transferência, Afastamento)
+- [ ] Disparo automático de e-mail ao criar/alterar status de funcionário
+- [ ] Preview de e-mail na UI de Notificações
+- [ ] Tabela de log de notificações enviadas (notification_logs) com status de envio/leitura
+- [ ] Registro automático no log a cada disparo de notificação por mudança de status
+- [ ] Pixel de rastreamento para confirmação de leitura
+- [ ] Painel de histórico de notificações na aba Notificações E-mail com status visual (Enviado/Lido)
+- [ ] Editor de labels/nomes do menu nos Critérios do Sistema (renomear itens do sidebar)
+- [ ] Auto-refresh na tela de Detalhes da Folha (atualizar divergências sem sair da tela)
+- [ ] Critério "Bloquear consolidação com inconsistências pendentes" nos Critérios do Sistema
+- [ ] Validação no botão Consolidar com alerta de inconsistências
+- [ ] Assistente IA de inconsistências com sugestões didáticas de resolução
+- [ ] Melhorar textos de alerta de consolidação bloqueada com detalhes claros
+- [ ] Botão "Analisar com IA" ao lado de cada divergência
+- [ ] Campo de foto/avatar na tabela de Usuários do Sistema com upload e iniciais como fallback
+- [ ] Foto 3x4 no cadastro de funcionários (upload + exibição)
+- [ ] Foto 3x4 no relatório Raio-X do Funcionário
+- [ ] Remover funcionários duplicados do banco de dados
+- [ ] Regra-mãe de unicidade: CPF único global (todas empresas e status)
+- [ ] Regra-mãe de unicidade: RG único global
+- [ ] Regra-mãe de unicidade: cruzar dados pessoais (nome+nascimento) entre todas categorias
+- [ ] Validação visual no frontend ao cadastrar/editar com dados duplicados
+- [ ] Fluxo de desligamento com diálogo de Lista Negra (Blacklist)
+- [ ] Campo obrigatório de motivo para Lista Negra
+- [ ] Registro de auditoria: nome do usuário que desligou, data/hora, motivo
+- [ ] Todo desligamento exige motivo obrigatório categorizado
+- [ ] Workflow de reativação de Lista Negra com aprovação de 2 diretores
+- [ ] Dashboard de desligamentos com análise de motivos e tendências
+- [ ] Auditoria completa de desligamentos (quem, quando, motivo)
+- [ ] Dashboard interativo: cards clicáveis abrindo lista de funcionários
+- [ ] Dashboard interativo: gráficos clicáveis com drill-down
+- [ ] Dashboard interativo: rankings clicáveis abrindo detalhes
+- [ ] Dashboard interativo: cards de destaque clicáveis abrindo ficha
+- [x] Bug: Impressão/PDF do Raio-X do Funcionário mostra tela branca (apenas cabeçalho e rodapé visíveis)
+- [x] Soft Delete: Adicionar campo deletedAt no schema de employees (exclusão lógica)
+- [x] Soft Delete: Alterar rota de exclusão para marcar deletedAt em vez de DELETE permanente
+- [x] Soft Delete: Filtrar colaboradores excluídos em todas as queries (WHERE deletedAt IS NULL)
+- [x] Lixeira: Criar rota backend para listar colaboradores excluídos
+- [x] Lixeira: Criar rota backend para restaurar colaborador excluído
+- [x] Lixeira: Implementar aba Lixeira na tela de Auditoria do Sistema
+- [x] Lixeira: Botão Restaurar com confirmação e registro no log de auditoria
+- [x] Bug: Impressão/PDF do Raio-X do Funcionário mostra tela branca (apenas cabeçalho e rodapé visíveis)
+- [x] Filtro de status na tela Fechamento de Ponto (Todos / Conforme / Com Inconsistências)
+- [x] Bug: Ao mudar status para Desligado, abrir dialog para selecionar categoria de desligamento (Término de contrato, Justa causa, Pedido de demissão, Acordo mútuo, Fim de obra, Baixo desempenho, Indisciplina, Outros), data e motivo
+- [x] Melhorar layout de impressão do Raio-X: logo da empresa no cabeçalho + cores consistentes (#1B2A4A)
+- [x] Sidebar: Mostrar logo e nome da empresa selecionada dinamicamente (não fixo FC Engenharia)
+- [x] Converter TODOS os dialogs pequenos para FullScreenDialog (Consolidação Bloqueada, etc.)
+- [x] Implementar 3 níveis de permissão: admin_master / admin / user no schema e backend
+- [x] Dica do Sistema (configurações avançadas) só visível para admin_master
+- [x] Promover usuário owner para admin_master automaticamente
+- [ ] Número Interno: auto-geração sequencial por empresa (nunca repete, somente leitura)
+- [ ] Número Interno: atualizar TODOS os colaboradores existentes que não possuem número interno
+- [ ] Número Interno: tornar campo somente leitura no frontend (não editável)
+- [ ] Número Interno: adicionar critério/configuração na aba Configurações
+- [ ] Número do Contador: verificar e garantir que todos os colaboradores tenham o código correto
+- [ ] Bug: ANDERSON BRAGA SILVA aparece na Folha mas não está cadastrado na base de Colaboradores
+- [ ] Usuários: Adicionar botões Editar, Excluir e Alterar Perfil na tabela de Usuários
+- [ ] Usuários: Melhorar layout da tabela - mais espaçamento, tela mais larga, sem texto encavalado
+- [x] Desligamento: Motivo Detalhado só obrigatório quando marcar Lista Negra (opcional para desligamento normal)
+- [x] E-mail desligamento: remover branding Manus, usar logo/dados da empresa do colaborador
+- [x] E-mail desligamento: texto formal técnico RH focado em dar baixa no seguro de vida
+- [ ] E-mail desligamento: template editável nos Critérios do Sistema (categoria rescisão)
+- [x] Foto do colaborador: ajuste automático com object-fit cover e centralização no rosto (object-position top)
+- [x] Foto do colaborador: formato circular ou arredondado com tamanho fixo
+- [x] Foto do colaborador: mini avatar circular na tabela de listagem ao lado do nome
+- [x] E-mail: remetente deve mostrar nome da empresa ao invés de Manus Team
+- [x] E-mail: assunto deve conter nome da empresa ao invés de manus
+- [x] Raio-X: adicionar foto circular do colaborador no cabeçalho da tela
+- [x] Raio-X: adicionar foto circular do colaborador no PDF/impressão
+- [ ] Desligamento: motivo opcional para fim de contrato normal, obrigatório apenas para Blacklist
+- [ ] Renomear nomenclatura para "Blacklist" no código
+- [x] E-mail desligamento: remover seção "Demais Providências Rescisórias"
+- [x] E-mail desligamento: dados do funcionário em vermelho para destaque
+- [x] E-mail desligamento: layout mais limpo e organizado visualmente
+- [x] Ver Detalhes no alerta de divergências já abre na aba Detalhes com filtro Divergentes ativo
+- [x] Bug: Admin Master não consegue alterar critérios do sistema (mostra "Apenas admin pode alterar critérios")
+- [ ] Bug: Documentos (ASOs, Treinamentos, Atestados, Advertências) permanecem após exclusão do funcionário
+- [ ] Implementar cascade delete ou filtro para documentos de funcionários excluídos/desligados
+- [x] Bug: Limpeza do banco de dados falha por ordem de exclusão (FK constraints) - corrigir ordem
+- [ ] Adicionar campo editável de texto padrão para cada tipo de notificação (Contratação, Demissão, Transferência, Afastamento) na aba E-mail
+
+- [x] Refazer planilha modelo de importação de colaboradores com todos os campos corretos
+- [x] Incluir campo "Código Contábil" na planilha modelo e no código de importação
+- [x] Garantir que todos os campos da planilha modelo correspondem ao schema do banco de dados
+- [x] Adicionar botão de impressão na página de detalhes da função (Descrição + Ordem de Serviço NR-1)
+- [x] Adicionar botão de impressão da ficha da função (Descrição + OS NR-1) no Raio-X do colaborador
+- [x] IA ao gerar Descrição/OS NR-1 deve incluir automaticamente dados da empresa selecionada no texto
+- [x] Corrigir IA para usar dados reais da empresa (nome, CNPJ, data) ao gerar Descrição/OS NR-1 em vez de placeholders genéricos
+- [x] Criar rota backend + botão frontend para gerar Descrição/OS NR-1 com IA em lote para todas as funções incompletas
+- [x] Adicionar ações de editar, excluir e alterar perfil dos usuários na tela Configurações > Usuários
+- [x] Corrigir verificações de permissão para reconhecer admin_master como tendo todas as permissões de admin
+- [ ] Remover campo obrigatório de obra no cadastro de relógio de ponto (apenas cadastrar SN)
+- [ ] Adicionar seleção de relógio de ponto no cadastro de obras (mostrar apenas relógios não vinculados)
+- [x] Adicionar campo de alterar senha na tela de Editar Usuário
+- [x] Implementar sistema de Lixeira/Recuperação com soft delete para Admin Master
+- [x] Converter todas as operações DELETE para soft delete (set deletedAt/deletedBy/deletedByUserId)
+- [x] Adicionar campos deletedAt/deletedBy/deletedByUserId em todas as tabelas (users, asos, atestados, trainings, warnings, goldenRules, documentTemplates, epiDeliveries)
+- [x] Filtrar registros excluídos (isNull(deletedAt)) em todas as queries SELECT
+- [x] Criar tela de Lixeira com listagem, filtros, restauração e exclusão permanente
+- [x] Adicionar rota /lixeira no menu lateral (Administração)
+- [ ] Corrigir TS errors no goldenRules batch generation (fn.nome -> fn.name)
+- [x] Permitir renomear itens do menu na tela de Configurações > Menu (somente ADM Master)
+- [x] BUG CRÍTICO: Login local corrigido - aceita username OU email, case-insensitive, senha resetada para asdf1020
+- [x] Resetar senha do usuário felipe@fcengenhariacivil.com.br para asdf1020 (senha padrão oficial)
+- [x] Adicionar botão "Resetar Senha" na tela de Configurações > Usuários (já existia, atualizado para senha asdf1020)
+- [ ] BUG: Tela de login redireciona automaticamente para Manus OAuth após 5 segundos em vez de ficar no login local
+
+## MISSÃO 1 — Correção Menu Cinza
+- [x] Corrigir estilo cinza/tachado em itens renomeados no MenuConfigPanel
+
+## MISSÃO 2 — Motivo do Atestado
+- [x] Adicionar campo motivo (reason/reasonOther) na tabela atestados
+- [x] Criar lista de causas pré-definidas + opção "Outros"
+- [x] Adicionar critério de obrigatoriedade em Configurações (ADM Master)
+- [x] Atualizar backend e frontend de atestados
+
+## MISSÃO 3 — Aviso Prévio + Férias
+- [x] Criar tabela termination_notices (aviso prévio)
+- [x] Criar tabela vacation_periods (férias)
+- [x] Backend: CRUD aviso prévio com cálculo proporcional CLT
+- [x] Backend: opção 2h/dia ou 7 dias corridos
+- [x] Backend: previsão data rescisão + estimativa pagamento
+- [x] Backend: controle férias vencidas + alertas
+- [x] Frontend: tela Aviso Prévio (full, responsiva, filtros)
+- [x] Frontend: calendário férias mês a mês + fluxo caixa prévio
+- [x] Frontend: alertas férias vencendo/2ª férias
+- [ ] Integração com cartão de ponto (não gerar falta no aviso)
+
+## MISSÃO 4 — CIPA
+- [x] Criar tabelas cipa_mandates, cipa_members, cipa_meetings, cipa_minutes
+- [x] Backend: CRUD mandato, membros, reuniões, atas
+- [x] Backend: alerta automático por nº mínimo de funcionários (NR-5)
+- [x] Backend: estabilidade (1 ano após mandato)
+- [x] Frontend: tela CIPA (membros, mandato, eleição)
+- [x] Frontend: calendário reuniões + upload atas
+- [x] Frontend: alerta no painel quando precisa constituir CIPA
+
+## MISSÃO 5 — Módulo PJ
+- [x] Criar tabelas pj_contracts, pj_payments
+- [x] Backend: CRUD contratos, modelo pré-definido, preenchimento auto
+- [x] Backend: folha PJ (40% vale + 60% fechamento + bonificações)
+- [x] Backend: alertas 30 dias antes vencimento contrato
+- [x] Frontend: aba contrato automática ao cadastrar PJ
+- [x] Frontend: modelo contrato com impressão + anexo assinado
+- [x] Frontend: controle contratos (status, vencimento, renovação)
+
+## FINALIZAÇÃO
+- [x] Integrar tudo com Raio-X do Funcionário
+- [x] Adicionar rotas e itens no menu lateral
+- [x] Teste geral + checkpoint
+
+## SUGESTÕES IMPLEMENTADAS
+
+### Regra de Ouro — Atualizar Revisão
+- [x] Atualizar Rev. 49 → Rev. 50 em shared/version.ts
+
+### Sugestão 1 — Integrar Aviso Prévio com Cartão de Ponto
+- [x] Backend: ao processar ponto, verificar se funcionário está em aviso prévio
+- [x] Backend: não gerar falta automática durante período de aviso trabalhado
+- [x] Backend: aplicar redução de jornada (2h/dia ou 7 dias corridos) no cálculo
+- [x] Frontend: indicador visual no cartão de ponto quando em aviso prévio
+
+### Sugestão 2 — Dashboard de Férias no Painel Principal
+- [x] Backend: procedure para buscar férias vencendo nos próximos 30/60 dias
+- [x] Frontend: card no Painel Principal com férias vencendo
+- [x] Frontend: férias em andamento + agendadas + custo próximocer
+
+### Sugestão 3 — Exportação PDF dos Pagamentos PJ
+- [x] Backend: procedure para gerar relatório consolidado PJ
+- [x] Frontend: botão de exportar PDF na página Módulo PJ
+- [x] Frontend: relatório formatado com logo, dados da empresa, totais
+
+## BUGS
+- [x] Raio-X do Funcionário travado em "Carregando dados do funcionário..." após adição das queries de aviso prévio/férias/CIPA/PJ
+- [x] Reorganizar aba Bancário: dados do funcionário primeiro, Conta da Empresa por último
+- [x] BUG: Após login interno, sistema redireciona para Manus OAuth após 10-15 segundos — corrigido token SDK + redirect para /login
+- [x] BUG: Erro "Please login (10001)" na página /login — corrigido: Login.tsx usa query direta + main.tsx ignora erro em /login
+- [x] Menu lateral: não mudar posição do scroll ao clicar em item — salvar e restaurar scrollTop
+- [x] BUG: vacation_periods query falha — coluna companyId não existe na tabela (recriadas 5 tabelas com camelCase)
+
+## Rev. 56 - Correções Urgentes
+- [x] Fix Raio-X do Funcionário travado em "Carregando dados do funcionário..."
+- [x] Fix database schema mismatch (snake_case vs camelCase columns) em vacation_periods, termination_notices, cipa_meetings, pj_contracts, pj_payments
+- [x] Fix coluna motivo_outro → motivoOutro na tabela atestados
+- [x] Fix erros TypeScript em fechamentoPonto.ts, Obras.tsx e db.ts
+- [x] Atualizar Rev. 55 → Rev. 56 em shared/version.ts
+
+## Rev. 57 - Correção Scroll do Menu Lateral
+- [x] Fix barra de rolagem do menu lateral não ficar fixa ao clicar em todos os itens (alguns resetam o scroll)
+- [x] SidebarContent agora usa forwardRef para conectar ref ao DOM
+- [x] Scroll position e estado de seções expandidas persistem via variáveis de módulo (sobrevive remount)
+- [x] Atualizar Rev. 56 → Rev. 57
+
+## Rev. 58 - Configuração de Numeração Interna (Código Interno)
+- [x] Criar critérios de numeração interna em Configurações (Critérios do Sistema)
+- [x] Campo para alterar prefixo alfanumérico (ex: JFC → FC ou outro)
+- [x] Campo para definir próximo número sequencial
+- [x] Botão para resetar numeração (zerar para começar do 1)
+- [x] Preview da próxima numeração gerada (ex: "Próximo: FC001")
+- [x] Backend: rotas para salvar/buscar configuração de numeração
+- [x] Backend: rota para resetar numeração (atualizar próximo número para 1)
+- [x] Integrar com geração automática de codigoInterno ao cadastrar colaborador (já existia)
+- [x] Atualizar Rev. 57 → Rev. 58
+
+## Rev. 59 - Auditoria Completa: Filtro deletedAt IS NULL em Todo o Sistema
+- [x] BUG: Dashboard mostra 9 obras ativas quando só existem 5 (query não filtrava deletedAt)
+- [x] Auditoria completa de TODAS as queries do sistema
+- [x] homeData.ts: corrigido employees e obras queries
+- [x] dashboards.ts: corrigidas 18+ queries (statusDist, sexDist, setorDist, funcaoDist, contratoDist, estadoCivilDist, cidadeDist, ageDist, tenureDist, admissoes, demissoes, oldest, youngest, longestTenure, shortestTenure, allEmps cartaoPonto, allEmps horasExtras, allEmps EPIs, allObras)
+- [x] fechamentoPonto.ts: corrigidas 3 queries (employees import, obras import, obras preview)
+- [x] folhaPagamento.ts: corrigidas 6 queries (3x employees matching, 3x obras listing)
+- [x] controleDocumentos.ts: corrigida query de employees para import
+- [x] processosTrabalhistas.ts: corrigida query de desligados
+- [x] Verificado: avisoPrevioFerias.ts, cipa.ts, pjContracts.ts já tinham filtro correto
+- [x] Verificado: db.ts getEmployees e getObras já tinham filtro correto
+- [x] Atualizar Rev. 58 → Rev. 59
+
+## Rev. 60 - Fix Senha Reset Numeração
+- [x] BUG: Senha RESETAR2026 não é aceita ao resetar numeração interna
+- [x] Campo alterado de password para text (usuário vê o que digita)
+- [x] Auto-uppercase no input para evitar erro de maiúsculas/minúsculas
+- [x] Trim no backend para evitar espaços acidentais
+- [x] Atualizar Rev. 59 → Rev. 60
+
+## Rev. 61 - Redesign Abas Raio-X
+- [x] Redesenhar layout das abas do Raio-X do Funcionário (amontoadas/ilegíveis com 17 abas)
+- [x] Implementar layout organizado em grid 2x2 com 4 categorias: Geral, SST, Financeiro, Disciplinar/Saída
+- [x] Labels coloridos por categoria com bordas temáticas
+- [x] Todas as 17 abas acessíveis e funcionais
+- [x] Atualizar Rev. 60 → Rev. 61
+
+## Rev. 62 - Correção Aba PJ no Raio-X
+- [x] Ocultar aba PJ no Raio-X para colaboradores CLT (só mostrar para tipo_contrato = PJ)
+- [x] Testado: CLT (Ademir) sem aba PJ / PJ (Ricardo) com aba PJ
+
+## Rev. 63 - Contrato Formal PJ + Adicionais PJ
+- [ ] Criar modelo de contrato formal PJ para impressão/PDF com dados dinâmicos do colaborador
+- [ ] Renomear "Horas Extras" para "Adicionais" no Raio-X para colaboradores PJ
+- [ ] Ocultar aba "Horas Extras" para PJ (PJ não tem HE por lei)
+- [ ] Criar tabela/schema de adicionais PJ (comissões, pagamentos extras, horas adicionais)
+- [ ] Criar CRUD de adicionais PJ no backend e frontend
+- [ ] Integrar botão de gerar contrato PJ na aba PJ do Raio-X
+
+## Rev. 63 - BUG CRÍTICO: Cálculo de Férias Errado
+- [ ] Investigar e corrigir cálculo de férias (valores absurdos: R$ 400.000 para Técnico de Segurança)
+- [ ] Provável erro de parsing do salário (formato BR com ponto/vírgula)
+- [ ] Revisar TODOS os cálculos de férias no sistema
+- [ ] Identificar automaticamente funcionários de férias na importação da folha de pagamento
+- [ ] Separar valores de férias (salário + 1/3) da folha normal ao importar
+- [ ] Sinalizar na folha que funcionário está de férias naquele mês
+- [ ] Formatar jornada de trabalho no Raio-X (JSON bruto → tabela visual simples)
+- [ ] Alterar labels da jornada de "Seg/Ter/Qua..." para "Segunda/Terça/Quarta..." por extenso
+
+## Rev. 63 - Nova Abordagem: Contrato PJ como Página Dedicada
+- [ ] Criar página /contrato-pj/:id como rota do sistema (sem popup/blob/window.open)
+- [ ] Backend tRPC: rota para buscar dados completos do contrato PJ por ID
+- [ ] Página renderiza contrato formal diretamente no app com CSS de impressão
+- [ ] Botão "Imprimir" usa window.print() nativo (funciona em qualquer ambiente)
+- [ ] Botão no Raio-X navega para a rota (useLocation do wouter)
+- [ ] Remover código antigo de Blob URL do RaioXFuncionario.tsx
+- [ ] Atualizar versão sidebar Rev. 60 → Rev. 63
+- [ ] Banner visual de LISTA NEGRA no Raio-X (colaboradores blacklist)
+- [ ] Corrigir filtro Blacklist (mostra 0 mas há colaborador no banco)
+- [x] Corrigir formato de valores monetários nos Processos Trabalhistas (45000.00 → R$ 45.000,00)
+- [x] Adicionar coluna Tipo de Contrato (CLT/PJ) na tabela de colaboradores ao lado do CPF
+- [x] Recriar página Contrato PJ com layout profissional (logo empresa, cabeçalho bonito)
+- [x] Usar texto exato do modelo DOCX fornecido pelo cliente
+- [x] Criar aba "Contrato PJ" nas Configurações/Critérios do Sistema para editar texto padrão
+- [x] Criar tabela no banco para armazenar template editável do contrato PJ
+- [x] Busca de colaboradores filtrar por qualquer campo (tipo contrato, setor, função, status, etc)
+- [x] Varredura completa: adicionar todos os módulos faltantes na tela de Limpeza de Dados
+- [x] Processos Trabalhistas: adicionar botões editar/excluir na tabela
+- [x] Processos Trabalhistas: seleção múltipla com checkbox para excluir em lote
+- [x] Processos Trabalhistas: criar rota backend de exclusão (delete e deleteBatch)
+- [x] CIPA: alerta só aparecer quando NÃO tem mandato ativo com membros suficientes (sumir quando CIPA já constituída)
+- [x] EPIs: seleção múltipla com checkbox + exclusão em lote na tabela de Catálogo de EPIs
+- [x] Funções/Cargos: corrigir filtros dos cards de estatísticas (Com CBO, Com Descrição, etc.) - não filtram ao clicar
+- [x] Fluxo de Caixa Prévio: adicionar gráfico de barras abaixo do Total Estimado Anual
+
+## ALINHAMENTO APRESENTAÇÃO vs SISTEMA — Gaps Identificados
+
+### SLIDE 4 — Painel Principal (Widgets faltantes)
+- [x] Widget "Afastados" no painel principal (JÁ EXISTE no homeData backend + Home.tsx)
+- [x] Widget "Licença" no painel principal (JÁ EXISTE no homeData backend + Home.tsx)
+- [x] Widget "Próximas Audiências" no painel principal (JÁ EXISTE no homeData backend + Home.tsx)
+- [x] Widget "Movimentações 30 dias" com atividade recente (JÁ EXISTE no homeData backend + Home.tsx)
+
+### SLIDE 6 — Cadastro de Empresas
+- [x] Validação automática de CNPJ (JÁ IMPLEMENTADO - Fase 10)
+- [x] Campos Inscrição Estadual e Inscrição Municipal no cadastro de empresas (ADICIONADO AGORA)
+
+### SLIDE 7 — Perfis e Permissões (4 níveis)
+- [ ] Implementar perfil "Operacional" (lançamentos diários, upload, sem configurações)
+- [ ] Implementar perfil "Consulta" (somente leitura, ideal para auditores)
+- [ ] Permissões granulares por módulo para cada perfil
+
+### SLIDE 8 — Critérios do Sistema (Categorias faltantes)
+- [ ] Critérios de Folha: regras de desconto, cálculo INSS/IRRF/FGTS
+- [ ] Critérios de Benefícios: VT, VA/VR, Plano de Saúde (valores padrão)
+- [ ] Referência CLT visível ao lado de cada valor configurado
+
+### SLIDE 12 — Templates de Documentos
+- [ ] Geração automática de PDF com variáveis preenchidas ({nome}, {cpf}, {função}, {data}, {empresa})
+- [ ] Assinatura digital integrada nos documentos
+
+### SLIDE 15 — Cadastro de Colaboradores (Campos faltantes)
+- [x] Campo "Cargo" separado de "Função" no cadastro (JÁ EXISTE no schema - campo cargo)
+- [x] Campo "Contato de Emergência" (nome, telefone) (JÁ EXISTE no schema) + parentesco ADICIONADO AGORA
+- [x] Campo "CTPS" (número e série) (JÁ EXISTE no schema - ctps + serieCTPS)
+- [x] Campo "Título de Eleitor" (JÁ EXISTE no schema - tituloEleitor)
+- [x] Campo "CNH" (número, categoria, validade) (JÁ EXISTE no schema)
+- [x] Campo "Chave PIX" na aba Bancário (JÁ EXISTE no schema - chavePix + tipoChavePix)
+
+### SLIDE 16 — Raio-X do Colaborador (Informações faltantes)
+- [ ] Histórico de salário/reajustes no Raio-X (timeline de aumentos)
+- [ ] Ranking de faltas/atrasos individual no Raio-X
+
+### SLIDE 17 — Lista Negra (Melhorias)
+- [x] Consulta automática de CPF/RG ao cadastrar novo funcionário (JÁ IMPLEMENTADO - checkBlacklist no routers.ts)
+- [x] Bloqueio automático de cadastro quando CPF está na lista negra (JÁ IMPLEMENTADO)
+
+### SLIDE 26 — Férias (Melhorias)
+- [ ] Controle de 1/3 constitucional no cálculo de férias
+- [ ] Opção de abono pecuniário (venda de 10 dias)
+- [ ] Status automático "Férias" ao iniciar período e retorno automático "Ativo"
+
+### SLIDE 30 — Advertências
+- [x] Sequência automática de advertências (JÁ IMPLEMENTADO - REVISÃO_01 advertencias progressivas CLT)
+
+### SLIDE 32 — Controle de Entregas de EPI
+- [x] Campo "Fornecedor" no cadastro de EPI (ADICIONADO AGORA)
+- [ ] Assinatura digital na entrega de EPI
+- [ ] Exportar Ficha de EPI completa em PDF (por funcionário)
+
+### SLIDE 33 — Acidentes, DDS e CIPA
+- [x] Registro fotográfico no DDS (campo fotosUrls ADICIONADO no schema)
+- [ ] Calendário visual de reuniões CIPA
+
+### SLIDE 34 — Segurança do Trabalho (FISPQ e Riscos)
+- [ ] FISPQ: classificação de risco 1-5, EPI necessário, primeiros socorros, armazenamento
+- [ ] Mapeamento de Riscos: 5 tipos (Físico, Químico, Biológico, Ergonômico, Acidente)
+- [ ] Auditorias internas/externas com plano de ação (responsável + prazo)
+
+### SLIDE 35 — Controle de PJ (Melhorias)
+- [ ] Validação automática de CNPJ do PJ
+- [ ] Renovação automática de contrato PJ (alerta + opção de renovar)
+- [ ] Relatórios separados CLT vs PJ
+- [ ] Dashboard de custos PJ
+
+### SLIDE 36 — Processos Trabalhistas (Melhorias)
+- [ ] Dashboard Jurídico completo (valor em risco, processos por status, por advogado)
+- [ ] Alertas automáticos de audiências e prazos
+
+### SLIDE 39 — IA Integrada (Funcionalidades avançadas)
+- [ ] Análise Preditiva (padrões de vencimento, tendências de HE)
+- [ ] Classificação Inteligente de documentos (upload → IA sugere tipo e preenche campos)
+- [ ] Sugestões automáticas de resolução de inconsistências
+
+### SLIDE 40 — Auditoria e Segurança
+- [ ] Log de downloads/exportações na auditoria
+- [ ] Log de tentativas de acesso negadas
+- [ ] Log de alterações de permissão
+
+## Correção do Sistema de Permissões e Roles
+- [x] Corrigir getAllUsers para filtrar usuários excluídos (soft delete)
+- [x] Corrigir auth.me para não retornar campo password
+- [x] Corrigir Select nativo de role na tabela de usuários (substituir por shadcn Select)
+- [x] Adicionar invalidação de cache auth.me após mudança de role
+- [x] Corrigir label de role no sidebar footer (estava hardcoded "Admin Master")
+- [x] Adicionar filtragem de menu baseada em role (admin-only paths)
+- [x] Adicionar restrição admin-only nas mutations de profiles (create, update, delete)
+- [x] Filtrar tabs de Configurações baseado no role do usuário
+- [x] Corrigir inicialização do editRole (era string vazia, agora "user")
+- [x] Simplificar condição de envio de role no updateUser
+- [x] Melhorar badges de role na tabela de usuários (cores e bordas distintas)
+
+## Unificação da Página de Usuários e Permissões
+- [x] Unificar aba "Usuários" das Configurações com a página "Usuários e Permissões"
+- [x] Página única com: criação de usuário, definição de role, perfil por empresa e permissões granulares
+- [x] Remover aba "Usuários" das Configurações
+- [x] Manter "Novo Usuário" (username/senha) e "Novo Perfil" na mesma página
+- [x] Exibir tabela de usuários com role do sistema + perfil por empresa + permissões
+
+## Bug: Desconsolidar Mês - Permissão Admin Master
+- [x] BUG: Admin Master recebe erro "Apenas o Admin Master pode desconsolidar um mês" ao tentar desconsolidar
+- [x] Investigar e corrigir verificação de role na rota de desconsolidação
+
+## Bug: Relógio de Ponto - Auto-liberação quando obra muda de status
+- [ ] Quando obra muda para "Concluída" ou "Paralisada", liberar relógio automaticamente para realocação
+- [ ] Relógio deve ficar com status "Disponível" e sem obra vinculada
+
+## Melhoria: Vincular Relógios na Tela de Nova Obra
+- [x] Mostrar relógios disponíveis para alocação na tela de Nova Obra
+- [x] Permitir adicionar múltiplos relógios diretamente no cadastro da obra
+- [x] Relógios vinculados devem ser salvos automaticamente ao salvar a obra
+
+## Bug: Painel de Controle - Texto cinza e Drag and Drop
+- [x] BUG: Itens "Funções" e "Relógios de Ponto" aparecem com texto cinza sem motivo (verificado - não reproduzível, itens aparecem normais)
+- [ ] Implementar drag and drop para reorganizar itens do menu no Painel de Controle (já implementado no MenuConfigPanel)
+
+## Bug PERSISTENTE: Desconsolidar - Admin Master bloqueado
+- [x] BUG: Admin Master continua recebendo erro "Apenas o Admin Master pode desconsolidar" em produção
+- [x] Investigar TODAS as camadas: frontend, backend, e como o role é verificado
+- [x] Corrigir definitivamente (permitir admin + admin_master desconsolidar)
+
+## Módulo: Controle de Revisões do Sistema
+- [x] Criar tabela system_revisions no schema (id, version, titulo, descricao, data, tipo)
+- [x] Criar backend CRUD para revisões (apenas Admin Master)
+- [x] Criar página de Controle de Revisões no frontend (visível apenas Admin Master)
+- [x] Popular histórico de revisões existentes (12 revisões seed)
+- [x] Exibir número da revisão atual no rodapé do sidebar
+
+## Responsividade - Controle de Revisões
+- [x] Corrigir layout dos cards de estatísticas para ser responsivo (não quebrar em 2 linhas)
+
+## Bug CRÍTICO PERSISTENTE: Desconsolidar ainda bloqueado para Admin Master
+- [x] Deep debug: verificar qual role o ctx.user realmente tem quando a rota é chamada
+- [x] Verificar se há OUTRA verificação de permissão bloqueando (frontend ou middleware)
+- [x] Corrigir definitivamente - adicionado fallback de owner + logging detalhado + includes('admin')
+
+## Regra: Registrar TODA alteração como revisão
+- [x] Registrar Rev. 65 com todas as mudanças feitas (responsividade, correções, etc.)
+- [x] A partir de agora, SEMPRE registrar cada alteração no Controle de Revisões
+
+## Rev. 66 - Fechamento de Ponto - Detalhe do Colaborador (em vez de Raio-X)
+- [x] Remover redirecionamento para Raio-X ao clicar no nome do colaborador
+- [x] Clique no nome agora abre visão detalhada de ponto do mês (viewMode detalhe)
+- [x] Card totalizador no topo: Dias Trab., Horas Totais, Horas Extras, Atrasos, Obras, Inconsistências, Conflitos
+- [x] Exibir competência, jornada e badge de múltiplas obras no card
+- [x] Painel de inconsistências pendentes do funcionário na visão de detalhe com botão Resolver
+- [x] Botão "Raio-X Completo" no header como opção secundária
+- [x] Ícone Raio-X na coluna de ações das tabelas (substituindo ícone de olho)
+- [x] Comportamento consistente em todas as abas: Resumo, Inconsistências, Conflitos, Rateio
+- [x] Registrado Rev. 66 no banco + shared/version.ts
+- [x] 41 testes passando (12 novos + 29 existentes)
+
+## Rev. 67 - Corrigir Fluxo de Advertência nas Inconsistências
+- [x] BUG: Botão de advertência nas inconsistências auto-resolve/cancela a inconsistência — CORRIGIDO
+- [x] BUG: Botão de advertência não navega para o formulário correto — CORRIGIDO (navega para Controle de Documentos)
+- [x] Advertência NÃO resolve a inconsistência automaticamente — são ações independentes
+- [x] Botão abre formulário completo de advertência (tipo, motivo, testemunhas) pré-preenchido via sessionStorage
+- [x] Usuário escolhe tipo (Verbal/Escrita/Suspensão/Justa Causa/OSS) e preenche todos os campos
+- [x] Inconsistência permanece pendente até ser resolvida separadamente (Justificar ou Ajustar)
+- [x] Dialog de Resolver Inconsistência agora só oferece Justificar e Ajustar (advertência é ação separada)
+- [x] Registrada Rev. 67 no banco + shared/version.ts
+- [x] 36 testes passando (6 novos + 30 existentes)
+
+## Rev. 68 - Detecção Inteligente de Conflitos de Obra (Transferência vs Sobreposição)
+- [x] Analisar lógica atual de detecção de conflitos de obra no backend e frontend
+- [x] Distinguir entre SOBREPOSIÇÃO (horários iguais/muito próximos ≤5min) e TRANSFERÊNCIA (horários diferentes com gap >5min)
+- [x] Para TRANSFERÊNCIA: exibir análise visual Obra A → Obra B com gap de tempo e sugestão de saída
+- [x] Para SOBREPOSIÇÃO REAL: manter alerta vermelho "escolha qual obra manter"
+- [x] Backend enriquecido com campo transferAnalysis (fromObra, toObra, gapMinutes, suggestedExit)
+- [x] Badge visual: vermelho=Sobreposição, azul=Transferência, verde=Deslocamento Válido
+- [x] Alerta principal com contagem separada de sobreposições, transferências e deslocamentos
+- [x] Aplicado em aba Conflitos e visão Detalhe do Colaborador
+- [x] O sistema apenas alerta e sugere — o usuário decide e ajusta via Lançar Manual
+- [x] Registrada Rev. 68 no banco + shared/version.ts + 7 testes passando
+
+## Rev. 69 - Funcionários Não Identificados como Inconsistência Tratável
+- [x] Importar registros de funcionários não encontrados como pendentes (nova tabela unmatched_dixi_records)
+- [x] Armazenar nome original do relógio, batidas brutas, entrada/saída, obra e competência
+- [x] Nova aba "Não Identificados" no Fechamento de Ponto com badge de contagem
+- [x] Interface de vinculação: busca colaboradores do cadastro e vincula ao nome do relógio
+- [x] Ao vincular, reprocessa automaticamente (calcula horas, extras, atrasos, inconsistências)
+- [x] Opção de descartar registros inválidos com registro de quem descartou
+- [x] Agrupamento por nome com contagem de registros e datas
+- [x] Toast de importação reposicionado para canto inferior esquerdo
+- [x] 3 endpoints backend: listUnmatched, linkUnmatched, discardUnmatched
+- [x] Registrada Rev. 69 no banco + shared/version.ts + 13 testes passando
+
+## Rev. 70 - Salário/Hora Bidirecional + Código Interno Visível
+- [x] Campos Salário Base e Valor da Hora ambos editáveis
+- [x] Digitar Valor da Hora → calcula Salário Base automaticamente (hora × horas mensais)
+- [x] Digitar Salário Base → calcula Valor da Hora automaticamente (salário ÷ horas mensais)
+- [x] Código interno exibido em destaque grande ao lado direito do nome no header
+- [x] Estruturar para horista: valor da hora como dado mestre (destaque azul + estrela), salário como referência
+- [x] Formatação monetária correta (R$ com separadores de ponto e vírgula)
+- [x] Registrada Rev. 70 no banco + shared/version.ts + 9 testes passando
+
+## Rev. 71 - Memória de Vinculação DIXI + Simulador Folha + Tipo Contrato Horista
+- [ ] Criar tabela dixi_name_mappings para salvar associação nome relógio ↔ colaborador
+- [ ] Na importação DIXI, consultar memória antes de tentar match por nome
+- [ ] Ao vincular nome não identificado, salvar automaticamente na memória
+- [ ] Simulador de folha por mês: campo dias úteis → calcula salário previsto de cada horista
+- [ ] Interface do simulador na Folha de Pagamento ou Fechamento de Ponto
+- [ ] Tipo de contrato "Horista" no cadastro do colaborador
+- [ ] Ao selecionar Horista, destacar automaticamente campo Valor da Hora
+- [ ] Registrar Rev. 71
+
+## Rev. 71 — Memória DIXI, Simulador Horistas, Tipo Horista
+
+- [x] Tabela dixi_name_mappings no banco de dados
+- [x] Tipo de contrato "Horista" adicionado ao enum
+- [x] Memória DIXI: auto-save ao vincular nome não identificado
+- [x] Memória DIXI: consulta de mapeamentos no import para auto-match
+- [x] Memória DIXI: aba "Memória DIXI" no Fechamento de Ponto com CRUD
+- [x] Memória DIXI: adicionar vinculação manual via dialog
+- [x] Memória DIXI: remover vinculação
+- [x] Simulador Horistas: endpoint backend com cálculo por dias úteis
+- [x] Simulador Horistas: aba "Simulador Horistas" no Fechamento de Ponto
+- [x] Simulador Horistas: cards de resumo (total horistas, horas/mês, total folha)
+- [x] Simulador Horistas: tabela com valor/hora, horas mês e salário previsto
+- [x] Tipo Horista: opção no Select de tipoContrato em Colaboradores
+- [x] Tipo Horista: badge amarelo na listagem
+- [x] Tipo Horista: destaque do campo Valor da Hora (amarelo) quando Horista selecionado
+- [x] Tipo Horista: label dinâmico "⚡ HORISTA" no campo Valor da Hora
+
+## Rev. 72 — Jornada de Trabalho Padrão e Cálculo de Horas Extras
+
+- [x] Critério padrão de jornada 44h semanais (Seg-Sex 07:00-17:00 + Sáb 07:00-11:00)
+- [x] Grid dia-a-dia no cadastro do colaborador (Padrão, Seg, Ter, Qua, Qui, Sex, Sáb, Dom)
+- [x] Entrada/Intervalo/Saída por dia da semana
+- [x] Sábado e Domingo = hora extra automática quando trabalhado
+- [x] Lógica robusta de cálculo de HE baseada na jornada contratada vs ponto real
+- [x] Integração do cálculo de HE na folha de pagamento
+- [x] Configurações globais de percentuais de HE (50%, 100%, noturno)
+
+## Rev. 73 — Contrato de Experiência CLT
+
+- [x] Campos no cadastro: tipo de experiência (30+30 ou 45+45), data início experiência, status
+- [x] Cálculo automático de datas de vencimento (1º período e 2º período)
+- [x] Status automático: Em Experiência, Prorrogado, Efetivado, Desligado
+- [x] Card na tela inicial (Dashboard) com colaboradores em experiência
+- [x] Alertas visuais de vencimento próximo (7 dias, vencido)
+- [x] Ações rápidas: Prorrogar, Efetivar, Desligar direto do painel
+- [x] Endpoint backend para listar experiências e executar ações
+- [ ] Testes unitários para lógica de prazos (futuro)
+
+## Correção — Datas/Horas das Revisões (GMT-3)
+- [x] Corrigir datas existentes no banco (UTC → Brasília GMT-3)
+- [x] Ajustar exibição no frontend para usar horário de Brasília (dateUtils.ts centralizado)
+- [x] Garantir que futuras inserções gravem no fuso correto (process.env.TZ = 'UTC' no servidor)
+- [x] Migrar TODAS as chamadas toLocaleString/toLocaleDateString para dateUtils em todos os arquivos
+- [x] Criar utilitários: formatDateTime, formatDate, formatTime, nowBrasilia, todayBrasiliaLong
+
+## Rev. 74 — Modelo de Contrato de Experiência CLT (Impressão + Upload)
+- [ ] Criar página /contrato-experiencia/:id para impressão do contrato formal CLT
+- [ ] Modelo com cláusulas padrão CLT (Art. 443, 445, 451)
+- [ ] Dados dinâmicos: empresa, colaborador, função, salário, jornada, datas
+- [ ] Layout profissional com logo da empresa, cabeçalho e rodapé
+- [ ] Botão "Imprimir Contrato" na seção de experiência do cadastro
+- [ ] Botão "Upload Contrato Assinado" com armazenamento S3
+- [ ] Campo para visualizar/baixar contrato assinado já enviado
+- [ ] Integrar com Raio-X do Funcionário (aba de documentos)
+- [x] Registrar Rev. 74
+
+## Rev. 74 — Contrato de Experiência: Modelo Impressão + Desligamento Completo + Upload
+- [ ] Melhorar dialog de desligamento na experiência (igual ao desligamento normal)
+- [ ] Adicionar campo "Categoria do Desligamento" (Término contrato, Justa causa, Baixo desempenho, etc.)
+- [ ] Adicionar checkbox "Adicionar à Lista Negra" com campo de motivo
+- [ ] Atualizar backend para aceitar categoria, motivo e lista negra no desligamento por experiência
+- [ ] Criar página /contrato-experiencia/:id para impressão do contrato formal CLT
+- [ ] Modelo com cláusulas padrão CLT (Art. 443, 445, 451)
+- [ ] Dados dinâmicos: empresa, colaborador, função, salário, jornada, datas
+- [ ] Layout profissional com logo da empresa
+- [ ] Botão "Imprimir Contrato" na seção de experiência do cadastro
+- [ ] Botão "Upload Contrato Assinado" com armazenamento S3
+- [x] Registrar Rev. 74
+
+## Bug Fix — Exclusão de Advertências não remove da lista
+- [x] Investigar por que a exclusão mostra sucesso mas o item não some
+- [x] Corrigir invalidação do cache após exclusão
+
+## Rev. 74 — Mega Atualização
+
+### 1. Bug Fix — Exclusão de Advertências
+- [x] Corrigir: exclusão mostra sucesso mas item não some da lista (filtro deletedAt adicionado)
+- [x] Garantir invalidação correta do cache após mutação de delete
+
+### 2. EPI — Campos de Custo e Vida Útil
+- [x] Adicionar campo "Valor do Produto" (custo unitário) no cadastro de EPI
+- [x] Adicionar campo "Tempo Mínimo de Troca" (vida útil em dias) no cadastro de EPI
+- [x] Verificar parâmetro do MT para vida útil de EPIs
+- [x] Configurações: campo "BDI sobre EPI (%)" para ADM Master (padrão 40%)
+- [x] Lógica de cobrança: se troca antes do prazo por perda/mau uso = Custo + BDI%
+- [x] Na ficha do funcionário: mostrar EPI com estimativa de troca, valor, alerta de cobrança
+- [x] Citar lei que permite desconto (CLT Art. 462 §1º) no rodapé
+- [x] Colaborador não vê o BDI, só o valor final de cobrança
+- [x] Mostrar valor total de EPIs em estoque na listagem
+
+### 3. EPI — Ficha Padronizada para Impressão
+- [x] Gerar ficha formal ao distribuir EPI (logo + cores da empresa)
+- [x] Texto padrão configurável nas Configurações
+- [x] Botão "Imprimir Ficha" após registrar entrega
+- [x] Upload da ficha assinada registrada no cadastro do funcionário
+
+### 4. Rankings de Pontualidade — Dashboard Cartão de Ponto
+- [x] Ranking Top 5 mais pontuais
+- [x] Ranking Top 5 mais atrasados
+- [x] Ranking Top 5 mais horas extras
+- [x] Ranking Top 5 menos dias trabalhados
+
+### 5. Preset "44h com Sábado"
+- [x] Novo botão no grid de jornada (Seg-Sex 8h + Sáb 4h = 44h)
+
+### 6. Dashboard de Horas Extras
+- [x] Visão consolidada mensal por colaborador (cards de resumo)
+- [x] Gráficos de HE 50% vs HE 100% (cards com totais e custo estimado)
+
+### 7. Dialog Desligamento Experiência (melhorado)
+- [x] Replicar padrão do desligamento normal com categorias de motivo (Art. 479, 480 CLT)
+- [x] Checkbox "Colocar na Lista Negra"
+- [x] Motivo detalhado + observações + cálculo automático de indenização
+
+### 8. Modelo Contrato de Experiência para Impressão
+- [x] Documento CLT formal (dados colaborador, empresa, datas, 8 cláusulas)
+- [x] Botão "Imprimir Contrato" na seção de experiência
+- [x] Upload do contrato assinado na ficha do funcionário
+
+### 9. Reestruturação Perfis de Acesso
+- [x] Tela "Tipos de Perfil": aba separada com cards visuais e checkboxes V/C/E/D por módulo
+- [x] Tela "Usuários": aba com cadastro de usuário, dados e perfil global
+- [x] Tela "Perfis por Empresa": aba com atribuição de tipo de perfil e personalização individual
+
+## Rev. 74 — Ajustes
+- [x] Adicionar botão de voltar na tela de Controle de Revisões
+
+## Rev. 74 — Ajustes
+- [x] Adicionar botão de voltar na tela de Controle de Revisões
+- [x] Adicionar Domingo na grade de jornada de trabalho (com badge HE, já existia)
+- [x] Bug: testemunhas na lista de advertências mostrando JSON bruto em vez de nomes formatados
+- [x] Ícones dinâmicos por tipo de EPI (capacete, luva, óculos, bota, protetor auricular, etc.)
+- [x] Busca automática de dados do EPI pelo número do CA (Ministério do Trabalho)
+- [x] Foto obrigatória do EPI ao trocar por desgaste normal, mau uso/dano ou perda
+- [x] Após registrar entrega, abrir ficha de entrega automaticamente para impressão
+- [x] Upload da ficha assinada obrigatório para dar baixa no EPI
+- [x] Critério nas Configurações para ativar/desativar obrigatoriedade do upload da ficha
+- [x] Ficha EPI: adicionar coluna Valor (custo + BDI) na tabela da ficha
+- [x] Ficha EPI: adicionar coluna Vida Útil (dias) na tabela da ficha
+- [x] Ficha EPI: texto legal atualizado com política de troca sem custo dentro do prazo
+- [x] Ficha EPI: base legal NR-6 item 6.7.1 sobre responsabilidade do empregado
+- [x] Ficha EPI: data e hora de emissão da ficha
+- [x] Ficha EPI: desconto claro dentro do mesmo mês
+- [x] Ficha EPI: foto obrigatória destacada na ficha
+- [x] Ficha EPI: layout padronizado com logo da empresa
+- [x] Bug: site não responsivo ao virar celular (viewport meta + CSS landscape + padding responsivo)
+- [x] Bug: consulta CA retorna erro "a[d] is not a function" - CORRIGIDO (migrado para site oficial CAEPI/MTE)
+- [x] Busca automática do CA ao digitar (debounce 800ms), sem precisar clicar no botão
+
+- [x] Simplificar exibição cobrança automática EPI: mostrar apenas valor final com BDI (sem detalhar cálculo)
+- [x] Bug: consulta CA ainda retorna "Erro na consulta" para CA 48067 - adicionado timeout e logs detalhados
+- [x] Melhorar formatação da ficha de entrega de EPI: logo no topo centralizado, cores padrão FC Engenharia
+- [x] Nome do arquivo PDF da ficha EPI: "EPI - Nome do Colaborador" ao salvar/imprimir
+- [x] Remover texto "(custo + encargos administrativos)" da seção de cobrança na ficha EPI
+- [x] Tornar linhas de EPI clicáveis no Raio-X do funcionário para abrir ficha de entrega e visualizar arquivo assinado
+- [x] Exibir nome do usuário que emitiu a ficha de EPI abaixo da data/hora de emissão
+- [x] Mover configurações de EPI (BDI, texto ficha) da página de EPIs para a tela de Configurações geral
+
+## Rev. 75 — Base CAEPI Local + Sistema de Descontos de EPI + Botão Atualizar Base CA
+
+### Base CAEPI Local (eliminar scraping)
+- [ ] Importar base CAEPI oficial do XLSX para tabela no banco de dados
+- [ ] Reescrever consulta CA para usar banco local (instantânea)
+- [x] Botão "Atualizar Base de CAs" nas Configurações para o usuário atualizar quando quiser (seção CAEPI com stats e botão refresh)
+
+### Sistema de Descontos de EPI
+- [x] Criar tabela epi_discount_alerts no schema (funcionarioId, epiDeliveryId, valor, status, validadoPor, dataValidacao, justificativa)
+- [x] Backend: criar alerta de desconto automaticamente ao registrar entrega por mau uso/perda/furto
+- [x] Backend: rotas CRUD para alertas de desconto (listar, validar, cancelar)
+- [x] Backend: bloquear fechamento da folha se houver descontos pendentes de validação
+- [x] Frontend: aba "Descontos" no Raio-X do funcionário com histórico completo
+- [x] Frontend: alerta obrigatório na folha de pagamento para DP validar desconto
+- [x] Frontend: botões "Confirmar Desconto" e "Cancelar Desconto" com justificativa
+- [x] Registrar Rev. 75
+
+### Uniformes e Controle de Tamanhos
+- [ ] Adicionar campo "Categoria" no cadastro EPI (EPI, Uniforme, Calçado)
+- [ ] Adicionar campo "Tamanho" para uniformes (PP, P, M, G, GG, XGG, XXGG) e calçados (34-48)
+- [ ] Controle de estoque por tamanho (ex: P:10, M:25, G:30)
+- [ ] Filtro por categoria e tamanho na listagem de EPIs/Uniformes
+- [ ] Exibir tamanho na entrega e na ficha de EPI
+
+## Correções Rev. 75
+- [x] Fix: índice codigoInterno alterado de global para composto (companyId + codigoInterno) para evitar conflito entre empresas
+- [x] Fix: createEmployee com retry automático em caso de duplicata de codigoInterno (até 5 tentativas)
+- [x] Fix: getEmployeeById agora filtra soft-deleted (isNull deletedAt)
+- [x] Fix: limpeza de dados de teste órfãos no banco de dados
+- [x] Todos os 247 testes passando (21 arquivos de teste)
+
+## Bug: Consulta CA + Erro insert epi_discount_alerts
+- [x] Corrigir erro insert epi_discount_alerts ao registrar entrega EPI com mau uso/dano (colunas snake_case vs camelCase corrigidas)
+- [x] Investigar e corrigir consulta CA no cadastro de EPI (CA 13211 e outros retornam erro) — corrigido fetch tRPC + schema caepiDatabase
+- [x] Registrar Rev. 76
+- [x] Adicionar categoria "EPI / Segurança" nos Critérios do Sistema com parâmetro BDI (%)
+- [x] Base CAEPI mostrando 0 CAs na produção - corrigido (40.467 CAs carregados)
+- [x] Bug: Raio-X do Funcionário travado em "Carregando dados do funcionário..." - corrigido (colunas epi_discount_alerts)
+- [x] Remover "Tempo mín. troca padrão do EPI" dos Critérios globais (é por EPI individual, não regra global)
+- [x] IA sugere vida útil (dias) automaticamente ao cadastrar EPI baseado no tipo de equipamento (com justificativa e nível de confiança)
+
+## Rev. 77 — Bug Timeline + Responsividade Mobile
+- [x] Bug CRÍTICO: Timeline mostrando itens excluídos (EPI, advertências, etc.) — filtrar deletedAt IS NULL em EPIs, Acidentes, Processos, Aviso Prévio, Férias
+- [x] Responsividade mobile: Raio-X header, tabs, data grids, EPIs page — tudo responsivo para mobile portrait
+- [x] Registrar Rev. 77
+
+## Rev. 78 — Descontos EPI: Interface Completa + Banner de Custo Visual
+- [x] Corrigir valor R$0,00 no desconto EPI — campos corrigidos (epiNome, valorUnitario, valorTotal, motivoCobranca, mesReferencia, validadoPor) mapeados corretamente do Drizzle schema
+- [x] Adicionar botões "Confirmar Desconto" (verde) e "Cancelar Desconto" (vermelho com justificativa obrigatória) na aba Descontos EPI do Raio-X
+- [x] Corrigir parâmetros da chamada validateDiscount (id/acao em vez de alertId/action) para corresponder ao backend
+- [x] Tabela de descontos EPI agora exibe: EPI, Motivo, Qtd, Valor Unit., Valor Total, Mês Ref., Status e Ações
+- [x] Resumo de descontos (Pendentes, Confirmados, Cancelados) com valores corretos
+- [x] Banner verde "Troca sem custo para o colaborador" no formulário de entrega de EPI (entrega regular ou desgaste normal)
+- [x] Banner vermelho "ATENÇÃO: Este item gerará desconto em folha" com valor + BDI quando motivo é mau uso/perda/furto
+- [x] Seção de cancelados mostra justificativa de cada cancelamento
+- [x] Fix: teste newModules.test.ts timeout aumentado para 15s (AppRouter integration)
+- [x] 247 testes passando (21 arquivos de teste)
+- [x] Registrar Rev. 78
+## Bug: Erro ao cadastrar EPI com nome muito longo (CA query)
+- [x] Nome do EPI vindo da consulta CAEPI excede limite da coluna varchar — coluna `nome` em epis e `epi_nome` em epi_discount_alerts aumentadas de 255/500 para 1000 caracteres
+## Ordenação Alfabética de Colaboradores
+- [x] Ordenar lista de colaboradores por nome em ordem alfabética por padrão (localeCompare pt-BR)
+## Bug: Percentuais de Horas Extras não persistem
+- [x] Percentuais HE (Dias Úteis, Domingos/Feriados, Adicional Noturno) voltam ao valor padrão após salvar e recarregar — frontend usava nomes errados (hePercentual50/100/Noturno), corrigido para nomes do banco (heNormal50, he100, heNoturna) em Colaboradores.tsx e db.ts
+## Bug: Ordenação alfabética não funcionando em produção
+- [x] Mateus aparecia fora de ordem — causa raiz: caractere TAB (0x09) no início do nome, limpado no banco e sanitização automática adicionada
+## Rev. 79 — Auditoria Completa de Campos + Ordenação
+- [x] Auditoria: comparados 89 campos do schema vs 67 do validFields vs 67 do frontend
+- [x] 23 campos faltantes adicionados ao validFields (experiência, desligamento, HE feriado/interjornada, lista negra, obsAcordoHe, etc.)
+- [x] 5 campos do frontend que eram silenciosamente descartados: categoriaDesligamento, codigoInterno, dataDesligamentoEfetiva, motivoDesligamento, parentescoEmergencia
+- [x] complementoObs renomeado para descricaoComplemento (nome correto no banco)
+- [x] booleanFields corrigido: recebeComplemento e acordoHoraExtra são tinyint (boolean), não int
+- [x] Sanitização automática de nomeCompleto (remove TAB/\r/\n e espaços extras) no create e update
+- [x] Dados limpos no banco (TRIM de todos os nomes com caracteres de controle)
+- [x] 247 testes passando (21 arquivos)
+## Fix: Ordenação alfabética confirmada
+- [x] Backend já tinha orderBy(asc(nomeCompleto)) — problema era dado sujo (TAB no nome)
+- [x] Frontend mantém .sort(localeCompare) como fallback
+## HE Percentuais: Input manual livre
+- [x] Trocar campos HE Dias Úteis, HE Domingos/Feriados e Adicional Noturno de spinner numérico para input texto livre (aceitar 60, 70, 80% etc.) — type=text com inputMode=numeric, sem limite max=100
+## Jornada de Trabalho: Campos de horário com digitação livre
+- [x] Converter selects de Entrada, Intervalo e Saída para combobox (opções pré-definidas + digitação manual livre, ex: 1h15 de intervalo) — componente TimeCombobox criado com dropdown + input texto, parse inteligente (1h15, 0730, 30min)
+## Bug: Critérios globais de HE não refletem nos funcionários sem acordo individual
+- [x] Quando altera HE nas Configurações (ex: 60%), funcionários sem acordo individual agora refletem o valor global da empresa em vez de CLT hardcoded (50%)
+- [x] Frontend busca critérios globais via trpc.criteria.getByCategory e exibe "Empresa: 60% (CLT: 50%)" nos campos
+- [x] Ao desmarcar acordo individual, valores resetam para os critérios da empresa (não mais para CLT)
+- [x] Visualização do funcionário mostra "Padrão Empresa (60/100/20%)" em vez de "Padrão CLT (50/100/20%)"
+## Central de Alertas: Fullscreen
+- [x] Fazer a Central de Alertas abrir em tela cheia (fullscreen) em vez de popup pequeno — DialogContent com 100vw/100vh
+## Controle de Revisões: Somente leitura + Registrar Rev. 75-80
+- [x] Remover botão "Nova Revisão" e botão de excluir — página somente leitura
+- [x] Inserir revisões 75 a 80 no banco com descrições detalhadas de cada atualização
+
+## Fase 29: Filtros no Controle de Revisões
+- [x] Cards de resumo (Total, Nova Funcionalidade, Correção de Bug, Melhoria, Segurança, Performance) devem funcionar como filtros clicáveis
+- [x] Ao clicar em um card, filtrar a lista de revisões mostrando apenas as do tipo selecionado
+- [x] Clicar novamente ou clicar em "Total" deve remover o filtro
+
+## Fase 30: Correção de Dados Desatualizados nos Dashboards
+- [x] Rankings e gráficos do Dashboard mostrando dados antigos (seed de teste) — corrigido: faltava filtro deletedAt
+- [x] Verificar se dados de seed ainda existem no banco e limpar se necessário — causa: advertências soft-deleted não eram filtradas
+- [x] Garantir que dashboards refletem apenas dados reais atuais — isNull(warnings.deletedAt) adicionado em 7 queries
+
+## Fase 31: Correção HE Percentuais — Usar Critério da Empresa como Padrão
+- [x] Tela dedicada em Configurações para sincronizar HE de funcionários com critérios da empresa
+- [x] Backend: procedure para listar funcionários com HE diferente e bulk-sync
+- [x] Frontend: tabela com checkboxes, selecionar todos, e botão sincronizar selecionados
+- [x] Remover banner inline do formulário do funcionário (ficou fora do escopo)
+
+## Fase 32: Módulo de Integração Dixi Ponto
+- [x] Schema: tabelas dixi_afd_importacoes e dixi_afd_marcacoes
+- [x] Backend: parser AFD (TypeScript) conforme Portaria 671 (Tipo 1=header, Tipo 3=marcação, Tipo 9=trailer)
+- [x] Backend: procedure de importação AFD com validações (SN, CPF, duplicidade)
+- [x] Backend: preview de importação (SN, período, marcações, CPFs identificados/não identificados)
+- [x] Backend: listagem de marcações com filtros (importação, data, CPF)
+- [x] Backend: histórico de importações com detalhes e exclusão
+- [x] Backend: dashboard stats (obras ativas, relógios, funcionários, importações, marcações, alertas)
+- [x] Frontend: página Dixi Ponto com 5 abas (Dashboard, Importar AFD, Histórico, Marcações, Alertas)
+- [x] Frontend: aba Importar com upload AFD + preview detalhado + confirmar importação
+- [x] Frontend: aba Histórico com log de importações expandível + exclusão
+- [x] Frontend: aba Marcações com filtros (importação, data, CPF) + tabela paginada
+- [x] Frontend: aba Alertas (CPFs não encontrados agrupados com contagem)
+- [x] Frontend: Dashboard com 6 cards de métricas + última importação
+- [x] Adicionar menu lateral "Dixi Ponto" na seção OPERACIONAL
+- [x] Testes unitários do parser AFD (10 testes passando)
+- [ ] API Dixi: autenticação OAuth2 não funcionou (endpoints retornam 404) — preparado para futuro
+- [ ] Frontend: aba Relógios com vinculação SN→Obra (usar tela existente de Relógios de Ponto)
+- [x] Bug: Dixi Ponto não aparece na lista de módulos configuráveis em Configurações (seção OPERACIONAL)
+
+## Fase 33: Motor de Cálculo CLT - Descontos Automáticos no Fechamento de Ponto
+- [x] Schema: tabela ponto_descontos para armazenar cálculos de descontos por funcionário/mês
+- [x] Critérios do Sistema: adicionar parâmetros CLT (tolerância atraso, desconto DSR, limite atestados, etc.)
+- [x] Backend: engine de cálculo CLT (atraso proporcional, falta, DSR, saída antecipada)
+- [x] Backend: detecção automática de atrasos/faltas/saídas antecipadas a partir das marcações
+- [x] Backend: cálculo de DSR perdido por semana (atraso > tolerância ou falta na semana)
+- [x] Backend: reflexo de faltas nas férias (Art. 130 CLT)
+- [x] Backend: procedure para gerar/recalcular descontos de um mês
+- [x] Frontend: aba/painel de Descontos no Fechamento de Ponto com revisão antes de fechar
+- [x] Frontend: status por funcionário (Pendente → Revisado → Fechado)
+- [x] Frontend: possibilidade de abonar/ajustar manualmente descontos
+- [ ] Folha de Pagamento: aba Descontos mostrando cálculos automáticos
+- [ ] Folha de Pagamento: comparativo sistema vs contabilidade para auditoria
+- [x] Testes unitários do motor de cálculo CLT
+
+## Fase 34: Módulo de Solicitação de Horas Extras
+- [x] Schema: tabela he_solicitacoes (obra, funcionários, data, horário, motivo, status, aprovador)
+- [x] Backend: CRUD de solicitações + aprovar/rejeitar (somente admin master)
+- [x] Backend: cruzamento automático batida vs solicitação aprovada no fechamento
+- [x] Frontend: página Solicitação de HE no menu Operacional
+- [x] Frontend: aba Solicitar (selecionar obra, funcionários, data, horário, motivo)
+- [x] Frontend: aba Aprovações (admin master aprova/rejeita pendentes)
+- [x] Frontend: aba Histórico (todas solicitações com status)
+- [x] HE não autorizada: flag no fechamento + sugestão de advertência
+- [x] Menu lateral: adicionar Solicitação de HE na seção Operacional
+- [ ] Renomear campo Matrícula para eSocial no cadastro do funcionário (frontend label)
+- [x] Campos rateáveis por obra: VA, VT, Seguro, Sindicato, FGTS, INSS, Dissídio, CCT, Pensão, DDS
+- [x] Regra vale: admitidos após dia 10 não recebem vale no mês de admissão (critério configurável)
+
+## Fase 35: Gap Analysis Completo - Reunião Gerencial RH (23/02/26)
+
+### Sprint 2A: Template Aviso Prévio + Alerta 80 dias
+- [x] Template de Aviso Prévio: gerar PDF/documento a partir da tela existente (tipo aviso_previo no documentTemplates)
+- [x] Alerta automático 80 dias antes do fim da obra para planejar avisos prévios dos funcionários alocados
+- [x] Exibir alerta no Painel Principal (Home) com lista de obras próximas do fim
+
+### Sprint 2B: Campos VT/Pensão/Licença + Campos Rateáveis por Obra
+- [x] Adicionar campos no employees: pensaoAlimenticia, valorPensao, tipoPensao, licencaMaternidade, dataInicioLicenca, dataFimLicenca
+- [x] Adicionar campos no employees: seguroVida, contribuicaoSindical, dissidio, convencaoColetiva
+- [x] Melhorar gestão de VT no cadastro (valor, tipo, operadora)
+- [x] Criar tabela feriados (nacionais + estaduais + municipais) para cálculos de salário horista
+- [x] Campos rateáveis por obra: VA, VT, Seguro, Sindicato, FGTS, INSS, Dissídio, CCT, Pensão, DDS
+
+### Sprint 2C: Aba Descontos na Folha + Unificar HE
+- [x] Aba Descontos na Folha de Pagamento: comparativo "sistema calculou" vs "contabilidade cobrou"
+- [x] Unificar lançamentos de HE: cruzar HE calculadas pelo sistema com HE da folha (upload contabilidade)
+- [x] Exibir divergências de HE para auditoria (sistema vs contabilidade)
+
+### Sprint 3A: Feriados + Salário Horista + Diferenças Salariais
+- [x] Tabela de feriados no banco (nacionais fixos + configuráveis por empresa)
+- [x] Ajustar simulador de horistas para considerar feriados e dias úteis variáveis por mês
+- [x] Critério de lançamento para diferenças salariais (dissídio, reajuste retroativo)
+- [x] Verificar/corrigir horário padrão e cálculos de HE nos critérios
+
+### Sprint 3B: PJ Medição Mensal + Upload Documentos Pessoais
+- [x] PJ como medição mensal: adicionar conceito de medição (horas trabalhadas x valor hora) no módulo PJ
+- [x] PJ: cálculo por horas trabalhadas/mês no pjPayments
+- [x] Upload de documentos pessoais (RG, CNH, CTPS, etc.) no cadastro do funcionário (S3)
+- [x] Visualização de documentos uploadados na ficha do funcionário
+
+### Sprint 3C: Regra Vale + Recontratação + Cadastro JF + Advertências Ponto
+- [x] Regra vale: admitidos após dia 10 não recebem vale no mês de admissão (critério configurável)
+- [x] Recontratação: fluxo de novo cadastro com mesmo CPF mantendo histórico anterior
+- [x] Cadastro manual de JF (campo justica adicionado ao módulo Processos)
+- [x] Verificar advertências automáticas por falta de ponto batido (sugestão de advertências implementada no motor CLT)
+
+### Futuro (não implementar agora)
+- [ ] Histograma da obra (orçado/planejado x realizado) - comparar mão de obra
+- [ ] Ficha de avaliação de desempenho → linkar com dossiê RH (Raio-X)
+- [ ] Ponto por geolocalização (GPS)
+- [ ] Nome/nº org igual em todos ERPs (TC e RDO) - padronizar nomenclatura
+
+## Fase 36: Frontend Novos Módulos + Dissídio por Ano + Campos Cadastro
+
+### Módulo Dissídio Separado por Ano
+- [x] Schema: tabela dissidios com histórico por ano (ano_referencia, percentual, data_base, data_aplicacao, status)
+- [x] Critérios CLT/MTE: data-base maio, percentual mínimo INPC, retroativo, piso salarial categoria
+- [x] Backend: router dissidio com CRUD + aplicação em massa + simulação
+- [x] Backend: aplicação automática do dissídio (reajuste salarial em massa por ano)
+- [x] Frontend: tela Dissídio separada por ano com histórico e aplicação
+
+### Campos Novos no Cadastro do Colaborador
+- [x] Frontend: campos pensão alimentícia (tipo, valor, percentual) no formulário
+- [x] Frontend: campos licença maternidade (data início, data fim, status) no formulário
+- [x] Frontend: campos seguro vida, sindicato, dissídio, CCT, DDS no formulário
+- [x] Frontend: campo VT melhorado (valor, tipo, operadora) no formulário
+
+### Frontend Novos Módulos
+- [x] Frontend: tela de Feriados (CRUD + seed nacionais)
+- [x] Frontend: tela de PJ Medições (horas x valor hora)
+- [x] Frontend: upload de documentos pessoais no cadastro do funcionário
+
+### Aba Descontos e Cruzamento HE na Folha
+- [x] Frontend: aba Descontos na Folha (comparativo sistema vs contabilidade)
+- [x] Frontend: aba Cruzamento HE na Folha (divergências sistema vs contabilidade)
+
+## Fase 37: Campo Fornecedor no Cadastro de EPIs
+- [x] Adicionar campo 'fornecedor' no schema da tabela de EPIs (+ CNPJ, contato, telefone, email, endereço)
+- [x] Atualizar backend (router) para aceitar e retornar campos do fornecedor
+- [x] Atualizar frontend do formulário de EPIs com busca automática por CNPJ via BrasilAPI
+
+## Fase 38: Reorganização das Abas do Cadastro de Colaboradores
+- [x] Auditar todas as abas e campos existentes para identificar duplicações
+- [x] Separar Benefícios (VT, VA/VR, Farmácia, Cesta Básica, Plano Saúde) de Obrigações Legais (Pensão, Licença, Seguro, DDS)
+- [x] Eliminar campos duplicados entre abas (removida aba duplicada)
+- [x] Criar aba Sindical separada (Sindicato, CCT, Contribuição, Dissídio)
+- [x] Validar que nenhum campo ficou duplicado ou fora de contexto (0 erros TS)
+
+## Fase 39: Limpeza de campos desnecessários no cadastro
+- [x] Remover campo Cesta Básica da aba Benefícios (substituído por VA) — já removido em sessão anterior
+- [x] Remover campo DDS da aba Obrigações (já existe módulo próprio na SST) — já removido em sessão anterior
+
+## Fase 40: Dissídio - Regra "nunca regredir" + Critério anual
+- [x] Regra: dissídio nunca pode regredir salário, só aumentar (validação backend criar + atualizar)
+- [x] Critério de % dissídio anual nos Critérios do Sistema (categoria adicionada em Configurações)
+- [x] Aplicação em massa do reajuste anual em todos os salários da base (tela Dissidio.tsx completa)
+- [x] Remover Cesta Básica da aba Benefícios — já removido
+- [x] Remover DDS da aba Obrigações — já removido
+- [x] 26 testes unitários para dissídio (regra não regressão, cálculo reajuste, retroativo, simulação em massa)
+- [x] Total: 300 testes passando (24 arquivos)
+
+## Fase 41: Correção de ordem do gráfico Tempo de Empresa
+- [x] Reorganizar barras do gráfico "Tempo de Empresa" em ordem crescente (< 3 meses → 3-6 meses → 6-12 meses → 1-2 anos → 2-5 anos → 5-10 anos)
+
+## Fase 42: Refatorar Dissídio — mover para Configurações
+- [x] Remover seção "Dissídio Coletivo" inteira da aba Sindical do cadastro de colaboradores
+- [x] Manter apenas Sindicato, CCT e Contribuição Sindical na aba Sindical
+- [x] Criar nova aba "Sindical / Dissídio" em Configurações com cadastro de ano + percentual de reajuste
+- [x] Botão "Aplicar" ao lado de cada ano para reajustar todos os CLT da empresa de uma vez (com confirmação)
+- [x] Regra: percentual nunca pode regredir (validação mantida no backend)
+- [x] Sem exclusão individual — é lei, todos os CLT ativos são reajustados
+- [x] 8 testes unitários para sindical router
+
+## Fase 43: Melhorar Dashboard EPIs com mais insights
+- [x] Corrigir formatação R$ para padrão brasileiro em todo o sistema (Epis.tsx e RaioXFuncionario.tsx)
+- [x] Criar endpoint backend com analytics expandidos de EPIs (consumo mensal, custo por obra, distribuição por categoria, ranking)
+- [x] Redesenhar dashboard EPIs com gráficos: consumo mensal, custo por obra, top EPIs consumidos, CAs vencendo, distribuição por categoria
+- [x] Adicionar cards de insight: custo médio por funcionário, taxa de reposição, EPIs mais trocados, valor total investido
+- [x] 308 testes passando (25 arquivos)
+
+## Fase 44: Filtros responsivos no Dashboard EPIs
+- [x] Adicionar filtros responsivos: período (De/Até), categoria, obra
+- [x] Layout adaptável para mobile e desktop (grid 1→2→4 colunas)
+- [x] Botão Filtros com indicador de filtros ativos
+- [x] Tags de filtros ativos com remoção individual
+- [x] Botão Limpar filtros
+- [x] Gráficos e tabelas reagem aos filtros selecionados
+
+## Fase 45: Botão de voltar na página Medições PJ
+- [x] Adicionar botão de voltar no header da página Medições PJ
+
+## Fase 46: Corrigir erro na atualização da Base CAEPI
+- [x] Investigar e corrigir falha no download de dados do Portal de Dados Abertos do Governo Federal
+- [x] Fonte primária alterada para FTP do MTE (ftp://ftp.mtps.gov.br) com arquivo pipe-delimited
+- [x] Deduplicação por número de CA (124k linhas → ~40k CAs únicos)
+- [x] Fallback para dados.gov.br API mantido
+- [x] 308 testes passando
+
+## Fase 47: Reestruturar como FC Gestão Integrada
+- [x] Criar tela Hub de Módulos como página inicial (cards visuais para cada módulo)
+- [x] Módulos atuais: RH & DP, SST (Segurança do Trabalho), Jurídico
+- [x] Módulos futuros (Em breve): Planejamento, Financeiro, Orçamento, Compras
+- [x] Reorganizar sidebar com botão voltar ao Hub (logo FC clicável)
+- [x] Atualizar branding para "FC Gestão Integrada" (título, header, footer, HTML)
+- [x] Preparar sistema de permissões por módulo (campo modulesAccess na tabela users)
+- [x] Botão de voltar ao Hub de Módulos na sidebar
+- [x] Rota / = Hub de Módulos, /painel = Dashboard principal
+- [x] 308 testes passando (25 arquivos)
+
+## Fase 48: Redesenhar Login + Hub com visual cinematográfico
+- [x] Gerar imagem cinematográfica de engenharia civil para fundo
+- [x] Atualizar tela de Login: trocar "Sistema de Gestão RH & DP" por "FC Gestão Integrada"
+- [x] Logo FC em destaque na tela de login e hub
+- [x] Redesenhar ModuleHub com visual premium, impactante e profissional
+- [x] Cards de módulos com efeito glass/translúcido sobre a imagem
+
+## Fase 49: Tela de edição de EPI + correção de salvamento
+- [x] Criar tela de edição de EPI igual à de cadastro, preenchida com dados atuais
+- [x] Corrigir bug: alterações no EPI não estão sendo salvas (updateEpiMut onSuccess agora navega de volta e reseta form)
+- [x] Ao clicar no EPI no catálogo, abrir formulário de edição (nome clicável + botão editar)
+
+## Fase 50: Reorganizar sidebar por módulo (RH & DP, SST, Jurídico)
+- [x] Mapear itens atuais da sidebar e classificar por módulo
+- [x] Criar seções separadas na sidebar: RH & DP, SST, Jurídico
+- [x] Cada módulo mostra apenas seus itens pertinentes, sem duplicidade
+- [x] Manter itens compartilhados (Cadastro: Empresas, Obras, etc.) em seção comum
+- [x] Navegação entre módulos via Hub ou troca na sidebar (seletor de módulo na sidebar)
+
+## Fase 51: Redesign Hub de Módulos - Tema Claro
+- [ ] Gerar 3 amostras de design claro com cores FC sutis
+- [x] Apresentar amostras ao usuário para escolha
+- [x] Implementar o design escolhido pelo usuário
+
+## Fase 52: Implementar Login split + Hub assimétrico
+- [x] Upload foto viaduto (escolhida pelo usuário) para S3
+- [x] Login: foto P&B à esquerda com "ERP - Gestão Integrada" + painel branco à direita com formulário
+- [x] Hub: layout assimétrico (título grande à esquerda, cards empilhados à direita)
+- [x] Sem logos (FC, etc) — apenas texto "ERP - Gestão Integrada"
+- [x] Cores azul marinho e amarelo/dourado sutis
+
+## Fase 53: Redesign Hub de Módulos - Visual mais impactante
+- [ ] Redesenhar Hub com design mais criativo, moderno e impactante
+- [ ] Melhorar hierarquia visual e apelo estético dos cards de módulos
+- [ ] Manter tema claro, cores FC sutis (azul marinho + dourado)
+- [ ] Título "ERP - Gestão Integrada" com mais destaque visual
+
+## Fase 54: Cadastro de Fornecedores de EPIs
+- [x] Criar tabela fornecedores_epi no banco (nome, cnpj, telefone, email, endereco, contato, observacoes)
+- [x] Criar procedures CRUD no backend (listar, criar, editar, excluir fornecedores)
+- [x] Integrar dropdown de fornecedores no formulário de cadastro/edição de EPI
+- [x] Ao selecionar fornecedor, preencher automaticamente CNPJ, telefone, email, endereço
+- [x] Botão "+" para cadastrar novo fornecedor direto do formulário de EPI
+- [x] Botão "Fornecedores" no catálogo para gerenciar lista completa
+- [x] Dialog de cadastro/edição de fornecedor com todos os campos
+- [x] Dialog de listagem de fornecedores com edição e exclusão
+- [ ] Testes vitest para as procedures de fornecedores
+
+## Fase 55: Bug - Tela de Login em branco
+- [ ] Investigar por que a tela de login não aparece nada ao acessar
+- [ ] Corrigir o bug e garantir que o login funcione corretamente
+
+## Fase 56: Hub Futurista tipo 2060
+- [x] Pesquisar referências de interfaces futuristas e sci-fi dashboards (Apple Vision Pro, glassmorphism, sci-fi HUD)
+- [x] Redesenhar Hub com visual futurista: mesh gradient animado, glassmorphism, cards com hover 3D, ícones flutuantes com glow
+- [x] Manter funcionalidade e usabilidade apesar do design avançado
+- [x] Tema claro com elementos futuristas (gradientes mesh, glassmorphism, animações staggered, accent glow)
+- [x] Gerar robô de IA engenheiro com capacete branco FC + colete de segurança + tablet holografico
+- [x] Implementar layout: robô à esquerda + título "Gestão Integrada" + cards glass à direita
+- [x] Watermark "ERP" gigante, ondas decorativas animadas, sombra drop-shadow no robô
+
+## Fase 57: Ajustar Hub para ficar idêntico ao mockup aprovado
+- [ ] Cards de módulos com ícones coloridos arredondados (azul claro RH, verde SST, azul escuro Jurídico)
+- [ ] Texto dos módulos em negrito grande como no mockup
+- [ ] Cards "Em Breve" na parte inferior com ícone de cadeado e relógio
+- [ ] Ondas douradas decorativas no fundo
+- [ ] Watermark "ERP" gigante atrás do título
+- [ ] Header com foto do usuário, ícone globo e seletor Company
+- [ ] Título "Gestão Integrada" em negrito grande
+
+## Fase 58: Corrigir Hub no mobile
+- [x] Robô com fundo cinza feio no mobile - escondido no mobile
+- [x] Robô ocupando tela toda no mobile - resolvido
+- [x] Esconder robô no mobile (hidden lg:block) - robô só aparece em desktop
+- [x] Focar nos cards de módulos no mobile - cards aparecem direto
+
+## Fase 59: Adicionar revisões no rodapé do Hub
+- [x] Adicionar rodapé no Hub de Módulos com número de revisão do sistema (Rev. 97)
+
+## Fase 60: Campo Cor do Capacete no Cadastro de EPI
+- [x] Pesquisar tabela padrão de cores de capacetes na construção civil (NR-6/NR-18)
+- [x] Adicionar campo corCapacete no schema do banco (coluna opcional na tabela epis)
+- [x] Exibir campo de cor condicionalmente quando EPI for tipo Capacete
+- [x] Criar legenda visual ao lado do campo com cores e suas funções
+- [x] Salvar cor do capacete no banco ao cadastrar/editar EPI
+- [x] Testes unitários (9 testes passando)
+
+## Fase 61: Controle de Acesso por Empresa (Permissões de Visibilidade)
+- [x] Criar tabela user_companies no banco (vínculo N:N entre usuários e empresas)
+- [x] Criar procedures backend para gerenciar permissões (listar, atribuir, remover)
+- [x] Atualizar tela de gestão de usuários com seleção de empresas permitidas
+- [x] Filtrar seletor de empresas no CompanyContext com base nas permissões
+- [x] Admin Master vê todas as empresas automaticamente (sem restrição)
+- [x] Testes unitários (12 testes, 329 total passando)
+
+## Fase 62: Reformulação Completa - Sidebar e Dashboards por Módulo
+- [x] Sidebar dinâmica: ao selecionar RH, mostrar APENAS itens de RH (Colaboradores, Obras, Setores, Funções, Ponto, Folha, etc.)
+- [x] Sidebar dinâmica: ao selecionar SST, mostrar APENAS itens de SST (EPIs, ASOs, Treinamentos, Acidentes, Riscos, CIPA, etc.)
+- [x] Sidebar dinâmica: ao selecionar Jurídico, mostrar APENAS itens de Jurídico (Processos Trabalhistas, Audiências, Provisões)
+- [x] Dashboard RH: painel com dados pertinentes a RH (headcount, turnover, folha, etc.)
+- [x] Dashboard SST: painel com dados pertinentes a SST (acidentes, treinamentos vencidos, EPIs, etc.)
+- [x] Dashboard Jurídico: painel com dados pertinentes ao Jurídico (processos, audiências, provisões)
+- [x] Admin Master vê tudo em todos os módulos (sem restrição)
+- [x] Remover itens não pertinentes de cada módulo (ex: colaboradores não aparece no Jurídico)
+- [x] Cada módulo com visual/identidade própria
+- [x] Testes e verificação visual (340 testes passando)
+
+## Fase 62b: Permissões Granulares por Módulo e Funcionalidade
+- [x] Criar tabela user_permissions no banco (userId, moduleId, featureKey, canAccess)
+- [x] Definir mapa de funcionalidades por módulo (RH: 14 features / SST: 3 features / Jurídico: 1 feature)
+- [x] Criar procedures backend para gerenciar permissões (getUserPermissions, setUserPermissions, getMyPermissions)
+- [x] Criar tela de configuração de permissões no cadastro de usuários (checkboxes por módulo e funcionalidade)
+- [x] Filtrar sidebar com base nas permissões do usuário logado (PermissionsContext)
+- [x] Bloquear módulos não permitidos no seletor da sidebar
+- [x] Admin Master vê tudo sem restrição
+- [x] Testes unitários (340 testes passando)
+
+## Fase 63: Dashboard de EPIs Aprimorado
+- [ ] Item mais utilizado
+- [ ] Item menos utilizado
+- [ ] Item mais caro
+- [ ] Item mais barato
+- [ ] Funcionário que mais recebe EPI
+- [ ] Funcionário que recebe menos EPI
+- [ ] Custo de EPI por funcionário
+- [ ] Obra que mais solicita EPI
+- [ ] EPI mais perdido/estragado
+- [ ] Sugestões adicionais (taxa de reposição, previsão de consumo, validade média, etc.)
+
+## Fase 64: Filtros Responsivos + Alerta de Desconto EPI
+- [x] Analisar lógica do alerta de desconto na página de EPIs
+- [x] Tornar alerta de desconto clicável com DescontosDialog (quem, qual EPI, valor, motivo)
+- [x] Explicar lógica do alerta ao usuário
+- [x] Tornar TODOS os filtros responsivos (8 páginas corrigidas: Epis, FechamentoPonto, ControleDocumentos, Ferias, Obras, Setores, Colaboradores, FolhaPagamento)
+- [x] Testes e verificação visual (340 testes passando)
+
+## Bug: Listagem de usuários travada em "Carregando..."
+- [x] Investigar e corrigir bug na listagem de usuários após mudanças de permissões (schema Drizzle mapeava colunas camelCase mas tabela usava snake_case)
+
+## Fase 65: Reorganizar Tela de Usuários + Corrigir Bug
+- [x] Corrigir bug: aba "Usuários" travada em "Carregando..." (mapeamento de colunas snake_case no schema)
+- [x] Reorganizar estrutura: remover abas "Tipos de Perfil" e "Perfis por Empresa"
+- [x] Criar painel de configuração completo ao clicar no usuário (perfil, módulos, empresas)
+- [x] Ao configurar usuário: definir perfil global, módulos acessíveis, empresas visíveis
+- [x] Simplificar UX para fluxo mais intuitivo
+
+## Fase 63: Dashboard de EPIs Aprimorado (implementação)
+- [x] Criar queries backend para análises avançadas de EPI
+- [x] Item mais utilizado (maior quantidade de entregas)
+- [x] Item menos utilizado (menor quantidade de entregas)
+- [x] Item mais caro (maior valor unitário)
+- [x] Item mais barato (menor valor unitário)
+- [x] Funcionário que mais recebe EPI (maior quantidade de entregas)
+- [x] Funcionário que recebe menos EPI (menor quantidade de entregas)
+- [x] Custo de EPI por funcionário (valor total gasto por pessoa)
+- [x] Obra que mais solicita EPI (maior volume de entregas por obra)
+- [x] EPI mais perdido/estragado (maior taxa de reposição por motivo)
+- [x] Sugestões adicionais: taxa de reposição, previsão de consumo, evolução custo mensal, custo por obra detalhado, motivos de reposição
+- [x] Redesenhar frontend do Dashboard de EPIs com novos cards e gráficos
+- [x] Testar e validar todas as análises (340 testes passando)
+
+## Fase 64: Correções na Tela de Fornecedores de EPI
+- [x] Remover seção "Dados do Fornecedor" do formulário principal de EPI (novo e editar)
+- [x] Corrigir botão "Cadastrar novo fornecedor" que não abria o dialog (dialog estava no return da MAIN VIEW mas não nos returns de novo_epi/editar_epi)
+- [x] Extrair FornecedorDialog para componente reutilizável
+- [x] Implementar autocompletar CNPJ via BrasilAPI no cadastro de fornecedor
+- [x] Ao digitar CNPJ, preencher automaticamente nome, telefone, endereço, email
+- [x] Testar e validar todas as correções
+
+## Fase 65b: Mover Alerta de Desconto EPI para Folha de Pagamento
+- [x] Remover alerta de desconto de EPI do Dashboard de EPIs (componente DescontosDialog e card removidos)
+- [x] Criar view "Descontos EPI" na Folha de Pagamento com botão no header
+- [x] Componente DescontosEPIView com filtros (Todos/Pendentes/Confirmados/Cancelados), cards de resumo e listagem
+- [x] Corrigir backend: ao excluir entrega de EPI, cancelar desconto pendente associado automaticamente
+- [x] Limpar descontos órfãos que referenciam entregas já excluídas no banco
+- [x] Testar e validar (340 testes passando)
+
+## Fase 66: Adicionar Tamanho U (Único) na Aba de Tamanhos de Camisa
+- [x] Adicionar opção "U" (Único) nos tamanhos de camisa
+
+## Fase 67: Alterar tamanho "U" para "Único"
+- [x] Alterar label de "U" para "Único" na lista de tamanhos de uniforme
+
+## Fase 68: Adicionar % em todos os gráficos dos dashboards
+- [x] Atualizar componente DashChart para exibir valor + percentual em todos os tipos de gráfico (plugin chartjs-plugin-datalabels)
+- [x] Verificar gráficos inline nos dashboards - todos 44 gráficos usam DashChart (6 dashboards)
+- [x] Testar e validar - percentuais exibidos corretamente em doughnut, bar, horizontalBar, line
+
+## Fase 69: Formatação automática de moeda no campo Valor do Produto (EPI)
+- [x] Criar utilitário de máscara de moeda brasileira (ponto milhar, vírgula decimal)
+- [x] Aplicar máscara nos campos de editar EPI, novo EPI e edição inline
+- [x] Converter corretamente ao salvar (parseCurrencyToFloat)
+- [x] Testado: 1055000 → 10.550,00 formatado automaticamente
+
+## Fase 70: Corrigir exibição de percentuais nos gráficos
+- [x] Remover labels fixos que sobrepõem textos em gráficos de barras (datalabels desativados para bar/line)
+- [x] Manter % apenas no tooltip (hover) para bar/horizontalBar/line - tooltip escuro com valor + %
+- [x] Em doughnut/pie: % dentro das fatias ≥5%, legenda com "Label: valor (%)" 
+- [x] Testar e validar visual limpo em todos os dashboards (FC Engenharia com dados reais)
+
+## Fase 71: Bug - Máscara de moeda não está funcionando no campo Valor do Produto
+- [x] Corrigir campo Valor do Produto: trocar input type="number" por type="text" com máscara de moeda
+- [x] Garantir formatação automática conforme digita (ex: 55454 → 554,54) - CONFIRMADO FUNCIONANDO
+
+## Fase 72: Adicionar campo "Condição" (Novo/Reutilizado) no cadastro de EPI
+- [x] Adicionar coluna `condicao` na tabela `epis` no schema do banco de dados
+- [x] Migrar banco de dados (SQL direto + schema atualizado)
+- [x] Atualizar rotas backend (create/update) para aceitar o campo condição
+- [x] Adicionar campo select "Condição" (Novo/Reutilizado) nos formulários de cadastro e edição de EPI
+- [x] Exibir condição na listagem/catálogo de EPIs (badge laranja "Reutilizado")
+- [x] Marcar fase 71 como concluída (máscara de moeda já funcionava)
+
+## Fase 73: Filtro de Condição (Novo/Reutilizado) no Catálogo de EPIs
+- [x] Adicionar estado de filtro de condição (Todos/Novo/Reutilizado)
+- [x] Adicionar Select de filtro ao lado da barra de busca no catálogo
+- [x] Aplicar filtro na lista de EPIs exibidos
+
+## Fase 74: Exibir badge "Novo" na listagem de EPIs (igual ao "Reutilizado")
+- [x] Adicionar badge verde "Novo" na listagem do catálogo para EPIs com condição Novo
+
+## Fase 75: Responsividade da página de EPIs
+- [x] Tornar cards de estatísticas responsivos (flex com scroll horizontal em mobile)
+- [x] Tornar barra de filtros (abas + busca + filtro condição) responsiva com flex-wrap
+- [x] Tabela do catálogo já tinha overflow-x-auto (mantido)
+
+## Fase 76: Tolerância de atraso e horas negativas no cartão de ponto
+- [x] Implementar tolerância de 10 minutos para atraso (não desconta se atraso <= 10min)
+- [x] Contabilizar chegada antecipada como hora extra (sem tolerância)
+- [x] Adicionar coluna "Saldo" no relatório de ponto (detalhe por obra e resumo por colaborador)
+- [x] Exibir saldo positivo em verde (+HH:MM) e negativo em vermelho (-HH:MM)
+- [x] Aplicar mesma lógica nos dois blocos de cálculo (processRecords e vinculação)
+- [x] Adicionar coluna Saldo nas tabelas de impressão/PDF
+
+## Fase 77: Modal de ajuste rápido para inconsistências no cartão de ponto
+- [x] Tornar badge "Inconsistente" clicável (abre modal de ajuste)
+- [x] Criar modal com campos de horário pré-preenchidos, destacando faltantes em amarelo
+- [x] Motivo obrigatório: Esqueceu de bater, Saiu mais cedo, Ficou doente, Falta justificada, Liberado pela chefia, Problema no relógio, Atraso justificado, Serviço externo, Outro
+- [x] Campo de descrição obrigatório quando motivo = Outro
+- [x] Backend atualizado para aceitar motivoAjuste e gravar na justificativa
+- [x] Registro marcado como ajuste manual e inconsistência resolvida automaticamente
+
+## Fase 78: Bug - Logout redireciona para tela de login OAuth ao invés da Home
+- [x] Corrigir logout para redirecionar para /login (tela de login do sistema) após fazer logout
+
+## Fase 79: Bug persistente - Logout não volta para tela inicial do sistema
+- [x] Investigar todo o fluxo de logout (useAuth, DashboardLayout, ModuleHub, Login.tsx, App.tsx)
+- [x] Corrigir ModuleHub.tsx: redirecionava para getLoginUrl() (OAuth Manus) quando !user, agora vai para /login
+- [x] Verificar todos os window.location.href no projeto - todos apontam para /login
+- [x] Único getLoginUrl() restante é o botão "Entrar com Manus OAuth" na tela de Login (correto)
+
+## Fase 80: Bugs no Ranking de Faltas do Dashboard de Cartão de Ponto
+- [x] Corrigir clique no colaborador do ranking: FechamentoPonto agora lê ?funcionario=X&mes=Y da URL
+- [x] Corrigir critério de 0.5 dias de falta: agora falta = 1 dia inteiro (sem meio dia)
+
+## Fase 81: Responsividade geral do sistema
+- [x] Tornar todas as tabelas do sistema responsivas (min-width:600px global em mobile + overflow-x-auto)
+- [x] Ajustar grids fixos (grid-cols-3/4/5/6) para responsivos com breakpoints sm/md em 10+ arquivos
+- [x] Adicionar overflow-x-auto em tabelas (Configuracoes, Lixeira, PJMedicoes, SolicitacaoHE)
+- [x] Grid de meses (12 colunas) agora 4 cols em mobile, 6 em tablet, 12 em desktop
+
+## Fase 82: Remover módulo Dixi Ponto
+- [x] Remover item "Dixi Ponto" do menu lateral (DashboardLayout, MenuConfigPanel, ModuleContext)
+- [x] Remover rota /dixi-ponto do App.tsx e import
+- [x] Arquivo DixiPonto.tsx mantido (desconectado)
+
+## Fase 83: Padronizar cores dos gráficos em todos os dashboards
+- [x] Criar paleta de cores padronizada (chartColors.ts) com CHART_PALETTE, SEMANTIC_COLORS e CHART_FILL
+- [x] Aplicar paleta nos 6 dashboards: Funcionários, Cartão de Ponto, Folha, EPIs, Horas Extras, Jurídico
+
+## Fase 84: Adicionar opções de Estado Civil no cadastro de colaboradores
+- [x] Adicionar: Amasiado, Separado, Separado Judicialmente, Outro (União Estável já existia)
+- [x] Atualizar enum no schema do banco de dados (ALTER TABLE employees)
+- [x] Atualizar formulário de cadastro de colaboradores com novas opções
+
+## Fase 85: Corrigir campo de busca de colaboradores em todas as telas
+- [x] Corrigido campo de busca no Aviso Prévio (z-index do input/overlay/dropdown)
+- [x] Corrigido campo de busca na CIPA
+- [x] Corrigido campo de busca nas Férias
+- [x] Corrigido campo de busca no Controle de Documentos
+- [x] Corrigido campo de busca no Módulo PJ
+
+## Fase 86: Reavaliação do cadastro de funcionários
+- [x] Colocar todos os funcionários como status "Ativo" (160 funcionários)
+- [x] Remover datas de desligamento futuro (dataDemissao, dataDesligamentoEfetiva)
+- [x] Limpar campo de observação que contenha referência a desligamento (69 limpos)
+- [x] Limpar campos de motivo/categoria de desligamento
+
+## Fase 87: Adicionar idade atual na ficha Raio X do funcionário
+- [x] Calcular e exibir idade atual baseada na data de nascimento (tela + impressão)
+
+## Fase 88: Corrigir dropdown e melhorar layout do Novo Aviso Prévio
+- [x] Remover limite de 20 itens no dropdown de colaboradores (mostrar todos os 160)
+- [x] Aumentar altura do dropdown e adicionar contador de resultados
+- [x] Melhorar layout geral do formulário (card com header, ícones, avatar, função/setor no dropdown)
+
+## Fase 89: Corrigir filtro de busca de colaboradores no Aviso Prévio
+- [x] Refatorado para usar Popover + Command (cmdk) do shadcn/ui
+- [x] Corrigido value do CommandItem para incluir nome+CPF+função+setor (cmdk filtra pelo value)
+- [x] Filtro agora funciona nativamente via cmdk (testado: "myrielle" filtra para 1 resultado)
+
+## Fase 89b: Limpeza de deletedAt de todos os funcionários
+- [x] Limpar deletedAt de todos os 299 funcionários no banco de dados
+
+## Fase 90: Corrigir Cálculo de Previsão de Rescisão no Aviso Prévio
+- [x] Botão "Calcular Previsão de Rescisão" agora exibe valores ao clicar (corrigido com trpc.useUtils())
+- [x] Exibe valores detalhados: saldo salário, aviso prévio indenizado, 13º proporcional, férias + 1/3, FGTS, multa 40%, total
+- [x] Exibe data limite de pagamento (Art. 477 §6º CLT - 10 dias úteis)
+
+## Fase 91: Apontamentos de Campo + Solicitação de Aviso Prévio
+
+### Módulo 1: Apontamentos de Campo
+- [ ] Schema: tabela field_notes (employeeId, data, tipo ocorrência, descrição, solicitanteId, status pendente/resolvido, respostaRH)
+- [ ] Backend: CRUD de apontamentos com filtro por empresa/status/data
+- [ ] Frontend: Tela de registro de ocorrência (gestor seleciona funcionário, data, tipo, descrição obrigatória)
+- [ ] Frontend: Painel RH com lista de pendências para resolver no fechamento do ponto
+- [ ] Integração: Apontamentos aparecem na timeline do funcionário
+
+### Módulo 2: Solicitação de Aviso Prévio (Fluxo de Aprovação)
+- [ ] Schema: tabela termination_requests (employeeId, solicitanteId, dataDesejada, motivoDetalhado obrigatório, status pendente/aprovado/rejeitado, parecerRH obrigatório, analisadoPorId, dataAnalise)
+- [ ] Backend: Criar solicitação (gestor), Analisar solicitação (RH aprovar/rejeitar com parecer)
+- [ ] Frontend: Formulário de solicitação (gestor: funcionário, data desejada, motivo detalhado obrigatório)
+- [ ] Frontend: Painel de análise RH (lista de solicitações pendentes, aprovar/rejeitar com parecer obrigatório)
+- [ ] Se aprovado: cria aviso prévio automaticamente e registra na timeline
+- [ ] Se rejeitado: registra na timeline do funcionário com motivo da rejeição
+- [ ] Notificação para RH quando nova solicitação é criada
+- [ ] Navegação: adicionar no menu lateral em Gestão de Pessoas
+
+## Fase 92: Corrigir cálculos de rescisão completamente errados
+- [x] Identificado: parseFloat("2.774,20") retornava 2.774 (R$2,77) em vez de 2774.20
+- [x] Criado utilitário parseBRL() compartilhado em server/utils/parseBRL.ts
+- [x] Corrigido em 5 arquivos: avisoPrevioFerias, dissidio, sindical, fechamentoPonto, folhaPagamento
+- [x] 13 testes unitários passando para parseBRL
+
+## Fase 93b: Estrutura de Benefícios de Alimentação por Obra
+- [x] Criar tabela meal_benefits no banco (companyId, obraId, cafeManha, lancheTarde, valeAlimentacao, janta, totalVA_iFood)
+- [x] Backend: CRUD de benefícios de alimentação por obra
+- [x] Frontend: Tela de configuração nas Configurações para definir valores por obra/localidade
+- [x] Integrar valores de VR/VA no cálculo de rescisão
+
+## Fase 94: Reescrita Completa do Cálculo de Rescisão + Benefícios de Alimentação + Lei 12.506/2011
+- [x] Criar tabela meal_benefit_configs no schema Drizzle (companyId, obraId, cafeManha, lancheTarde, valeAlimentacao, janta, ativo)
+- [x] Sincronizar tabela no banco de dados (db:push)
+- [x] Reescrever completamente a lógica de cálculo de rescisão no backend (avisoPrevioFerias.ts)
+- [x] Implementar Lei 12.506/2011: aviso prévio proporcional (30 dias + 3 dias por ano de serviço, máximo 90 dias)
+- [x] Calcular saldo de salário proporcional (dias trabalhados / 30 × salário)
+- [x] Calcular férias proporcionais + 1/3 constitucional (meses trabalhados / 12 × salário × 4/3)
+- [x] Calcular férias vencidas quando aplicável (períodos aquisitivos completos)
+- [x] Calcular 13º salário proporcional (meses trabalhados no ano / 12 × salário)
+- [x] Calcular VR proporcional (VR diário × dias trabalhados no mês)
+- [x] Calcular aviso prévio indenizado (dias extras Lei 12.506 × salário diário)
+- [x] Calcular FGTS estimado e multa 40% (informativo)
+- [x] Calcular data limite de pagamento (Art. 477 §6º CLT: 10 dias corridos)
+- [x] Criar componente BeneficiosAlimentacaoTab nas Configurações (CRUD de benefícios por obra)
+- [x] Adicionar aba "Benefícios Alimentação" na página de Configurações
+- [x] Atualizar frontend do Aviso Prévio com campos: Data Desligamento, Dias Trabalhados, VR Override
+- [x] Atualizar preview de rescisão com detalhamento completo (verbas rescisórias, FGTS informativo, total)
+- [x] Atualizar seção de detalhes do aviso prévio salvo com novo layout
+- [x] Criar 23 testes unitários para validar cálculos de rescisão (todos passando)
+
+## Fase 95: Simplificar formulário de Aviso Prévio
+- [x] Remover campo "Data de Desligamento" (automática = data de início do aviso)
+- [x] Remover campo "VR Diário (override)" — VR é calculado automaticamente pela config de benefícios × dias
+- [x] Manter campo "Dias Trabalhados no Mês" como ajuste opcional
+- [x] Reorganizar layout do formulário (grid 2 colunas em vez de 3)
+
+## Fase 96: Reconstrução completa do fluxo de cálculo de rescisão
+- [ ] BUG: Cálculo não reage à mudança de data — valores ficam estáticos
+- [ ] Renomear campo "Data de Início" para "Último Dia Trabalhado" (data de desligamento efetiva)
+- [ ] Investigar tabelas de descontos disponíveis (adiantamentos, EPIs, vales pendentes)
+- [ ] Reescrever backend: calcular VR automático pela obra do funcionário
+- [ ] Reescrever backend: buscar e somar descontos pendentes (adiantamentos, EPIs, etc)
+- [ ] Reescrever backend: total = verbas rescisórias - descontos
+- [ ] Refazer frontend com seção de verbas e seção de descontos separadas
+- [ ] Testar com caso Isabela para validar valores
+
+## Fase 97: Corrigir VR na rescisão e config de benefícios
+- [ ] Atualizar config benefícios: checkbox ativar/desativar por item (café, lanche, VA, janta)
+- [ ] Escritório Central: café ✅, lanche ❌, VA ✅, janta ❌
+- [ ] Obra: café ✅, lanche ✅, VA ✅, janta ❌
+- [ ] Corrigir cálculo VR rescisão: Total VA iFood = café(22d) + lanche(22d) + VA(485-5%), proporcional por dias/30
+- [ ] Remover janta do cálculo de rescisão
+- [ ] Aviso prévio: só pagar 3 dias extras com 1 ano COMPLETO de serviço (já está correto)
+- [ ] Atualizar frontend da config de benefícios com checkboxes
+- [ ] Testar cálculo Isabela: deve dar ~R$ 542 de VR (escritório, sem lanche)
+
+## Fase 98: Alertas + Aviso Prévio no Dashboard + Gráficos Clicáveis
+- [ ] Botão "198 alertas" deve abrir painel com TODOS os alertas pendentes organizados por tipo
+- [ ] Cada alerta deve poder ser resolvido individualmente pelo usuário
+- [ ] Card de Aviso Prévio no Dashboard: quem está de aviso, dias restantes
+- [ ] Alerta grande no dia do vencimento do aviso prévio (não perder a data)
+- [ ] Corrigir cálculo VR na rescisão (Total VA mensal / 30 × dias, com checkboxes ativo/desativo)
+- [ ] Atualizar frontend BeneficiosAlimentacaoTab com checkboxes de ativação por item
+- [ ] Gráficos clicáveis: ao clicar em barra/ponto, abrir painel com detalhes (nomes, cargos, datas)
+- [ ] Aplicar gráficos clicáveis em Admissões x Demissões e todos os outros gráficos do Dashboard
+
+## Fase 99: Cores dos Gráficos
+- [x] Azul (#2563EB) para admitidos/ativos em TODOS os gráficos
+- [x] Vermelho (#DC2626) para desligados/demissões em TODOS os gráficos
+- [x] Cores criativas e vibrantes para os demais gráficos (laranja, roxo, âmbar, esmeralda, rosa, índigo)
+- [x] Aplicar em Dashboard de Funcionários, Home, e todos os dashboards
+
+## Fase 100: Correções Dashboard + Gráficos Clicáveis + Alertas + VR
+- [ ] Corrigir contagem de obras ativas (13 no banco vs 8 na tela)
+- [ ] Corrigir contagem de férias pendentes (78 no banco vs 42 na tela)
+- [ ] Alertar sobre 156 funcionários sem ASO cadastrado
+- [ ] Cores dos gráficos: azul=admissão, vermelho=demissão, paleta vibrante nos demais
+- [ ] Gráficos clicáveis: ao clicar em barra/ponto, abrir painel com detalhes (nomes, cargos, datas)
+- [ ] Card de Aviso Prévio no Dashboard (quem está de aviso, dias restantes, alerta no vencimento)
+- [ ] Botão de alertas funcional com lista completa para resolver um a um
+- [ ] Corrigir cálculo VR na rescisão (Total VA mensal / 30 × dias, sem janta, com checkboxes)
+- [ ] Atualizar frontend BeneficiosAlimentacaoTab com checkboxes de ativação por item
+
+## Fase 100: Correções Dashboard + Gráficos Clicáveis + VR + Banner Aviso Prévio
+- [x] Banner vermelho de aviso prévio no Raio-X do funcionário (canto superior direito)
+- [x] Só aparece quando status ativo/em_andamento/pendente (desaparece se cancelado/concluído)
+- [x] Mostra tipo, datas, dias restantes, pulsa se urgente (≤3 dias), destaque se vencido
+- [ ] Cores dos gráficos: azul=admissões, vermelho=demissões, paleta vibrante nos demais
+- [ ] Card de Aviso Prévio no Dashboard (quem está de aviso, dias restantes)
+- [ ] Alerta grande no dia do vencimento do aviso prévio
+- [ ] Gráficos clicáveis: ao clicar em barra/ponto, abrir painel com detalhes (nomes, cargos, datas)
+- [ ] Corrigir cálculo VR na rescisão (Total VA mensal / 30 × dias, sem janta, com checkboxes)
+- [ ] Atualizar frontend BeneficiosAlimentacaoTab com checkboxes de ativação por item
+- [ ] Aviso prévio: 3 dias extras só com 1 ano completo de serviço (Lei 12.506)
+
+## Fase 104: Botão de Edição no Aviso Prévio
+- [x] Adicionar botão de edição (ícone lápis) na coluna de Ações da tabela de Aviso Prévio
+- [x] Implementar formulário de edição com campos preenchidos do registro existente
+- [x] Criar/atualizar rota backend para update do aviso prévio
+
+## Fase 104-B: Melhorias diversas
+- [x] Renomear "Solicitação de HE" para "Solicitação de Hora Extra" no menu lateral
+- [x] Expandir Timeline do Raio-X com TODOS os eventos do funcionário (aviso prévio cancelado/concluído, advertências, férias, mudanças de cargo/setor, alterações salariais, ASOs, treinamentos, CIPA, PJ, HE, desconto EPI, processos trabalhistas)
+- [x] Adicionar botão de edição (ícone lápis) na coluna de Ações da tabela de Aviso Prévio
+
+## Fase 104-C: Correções visuais
+- [x] Corrigir paleta de cores dos gráficos do dashboard - cores mais suaves e harmoniosas
+- [x] Tornar drill-down modal full screen em vez de popup pequeno
+
+## Fase 105: Responsividade Dashboard EPIs + Catálogo EPI
+- [ ] Tornar cards KPI do Dashboard de EPIs responsivos (grid adaptável)
+- [ ] Tornar tabela Resumo por Categoria responsiva
+- [ ] Tornar gráficos e demais seções responsivas
+- [ ] Tornar cards KPI da tela de Catálogo EPI responsivos
+- [ ] Tornar tabela e filtros do Catálogo EPI responsivos
+- [ ] Adicionar filtro por categoria (EPI, Uniforme, Calçados) na tela de Catálogo EPI
+- [ ] Desconto EPI cancelado NÃO pode ser descontado do funcionário na folha
+- [ ] Adicionar filtro por categoria (EPI, Uniforme, Calçados) na tela de Catálogo EPI
+
+## Fase 106: Módulo de Avaliação de Funcionários integrado ao ERP
+- [ ] Criar schema de avaliações no banco (questionários, avaliações, respostas, rankings)
+- [ ] Criar rotas backend para CRUD de avaliações vinculadas à base de funcionários
+- [ ] Criar frontend do módulo de Avaliação integrado ao ERP (multi-avaliação, questionários personalizáveis)
+- [ ] Vincular avaliações à base de funcionários existente (autocompletar, link direto)
+- [ ] Implementar ranking de funcionários (melhor/pior por mês, trimestre, ano)
+- [ ] Travar avaliação após finalização (não pode ser alterada)
+- [ ] Permitir ADM gerar PDF de cada avaliação
+
+## Fase 105-D: Melhorias na Solicitação de Hora Extra
+- [ ] Opção de filtrar funcionários por "Funcionários da Obra" ou "Todos da Empresa"
+- [ ] Alerta ao selecionar funcionário em Aviso Prévio (sugerir escolher outro)
+- [ ] Análise de faltas do funcionário selecionado para HE
+- [ ] Integração futura com Avaliação de Desempenho para aptidão de HE
+- [ ] No fechamento do ponto, avaliar batidas em outras obras
+
+## Fase 106: Módulo de Avaliação de Funcionários integrado ao ERP
+- [ ] Criar schema de avaliações no banco (questionários, avaliações, respostas, rankings)
+- [ ] Criar rotas backend para CRUD de avaliações vinculadas à base de funcionários
+- [ ] Criar frontend do módulo de Avaliação integrado ao ERP
+- [ ] Vincular avaliações à base de funcionários existente
+- [ ] Implementar ranking de funcionários (melhor/pior por mês, trimestre, ano)
+- [ ] Travar avaliação após finalização
+- [ ] Permitir ADM gerar PDF de cada avaliação
+- [ ] BUG: Drill-down do gráfico redireciona para /raio-x/ID que dá 404 - corrigir rota
+- [x] Eliminar todas as datas de demissão futuras (a partir de hoje 26/02/2026) no banco de dados
+- [ ] Formatar exibição da Jornada no Ponto - JSON bruto para tabela organizada por dia da semana
+
+## Rev. 105 - Biblioteca de Conhecimento + Melhorias
+
+- [x] Fase 1: Estrutura base, rotas, layout da Biblioteca de Conhecimento (/ajuda)
+- [x] Fase 2: Unificar sistema de avaliação de desempenho como módulo adicional do ERP
+- [x] Fase 3: Conteúdo dos módulos principais + complementares + memoriais adicionais
+- [x] Fase 4: Artigos de Avaliação de Desempenho + FAQ + Dissídio + Feriados + Auditoria
+- [x] Fase 5: Conteúdo dos módulos principais (Hub, Painel, Colaboradores, Ponto, Rescisão)
+- [x] Fase 6: Conteúdo dos módulos complementares (EPI, HE, Férias, CIPA, PJ, etc.)
+- [x] Fase 7: Memoriais de cálculo com fórmulas e exemplos práticos
+- [x] Fase 8: Assistente IA com chatbot flutuante para tirar dúvidas
+- [x] Fase 9: Busca global, favoritos, glossário e FAQ
+- [x] Fase 10: Testar todo o sistema (gráficos, dados, páginas, erros)
+- [x] Fase 11: Filtro no catálogo EPI para separar EPI/Uniforme/Calçados + filtro por tamanho
+- [x] Fase 12: Testes finais e publicação
+
+## Rev. 106 - Módulo Avaliação no Hub
+
+- [x] Adicionar card de Avaliação de Desempenho na página inicial (Hub) como módulo adicional
+- [x] Corrigir página Avaliação de Desempenho para usar empresa selecionada do cabeçalho (useCompany)
+
+## Rev. 107 - Fusão Módulo Avaliação de Desempenho (fc-engenharia-avaliacao → ERP)
+
+- [x] Criar tabelas no banco: evaluators, evaluations (12 critérios), criteria_revisions, evaluation_pillars, evaluation_criteria, evaluation_scores
+- [x] Criar tabelas no banco: surveys, survey_questions, survey_responses, survey_answers, survey_evaluators
+- [x] Criar tabelas no banco: climate_surveys, climate_questions, climate_responses, climate_answers
+- [x] Criar tabelas no banco: external_participants, climate_external_tokens, audit_log
+- [x] Backend: Router avaliadores (CRUD com login/senha, toggle status, reset senha)
+- [x] Backend: Router avaliações (criar 12 critérios, listar, detalhe, ranking, IA summary, getByEmployee)
+- [x] Backend: Router pesquisas customizadas (CRUD)
+- [x] Backend: Router clima organizacional (CRUD)
+- [x] Backend: Router dashboard stats (globalStats, employeeRanking, evaluatorStats)
+- [x] Frontend: Dashboard admin com estatísticas globais
+- [x] Frontend: Gestão de avaliadores (CRUD)
+- [x] Frontend: Lista de avaliações + detalhe com 12 critérios
+- [x] Frontend: Formulário de avaliação com 3 pilares e notas 1-5
+- [x] Frontend: Pesquisas e Clima (abas)
+- [x] Frontend: Ranking de funcionários
+- [x] Integrar avaliação no Raio-X do funcionário (aba Avaliações com histórico, resumo, detalhes)
+
+## Rev. 108 - Melhorias Formulário Avaliação
+
+- [ ] Busca de funcionário por nome com autocomplete (digitar e já aparecer)
+- [ ] Remover campo Avaliador - avaliador é o usuário logado automaticamente
+- [ ] Adicionar campo Obra - mostrar apenas obras que o usuário é gestor/responsável + opção "Todas as Obras"
+- [ ] Filtrar funcionários pela obra selecionada
+- [ ] Remover resumo de notas/médias durante preenchimento (gestor não vê resultado)
+- [ ] Adicionar tela de confirmação antes de enviar (resumo: funcionário, obra, mês)
+- [ ] Visibilidade das avaliações: só RH, ADM e ADM Master veem resultados/notas
+- [ ] Gestor que avaliou NÃO vê as notas depois de enviar
+
+## Rev. 109 - Reformulação Módulo Avaliação
+
+- [ ] Backend: avaliador automático (ctx.user.id/name) em vez de evaluatorId manual
+- [ ] Backend: adicionar campo evaluatorName na tabela eval_avaliacoes
+- [ ] Backend: pesquisas customizáveis com IA sugerindo perguntas por tema
+- [ ] Backend: visibilidade de resultados só para RH/ADM/ADM Master
+- [ ] Frontend: busca por nome com autocomplete no campo funcionário
+- [ ] Frontend: remover campo avaliador (automático = usuário logado)
+- [ ] Frontend: adicionar campo Obra (só obras do gestor + Todas as Obras)
+- [ ] Frontend: remover resumo de notas durante preenchimento
+- [ ] Frontend: tela de confirmação antes de enviar (resumo sem notas)
+- [ ] Frontend: pesquisas customizáveis com criação/edição de perguntas + IA
+- [ ] Frontend: visibilidade - gestor não vê notas após enviar
+
+## Fase Avaliação: Reformulação Completa do Módulo de Avaliação
+### Backend - Router Reescrito
+- [x] Adicionar campo obraId e evaluatorName na tabela eval_avaliacoes
+- [x] Adicionar campo publicToken nas tabelas eval_surveys e eval_climate_surveys
+- [x] Reescrever router avaliacao.ts com sub-routers: avaliacoes, avaliadores, pesquisas, clima, dashboard, obras
+- [x] Avaliador automático (ctx.user.name) no create de avaliação
+- [x] Campo Obra (obraId) vinculado à avaliação
+- [x] Dashboard com stats globais e ranking de funcionários
+- [x] Pesquisas Customizadas: CRUD completo com token público
+- [x] Clima Organizacional: CRUD completo com categorias (empresa, gestor, ambiente, segurança, crescimento, recomendação)
+- [x] IA sugere perguntas para pesquisas customizadas e clima (via invokeLLM)
+- [x] Visibilidade: apenas RH/ADM/ADM Master veem resultados
+
+### Frontend - AvaliacaoDesempenho.tsx Reescrito
+- [x] Autocomplete de funcionário com Command/Popover (busca por nome)
+- [x] Avaliador automático (nome do usuário logado)
+- [x] Campo Obra (select de obras ativas da empresa)
+- [x] Sem resumo de notas durante preenchimento
+- [x] Tela de confirmação antes de enviar
+- [x] Aba Clima Organizacional (criar pesquisa, perguntas por categoria, link público, resultados)
+- [x] Aba Pesquisas Customizadas (criar pesquisa, IA sugere perguntas, link público, respostas)
+- [x] Aba Dashboard com estatísticas e ranking
+
+### Páginas Públicas
+- [x] PesquisaPublica.tsx: página pública para responder pesquisas customizadas via token
+- [x] ClimaPublicoPage: página pública para responder pesquisa de clima via token
+- [x] Rotas /pesquisa-publica/pesquisa/:token e /pesquisa-publica/clima/:token no App.tsx
+
+### Testes
+- [x] 15 testes unitários para o módulo de avaliação (router structure, avaliadores, avaliacoes, pesquisas, clima, dashboard, obras)
+
+## Fase Avaliação - Dashboard com Gráficos Interativos
+
+### Backend - Rotas de dados agregados
+- [x] Rota pillarComparison: média por critério (12 critérios) + média por pilar (3 pilares)
+- [x] Rota byObra: comparativo de médias por obra
+- [x] Rota monthlyEvolution: evolução mensal com médias por pilar
+- [x] Rota climaConsolidated: índice geral + média por categoria de clima
+- [x] Rota topBottomEmployees: top 5 melhores e 5 que necessitam atenção
+- [x] Rota scoreDistribution: histograma de distribuição de notas
+
+### Frontend - Gráficos Chart.js
+- [x] Gráfico de linha: Evolução mensal das avaliações com pilares (Line chart)
+- [x] Gráfico de barras: Distribuição de notas / histograma colorido (Bar chart)
+- [x] Gráfico de barras horizontais: Média por critério de avaliação (12 critérios)
+- [x] Gráfico Doughnut + Cards: Média por pilar (3 pilares)
+- [x] Gráfico de barras: Comparativo por obra (Bar chart)
+- [x] Gráfico Doughnut: Distribuição por recomendação
+- [x] Top 5 melhores avaliados (cards com ranking e medalhas)
+- [x] Top 5 que necessitam atenção (cards com alertas)
+- [x] Clima Organizacional consolidado (índice geral + barras por categoria)
+- [x] Cards com KPIs: total avaliações, avaliadores, pesquisas, média geral
+
+### Testes
+- [x] 29 testes unitários passando (incluindo controle de acesso por role)
+- [x] Controle de acesso: gráficos restritos a RH/ADM/ADM Master
+
+## Fase Avaliação - Redesign Completo: Sistema Flexível de Avaliações
+
+### Conceito Novo
+- [x] Templates de avaliação customizáveis (título + perguntas definidas pelo usuário)
+- [x] IA sugere perguntas baseadas no título da avaliação
+- [x] Perguntas manuais: usuário cria suas próprias perguntas (escala 1-5)
+- [x] Atribuir avaliadores: selecionar colaboradores que farão a avaliação
+- [x] Avaliadores acessam base de funcionários para avaliar cada um
+- [x] Múltiplas avaliações: ativar/desativar quando quiser
+- [x] Dashboard com gráficos comparativos por avaliação
+
+### Schema
+- [x] Reutilizado eval_surveys com flags isEvaluation + allowEmployeeSelection
+- [x] eval_survey_questions (perguntas customizáveis por avaliação)
+- [x] eval_survey_evaluators (avaliadores atribuídos)
+- [x] eval_survey_responses com employeeId + evaluatorUserId
+- [x] eval_survey_response_answers (respostas por pergunta)
+
+### Backend
+- [x] CRUD de templates de avaliação (pesquisas.create com isEvaluation)
+- [x] IA sugere perguntas via LLM baseado no título
+- [x] CRUD de perguntas por template
+- [x] Atribuir/remover avaliadores (addEvaluators/removeEvaluator/getEvaluators)
+- [x] Ativar/desativar template (updateStatus)
+- [x] Aplicar avaliação (submitResponse com employeeId + evaluatorUserId)
+- [x] Resultados por template, por funcionário (getResults + getEvaluationByEmployee)
+
+### Frontend
+- [x] Tela de listagem de avaliações (cards com status ativo/inativo, toggle)
+- [x] Wizard criar avaliação: título → IA sugere perguntas → avaliadores → confirmar
+- [x] Tela de gerenciar avaliadores (adicionar/remover da base de usuários)
+- [x] Tela de aplicar avaliação (avaliador escolhe funcionário → responde perguntas)
+- [x] Dashboard com 10 gráficos Chart.js interativos
+- [x] 29 testes unitários passando
+
+## Bug: Módulo Avaliação faltando na sidebar
+- [x] Adicionar módulo Avaliação no dropdown de módulos da sidebar (DashboardLayout)
+
+## Bug: IA Sugerir Perguntas não funciona no módulo Avaliação
+- [x] Diagnosticar por que o botão "IA Sugerir Perguntas" não gera perguntas (retorno incompatível)
+- [x] Corrigir backend/frontend para gerar perguntas completas via IA (15 perguntas cobrindo 7 aspectos do colaborador)
+
+## Melhoria: Perguntas da IA mais específicas e profissionais
+- [ ] Melhorar prompt da IA para evitar perguntas vagas (ex: "sempre à disposição da empresa")
+- [ ] Perguntas devem ser específicas, mensuráveis e práticas para construção civil
+
+## Controle de Documentos (padrão advertência) + ASO
+- [x] Remover tela de importação TSV de ASOs
+- [x] Adicionar campo de anexo no ASO existente (documentUrl)
+- [x] Upload de documento integrado no formulário de criação/edição de ASO
+- [x] Backend: ASO create retorna ID para upload subsequente
+- [x] Adicionar aba "Painel de Validade" no Controle de Documentos
+- [x] Painel consolidado: ASOs + Treinamentos com status de validade (válido/vencendo/vencido)
+- [x] Alertas visuais de documentos próximos ao vencimento (banner vermelho/amarelo no topo)
+- [x] Filtros por status, tipo de documento e funcionário
+- [x] Cards KPI: Vencidos, Vence em 30d, Vence em 60d, Válidos (clicáveis como filtro)
+- [x] Cards resumo expandidos: 8 cards (ASOs, ASOs Vencidos, ASOs A Vencer, Treinamentos, Trein. Vencidos, Trein. A Vencer, Atestados, Advertências)
+- [x] Backend: endpoint painelValidade com dados consolidados e estatísticas
+- [x] Backend: resumo atualizado com treinVencidos e treinAVencer
+- [x] 10 testes unitários passando (controleDocumentos.test.ts)
+
+## Bug: IA Sugerir Perguntas não funciona no módulo Avaliação (v2)
+- [ ] Diagnosticar por que o botão "IA Sugerir Perguntas" não gera perguntas automaticamente
+- [ ] Verificar backend: endpoint de geração de perguntas via LLM
+- [ ] Verificar frontend: handler do botão e chamada da mutation
+- [ ] Corrigir e testar a geração automática de perguntas baseada no título da avaliação
+
+## Bug: Nome do funcionário não aparece no autocomplete do ASO
+- [ ] Corrigir campo Colaborador no formulário Novo ASO — nome digitado não filtra corretamente
+- [ ] Verificar EmployeeSelect component e como o filtro de busca funciona
+
+## Melhoria: Controle de Documentos amplo (não apenas ASO)
+- [x] Expandir Controle de Documentos para cobrir TODOS os documentos do funcionário
+- [x] Aba "Documentos" adicionada com 15 tipos: RG, CNH, CTPS, Comprovante Residência, Certidão, Título, Reservista, PIS, Foto, Contrato, Rescisão, Atestado, Diploma, Certificado, Outros
+- [x] Mesmo padrão de processo que advertência: seleciona funcionário, preenche dados, anexa documento
+
+## Exames Realizados - Checkboxes com Upload Individual
+- [x] Substituir textarea por checkboxes clicáveis com todos os exames possíveis (21 exames padrão)
+- [x] Adicionar campo para inserir exames extras personalizados
+- [ ] Upload individual por exame habilitado (próxima iteração)
+- [x] Exames: Audiometria, Acuidade Visual, Hemograma, Glicemia, EAS, ECG, Espirometria, Raio-X Tórax, etc.
+
+## Bug: Busca de nome do colaborador no ASO (campo Colaborador)
+- [x] Corrigir busca automática conforme digita no campo Colaborador do ASO
+- [x] Melhorar UX mobile: input com ref callback para foco, inputMode text, border azul quando ativo
+
+## Bug: Cálculo de saldo de salário na rescisão usa 30 dias fixo
+- [x] Corrigir cálculo do saldo de salário na rescisão para usar dias reais do mês (28 para fevereiro, 31 para janeiro, etc.)
+- [x] Fevereiro/2026 tem 28 dias, sistema calcula como 30 → saldo de 13 dias em vez de 15 dias
+- [x] VR proporcional também corrigido para usar dias reais do mês
+- [x] Frontend atualizado para mostrar "X/Y dias do mês" (ex: 13/28 dias)
+- [x] 24 testes passando (rescisao.test.ts)
+
+## Bug: Campo Colaborador no ASO não permite digitar no mobile
+- [ ] Campo de busca do colaborador não funciona no mobile - não aceita digitação
+- [ ] Reescrever o EmployeeSelect para funcionar melhor em dispositivos móveis
+- [ ] Garantir que o teclado virtual não interfira com o dropdown
+
+## Bug: Aba Benefícios não está salvando
+- [x] Campos de VT (Recebe VT, Valor VT Diário, Tipo VT, Operadora VT, Nº Cartão VT) - CORRIGIDO
+- [x] Campos de VA/VR (Recebe VA/VR, Valor VA/VR Mensal, Operadora VA/VR, Nº Cartão VA/VR) - CORRIGIDO
+- [x] Campos de Outros Benefícios (Auxílio Farmácia, Plano de Saúde) - CORRIGIDO
+- [x] Causa: campos não existiam no schema do banco + não estavam na lista validFields do updateEmployee
+- [x] 12 colunas adicionadas ao banco + 17 campos adicionados à lista validFields + campos de pensão/licença/rateáveis
+
+## Bug: Dias indenizados somando no aviso prévio trabalhado
+- [x] Os 3 dias extras por ano de serviço não somam mais nos dias de aviso trabalhado
+- [x] Aviso prévio TRABALHADO = sempre 30 dias fixos
+- [x] Aviso prévio INDENIZADO = 30 + 3*anos (total pago)
+- [x] Backend: calcularDiasAviso agora recebe o tipo e retorna 30 para trabalhado
+- [x] Frontend: card mostra "30 dias" + nota "+ X dias indenizados" quando aplicável
+- [x] 24 testes passando
+
+## Fix: Deploy timeout - bundle size reduction
+- [x] Substituir streamdown (shiki 9.2MB + mermaid 1.1MB) por react-markdown (leve)
+- [x] Bundle reduzido de 20MB/404 arquivos para 6.9MB/9 arquivos
+- [x] Lazy wrapper criado em LazyStreamdown.tsx
+- [x] react-markdown + remark-gfm instalados como alternativa leve
+
+## Bug: Erro ao clicar em funcionário na aba Vale Alimentação
+- [ ] Erro "Ocorreu um erro inesperado" ao clicar em um funcionário na lista de Vale Alimentação
+- [ ] Stack trace aponta para vendor bundle - possível problema com dados undefined/null
+
+## Melhoria Vale Alimentação - 2026-02-27
+- [ ] Adicionar card de valor total no topo da página de Vale Alimentação
+
+## Dashboard Aviso Prévio - 2026-02-27
+- [ ] Criar rota tRPC de dados agregados para dashboard de aviso prévio
+- [x] Criar página DashAvisoPrevio com gráficos responsivos
+- [ ] Cards resumo: total avisos, em andamento, concluídos, indenizados vs trabalhados
+- [ ] Gráfico: distribuição por tipo (Trabalhado/Indenizado)
+- [ ] Gráfico: avisos por mês (evolução temporal)
+- [ ] Gráfico: avisos por motivo de desligamento
+- [ ] Gráfico: dias de aviso prévio proporcional (30 + 3/ano)
+- [ ] Gráfico: avisos por setor/obra
+- [x] Tabela detalhada com status e prazos
+- [x] Registrar rota e navegação no menu lateral
+- [x] Todos os gráficos responsivos
+
+## Bug Fix - Jurídico Insert Error - 2026-02-27
+- [x] Fix: Erro ao cadastrar processo trabalhista - Failed query insert into processos_trabalhistas (empty strings -> null for DATE fields)
+
+## Bug Fix - Dashboard Aviso Prévio Cálculos Errados - 2026-02-27
+- [x] Fix: Custo Total Estimado mostrando R$ 17.499.687,00 - parseVal removia ponto decimal pensando ser separador de milhar. Valor correto: R$ 178.558,34
+
+## Fix Dashboard Aviso Prévio - Formatação e Responsividade - 2026-02-27
+- [x] Formatar todos os valores monetários no padrão brasileiro (R$ 3.561,47)
+- [x] Formatar valores nos tooltips dos gráficos (R$ 43.147,20 em vez de 43147.2)
+- [x] Formatar valores na tabela detalhada (R$ 3.561,47 em vez de R$ 3561.47)
+- [x] Garantir gráficos responsivos com valueFormatter no DashChart
+- [x] Padronizar formatação em KPIs, gráficos e tabela
+
+## Bug Fix - Data Início Aviso Prévio - 2026-02-27
+- [x] Fix: Data de início do aviso prévio deve ser último dia trabalhado + 1 dia (ex: último dia 12/02, início aviso 13/02)
+- [x] Atualizado registros existentes no banco (+1 dia em dataInicio e dataFim)
+- [x] Adicionada função calcularDataInicioAviso() no backend
+
+## Full Screen Modal Avaliação - 2026-02-27
+- [x] Tornar modal Nova Avaliação de Desempenho full screen (usando FullScreenDialog)
+
+## Auto-Conclusão Aviso Prévio - 2026-02-27
+- [x] Implementar auto-conclusão: se dataFim < hoje e status = em_andamento, marcar como concluído automaticamente
+- [x] Atualizar registros existentes no banco que já passaram da data de término
+- [x] Lógica aplicada tanto na listagem quanto no dashboard
+
+## Bloqueio Duplicidade Aviso Prévio - 2026-02-27
+- [x] Backend: validar se colaborador já tem aviso em_andamento antes de criar novo (TRPCError CONFLICT)
+- [x] Frontend: mostrar alerta ao selecionar colaborador com aviso ativo + badge "Aviso ativo"
+- [ ] Limpar registros duplicados existentes no banco (a fazer manualmente pelo usuário)
+
+## Full Screen Aplicar Avaliação - 2026-02-27
+- [x] Tornar modal Aplicar Avaliação full screen com layout mais agradável (FullScreenDialog)
+- [x] Notas com cores sugestivas: 1=vermelho(Péssimo), 2=laranja(Ruim), 3=amarelo(Regular), 4=verde-claro(Bom), 5=verde(Excelente)
+## BUG FIX: Card Aviso Prévio sem nome + Perfil Usuário não altera para ADM - 2026-02-27
+- [x] FIX: Card de aviso prévio com 4d restantes mostra nome do funcionário vazio (apenas "-")
+- [x] FIX: Não consegue alterar perfil do usuário para ADM na tela Configurar Usuário
+## BUG FIX: Data de término do aviso prévio incorreta - 2026-02-27
+- [x] FIX: Data de término do aviso prévio está 1 dia a mais (ex: início 12/02, 30 dias, mostra 14/03 em vez de 13/03)
+- [x] FIX: Atualizar 40 registros existentes no banco com dataFim correta
+## Novos Módulos Em Desenvolvimento - Home Page - 2026-02-27
+- [x] Adicionar card CRM na seção Em Desenvolvimento
+- [x] Adicionar card Comercial na seção Em Desenvolvimento
+- [x] Adicionar card Pós-Obras na seção Em Desenvolvimento
+- [x] Adicionar card Medição de Obras na seção Em Desenvolvimento
+- [x] Adicionar card Diário de Obras na seção Em Desenvolvimento
+- [x] Adicionar card Gestão de Contratos na seção Em Desenvolvimento
+- [x] Adicionar card Gestão de Subempreiteiros na seção Em Desenvolvimento
+- [x] Adicionar card Almoxarifado / Estoque de Obra na seção Em Desenvolvimento
+- [x] Adicionar card Assistência Técnica na seção Em Desenvolvimento
+- [x] Adicionar card Documentação de Obra na seção Em Desenvolvimento
+- [x] Adicionar card Indicadores / BI na seção Em Desenvolvimento
+## Painel RH - Avisos Prévios melhorias - 2026-02-27
+- [x] Adicionar total em dinheiro (valor estimado) no topo da seção Avisos Prévios em Andamento
+- [x] FIX: Card de funcionário excluído (4d restantes) sem nome no Painel RH — ocultar cards de funcionários excluídos
+## Painel RH - Card de Aviso Prévio clicável - 2026-02-27
+- [x] Tornar cards de aviso prévio clicáveis no Painel RH, abrindo dialog com cálculos detalhados da rescisão
+## Dashboard Aviso Prévio - Gráfico responsivo - 2026-02-27
+- [x] FIX: Gráfico de Redução de Jornada (Art. 488 CLT) não responsivo — legenda agora fica embaixo no mobile
+## Medições PJ - Melhorar Layout - 2026-02-27
+- [x] Redesign da tela de Medições PJ para ficar mais apresentável e profissional
+## Dashboard Jurídico - Filtros responsivos - 2026-02-27
+- [x] FIX: Tornar filtros e KPIs do Dashboard Jurídico responsivos no mobile
+## Controle de Revisões - Registrar alterações da sessão - 2026-02-28
+- [x] Registrar todas as alterações feitas nesta sessão no Controle de Revisões e atualizar número da revisão (Rev. 105-111)
+## CAEPI - Botão Atualizar não funciona - 2026-02-28
+- [x] FIX: Botão "Atualizar Base CAEPI" não funciona ao clicar - implementado fallback XLSX via dados.gov.br
+## Dashboard Aviso Prévio - Gráfico Top 10 Funções - 2026-02-28
+- [x] FIX: Gráfico "Top 10 Funções com Avisos" não responsivo
+- [x] Adicionar drill-down ao clicar no gráfico (mostrar funcionários da função)
+- [x] Adicionar drill-down ao clicar no gráfico "Avisos por Setor" (mostrar funcionários do setor)
+- [x] Registrar revisão 112 no sistema
+## REWRITE: Módulo Avaliação de Desempenho - Replicar sistema original completo - 2026-02-28
+- [x] Backend: Login unificado ERP (removido JWT separado)
+- [x] Backend: Trava de frequência (não repetir avaliação no período)
+- [x] Backend: Filtro apenas funcionários ATIVOS para avaliação
+- [x] Backend: Endpoint Raio-X do funcionário com evolução mensal por critério
+- [x] Backend: Sigilo - avaliador NÃO vê nota final/recomendação
+- [x] Backend: listPendingForEvaluator, checkMonthlyLock, listEmployeesForEvaluator
+- [x] Backend: adminUpdate, adminDelete, adminBulkDelete, listAll
+- [x] Frontend: Tela de login do avaliador (removida - login unificado ERP)
+- [x] Frontend: Stepper de avaliação por pilar (3 pilares, 12 critérios)
+- [x] Frontend: Painel do avaliador (funcionários pendentes, histórico)
+- [x] Frontend: Admin Dashboard com gráficos
+- [x] Frontend: Lista de avaliações admin com filtros
+- [x] Frontend: Raio-X do funcionário com gráfico evolução mensal por critério
+- [x] Frontend: Gestão de avaliadores (CRUD, vincular usuário ERP)
+- [x] Frontend: Critérios configuráveis (revisões)
+- [x] Frontend: Pesquisas customizadas
+- [x] Frontend: Pesquisa de clima organizacional
+- [ ] Frontend: Participantes externos (pendente)
+- [ ] Frontend: Integrar Raio-X no perfil do funcionário (pendente)
+- [x] Rotas e navegação integradas no sidebar
+- [x] CHANGE: Remover login separado do avaliador - usar login único do ERP
+- [x] CHANGE: Avaliador é um usuário do ERP com role/permissão específica
+- [x] CHANGE: Avaliador só vê painel de avaliação (stepper), admin vê tudo
+
+## Jurídico: Consulta automática de processos e alertas de movimentação - 2026-02-28
+- [ ] Pesquisar APIs disponíveis para consulta de processos judiciais brasileiros
+- [ ] Backend: Integrar API de consulta de processos (auto-preenchimento por número)
+- [ ] Backend: Monitoramento de movimentações processuais com alertas automáticos
+- [ ] Frontend: Auto-preenchimento ao digitar número do processo (Tipo de Ação, Vara, Comarca, Tribunal, Valor da Causa, partes)
+- [ ] Frontend: Painel de alertas de movimentação processual
+- [ ] Cron/Job: Verificação periódica de movimentações em processos cadastrados
+- [ ] FIX: Admin Master deve ter acesso total à aba Avaliar sem precisar ser cadastrado como avaliador
+- [ ] CHANGE: Remover necessidade de cadastro manual de avaliador - gestor de área avalia automaticamente
+- [ ] CHANGE: Admin Master tem acesso total para avaliar qualquer funcionário
+- [ ] CHANGE: Simplificar/remover aba Avaliadores - usar permissões do ERP
+- [ ] Frontend: Critérios editáveis - poder editar pilares e critérios existentes, adicionar novos
+- [ ] Frontend: IA para sugerir perguntas na criação de pesquisas baseado no título digitado
+- [ ] FIX: Clicar no nome do funcionário no drill-down de Avisos Prévios deve abrir o aviso prévio dele
+- [ ] FIX: Revisar TODOS os gráficos de todas as páginas - garantir drill-down ao clicar em todos
+
+## Dashboard de Férias - 2026-02-28
+- [x] Backend: endpoint de dados agregados para dashboard de férias
+- [x] Frontend: DashFerias com KPIs (total, pendentes, agendadas, vencidas, em gozo, concluídas)
+- [x] Frontend: Gráfico timeline mensal (colaboradores em férias por mês)
+- [x] Frontend: Gráfico distribuição por status (donut)
+- [x] Frontend: Gráfico top setores com férias vencidas
+- [x] Frontend: Gráfico custo mensal projetado
+- [x] Frontend: Gráfico férias por obra
+- [x] Frontend: Proporção 1º vs 2º período
+- [x] Adicionar DashFerias no menu lateral (Dashboards)
+- [x] Drill-down em todos os gráficos
+
+## Integração DataJud API - 2026-02-28
+- [x] Pesquisar API DataJud (endpoints, autenticação, estrutura de dados)
+- [x] Backend: endpoint de consulta DataJud por número de processo
+- [x] Backend: parser de dados retornados (vara, juiz, movimentações, audiências, pedidos)
+- [x] Backend: atualizar processo existente com dados do DataJud
+- [x] Backend: consulta em lote de todos os processos cadastrados
+- [x] Frontend: botão "Consultar DataJud" por processo
+- [x] Frontend: botão "Atualizar Todos via DataJud" em lote
+- [x] Frontend: indicador visual de dados preenchidos pelo DataJud
+- [x] Testar com processos reais já cadastrados
+- [x] Auto-preencher valor da causa do DataJud
+- [x] Auto-preencher situação do processo (ativo, suspenso, baixado, arquivado)
+- [x] Calcular nível de criticidade automaticamente
+- [x] Sistema de alerta automático de movimentações
+- [x] Histórico de movimentações do processo
+- [x] Busca automática por nome de funcionários ativos/desligados no DataJud
+- [x] Detecção automática de novos processos
+- [x] Cruzamento automático reclamante x base de colaboradores
+- [x] Blacklist automática para ex-funcionários com processo trabalhista
+- [x] Alerta automático ao RH quando novo processo é detectado
+
+## Correções Globais - Dashboards - 2026-02-28
+- [x] Botão de volta à tela principal em TODOS os dashboards
+- [x] Gráficos responsivos em TODOS os dashboards (mobile-friendly)
+- [x] Atualizar número de revisão (Rev. 112)
+- [x] DashFerias: botão voltar + DashboardLayout wrapper + gráficos responsivos
+- [x] DashAvisoPrevio: botão voltar + gráficos responsivos
+- [x] DashFuncionarios: botão voltar + gráficos responsivos
+- [x] DashCartaoPonto: botão voltar + gráficos responsivos
+- [x] DashFolhaPagamento: botão voltar + gráficos responsivos
+- [x] DashHorasExtras: botão voltar + gráficos responsivos
+- [x] DashEpis: botão voltar + gráficos responsivos
+- [x] DashJuridico: botão voltar + gráficos responsivos
+- [x] Todos os dashboards: botão voltar + gráficos responsivos confirmados
+
+## Bug Fix URGENTE - 2026-02-28
+- [x] Processos Trabalhistas: lista não carrega (loading infinito) - CORRIGIDO: colunas DataJud faltando no DB
+- [x] Processos Trabalhistas: valores sumiram (R$ 0,00) - NÃO ERA BUG: empresa errada selecionada
+- [x] Painel Jurídico: valor provisionado zerado - NÃO ERA BUG: empresa errada selecionada
+
+## Fluxo de Caixa Prévio - Melhorias - 2026-02-28
+- [x] Clique no card do mês abre modal com detalhamento completo dos valores de férias
+- [x] Gráfico de Gantt mostrando timeline de férias dos funcionários ao longo do ano
+- [x] Atualizar versão para Rev. 113
+
+## Dashboard Jurídico - Correções - 2026-02-28
+- [x] Corrigir labels do gráfico - agora mostra "Assuntos Mais Comuns" do DataJud com dados reais
+- [ ] Corrigir erro do DataJud em 1 dos 7 processos
+- [x] Garantir que gráficos do Dashboard Jurídico sejam interativos/responsivos
+
+## Processos Trabalhistas - Melhorias - 2026-02-28
+- [x] Corrigir labels do gráfico - agora usa assuntos DataJud
+- [x] Ícone "olhinho" já existia na lista de processos
+- [x] Botão "Gerar PDF" já existia (via Print/PDF do navegador)
+- [x] DashAvisoPrevio.tsx sem erros de import
+
+## IA Jurídica - Sistema de Análise Inteligente - 2026-02-28
+- [x] Criar tabela no banco para armazenar análises da IA (processo_analises)
+- [x] Criar tabela banco de aprendizado (processo_aprendizado)
+- [x] Integrar LLM para análise completa do processo trabalhista
+- [x] Extrair valor da causa automaticamente via IA
+- [x] Gerar resumo executivo, pontos fortes/fracos, caminhos possíveis
+- [x] Gerar jurisprudência relevante baseada nos assuntos
+- [x] Criar painel de análise IA no detalhe do processo
+- [x] Banco de dados de aprendizado - IA aprende com análises anteriores
+- [ ] Gerar PDF profissional do processo com análise IA
+
+## Visualizador Completo do Processo - 2026-02-28
+- [x] Painel de movimentações completo com timeline cronológica (já existia)
+- [x] Link direto para o processo no tribunal (PJe/TST)
+- [x] Área de upload removida (módulo consultivo, não operacional)
+- [x] Tabela no banco para documentos do processo (criada)
+- [x] Tabela no banco para análises IA e banco de aprendizado (criadas)
+- [x] Endpoint de análise IA com LLM (implementado)
+- [x] Painel de análise IA no detalhe do processo (implementado)
+- [ ] Geração de PDF profissional do processo
+
+## Formatação e Interatividade - 2026-02-28
+- [x] Números formatados com ponto separador de milhar (ex: 1.255 em vez de 1255)
+- [x] Jornada de trabalho: formatar JSON em tabela legível (não mostrar JSON bruto)
+- [x] Faltas e atrasos clicáveis: ao clicar na data, abre cartão de ponto do dia
+- [x] Layout responsivo e dados de fácil consulta
+
+## Bug: Troca de Módulo não navega para tela inicial - 2026-02-28
+- [x] Ao trocar módulo no dropdown da sidebar, navega para a tela inicial do módulo selecionado
+
+## Bug: Dashboard Jurídico - Gráficos - 2026-02-28
+- [x] Gráfico "Novos Processos por Mês" mostra "undefined/sconhecido" na última barra (label incorreto)
+- [x] Gráficos do Dashboard Jurídico não responsivos ao clicar (drill-down não funciona)
+
+## Redesign: Painel Jurídico - 2026-02-28
+- [x] Reformular completamente o Painel Jurídico com layout rico e responsivo
+- [x] KPIs completos com dados reais dos processos (ativos, encerrados, risco, valores)
+- [x] Gráficos interativos (risco, status, evolução, assuntos DataJud)
+- [x] Lista de processos recentes com informações-chave
+- [x] Próximas audiências com destaque visual
+- [x] Valores financeiros consolidados
+- [x] Layout totalmente responsivo (mobile e desktop)
+- [x] Corrigir gráfico "Novos Processos por Mês" com label "undefined/sconhecido"
+- [x] Corrigir drill-down nos gráficos do Dashboard Jurídico
+
+## Redesign: Tela de Dashboards + Visão Panorâmica Executiva - 2026-02-28
+- [x] Redesign completo da tela de Dashboards Analíticos com ícones e layout profissional
+- [x] Novo Dashboard "Visão Panorâmica" executivo para CEO/Diretor
+- [x] Compilar KPIs estratégicos de todos os módulos (RH, Folha, Ponto, HE, EPIs, Jurídico, Férias, Aviso Prévio)
+- [x] Backend: endpoint aggregando dados de todos os dashboards
+- [x] Seção de Análise com IA: insights estratégicos, pontos fortes, pontos fracos, riscos e oportunidades
+- [x] Consultar Regras de Ouro da empresa na análise IA
+- [x] Layout responsivo e visual impactante para tomada de decisão
+
+## Redesign Futurista: Tela de Dashboards Analíticos - 2026-02-28
+- [x] Redesign com visual futurista sci-fi/cyberpunk corporativo
+- [x] Glassmorphism (vidro fosco translúcido) nos cards
+- [x] Gradientes neon e efeitos de brilho (glow)
+- [x] Bordas luminosas e hover holográfico
+- [x] Fundo escuro com grid/partículas futuristas
+- [x] Tipografia bold com destaque neon
+- [x] Cards com efeito de energia/pulso
+- [x] Visual impactante e diferenciado para CEO/Diretor
+
+## Botão Voltar - Processos Trabalhistas - 2026-02-28
+- [x] Adicionar botão de voltar à tela inicial na página de Processos Trabalhistas
+
+## Painel Jurídico - Alertas e Verificação Automática - 2026-02-28
+- [x] FIX: Botão "alerta" no Painel Jurídico não abre nada ao clicar
+- [x] Adicionar modal/painel de alertas com detalhes (processos alto risco, audiências, etc.)
+- [x] Adicionar botão voltar à tela inicial na página de Processos Trabalhistas
+- [x] Implementar verificação automática periódica do DataJud (padrão 1h, configurável pelo master: 30min/1h/2h/6h/12h/24h)
+- [x] Gerar alertas automáticos para o usuário quando detectar novidades no DataJud
+
+## Painel Jurídico - Alertas, Gráficos e Verificação Automática - 2026-02-28
+- [x] FIX: Botão "alerta" no Painel Jurídico não abre nada ao clicar
+- [x] Adicionar modal/painel de alertas com detalhes (processos alto risco, audiências, etc.)
+- [x] FIX: Gráficos no Painel Jurídico não responsivos ao clicar (Assuntos DataJud, etc.)
+- [x] Adicionar botão voltar à tela inicial na página de Processos Trabalhistas
+- [x] Implementar verificação automática periódica do DataJud (padrão 1h, configurável pelo master: 30min/1h/2h/6h/12h/24h)
+- [x] Gerar alertas automáticos para o usuário quando detectar novidades no DataJud
+
+## Dashboard Jurídico - Mapa do Brasil - 2026-02-28
+- [x] Adicionar mapa interativo do Brasil no Dashboard Jurídico mostrando distribuição de processos por estado/cidade
+- [x] Ao clicar em um estado, mostrar detalhes dos processos daquela região
+
+## Dashboard Funcionários - Mapa do Brasil - 2026-02-28
+- [x] Adicionar mapa interativo do Brasil no Dashboard Funcionários mostrando distribuição de funcionários por cidade/estado
+
+## FIX: Gráfico Valor em Risco e Mapa do Brasil - 2026-02-28
+- [ ] Gráfico "Valor em Risco por Nível" não mostra valores formatados em reais (R$ 80.000,00)
+- [ ] Gráfico "Valor em Risco por Nível" não é interativo ao clicar
+- [ ] Mapa do Brasil SVG muito pequeno e desproporcional - redesenhar maior e mais profissional
+- [ ] Adicionar tooltip ao passar o mouse nos estados do mapa
+- [ ] Melhorar interatividade do mapa ao clicar nos estados
+
+## Redesign Cores Claras: Tela de Dashboards Analíticos - 2026-02-28
+- [ ] Reformular cores para tons claros (fundo branco, cards brancos, sombras suaves)
+- [ ] Remover glassmorphism pesado e fundo escuro
+- [ ] Cores de destaque em tons pastéis (azul claro, verde menta, laranja suave)
+- [ ] Layout limpo e profissional com boa legibilidade
+
+## Redesign Resolver Inconsistência
+- [ ] Redesign "Resolver Inconsistência" page with better visual layout
+- [ ] Add quick action buttons (Justificar, Abonar, Aplicar Falta) instead of dropdown
+- [ ] Add pre-defined justification suggestions for 1-click selection
+- [ ] Improve inconsistencies list visual design with icons and colors
+- [ ] Show timeline of registered punches visually
+
+## Redesign Completo Vale Alimentação
+- [ ] Criar tabela va_config (configurações: valor padrão, regras por cargo/setor, critérios elegibilidade)
+- [ ] Criar tabela va_lancamentos (lançamentos mensais por colaborador com valor, status, motivo)
+- [ ] Backend: rota de configuração do VA (CRUD regras)
+- [ ] Backend: rota de geração mensal automática baseada nas regras
+- [ ] Backend: rota de edição individual de VA por colaborador/mês
+- [ ] Frontend: Aba Configuração (valor padrão, regras, critérios)
+- [ ] Frontend: Aba Lançamento Mensal (gerar, editar individual, aprovar)
+- [ ] Frontend: Detalhe VA do colaborador (histórico, valores)
+- [ ] Frontend: KPIs corretos (total a pagar, beneficiários, média)
+- [ ] Corrigir clique no nome (abrir detalhe VA, não Raio-X)
+- [x] Fix risk level ordering in Painel RH: Baixo → Médio → Alto (crescente)
+- [x] IA Jurídica: somar todos os pedidos do reclamante e atualizar valorCausa automaticamente
+- [x] Fix Valor Causa column to display as currency (R$ format) in processos trabalhistas list
+- [x] Add "Re-analisar Todos" button to batch re-analyze all processos and update valorCausa
+- [x] Re-analisar todos os 7 processos via IA para recalcular valorCausa (botão criado, execução pelo usuário)
+- [x] Redesenhar dialog "Resolver Inconsistência" do Fechamento de Ponto (mais prático e visual)
+- [x] Configurar valores do VA por obra na aba Configuração do Vale Alimentação (já funcional)
+- [x] Central de Alertas: mudar de popup para full screen
+- [x] Add progress indicator to Re-analisar Todos button (Analisando 3/7...)
+- [x] Add Comarca (Cidade/Estado) column to processos trabalhistas list
+- [x] Fix Saldo Salário: usar dias reais do mês (não 30 fixo) e calcular até término do aviso
+- [x] Fix Férias Proporcionais: calcular da admissão até término do aviso (não início)
+- [x] Add 13º Salário Proporcional: salário/12 x meses de jan até término do aviso
+- [x] Fix Multa FGTS: calcular até término do aviso (não início)
+
+## Sessão de Testes e Correções - 28/02/2026
+- [x] BUG FIX: Resolver Inconsistência no Fechamento de Ponto - refetch do employeeDetail após resolver (contador local não atualizava)
+- [x] Preencher Comarca nos processos trabalhistas (7 processos atualizados para "Igarassu/PE")
+- [x] Preencher Vara e Tribunal do processo 30008 (estava nulo)
+- [x] Testar fluxo completo do Vale Alimentação Fevereiro 2026 - Gerar, Aprovar Individual, Aprovar Todos (145 lançamentos)
+- [x] Validar cálculo de rescisão no Aviso Prévio (GILBERTO DA COSTA BARBOZA - R$ 3.709,14)
+
+## Changelog de Atualização DataJud - Processos Trabalhistas
+- [x] Implementar comparação detalhada (diff) ao atualizar processos via DataJud
+- [x] Armazenar histórico de mudanças por processo (campo antigo vs novo)
+- [x] Exibir relatório de mudanças após "Atualizar Todos via DataJud"
+- [x] Mostrar quais campos mudaram em cada processo (status, fase, valor, audiência, etc.)
+
+## Correção de Cálculos de Rescisão - Aviso Prévio
+- [x] BUG: Saldo de Salário - corrigido para usar dataSaida (dia seguinte ao término) com divisor CLT 30
+- [x] BUG: Férias Proporcionais - corrigido para calcular até dataSaida (dia seguinte ao término)
+- [x] BUG: 13º Proporcional - corrigido para contar de janeiro até dataSaida (3/12 no caso ANTONIO RENATO)
+- [x] BUG: FGTS/Multa 40% - corrigido para calcular até dataSaida
+- [x] Testes unitários para validar todos os cálculos corrigidos (31 testes de rescisão, 477 total)
+- [x] Tela de detalhes recalcula em tempo real via getById (não usa JSON armazenado antigo)
+
+## Correção Cálculos Rescisão - Caso IVAN DOS SANTOS (Referência: R$ 5.320,65)
+- [x] BUG: Saldo salário - CORRIGIDO: 14/30 = R$ 1.021,53 (ref R$ 1.021,07)
+- [x] BUG: Férias - CORRIGIDO: 12 meses com projeção CLT = R$ 2.918,67 EXATO
+- [x] BUG: 13º - CORRIGIDO: 3/12 = R$ 547,25 EXATO
+- [x] BUG: Multa FGTS - CORRIGIDO: R$ 840,58 (diff R$ 6,91 por estimativa)
+- [x] Investigar dados do IVAN no banco (admissão 17/03/2025, salário R$ 2.189)
+- [x] Corrigir cálculo de férias - usa projeção até último dia do mês de término
+- [x] Garantir que TODAS as telas usem o mesmo cálculo corrigido (getById recalcula)
+- [x] Incluir Multa FGTS 40% no total da rescisão (é custo para empresa)
+
+## Correção Tela Editar Aviso Prévio (mutation calcular)
+- [x] BUG: Saldo de salário usa 31 dias - CORRIGIDO para divisor CLT 30
+- [x] BUG: Férias usa data de início - CORRIGIDO: projeção até fim do mês de término
+- [x] BUG: 13º usa data de início - CORRIGIDO: projeção até fim do mês de término (3/12)
+- [x] BUG: FGTS/Multa - CORRIGIDO: projeção até fim do mês de término
+- [x] BUG: VR usa dias reais - CORRIGIDO para divisor CLT 30
+- [x] BUG: Total Verbas não inclui multa FGTS - CORRIGIDO
+- [x] BUG: Label Desligamento - CORRIGIDO para Término Aviso
+- [x] Alinhar mutation calcular com calcularRescisaoCompleta - FEITO
+- [x] BUG: Valor Estimado na lista principal ainda mostra valor antigo (armazenado) - CORRIGIDO (recálculo em tempo real no list)
+
+## Exibição Detalhada Tempo de Serviço
+- [x] Mostrar anos, meses e dias de serviço no card "DIAS DE AVISO" - FEITO (ex: "11 meses, 24 dias de serviço")
+- [x] Incluir dataAdmissao no JSON previsaoRescisao do getById para cálculo no frontend
+- [x] BUG: Nome do colaborador aparecia como "—" no card de detalhes - CORRIGIDO (getById agora inclui employeeName, employeeCpf, employeeCargo)
+
+## Dashboard Aviso Prévio - Recálculo em Tempo Real
+- [x] Atualizar getDashAvisoPrevio para recalcular valores de rescisão em tempo real (não usar valorEstimadoTotal armazenado)
+- [x] Recalcular breakdownRescisao com valores atualizados
+- [x] Recalcular custoPorSetor com valores atualizados
+
+## Recálculo em Tempo Real - Tela de Féria- [x] Analisar como valores de férias são calculados/armazenados
+- [x] Implementar recálculo em tempo real na lista de férias (usar salário atual)
+- [x] Implementar recálculo em tempo real no Dashboard de Férias
+## Exportar PDF/TRCT no Aviso Prévio
+- [x] Criar endpoint backend para gerar PDF do TRCT (já existia gerarPdf)
+- [x] Adicionar botão "Exportar TRCT (PDF)" no card de detalhes do Aviso Prévio
+- [x] Gerar documento TRCT com todas as verbas rescisórias (abre em nova aba com opção de imprimir/salvar PDF)
+
+## Notificação Automática - Prazo Pagamento Rescisão (Art. 477 §6º CLT)
+- [x] Implementar verificação automática de prazos de pagamento de rescisão (job a cada 6h)
+- [x] Enviar notificação ao owner quando prazo estiver próximo (3 dias antes)
+- [x] Enviar notificação quando prazo estiver vencido
+
+## Correções Painel RH
+- [x] Verificar e corrigir cálculo da Massa Salarial no Painel RH - CORRIGIDO (parseBRL ao invés de parseFloat)
+- [x] Corrigir valor de Avisos Prévios no Painel RH para usar recálculo em tempo real - CORRIGIDO
+- [x] Corrigir custo férias vencidas e valor em risco jurídico (parseBRL)
+
+## Atualização de Revisão do Sistema
+- [x] Atualizar número de revisão de 114 para 115
+- [x] Registrar changelog completo de todas as alterações feitas nesta sessão
+
+## Editar Status de Pagamento - Vale Alimentação
+- [x] Adicionar opção de reverter status "Pago" para "Aprovado" na tela de Vale Alimentação
+- [x] Permitir que o usuário corrija cliques errados no botão de pagamento
+- [x] Botão individual (RefreshCw) em cada linha com status "Pago"
+- [x] Botão em lote "Reverter Pagos" na barra de ações superior
+
+## Layout Totalizador Vale Alimentação
+- [x] Mover totalizador para o topo da tabela (não repetir por página)
+
+## Melhorias Gráfico Gantt de Férias
+- [x] Adicionar mais cores na legenda para identificar cada tipo de período (Previstas, Agendadas, Em Gozo, Concluídas, Vencidas)
+- [x] Tornar nome do funcionário clicável para abrir tela completa de férias
+- [x] Criar dialog/sheet com informações completas de férias do funcionário para análise do RH
+- [x] Barras coloridas por status no Gantt (azul=prevista, vermelho=vencida, laranja=agendada, verde=em gozo, cinza=concluída)
+- [x] Backend feriasDoFuncionario com todos os períodos aquisitivos, status e valores
+- [x] Dialog mostra: dados do colaborador, total períodos, vencidas, valor estimado, tabela detalhada
+
+## Separação de Valores de Férias no Fluxo de Caixa
+- [x] Separar Total Estimado Anual em: Salário Base, 1/3 Adicional e Total Geral
+- [x] Aplicar mesma separação nos cards mensais do fluxo de caixa
+- [x] Atualizar backend para retornar valores separados (salário e 1/3)
+- [x] Separar totais no dialog mensal detalhado (tabela com tfoot)
+
+## Nomes Clicáveis na Tabela Férias Vencidas
+- [x] Tornar nomes clicáveis na tabela "Funcionários com Mais Férias Vencidas" para abrir dialog de férias
+
+## Redesign Visual Centro de Comando
+- [x] Reformular Centro de Comando com cores claras, fundo branco/cinza claro
+- [x] Textos escuros e boa legibilidade
+- [x] Remover fundo escuro/azulado que dificulta leitura
+
+## Liquidação de Férias Antigas
+- [ ] Liquidar via SQL todas as férias com período concessivo anterior a 2024 (marcar como concluídas)
+
+## Cards Resumo Financeiro Clicáveis - Dashboard Aviso Prévio
+- [ ] Tornar cards do Resumo Financeiro clicáveis (Custo Total, Em Andamento, Concluído, Cancelado)
+- [ ] Ao clicar, abrir lista detalhada mostrando quais funcionários compõem aquele valor
+- [ ] Garantir responsividade dos cards
+
+## Rev. 116 - Liquidação de Férias + Cards Clicáveis Aviso Prévio
+
+### Liquidação de Férias Antigas
+- [x] Liquidar 38 períodos de férias anteriores a 2024 via banco de dados (status → concluída)
+- [x] Adicionar observação automática de liquidação nos registros
+
+### Dashboard Aviso Prévio - Cards Clicáveis
+- [x] Card "Custo Total Estimado" clicável com drill-down mostrando todos os avisos
+- [x] Card "Custo Em Andamento" clicável filtrando por status em_andamento
+- [x] Card "Custo Concluído" clicável filtrando por status concluido
+- [x] Card "Custo Cancelado" clicável filtrando por status cancelado
+- [x] Hover e feedback visual nos cards (borda, sombra, scale)
+- [x] Texto "Clique para detalhes" nos cards financeiros
+- [x] Dialog com lista detalhada de funcionários, valores e totalização
+
+### Centro de Comando
+- [x] Verificar e confirmar cores claras e responsividade (já implementado)
+
+### Changelog
+- [x] Inserir Rev. 116 no banco de dados (system_revisions)
+
+### Bug Fix - Indicador Pagamento em Dobro
+- [x] Corrigir indicador "Pagamento em Dobro" que mostra 109 períodos incorretamente (não houve pagamento em dobro)
+- [x] Zerar flag pagamentoEmDobro nos registros de férias concluídas/liquidadas
+- [x] Remover lógica automática que marcava pagamentoEmDobro=1 em períodos vencidos
+- [x] Atualizar textos de alerta: "Pagamento em Dobro" → "Período Concessivo Expirado"
+
+## Rev. 117 - Excluir Desligados de Todos os Cálculos Ativos
+
+### Investigação e Mapeamento
+- [x] Mapear todos os módulos que contabilizam colaboradores desligados indevidamente
+- [x] Verificar filtros de VR, VA, VT, férias, folha, horas extras, dashboards
+### Correções Backend
+- [x] Filtrar desligados nos cálculos de VR/VA/VT (stats e listagem)
+- [x] Folha de pagamento já alertava status não-ativo (OK)
+- [x] Filtrar desligados nos cálculos de horas extras (dashboard)
+- [x] Filtrar desligados nos cálculos de férias (listagem, vencidas, calendário, alertas, feriasDoMes)
+- [x] Filtrar desligados nos dashboards de férias e horas extras
+### Teste Prático
+- [x] Desligar ODAIR JOSE PEREIRA (id=420058) e verificar que sumiu de férias e VA
+- [x] Reverter desligamento após teste
+### Correções de Dados
+- [x] Férias de desligados já estavam zeradas (nenhum desligado tinha férias pendentes/vencidas)
+- [x] Benefícios de desligados agora são filtrados nas queries
+
+## Rev. 118 - Filtro Aviso Prévio no Raio-X do Funcionário
+- [ ] Adicionar filtro "Aviso Prévio" na barra de filtros do Raio-X do Funcionário
+- [ ] Filtrar colaboradores que estão em aviso prévio ativo
+
+## Rev. 118 - Badge Crítico Clicável + Filtro Aviso Prévio
+- [x] Adicionar filtro "Aviso Prévio" na barra de filtros do Raio-X do Funcionário
+- [x] Tornar badge "Crítico 35/100" clicável na Visão Panorâmica
+- [x] Abrir dialog com detalhamento da pontuação ao clicar (quais indicadores contribuem)
+
+## Rev. 119 - Botão Recalcular + Valor Total Aviso Prévio
+- [x] Adicionar botão "Recalcular Todos" na tela de Aviso Prévio
+- [x] Criar endpoint backend para recalcular todos os avisos prévios em andamento
+- [x] Mostrar valor total estimado nos cards de resumo quantitativo
+
+## Rev. 120 - Persistir Exames Customizados no ASO
+- [x] Salvar exames adicionados pelo campo "Adicionar outro exame" no banco de dados
+- [x] Carregar exames customizados salvos na lista de exames para próximos ASOs
+- [x] Tabela custom_exams criada com índice por empresa e constraint unique
+- [x] Endpoints list/add/remove no router docs.customExams
+- [x] Toast de confirmação ao adicionar exame customizado
+
+## Rev. 121 - Filtro por Ano no Dashboard de Férias
+- [x] Corrigir Dashboard de Férias para filtrar dados apenas pelo ano selecionado no filtro superior
+- [x] Cards quantitativos (Total, Pendentes, Vencidas, etc.) devem refletir apenas o ano selecionado
+- [x] Cards financeiros (Provisão Total, A Pagar, Custo Vencidas, Já Pago) devem refletir apenas o ano selecionado
+- [x] Alertas de férias vencidas devem refletir apenas o ano selecionado
+
+## Rev. 122 - Dialog Férias do Funcionário em Full Screen
+- [x] Tornar dialog "Férias do Funcionário" em tela cheia para melhor visualização
+
+### Filtro por Ano em TODOS os Dashboards
+- [x] Dashboard Aviso Prévio - adicionar filtro por ano (backend + frontend com seletor de ano)
+- [ ] Dashboard Funcionários - verificar se precisa filtro por ano
+- [ ] Dashboard Cartão de Ponto - verificar se precisa filtro por ano
+- [ ] Dashboard Folha de Pagamento - verificar se precisa filtro por ano
+- [ ] Dashboard Horas Extras - verificar se precisa filtro por ano
+- [x] Dashboard Férias - corrigido filtro por ano (remover períodos antigos)
+
+## Rev. 123 - Vinculação de Funcionários a Obras (Alocação de Efetivo)
+### Schema / Banco de Dados
+- [x] Criar tabela `employee_site_history` para histórico de alocações (já existia `obras` e `obra_funcionarios`)
+- [x] Criar tabela `obra_ponto_inconsistencies` para alertas de inconsistência ponto x obra
+- [x] Migrar schemas para o banco via SQL direto
+
+### Backend tRPC
+- [x] CRUD completo de obras (já existia, mantido)
+- [x] Gestão de alocações: alocar funcionário com histórico, transferir, encerrar alocação
+- [x] Endpoint de efetivo por obra (getEfetivoPorObra)
+- [x] Endpoint de histórico de alocações por funcionário (getEmployeeSiteHistory)
+- [x] Endpoint de efetivo histórico para dashboard histograma (getEfetivoHistorico)
+- [x] Endpoint de funcionários sem obra (getFuncionariosSemObra)
+- [x] Endpoint de transferência em lote (transferirEmLote)
+
+### Frontend - Tela de Obras
+- [x] Tela de Efetivo por Obra (/obras/efetivo) com 3 abas: Efetivo, Sem Obra, Inconsistências
+- [x] KPIs: Alocados, Obras com Efetivo, Sem Obra, Inconsistências
+- [x] Busca por obra ou funcionário
+- [x] Botão Alocar Funcionário com dialog de seleção
+- [x] Aba Sem Obra lista funcionários sem alocação com botão Alocar individual
+
+### Frontend - Integração com Funcionário
+- [x] Campo "Obra Principal" já existia no cadastro de funcionário (obraAtualId)
+- [x] Exibir obra atual no Raio-X do Funcionário (seção Dados Profissionais)
+- [x] Obra principal retornada pelo endpoint raioX
+
+### Dashboard - Efetivo por Obra
+- [x] Dashboard Efetivo por Obra (/dashboards/efetivo-obra) com histograma
+- [x] Evolução mensal do efetivo (gráfico de barras empilhadas por obra)
+- [x] Distribuição percentual (gráfico de rosca)
+- [x] KPIs: Funcionários Alocados, Obras com Efetivo, Sem Obra, Inconsistências
+- [x] Tabela de detalhamento por obra com ações
+- [x] Filtro por ano com seletor
+
+### Preparação para Módulo Futuro (Diário de Obras)
+- [x] Estrutura preparada: employee_site_history + obra_ponto_inconsistencies
+- [x] Detecção automática integrada no importAFD (cruza SN do relógio com alocação principal)
+
+### Integração Ponto x Alocação de Obra
+- [x] Ponto cruza SN do relógio (obra do equipamento) com alocação principal do funcionário
+- [x] Detecta inconsistência quando ponto é batido em obra diferente da alocação
+- [x] Registra inconsistência na tabela obra_ponto_inconsistencies
+- [x] Integrado no fluxo de importAFD (detectarInconsistenciaPonto chamado automaticamente)
+
+### Alertas de Inconsistência Ponto x Obra
+- [x] Tabela `obra_ponto_inconsistencies` criada e funcional
+- [x] Detecção automática integrada no importAFD
+- [x] Aba Inconsistências na tela Efetivo por Obra com opções: Esporádico / Transferir
+- [x] Esporádico: marca como resolvido, mantém alocação principal
+- [x] Transferir: executa transferência automática e registra no histórico de alocações
+
+## Rev. 124 - KPIs Clicáveis no Dashboard de Férias
+- [ ] KPIs de status (Total, Pendentes, Agendadas, Vencidas, Em Gozo, Concluídas, Canceladas) devem ser clicáveis
+- [ ] Ao clicar em um KPI, filtrar todos os dados do dashboard para aquele status
+- [ ] KPIs financeiros (Provisão, A Pagar, Custo Vencidas, Já Pago) também devem filtrar
+- [ ] Visual feedback: KPI selecionado deve ter destaque visual (borda, sombra ou fundo diferente)
+- [ ] Botão "Limpar filtro" ou clicar novamente no KPI ativo para voltar à visão geral
+- [ ] Gráficos, tabelas e alertas devem respeitar o filtro selecionado
+
+## Rev. 125 - Dialog Alocar Funcionário com Multi-Select
+- [ ] Substituir select simples por campo de busca com digitação e seleção múltipla de colaboradores
+- [ ] Mostrar TODOS os funcionários ativos no dialog (não apenas sem obra)
+- [ ] Mostrar chips/tags dos funcionários selecionados com botão X para remover
+- [ ] Filtrar lista conforme o usuário digita (nome, matrícula, CPF)
+- [ ] Permitir alocar vários funcionários de uma vez na mesma obra
+- [ ] Manter campo de Obra de Destino, Data de Início e Motivo
+
+## Rev. 126 - Correções e Melhorias
+- [x] Corrigir horário UTC para GMT-3 (Brasília) no módulo jurídico (Central de Alertas / DataJud)
+- [x] Clicar no nome do funcionário na tela de ASO abre Raio-X em full screen
+- [x] Clicar no nome do funcionário em outras telas também abre Raio-X full screen (ObraEfetivo, Epis, ProcessosTrabalhistas, ValeAlimentacao, SolicitacaoHE)
+- [x] KPIs financeiros do Dashboard de Férias clicáveis (Provisão, A Pagar, Custo Vencidas, Já Pago)
+- [x] Feedback visual (ring/highlight) nos KPIs ao clicar
+- [x] Dialog "Relatório de Atualização DataJud" em full screen (já usava FullScreenDialog)
+- [x] Tipo de contrato: remover "Horista" como opção separada, manter apenas CLT e PJ (todos CLT são horistas)
+- [x] Corrigir funcionário com tipo "Horista" para "CLT" no banco (127 registros atualizados)
+- [x] Mapa de Distribuição por Estado: somatória não bate com total de ativos (adicionado "Não informado" + total no ranking)
+
+## Rev. 127 - Dashboard Análise de Perfil por Tempo de Casa
+- [x] Backend: endpoint que agrupa funcionários por faixa de tempo de casa e cruza com estado civil, localidade, função, gênero, faixa etária, obra
+- [x] Backend: endpoint de análise IA que gera insights (pontos positivos a aproveitar e negativos a evitar)
+- [x] Frontend: Dashboard com gráficos comparativos por faixa de tempo de casa
+- [x] Frontend: Seção de IA com análise de pontos positivos e negativos
+- [x] Adicionar rota e menu para o novo dashboard
+
+## Rev. 128 - Correções Assistente IA
+- [x] Renomear "Assistente FC" para apenas "Assistente"
+- [x] X deve fechar/minimizar o chat completamente para não atrapalhar navegação no celular
+- [x] Ajustar tamanho do chat no mobile para não ultrapassar a tela
+
+## Rev. 128b - Dialog Alocar Funcionários em Full Screen
+- [x] Converter dialog "Alocar Funcionários" para FullScreenDialog com filtros (Todos/Sem Obra/Com Obra)
+- [x] Investigar e documentar como a "obra atual" do funcionário é determinada (campo obraAtualId atualizado automaticamente)
+- [x] Funcionários já alocados aparecem no relatório de efetivo por obra (já funcionava)
+- [x] Melhorar UX do dialog de alocação: filtros Todos/Sem Obra/Com Obra + busca por obra
+- [x] Limpar todas as alocações de obra dos funcionários (usuário fará manualmente) - 392 funcionários ativos agora sem obra
+
+## Rev. 129 - Busca sem acentos + LGPD + Assistente
+- [ ] Busca ignorando acentos/caracteres especiais no dialog de alocação de funcionários
+- [ ] Aplicar busca sem acentos em outras telas de pesquisa do sistema
+
+## Rev. 129b - Regra de alocação única por obra
+- [ ] Backend: validar que funcionário só pode ter 1 obra ativa por vez
+- [ ] Frontend: alerta de confirmação quando funcionário já está alocado em outra obra (transferir?)
+- [ ] Impedir alocação dupla simultânea
+## Rev. 130 - Dashboard Efetivo por Obra + Regra Alocação
+- [x] Backend: validar que funcionário só pode ter 1 obra ativa por vez (dialog de transferência implementado)
+- [x] Frontend: dialog de confirmação de transferência quando funcionário já alocado
+- [x] PrintFooterLGPD adicionado em TODAS as páginas com DashboardLayout (11 páginas corrigidas)
+- [x] Dashboard Efetivo por Obra: cruzar dados de alocação com cartão de ponto mensal
+- [x] Dashboard Efetivo por Obra: adicionar filtro por mês além do ano
+- [x] Dashboard Efetivo por Obra: mostrar efetivo real baseado em ponto + alocação
+- [ ] REGRA GLOBAL: Todos os gráficos devem ser responsivos e clicáveis com drill-down de dados
+- [x] Dashboard Efetivo: "Ver equipe" deve abrir dialog com funcionários da obra específica
+- [x] Dashboard Efetivo: testar todos os vínculos e links corretamente
+
+## Rev. 131 - Correção ObraEfetivo: clicar na obra
+- [x] Clicar no card da obra deve abrir a equipe com funcionários já alocados visíveis
+- [x] Permitir alocar mais funcionários diretamente ao clicar na obra
+- [x] Verificar por que os funcionários alocados não aparecem ao abrir a obra
+- [x] BUG: Alocação de funcionário não atualiza a lista em tempo real (precisa recarregar página)
+- [x] Clicar no card da obra deve abrir FullScreenDialog com equipe e opção de alocar
+- [x] Adicionar linha de TOTAL no final da tabela Detalhamento por Obra no DashEfetivoObra
+- [x] BUG: Discrepância no "Sem Obra" - KPIs mostram 24 mas dialog de alocação mostra 22 (correto é 22)
+- [x] Equipe da Obra: separar funcionários por status (Ativo, Aviso Prévio, Férias, Afastado, Recluso)
+
+## Rev. 132 - Dashboard Efetivo: FullScreen equipe + histograma + auto-desligamento
+- [x] DashEfetivoObra: "Ver equipe" abre FullScreenDialog (não dialog pequeno) com tabela agrupada por função
+- [x] DashEfetivoObra: histograma por função na equipe da obra
+- [x] Auto-remover funcionário da obra quando for desligado (status = Desligado)
+- [x] Detalhamento por Obra: adicionar colunas Aviso Prévio (cruzando termination_notices em_andamento), Afastados, Férias + Total Geral por obra
+- [x] Aviso Prévio na tabela deve atualizar automaticamente quando aviso é criado/concluído/cancelado (invalidar query)
+- [x] Férias na tabela deve atualizar automaticamente cruzando vacation_periods em gozo com alocações (invalidar query)
+
+## Rev. 133 - Botões Imprimir e PDF na Equipe da Obra
+- [x] Adicionar botão Imprimir na tela FullScreenDialog de Equipe da Obra
+- [x] Adicionar botão Gerar PDF na tela FullScreenDialog de Equipe da Obra
+- [x] Gráfico Distribuição por Função: barras empilhadas por status (Ativo=verde, Aviso=vermelho, Férias=azul, Afastado=amarelo)
+- [x] Botões Imprimir e PDF no header do FullScreenDialog de Equipe da Obra
+- [x] Layout de impressão A4 profissional com logo da empresa no cabeçalho
+- [x] Rodapé LGPD na impressão com nome do usuário que solicitou, data/hora
+- [x] Sem folhas em branco no final da impressão
+- [x] BUG: Gráfico de distribuição por função não aparece na impressão (CSS background não imprime)
+- [x] Botão fechar no Assistente IA (floating chat) para usuário desabilitar quando quiser
+- [x] BUG: React error #300 ao fechar o Assistente IA (renderização condicional incorreta)
+- [x] Legenda Férias (azul) + Afastado (amarelo) no gráfico empilhado da Equipe da Obra
+- [x] Clique na barra do gráfico filtra a tabela de funcionários por função/status
+- [x] Gráfico e tabela responsivos para telas menores
+- [x] Cores do gráfico: Azul=Ativo, Vermelho claro=Aviso Prévio, Laranja=Férias, Amarelo=Afastado, Roxo=Licença, Cinza=Recluso
+- [x] Legenda completa com todos os status prontos
+- [x] Impressão só da tela visível (não imprime tudo, só o que está na viewport)
+
+## Rev. 134 - Dashboard Controle de Documentos
+- [x] Backend: endpoint getDashControleDocumentos com dados completos (ASOs, treinamentos, docs pessoais, CNH)
+- [x] KPIs: Total documentos, vencidos, a vencer 30d, compliance %, funcionários sem ASO
+- [x] Gráfico: Status geral por categoria (ASO, Treinamento, CNH, Docs Pessoais)
+- [x] Gráfico: Timeline de vencimentos próximos 90 dias
+- [x] Gráfico: Distribuição por tipo de documento
+- [x] Tabela: Documentos vencidos/a vencer com nome do funcionário, tipo, data validade
+- [x] Tabela: Funcionários com documentação incompleta
+- [x] Filtros: Por tipo de documento, por status (vencido/a vencer/em dia)
+- [x] Alertas visuais: Cards com cores de urgência
+- [x] Nome do funcionário clicável abre Raio-X
+- [x] Botões Imprimir e PDF com layout A4 + logo + rodapé LGPD
+- [x] Rota /dashboards/controle-documentos no App.tsx
+- [x] Menu lateral: item na seção Dashboards
+- [x] Card no DashboardIndex para o novo dashboard
+
+## Rev. 134 - Bug Fix: Gráfico Evolução Mensal Avisos Prévios
+- [x] Gráfico mostra apenas meses com dados, faltando continuidade (pula meses sem aviso)
+- [x] Corrigir para mostrar todos os 12 meses do ano selecionado (meses sem dados = 0)
+- [x] Melhorar formato do eixo X (ex: "Fev/25" ao invés de "02/25")
+
+## Rev. 135 - Bug Fix: Funcionários não aparecem na Solicitação de HE
+- [x] BUG: Ao selecionar obra na Nova Solicitação de Horas Extras, mostra "Nenhum funcionário ativo encontrado nesta obra"
+- [x] Corrigido: campo errado (e.obraAtual/e.obraId) trocado para e.obraAtualId + busca via tabela obraFuncionarios
+- [x] Limpar seleção de funcionários ao trocar de obra
+
+## Rev. 135 - Bug Fix: Aba Aprovações mostra vazio mesmo com pendência
+- [x] BUG: Card mostra 1 Pendente, badge mostra 1, mas lista de Aprovações Pendentes aparece vazia
+
+## Rev. 136 - Bug Fix: Aba Aprovações vazia + Responsividade HE + Revisões Faltantes
+- [x] BUG: Aba Aprovações usava listQuery filtrada por mês, criada pendentesQuery separada sem filtro de mês
+- [x] Tornar a tela de Solicitação de HE totalmente responsiva (cards, tabs, botões, filtros)
+- [x] Inserir revisões 122-132, 134, 135 faltantes no banco de dados (Controle de Revisões)
+
+## Rev. 137 - Alertas SST: FullScreenDialog ao clicar no botão de alertas
+- [x] Botão "X alertas de SST" no Painel SST abre FullScreenDialog com lista completa de alertas
+- [x] Lista detalhada com nome do funcionário, função, tipo de alerta, detalhe, urgência
+- [x] Filtros por tipo de alerta (ASO Vencido, ASO Vencendo, Sem ASO, Advertências) e busca por nome
+- [x] Badges de resumo (críticos, alertas, atenção)
+- [x] Raio-X clicável no nome do funcionário
+- [x] Responsivo (mobile/desktop)
+
+## Rev. 138 - Melhoria Fluxo de Aprovação HE + Botão Voltar Alertas SST
+- [x] FullScreenDialog ao clicar na solicitação para análise detalhada
+- [x] Campo de observações do admin na aprovação/rejeição
+- [x] Permitir reverter decisão: reprovar após aprovar e aprovar após reprovar
+- [x] Histórico mostra observações do admin e permite editar decisão
+- [x] Schema: adicionado campo observacaoAdmin na tabela heSolicitacoes
+- [x] Fix: Botão Voltar no FullScreenDialog de Alertas SST agora visível (header escuro)
+
+## Rev. 139 - Bug Fix: Aba Aprovações mostra vazio + Responsividade HE
+- [x] BUG: Cards mostram 1 Aprovada mas aba Aprovações mostra "Nenhuma solicitação pendente" (só mostrava pendentes)
+- [x] Aba Aprovações agora mostra TODAS as solicitações: pendentes no topo + histórico de decisões
+- [x] Filtros por mês e status na aba Aprovações
+- [x] Mini resumo com badges (pendentes, aprovadas, rejeitadas)
+- [x] Cards e tabs responsivos (grid 2x2 em mobile, textos menores)
+
+## Rev. 140 - Excluir Solicitação HE + Fix Filtro Mês
+- [x] Backend: endpoint delete para excluir solicitação HE (Admin Master only)
+- [x] Frontend: botão Excluir na listagem (Histórico e Aprovações) e no FullScreenDialog com confirmação inline
+- [x] Fix: filtro de mês agora inclui opção "Todos os meses" para evitar solicitações desaparecendo
+- [x] Fix: mês padrão agora é o mês atual (março 2026) ao invés de ficar em mês anterior
+- [x] Confirmação inline (Sim/Não) ao invés de dialog separado para melhor UX mobile
+- [x] Apenas Admin Master pode excluir solicitações (verificação backend + frontend)
+- [x] Toast de sucesso/erro ao excluir
+- [x] Invalidação automática de queries após exclusão
+
+## Rev. 141 - Bug Fix: Admin Master não consegue excluir HE
+- [x] Investigar verificação isAdminMaster no frontend (SolicitacaoHE.tsx) - frontend OK (user?.role === "admin_master")
+- [x] Investigar verificação de role no backend (delete endpoint) - BUG: comparava com "admin" ao invés de "admin_master"
+- [x] Corrigir para reconhecer corretamente o Admin Master - fix: ctx.user.role !== "admin_master"
+
+## Sprint 1 - Fundação (Prioridade 1)
+- [x] 1.1 Tipo de vínculo no colaborador (CLT, PJ, Estagiário, Menor Aprendiz) - já existia como tipoContrato
+- [x] 1.2 Documentos regulatórios no cadastro de empresa (PGR, PCMSO, LTCAT) com upload e validade
+- [x] 1.3 Convenção Coletiva no cadastro de empresa com upload PDF e campos estruturados
+- [x] 1.4 Status de Aptidão automático (Apto/Inapto) para colaboradores - endpoint criado
+
+## Sprint 2 - Módulo Terceiros: Cadastro (Prioridade 2)
+- [x] 2.1 Cadastro de empresas terceiras com documentos obrigatórios (PGR, PCMSO, contrato social)
+- [x] 2.2 Cadastro de funcionários terceiros com ficha, documentos, ASO, treinamentos, alocação em obra
+- [x] 2.3 Aptidão de terceiros (Apto/Inapto automático)
+- [x] 2.4 Obrigações mensais da empresa terceira (FGTS, INSS, folha, comprovantes) com checklist e upload
+
+## Sprint 3 - Módulo Terceiros: Acesso Externo e Alertas (Prioridade 2 cont.)
+- [x] 2.5 Acesso externo para empresa terceira enviar documentos mensais (Portal Externo do Terceiro)
+- [x] 2.6 Alertas automáticos por e-mail para terceiros (Alertas e Cobranças com escalonamento)
+- [x] 2.7 Painel de Conformidade para Medição (visão consolidada por fornecedor/obra)
+- [x] 2.8 Aprovações de Parceiros (workflow de aprovação de lançamentos)
+
+## Sprint 4 - Crachás (Prioridade 3)
+- [x] 3.1 Emissão de crachá para colaboradores (azul CLT, verde PJ) com foto, dados, QR Code
+- [x] 3.2 Emissão de crachá para terceiros (laranja) com dados da empresa terceira
+- [x] 3.3 QR Code com dados do colaborador para verificação
+- [x] 3.4 Download do crachá em PNG de alta qualidade
+- [x] 3.5 Impressão direta do crachá
+
+## Sprint 5 - Portal de Parceiros (Prioridade 4)
+- [x] 4.1 Cadastro completo de parceiro conveniado (dados, CNPJ, bancários, forma pagamento, condições)
+- [x] 4.2 Portal externo da Farmácia (lançamento consumo, comprovantes, fechamento mensal)
+- [x] 4.3 Validação e aprovação pelo RH com geração de guia de desconto automática
+- [x] 4.4 Resumo de pagamento ao parceiro com dados bancários prontos
+- [x] 4.5 Extensão para outros parceiros (posto, restaurante, etc.)
+
+## Sprint 6 - Inteligência Artificial (Prioridade 5)
+- [x] 5.1 Validação automática com IA dos documentos enviados por terceiros (Validação IA de Docs)
+- [x] 5.2 Convenção Coletiva por obra com busca por cidade/estado (já existente no módulo Empresas)
+- [x] 5.3 Comparativo de convenções com IA (Comparativo Convenções - matriz vs. local)
+
+## Regras de Design (aplicar em TUDO)
+- [ ] Todas as telas FullScreen (FullScreenDialog pattern)
+- [ ] Todos os gráficos responsivos (mobile/desktop)
+- [ ] Layout agradável e consistente
+- [ ] Configurações centralizadas na aba Configurações do sistema
+
+## Ajuste: Remover Horista
+- [x] Remover opção "Horista" do select de tipoContrato (todos CLT já são horistas)
+
+## Arquitetura: Módulos Independentes
+- [x] Criar módulo "Terceiros" como módulo independente na tela principal (como RH&DP, SST, Jurídico)
+- [x] Criar módulo "Parceiros" como módulo independente na tela principal
+- [x] Cada módulo com sidebar própria, cor e ícone distintos
+- [x] Terceiros: cor laranja, ícone HardHat/Building
+- [x] Parceiros: cor roxa/violeta, ícone Handshake/Store
+
+## Ajustes Pós-Sprints (fazer depois de finalizar tudo)
+- [ ] Remover "Avaliação de Desempenho" da sidebar do RH & DP (já é módulo separado)
+- [ ] Tornar dialogs/abas redimensionáveis com drag nas bordas (resize com mouse)
+
+## Melhorias de UX
+- [x] Diálogos/modais redimensionáveis (arrastar bordas laterais com mouse para ajustar largura)
+- [x] Expandir aba Sistema em Configurações com parâmetros de TODOS os módulos (Terceiros, Parceiros, Jurídico, Avaliação, SST, etc.)
+- [x] Busca automática de dados por CNPJ no cadastro de Parceiros e Terceiros (BrasilAPI)
+- [x] Sistema de habilitação/desabilitação de módulos por empresa (Admin Master)
+- [x] Tabela module_config no banco para controlar módulos habilitados por empresa
+- [x] Painel de controle de módulos nas Configurações (toggle ON/OFF por módulo)
+- [x] Módulos desabilitados ficam ocultos na Home e sidebar para todos os usuários
+- [x] Preparado para venda futura - cada empresa com módulos independentes
+- [x] BUG: React Hooks order error in ModuleHub - useModuleConfig chamado após early return (movido para antes dos returns)
+- [ ] Seção de Convenção Coletiva na tela Editar Obra (adotar matriz ou selecionar outra)
+- [ ] Comparação com IA entre convenção da obra e da matriz com registro de divergências
+- [ ] Seção de Convenção Coletiva na tela Editar Obra (adotar matriz ou selecionar outra)
+- [ ] Comparação com IA entre convenção da obra e da matriz com registro de divergências
+- [ ] Controle de acesso por módulo por usuário (definir quais módulos cada usuário pode acessar)
+- [x] Detalhamento da Pontuação de Saúde em tela cheia (FullScreenDialog) com botão de voltar
+- [ ] Upload de arquivo da convenção coletiva na Editar Obra quando diferente da matriz
+
+## Bug Fix: Empresas Terceiras e Parceiros
+- [x] BUG CRÍTICO: TypeError "Cannot read properties of undefined (reading 'charAt')" na tela /terceiros/empresas
+- [x] Busca automática de CNPJ na tela de Empresas Terceiras (BrasilAPI) — já existia, verificado OK
+- [x] Busca automática de CNPJ na tela de Parceiros Conveniados (BrasilAPI) — já existia, verificado OK
+- [ ] Sistema de login externo para Terceiros e Parceiros
+## Portal Externo do Terceiro (Login com Senha)
+- [x] Tabela portal_credentials no banco (CNPJ + senha hash + tipo + empresa)
+- [x] Backend: Login com CNPJ + senha (JWT token)
+- [x] Backend: Trocar senha (primeiro acesso obrigatório)
+- [x] Backend: Verificar token
+- [x] Backend: CRUD funcionários pelo portal (terceiro cadastra seus próprios)
+- [x] Backend: Upload de documentos pelo portal (S3)
+- [x] Backend: Admin gerar acesso (senha temporária)
+- [x] Backend: Admin listar/desativar acessos
+- [x] Backend: Admin aprovar/rejeitar funcionário do portal
+- [x] Frontend: Tela de login do portal (/portal/login)
+- [x] Frontend: Tela de trocar senha (/portal/trocar-senha)
+- [x] Frontend: Dashboard do portal com gestão de funcionários (/portal/dashboard)
+- [x] Frontend: Botão "Acesso Portal" na lista de Empresas Terceiras
+- [x] Frontend: Dialog para gerar acesso com senha temporária e botão copiar
+- [x] Dupla via: RH interno também pode cadastrar funcionários de terceiros
+- [x] Bug fix: Lista de colaboradores não aparecia no Lançamento de Parceiros (campo nome vs nomeCompleto)
+- [x] Bug fix: Campos duplicados datajud removidos do schema
+## Próximos Passos - Portal Externo
+- [x] Notificações automáticas ao aprovar/rejeitar funcionário do portal
+- [x] Portal do Parceiro (login CNPJ+senha, dashboard, lançamentos)
+- [x] Painel de Aprovação em lote no módulo Terceiros (RH visualiza e aprova/rejeita funcionários do portal)
+- [x] BUG: QR Code do crachá corrigido - agora abre página pública de verificação de aptidão
+- [x] Criar página pública de verificação de aptidão (QR Code → mostra se funcionário está apto/inapto)
+- [x] Adicionar opção de Crachás na sidebar do módulo RH/DP
+- [x] BUG: Gerar Acesso Portal corrigido - colunas da tabela renomeadas para alinhar com Drizzle schema (tipo_portal→tipo, parceiro_conveniado_id→parceiro_id, ultimo_acesso→ultimo_login)
+
+## Correções Portal Terceiros - Mar/2026
+- [x] Senha padrão do portal: usar "mudar123" em vez de senha aleatória
+- [x] Fix erro cadastro funcionário terceiro: colunas inexistentes no banco (nome_completo, aso_doc_url, nr35_doc_url, etc.)
+- [x] Formulário Novo Funcionário do portal: tornar full screen
+- [x] Adicionar link de Crachás na seção OPERACIONAL do menu lateral (mesmo link do módulo Terceiros)
+
+## Melhorias Portal Parceiro - Mar/2026
+- [x] Upload de nota/cupom fiscal no formulário de lançamento do parceiro
+- [x] Busca de funcionário por nome ou CPF com autocomplete no portal do parceiro
+- [x] Login do parceiro com CNPJ + senha padrão "mudar123" e troca obrigatória no primeiro acesso
+- [x] Remover "Avaliação de Desempenho" da seção Gestão de Pessoas na sidebar RH&DP (módulo desabilitado)
+- [x] Remover Crachás do módulo Terceiros (manter apenas no módulo RH & DP seção Operacional)
+- [x] Botões de editar e excluir lançamento do parceiro (simulação PortalParceiro + portal externo PortalDashboard)
+- [x] Cancelar aprovação/rejeição de lançamento parceiro com campo de comentário para o fornecedor
+- [ ] Botão editar/excluir lançamento na tela de Aprovações de Parceiros (para aprovados e rejeitados)
+- [x] Reformular Portal Parceiro: login CNPJ+mudar123 com troca obrigatória (igual terceiro)
+- [x] Botão "Gerar Acesso" no Portal Externo do Parceiro (substituir link com token)
+- [x] Corrigir rota Crachás: mover para módulo RH&DP (não redirecionar para Terceiros)
+- [x] BUG URGENTE: Obras cadastradas sumiram da tela - corrigido mismatch de colunas no schema (usar_convencao_matriz, convencao_id, convencao_divergencias)
+- [x] BUG: Botão Voltar da tela Validação IA de Documentos deixa tela branca - corrigido para navegar de volta ao painel terceiros
+- [x] Adicionar botão de deletar funcionário no portal do terceiro (ao lado do editar)
+- [x] Adicionar campo status (Ativo/Desligado) no formulário de edição do funcionário terceiro
+- [x] Adicionar "Convenções Coletivas" na seção CADASTRO do menu lateral (sidebar)
+- [x] Criar/atualizar página de listagem e gestão de Convenções Coletivas
+- [x] Adicionar opção "Padrão (Sede)" na aba Convenção Coletiva dentro de Empresas
+- [x] Lógica: convenção padrão = sede da empresa, demais = obras em regiões específicas
+- [x] Criar página dedicada /convencoes-coletivas com listagem global de todas as convenções
+- [x] Botão "Nova Convenção Coletiva" na página /convencoes-coletivas com formulário de cadastro
+- [x] Botão de excluir funcionário no Portal do Terceiro (ao lado do Editar)
+- [x] Campo status (Ativo/Desligado) no Portal do Terceiro
+- [x] Seção "Período de Experiência" no Painel RH com alertas de colaboradores em 1º ou 2º período (já existia)
+- [x] Opções de Prorrogar, Efetivar ou Desligar para cada colaborador em experiência (já existia)
+- [x] Crachá: centralizar nome da empresa no topo
+- [x] Crachá: adicionar logo da empresa
+- [x] Crachá: usar Nº Interno como matrícula (não o código COL gerado)
+- [x] BUG: Calendário de férias aparece vazio - corrigido case sensitivity dataAlteradaPeloRH -> dataAlteradaPeloRh em avisoPrevioFerias.ts e dashboards.ts
+- [x] Upload de PDF da convenção coletiva com extração automática por IA
+- [x] Dialog Detalhamento do Fluxo de Caixa de Férias em fullscreen
+- [x] BUG: Consulta automática de CNPJ do sindicato - reimplementado com formatação, lookup BrasilAPI e loading state
+- [x] BUG: Erro ao salvar convenção coletiva - companyId enviado como string em vez de number
+- [x] Upload de PDF da convenção coletiva com extração automática por IA dos campos (nome, sindicato, vigência, piso salarial, benefícios)
+- [x] BUG: Tela branca ao clicar Voltar no Comparativo de Convenções com IA
+- [ ] BUG: Botão Atualizar não salva alterações ao editar convenção coletiva
+
+## Fase: Melhorias Convenções Coletivas
+- [ ] Alertas de vencimento de convenção no Painel RH (60 dias antes do vencimento)
+- [ ] Histórico de versões da convenção (log de alterações com data/hora/usuário)
+- [ ] Vinculação automática de convenção à obra (seletor de CCT no cadastro de obras)
+- [ ] Dashboard/resumo de convenções com indicadores visuais de vencimento
+- [ ] BUG: Ícone do olho (ver documento PDF) não aparece na primeira convenção que tem PDF vinculado
+- [x] BUG: Atualizar convenção coletiva não salva as alterações (dados não persistem)
+- [x] BUG: PDF do upload na edição não fica disponível para visualização futura (ícone do olho)
+- [x] Ao clicar no nome do funcionário no Vale Alimentação, abrir histórico de recebíveis dele
+- [x] Opção de reverter status de Concluído no Aviso Prévio (apenas Admin e Admin Master)
+- [x] Dashboard Funcionários: remover card Total Geral, mostrar apenas Ativos como destaque principal
+- [x] Liberar botão de reverter status do aviso prévio para todos os usuários
+- [x] Atualizar controle de revisões (está desatualizado)
+- [ ] BUG: Dashboard Aviso Prévio mostrando dados desatualizados (não reflete reversões de status)
+
+## Rev. 141 - Correção Divergência Dashboard Aviso Prévio
+- [x] Investigar divergência de dados nos cards do Dashboard Aviso Prévio (Total, Em Andamento, Concluídos)
+- [x] Identificar causa raiz: auto-conclude re-concluía avisos revertidos manualmente
+- [x] Adicionar campo revertidoManualmente na tabela termination_notices
+- [x] Corrigir auto-conclude em avisoPrevioFerias.ts para ignorar avisos revertidos
+- [x] Corrigir auto-conclude em dashboards.ts para ignorar avisos revertidos
+- [x] Atualizar mutation revertConcluido para setar flag revertidoManualmente = 1
+- [x] Criar testes unitários para validar a correção (6 testes passando)
+- [x] Atualizar versão para Rev. 141
+
+## Rev. 142 - Correção Férias Dashboard
+- [x] BUG: Valores dos cards do dashboard alterando ao clicar nos filtros (Vencidos/Pendentes)
+- [x] Renomear "Pendentes" para "Férias a Vencer" no card e onde aplicável
+
+## Rev. 143 - Dialog Cálculos da Rescisão Fullscreen
+- [x] Alterar dialog "Cálculos da Rescisão" para tela cheia (FullScreenDialog)
+
+## Rev. 144 - Erro ao editar Convenção Coletiva Matriz
+- [x] BUG: "Invalid input: expected boolean, received number" ao atualizar convenção coletiva
+
+## Rev. 145 - Melhoria Dialog Cálculos da Rescisão
+- [x] Adicionar nome do funcionário no header do dialog
+- [x] Exibir todos os valores pertinentes (VR, 13º, Aviso Prévio Indenizado, 1/3 férias vencidas, descontos, data limite pgto)
+- [x] Voltar para dialog normal (não fullscreen) com layout claro e bem dimensionado
+
+## Rev. 146 - Erro persistente ao salvar Convenção Coletiva
+- [x] BUG: Erro ao clicar "Atualizar" na Convenção Coletiva - investigar todos os campos com tipo incompatível
+
+## Rev. 147 - Aumentar tamanho do dialog Cálculos da Rescisão
+- [x] Aumentar dialog para caber todo conteúdo sem barra de rolagem
+
+## Rev. 148 - Comparativo de Custos: Aviso Trabalhado vs Indenizado
+- [x] Backend: Criar procedure que calcula rescisão nos dois cenários (trabalhado e indenizado) para um mesmo funcionário
+- [x] Frontend: Criar aba/seção de comparativo no dialog de Cálculos da Rescisão com layout lado a lado
+- [x] Mostrar diferença financeira e recomendação baseada no menor custo
+
+## Rev. 149 - Dialog Cálculos da Rescisão Fullscreen
+- [x] Converter dialog para FullScreenDialog com layout otimizado para tela cheia
+
+## Rev. 150 - Correção Permissões de Módulos na Sidebar
+- [x] BUG: Sidebar mostrando todos os itens mesmo para usuários com permissões restritas (ex: Rodney)
+- [x] Filtrar itens do menu com base nos módulos/funcionalidades habilitados para o usuário
+- [x] Mapear todas as rotas extras (dashboards, convenções, relatórios) para features
+- [x] Alterar default de 'return true' para 'return false' (segurança por padrão)
+
+## Rev. 151 - Melhoria Dialog Cálculos da Rescisão
+- [x] Aumentar largura do dialog para max-w-7xl para ver tudo sem scroll
+- [x] Tempo de serviço em formato "X anos e Y meses" ao invés de apenas anos
+- [x] Backend: adicionado mesesServico no retorno do comparativo
+
+## Rev. 152 - Sistema de Permissões Granulares + Perfil Campo/Obra
+- [ ] Schema: Adicionar sub-permissões granulares (verValores, verDocumentos, editar, excluir, verDadosPessoais)
+- [ ] Schema: Criar perfil padrão "Campo/Obra" com permissões restritas
+- [ ] Backend: Filtrar dados sensíveis (salários, CPF, RG, dados bancários) baseado nas permissões
+- [ ] Frontend: Ocultar colunas de valores e dados pessoais para usuários sem permissão
+- [ ] Admin UI: Tela de gestão de permissões granulares por usuário (checkboxes detalhados)
+- [ ] Férias: Ocultar coluna "Valor Total" e "Pagamento" para perfil Campo/Obra
+- [ ] Colaboradores: Ocultar dados sensíveis (CPF, RG, CTPS, dados bancários, salário) para Campo/Obra
+
+## Rev. 152 - Sistema de Grupos de Usuários
+- [x] Schema: Criar tabelas user_groups, user_group_permissions, user_group_members
+- [x] Grupos pré-definidos: TST, Gestor de Obras, Auxiliar de Engenharia, Encarregado, RH
+- [x] Backend: CRUD de grupos (criar, editar, excluir, listar)
+- [x] Backend: Vincular/desvincular usuários a grupos
+- [x] Backend: getMyPermissions retornar permissões do grupo do usuário
+- [x] Frontend: Tela de gestão de Grupos com permissões granulares por rota
+- [x] Frontend: Botão "Criar Grupo" para admin_master criar novos grupos
+- [x] Frontend: Vincular usuário a grupo na tela de Usuários
+- [x] Sidebar: Filtrar itens baseado nas permissões do grupo do usuário
+- [x] Painel RH: Filtrar seções por permissões do grupo (ocultar valores, seções sem acesso)
+- [x] Painel RH: Ocultar "Valor total estimado" e valores individuais para grupos sem permissão
+- [x] Dashboards: Mostrar apenas dashboards pertinentes ao grupo do usuário
+- [x] Telas de cadastro: Somente visualização para grupos restritos (sem botões criar/editar/excluir)
+
+## Rev. 153 - Correção de Bugs de Permissões de Grupo
+- [x] BUG: Home.tsx mostra módulos (Jurídico, etc.) que o grupo não tem acesso — corrigido com rotas exclusivas por módulo
+- [x] BUG: Painel RH mostra Movimentações, Aniversariantes para TST — corrigido com canSee() por rota
+- [x] BUG: EPI mostra Valor Inventário R$ e coluna Valor (R$) para TST — corrigido com hideEpiValues
+- [x] BUG: EPI mostra botão "+ Novo EPI" para grupos somente visualização — corrigido com readOnly
+- [x] BUG: Acesso Rápido mostra "Dashboards" genérico sem filtrar por grupo — corrigido com canSee() filter
+- [x] BUG: Permissões de grupo sobrescrevem permissões individuais — sidebar filtra por groupCanAccessRoute
+- [x] BUG: Sidebar permite acesso a telas fora do grupo — corrigido com effectiveSections group filter
+- [x] BUG: PainelSST mostra Atividade Recente e Total Colaboradores para TST — corrigido
+- [x] BUG: DashboardIndex mostra dashboards não autorizados para grupo — corrigido com filtro por grupo
+
+## Rev. 154 - Correção Sidebar Seletor de Módulos
+- [x] BUG: Seletor de módulos no sidebar mostra RH & DP para TST — REVERTIDO: TST deve ver RH & DP (tem rotas liberadas lá)
+- [x] BUG: canAccessModule agora usa TODAS as rotas do grupo (não apenas exclusivas)
+- [x] BUG: Movimentações (30 dias) já estava com canSee('/colaboradores') — verificado
+- [x] BUG: canAccessModule agora usa groupRouteMap com rotas exclusivas quando usuário tem grupo
+
+## Rev. 155 - Ocultar Quadro de Pessoal para TST
+- [ ] Ocultar seção "Quadro de Pessoal" no Painel RH para grupos sem acesso a /colaboradores
+- [x] Remover card "Total Colaboradores" do Quadro de Pessoal (manter apenas Ativos, Férias, Afastados, Licença, Desligados)
+
+## Rev. 156 - Atalhos Sidebar Operacional
+- [x] Adicionar "Lançar Atestados" na seção Operacional do sidebar
+- [x] Adicionar "Advertências" na seção Operacional do sidebar
+
+## Rev. 157 - Correção Bug Checkboxes Permissões
+- [x] Corrigir bug onde desmarcar checkbox "Ver" fazia o item sumir da lista de permissões do grupo
+- [x] Remover filtro que escondia rotas sem canView na renderização
+- [x] Sempre exibir todas as rotas de cada seção independente do estado do checkbox
+
+## Rev. 158 - Correção Atalhos Sidebar (Advertências e Atestados)
+- [x] Corrigir atalho "Advertências" no sidebar para abrir diretamente na aba de advertências
+- [x] Corrigir atalho "Lançar Atestados" no sidebar para abrir diretamente na aba de atestados
+
+## Rev. 159 - Permissões: Atalhos Sidebar devem respeitar permissões do grupo
+- [x] Garantir que atalhos Advertências e Lançar Atestados no sidebar estejam mapeados no sistema de permissões
+- [x] Sidebar deve ocultar itens que o usuário não tem permissão de ver (canView)
+- [x] Todas as rotas/atalhos do sidebar devem ter correspondência no sistema de permissões
+
+## Rev. 160 - Correção Drag-and-Drop na Tela de Configurações
+- [x] Corrigir bug onde arrastar item fica cinza e trava a tela
+- [x] Permitir arrastar itens entre seções diferentes (ex: mover Crachás de Operacional para Gestão de Pessoas)
+- [x] Permitir reordenar itens dentro da mesma seção
+- [x] Garantir que o drag-and-drop funcione de forma fluida e intuitiva
+
+## Rev. 161 - Atualizar Fases do Processo Trabalhista (Jurídico)
+- [x] Atualizar fases para: Conhecimento, Instrução, Decisória (Sentença), Recursal (Opcional), Execução (Cumprimento de Sentença), Encerrado
+- [x] Atualizar schema do banco de dados com as novas fases
+- [x] Atualizar frontend (select de Fase) com as novas opções
+- [x] Atualizar validação Zod no backend (criar e atualizar processo)
+- [x] Atualizar PainelJuridico.tsx com as novas fases
+- [x] Atualizar datajud.ts para inferir fases corretas (instrução, decisória)
+
+## Rev. 162 - Correção Atalhos Atestados e Sidebar
+- [x] Lançar Atestados deve abrir aba Atestados SEM abrir formulário automaticamente (remover action=nova)
+- [x] Sidebar não deve colapsar seções ao clicar nos atalhos (usar sessionStorage + setLocation ao invés de window.location.href)
+- [x] Suporte a re-clique no atalho quando já está na mesma página (evento customizado navParamsUpdated)
+
+## Rev. 163 - Reimplementar Drag-and-Drop com @dnd-kit
+- [x] Instalar @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
+- [x] Reimplementar MenuConfigPanel usando @dnd-kit para drag-and-drop confiável
+- [x] Permitir arrastar itens entre seções (ex: mover Crachás de Operacional para Gestão de Pessoas)
+- [x] Permitir reordenar itens dentro da mesma seção
+- [x] Auto-expandir todas as seções ao iniciar arraste
+- [x] Overlay visual durante o arraste com feedback "Solte aqui"
+- [x] Corrigir atalho Lançar Atestados para não abrir formulário automaticamente
+- [x] Corrigir sidebar que colapsava ao clicar nos atalhos (usar sessionStorage + setLocation)
+
+## Rev. 164 - Correção Definitiva: Atalho Lançar Atestados
+- [x] Corrigir atalho "Lançar Atestados" no sidebar para abrir diretamente na aba de Atestados
+- [x] Corrigir atalho "Advertências" no sidebar para abrir diretamente na aba de Advertências
+- [x] Garantir que o mecanismo funcione mesmo quando já está na página de Controle de Documentos
+- [x] Usar setTimeout + evento navParamsUpdated para garantir que o componente leia os params após montar
+
+## Rev. 165 - Sincronizar Painel de Controle com Sidebar
+- [x] Garantir que o Painel de Controle (Configurações) tenha exatamente os mesmos itens do sidebar
+- [x] Adicionar "Lançar Atestados" e "Advertências" no Painel de Controle
+- [x] Atualizar DEFAULT_MENU com todos os itens do sidebar (Efetivo por Obra, Convenções Coletivas, Dashboards extras, IA, Admin completo, Ajuda)
+- [x] Corrigir path de Crachás (/terceiros/crachas → /crachas)
+- [x] Atualizar ICON_MAP e PATH_ICON_MAP com todos os ícones e paths
+
+## Rev. 166 - Sidebar não atualiza após salvar Painel de Controle
+- [x] Investigar por que o sidebar não reflete as alterações salvas no Painel de Controle
+- [x] Corrigir para que o sidebar atualize automaticamente após salvar configurações do menu
+
+## Rev. 166: Sidebar lê configuração salva do Menu
+- [x] Adicionar trpc.menuConfig.get.useQuery() no DashboardLayoutContent
+- [x] Aplicar configuração salva para reorganizar effectiveSections no sidebar
+- [x] Manter ícones corretos ao aplicar configuração salva (lookup por path no allItemsByPath)
+- [x] Suportar labels customizados (renomeados no Painel de Controle)
+- [x] Ocultar itens marcados como invisible na configuração salva
+- [x] Adicionar itens novos do código que não existem na configuração salva
+- [x] Invalidar cache do menuConfig.get ao salvar/resetar no MenuConfigPanel
+- [x] Sidebar atualiza imediatamente após salvar no Painel de Controle (sem refresh)
+
+## Rev. 167: Módulo Completo de Gestão de Competências (Ponto e Folha)
+
+### Schema / Banco de Dados
+- [x] Criar tabela payroll_periods (competências com status: nao_aberta, aberta, ponto_importado, aferida, vale_gerado, pagamento_simulado, consolidada, travada)
+- [x] Criar tabela timecard_daily (registro diário por funcionário com status: registrado, fechado_no_escuro, aferido)
+- [x] Criar tabela payroll_advances (vales/adiantamentos com cálculo automático 40%)
+- [x] Criar tabela payroll_payments (pagamentos com todos os descontos detalhados)
+- [x] Criar tabela payroll_adjustments (acertos do período no escuro)
+- [x] Criar tabela payroll_alerts (alertas automáticos de prazos e divergências)
+- [x] Criar tabela financial_events (ponte para futuro módulo financeiro)
+
+### Backend - Router payrollEngine
+- [x] Procedure abrirCompetencia (cria período com datas calculadas)
+- [x] Procedure processarPonto (importa dados DIXI e gera timecard diário)
+- [x] Procedure realizarAfericao (cruza ponto com período no escuro do mês anterior)
+- [x] Procedure gerarVale (40% salário + HE, bloqueio se >5 faltas)
+- [x] Procedure simularPagamento (calcula todos os descontos e proventos)
+- [x] Procedure consolidarPagamento (confirma e gera eventos financeiros)
+- [x] Procedure travarCompetencia (bloqueia alterações)
+- [x] Procedure getCriterios / salvarCriterios (critérios configuráveis por empresa)
+- [x] Procedure listarVales / listarPagamentos / listarDivergencias
+- [x] Procedure listarEventosFinanceiros / previsaoFinanceira
+- [x] Procedure custoPorObra (custo de mão de obra por obra)
+- [x] Procedure listarAlertas
+- [x] Procedure resumoCompetencia (dashboard da competência)
+- [x] Procedure gerarContracheque (dados para contracheque individual)
+
+### Frontend - Página Gestão de Competências
+- [x] Pipeline visual de 7 etapas com status colorido (verde=done, azul=current, cinza=pending)
+- [x] Seletor de mês/ano com navegação por setas
+- [x] Cards de resumo: Registros Ponto, Vales, Pagamentos, Divergências, Eventos Financeiros, Custo por Obra
+- [x] View Cartão de Ponto Diário (timecard com timeline visual e status por dia)
+- [x] View Vale/Adiantamento (tabela com totais, status bloqueado/liberado)
+- [x] View Pagamento (tabela com todos os descontos, linhas expandíveis, botão contracheque)
+- [x] View Divergências (relatório automático de divergências na aferição)
+- [x] View Alertas (cards coloridos por tipo: info, warning, error)
+- [x] View Eventos Financeiros (tabela com totais por tipo)
+- [x] View Custo por Obra (tabelas de pagamentos e ponto por obra)
+- [x] View Critérios Configuráveis (9 critérios editáveis)
+- [x] Diálogo de Contracheque individual com PrintHeader/PrintFooterLGPD
+- [x] PrintHeader e PrintFooterLGPD em todas as views imprimíveis
+
+### Critérios Configuráveis
+- [x] Dia de Corte do Ponto (padrão: 15)
+- [x] Percentual do Adiantamento (padrão: 40%)
+- [x] Dia do Adiantamento (padrão: 20)
+- [x] Dia Útil do Pagamento (padrão: 5º dia útil)
+- [x] Máx. Faltas para Vale (padrão: 5)
+- [x] Carga Horária Diária (padrão: 8h)
+- [x] Fechar no Escuro (sim/não)
+- [x] Descontar VR por Falta (sim/não)
+- [x] Descontar VT por Falta (sim/não)
+
+### Lógica de Negócio
+- [x] Ciclo do ponto 15 a 15 com "fechar no escuro"
+- [x] Aferição automática ao importar próximo ponto
+- [x] Bloqueio de vale se >5 faltas no período 15 a 15
+- [x] Desconto VR/VT proporcional por dia de falta (CLT)
+- [x] Acerto do escuro: descontos do período no escuro do mês anterior
+- [x] Eventos financeiros gerados automaticamente na consolidação
+- [x] Trava de competência impede alterações após fechamento
+
+### Testes
+- [x] 47 testes unitários para lógica de cálculo (salário, vale, pagamento, períodos, status)
+- [x] Testes de dias úteis, período do ponto, período no escuro
+- [x] Testes de bloqueio de vale, desconto VR/VT, acerto escuro
+- [x] Testes de fluxo completo (Fev/2026 como exemplo)
+- [x] Testes de eventos financeiros
+
+## Rev. 168: Atualizar Controle de Revisões
+- [x] Adicionar revisões 143 a 167 no Controle de Revisões
+- [x] Verificar que todas as revisões aparecem corretamente na página
+
+## Rev. 169: Refazer Gestão de Competências como Wizard + Relatórios + Remover telas obsoletas
+- [x] Refazer PayrollCompetencias como wizard passo a passo fullscreen
+- [x] Cada passo ocupa tela inteira, barra de progresso no topo
+- [x] Sistema mostra automaticamente o passo atual, avança sozinho
+- [ ] Passo 2: suporte a múltiplos arquivos DIXI (um por relógio/obra)
+- [x] Passo 2: detecção automática de inconsistências (batidas incompletas)
+- [x] Passo 2: ações inline por inconsistência (Ajustar / Atestado / Advertência / Justificar)
+- [x] Passo 2: detecção de horários sobrepostos em obras diferentes (alerta crítico)
+- [ ] Passo 2: rateio automático entre obras quando funcionário transita no mesmo dia
+- [x] Passo 2: controle de origem (DIXI / Manual / Rateio / Escuro / Aferido)
+- [x] Passo 2: bloqueio de avanço enquanto houver inconsistências não resolvidas
+- [x] Passos 3-7 no formato wizard fullscreen com detalhes máximos
+- [ ] Remover Cartão de Ponto do sidebar (absorvido pela Gestão de Competências)
+- [ ] Remover Folha de Pagamento do sidebar (absorvido pela Gestão de Competências)
+- [ ] Criar Relatório de Ponto (substitui Cartão de Ponto)
+- [ ] Criar Relatório de Folha (substitui Folha de Pagamento)
+- [ ] Criar Relatório de Divergências
+- [ ] Criar Relatório de Custo por Obra
+- [ ] Todos os relatórios com PrintHeader (logo FC) e PrintFooterLGPD
+- [ ] Verificar permissões de acesso e atualizar sidebar
+- [ ] Subir revisão no Controle de Revisões
+
+## Rev. 169 - Redesign Gestão de Competências (Wizard Fullscreen)
+
+### Backend - Correções e Melhorias
+- [x] Corrigir mapeamento getPayrollCriteria para usar chaves corretas do system_criteria
+- [x] Adicionar detecção de inconsistências no processarPonto (batidas ímpares, sobreposição, multi-obra)
+- [x] Adicionar colunas novas no INSERT do processarPonto (origemRegistro, numBatidas, isInconsistente, etc.)
+- [x] Criar procedure resolverInconsistencia (Ajustar Horário / Upload Atestado / Emitir Advertência / Justificar)
+- [x] Criar procedure listarInconsistencias para o wizard
+- [ ] Adicionar suporte a múltiplos relógios/obras no processamento
+- [ ] Adicionar rateio proporcional automático para multi-obra
+- [x] Adicionar alerta crítico para sobreposição de horários impossível
+
+### Frontend - Wizard Fullscreen
+- [x] Refazer PayrollCompetencias como wizard vertical fullscreen (step-by-step)
+- [x] Barra de progresso "Etapa X de 7" com cores (Verde=concluído, Azul=atual, Cinza=pendente)
+- [x] Step 1: Abrir Competência - tela grande com datas e informações
+- [x] Step 2: Processar Ponto - importação com detecção de inconsistências e ações inline
+- [x] Step 3: Aferir Escuro - cruzamento com verificação visual
+- [x] Step 4: Gerar Vale - cálculo com bloqueio por faltas
+- [x] Step 5: Simular Pagamento - preview completo com contracheques
+- [x] Step 6: Consolidar - confirmação final
+- [x] Step 7: Travar Competência - bloqueio definitivo
+- [x] Ações inline por inconsistência: Ajustar Horário / Upload Atestado / Emitir Advertência / Justificar
+- [x] Tracking de origem: DIXI / Manual / Rateado / Escuro / Aferido
+
+### Sidebar e Relatórios
+- [x] Remover Cartão de Ponto e Folha de Pagamento do sidebar (viram relatórios)
+- [x] Criar seção de Relatórios: Ponto, Folha, Divergências, Custo por Obra
+- [x] Todos os relatórios com PrintHeader e PrintFooterLGPD
+
+## Rev. 170 - Relatórios, Multi-DIXI e Assistente IA
+
+### 1. Reestruturar Sidebar e Relatórios
+- [x] Remover "Cartão de Ponto" do sidebar (absorvido pela Gestão de Competências)
+- [x] Remover "Folha de Pagamento" do sidebar (absorvido pela Gestão de Competências)
+- [x] Criar seção "Relatórios" no sidebar com ícone dedicado
+- [x] Criar página Relatório de Ponto (substituindo Cartão de Ponto)
+- [x] Criar página Relatório de Folha (substituindo Folha de Pagamento)
+- [x] Criar página Relatório de Divergências (inconsistências e atrasos)
+- [x] Criar página Relatório de Custo por Obra (rateio de custos)
+- [x] Todos os relatórios com PrintHeader e PrintFooterLGPD
+- [x] Filtros por mês, obra e funcionário em cada relatório
+
+### 2. Suporte a Múltiplos DIXI com Rateio
+- [x] Backend: aceitar múltiplos arquivos DIXI no processarPonto (um por relógio/obra) — já suporta via time_records multi-obra
+- [x] Backend: identificar obra de origem pelo relógio/arquivo — via obraId no time_records
+- [x] Backend: rateio proporcional automático quando funcionário transita entre obras no mesmo dia
+- [ ] Backend: campos rateáveis (VA, VT, Seguro, FGTS, INSS, etc.) conforme regras da empresa
+- [ ] Frontend: upload de múltiplos arquivos no Step 2 do wizard
+
+### 3. Assistente IA de Inconsistências
+- [x] Backend: procedure analisarInconsistenciaIA que envia contexto ao LLM
+- [x] Backend: LLM recebe dados do funcionário, tipo de inconsistência, histórico recente, regras de ouro
+- [x] Backend: LLM retorna sugestão didática com confiança, horários corrigidos, alertas trabalhistas
+- [x] Frontend: botão "Pedir Sugestão da IA" no dialog de resolução
+- [x] Frontend: painel roxo com explicação, badge de confiança e alertas
+- [x] Frontend: auto-preenchimento do formulário com sugestão da IA
+
+### Bug Fix - Sidebar não atualizado para empresas existentes
+- [x] Remover "Fechamento de Ponto" e "Folha de Pagamento" do menu salvo no banco para todas as empresas
+- [x] Garantir que o DEFAULT_MENU e o menu salvo fiquem sincronizados (via DEPRECATED_PATHS filter)
+
+## Rev. 171 - Upload DIXI no Wizard, Campos Rateáveis, Dashboard Competências
+
+### 1. Upload Múltiplos DIXI no Step 2 do Wizard
+- [x] Área de drag & drop no Step 2 para upload de arquivos DIXI
+- [x] Validação de SN antes do upload (reutilizar validateDixi existente)
+- [x] Upload e processamento integrado ao wizard (uploadDixi + processarPonto)
+- [x] Feedback visual de progresso e resultado por arquivo
+
+### 2. Campos Rateáveis por Obra na Simulação
+- [x] Incluir VA, VT, Seguro de Vida, FGTS, INSS, Dissídio, Contribuição Sindical, Pensão, DDS
+- [x] VR puxado da configuração de benefícios da obra
+- [x] Considerar descontos do colaborador (adiantamento, EPI)
+- [x] Rateio proporcional por dias trabalhados em cada obra
+
+### 3. Dashboard de Competências
+- [x] Página com visão consolidada de todas as competências do ano
+- [x] Cards por mês com status, totais e indicadores
+- [x] Gráficos de evolução (custo, horas extras, faltas)
+- [x] Filtros por ano e obra
+
+### Bug Fix - Processar Ponto travado em "Processando..."
+- [ ] Investigar logs do servidor para identificar erro no processarPonto
+- [ ] Corrigir o bug que trava o processamento
+
+### Bug Fix - Valor do Vale totalmente errado
+- [ ] Investigar cálculo do gerarVale - salários parecem estar em centavos (R$ 242.112 para um funcionário)
+- [ ] Corrigir cálculo para usar valores corretos
+- [ ] Verificar se todos os 139 estão bloqueados corretamente
+
+### Bug Fix - formatBRL exibindo valores errados (centavos)
+- [x] Corrigir formatBRL em PayrollCompetencias, FolhaPagamento, RelatorioCustoObra, RelatorioFolha
+- [x] Criar lib/formatBRL.ts compartilhado
+
+### Feature - Botão Limpar Lançamento em todas as etapas
+- [x] Backend: criar procedure resetarCompetencia (limpa ponto, vale, pagamento, ajustes)
+- [x] Frontend: botão "Limpar Lançamento" visível em todas as etapas do wizard
+- [x] Confirmação com dialog antes de limpar
+- [x] Após limpar, voltar para Etapa 1 com status "aberta"
+
+### Feature - Botões Limpar Etapa e Limpar Competência
+- [x] Backend: procedure resetarEtapa (limpa dados de uma etapa específica: ponto, escuro, vale, pagamento)
+- [x] Backend: procedure resetarCompetencia (limpa TODOS os dados do mês, volta status para "aberta")
+- [x] Frontend: botão "Limpar Etapa" em cada etapa do wizard com confirmação
+- [x] Frontend: botão "Limpar Competência" no header do wizard com confirmação
+
+### Feature - Critério "Gestão de Competências" nos Critérios do Sistema
+- [x] Adicionar categoria "Gestão de Competências" com parâmetros: dia corte ponto, dia limite vale, % adiantamento, bloqueio por faltas, tolerância atraso, etc.
+- [x] Inserir no banco via seed/migration os critérios padrão
+- [x] Exibir na tela de Critérios do Sistema
+
+### Bug Fix - Processar Ponto travado
+- [x] Adicionar validação de status antes de processar ponto (deve ser "aberta" ou "ponto_importado")
+- [x] Adicionar try/catch com mensagem de erro clara
+- [x] Converter function declarations para arrow functions dentro do try block (fix TS strict mode)
+- [x] 79 testes passando no payrollEngine.test.ts (32 novos testes adicionados)
+
+### Auditoria - Regras de Fechamento de Ponto e Folha
+- [x] Verificar lógica do dia de corte (15 a 15) no processarPonto - OK
+- [x] Verificar período "no escuro" (16 a fim do mês) - preenchimento automático sem descontos - OK
+- [x] Verificar aferição: sobreposição do ponto real sobre o escuro do mês anterior - CORRIGIDO (agora copia horários reais)
+- [x] Verificar vale: 40% do salário bruto no dia 20 - OK
+- [x] Verificar pagamento: saldo no 5º dia útil do mês subsequente - OK
+- [x] Verificar que funcionários registrados após dia 10 não recebem vale - OK
+- [x] Documentar gaps encontrados e corrigir - FEITO
+
+### Bug - DELETE FROM timecard_daily falha
+- [x] Investigar erro "Failed query: DELETE FROM timecard_daily WHERE companyId = ? AND mesReferencia = ?" ao processar ponto
+- [x] Corrigir o bug - timecard_daily usa mesCompetencia, payroll_uploads usa month, payroll_adjustments usa mesOrigem/mesDesconto
+
+### Melhoria - Etapa 2 (Processar Ponto) - Tela Completa de Revisão
+- [x] Mostrar tabela de inconsistências com ações (ajustar horário, atestado, abonar, advertir)
+- [x] Mostrar resumo por funcionário (faltas, atrasos, horas trabalhadas, HE)
+- [x] Mostrar sobreposições de obras no mesmo dia
+- [x] Adicionar filtros (por funcionário, por tipo de inconsistência, por obra)
+- [x] Adicionar abas/seções: Resumo | Inconsistências | Ponto Detalhado | Sobreposições
+- [x] Bloquear avanço para próxima etapa se houver inconsistências não resolvidas
+
+### Bug - Load failed ao importar arquivos DIXI
+- [x] Investigar erro "Load failed" ao clicar "Importar Arquivos" na Etapa 2 - Safari aborta payloads grandes
+- [x] Corrigir o bug de upload DIXI - upload sequencial (1 arquivo por vez) + timeout 5min no fetch
+
+### Análise - Arquivos DIXI reais do usuário
+- [x] Analisar estrutura dos 4 arquivos DIXI (Marcações e RegistroOriginal)
+- [x] Verificar se o parser atual lê corretamente esses formatos
+- [x] Corrigir parser: sheet "Marcações" reconhecida, formato YYYY/MM/DD suportado, nomes vazios tratados
+- [x] Upload sequencial (1 arquivo por vez) para evitar Load failed no Safari
+
+### Bug - Blacklist não filtra no Raio-X do Funcionário
+- [x] Investigar por que o filtro Blacklist mostra 0 - status era "Desligado" com listaNegra=1, mas filtro procura status="Lista_Negra"
+- [x] Corrigir: atualizados 14 registros no banco + auto-setar status='Lista_Negra' ao incluir na blacklist + reverter para 'Desligado' ao remover
+
+### Refatoração - Etapa 2 Gestão de Competências (replicar Cartão de Ponto)
+- [x] Estudar módulo Cartão de Ponto existente (frontend + backend)
+- [x] Mapear lógica de espelho de ponto (entrada1/saída1/entrada2/saída2)
+- [x] Mapear lógica de sobreposições multi-obra
+- [x] Corrigir backend resumoPontoPorFuncionario: aliases totalFaltas, horasTrabalhadas, horasExtras, employeeCode, employeeRole
+- [x] Corrigir frontend StepProcessarPonto: upload DIXI sempre visível, botão Reprocessar Ponto
+- [x] Corrigir espelho de ponto: cálculo de totais HH:MM, formatação de horas
+- [x] Corrigir inconsistências: usar is_inconsistente + inconsistencia_resolvida ao invés de status
+- [x] Adicionar label falta_batida nas inconsistências
+- [ ] Testar fluxo completo com upload DIXI real e reprocessamento
+
+## Fase 80: Reverter para Cartão de Ponto e Folha de Pagamento separados
+- [x] Identificar checkpoint anterior à Gestão de Competências
+- [x] Restaurar Fechamento de Ponto e Folha de Pagamento no sidebar (sem rollback destrutivo)
+- [x] Verificar que Cartão de Ponto e Folha de Pagamento funcionam corretamente
+- [x] Remover Gestão de Competências do menu (movida para DEPRECATED_PATHS)
+
+## Fase 81: Integração Opção A — PayrollEngine + Fechamento de Ponto + Folha de Pagamento
+- [x] Backend: consolidarMes do fechamentoPonto dispara processarPonto do payrollEngine automaticamente
+- [x] Backend: criar/abrir payroll_period automaticamente ao consolidar
+- [x] Frontend Folha: adicionar seção "Cálculo Interno" no topo
+- [x] Frontend Folha: botão "Calcular Vale" (40% + HE do ponto real)
+- [x] Frontend Folha: botão "Simular Pagamento" (100% - descontos)
+- [x] Frontend Folha: botão "Aferir Escuro" (comparar escuro com ponto real do mês seguinte)
+- [ ] Frontend Folha: melhorar verificação cruzada (cálculo interno vs PDF contabilidade, valor por valor) — já funcional, melhoria incremental
+- [x] Testar fluxo completo no navegador
+- [x] Corrigir mapeamento de campos Vale: valorAdiantamento, valorHE, valorTotalVale
+- [x] Corrigir mapeamento de campos Pagamento: descontoAdiantamento, descontoInss, salarioLiquido, descontoFgts
+
+## Fase 82: Reorganizar Folha de Pagamento — Cálculo Interno em cima
+- [x] Mover seção Cálculo Interno para cima dos cards de Vale/Pagamento
+- [x] Mover cards de Importação da Contabilidade para baixo
+
+## Fase 83: Regras de Alerta no Calcular Vale
+- [x] Backend: contar faltas apenas dos 15 primeiros dias do mês atual (01 a 15)
+- [x] Backend: alertar se funcionário tem 10+ faltas (não bloquear)
+- [x] Backend: alertar se funcionário contratado após dia 10 (não bloquear)
+- [x] Backend: retornar campo de alerta por funcionário (tipo + motivo)
+- [x] Frontend: mostrar alerta amarelo/vermelho para funcionários com regra ativada
+- [x] Frontend: botões Pagar/Não Pagar para cada funcionário alertado
+- [x] Frontend: permitir decisão individual do usuário
+
+## Fase 84: Ajuste Tela Inicial RH & DP
+- [x] Remover card "Total Colaboradores" do Quadro de Pessoal na tela inicial
+
+## Fase 85: Correções Urgentes
+- [x] BUG: Botão Consolidar Mês travado em "Consolidando..." - otimizado com batch inserts (200 por vez)
+- [x] Remover card "Total Colaboradores" do Quadro de Pessoal na tela inicial do Painel RH
+
+## Fase 86: Documentação do Fluxo e Bug Inconsistências
+- [ ] Documentar fluxo completo: Upload DIXI → Inconsistências → Consolidação → Folha → Aferição
+- [ ] BUG: Relatório de inconsistências não aparece ao clicar
+
+## Fase 87b: Correção Aferição + Melhoria Inconsistências + Conferência Contabilidade
+- [x] Backend: aferição gera alerta pendente_decisao quando não há registro real no escuro
+- [x] Backend: procedure decidirAfericao para decisão do usuário (erro relógio vs falta real)
+- [x] Backend: procedure listarAlertasAfericao para buscar alertas pendentes
+- [x] Frontend: tela alertas_afericao com botões Erro Relógio / Falta Real
+- [x] Frontend: card de inconsistências no Fechamento de Ponto (já funcional)
+- [x] Frontend: expansão individual de inconsistências com detalhes (já funcional)
+- [x] Frontend: card de inconsistências na Folha de Pagamento (já funcional)
+- [x] Documento do fluxo atualizado (Rev. 172)
+- [x] Backend: critério configurável folha_conferencia_contabilidade (obrigatoria/recomendada/opcional)
+- [x] Frontend: dialog de conferência com contabilidade no consolidar pagamento
+
+## Fase 88: Reorganizar Folha + Campo Obra na Ficha de EPI
+- [ ] Reorganizar layout Folha de Pagamento: atividades rotineiras em destaque, conferência contabilidade compacta
+
+## Fase 88b: Campo Obra na Ficha de EPI com Confirmação
+- [ ] Frontend: alerta de confirmação de obra ao gerar ficha de EPI (pré-seleciona obra padrão, permite trocar)
+- [ ] Backend/PDF: adicionar campo Obra na ficha de entrega de EPI impressa
+- [ ] Salvar obra selecionada no registro de entrega de EPI
+
+## Fase 89: BUG Aferição + VT→VA + Layout Folha + Obra EPI
+- [ ] BUG: Erro INSERT duplicado em payroll_adjustments ao aferir escuro (chave duplicada)
+- [ ] Trocar VT por VA na folha de pagamento e conectar VA ao cálculo
+- [ ] Reorganizar layout Folha: conferência contabilidade compacta
+- [ ] Campo Obra na ficha de EPI com alerta de confirmação
+
+## Fase 90: VT + VA como colunas separadas na tabela de pagamento
+- [x] Backend: ativar cálculo VT usando vtValorDiario do cadastro do funcionário × dias úteis
+- [x] Backend: retornar VT e VA como campos separados (vtValor, descontoVaTotal, descontoVtFaltas)
+- [x] Backend: incluir VT no totalDescontos
+- [x] Frontend: tabela expandida com 16 colunas (Funcionário, Função, Bruto, H.E., Proventos, Adiant., INSS, VT, VA 5%, Faltas, Pensão, Seguro, Ac.Escuro, Tot.Desc., Líquido, FGTS)
+- [x] Frontend: totais por coluna no rodapé da tabela
+- [x] Frontend: cores diferenciadas (verde=proventos, laranja=adiantamento, vermelho=descontos, azul=líquido)
+
+## Fase 91: VT diário no cadastro + Obra na EPI + Integração Convênios
+- [x] Garantir campo VT diário visível e editável no cadastro de funcionários (já existia na aba Benefícios)
+- [x] Campo Obra na ficha de EPI: seletor de obra no formulário de entrega (pré-preenchido com obra atual)
+- [x] Campo Obra na ficha de EPI: exibição na ficha impressa
+- [x] Campo Obra na ficha de EPI: confirmação do usuário ao registrar entrega
+- [x] Backend EPI: retornar obraNome na listagem de entregas
+- [x] Módulo Convênios: já existia como módulo Parceiros (farmácia, posto, etc.)
+- [x] Integração Convênios com Folha: buscar lançamentos aprovados do mês no simularPagamento
+- [x] Integração Convênios com Folha: descontoConvenio incluído no totalDescontos
+- [x] Integração Convênios com Folha: coluna Conv. (roxo) na tabela de simulação de pagamento
+- [x] Integração Convênios com Folha: descontoOutros agora recebe valor de convênio no INSERT
+
+## Fase 92: Módulo Apontamentos de Campo + Reorganizar Folha
+
+### Módulo Apontamentos de Campo
+- [x] Schema: tabela field_notes (companyId, employeeId, obraId, data, tipoOcorrencia, descricao, solicitanteId, solicitanteNome, status, respostaRH, resolvidoPor, resolvidoEm)
+- [x] Backend: CRUD de apontamentos com filtro por empresa/status/data/obra
+- [x] Backend: procedure para RH resolver apontamento (aprovar/rejeitar com resposta)
+- [x] Backend: stats de apontamentos pendentes por empresa
+- [x] Frontend: Tela de registro de ocorrência (gestor seleciona funcionário, obra, data, tipo, descrição)
+- [x] Frontend: Painel RH com lista de pendências para resolver no fechamento do ponto
+- [x] Frontend: Filtros por status, obra, funcionário, período
+- [x] Navegação: adicionado no menu lateral em Operacional (RH & DP)
+
+### Reorganizar Layout Folha de Pagamento
+- [x] Atividades rotineiras em destaque (Cálculo Interno no topo com destaque visual)
+- [x] Conferência contabilidade mais compacta (accordion colapsável já implementado)
+- [x] Melhorar hierarquia visual: subtítulo com fluxo (Ponto → Vale → Pagamento → Conferência)
+
+## Fase 93: Vincular Apontamentos + Dashboard + Notificações Push
+
+### 1. Vincular Apontamentos ao Fechamento de Ponto
+- [x] Backend: ao resolver apontamento de falta/abandono, criar/atualizar registro no ponto (faltas=1, horasTrabalhadas=00:00)
+- [x] Backend: ao resolver atraso/saída antecipada, ajustar atrasos no ponto existente
+- [x] Frontend: toast com feedback "vinculado ao ponto" quando ação é desconto_folha ou ajuste_ponto
+- [ ] Frontend: indicador visual de dias com apontamento no espelho de ponto (futuro)
+
+### 2. Dashboard de Apontamentos
+- [x] Backend: procedures statsPorObra, statsPorMes, taxaResolucao, statsPorTipo
+- [x] Frontend: página DashApontamentos com gráficos Chart.js
+- [x] Gráfico: ocorrências por tipo (donut)
+- [x] Gráfico: ocorrências por obra (barras empilhadas pendentes/resolvidos)
+- [x] Gráfico: evolução mensal (linha total/resolvidos/pendentes)
+- [x] KPIs: total, pendentes, em análise, resolvidos, taxa resolução, tempo médio
+- [x] Filtros por período (data início/fim) e ano
+- [x] Adicionado no menu de Dashboards (RH & DP)
+
+### 3. Notificações Push para Apontamentos Urgentes
+- [x] Backend: ao criar apontamento urgente/alta, disparar notifyOwner com detalhes
+- [ ] Backend: resumo diário de apontamentos pendentes (futuro - scheduled task)
+- [x] Frontend: badge de contagem já existia via stats no ApontamentosCampo
+
+## Fase 94b: Filtro "Sem ASO" + Layout KPIs Controle de Documentos
+- [x] Backend: contar funcionários ativos sem ASO no resumo (semASO)
+- [x] Backend: procedure listSemASO com nome, CPF, função, obra
+- [x] Frontend: novo KPI card "Sem ASO" (rosa) com badge de contagem
+- [x] Frontend: nova aba "Sem ASO" com tabela, busca e botão "Cadastrar ASO"
+- [x] Frontend: layout KPIs centralizado, textos completos, grid 9 colunas
+
+## Fase 95b: Processos Trabalhistas - Bug exclusão + Alterar funcionário
+- [x] BUG: Excluir processo não atualiza a lista (corrigido: filtro deletedAt IS NULL no listar)
+- [x] Backend: procedure alterarFuncionario (atualiza employeeId e reclamante)
+- [x] Frontend: botão lápis na seção "Partes" para trocar o funcionário vinculado
+- [x] Frontend: dialog de busca por nome/CPF com confirmação (view detalhe + lista)
+
+## Fase 96b: Apontamentos de Campo nas Permissões
+- [x] Adicionar "Apontamentos de Campo" na seção RH & DP - Operacional da tela de Permissões
+- [x] Adicionar "Dashboard Apontamentos de Campo" na seção Dashboards das Permissões
+
+## Fase 97: Filtrar módulos/telas por permissões do grupo
+- [ ] Home: mostrar somente módulos (RH&DP, SST, Jurídico) que o usuário tem acesso a pelo menos 1 tela
+- [ ] Sidebar: ocultar itens de menu que o grupo não tem permissão
+- [ ] Painéis (PainelRH, PainelSST): ocultar cards de telas sem permissão
+- [ ] Admin Master continua vendo tudo
+
+## Rev. 180: Correção de Erros TypeScript + Filtro de Permissões
+- [x] Fix 27 erros TypeScript que bloqueiam publicação (12 arquivos)
+- [x] Melhorar filtro de permissões na Home (ModuleHub) e sidebar (DashboardLayout)
+
+## Rev. 181: Filtros na Tela de Processos Trabalhistas
+- [x] Adicionar filtro funcional por Status na tela de Processos Trabalhistas
+- [x] Adicionar filtro por Arquivo (com/sem arquivo anexado) na tela de Processos Trabalhistas
+- [x] Adicionar botão Salvar na seção de Análise IA dos Processos Trabalhistas
+
+## Rev. 182: Otimização de Performance do Sistema
+- [ ] Análise completa de bundle size e identificação de gargalos
+- [x] Implementar code splitting e lazy loading nas rotas
+- [ ] Otimizar queries do backend (N+1, índices, caching)
+- [ ] Reduzir bundle size com imports otimizados
+- [x] Configurar manual chunks no Vite para melhor caching
+- [x] Adicionar índices no banco de dados para queries frequentes
+- [x] Adicionar botões Selecionar/Desmarcar Todos por coluna na tela de permissões de grupo
+
+## Rev. 183: Reestruturação Estoque de EPI
+- [x] Criar schema estoque central (epi_estoque_central) com quantidade por EPI/empresa
+- [x] Criar schema estoque por obra (epi_estoque_obra) com quantidade por EPI/obra
+- [x] Criar schema transferências (epi_transferencias) do escritório para obra
+- [x] Criar rotas tRPC: CRUD estoque central, transferências, consulta estoque obra
+- [x] Ajustar entrega de EPI para descontar do estoque da obra OU do estoque central
+- [x] Opção de entrega pelo escritório central (contratação) e pela obra (dia a dia)
+- [x] Frontend: tela de estoque central com entrada de EPIs
+- [x] Frontend: tela de transferência (escritório → obra)
+- [x] Frontend: tela de estoque por obra com saldo e entregas
+- [x] Integrar fluxo completo: entrada → transferência → entrega → saldo
+- [x] Tornar filtros da tela de Processos Trabalhistas responsivos (busca + selects)
+- [x] BUG: Erro ao atualizar destinatário de notificação - expected boolean, received number
+- [x] BUG: Destinatários do Renan (ativos) não recebem e-mails de notificação - corrigido filtro ativo com Number() para tinyint
+- [x] BUG: Felipe (desativado) continua recebendo e-mails normalmente - corrigido toggle ativo com Number()
+- [x] BUG: Exibição de "00" ao lado das tags de notificação na lista de destinatários - corrigido com !! para coerção booleana de tinyint
+- [x] Adicionar entrada direta de EPI no estoque da obra (TST local pode cadastrar EPIs que já tem) - botão + dialog + backend mutation
+- [x] Tornar tela de EPIs totalmente responsiva (cards, abas, filtros) - grid responsivo, flex-wrap, overflow-x-auto
+- [x] Badge de Entrada Direta no histórico de transferências (tipo entrada_direta com cor emerald)
+- [x] Tornar cards de estatísticas da tela de EPIs responsivos (scroll horizontal mobile, grid 3 cols tablet, 7 cols desktop)
+- [x] Tornar abas (Catálogo, Entregas, Estoque Obra, Transferências) responsivas com scroll horizontal em mobile
+- [x] Dropdown no nome do usuário (header) com links rápidos de Administração: Usuários e Permissões, Grupos de Usuários, Auditoria do Sistema, Configurações, Revisões do Sistema, Lixeira
+- [x] Cadastro de Médicos (nome + CRM) com tabela no banco para sugestões automáticas no formulário de ASO
+- [x] Cadastro de Clínicas com tabela no banco para sugestões automáticas no formulário de ASO
+- [x] Autocomplete nos campos Médico, CRM e Clínica do formulário de ASO e Atestados baseado nos registros cadastrados
+- [x] BUG: Renan (ativo) não recebe e-mail de notificação - corrigido: agora envia e-mail real via SMTP para cada destinatário ativo
+- [x] Implementar envio real de e-mails via SMTP corporativo (Nodemailer) para cada destinatário ativo
+- [x] Configurar secrets SMTP_HOST, SMTP_PORT, SMTP_EMAIL, SMTP_PASSWORD (email-ssl.com.br:465)
+- [x] BUG: Ao selecionar médico da lista de sugestões, o nome não é preenchido no campo - corrigido com onSelect callback único
+- [x] Adicionar opção de editar dados do médico na lista de sugestões - ícone de lápis + formulário de edição
+- [x] Adicionar opção de editar dados da clínica na lista de sugestões - ícone de lápis + formulário de edição
+- [x] BUG: Salvar funcionário trava em "Salvando..." - corrigido: dispararNotificacao agora é fire-and-forget + timeouts SMTP (10s/15s)
+- [x] Remover rodapé do e-mail de notificação (Departamento Pessoal, nome empresa, e-mail, telefone)
+- [x] Ajustar e-mail de Contratação para incluir: Nome, CPF, Data Nascimento, Estado Civil, Salário, Profissão
+- [x] Ajustar e-mail de Demissão e demais avisos para incluir apenas: Nome, CPF
+- [x] Adicionar logo da empresa no header do template HTML do e-mail de notificação
+- [x] Botão "Enviar Teste" na tela de Notificações para validar envio sem criar movimentação real (botão visível no topo + preview com envio)
+- [x] BUG: Preview de e-mail de Contratação faltando Data de Nascimento, Estado Civil e Salário - corrigido preview e teste com dados dummy
+- [x] BUG: Horário no histórico de notificações mostra UTC em vez do horário de Brasília (GMT-3) - corrigido com timeZone America/Sao_Paulo
+
+## Fase 20: Módulo Completo de EPI - Gestão Inteligente
+
+### Banco de Dados
+- [x] Criar tabela epi_kits (kits padrão por função com itens e quantidades)
+- [x] Criar tabela epi_kit_items (itens de cada kit com EPI, quantidade, obrigatório)
+- [x] Criar tabela epi_cores_capacete (cores de capacete por função)
+- [x] Criar tabela epi_validade (vida útil padrão por tipo de EPI em meses)
+- [x] Criar tabela epi_assinaturas (assinaturas digitais de entrega/devolução)
+- [x] Criar tabela epi_treinamentos_vinculados (NRs exigidas por tipo de EPI)
+- [x] Criar tabela epi_estoque_minimo (estoque mínimo por EPI por obra)
+- [x] Adicionar campos de custo unitário e validade na tabela de EPIs
+- [x] Adicionar campo de data_validade nas entregas de EPI (calculada automaticamente)
+
+### Backend - Kits e Cores de Capacete
+- [x] CRUD de kits por função (criar, editar, listar, excluir)
+- [x] CRUD de cores de capacete por função (editável pelo usuário)
+- [x] Seed de kits padrão (kit básico + variações por função)
+- [x] Seed de cores de capacete padrão (branco engenheiro, azul servente, etc.)
+
+### Backend - Geração Automática na Contratação
+- [x] Ao contratar funcionário, gerar checklist de EPI baseado na função
+- [x] Selecionar cor do capacete automaticamente pela função
+- [x] Permitir edição/confirmação do kit antes de finalizar
+
+### Backend - Entrega e Devolução com Assinatura
+- [x] Rota de entrega de EPI com campo de assinatura digital (base64)
+- [x] Rota de devolução de EPI na demissão com assinatura
+- [x] Integração com QR Code do crachá existente para identificar funcionário
+- [x] Registrar quem entregou (TST), data, hora, assinatura
+
+### Backend - Controle de Validade
+- [x] Calcular data de validade automaticamente na entrega (baseado na vida útil do EPI)
+- [x] Rota de consulta de EPIs próximos do vencimento (30, 15, 7 dias)
+- [x] Gerar alertas automáticos de troca de EPI vencido
+
+### Backend - Alertas de Reposição
+- [x] Configurar estoque mínimo por EPI por obra
+- [x] Verificar estoque ao registrar entrega/saída
+- [x] Enviar e-mail automático quando estoque abaixo do mínimo configurado
+
+### Backend - Relatórios de Custo
+- [x] Relatório de custo de EPI por funcionário
+- [x] Relatório de custo de EPI por obra
+- [x] Relatório de custo de EPI por mês/período
+- [x] Exportar relatórios em PDF
+
+### Backend - Controle de Treinamento Vinculado
+- [x] Vincular NRs exigidas por tipo de EPI (ex: cinto → NR-35, luva isolante → NR-10)
+- [x] Verificar treinamentos do funcionário antes da entrega
+- [x] Bloquear ou alertar entrega se treinamento não estiver válido
+
+### Backend - IA de Transferências
+- [x] Analisar estoque de todas as obras
+- [x] Calcular proximidade geográfica entre obras (usando CEP)
+- [x] Gerar sugestões de transferência via LLM
+- [x] Executar análise automaticamente a cada movimentação de EPI
+- [x] Botão "Analisar Estoque" para execução manual
+
+### Frontend - Kits por Função
+- [x] Tela de configuração de kits por função com drag-and-drop de itens
+- [x] Tabela de cores de capacete editável
+- [x] Preview do kit ao selecionar função
+
+### Frontend - Entrega/Devolução via QR Code
+- [x] Scanner de QR Code usando câmera do celular/tablet
+- [x] Tela de entrega com lista de itens do kit pendente
+- [x] Canvas de assinatura digital touch (funcionário assina na tela)
+- [x] Tela de devolução na demissão com checklist
+
+### Frontend - Controle de Validade e Alertas
+- [x] Painel de EPIs próximos do vencimento com semáforo (verde/amarelo/vermelho)
+- [x] Alertas visuais no dashboard de pendências
+- [x] Configuração de estoque mínimo por EPI/obra
+
+### Frontend - Histórico no Raio-X
+- [x] Seção de histórico completo de EPIs no Raio-X do funcionário
+- [x] Timeline de entregas e devoluções com datas
+- [x] Exportar ficha de EPI em PDF (substitui ficha de papel)
+
+### Frontend - Relatórios de Custo
+- [x] Tela de relatórios com filtros (funcionário, obra, período)
+- [x] Gráficos de custo por obra e por mês
+- [x] Exportar relatórios em PDF/Excel
+
+### Frontend - Controle de Treinamento
+- [x] Indicador visual de treinamento válido/inválido na tela de entrega
+- [x] Alerta/bloqueio ao tentar entregar EPI sem treinamento correspondente
+- [x] Lista de treinamentos exigidos por EPI
+
+### Frontend - IA de Transferências
+- [x] Card de sugestões da IA na aba de Transferências
+- [x] Botão "Analisar Estoque" com loading e resultado
+- [x] Visualização das sugestões com mapa de proximidade
+- [x] Aprovar/rejeitar sugestões da IA
+
+## Revisão de Numeração Interna - Números Proibidos
+
+- [x] Verificar funcionários com números proibidos (13, 17, 22, 24, 69, 171, 666) - Nenhum encontrado
+- [x] Reatribuir funcionários com números proibidos para o próximo número disponível - Não necessário
+- [x] Atualizar lógica de geração automática de número interno para pular números proibidos
+- [x] Adicionar lista de números proibidos nas configurações do sistema
+- [x] Testes da nova lógica de numeração (15 testes passando)
+
+## Assinatura Digital na Ficha de Entrega de EPI
+
+- [x] Adicionar canvas de assinatura touch na ficha de entrega de EPI existente
+- [x] Salvar assinatura como imagem no S3 vinculada à entrega
+- [x] Exibir assinatura salva na ficha ao visualizar entregas anteriores
+- [x] Botão "Assinar" na ficha de entrega com feedback visual
+- [x] Validar que assinatura foi feita antes de confirmar entrega
+
+## Botão Excluir Checklist de EPI + Assinatura Digital na Ficha
+
+- [x] Adicionar rota de exclusão de checklist no backend (epiAvancado)
+- [x] Adicionar botão de excluir no componente EpiChecklist.tsx
+- [x] Implementar assinatura digital touch na ficha de entrega de EPI
+
+## Dashboard EPI Interativo + Excluir Checklist + Assinatura Ficha
+
+- [x] Botão excluir checklist de EPI (backend + frontend)
+- [x] Cards do dashboard de EPIs clicáveis com tela full screen de dados filtrados
+- [x] Layout responsivo dos cards e telas
+- [x] Assinatura digital na ficha de entrega de EPI existente
+
+## Seletor de Cores nos Crachás
+
+- [x] Adicionar seletor de cores personalizável na tela de Emissão de Crachás
+- [x] Permitir escolher cor para CLT, PJ e Terceiros separadamente
+- [x] Salvar preferência de cores (persistir no sistema)
+- [x] Aplicar cores escolhidas nos crachás gerados
+
+## Auditoria de Assinatura Digital de EPI (Prova Legal)
+
+### Banco de Dados
+- [ ] Criar tabela epi_assinatura_auditoria (hash SHA-256, IP, geolocalização, user-agent, timestamp servidor)
+- [ ] Vincular auditoria à assinatura e entrega de EPI
+
+### Backend
+- [ ] Rota para registrar assinatura com evidências completas (hash, IP, GPS, user-agent)
+- [ ] Gerar hash SHA-256 da imagem da assinatura no servidor
+- [ ] Registrar IP do dispositivo via req.ip
+- [ ] Registrar timestamp do servidor (não do cliente)
+- [ ] Rota para verificar integridade da assinatura (comparar hash)
+- [ ] Rota para gerar relatório de auditoria em PDF
+
+### Frontend
+- [ ] Coletar geolocalização (GPS) do dispositivo antes de assinar
+- [ ] Coletar user-agent do navegador
+- [ ] Exibir termo de aceite legal antes da assinatura (Art. 462 CLT + NR-6)
+- [ ] Checkbox de concordância obrigatório antes de assinar
+- [ ] Enviar todas as evidências junto com a assinatura
+
+### Relatório de Auditoria
+- [ ] PDF com ficha completa + assinatura + todas as evidências
+- [ ] Hash SHA-256 da assinatura no rodapé
+- [ ] Dados do dispositivo (IP, GPS, user-agent)
+- [ ] Timestamp do servidor
+- [ ] Selo de integridade verificável
+
+## Propagação Global de Visibilidade do Menu
+
+- [ ] Analisar como o Painel de Controle do Menu salva/carrega configurações de visibilidade
+- [ ] Criar contexto/hook global de visibilidade de módulos (useMenuVisibility)
+- [ ] Aplicar filtro de visibilidade no DashboardLayout (sidebar)
+- [ ] Aplicar filtro de visibilidade nos Dashboards (cards de navegação)
+- [ ] Aplicar filtro de visibilidade na Home (cards de módulos)
+- [ ] Aplicar filtro de visibilidade em relatórios e filtros de seleção
+- [ ] Garantir que desativar um item no Painel de Controle oculte em TODOS os módulos
+
+## Indicador de Capacidade de Contratação (EPI)
+- [x] Criar tabela/config de "Kit Básico de Contratação" (lista editável de EPIs obrigatórios + quantidade)
+- [x] Rota backend que calcula capacidade: cruza kit básico com estoque disponível (central + obras)
+- [x] Retornar: quantos novos funcionários podem ser equipados com estoque atual
+- [x] Detalhar item limitante (gargalo): qual EPI limita a capacidade
+- [x] Componente frontend: card grande com número de capacidade + semáforo
+- [x] Tela de configuração do kit básico editável (adicionar/remover itens, alterar quantidade)
+- [x] Filtro por obra (capacidade por obra específica ou geral)
+- [x] Integrar no dashboard de EPIs como card principal
+
+## Melhorias Capacidade de Contratação
+- [ ] Testar indicador de capacidade na aba EPIs > Capacidade
+- [ ] Alertas automáticos por e-mail quando capacidade cair abaixo do limite configurável
+- [ ] Card de "Capacidade de Contratação" no dashboard principal de EPIs (cards do topo)
+
+## Rev. 188: Correção EpiCapacidade + Alertas Automáticos + Card Dashboard
+- [x] Corrigir crash do EpiCapacidade em mobile/produção (null checks, loading states, error boundary)
+- [x] Adicionar card "Cap. Contratação" no dashboard principal de EPIs (sempre visível)
+- [x] Implementar alertas automáticos por email quando capacidade < limiar configurável
+- [x] Criar tabela epi_alerta_capacidade (configuração de alertas)
+- [x] Criar tabela epi_alerta_capacidade_log (histórico de alertas enviados)
+- [x] Backend: getAlertaCapacidade, salvarAlertaCapacidade, getAlertaCapacidadeLogs, verificarAlertaCapacidade
+- [x] Frontend: seção de configuração de alertas no EpiCapacidade (limiar, intervalo, emails extras, histórico)
+- [x] Botão "Verificar e Enviar Agora" para teste manual de alertas
+- [x] Email HTML profissional com tabela de itens, gargalo destacado, e ação requerida
+- [x] 10 testes vitest passando para o módulo de alerta de capacidade
+
+## Rev. 189: Kit Básico Automático + Emails Compras + Desconto EPI Folha
+- [x] Configurar kit básico de contratação automaticamente para cada empresa (EPIs padrão construção civil)
+- [x] Seed automático do kit ao acessar Capacidade sem kit configurado
+- [x] Adicionar campo de e-mails de responsáveis de compras na seção de alertas de capacidade
+- [x] Implementar desconto automático de EPI por mau uso/perda integrado à folha de pagamento
+- [x] Criar tabela epi_descontos (motivo, valor, status aprovação, vinculo folha) — já existia epi_discount_alerts
+- [x] Backend: rotas CRUD de descontos EPI + rota de aprovação DP — já existia, verificado
+- [x] Frontend: campo "Motivo da troca" na entrega de EPI (mau uso/perda/desgaste normal) — já existia
+- [x] Frontend: alerta na ficha do colaborador quando há desconto pendente — já existia no RaioX
+- [x] Frontend: tela de aprovação de descontos para o DP — nova aba Descontos no Epis.tsx
+- [x] Integração com folha: exibir descontos pendentes ao lançar pagamento/vale — já existia no avisoPrevioFerias
+- [x] Testes vitest para desconto EPI — 14 testes passando
+
+## Bug: Capacidade de Contratação mostrando valor incorreto
+- [x] Investigar cálculo: mostra 1 funcionário quando deveria ser muito mais (mais de mil itens no estoque)
+- [x] Verificar vinculação do kit básico auto-seed com catálogo de EPIs real
+- [x] Gargalo "Camisa Manga Longa (estoque: 2)" — matching pegava só 1º EPI, agora soma todos
+- [x] Corrigir lógica de cálculo: matching inteligente por palavras-chave + soma de TODOS os EPIs do mesmo tipo
+- [x] Resultado: Cap. Contratação agora mostra 38 (antes 1) para FC Engenharia
+
+## Rev. 190: IA Assistente nos Campos de Configuração de EPIs
+- [x] Backend: rota iaSugerirKitsPorFuncao com invokeLLM + json_schema
+- [x] Backend: rota iaSugerirCoresCapacete com invokeLLM + json_schema (NR-6/NR-18)
+- [x] Backend: rota iaSugerirVidaUtil com invokeLLM + json_schema
+- [x] Backend: rota iaSugerirTreinamentos com invokeLLM + json_schema (NR-6/10/18/33/35)
+- [x] Backend: consultar Regras de Ouro + jobFunctions + EPIs catálogo como contexto
+- [x] Frontend: botão "Sugerir com IA" em cada aba (Kits, Cores, Vida Útil, Treinamentos)
+- [x] Frontend: UI de revisão com banner de sugestões + aceitar/rejeitar individual
+- [x] Frontend: botão Salvar Todos para persistir sugestões aceitas
+- [x] Testes vitest para as 4 rotas de IA — 25 testes passando
+- [x] Fix: EpiDescontos.tsx corrigido para usar listDiscountAlerts (não listDiscounts)
+
+## Bug: Filtro por Obra na Capacidade de Contratação não funciona
+- [x] Dropdown de obra não altera o cálculo — CORRIGIDO: agora filtra por obra
+- [x] Ao selecionar obra específica (QIU 2, PALES, etc.), deve filtrar estoque daquela obra
+- [x] Corrigir backend: quando obraId informado, usa apenas estoque da obra (não soma central)
+
+## Rev. 191: Card Capacidade no Painel SST
+- [x] Adicionar card de Capacidade de Contratação no Painel SST (painel inicial do módulo)
+- [x] Confirmar fix do filtro por obra na Capacidade — QIU2=0, PALES=0, Geral=38
+
+## Bug: Erro SQL nas sugestões IA + Cores Capacete + Versão ERP
+- [x] Fix: erro SQL "companyId = ? and is null" — removido isNull(epis.deletedAt) pois tabela epis não tem deletedAt
+- [x] Adicionar botão "Carregar Padrão NR-6/NR-18" com 9 cores padrão (Branco, Azul, Verde, Amarelo, Vermelho, Laranja, Cinza, Marrom, Preto)
+- [x] Atualizar versão do ERP para Rev. 191 (05/03/2026)
+
+## Rev. 192: Reordenar abas EPIs
+- [x] Mover aba Config para a extrema direita da barra de abas (após Descontos)
+
+## Rev. 192b: Formatação de números
+- [x] Formatar valores numéricos com separador de milhar (pt-BR) nos cards do dashboard EPIs
+
+## Rev. 192: Formatação pt-BR em todos os módulos + Fix Aniversariantes
+- [x] Criar função utilitária fmtNum() centralizada em formatters.ts
+- [x] Aplicar fmtNum() em 27 arquivos (110+ valores numéricos) — KPI cards, stats, contadores
+- [x] Aplicar formatação pt-BR no módulo RH & DP (PainelRH, Home)
+- [x] Aplicar formatação pt-BR no módulo SST (PainelSST)
+- [x] Aplicar formatação pt-BR no módulo Jurídico (PainelJuridico já tinha)
+- [x] Aplicar formatação pt-BR em AvisoPrevio, Configuracoes, ControleDocumentos, ConvencoesColetivas
+- [x] Aplicar formatação pt-BR em FechamentoPonto, Ferias, FolhaPagamento, Funcoes
+- [x] Aplicar formatação pt-BR em ModuloPJ, ObraEfetivo, ProcessosTrabalhistas, ValeAlimentacao
+- [x] Aplicar formatação pt-BR em DixiPonto, Dissidio, EpiValidade, EpiEstoqueMinimo
+- [x] Aplicar formatação pt-BR em ApontamentosCampo, BibliotecaConhecimento, CipaCompleta
+- [x] Aplicar formatação pt-BR em ContasBancarias, Empresas, RelogiosPonto, SolicitacaoHE
+- [x] Aplicar formatação pt-BR em RaioXFuncionario, PJMedicoes
+- [x] Corrigir bug aniversariantes: usar timezone America/Sao_Paulo (GMT-3) no backend homeData.ts
+- [x] Atualizar versão do ERP para Rev. 192 (05/03/2026)
+
+## Rev. 193: Remover seção ADMINISTRAÇÃO completa da sidebar
+- [x] Remover todos os 6 itens: Usuários/Permissões, Grupos, Auditoria, Configurações, Revisões, Lixeira
+- [x] Remover seção Administração do módulo Avaliação de Desempenho
+- [x] Manter acesso via Home e rota direta
+- [x] Atualizar versão para Rev. 193
+
+## Rev. 194: Adicionar itens EPI à sidebar SST
+- [x] Adicionar Checklists EPI à sidebar do módulo SST
+- [x] Adicionar Descontos EPI à sidebar do módulo SST
+- [x] Adicionar Transferências EPI à sidebar do módulo SST
+- [x] Adicionar Config EPI à sidebar do módulo SST
+- [x] Implementar suporte a ?tab= no Epis.tsx com listener navParamsUpdated
+- [x] Atualizar versão para Rev. 194
+
+## Rev. 195: Atualizar Controle de Revisões
+- [x] Inserir revisões 168 a 194 no banco de dados (27 revisões inseridas)
+
+## Rev. 196: Automatizar inserção de revisões no banco
+- [x] Criar arquivo shared/changelog.ts com todas as revisões em código
+- [x] Criar função syncRevisions() que compara versões do changelog com o banco
+- [x] Chamar syncRevisions() no startup do servidor
+- [x] Testar que novas revisões são inseridas automaticamente (Rev. 195-196 inseridas com sucesso)
+
+## Rev. 197: Otimização de Performance + Reforço de Segurança
+
+### Performance
+- [x] Analisar queries (N+1 encontrados em avaliacao.ts — corrigir em batch futuro)
+- [x] Implementar cache em memória com TTL 5min (server/cache.ts + server/cachedQueries.ts)
+- [x] Lazy loading já implementado em 50+ páginas (Rev. 182)
+- [x] Manual chunks já configurados no Vite (vendor-charts, vendor-ui, vendor-utils, vendor-data)
+- [x] 282 índices já definidos no schema (cobertura adequada)
+
+### Segurança
+- [x] Rate limiting: API 200 req/min, Auth 20 req/min, Upload 30 req/min (server/security.ts)
+- [x] Headers HTTP: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, Permissions-Policy
+- [x] Validação Zod: 702 rotas com validação, 0 sem — já 100% coberto
+- [x] Atualizar versão para Rev. 197
+
+## Rev. 198: Backup Automatizado + Aniversários de Empresa + Raio-X Clicável
+- [x] Criar serviço de backup (export JSON de todas as 160 tabelas)
+- [x] Compactar backup em gzip e fazer upload para S3
+- [x] Criar job agendado (backup diário automático às 03:00 Brasília)
+- [x] Criar rota tRPC para backup manual (admin only)
+- [x] Notificar admin por e-mail e plataforma após backup
+- [x] Adicionar UI de backups em Configurações > Backup do Banco
+- [x] Registrar histórico de backups no banco (tabela system_backups)
+- [x] Ao clicar no aniversariante na Home, abrir Raio-X do funcionário
+- [x] Adicionar seção de aniversários de empresa (anos de casa) na Home
+- [x] Backend: calcular aniversários de contratação no homeData
+- [x] Atualizar Controle de Revisões (Rev. 198 no changelog)
+
+## Rev. 199: Módulo de Contratos CLT
+- [x] Criar tabelas no banco: contract_templates, employee_contracts
+- [x] Criar router tRPC para contratos (8 procedures: CRUD, geração, upload, status)
+- [x] Implementar função de valor por extenso em pt-BR (até milhares + centavos)
+- [x] Criar UI de geração de contrato (escolher tipo, prazo 30+30 ou 45+45)
+- [x] Criar aba "Contratos CLT" no Raio-X do funcionário
+- [x] Implementar impressão em formato A4 com window.print()
+- [x] Implementar upload de contrato assinado (PDF/foto) para S3
+- [x] Implementar Prorrogar e Efetivar com um clique
+- [x] Horário de trabalho puxado do cadastro do funcionário
+- [x] Templates com LGPD, sigilo e segurança baseados nos contratos originais
+
+## Rev. 200: Logo da Empresa nos Contratos CLT
+- [x] Buscar logo da empresa ativa do banco/S3
+- [x] Exibir logo no cabeçalho do contrato (preview e impressão)
+- [x] Garantir que logo aparece corretamente na impressão A4
+
+## Rev. 201: Logo nos Contratos PJ + Rodapé com Dados da Empresa
+- [x] Adicionar logo da empresa no cabeçalho dos contratos PJ (já existia)
+- [x] Incluir rodapé com telefone, e-mail e site da empresa nos contratos CLT
+- [x] Incluir rodapé com telefone, e-mail e site da empresa nos contratos PJ
+- [x] Adicionar campo "site" na tabela companies e no formulário de empresas
+
+## Rev. 202: Rebranding - Remover FC, tornar sistema genérico "Gestão Integrada"
+- [x] Remover "FC" do nome na sidebar (DashboardLayout)
+- [x] Remover "FC" do ícone na sidebar (trocar por ícone genérico)
+- [x] Alterar título da página para "ERP - Gestão Integrada"
+- [x] Remover referências a "FC" no Home.tsx
+- [x] Verificar e remover "FC" de qualquer outro lugar do frontend
+
+## Rev. 203: Tornar TODOS os documentos dinâmicos por empresa (remover FC hardcoded)
+- [x] ControleDocumentos.tsx - Advertências: remover "FC ENGENHARIA PROJETOS E CONSTRUÇÕES LTDA" hardcoded
+- [x] ControleDocumentos.tsx - Footer: remover "FC Engenharia" hardcoded
+- [x] ContratoPJView.tsx - Fallback: remover "FC ENGENHARIA" hardcoded
+- [x] Colaboradores.tsx - Impressão: usar nomeEmpresa dinâmico
+- [x] BeneficiosAlimentacaoTab.tsx - Placeholder: remover "FC Engenharia"
+- [x] ChartSetup.tsx - Comentário: remover "FC Engenharia"
+- [x] Notificações por e-mail (backend) - Templates de contratação/demissão: usar empresa dinâmica
+- [x] Verificar server/routers/ para referências FC hardcoded
+- [x] PrintHeader.tsx - Remover logo FC hardcoded como fallback
+- [x] assistenteIA.ts - Remover "FC" do system prompt
+- [x] smtpService.ts - Remover "FC" do remetente de e-mail
+- [x] backupService.ts - Remover "FC" do footer de e-mail
+- [x] bibliotecaConteudo.ts - Remover "FC" dos textos de ajuda
+- [x] payrollEngine.ts - Remover "FC" do fallback de empresa
+- [x] pjContracts.ts - Remover "FC" do comentário
+
+## Rev. 204: Tabela de Horários nos Contratos CLT
+- [x] Converter JSON bruto de horário de trabalho em tabela HTML formatada nos contratos CLT
+- [x] Tabela com colunas: Dia, Entrada, Intervalo, Saída
+- [x] Estilo profissional com cabeçalho azul escuro
+- [x] Garantir boa aparência na impressão e preview
+
+## Rev. 205: Corrigir Números Proibidos na Numeração Interna
+- [x] Verificar funcionários existentes com números proibidos (13, 17, 22, 24, 69, 171, 666)
+- [x] Renumerar funcionários que possuem números proibidos (8 renumerados)
+- [x] Garantir que a regra funciona para TODAS as empresas (não só FC)
+- [x] Atualizar o nextCodigoInterno das empresas afetadas
+
+## Rev. 205: Números Proibidos Editáveis nas Configurações
+- [x] Adicionar campo numerosProibidos no schema/banco (coluna na tabela companies)
+- [x] Criar rota tRPC para ler/salvar números proibidos (getNumbering/updateNumbering)
+- [x] Adicionar campo editável na tela de Critérios/Parâmetros (seção Numeração Interna)
+- [x] Integrar números proibidos dinâmicos na geração de código interno (server/db.ts)
+- [x] Renumerar funcionários existentes com números proibidos (8 renumerados)
+- [x] Preview na tela mostra os números sendo pulados com badges vermelhos
+
+## Rev. 206: Sincronizar Módulos/Funcionalidades nas Permissões de Usuário
+- [x] Levantar todas as funcionalidades da sidebar (RH, SST, Jurídico, Terceiros, Parceiros)
+- [x] Comparar com a lista atual de permissões em Módulos e Funcionalidades
+- [x] Adicionar ~25 funcionalidades faltantes (Apontamento de Campo, Raio-X, Dashboards, Relatórios, etc.)
+- [x] Garantir que TODA funcionalidade da sidebar tenha correspondência nas permissões
+- [x] Limpar rotas extras hardcoded no DashboardLayout.tsx
+- [x] Regra: sempre que criar nova funcionalidade na sidebar, adicionar nas permissões também
+
+## Rev. 207: Melhorar Tabela de EPIs - Rastreabilidade e Edição
+- [ ] Mostrar nomes reais (nome do EPI, nome da obra) em vez de IDs
+- [ ] Adicionar coluna CA com número real
+- [ ] Adicionar rastreabilidade: quem cadastrou, data de cadastro
+- [ ] Adicionar botão de editar em cada linha
+- [ ] Tornar linhas clicáveis para ver detalhes
+
+## Rev. 207: Correção Tabela EPIs - Nomes Reais e Rastreabilidade
+- [x] Corrigir mapeamento de campos na tabela Estoque por Obra (nomeEpi, nomeObra, caEpi em vez de epiNome, obraNome, epiCa)
+- [x] Corrigir mapeamento de campos na tabela de Transferências (nomeEpi, origemNome, destinoNome)
+- [x] Corrigir mapeamento no resumo de estoque por obra (nomeObra, totalUnidades)
+- [x] Adicionar coluna Categoria na tabela de Estoque por Obra
+- [x] Adicionar coluna Ações (Editar EPI, Ver Entregas) na tabela de Estoque por Obra
+- [x] Tornar linhas da tabela de Estoque por Obra clicáveis (abre editor do EPI)
+- [x] Adicionar campos criadoPor e alteradoPor no schema de epis e epiEstoqueObra
+- [x] Adicionar rastreabilidade no backend: create (criadoPor), update (alteradoPor), transferir, entradaDiretaObra
+- [x] Adicionar coluna "Cadastrado por" na tabela de Catálogo de EPIs (com data e quem alterou)
+- [x] Retornar campos de rastreabilidade (createdAt, updatedAt, criadoPor, alteradoPor) no endpoint estoqueObraList
+
+## Rev. 208: Conceito "Construtoras" — Visão Unificada Cross-Company
+
+### Fase 1 — Base e Seletor
+- [x] Adicionar campo compartilhaRecursos (boolean) na tabela companies
+- [x] Criar lógica de agrupamento: empresas com compartilhaRecursos=true formam "Construtoras"
+- [x] Adicionar opção "CONSTRUTORAS" no seletor de empresa do header
+- [x] Quando "Construtoras" selecionado, queries retornam dados de todas as empresas do pool
+- [x] Endpoint backend para listar empresas do pool compartilhado
+
+### Fase 2 — EPIs Unificados
+- [x] Catálogo de EPIs unificado quando "Construtoras" selecionado
+- [x] Estoque central unificado (um almoxarifado para FC+JF)
+- [x] Entrega de EPI: listar funcionários de todas as empresas do pool
+- [x] Centro de custo automático: custo alocado na empresa do funcionário (não da obra)
+- [x] Transferências para obra: visão unificada de obras FC+JF
+- [x] Relatórios de custo EPI com filtro por empresa dentro de Construtoras
+
+### Fase 3 — Demais módulos (sequência futura)
+- [ ] Advertências cross-company (visão unificada, registro na empresa do funcionário)
+- [ ] ASOs/Atestados cross-company
+- [ ] Acidentes cross-company
+- [ ] Treinamentos cross-company (turma mista FC+JF)
+- [ ] Raio X do funcionário: dados consolidados independente da empresa
+- [ ] Alocação de funcionários JF em obras FC
+
+### Dashboards Construtoras
+- [ ] Total colaboradores ativos: soma FC+JF quando Construtoras selecionado
+- [ ] Indicadores de EPIs consolidados
+- [ ] Filtro por empresa dentro da visão Construtoras
+- [x] Dashboard EPIs adaptado para visão Construtoras (multi-company)
+
+## Rev. 209: Estoque por Obra na Sidebar, Valores por Obra e Inventário PDF
+
+- [x] Adicionar link "Estoque por Obra" na sidebar do módulo SST
+- [x] Corrigir valores R$ 0,00 no custo de EPI por obra (dashboard)
+- [x] Adicionar valor do estoque separado por obra e total geral
+- [x] Implementar impressão do inventário com logo da empresa e LGPD
+- [x] Implementar geração de PDF do inventário com logo e LGPD
+
+## Rev. 210: Bug Filtro Processos Trabalhistas
+
+- [x] Corrigir filtro de status para incluir processos "Encerrado" na listagem
+- [x] Verificar se o card "Encerrados" está contando corretamente (6 encerrados agora)
+- [x] Adicionar filtro "Ativos (em andamento)" e "Encerrados (todos)" no dropdown
+- [x] Adaptar Processos Trabalhistas para multi-company (CONSTRUTORAS)
+- [x] Backend: endpoints listar, estatisticas, funcionariosDesligados aceitam companyIds
+- [x] Frontend: usa getCompanyIdsForQuery e queryCompanyId do contexto
+
+## Rev. 211: Correção formato data de nascimento
+
+- [x] Corrigir data de nascimento para padrão brasileiro (dd/mm/aaaa) na tela de dados do colaborador (já estava correto)
+
+## Rev. 211: Data nascimento BR + Férias clicáveis
+
+- [x] Corrigir data de nascimento para padrão brasileiro (dd/mm/aaaa) em todas as telas (já estava correto)
+- [x] Tornar nomes clicáveis nos alertas de férias vencidas/a vencer
+- [x] Ao clicar no nome, navegar para módulo de férias
+## Rev. 211: Filtros Férias + Alertas clicáveis + Data BR
+- [x] Corrigir filtros dos cards no módulo de Férias (Total, Férias a Vencer, Agendadas, Vencidas, Em Gozo) - agora mudam aba e filtram
+- [x] Corrigir busca de colaborador no formulário Registrar Férias - removeAccents corrigido
+- [x] Formulário Registrar Férias: lista aumentada de 20 para 200 e busca corrigida
+- [x] Adicionar botões de ação rápida na tabela de férias: Iniciar Gozo, Concluir Férias
+
+## Rev. 212: Clique no nome abre detalhes de férias (não Raio X)
+- [x] Alterar clique no nome do colaborador na tela de Férias para abrir detalhes das férias (prorrogar, antecipar, gozo) ao invés do Raio X
+- [x] Aplicar tanto nos alertas (vencidas/a vencer) quanto na tabela de lista de férias
+
+## Rev. 213: Verificar e corrigir cálculos de férias
+- [x] Verificar cálculo de períodos aquisitivos (total, registrados, não registrados)
+- [x] Verificar cálculo de vencidas (contagem) - excluir concluídas/canceladas
+- [x] Verificar cálculo de valor estimado de férias - agora mostra apenas valor pendente (exclui concluídas)
+
+## Rev. 214: Seleção por grupo de empresas nas permissões de usuário
+- [x] Adicionar botões de grupo (Construtora, etc.) na tela de permissões do usuário
+- [x] Ao selecionar um grupo, marcar automaticamente todas as empresas daquele grupo
+- [x] Campo grupoEmpresarial adicionado no cadastro de empresas
+- [x] Grupo exibido no card de cada empresa e na seleção de permissões
+
+## Rev. 215: Corrigir Valor Inventário de EPIs
+- [x] Valor Inventário já está correto: soma de (estoque × valor unitário) de todos os EPIs - verificado no banco
+- [x] BUG: Módulos do Sistema sumiram na tela de Configurações - corrigido para usar FC quando CONSTRUTORAS
+- [x] GoldenRulesPanel corrigido para usar FC quando CONSTRUTORAS selecionado
+
+## Rev. 216: CONSTRUTORAS usar FC como referência
+- [x] Quando CONSTRUTORAS selecionado, Configurações (módulos, regras, critérios) usam dados da FC
+- [x] Quando CONSTRUTORAS selecionado, Obras mostra obras de todas empresas do grupo
+- [x] GoldenRulesPanel: corrigido companyId para CONSTRUTORAS
+
+## Rev. 217: Upload de Certificado nos Treinamentos (igual ASO)
+- [x] Campo de upload de certificado (PDF/Imagem) no formulário de Novo/Editar Treinamento
+- [x] Submit handler envia arquivo junto ao salvar (como ASO)
+- [x] Link "Ver certificado atual" ao editar treinamento que já tem certificado
+- [x] Coluna de Certificado na tabela de treinamentos (link para ver)
+- [x] Backend create retorna ID para permitir upload imediato
+
+## Rev. 218: Dashboards unificados para CONSTRUTORAS
+- [x] Dashboards devem mostrar dados unificados quando CONSTRUTORAS selecionado
+- [x] Remover mensagem "Selecione uma empresa" quando CONSTRUTORAS está ativo
+- [x] Todos os gráficos/cards devem agregar dados de todas empresas do grupo
+
+## Bugs Reportados - Março 2026
+- [x] BUG: Cartão de ponto dia 19/02 mostra 'Inconsistente/batida ímpar' mesmo com 4 horários preenchidos - filtrar apenas pendentes
+- [x] BUG: Após ajuste manual, status continua 'Inconsistente' - corrigido filtrando por status=pendente
+- [x] BUG: Edição de treinamentos não salva as modificações - corrigido tratamento de strings vazias
+- [x] Dashboards CONSTRUTORAS: mostrar dados unificados de todas as empresas do grupo - backend e frontend atualizados
+
+## Rev. 219: Sistema de Exportação e Importação Completa
+- [x] Backend: Exportar todas as tabelas do banco em JSON organizado
+- [x] Backend: Exportar todos os documentos/arquivos anexados (ASOs, certificados, fotos, etc.)
+- [x] Backend: Gerar pacote ZIP com banco + arquivos organizados por pasta
+- [x] Backend: Importar dados de pacote ZIP (restaurar banco + arquivos)
+- [x] Frontend: Página de Backup/Migração com botões Exportar e Importar
+- [x] Frontend: Progresso de exportação/importação com feedback visual
+- [x] Documentação: README com instruções para migrar para Railway + banco independente
+
+## Rev. 220: Corrigir Exportação - ZIP com dados reais
+- [x] BUG: Exportação retorna tabelas vazias (totalRecords: 0) - corrigido rows[0] do mysql2
+- [x] Gerar exportação em formato ZIP organizado com pastas (archiver)
+- [x] ZIP contém: /banco/*.json + banco-completo.json + manifesto-arquivos.json + README-MIGRACAO.md
+
+## Rev. 221: Auto-preenchimento de validade em treinamentos por NR
+- [x] Pesquisar prazos de validade oficiais de cada NR (NR-35, NR-10, NR-33, NR-18, etc.)
+- [x] Criar constante/tabela com regras de validade por tipo de treinamento (shared/trainingRules.ts)
+- [x] Auto-preencher data de validade ao selecionar tipo de treinamento + data de realização
+- [x] Permitir que o usuário altere a data sugerida (não bloquear)
+- [x] Indicador visual de que a data foi preenchida automaticamente pela norma (Zap icon + texto)
+
+## Rev. 222: Colaboradores - Suporte a CONSTRUTORAS
+- [x] Mostrar todos os funcionários de JF e FC quando CONSTRUTORAS está selecionado
+- [x] Remover mensagem "Selecione uma empresa" quando CONSTRUTORAS está ativo
+
+## Melhoria: Busca com Autocomplete em Selects
+- [x] Campo de funcionário na entrega de EPI com busca/autocomplete em tempo real (filtrar por nome, CPF, função)
+- [x] Controle de Documentos: unificar dados de FC + JF quando CONSTRUTORAS selecionado
+- [x] TODAS as páginas: unificar dados quando CONSTRUTORAS selecionado (companyIds para grupo empresarial)
+- [x] Aviso Prévio: ajustar tabela conforme planilha (Nome, Data Aviso, Redução, Dia Trabalhado, Último Dia, Data de Pagamento)
+- [x] Aviso Prévio: renomear "Rescisão" para "Data de Pagamento" na tabela
+- [x] Aviso Prévio: calcular e exibir automaticamente Último Dia Trabalhado e Data de Pagamento ao preencher Data do Aviso + Redução
+
+## Correção Fluxo de Estoque EPI
+- [x] Auto-selecionar "Obra" como origem quando funcionário está em obra com estoque do EPI
+- [x] Permitir transferência obra→central (devolver EPI ao catálogo/escritório)
+- [x] Corrigir deleteDelivery para devolver ao estoque correto (obra ou central) conforme origemEntrega
+
+## Bug: Total Pago Processos Trabalhistas
+- [x] Corrigir card "Total Pago" que mostra R$ 0,00 mesmo com processos encerrados (fallback: valorAcordo ou valorCondenacao)
+
+## Bug: Último Dia Trabalhado - Aviso Prévio 7 dias
+- [x] Corrigir cálculo do Último Dia Trabalhado para descontar os 7 dias da redução no aviso de 7 dias
+
+## Correção: Preenchimento Automático NRs - Treinamentos
+- [x] Completar todas as NRs faltantes no preenchimento rápido
+- [x] Adicionar carga horária automática para cada NR ao selecionar
+
+## Bug: Efetivo por Obra zerado na CONSTRUTORAS
+- [x] Corrigir Efetivo por Obra que mostra 0 alocados, 0 obras com efetivo na empresa CONSTRUTORAS (companyIds não era passado para as funções do backend)
+
+## Bug: Cards de filtro Aviso Prévio mostram totais filtrados
+- [x] Corrigir cards para mostrar totais globais independentes do filtro ativo (Total, Em Andamento, Concluídos, Cancelados)
+
+## Melhorias Dashboard Aviso Prévio
+- [x] Adicionar barra de evolução (progresso) responsiva em cada linha da tabela de avisos detalhados
+- [x] Adicionar filtro por tipo de redução (7 dias corridos / 2h dia / Todos)
+
+## Regra: Avisos Cancelados fora das listagens
+- [ ] Excluir avisos cancelados E concluídos da listagem principal (só mostrar Em Andamento)
+- [ ] Excluir cancelados e concluídos dos cards de resumo e previsão de custo
+- [ ] Excluir cancelados e concluídos do Dashboard Aviso Prévio (tabela e gráficos)
+- [ ] Manter registro do cancelamento apenas na timeline do funcionário
+
+## Regra: Avisos Cancelados fora das listagens + Coluna Dias Restantes
+- [ ] Excluir avisos cancelados E concluídos da listagem principal (só mostrar Em Andamento)
+- [ ] Excluir cancelados e concluídos dos cards de resumo e previsão de custo
+- [ ] Excluir cancelados e concluídos do Dashboard Aviso Prévio (tabela e gráficos)
+- [ ] Adicionar coluna "Dias Restantes" na tabela do Dashboard Aviso Prévio
+
+## Rev. 226: Aviso Prévio - Cancelados/Concluídos removidos de listagens e custos
+- [x] Backend Dashboard: Custos, gráficos e distribuições filtram apenas avisos em_andamento
+- [x] Backend Dashboard: Custo total estimado = apenas em andamento (cancelados/concluídos excluídos da previsão)
+- [x] Backend Dashboard: Breakdown de rescisão, custo por setor, evolução mensal = apenas em andamento
+- [x] Frontend Dashboard: Seção financeira simplificada (Custo Total Em Andamento + Média por Aviso)
+- [x] Frontend Dashboard: Removidos cards de custo concluído e cancelado da previsão
+- [x] Frontend Aviso Prévio: valorTotal nos stats cards = apenas em andamento
+- [x] Coluna "Dias Restantes" já existente em ambas as páginas (Aviso Prévio e Dashboard)
+- [x] 720 testes passando
+
+## BUG: Diferença de 13 funcionários entre Painel RH (142) e Efetivo por Obra (129)
+- [x] Investigar queries do Painel RH e Efetivo por Obra
+- [x] Identificar os 13 funcionários faltantes (20 sem alocação em obra_funcionarios)
+- [x] Corrigir a query para incluir todos os ativos (removido obraAtualId)
+
+## Rev. 227: Remover obraAtualId do sistema
+- [x] Remover obraAtualId do schema drizzle
+- [x] Remover obraAtualId de todas as queries backend (db.ts, routers) - 18 arquivos
+- [x] Remover obraAtualId de todos os componentes frontend (Colaboradores.tsx campo somente leitura)
+- [x] Corrigir getEfetivoPorObra para usar apenas obra_funcionarios
+- [x] Corrigir getFuncionariosSemObra para usar apenas obra_funcionarios (NOT IN alocações ativas)
+- [x] Funcionários sem alocação ativa aparecem como "Não Alocado" para alocação manual
+- [x] Migrar banco de dados (ALTER TABLE DROP COLUMN)
+- [x] 720 testes passando
+
+## BUG: Erro "Unexpected token < is not valid JSON" ao registrar férias
+- [x] Investigar rota de registro de férias no backend
+- [x] Identificar causa: coluna obraAtualId removida do banco mas schema antigo (publicado) ainda referencia
+- [x] Corrigir: Rev. 227 já tem schema sem obraAtualId - basta publicar
+
+## BUG: Processos Trabalhistas não carregam (fica em "Carregando processos..." infinitamente)
+- [ ] Investigar query de listagem de processos trabalhistas
+- [ ] Identificar causa do erro (possivelmente referência a obraAtualId removida)
+- [ ] Corrigir o bug
+
+## Rev. 228: Pagamento de Processos Trabalhistas
+- [ ] Adicionar campo valorPago e dataPagamento no schema/banco
+- [ ] Criar procedure de registrar pagamento no backend
+- [ ] Adicionar botão "Registrar Pagamento" na listagem e dentro de cada processo
+- [ ] Dialog para informar valor pago e data
+- [ ] Processos pagos não contam como pendentes no card "Valor Causas"
+- [ ] Card "Total Pago" mostra soma real dos pagamentos
+
+## Rev. 228: Correção de imports faltantes de obraFuncionarios
+- [x] homeData.ts - import obraFuncionarios adicionado
+- [x] avaliacao.ts - import obraFuncionarios adicionado
+- [x] controleDocumentos.ts - import obraFuncionarios adicionado
+- [x] epiAvancado.ts - import obraFuncionarios adicionado
+- [x] epis.ts - import obraFuncionarios adicionado
+- [x] Causa raiz: ao substituir obraAtualId por queries em obraFuncionarios, os imports não foram adicionados em todos os arquivos
+- [x] 720 testes passando
+
+## Rev. 229: Botões Imprimir/PDF na Equipe da Obra
+- [ ] Adicionar botão "Imprimir" na tela de Equipe da Obra
+- [ ] Adicionar botão "Gerar PDF" na tela de Equipe da Obra
+- [ ] Imprimir/PDF deve mostrar apenas a listagem da equipe (sem ações, sem busca)
+
+## BUG: Efetivo por Obra duplica obras no modo CONSTRUTORAS
+- [x] Obras aparecem duplicadas quando FC + JF têm funcionários na mesma obra
+- [x] Consolidar por nome da obra (não por obraId) para unificar entre empresas
+- [x] Garantir que "Sem Obra Vinculada" também consolide
+- [x] Fix: companyId NaN quando CONSTRUTORAS selecionado (parseInt('construtoras') = NaN desabilitava queries)
+- [x] getEfetivoPorObra: consolida por nome da obra no modo CONSTRUTORAS
+- [x] getEfetivoDashboardMensal: consolida por nome da obra no modo CONSTRUTORAS
+- [x] getEfetivoHistorico: consolida por nome da obra no modo CONSTRUTORAS
+- [x] getEquipeObra: aceita obraIds[] e companyIds[] para buscar equipe consolidada
+- [x] DashEfetivoObra: passa obraIds ao clicar "Ver equipe" em obra consolidada
+- [x] ObraEfetivo: fix companyId para usar construtorasIds[0] no modo CONSTRUTORAS
+
+## Rev. 230: Consolidação CONSTRUTORAS - Testes e Melhorias
+- [x] Testar "Ver equipe" em obras consolidadas (Escritório Central, Luciana) para validar funcionários de ambas empresas
+- [x] Implementar Imprimir/PDF da equipe por obra (abre nova janela com HTML formatado, inclui status e datas)
+- [x] Corrigir bug NaN companyId em TODOS os módulos no modo CONSTRUTORAS (Folha, Ponto, Férias, etc.)
+
+- [x] Equipe por Obra: mostrar funcionários de Aviso Prévio, Férias e Afastados com cores diferentes
+- [x] Equipe por Obra: para quem está de Aviso, mostrar data final de trabalho
+- [x] Equipe por Obra: badges coloridos por status (verde=Ativo, amarelo=Aviso, azul=Férias, vermelho=Afastado)
+
+- [x] BUG: Impressão da equipe - corrigido para abrir nova janela com HTML formatado (não usa window.print da página)
+- [x] Corrigir Imprimir/PDF para imprimir apenas o conteúdo da equipe (FullScreenDialog)
+
+- [x] BUG: Botão Transferir na equipe - corrigido z-index do FullScreenDialog para abrir por cima da equipe
+- [x] Fix: Sem Obra Vinculada contagem errada - corrigido para usar query semObra em vez de allEmps.filter
+- [x] Fix: Férias no modo CONSTRUTORAS não carregava - corrigido para passar companyIds nas queries
+- [x] Fix: NaN companyId em 22+ páginas - script automatizado corrigiu parseInt/Number(selectedCompanyId) em todas
+
+- [x] BUG: Dropdown de obras duplica no modo CONSTRUTORAS - corrigido consolidação por nome em obras.list e obras.listActive
+
+## Rev. 231: Status automático do funcionário
+- [ ] Status Férias, Afastado, Licença devem ser calculados automaticamente
+- [ ] Apenas Ativo, Recluso e Desligado podem ser editados manualmente
+- [ ] Remover opções Férias/Afastado/Licença do dropdown de status manual
+- [ ] Calcular status com base em: férias em gozo, afastamentos ativos, etc.
+- [ ] Mostrar status calculado como badge visual não editável
+
+## Fase: Atualização Automática de Status de Funcionários
+- [ ] Criar job de sincronização automática de status (statusSyncJob)
+- [ ] Limitar dropdown de status manual para Ativo/Recluso/Desligado no Colaboradores.tsx
+- [ ] Executar atualização imediata dos status (Férias em gozo, Afastados, Avisos Prévios)
+- [ ] Adicionar endpoint tRPC para sincronizar status manualmente
+- [ ] Testar sincronização automática de status
+- [x] Adicionar coluna Status na tabela "Sem Obra" (ObraEfetivo.tsx) com cores por status
+- [x] BUG GRAVE: Excluir desligados de TODAS as análises dos dashboards (gênero, contrato, pirâmide etária, etc.) - só manter contagem no card "Desligados"
+- [x] Lista_Negra deve aparecer como "Desligado" nos dashboards/relatórios (sub-classificação interna)
+- [x] Lista_Negra só visível como filtro na tela de Funcionários, não nos relatórios
+- [x] BUG: Erro 404 no domínio publicado fcerp-rh-w4mm458s.manus.space (resolvido - site está funcionando)
+- [x] Adicionar "Afastado" como opção manual no dropdown de status do funcionário
+- [x] Job de sincronização NÃO deve reverter Afastado manual para Ativo
+- [x] Restaurar funcionários que estavam Afastado e foram revertidos indevidamente pelo job (6 restaurados)
+- [x] Adicionar "Afastado" como opção manual no dropdown de status do funcionário
+- [x] Job de sincronização NÃO deve reverter Afastado manual para Ativo
+- [x] Restaurar funcionários que estavam Afastado e foram revertidos indevidamente pelo job (6 restaurados)
+- [x] BUG: Filtros dos cards do Painel RH & DP não estão filtrando ao clicar (Ativos, Férias, Afastados, Licença, Desligados)
+- [x] BUG: Custo por Obra não mostra dados quando selecionado "CONSTRUTORAS" (deveria somar todas)
+- [x] Custo por Obra: ao clicar em cada obra, expandir e mostrar valores segregados por funcionário
+- [x] Incluir coluna de horas extras por funcionário na expansão detalhada do Custo por Obra
+- [x] BUG: Custo por Obra não mostra dados - query quebrada após alterações (coluna pp.diasTrabalhados/pp.faltas não existia)
+- [x] Adicionar coluna Total de Descontos na expansão detalhada do Custo por Obra
+- [x] Ao clicar no valor de Descontos de cada funcionário no Custo por Obra, abrir popup com detalhamento dos descontos
+- [ ] Limpar cadastros de teste (camila, teste, renan teste, etc.) do sistema
+
+## Fase: Alerta Divergência Ativos vs Folha Processada
+- [x] Criar endpoint backend `payrollEngine.divergenciaAtivosSemFolha` que cruza ativos com folha processada
+- [x] Criar componente reutilizável `AlertaDivergenciaFolha` com variantes full e compact
+- [x] Adicionar alerta no Relatório Custo por Obra (variant full)
+- [x] Adicionar alerta no Relatório de Folha de Pagamento (variant full)
+- [x] Adicionar alerta no módulo Folha de Pagamento (variant full, entre cálculo interno e conferência)
+- [x] Adicionar alerta no Dashboard Folha de Pagamento (variant compact)
+- [x] Separar CLT sem folha (crítico) de PJ sem lançamento (informativo)
+- [x] Exibir tabela detalhada com código, nome, função e status de cada funcionário sem folha
+
+## Fase: Mostrar Férias no Efetivo da Obra
+- [ ] Incluir funcionários em férias na listagem de efetivo da obra
+- [ ] Exibir status "Férias" visível na coluna Info Status da equipe da obra
+- [ ] Investigar e corrigir por que funcionários de férias não aparecem no grupo Férias na equipe da obra
+- [ ] Adicionar badges de Férias/Afastado nos cards de cada obra na visão geral
+- [x] BUG: Painel RH mostra 3 Férias ao invés de 4 quando CONSTRUTORAS selecionado (FC+JF) - query não conta corretamente
+- [x] BUG: ELIAS VIEIRA DO NASCIMENTO aparecendo como Aviso Prévio indevidamente - corrigido: queries em db.ts não filtravam deletedAt IS NULL para termination_notices
+
+## Fase: Aviso Prévio - Dispensado (7 dias corridos)
+- [x] Backend: calcular data de dispensa (dataFim - 7 dias) quando reducaoJornada = '7_dias_corridos'
+- [x] Backend: criar status operacional "Aviso - Dispensado" no efetivo por obra (getObraFuncionarios, getEfetivoPorObra)
+- [x] Backend: não contar dispensados como efetivo ativo na obra
+- [x] Frontend: exibir "Aviso - Dispensado" com cor diferenciada na equipe da obra
+- [x] Frontend: separar dispensados do efetivo ativo nos cards de obra
+- [x] Frontend: manter dispensados na contagem contábil (folha, custos)
+- [x] Implementar filtro por status nos badges do Efetivo por Obra (clicar em Ativos, Aviso Prévio, etc. filtra as obras)
+- [x] Corrigir cores dos badges: AvisoDispensado com cor própria (laranja), Afastados com cor diferente (roxo), legenda incluir AvisoDispensado
+- [x] BUG: Painel RH mostra 6 Férias mas filtro Colaboradores mostra apenas 5 - corrigido: vacation_period de funcionário deletado (420026) era contada no feriasEmAndamento
+
+## Fase: Módulo de Habilidades
+- [ ] Schema: criar tabela skills (id, nome, categoria, descricao, companyId, createdAt)
+- [ ] Schema: criar tabela employee_skills (id, employeeId, skillId, nivel, tempoExperiencia, observacao, createdAt)
+- [ ] Migração: rodar pnpm db:push
+- [ ] Backend: CRUD de habilidades (listar, criar, editar, excluir)
+- [ ] Backend: atribuir/remover habilidade de funcionário
+- [ ] Backend: listar habilidades de um funcionário
+- [ ] Backend: buscar funcionários por habilidade
+- [ ] Backend: habilidades por obra (agregado)
+- [ ] Frontend: tela de Cadastro de Habilidades (nome, categoria, descrição)
+- [ ] Frontend: seção Habilidades na ficha do Colaborador (atribuir, nível, experiência, observação)
+- [ ] Frontend: habilidades no card da obra no Efetivo por Obra
+- [ ] Frontend: habilidades na equipe da obra (ao clicar no funcionário)
+- [ ] Frontend: filtro por habilidade na tela de Colaboradores
+
+## Módulo de Habilidades e Competências
+- [x] Criar tabelas skills e employee_skills no banco de dados
+- [x] Criar schema Drizzle para skills e employee_skills (com campo tempoExperiencia)
+- [x] Criar router tRPC completo: list, create, update, delete, assignSkill, removeSkill, employeeSkills, searchBySkill, skillSummaryByObra, skillsByAllObras, skillSummaryGlobal
+- [x] Criar tela de Cadastro de Habilidades com cards agrupados por categoria
+- [x] Implementar atribuição de habilidade a funcionário (com nível e tempo de experiência)
+- [x] Exibir habilidades no card da obra (ex: "3 Pintura, 2 Solda")
+- [x] Exibir habilidades na Ficha do Colaborador (seção Habilidades e Competências)
+- [x] Filtro por habilidade na tela de Colaboradores
+- [x] Testes unitários para módulo de habilidades (9 testes passando)
+- [x] Adicionar menu "Habilidades" na sidebar (seção Cadastro)
+
+## Módulo de Habilidades - Fase 2
+- [x] Relatório de Habilidades por Obra (quais habilidades disponíveis e faltantes por obra)
+- [x] Importação em massa de habilidades (atribuir uma habilidade a múltiplos funcionários de uma vez)
+- [x] Dashboard de Competências (gráficos de distribuição por obra, categoria e nível)
+- [x] Endpoints backend para relatório por obra, atribuição em massa e dados do dashboard
+- [x] Tela frontend do Relatório de Habilidades por Obra
+- [x] Tela frontend de Importação em Massa
+- [x] Tela frontend do Dashboard de Competências
+- [x] Adicionar rotas e navegação no menu lateral
+- [x] Testes unitários para os novos endpoints (18 testes passando)
+
+## Bugs - Módulo de Habilidades
+- [x] BUG: Obras duplicadas no Relatório de Habilidades por Obra quando no modo CONSTRUTORAS

@@ -1,0 +1,202 @@
+{
+  "query": "SHOW COLUMNS FROM processos_trabalhistas LIKE 'datajud%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW COLUMNS FROM processos_trabalhistas LIKE 'datajud%';",
+  "rows": [
+    {
+      "Field": "datajud_id",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_ultima_consulta",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_ultima_atualizacao",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_grau",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_classe",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_assuntos",
+      "Type": "json",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_orgao_julgador",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_sistema",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_formato",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_movimentos",
+      "Type": "json",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_total_movimentos",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajud_auto_detectado",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudId",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudUltimaConsulta",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudUltimaAtualizacao",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudGrau",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudClasse",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudAssuntos",
+      "Type": "json",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudOrgaoJulgador",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudSistema",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudFormato",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudMovimentos",
+      "Type": "json",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudTotalMovimentos",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "datajudAutoDetectado",
+      "Type": "tinyint",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\ndatajud_id\tvarchar(255)\tYES\t\tNULL\t\ndatajud_ultima_consulta\ttimestamp\tYES\t\tNULL\t\ndatajud_ultima_atualizacao\tvarchar(100)\tYES\t\tNULL\t\ndatajud_grau\tvarchar(20)\tYES\t\tNULL\t\ndatajud_classe\tvarchar(255)\tYES\t\tNULL\t\ndatajud_assuntos\tjson\tYES\t\tNULL\t\ndatajud_orgao_julgador\tvarchar(255)\tYES\t\tNULL\t\ndatajud_sistema\tvarchar(100)\tYES\t\tNULL\t\ndatajud_formato\tvarchar(50)\tYES\t\tNULL\t\ndatajud_movimentos\tjson\tYES\t\tNULL\t\ndatajud_total_movimentos\tint\tYES\t\tNULL\t\ndatajud_auto_detectado\ttinyint\tNO\t\t0\t\ndatajudId\tvarchar(255)\tYES\t\tNULL\t\ndatajudUltimaConsulta\ttimestamp\tYES\t\tNULL\t\ndatajudUltimaAtualizacao\tvarchar(100)\tYES\t\tNULL\t\ndatajudGrau\tvarchar(20)\tYES\t\tNULL\t\ndatajudClasse\tvarchar(255)\tYES\t\tNULL\t\ndatajudAssuntos\tjson\tYES\t\tNULL\t\ndatajudOrgaoJulgador\tvarchar(255)\tYES\t\tNULL\t\ndatajudSistema\tvarchar(100)\tYES\t\tNULL\t\ndatajudFormato\tvarchar(50)\tYES\t\tNULL\t\ndatajudMovimentos\tjson\tYES\t\tNULL\t\ndatajudTotalMovimentos\tint\tYES\t\tNULL\t\ndatajudAutoDetectado\ttinyint\tYES\t\t0\t\n",
+  "stderr": "",
+  "execution_time_ms": 117
+}

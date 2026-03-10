@@ -1,0 +1,8 @@
+{
+  "query": "SELECT ugp.rota, ugp.canView, ugp.canEdit, ugp.canCreate, ugp.canDelete, ugp.ocultarValores, ugp.ocultarDocumentos, ug.nome FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.groupId ORDER BY ug.nome, ugp.rota",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT ugp.rota, ugp.canView, ugp.canEdit, ugp.canCreate, ugp.canDelete, ugp.ocultarValores, ugp.ocultarDocumentos, ug.nome FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.groupId ORDER BY ug.nome, ugp.rota",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'ugp.groupid' in 'on clause'"
+  ]
+}

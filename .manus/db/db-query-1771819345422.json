@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, nomeFantasia, razaoSocial FROM companies WHERE nomeFantasia LIKE '%FC%' OR razaoSocial LIKE '%FC%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeFantasia, razaoSocial FROM companies WHERE nomeFantasia LIKE '%FC%' OR razaoSocial LIKE '%FC%';",
+  "rows": [
+    {
+      "id": "60002",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeFantasia\trazaoSocial\n60002\tFC ENGENHARIA PROJETOS E OBRAS\tFC ENGENHARIA E CONSTRUCAO LTDA\n",
+  "stderr": "",
+  "execution_time_ms": 111
+}

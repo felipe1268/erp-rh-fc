@@ -1,0 +1,52 @@
+{
+  "query": "SELECT id, name, username, role, deletedAt FROM users LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, name, username, role, deletedAt FROM users LIMIT 20;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Felipe Alves",
+      "username": "NULL",
+      "role": "admin_master",
+      "deletedAt": "NULL"
+    },
+    {
+      "id": "570172",
+      "name": "Ana Beatriz  Silva Conceição",
+      "username": "Ana Beatriz",
+      "role": "admin",
+      "deletedAt": "NULL"
+    },
+    {
+      "id": "601043",
+      "name": "Felipe Costa Alves",
+      "username": "Felipe Alves",
+      "role": "admin_master",
+      "deletedAt": "NULL"
+    },
+    {
+      "id": "990252",
+      "name": "Isabela Augusta da Silva Velloso Monteiro",
+      "username": "Isabela Velloso",
+      "role": "admin",
+      "deletedAt": "NULL"
+    },
+    {
+      "id": "1020024",
+      "name": "Nayara Rodrigues ",
+      "username": "Nayara Rodrigues ",
+      "role": "user",
+      "deletedAt": "NULL"
+    },
+    {
+      "id": "1530049",
+      "name": "Myrielle Fialho Borges Arcanjo",
+      "username": "Myrielle Arcanjo",
+      "role": "user",
+      "deletedAt": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tusername\trole\tdeletedAt\n1\tFelipe Alves\tNULL\tadmin_master\tNULL\n570172\tAna Beatriz  Silva Conceição\tAna Beatriz\tadmin\tNULL\n601043\tFelipe Costa Alves\tFelipe Alves\tadmin_master\tNULL\n990252\tIsabela Augusta da Silva Velloso Monteiro\tIsabela Velloso\tadmin\tNULL\n1020024\tNayara Rodrigues \tNayara Rodrigues \tuser\tNULL\n1530049\tMyrielle Fialho Borges Arcanjo\tMyrielle Arcanjo\tuser\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

@@ -1,0 +1,12 @@
+{
+  "query": "SELECT COUNT(*) as cnt FROM time_records; SELECT DISTINCT mesReferencia FROM time_records ORDER BY mesReferencia DESC LIMIT 10; SELECT COUNT(DISTINCT employeeId) as empCnt FROM time_records WHERE obraId IS NOT NULL; SELECT COUNT(*) as allocCnt FROM obra_funcionarios WHERE is_active = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COUNT(*) as cnt FROM time_records; SELECT DISTINCT mesReferencia FROM time_records ORDER BY mesReferencia DESC LIMIT 10; SELECT COUNT(DISTINCT employeeId) as empCnt FROM time_records WHERE obraId IS NOT NULL; SELECT COUNT(*) as allocCnt FROM obra_funcionarios WHERE is_active = 1;",
+  "returncode": 1,
+  "logs": [
+    "cnt",
+    "0",
+    "empCnt",
+    "0",
+    "ERROR 1054 (42S22) at line 1: Unknown column 'is_active' in 'where clause'"
+  ]
+}

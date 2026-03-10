@@ -1,0 +1,49 @@
+{
+  "query": "SELECT * FROM notification_recipients ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM notification_recipients ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "companyId": "60002",
+      "nome": "Felipe Alves",
+      "email": "felipe1268@gmail.com",
+      "notificarContratacao": "1",
+      "notificarDemissao": "1",
+      "notificarTransferencia": "1",
+      "notificarAfastamento": "1",
+      "ativo": "0",
+      "createdAt": "2026-02-22 14:51:45",
+      "updatedAt": "2026-03-04 18:16:50"
+    },
+    {
+      "id": "60001",
+      "companyId": "60002",
+      "nome": "Renan Pamplona",
+      "email": "pamplona.seguros@gmail.com",
+      "notificarContratacao": "1",
+      "notificarDemissao": "1",
+      "notificarTransferencia": "0",
+      "notificarAfastamento": "0",
+      "ativo": "1",
+      "createdAt": "2026-03-04 18:12:15",
+      "updatedAt": "2026-03-04 18:12:15"
+    },
+    {
+      "id": "60002",
+      "companyId": "60002",
+      "nome": "Renan Pamplona",
+      "email": "pamplona.consorcio@gmail.com",
+      "notificarContratacao": "1",
+      "notificarDemissao": "1",
+      "notificarTransferencia": "0",
+      "notificarAfastamento": "0",
+      "ativo": "1",
+      "createdAt": "2026-03-04 18:19:52",
+      "updatedAt": "2026-03-04 18:19:52"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcompanyId\tnome\temail\tnotificarContratacao\tnotificarDemissao\tnotificarTransferencia\tnotificarAfastamento\tativo\tcreatedAt\tupdatedAt\n1\t60002\tFelipe Alves\tfelipe1268@gmail.com\t1\t1\t1\t1\t0\t2026-02-22 14:51:45\t2026-03-04 18:16:50\n60001\t60002\tRenan Pamplona\tpamplona.seguros@gmail.com\t1\t1\t0\t0\t1\t2026-03-04 18:12:15\t2026-03-04 18:12:15\n60002\t60002\tRenan Pamplona\tpamplona.consorcio@gmail.com\t1\t1\t0\t0\t1\t2026-03-04 18:19:52\t2026-03-04 18:19:52\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

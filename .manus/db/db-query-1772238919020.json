@@ -1,0 +1,25 @@
+{
+  "query": "SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 3;",
+  "rows": [
+    {
+      "version": "111",
+      "titulo": "Redesign Medições PJ + Dashboard Jurídico responsivo + Breakpoint xs",
+      "tipo": "melhoria"
+    },
+    {
+      "version": "110",
+      "titulo": "Cards de aviso prévio clicáveis com cálculo de rescisão + Gráficos responsivos",
+      "tipo": "melhoria"
+    },
+    {
+      "version": "109",
+      "titulo": "Valor total estimado no Painel RH + Ocultação de cards órfãos",
+      "tipo": "melhoria"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\n111\tRedesign Medições PJ + Dashboard Jurídico responsivo + Breakpoint xs\tmelhoria\n110\tCards de aviso prévio clicáveis com cálculo de rescisão + Gráficos responsivos\tmelhoria\n109\tValor total estimado no Painel RH + Ocultação de cards órfãos\tmelhoria\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

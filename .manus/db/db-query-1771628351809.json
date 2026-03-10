@@ -1,0 +1,13 @@
+{
+  "query": "SELECT id FROM companies WHERE cnpj LIKE '%29.353.906%' LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id FROM companies WHERE cnpj LIKE '%29.353.906%' LIMIT 1;",
+  "rows": [
+    {
+      "id": "60002"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\n60002\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

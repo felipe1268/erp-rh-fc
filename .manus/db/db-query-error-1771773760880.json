@@ -1,0 +1,8 @@
+{
+  "query": "SELECT cpf, COUNT(*) as qtd, GROUP_CONCAT(id ORDER BY id) as ids, GROUP_CONCAT(nome_completo ORDER BY id SEPARATOR ' | ') as nomes, GROUP_CONCAT(status ORDER BY id) as statuses, GROUP_CONCAT(company_id ORDER BY id) as companies FROM employees WHERE cpf IS NOT NULL AND cpf != '' AND cpf NOT LIKE '000.000%' GROUP BY cpf HAVING COUNT(*) > 1 ORDER BY qtd DESC LIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT cpf, COUNT(*) as qtd, GROUP_CONCAT(id ORDER BY id) as ids, GROUP_CONCAT(nome_completo ORDER BY id SEPARATOR ' | ') as nomes, GROUP_CONCAT(status ORDER BY id) as statuses, GROUP_CONCAT(company_id ORDER BY id) as companies FROM employees WHERE cpf IS NOT NULL AND cpf != '' AND cpf NOT LIKE '000.000%' GROUP BY cpf HAVING COUNT(*) > 1 ORDER BY qtd DESC LIMIT 50;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'nome_completo' in 'where clause'"
+  ]
+}

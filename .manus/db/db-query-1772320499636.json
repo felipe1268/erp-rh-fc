@@ -1,0 +1,13 @@
+{
+  "query": "SELECT GROUP_CONCAT(column_name) as cols FROM information_schema.columns WHERE table_name = 'system_revisions';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT GROUP_CONCAT(column_name) as cols FROM information_schema.columns WHERE table_name = 'system_revisions';",
+  "rows": [
+    {
+      "cols": "id,version,titulo,descricao,tipo,modulos,criadoPor,dataPublicacao,createdAt"
+    }
+  ],
+  "messages": [],
+  "stdout": "cols\nid,version,titulo,descricao,tipo,modulos,criadoPor,dataPublicacao,createdAt\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

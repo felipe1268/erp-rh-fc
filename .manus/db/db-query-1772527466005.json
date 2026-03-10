@@ -1,0 +1,60 @@
+{
+  "query": "SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 10",
+  "rows": [
+    {
+      "version": "142",
+      "titulo": "Sprint 2 - Módulos Terceiros e Parceiros",
+      "tipo": "feature"
+    },
+    {
+      "version": "141",
+      "titulo": "Bug Fix: Admin Master não consegue excluir HE",
+      "tipo": "bugfix"
+    },
+    {
+      "version": "140",
+      "titulo": "Excluir Solicitação HE + Fix Filtro Mês",
+      "tipo": "feature"
+    },
+    {
+      "version": "135",
+      "titulo": "Correção Funcionários na Solicitação de HE",
+      "tipo": "bugfix"
+    },
+    {
+      "version": "134",
+      "titulo": "Dashboard Controle de Documentos + Fix Gráfico Aviso Prévio",
+      "tipo": "feature"
+    },
+    {
+      "version": "133",
+      "titulo": "Dashboard Efetivo por Obra - Status em Tempo Real",
+      "tipo": "feature"
+    },
+    {
+      "version": "132",
+      "titulo": "Dashboard Efetivo: FullScreen Equipe + Histograma + Auto-desligamento",
+      "tipo": "feature"
+    },
+    {
+      "version": "131",
+      "titulo": "Correções ObraEfetivo: Clicar na Obra",
+      "tipo": "bugfix"
+    },
+    {
+      "version": "130",
+      "titulo": "Dashboard Efetivo por Obra + Regra Alocação",
+      "tipo": "feature"
+    },
+    {
+      "version": "129",
+      "titulo": "Busca sem Acentos + LGPD + Regra de Alocação Única",
+      "tipo": "melhoria"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\n142\tSprint 2 - Módulos Terceiros e Parceiros\tfeature\n141\tBug Fix: Admin Master não consegue excluir HE\tbugfix\n140\tExcluir Solicitação HE + Fix Filtro Mês\tfeature\n135\tCorreção Funcionários na Solicitação de HE\tbugfix\n134\tDashboard Controle de Documentos + Fix Gráfico Aviso Prévio\tfeature\n133\tDashboard Efetivo por Obra - Status em Tempo Real\tfeature\n132\tDashboard Efetivo: FullScreen Equipe + Histograma + Auto-desligamento\tfeature\n131\tCorreções ObraEfetivo: Clicar na Obra\tbugfix\n130\tDashboard Efetivo por Obra + Regra Alocação\tfeature\n129\tBusca sem Acentos + LGPD + Regra de Alocação Única\tmelhoria\n",
+  "stderr": "",
+  "execution_time_ms": 91
+}

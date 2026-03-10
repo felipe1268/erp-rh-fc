@@ -1,0 +1,103 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'vacation_periods' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'vacation_periods' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "company_id"
+    },
+    {
+      "COLUMN_NAME": "employee_id"
+    },
+    {
+      "COLUMN_NAME": "periodo_aquisitivo_inicio"
+    },
+    {
+      "COLUMN_NAME": "periodo_aquisitivo_fim"
+    },
+    {
+      "COLUMN_NAME": "periodo_concessivo_fim"
+    },
+    {
+      "COLUMN_NAME": "data_inicio"
+    },
+    {
+      "COLUMN_NAME": "data_fim"
+    },
+    {
+      "COLUMN_NAME": "dias_gozo"
+    },
+    {
+      "COLUMN_NAME": "fracionamento"
+    },
+    {
+      "COLUMN_NAME": "periodo2_inicio"
+    },
+    {
+      "COLUMN_NAME": "periodo2_fim"
+    },
+    {
+      "COLUMN_NAME": "periodo3_inicio"
+    },
+    {
+      "COLUMN_NAME": "periodo3_fim"
+    },
+    {
+      "COLUMN_NAME": "abono_pecuniario"
+    },
+    {
+      "COLUMN_NAME": "valor_ferias"
+    },
+    {
+      "COLUMN_NAME": "valor_terco_constitucional"
+    },
+    {
+      "COLUMN_NAME": "valor_abono"
+    },
+    {
+      "COLUMN_NAME": "valor_total"
+    },
+    {
+      "COLUMN_NAME": "data_pagamento"
+    },
+    {
+      "COLUMN_NAME": "status"
+    },
+    {
+      "COLUMN_NAME": "vencida"
+    },
+    {
+      "COLUMN_NAME": "pagamento_em_dobro"
+    },
+    {
+      "COLUMN_NAME": "observacoes"
+    },
+    {
+      "COLUMN_NAME": "aprovado_por"
+    },
+    {
+      "COLUMN_NAME": "aprovado_por_user_id"
+    },
+    {
+      "COLUMN_NAME": "created_at"
+    },
+    {
+      "COLUMN_NAME": "updated_at"
+    },
+    {
+      "COLUMN_NAME": "deleted_at"
+    },
+    {
+      "COLUMN_NAME": "deleted_by"
+    },
+    {
+      "COLUMN_NAME": "deleted_by_user_id"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncompany_id\nemployee_id\nperiodo_aquisitivo_inicio\nperiodo_aquisitivo_fim\nperiodo_concessivo_fim\ndata_inicio\ndata_fim\ndias_gozo\nfracionamento\nperiodo2_inicio\nperiodo2_fim\nperiodo3_inicio\nperiodo3_fim\nabono_pecuniario\nvalor_ferias\nvalor_terco_constitucional\nvalor_abono\nvalor_total\ndata_pagamento\nstatus\nvencida\npagamento_em_dobro\nobservacoes\naprovado_por\naprovado_por_user_id\ncreated_at\nupdated_at\ndeleted_at\ndeleted_by\ndeleted_by_user_id\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

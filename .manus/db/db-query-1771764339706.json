@@ -1,0 +1,610 @@
+{
+  "query": "DESCRIBE employees",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute DESCRIBE employees",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "companyId",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "matricula",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "nomeCompleto",
+      "Type": "varchar(255)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "cpf",
+      "Type": "varchar(14)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "rg",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "orgaoEmissor",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "dataNascimento",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "sexo",
+      "Type": "enum('M','F','Outro')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "estadoCivil",
+      "Type": "enum('Solteiro','Casado','Divorciado','Viuvo','Uniao_Estavel')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "nacionalidade",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "naturalidade",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "nomeMae",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "nomePai",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "ctps",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "serieCTPS",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "pis",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "tituloEleitor",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "certificadoReservista",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "cnh",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "categoriaCNH",
+      "Type": "varchar(5)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "validadeCNH",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "logradouro",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "numero",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "complemento",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "bairro",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "cidade",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "estado",
+      "Type": "varchar(2)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "cep",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "telefone",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "celular",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "email",
+      "Type": "varchar(320)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "contatoEmergencia",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "telefoneEmergencia",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "cargo",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "funcao",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "setor",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "dataAdmissao",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "dataDemissao",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "salarioBase",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "valorHora",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "horasMensais",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "tipoContrato",
+      "Type": "enum('CLT','PJ','Temporario','Estagio','Aprendiz')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "jornadaTrabalho",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "banco",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "bancoNome",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "agencia",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "conta",
+      "Type": "varchar(30)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "tipoConta",
+      "Type": "enum('Corrente','Poupanca','Salario')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "tipoChavePix",
+      "Type": "enum('CPF','Celular','Email','Aleatoria')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "chavePix",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "contaPix",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "bancoPix",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "enum('Ativo','Ferias','Afastado','Licenca','Desligado','Recluso','Lista_Negra')",
+      "Null": "NO",
+      "Key": "",
+      "Default": "Ativo",
+      "Extra": ""
+    },
+    {
+      "Field": "fotoUrl",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "observacoes",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "createdAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "updatedAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    },
+    {
+      "Field": "listaNegra",
+      "Type": "tinyint(1)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "motivoListaNegra",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "dataListaNegra",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "obraAtualId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "codigoContabil",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "codigoInterno",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "UNI",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "recebeComplemento",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "valorComplemento",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "descricaoComplemento",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "acordoHoraExtra",
+      "Type": "tinyint",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "heNormal50",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "50",
+      "Extra": ""
+    },
+    {
+      "Field": "heNoturna",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "20",
+      "Extra": ""
+    },
+    {
+      "Field": "he100",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "100",
+      "Extra": ""
+    },
+    {
+      "Field": "heFeriado",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "100",
+      "Extra": ""
+    },
+    {
+      "Field": "heInterjornada",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "50",
+      "Extra": ""
+    },
+    {
+      "Field": "obsAcordoHe",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "contaBancariaEmpresaId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint\tNO\tPRI\tNULL\tauto_increment\ncompanyId\tint\tNO\t\tNULL\t\nmatricula\tvarchar(20)\tYES\t\tNULL\t\nnomeCompleto\tvarchar(255)\tNO\t\tNULL\t\ncpf\tvarchar(14)\tNO\t\tNULL\t\nrg\tvarchar(20)\tYES\t\tNULL\t\norgaoEmissor\tvarchar(20)\tYES\t\tNULL\t\ndataNascimento\tdate\tYES\t\tNULL\t\nsexo\tenum('M','F','Outro')\tYES\t\tNULL\t\nestadoCivil\tenum('Solteiro','Casado','Divorciado','Viuvo','Uniao_Estavel')\tYES\t\tNULL\t\nnacionalidade\tvarchar(50)\tYES\t\tNULL\t\nnaturalidade\tvarchar(100)\tYES\t\tNULL\t\nnomeMae\tvarchar(255)\tYES\t\tNULL\t\nnomePai\tvarchar(255)\tYES\t\tNULL\t\nctps\tvarchar(20)\tYES\t\tNULL\t\nserieCTPS\tvarchar(10)\tYES\t\tNULL\t\npis\tvarchar(20)\tYES\t\tNULL\t\ntituloEleitor\tvarchar(20)\tYES\t\tNULL\t\ncertificadoReservista\tvarchar(20)\tYES\t\tNULL\t\ncnh\tvarchar(20)\tYES\t\tNULL\t\ncategoriaCNH\tvarchar(5)\tYES\t\tNULL\t\nvalidadeCNH\tdate\tYES\t\tNULL\t\nlogradouro\tvarchar(255)\tYES\t\tNULL\t\nnumero\tvarchar(20)\tYES\t\tNULL\t\ncomplemento\tvarchar(100)\tYES\t\tNULL\t\nbairro\tvarchar(100)\tYES\t\tNULL\t\ncidade\tvarchar(100)\tYES\t\tNULL\t\nestado\tvarchar(2)\tYES\t\tNULL\t\ncep\tvarchar(10)\tYES\t\tNULL\t\ntelefone\tvarchar(20)\tYES\t\tNULL\t\ncelular\tvarchar(20)\tYES\t\tNULL\t\nemail\tvarchar(320)\tYES\t\tNULL\t\ncontatoEmergencia\tvarchar(255)\tYES\t\tNULL\t\ntelefoneEmergencia\tvarchar(20)\tYES\t\tNULL\t\ncargo\tvarchar(100)\tYES\t\tNULL\t\nfuncao\tvarchar(100)\tYES\t\tNULL\t\nsetor\tvarchar(100)\tYES\t\tNULL\t\ndataAdmissao\tdate\tYES\t\tNULL\t\ndataDemissao\tdate\tYES\t\tNULL\t\nsalarioBase\tvarchar(20)\tYES\t\tNULL\t\nvalorHora\tvarchar(20)\tYES\t\tNULL\t\nhorasMensais\tvarchar(10)\tYES\t\tNULL\t\ntipoContrato\tenum('CLT','PJ','Temporario','Estagio','Aprendiz')\tYES\t\tNULL\t\njornadaTrabalho\ttext\tYES\t\tNULL\t\nbanco\tvarchar(100)\tYES\t\tNULL\t\nbancoNome\tvarchar(100)\tYES\t\tNULL\t\nagencia\tvarchar(20)\tYES\t\tNULL\t\nconta\tvarchar(30)\tYES\t\tNULL\t\ntipoConta\tenum('Corrente','Poupanca','Salario')\tYES\t\tNULL\t\ntipoChavePix\tenum('CPF','Celular','Email','Aleatoria')\tYES\t\tNULL\t\nchavePix\tvarchar(100)\tYES\t\tNULL\t\ncontaPix\tvarchar(100)\tYES\t\tNULL\t\nbancoPix\tvarchar(100)\tYES\t\tNULL\t\nstatus\tenum('Ativo','Ferias','Afastado','Licenca','Desligado','Recluso','Lista_Negra')\tNO\t\tAtivo\t\nfotoUrl\ttext\tYES\t\tNULL\t\nobservacoes\ttext\tYES\t\tNULL\t\ncreatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\nupdatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\tDEFAULT_GENERATED on update CURRENT_TIMESTAMP\nlistaNegra\ttinyint(1)\tNO\t\t0\t\nmotivoListaNegra\ttext\tYES\t\tNULL\t\ndataListaNegra\tdate\tYES\t\tNULL\t\nobraAtualId\tint\tYES\t\tNULL\t\ncodigoContabil\tvarchar(20)\tYES\t\tNULL\t\ncodigoInterno\tvarchar(10)\tYES\tUNI\tNULL\t\nrecebeComplemento\ttinyint\tNO\t\t0\t\nvalorComplemento\tvarchar(20)\tYES\t\tNULL\t\ndescricaoComplemento\tvarchar(255)\tYES\t\tNULL\t\nacordoHoraExtra\ttinyint\tNO\t\t0\t\nheNormal50\tvarchar(10)\tYES\t\t50\t\nheNoturna\tvarchar(10)\tYES\t\t20\t\nhe100\tvarchar(10)\tYES\t\t100\t\nheFeriado\tvarchar(10)\tYES\t\t100\t\nheInterjornada\tvarchar(10)\tYES\t\t50\t\nobsAcordoHe\ttext\tYES\t\tNULL\t\ncontaBancariaEmpresaId\tint\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 359
+}

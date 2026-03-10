@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, razaoSocial, nomeFantasia FROM companies ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, razaoSocial, nomeFantasia FROM companies ORDER BY id;",
+  "rows": [
+    {
+      "id": "2",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS"
+    },
+    {
+      "id": "3",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "nomeFantasia": "JULIO FERRAZ"
+    },
+    {
+      "id": "4",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "nomeFantasia": "LOCNOW LOCACOES"
+    },
+    {
+      "id": "5",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "nomeFantasia": "HOTEL CONSAGRADO"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\tnomeFantasia\n2\tFC ENGENHARIA E CONSTRUCAO LTDA\tFC ENGENHARIA PROJETOS E OBRAS\n3\tJULIO FERRAZ PROJETOS E OBRAS LTDA\tJULIO FERRAZ\n4\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\tLOCNOW LOCACOES\n5\tCF HOTELARIA LTDA\tHOTEL CONSAGRADO\n",
+  "stderr": "",
+  "execution_time_ms": 160
+}

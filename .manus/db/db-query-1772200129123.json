@@ -1,0 +1,31 @@
+{
+  "query": "SELECT id, nomeCompleto, cpf, status, companyId FROM employees WHERE nomeCompleto LIKE '%ateus%' OR cpf LIKE '%415.306%' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, cpf, status, companyId FROM employees WHERE nomeCompleto LIKE '%ateus%' OR cpf LIKE '%415.306%' LIMIT 10;",
+  "rows": [
+    {
+      "id": "420066",
+      "nomeCompleto": "MATEUS OLIVEIRA BRITO PIRES",
+      "cpf": "443.679.498-93",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "420112",
+      "nomeCompleto": "LUCAS MATEUS RIBEIRO NEVES",
+      "cpf": "450.803.948-03",
+      "status": "Ativo",
+      "companyId": "60002"
+    },
+    {
+      "id": "450002",
+      "nomeCompleto": "isa",
+      "cpf": "415.306.378-99",
+      "status": "Ativo",
+      "companyId": "60004"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tcpf\tstatus\tcompanyId\n420066\tMATEUS OLIVEIRA BRITO PIRES\t443.679.498-93\tAtivo\t60002\n420112\tLUCAS MATEUS RIBEIRO NEVES\t450.803.948-03\tAtivo\t60002\n450002\tisa\t415.306.378-99\tAtivo\t60004\n",
+  "stderr": "",
+  "execution_time_ms": 136
+}

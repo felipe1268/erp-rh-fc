@@ -1,0 +1,346 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --breakpoint-xs: 480px;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  /* Light theme - white/blue like the evaluation system */
+  --background: oklch(0.98 0.002 260);
+  --foreground: oklch(0.15 0.03 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.03 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.03 260);
+  --primary: oklch(0.35 0.12 260);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.01 260);
+  --secondary-foreground: oklch(0.25 0.04 260);
+  --muted: oklch(0.96 0.01 260);
+  --muted-foreground: oklch(0.5 0.02 260);
+  --accent: oklch(0.95 0.02 260);
+  --accent-foreground: oklch(0.25 0.04 260);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.91 0.01 260);
+  --input: oklch(0.91 0.01 260);
+  --ring: oklch(0.35 0.12 260);
+  --chart-1: oklch(0.35 0.12 260);
+  --chart-2: oklch(0.65 0.15 150);
+  --chart-3: oklch(0.75 0.15 80);
+  --chart-4: oklch(0.65 0.2 25);
+  --chart-5: oklch(0.55 0.15 300);
+  /* Sidebar - dark navy blue */
+  --sidebar: oklch(0.25 0.08 260);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.78 0.15 80);
+  --sidebar-primary-foreground: oklch(0.15 0.02 260);
+  --sidebar-accent: oklch(0.32 0.08 260);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(0.32 0.06 260);
+  --sidebar-ring: oklch(0.78 0.15 80);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", "Roboto", system-ui, sans-serif;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+}
+
+
+/* ============================================================ */
+/* RESPONSIVIDADE MOBILE                                        */
+/* ============================================================ */
+
+/* Garantir que o layout se adapte ao virar o celular */
+@media screen and (max-width: 767px) {
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+    min-height: 100dvh;
+  }
+
+  /* Tabelas responsivas - scroll horizontal */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Todas as tabelas dentro de cards devem ter scroll horizontal */
+  table {
+    min-width: 600px;
+  }
+
+  /* Cards e formulários */
+  .grid {
+    gap: 0.75rem;
+  }
+
+  /* Textos menores em mobile */
+  h1 { font-size: 1.25rem !important; }
+  h2 { font-size: 1.1rem !important; }
+
+  /* Botões menores em mobile */
+  .gap-2 > button, .gap-3 > button {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.625rem;
+  }
+}
+
+/* Landscape mobile - aproveitar melhor o espaço horizontal */
+@media screen and (max-width: 900px) and (orientation: landscape) {
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  /* Sidebar fica oculta em landscape mobile para dar mais espaço */
+  [data-sidebar] {
+    --sidebar-width: 0px !important;
+  }
+}
+
+/* Tablets e landscape phones */
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* ============================================================ */
+/* REGRAS DE IMPRESSÃO GLOBAIS                                  */
+/* ============================================================ */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm 8mm 18mm 8mm;
+  }
+
+  /* Ocultar sidebar, header, botões de ação e elementos de UI */
+  [data-sidebar],
+  .sidebar-wrapper,
+  nav,
+  .print\\:hidden,
+  .print-hidden,
+  button:not(.print-keep),
+  input[type="file"],
+  .toast-container,
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+
+  /* Mostrar apenas o conteúdo principal */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    font-size: 11px !important;
+  }
+
+  /* Expandir conteúdo para ocupar toda a página */
+  main,
+  [role="main"],
+  .main-content {
+    margin: 0 !important;
+    padding: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Tabelas */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10px !important;
+  }
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 4px 6px !important;
+  }
+  thead {
+    background: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Cards */
+  .rounded-lg, .rounded-xl {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+  }
+
+  /* PRESERVAR TODAS AS CORES DE FUNDO NA IMPRESSÃO */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Cabeçalho de impressão */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #1B2A4A;
+  }
+  .print-header img {
+    display: inline-block !important;
+  }
+
+  /* Cabeçalho de impressão da equipe */
+  .equipe-print-header {
+    display: block !important;
+  }
+  .equipe-print-header img {
+    display: inline-block !important;
+  }
+
+  /* Quebra de página */
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* Não quebrar cards no meio */
+  .card, [class*="CardContent"] {
+    page-break-inside: avoid;
+  }
+
+  /* Rodapé LGPD - fixo no final de cada página impressa */
+  .print-footer-lgpd {
+    display: block !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 4px 10px;
+    z-index: 9999;
+  }
+
+  /* Rodapé LGPD da equipe */
+  .equipe-print-footer-lgpd {
+    display: block !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 4px 10px;
+    z-index: 9999;
+  }
+
+  /* FullScreenDialog: quando imprimindo, remover overlay e posicionamento fixo */
+  .fixed.inset-0 {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Ocultar header do FullScreenDialog na impressão (temos o print-header) */
+  .fixed.inset-0 > div:first-child {
+    display: none !important;
+  }
+
+  /* Conteúdo do FullScreenDialog: sem overflow, sem scroll */
+  .fixed.inset-0 > .flex-1 {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Evitar páginas em branco no final */
+  .equipe-print-area {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Barras do gráfico - garantir visibilidade */
+  .equipe-print-area .h-6 {
+    min-height: 18px !important;
+  }
+}

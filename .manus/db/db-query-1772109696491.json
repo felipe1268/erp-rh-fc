@@ -1,0 +1,19 @@
+{
+  "query": "SELECT eda.id as alert_id, eda.epiDeliveryId, eda.epi_nome, eda.valor_total, eda.status, eda.employeeId,\n       CASE WHEN ed.id IS NULL THEN 'ENTREGA NAO EXISTE' WHEN ed.deletedAt IS NOT NULL THEN 'ENTREGA EXCLUIDA' ELSE 'ENTREGA ATIVA' END as status_entrega\nFROM epi_discount_alerts eda\nLEFT JOIN epi_deliveries ed ON eda.epiDeliveryId = ed.id\nWHERE eda.status = 'pendente';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT eda.id as alert_id, eda.epiDeliveryId, eda.epi_nome, eda.valor_total, eda.status, eda.employeeId,\n       CASE WHEN ed.id IS NULL THEN 'ENTREGA NAO EXISTE' WHEN ed.deletedAt IS NOT NULL THEN 'ENTREGA EXCLUIDA' ELSE 'ENTREGA ATIVA' END as status_entrega\nFROM epi_discount_alerts eda\nLEFT JOIN epi_deliveries ed ON eda.epiDeliveryId = ed.id\nWHERE eda.status = 'pendente';",
+  "rows": [
+    {
+      "alert_id": "30001",
+      "epiDeliveryId": "540003",
+      "epi_nome": "LUVA PARA PROTEÇÃO CONTRA AGENTES MECÂNICOS, QUÍMICOS, BIOLÓGICOS E UMIDADE PROVENIENTE DE OPERAÇÕES COM O USO DE ÁGUA",
+      "valor_total": "14.00",
+      "status": "pendente",
+      "employeeId": "450001",
+      "status_entrega": "ENTREGA NAO EXISTE"
+    }
+  ],
+  "messages": [],
+  "stdout": "alert_id\tepiDeliveryId\tepi_nome\tvalor_total\tstatus\temployeeId\tstatus_entrega\n30001\t540003\tLUVA PARA PROTEÇÃO CONTRA AGENTES MECÂNICOS, QUÍMICOS, BIOLÓGICOS E UMIDADE PROVENIENTE DE OPERAÇÕES COM O USO DE ÁGUA\t14.00\tpendente\t450001\tENTREGA NAO EXISTE\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

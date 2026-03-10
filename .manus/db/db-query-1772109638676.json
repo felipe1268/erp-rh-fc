@@ -1,0 +1,40 @@
+{
+  "query": "SHOW CREATE TABLE epi_discount_alerts;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW CREATE TABLE epi_discount_alerts;",
+  "rows": [
+    {
+      "Table": "epi_discount_alerts",
+      "Create Table": "CREATE TABLE `epi_discount_alerts` ("
+    }
+  ],
+  "messages": [
+    "  `id` int NOT NULL AUTO_INCREMENT,",
+    "  `companyId` int NOT NULL,",
+    "  `employeeId` int NOT NULL,",
+    "  `epiDeliveryId` int NOT NULL,",
+    "  `epi_nome` varchar(1000) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `ca` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `quantidade` int NOT NULL DEFAULT '1',",
+    "  `valor_unitario` decimal(10,2) NOT NULL,",
+    "  `valor_total` decimal(10,2) NOT NULL,",
+    "  `motivo_cobranca` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `mes_referencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `status` enum('pendente','confirmado','cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pendente',",
+    "  `validado_por` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `validado_por_user_id` int DEFAULT NULL,",
+    "  `data_validacao` timestamp NULL DEFAULT NULL,",
+    "  `justificativa` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,",
+    "  KEY `eda_company` (`companyId`),",
+    "  KEY `eda_employee` (`employeeId`),",
+    "  KEY `eda_delivery` (`epiDeliveryId`),",
+    "  KEY `eda_status` (`status`),",
+    "  KEY `eda_mes` (`companyId`,`mes_referencia`)",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=60001"
+  ],
+  "stdout": "Table\tCreate Table\nepi_discount_alerts\tCREATE TABLE `epi_discount_alerts` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `companyId` int NOT NULL,\n  `employeeId` int NOT NULL,\n  `epiDeliveryId` int NOT NULL,\n  `epi_nome` varchar(1000) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `ca` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `quantidade` int NOT NULL DEFAULT '1',\n  `valor_unitario` decimal(10,2) NOT NULL,\n  `valor_total` decimal(10,2) NOT NULL,\n  `motivo_cobranca` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `mes_referencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `status` enum('pendente','confirmado','cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pendente',\n  `validado_por` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `validado_por_user_id` int DEFAULT NULL,\n  `data_validacao` timestamp NULL DEFAULT NULL,\n  `justificativa` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,\n  KEY `eda_company` (`companyId`),\n  KEY `eda_employee` (`employeeId`),\n  KEY `eda_delivery` (`epiDeliveryId`),\n  KEY `eda_status` (`status`),\n  KEY `eda_mes` (`companyId`,`mes_referencia`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=60001\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

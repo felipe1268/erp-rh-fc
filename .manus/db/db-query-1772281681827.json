@@ -1,0 +1,37 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'obra_funcionarios' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'obra_funcionarios' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "obraId"
+    },
+    {
+      "COLUMN_NAME": "employeeId"
+    },
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "funcaoNaObra"
+    },
+    {
+      "COLUMN_NAME": "dataInicio"
+    },
+    {
+      "COLUMN_NAME": "dataFim"
+    },
+    {
+      "COLUMN_NAME": "isActive"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\nobraId\nemployeeId\ncompanyId\nfuncaoNaObra\ndataInicio\ndataFim\nisActive\ncreatedAt\n",
+  "stderr": "",
+  "execution_time_ms": 49
+}

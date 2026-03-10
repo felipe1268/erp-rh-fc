@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `system_criteria` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `companyId` int NOT NULL,\n  `categoria` varchar(50) NOT NULL,\n  `chave` varchar(100) NOT NULL,\n  `valor` varchar(255) NOT NULL,\n  `descricao` varchar(500),\n  `valorPadraoClt` varchar(255),\n  `unidade` varchar(50),\n  `atualizadoPor` varchar(255),\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`),\n  INDEX `sys_criteria_company_cat` (`companyId`, `categoria`),\n  INDEX `sys_criteria_company_key` (`companyId`, `chave`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `system_criteria` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `companyId` int NOT NULL,\n  `categoria` varchar(50) NOT NULL,\n  `chave` varchar(100) NOT NULL,\n  `valor` varchar(255) NOT NULL,\n  `descricao` varchar(500),\n  `valorPadraoClt` varchar(255),\n  `unidade` varchar(50),\n  `atualizadoPor` varchar(255),\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`),\n  INDEX `sys_criteria_company_cat` (`companyId`, `categoria`),\n  INDEX `sys_criteria_company_key` (`companyId`, `chave`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 161
+}

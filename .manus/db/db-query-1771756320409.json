@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, cnpj, razaoSocial FROM companies LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, cnpj, razaoSocial FROM companies LIMIT 10;",
+  "rows": [
+    {
+      "id": "60002",
+      "cnpj": "29.353.906/0001-71",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA"
+    },
+    {
+      "id": "60004",
+      "cnpj": "47.401.586/0001-60",
+      "razaoSocial": "CF HOTELARIA LTDA"
+    },
+    {
+      "id": "60005",
+      "cnpj": "03.426.403/0001-95",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA"
+    },
+    {
+      "id": "90001",
+      "cnpj": "61.423.062/0001-09",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcnpj\trazaoSocial\n60002\t29.353.906/0001-71\tFC ENGENHARIA E CONSTRUCAO LTDA\n60004\t47.401.586/0001-60\tCF HOTELARIA LTDA\n60005\t03.426.403/0001-95\tJULIO FERRAZ PROJETOS E OBRAS LTDA\n90001\t61.423.062/0001-09\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\n",
+  "stderr": "",
+  "execution_time_ms": 347
+}

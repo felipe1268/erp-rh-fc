@@ -1,0 +1,15 @@
+{
+  "query": "SELECT COUNT(*) as total, COUNT(DISTINCT epiId) as epis_distintos, COUNT(DISTINCT employeeId) as funcs_distintos FROM epi_deliveries WHERE deletedAt IS NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COUNT(*) as total, COUNT(DISTINCT epiId) as epis_distintos, COUNT(DISTINCT employeeId) as funcs_distintos FROM epi_deliveries WHERE deletedAt IS NULL;",
+  "rows": [
+    {
+      "total": "71",
+      "epis_distintos": "71",
+      "funcs_distintos": "71"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\tepis_distintos\tfuncs_distintos\n71\t71\t71\n",
+  "stderr": "",
+  "execution_time_ms": 61
+}

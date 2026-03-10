@@ -1,0 +1,55 @@
+{
+  "query": "SELECT * FROM sectors ORDER BY companyId, nome;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM sectors ORDER BY companyId, nome;",
+  "rows": [
+    {
+      "id": "1",
+      "companyId": "60002",
+      "nome": "Financeiro",
+      "descricao": "NULL",
+      "isActive": "1",
+      "createdAt": "2026-02-21 01:03:14",
+      "updatedAt": "2026-02-21 01:03:14"
+    },
+    {
+      "id": "2",
+      "companyId": "60002",
+      "nome": "Operação",
+      "descricao": "NULL",
+      "isActive": "1",
+      "createdAt": "2026-02-21 01:03:26",
+      "updatedAt": "2026-02-21 01:03:26"
+    },
+    {
+      "id": "5",
+      "companyId": "60002",
+      "nome": "Operação",
+      "descricao": "NULL",
+      "isActive": "1",
+      "createdAt": "2026-02-21 02:42:11",
+      "updatedAt": "2026-02-21 02:42:11"
+    },
+    {
+      "id": "4",
+      "companyId": "60002",
+      "nome": "Planejamento",
+      "descricao": "NULL",
+      "isActive": "1",
+      "createdAt": "2026-02-21 02:42:03",
+      "updatedAt": "2026-02-21 02:42:03"
+    },
+    {
+      "id": "3",
+      "companyId": "60002",
+      "nome": "Rh",
+      "descricao": "NULL",
+      "isActive": "1",
+      "createdAt": "2026-02-21 01:03:35",
+      "updatedAt": "2026-02-21 01:03:35"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcompanyId\tnome\tdescricao\tisActive\tcreatedAt\tupdatedAt\n1\t60002\tFinanceiro\tNULL\t1\t2026-02-21 01:03:14\t2026-02-21 01:03:14\n2\t60002\tOperação\tNULL\t1\t2026-02-21 01:03:26\t2026-02-21 01:03:26\n5\t60002\tOperação\tNULL\t1\t2026-02-21 02:42:11\t2026-02-21 02:42:11\n4\t60002\tPlanejamento\tNULL\t1\t2026-02-21 02:42:03\t2026-02-21 02:42:03\n3\t60002\tRh\tNULL\t1\t2026-02-21 01:03:35\t2026-02-21 01:03:35\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

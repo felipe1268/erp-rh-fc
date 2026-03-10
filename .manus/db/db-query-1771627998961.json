@@ -1,0 +1,320 @@
+{
+  "query": "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id",
+      "DATA_TYPE": "int",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "companyId",
+      "DATA_TYPE": "int",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "matricula",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "nomeCompleto",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "cpf",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "rg",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "orgaoEmissor",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "dataNascimento",
+      "DATA_TYPE": "date",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "sexo",
+      "DATA_TYPE": "enum",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "estadoCivil",
+      "DATA_TYPE": "enum",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "nacionalidade",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "naturalidade",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "nomeMae",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "nomePai",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "ctps",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "serieCTPS",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "pis",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "tituloEleitor",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "certificadoReservista",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "cnh",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "categoriaCNH",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "validadeCNH",
+      "DATA_TYPE": "date",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "logradouro",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "numero",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "complemento",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "bairro",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "cidade",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "estado",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "cep",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "telefone",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "celular",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "email",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "contatoEmergencia",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "telefoneEmergencia",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "cargo",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "funcao",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "setor",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "dataAdmissao",
+      "DATA_TYPE": "date",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "dataDemissao",
+      "DATA_TYPE": "date",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "salarioBase",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "valorHora",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "horasMensais",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "tipoContrato",
+      "DATA_TYPE": "enum",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "jornadaTrabalho",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "banco",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "bancoNome",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "agencia",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "conta",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "tipoConta",
+      "DATA_TYPE": "enum",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "tipoChavePix",
+      "DATA_TYPE": "enum",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "chavePix",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "contaPix",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "bancoPix",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "status",
+      "DATA_TYPE": "enum",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "fotoUrl",
+      "DATA_TYPE": "text",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "observacoes",
+      "DATA_TYPE": "text",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "createdAt",
+      "DATA_TYPE": "timestamp",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "updatedAt",
+      "DATA_TYPE": "timestamp",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "listaNegra",
+      "DATA_TYPE": "tinyint",
+      "IS_NULLABLE": "NO"
+    },
+    {
+      "COLUMN_NAME": "motivoListaNegra",
+      "DATA_TYPE": "text",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "dataListaNegra",
+      "DATA_TYPE": "date",
+      "IS_NULLABLE": "YES"
+    },
+    {
+      "COLUMN_NAME": "obraAtualId",
+      "DATA_TYPE": "int",
+      "IS_NULLABLE": "YES"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\tDATA_TYPE\tIS_NULLABLE\nid\tint\tNO\ncompanyId\tint\tNO\nmatricula\tvarchar\tYES\nnomeCompleto\tvarchar\tNO\ncpf\tvarchar\tNO\nrg\tvarchar\tYES\norgaoEmissor\tvarchar\tYES\ndataNascimento\tdate\tYES\nsexo\tenum\tYES\nestadoCivil\tenum\tYES\nnacionalidade\tvarchar\tYES\nnaturalidade\tvarchar\tYES\nnomeMae\tvarchar\tYES\nnomePai\tvarchar\tYES\nctps\tvarchar\tYES\nserieCTPS\tvarchar\tYES\npis\tvarchar\tYES\ntituloEleitor\tvarchar\tYES\ncertificadoReservista\tvarchar\tYES\ncnh\tvarchar\tYES\ncategoriaCNH\tvarchar\tYES\nvalidadeCNH\tdate\tYES\nlogradouro\tvarchar\tYES\nnumero\tvarchar\tYES\ncomplemento\tvarchar\tYES\nbairro\tvarchar\tYES\ncidade\tvarchar\tYES\nestado\tvarchar\tYES\ncep\tvarchar\tYES\ntelefone\tvarchar\tYES\ncelular\tvarchar\tYES\nemail\tvarchar\tYES\ncontatoEmergencia\tvarchar\tYES\ntelefoneEmergencia\tvarchar\tYES\ncargo\tvarchar\tYES\nfuncao\tvarchar\tYES\nsetor\tvarchar\tYES\ndataAdmissao\tdate\tYES\ndataDemissao\tdate\tYES\nsalarioBase\tvarchar\tYES\nvalorHora\tvarchar\tYES\nhorasMensais\tvarchar\tYES\ntipoContrato\tenum\tYES\njornadaTrabalho\tvarchar\tYES\nbanco\tvarchar\tYES\nbancoNome\tvarchar\tYES\nagencia\tvarchar\tYES\nconta\tvarchar\tYES\ntipoConta\tenum\tYES\ntipoChavePix\tenum\tYES\nchavePix\tvarchar\tYES\ncontaPix\tvarchar\tYES\nbancoPix\tvarchar\tYES\nstatus\tenum\tNO\nfotoUrl\ttext\tYES\nobservacoes\ttext\tYES\ncreatedAt\ttimestamp\tNO\nupdatedAt\ttimestamp\tNO\nlistaNegra\ttinyint\tNO\nmotivoListaNegra\ttext\tYES\ndataListaNegra\tdate\tYES\nobraAtualId\tint\tYES\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

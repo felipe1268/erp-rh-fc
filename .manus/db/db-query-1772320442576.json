@@ -1,0 +1,32 @@
+{
+  "query": "SELECT * FROM system_revisions ORDER BY id DESC LIMIT 2;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM system_revisions ORDER BY id DESC LIMIT 2;",
+  "rows": [
+    {
+      "id": "210007",
+      "version": "121",
+      "titulo": "Filtro por Ano no Dashboard de Férias",
+      "descricao": "Dashboard de Férias agora filtra todos os dados (cards quantitativos, financeiros, alertas, gráficos) pelo ano selecionado no filtro superior. Períodos de anos anteriores não são mais somados nos totais do ano corrente.",
+      "tipo": "bugfix",
+      "modulos": "[\"Dashboard de Férias\"]",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-28 17:54:33",
+      "createdAt": "2026-02-28 17:54:33"
+    },
+    {
+      "id": "210006",
+      "version": "120",
+      "titulo": "Exames Customizados Persistentes no ASO",
+      "descricao": "Exames adicionados pelo campo Adicionar outro exame agora são salvos no banco de dados e ficam disponíveis automaticamente na lista de exames para os próximos ASOs da mesma empresa. Tabela custom_exams com constraint unique por empresa. Toast de confirmação ao adicionar.",
+      "tipo": "feature",
+      "modulos": "Controle de Documentos, ASO",
+      "criadoPor": "Manus AI",
+      "dataPublicacao": "2026-02-28 17:44:37",
+      "createdAt": "2026-02-28 17:44:37"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\tdescricao\ttipo\tmodulos\tcriadoPor\tdataPublicacao\tcreatedAt\n210007\t121\tFiltro por Ano no Dashboard de Férias\tDashboard de Férias agora filtra todos os dados (cards quantitativos, financeiros, alertas, gráficos) pelo ano selecionado no filtro superior. Períodos de anos anteriores não são mais somados nos totais do ano corrente.\tbugfix\t[\"Dashboard de Férias\"]\tSistema\t2026-02-28 17:54:33\t2026-02-28 17:54:33\n210006\t120\tExames Customizados Persistentes no ASO\tExames adicionados pelo campo Adicionar outro exame agora são salvos no banco de dados e ficam disponíveis automaticamente na lista de exames para os próximos ASOs da mesma empresa. Tabela custom_exams com constraint unique por empresa. Toast de confirmação ao adicionar.\tfeature\tControle de Documentos, ASO\tManus AI\t2026-02-28 17:44:37\t2026-02-28 17:44:37\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

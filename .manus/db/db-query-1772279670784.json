@@ -1,0 +1,20 @@
+{
+  "query": "SELECT tribunal, comarca, COUNT(*) as cnt FROM processos_trabalhistas GROUP BY tribunal, comarca;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT tribunal, comarca, COUNT(*) as cnt FROM processos_trabalhistas GROUP BY tribunal, comarca;",
+  "rows": [
+    {
+      "tribunal": "TRT6",
+      "comarca": "NULL",
+      "cnt": "6"
+    },
+    {
+      "tribunal": "NULL",
+      "comarca": "NULL",
+      "cnt": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "tribunal\tcomarca\tcnt\nTRT6\tNULL\t6\nNULL\tNULL\t1\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

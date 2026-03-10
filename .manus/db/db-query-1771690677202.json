@@ -1,0 +1,9 @@
+{
+  "query": "SELECT c.id as cid, c.razaoSocial, e.id as eid, e.nomeCompleto, e.cpf FROM companies c LEFT JOIN employees e ON e.companyId = c.id WHERE c.id = 2 LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT c.id as cid, c.razaoSocial, e.id as eid, e.nomeCompleto, e.cpf FROM companies c LEFT JOIN employees e ON e.companyId = c.id WHERE c.id = 2 LIMIT 10;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 71
+}

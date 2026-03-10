@@ -1,0 +1,20 @@
+{
+  "query": "SELECT status, COUNT(*) as cnt, SUM(CASE WHEN revertidoManualmente = 1 THEN 1 ELSE 0 END) as revertidos FROM termination_notices WHERE deletedAt IS NULL GROUP BY status;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT status, COUNT(*) as cnt, SUM(CASE WHEN revertidoManualmente = 1 THEN 1 ELSE 0 END) as revertidos FROM termination_notices WHERE deletedAt IS NULL GROUP BY status;",
+  "rows": [
+    {
+      "status": "concluido",
+      "cnt": "2",
+      "revertidos": "0"
+    },
+    {
+      "status": "em_andamento",
+      "cnt": "38",
+      "revertidos": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\tcnt\trevertidos\nconcluido\t2\t0\nem_andamento\t38\t0\n",
+  "stderr": "",
+  "execution_time_ms": 389
+}

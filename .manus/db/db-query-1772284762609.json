@@ -1,0 +1,187 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'processos_trabalhistas' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'processos_trabalhistas' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "employeeId"
+    },
+    {
+      "COLUMN_NAME": "numeroProcesso"
+    },
+    {
+      "COLUMN_NAME": "vara"
+    },
+    {
+      "COLUMN_NAME": "comarca"
+    },
+    {
+      "COLUMN_NAME": "tribunal"
+    },
+    {
+      "COLUMN_NAME": "tipoAcao"
+    },
+    {
+      "COLUMN_NAME": "reclamante"
+    },
+    {
+      "COLUMN_NAME": "advogadoReclamante"
+    },
+    {
+      "COLUMN_NAME": "advogadoEmpresa"
+    },
+    {
+      "COLUMN_NAME": "valorCausa"
+    },
+    {
+      "COLUMN_NAME": "valorCondenacao"
+    },
+    {
+      "COLUMN_NAME": "valorAcordo"
+    },
+    {
+      "COLUMN_NAME": "valorPago"
+    },
+    {
+      "COLUMN_NAME": "dataDistribuicao"
+    },
+    {
+      "COLUMN_NAME": "dataDesligamento"
+    },
+    {
+      "COLUMN_NAME": "dataCitacao"
+    },
+    {
+      "COLUMN_NAME": "dataAudiencia"
+    },
+    {
+      "COLUMN_NAME": "dataEncerramento"
+    },
+    {
+      "COLUMN_NAME": "status"
+    },
+    {
+      "COLUMN_NAME": "fase"
+    },
+    {
+      "COLUMN_NAME": "risco"
+    },
+    {
+      "COLUMN_NAME": "pedidos"
+    },
+    {
+      "COLUMN_NAME": "observacoes"
+    },
+    {
+      "COLUMN_NAME": "criadoPor"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "updatedAt"
+    },
+    {
+      "COLUMN_NAME": "clienteCnpj"
+    },
+    {
+      "COLUMN_NAME": "clienteRazaoSocial"
+    },
+    {
+      "COLUMN_NAME": "clienteNomeFantasia"
+    },
+    {
+      "COLUMN_NAME": "deletedAt"
+    },
+    {
+      "COLUMN_NAME": "deletedBy"
+    },
+    {
+      "COLUMN_NAME": "deletedByUserId"
+    },
+    {
+      "COLUMN_NAME": "justica"
+    },
+    {
+      "COLUMN_NAME": "datajud_id"
+    },
+    {
+      "COLUMN_NAME": "datajud_ultima_consulta"
+    },
+    {
+      "COLUMN_NAME": "datajud_ultima_atualizacao"
+    },
+    {
+      "COLUMN_NAME": "datajud_grau"
+    },
+    {
+      "COLUMN_NAME": "datajud_classe"
+    },
+    {
+      "COLUMN_NAME": "datajud_assuntos"
+    },
+    {
+      "COLUMN_NAME": "datajud_orgao_julgador"
+    },
+    {
+      "COLUMN_NAME": "datajud_sistema"
+    },
+    {
+      "COLUMN_NAME": "datajud_formato"
+    },
+    {
+      "COLUMN_NAME": "datajud_movimentos"
+    },
+    {
+      "COLUMN_NAME": "datajud_total_movimentos"
+    },
+    {
+      "COLUMN_NAME": "datajud_auto_detectado"
+    },
+    {
+      "COLUMN_NAME": "datajudId"
+    },
+    {
+      "COLUMN_NAME": "datajudUltimaConsulta"
+    },
+    {
+      "COLUMN_NAME": "datajudUltimaAtualizacao"
+    },
+    {
+      "COLUMN_NAME": "datajudGrau"
+    },
+    {
+      "COLUMN_NAME": "datajudClasse"
+    },
+    {
+      "COLUMN_NAME": "datajudAssuntos"
+    },
+    {
+      "COLUMN_NAME": "datajudOrgaoJulgador"
+    },
+    {
+      "COLUMN_NAME": "datajudSistema"
+    },
+    {
+      "COLUMN_NAME": "datajudFormato"
+    },
+    {
+      "COLUMN_NAME": "datajudMovimentos"
+    },
+    {
+      "COLUMN_NAME": "datajudTotalMovimentos"
+    },
+    {
+      "COLUMN_NAME": "datajudAutoDetectado"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncompanyId\nemployeeId\nnumeroProcesso\nvara\ncomarca\ntribunal\ntipoAcao\nreclamante\nadvogadoReclamante\nadvogadoEmpresa\nvalorCausa\nvalorCondenacao\nvalorAcordo\nvalorPago\ndataDistribuicao\ndataDesligamento\ndataCitacao\ndataAudiencia\ndataEncerramento\nstatus\nfase\nrisco\npedidos\nobservacoes\ncriadoPor\ncreatedAt\nupdatedAt\nclienteCnpj\nclienteRazaoSocial\nclienteNomeFantasia\ndeletedAt\ndeletedBy\ndeletedByUserId\njustica\ndatajud_id\ndatajud_ultima_consulta\ndatajud_ultima_atualizacao\ndatajud_grau\ndatajud_classe\ndatajud_assuntos\ndatajud_orgao_julgador\ndatajud_sistema\ndatajud_formato\ndatajud_movimentos\ndatajud_total_movimentos\ndatajud_auto_detectado\ndatajudId\ndatajudUltimaConsulta\ndatajudUltimaAtualizacao\ndatajudGrau\ndatajudClasse\ndatajudAssuntos\ndatajudOrgaoJulgador\ndatajudSistema\ndatajudFormato\ndatajudMovimentos\ndatajudTotalMovimentos\ndatajudAutoDetectado\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}

@@ -1,0 +1,1065 @@
+{
+  "query": "SELECT id, razaoSocial, grupoEmpresarial FROM companies ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, razaoSocial, grupoEmpresarial FROM companies ORDER BY id;",
+  "rows": [
+    {
+      "id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "grupoEmpresarial": "Construtora"
+    },
+    {
+      "id": "60004",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "grupoEmpresarial": "Hotelaria"
+    },
+    {
+      "id": "60005",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "grupoEmpresarial": "Construtora"
+    },
+    {
+      "id": "90001",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "grupoEmpresarial": "Locação"
+    },
+    {
+      "id": "450042",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450043",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450044",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450045",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450046",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450047",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450048",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450049",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450050",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "450051",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "480001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "480002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "480003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "480004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "480005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "480006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "480007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "510001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "510002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "510003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "540001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "540002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "570001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "570002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "600001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "600002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "600003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "630001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "630002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "630003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "630004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "630005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "660001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "660002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "660003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "660004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "660005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "660006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "660007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "690001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "720001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "720002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "720003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "750008",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "780001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "810001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "810002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "810003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "810004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "840001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "840002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "840003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "870001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "870002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "900001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "900002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "900003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "900004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "930001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "960001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "960002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "960003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "990001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "990002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1020001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1020002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1020003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1020004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1020005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1020006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1020007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050008",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050009",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1050010",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080008",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080009",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080010",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080011",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080012",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080013",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080014",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080015",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080016",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080017",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080018",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080019",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080020",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080021",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080022",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080023",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080024",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080025",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080026",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080027",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080028",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080029",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080030",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080031",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080032",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080033",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080034",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080035",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080036",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080037",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080038",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080039",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080040",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080041",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080042",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080043",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080044",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080045",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080046",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080047",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080048",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080049",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080050",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080051",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080052",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080053",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080054",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080055",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1080056",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1110001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1110002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1110003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1110004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140008",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140009",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140010",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140011",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140012",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140013",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140014",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140015",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140016",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140017",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140018",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140019",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140020",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140021",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140022",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1140023",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1170001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1170002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1200001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1200002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1230001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1230002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1230003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1230004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1230005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1230006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1230007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260007",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260008",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260009",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260010",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260011",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260012",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260013",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260014",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260015",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260016",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260017",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260018",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1260019",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1290001",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1290002",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1290003",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1290004",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1290005",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    },
+    {
+      "id": "1290006",
+      "razaoSocial": "Empresa Teste CRUD",
+      "grupoEmpresarial": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\tgrupoEmpresarial\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\tConstrutora\n60004\tCF HOTELARIA LTDA\tHotelaria\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\tConstrutora\n90001\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\tLocação\n450042\tEmpresa Teste CRUD\tNULL\n450043\tEmpresa Teste CRUD\tNULL\n450044\tEmpresa Teste CRUD\tNULL\n450045\tEmpresa Teste CRUD\tNULL\n450046\tEmpresa Teste CRUD\tNULL\n450047\tEmpresa Teste CRUD\tNULL\n450048\tEmpresa Teste CRUD\tNULL\n450049\tEmpresa Teste CRUD\tNULL\n450050\tEmpresa Teste CRUD\tNULL\n450051\tEmpresa Teste CRUD\tNULL\n480001\tEmpresa Teste CRUD\tNULL\n480002\tEmpresa Teste CRUD\tNULL\n480003\tEmpresa Teste CRUD\tNULL\n480004\tEmpresa Teste CRUD\tNULL\n480005\tEmpresa Teste CRUD\tNULL\n480006\tEmpresa Teste CRUD\tNULL\n480007\tEmpresa Teste CRUD\tNULL\n510001\tEmpresa Teste CRUD\tNULL\n510002\tEmpresa Teste CRUD\tNULL\n510003\tEmpresa Teste CRUD\tNULL\n540001\tEmpresa Teste CRUD\tNULL\n540002\tEmpresa Teste CRUD\tNULL\n570001\tEmpresa Teste CRUD\tNULL\n570002\tEmpresa Teste CRUD\tNULL\n600001\tEmpresa Teste CRUD\tNULL\n600002\tEmpresa Teste CRUD\tNULL\n600003\tEmpresa Teste CRUD\tNULL\n630001\tEmpresa Teste CRUD\tNULL\n630002\tEmpresa Teste CRUD\tNULL\n630003\tEmpresa Teste CRUD\tNULL\n630004\tEmpresa Teste CRUD\tNULL\n630005\tEmpresa Teste CRUD\tNULL\n660001\tEmpresa Teste CRUD\tNULL\n660002\tEmpresa Teste CRUD\tNULL\n660003\tEmpresa Teste CRUD\tNULL\n660004\tEmpresa Teste CRUD\tNULL\n660005\tEmpresa Teste CRUD\tNULL\n660006\tEmpresa Teste CRUD\tNULL\n660007\tEmpresa Teste CRUD\tNULL\n690001\tEmpresa Teste CRUD\tNULL\n720001\tEmpresa Teste CRUD\tNULL\n720002\tEmpresa Teste CRUD\tNULL\n720003\tEmpresa Teste CRUD\tNULL\n750001\tEmpresa Teste CRUD\tNULL\n750002\tEmpresa Teste CRUD\tNULL\n750003\tEmpresa Teste CRUD\tNULL\n750004\tEmpresa Teste CRUD\tNULL\n750005\tEmpresa Teste CRUD\tNULL\n750006\tEmpresa Teste CRUD\tNULL\n750007\tEmpresa Teste CRUD\tNULL\n750008\tEmpresa Teste CRUD\tNULL\n780001\tEmpresa Teste CRUD\tNULL\n810001\tEmpresa Teste CRUD\tNULL\n810002\tEmpresa Teste CRUD\tNULL\n810003\tEmpresa Teste CRUD\tNULL\n810004\tEmpresa Teste CRUD\tNULL\n840001\tEmpresa Teste CRUD\tNULL\n840002\tEmpresa Teste CRUD\tNULL\n840003\tEmpresa Teste CRUD\tNULL\n870001\tEmpresa Teste CRUD\tNULL\n870002\tEmpresa Teste CRUD\tNULL\n900001\tEmpresa Teste CRUD\tNULL\n900002\tEmpresa Teste CRUD\tNULL\n900003\tEmpresa Teste CRUD\tNULL\n900004\tEmpresa Teste CRUD\tNULL\n930001\tEmpresa Teste CRUD\tNULL\n960001\tEmpresa Teste CRUD\tNULL\n960002\tEmpresa Teste CRUD\tNULL\n960003\tEmpresa Teste CRUD\tNULL\n990001\tEmpresa Teste CRUD\tNULL\n990002\tEmpresa Teste CRUD\tNULL\n1020001\tEmpresa Teste CRUD\tNULL\n1020002\tEmpresa Teste CRUD\tNULL\n1020003\tEmpresa Teste CRUD\tNULL\n1020004\tEmpresa Teste CRUD\tNULL\n1020005\tEmpresa Teste CRUD\tNULL\n1020006\tEmpresa Teste CRUD\tNULL\n1020007\tEmpresa Teste CRUD\tNULL\n1050001\tEmpresa Teste CRUD\tNULL\n1050002\tEmpresa Teste CRUD\tNULL\n1050003\tEmpresa Teste CRUD\tNULL\n1050004\tEmpresa Teste CRUD\tNULL\n1050005\tEmpresa Teste CRUD\tNULL\n1050006\tEmpresa Teste CRUD\tNULL\n1050007\tEmpresa Teste CRUD\tNULL\n1050008\tEmpresa Teste CRUD\tNULL\n1050009\tEmpresa Teste CRUD\tNULL\n1050010\tEmpresa Teste CRUD\tNULL\n1080001\tEmpresa Teste CRUD\tNULL\n1080002\tEmpresa Teste CRUD\tNULL\n1080003\tEmpresa Teste CRUD\tNULL\n1080004\tEmpresa Teste CRUD\tNULL\n1080005\tEmpresa Teste CRUD\tNULL\n1080006\tEmpresa Teste CRUD\tNULL\n1080007\tEmpresa Teste CRUD\tNULL\n1080008\tEmpresa Teste CRUD\tNULL\n1080009\tEmpresa Teste CRUD\tNULL\n1080010\tEmpresa Teste CRUD\tNULL\n1080011\tEmpresa Teste CRUD\tNULL\n1080012\tEmpresa Teste CRUD\tNULL\n1080013\tEmpresa Teste CRUD\tNULL\n1080014\tEmpresa Teste CRUD\tNULL\n1080015\tEmpresa Teste CRUD\tNULL\n1080016\tEmpresa Teste CRUD\tNULL\n1080017\tEmpresa Teste CRUD\tNULL\n1080018\tEmpresa Teste CRUD\tNULL\n1080019\tEmpresa Teste CRUD\tNULL\n1080020\tEmpresa Teste CRUD\tNULL\n1080021\tEmpresa Teste CRUD\tNULL\n1080022\tEmpresa Teste CRUD\tNULL\n1080023\tEmpresa Teste CRUD\tNULL\n1080024\tEmpresa Teste CRUD\tNULL\n1080025\tEmpresa Teste CRUD\tNULL\n1080026\tEmpresa Teste CRUD\tNULL\n1080027\tEmpresa Teste CRUD\tNULL\n1080028\tEmpresa Teste CRUD\tNULL\n1080029\tEmpresa Teste CRUD\tNULL\n1080030\tEmpresa Teste CRUD\tNULL\n1080031\tEmpresa Teste CRUD\tNULL\n1080032\tEmpresa Teste CRUD\tNULL\n1080033\tEmpresa Teste CRUD\tNULL\n1080034\tEmpresa Teste CRUD\tNULL\n1080035\tEmpresa Teste CRUD\tNULL\n1080036\tEmpresa Teste CRUD\tNULL\n1080037\tEmpresa Teste CRUD\tNULL\n1080038\tEmpresa Teste CRUD\tNULL\n1080039\tEmpresa Teste CRUD\tNULL\n1080040\tEmpresa Teste CRUD\tNULL\n1080041\tEmpresa Teste CRUD\tNULL\n1080042\tEmpresa Teste CRUD\tNULL\n1080043\tEmpresa Teste CRUD\tNULL\n1080044\tEmpresa Teste CRUD\tNULL\n1080045\tEmpresa Teste CRUD\tNULL\n1080046\tEmpresa Teste CRUD\tNULL\n1080047\tEmpresa Teste CRUD\tNULL\n1080048\tEmpresa Teste CRUD\tNULL\n1080049\tEmpresa Teste CRUD\tNULL\n1080050\tEmpresa Teste CRUD\tNULL\n1080051\tEmpresa Teste CRUD\tNULL\n1080052\tEmpresa Teste CRUD\tNULL\n1080053\tEmpresa Teste CRUD\tNULL\n1080054\tEmpresa Teste CRUD\tNULL\n1080055\tEmpresa Teste CRUD\tNULL\n1080056\tEmpresa Teste CRUD\tNULL\n1110001\tEmpresa Teste CRUD\tNULL\n1110002\tEmpresa Teste CRUD\tNULL\n1110003\tEmpresa Teste CRUD\tNULL\n1110004\tEmpresa Teste CRUD\tNULL\n1140001\tEmpresa Teste CRUD\tNULL\n1140002\tEmpresa Teste CRUD\tNULL\n1140003\tEmpresa Teste CRUD\tNULL\n1140004\tEmpresa Teste CRUD\tNULL\n1140005\tEmpresa Teste CRUD\tNULL\n1140006\tEmpresa Teste CRUD\tNULL\n1140007\tEmpresa Teste CRUD\tNULL\n1140008\tEmpresa Teste CRUD\tNULL\n1140009\tEmpresa Teste CRUD\tNULL\n1140010\tEmpresa Teste CRUD\tNULL\n1140011\tEmpresa Teste CRUD\tNULL\n1140012\tEmpresa Teste CRUD\tNULL\n1140013\tEmpresa Teste CRUD\tNULL\n1140014\tEmpresa Teste CRUD\tNULL\n1140015\tEmpresa Teste CRUD\tNULL\n1140016\tEmpresa Teste CRUD\tNULL\n1140017\tEmpresa Teste CRUD\tNULL\n1140018\tEmpresa Teste CRUD\tNULL\n1140019\tEmpresa Teste CRUD\tNULL\n1140020\tEmpresa Teste CRUD\tNULL\n1140021\tEmpresa Teste CRUD\tNULL\n1140022\tEmpresa Teste CRUD\tNULL\n1140023\tEmpresa Teste CRUD\tNULL\n1170001\tEmpresa Teste CRUD\tNULL\n1170002\tEmpresa Teste CRUD\tNULL\n1200001\tEmpresa Teste CRUD\tNULL\n1200002\tEmpresa Teste CRUD\tNULL\n1230001\tEmpresa Teste CRUD\tNULL\n1230002\tEmpresa Teste CRUD\tNULL\n1230003\tEmpresa Teste CRUD\tNULL\n1230004\tEmpresa Teste CRUD\tNULL\n1230005\tEmpresa Teste CRUD\tNULL\n1230006\tEmpresa Teste CRUD\tNULL\n1230007\tEmpresa Teste CRUD\tNULL\n1260001\tEmpresa Teste CRUD\tNULL\n1260002\tEmpresa Teste CRUD\tNULL\n1260003\tEmpresa Teste CRUD\tNULL\n1260004\tEmpresa Teste CRUD\tNULL\n1260005\tEmpresa Teste CRUD\tNULL\n1260006\tEmpresa Teste CRUD\tNULL\n1260007\tEmpresa Teste CRUD\tNULL\n1260008\tEmpresa Teste CRUD\tNULL\n1260009\tEmpresa Teste CRUD\tNULL\n1260010\tEmpresa Teste CRUD\tNULL\n1260011\tEmpresa Teste CRUD\tNULL\n1260012\tEmpresa Teste CRUD\tNULL\n1260013\tEmpresa Teste CRUD\tNULL\n1260014\tEmpresa Teste CRUD\tNULL\n1260015\tEmpresa Teste CRUD\tNULL\n1260016\tEmpresa Teste CRUD\tNULL\n1260017\tEmpresa Teste CRUD\tNULL\n1260018\tEmpresa Teste CRUD\tNULL\n1260019\tEmpresa Teste CRUD\tNULL\n1290001\tEmpresa Teste CRUD\tNULL\n1290002\tEmpresa Teste CRUD\tNULL\n1290003\tEmpresa Teste CRUD\tNULL\n1290004\tEmpresa Teste CRUD\tNULL\n1290005\tEmpresa Teste CRUD\tNULL\n1290006\tEmpresa Teste CRUD\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

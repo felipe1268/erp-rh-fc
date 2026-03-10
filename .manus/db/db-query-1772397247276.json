@@ -1,0 +1,110 @@
+{
+  "query": "SELECT id, nome, status FROM obras LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nome, status FROM obras LIMIT 20;",
+  "rows": [
+    {
+      "id": "60001",
+      "nome": "QIU 2 - FASE 4",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "60002",
+      "nome": "HOTEL DO PAPA - AMPLIAÇÃO - 5 PAV",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "60003",
+      "nome": "LUCIANA - FASE FINAL - BLOCO B",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "60004",
+      "nome": "UTC - UNIDADE DE COMPOSTAGEM",
+      "status": "Concluida"
+    },
+    {
+      "id": "60005",
+      "nome": "CARAMURU - HH",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90001",
+      "nome": "QIU 2 - FASE 4",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90002",
+      "nome": "LUCIANA - FINAL BLOCO B",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90003",
+      "nome": "CARAMURU - HH - CACHOEIRA PAULISTA",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90004",
+      "nome": "HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90005",
+      "nome": "ESCRITÓRIO CENTRAL",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "120001",
+      "nome": "UTC - UNIDADE DE COMPOSTAGEM",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "150001",
+      "nome": "PALES ",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "150002",
+      "nome": "CASA DO PEQUENO",
+      "status": "Concluida"
+    },
+    {
+      "id": "150003",
+      "nome": "TESTE",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "180001",
+      "nome": "IGREJA SANTA RITA ",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "210001",
+      "nome": "CHLORUM PE - PLANTA NOVA ",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "240001",
+      "nome": "POS OBRA",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "240002",
+      "nome": "CARAMURU -  HH -  ANGRA DOS REIS",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "240003",
+      "nome": "REFORMA ESCRITÓRIO",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "240004",
+      "nome": "DEPÓSITO ITAGUAÇU",
+      "status": "Em_Andamento"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\tstatus\n60001\tQIU 2 - FASE 4\tEm_Andamento\n60002\tHOTEL DO PAPA - AMPLIAÇÃO - 5 PAV\tEm_Andamento\n60003\tLUCIANA - FASE FINAL - BLOCO B\tEm_Andamento\n60004\tUTC - UNIDADE DE COMPOSTAGEM\tConcluida\n60005\tCARAMURU - HH\tEm_Andamento\n90001\tQIU 2 - FASE 4\tEm_Andamento\n90002\tLUCIANA - FINAL BLOCO B\tEm_Andamento\n90003\tCARAMURU - HH - CACHOEIRA PAULISTA\tEm_Andamento\n90004\tHOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV\tEm_Andamento\n90005\tESCRITÓRIO CENTRAL\tEm_Andamento\n120001\tUTC - UNIDADE DE COMPOSTAGEM\tEm_Andamento\n150001\tPALES \tEm_Andamento\n150002\tCASA DO PEQUENO\tConcluida\n150003\tTESTE\tEm_Andamento\n180001\tIGREJA SANTA RITA \tEm_Andamento\n210001\tCHLORUM PE - PLANTA NOVA \tEm_Andamento\n240001\tPOS OBRA\tEm_Andamento\n240002\tCARAMURU -  HH -  ANGRA DOS REIS\tEm_Andamento\n240003\tREFORMA ESCRITÓRIO\tEm_Andamento\n240004\tDEPÓSITO ITAGUAÇU\tEm_Andamento\n",
+  "stderr": "",
+  "execution_time_ms": 65
+}

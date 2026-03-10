@@ -1,0 +1,18 @@
+{
+  "query": "SHOW COLUMNS FROM asos WHERE Field = 'tipo'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW COLUMNS FROM asos WHERE Field = 'tipo'",
+  "rows": [
+    {
+      "Field": "tipo",
+      "Type": "enum('Admissional','Periodico','Retorno','Mudanca_Funcao','Demissional')",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\ntipo\tenum('Admissional','Periodico','Retorno','Mudanca_Funcao','Demissional')\tNO\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

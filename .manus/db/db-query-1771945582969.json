@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, nomeCompleto FROM employees WHERE deletedAt IS NULL ORDER BY nomeCompleto ASC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto FROM employees WHERE deletedAt IS NULL ORDER BY nomeCompleto ASC LIMIT 10;",
+  "rows": [
+    {
+      "id": "420070",
+      "nomeCompleto": "ACACIO LESCURA DE CAMARGO"
+    },
+    {
+      "id": "420165",
+      "nomeCompleto": "ADRIANO PAZ FERREIRA"
+    },
+    {
+      "id": "420076",
+      "nomeCompleto": "AGOSTINHO DIJALMA FERREIRA"
+    },
+    {
+      "id": "420122",
+      "nomeCompleto": "ALEX ALESSANDRO MONTEIRO DA SILVA"
+    },
+    {
+      "id": "420121",
+      "nomeCompleto": "ALEX DA SILVA DOMINGOS"
+    },
+    {
+      "id": "420128",
+      "nomeCompleto": "ALEX PAULO RODRIGUES"
+    },
+    {
+      "id": "420194",
+      "nomeCompleto": "ALEX ROBSON CARNEIRO PINTO"
+    },
+    {
+      "id": "420082",
+      "nomeCompleto": "ALEXANDRO GONCALVES DO NASCIMENTO"
+    },
+    {
+      "id": "420071",
+      "nomeCompleto": "ALEXSANDRO DE LIMA"
+    },
+    {
+      "id": "420069",
+      "nomeCompleto": "ANDERSON BRAGA SILVA"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\n420070\tACACIO LESCURA DE CAMARGO\n420165\tADRIANO PAZ FERREIRA\n420076\tAGOSTINHO DIJALMA FERREIRA\n420122\tALEX ALESSANDRO MONTEIRO DA SILVA\n420121\tALEX DA SILVA DOMINGOS\n420128\tALEX PAULO RODRIGUES\n420194\tALEX ROBSON CARNEIRO PINTO\n420082\tALEXANDRO GONCALVES DO NASCIMENTO\n420071\tALEXSANDRO DE LIMA\n420069\tANDERSON BRAGA SILVA\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

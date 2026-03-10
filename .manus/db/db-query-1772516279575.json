@@ -1,0 +1,44 @@
+{
+  "query": "SHOW CREATE TABLE financial_events;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW CREATE TABLE financial_events;",
+  "rows": [
+    {
+      "Table": "financial_events",
+      "Create Table": "CREATE TABLE `financial_events` ("
+    }
+  ],
+  "messages": [
+    "  `id` int NOT NULL AUTO_INCREMENT,",
+    "  `companyId` int NOT NULL,",
+    "  `tipo` enum('saida_vale','saida_pagamento','saida_he','saida_vr','saida_vt','saida_encargos','entrada_desconto','ajuste') COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `categoria` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'folha_pagamento',",
+    "  `subcategoria` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `mesCompetencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `dataPrevista` date NOT NULL,",
+    "  `dataEfetiva` date DEFAULT NULL,",
+    "  `valor` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `status` enum('previsto','consolidado','pago','cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'previsto',",
+    "  `employeeId` int DEFAULT NULL,",
+    "  `employeeName` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `obraId` int DEFAULT NULL,",
+    "  `obraNome` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `descricao` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `origemTipo` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `origemId` int DEFAULT NULL,",
+    "  `criadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `atualizadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,",
+    "  KEY `fe_company_mes` (`companyId`,`mesCompetencia`),",
+    "  KEY `fe_tipo` (`tipo`),",
+    "  KEY `fe_status` (`status`),",
+    "  KEY `fe_data_prevista` (`dataPrevista`),",
+    "  KEY `fe_employee` (`employeeId`),",
+    "  KEY `fe_obra` (`obraId`)",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  ],
+  "stdout": "Table\tCreate Table\nfinancial_events\tCREATE TABLE `financial_events` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `companyId` int NOT NULL,\n  `tipo` enum('saida_vale','saida_pagamento','saida_he','saida_vr','saida_vt','saida_encargos','entrada_desconto','ajuste') COLLATE utf8mb4_unicode_ci NOT NULL,\n  `categoria` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'folha_pagamento',\n  `subcategoria` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `mesCompetencia` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `dataPrevista` date NOT NULL,\n  `dataEfetiva` date DEFAULT NULL,\n  `valor` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `status` enum('previsto','consolidado','pago','cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'previsto',\n  `employeeId` int DEFAULT NULL,\n  `employeeName` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `obraId` int DEFAULT NULL,\n  `obraNome` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `descricao` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `origemTipo` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `origemId` int DEFAULT NULL,\n  `criadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `atualizadoPor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,\n  KEY `fe_company_mes` (`companyId`,`mesCompetencia`),\n  KEY `fe_tipo` (`tipo`),\n  KEY `fe_status` (`status`),\n  KEY `fe_data_prevista` (`dataPrevista`),\n  KEY `fe_employee` (`employeeId`),\n  KEY `fe_obra` (`obraId`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci\n",
+  "stderr": "",
+  "execution_time_ms": 61
+}

@@ -1,0 +1,25 @@
+{
+  "query": "SELECT id, nomeCompleto, jornadaTrabalho FROM employees WHERE jornadaTrabalho IS NOT NULL LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, jornadaTrabalho FROM employees WHERE jornadaTrabalho IS NOT NULL LIMIT 3;",
+  "rows": [
+    {
+      "id": "420054",
+      "nomeCompleto": "MARCIO ELOY DOS SANTOS",
+      "jornadaTrabalho": "{\"seg\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"ter\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qua\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qui\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"sex\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"16:00\"}}"
+    },
+    {
+      "id": "420055",
+      "nomeCompleto": "PAULO VINICIUS SALES TEIXEIRA",
+      "jornadaTrabalho": "{\"seg\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"ter\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qua\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qui\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"sex\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"16:00\"}}"
+    },
+    {
+      "id": "420056",
+      "nomeCompleto": "ANDERSON DOS ANJOS ALKMIN JUNIOR",
+      "jornadaTrabalho": "{\"seg\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"ter\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qua\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qui\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"sex\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"16:00\"}}"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tjornadaTrabalho\n420054\tMARCIO ELOY DOS SANTOS\t{\"seg\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"ter\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qua\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qui\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"sex\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"16:00\"}}\n420055\tPAULO VINICIUS SALES TEIXEIRA\t{\"seg\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"ter\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qua\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qui\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"sex\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"16:00\"}}\n420056\tANDERSON DOS ANJOS ALKMIN JUNIOR\t{\"seg\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"ter\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qua\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"qui\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"17:00\"},\"sex\":{\"entrada\":\"07:00\",\"intervalo\":\"01:00\",\"saida\":\"16:00\"}}\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}

@@ -1,0 +1,25 @@
+{
+  "query": "SELECT companyId, id, numeroProcesso FROM processos_trabalhistas LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT companyId, id, numeroProcesso FROM processos_trabalhistas LIMIT 3;",
+  "rows": [
+    {
+      "companyId": "60002",
+      "id": "30002",
+      "numeroProcesso": "0001356-73.2023.5.06.0182"
+    },
+    {
+      "companyId": "60002",
+      "id": "30003",
+      "numeroProcesso": "0000757-66.2025.5.06.0182"
+    },
+    {
+      "companyId": "60002",
+      "id": "30004",
+      "numeroProcesso": "0000663-21.2025.5.06.0182"
+    }
+  ],
+  "messages": [],
+  "stdout": "companyId\tid\tnumeroProcesso\n60002\t30002\t0001356-73.2023.5.06.0182\n60002\t30003\t0000757-66.2025.5.06.0182\n60002\t30004\t0000663-21.2025.5.06.0182\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

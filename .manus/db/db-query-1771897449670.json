@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, version, titulo, CAST(dataPublicacao AS CHAR) as dp, CAST(createdAt AS CHAR) as ca FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, CAST(dataPublicacao AS CHAR) as dp, CAST(createdAt AS CHAR) as ca FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "21",
+      "version": "73",
+      "titulo": "Contrato de Experiência CLT",
+      "dp": "2026-02-24 01:43:01",
+      "ca": "2026-02-24 01:43:01"
+    },
+    {
+      "id": "20",
+      "version": "72",
+      "titulo": "Jornada 44h Semanais e Cálculo de HE Robusto",
+      "dp": "2026-02-24 01:26:23",
+      "ca": "2026-02-24 01:26:23"
+    },
+    {
+      "id": "19",
+      "version": "71",
+      "titulo": "Memória DIXI, Simulador Horistas, Tipo Horista",
+      "dp": "2026-02-24 01:12:33",
+      "ca": "2026-02-24 01:12:33"
+    },
+    {
+      "id": "18",
+      "version": "70",
+      "titulo": "Salário/Hora Bidirecional + Código Interno em Destaque",
+      "dp": "2026-02-24 00:00:00",
+      "ca": "2026-02-24 00:44:30"
+    },
+    {
+      "id": "17",
+      "version": "69",
+      "titulo": "Funcionários Não Identificados como Inconsistência Tratável",
+      "dp": "2026-02-24 00:00:00",
+      "ca": "2026-02-24 00:31:01"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\tdp\tca\n21\t73\tContrato de Experiência CLT\t2026-02-24 01:43:01\t2026-02-24 01:43:01\n20\t72\tJornada 44h Semanais e Cálculo de HE Robusto\t2026-02-24 01:26:23\t2026-02-24 01:26:23\n19\t71\tMemória DIXI, Simulador Horistas, Tipo Horista\t2026-02-24 01:12:33\t2026-02-24 01:12:33\n18\t70\tSalário/Hora Bidirecional + Código Interno em Destaque\t2026-02-24 00:00:00\t2026-02-24 00:44:30\n17\t69\tFuncionários Não Identificados como Inconsistência Tratável\t2026-02-24 00:00:00\t2026-02-24 00:31:01\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

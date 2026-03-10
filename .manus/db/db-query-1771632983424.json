@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `sectors` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `companyId` int NOT NULL,\n  `nome` varchar(100) NOT NULL,\n  `descricao` varchar(255),\n  `isActive` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP\n);\n\nCREATE TABLE IF NOT EXISTS `job_functions` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `companyId` int NOT NULL,\n  `nome` varchar(100) NOT NULL,\n  `descricao` varchar(255),\n  `cbo` varchar(10),\n  `isActive` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `sectors` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `companyId` int NOT NULL,\n  `nome` varchar(100) NOT NULL,\n  `descricao` varchar(255),\n  `isActive` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP\n);\n\nCREATE TABLE IF NOT EXISTS `job_functions` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `companyId` int NOT NULL,\n  `nome` varchar(100) NOT NULL,\n  `descricao` varchar(255),\n  `cbo` varchar(10),\n  `isActive` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 370
+}

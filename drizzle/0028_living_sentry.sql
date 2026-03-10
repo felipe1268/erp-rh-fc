@@ -1,0 +1,1 @@
+ALTER TABLE `companies` ADD `compartilha_recursos` tinyint DEFAULT 0 NOT NULL;

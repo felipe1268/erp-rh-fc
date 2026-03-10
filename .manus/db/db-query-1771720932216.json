@@ -1,0 +1,80 @@
+{
+  "query": "SELECT employeeId, obraId, horasExtras, horasNoturnas, horasTrabalhadas FROM time_records WHERE mesReferencia = '2026-01' AND horasExtras IS NOT NULL AND horasExtras != '0:00' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT employeeId, obraId, horasExtras, horasNoturnas, horasTrabalhadas FROM time_records WHERE mesReferencia = '2026-01' AND horasExtras IS NOT NULL AND horasExtras != '0:00' LIMIT 10;",
+  "rows": [
+    {
+      "employeeId": "90519",
+      "obraId": "3",
+      "horasExtras": "0:59",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "8:59"
+    },
+    {
+      "employeeId": "90519",
+      "obraId": "3",
+      "horasExtras": "0:59",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "8:59"
+    },
+    {
+      "employeeId": "90519",
+      "obraId": "3",
+      "horasExtras": "0:06",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "8:06"
+    },
+    {
+      "employeeId": "90519",
+      "obraId": "3",
+      "horasExtras": "1:01",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "9:01"
+    },
+    {
+      "employeeId": "90519",
+      "obraId": "3",
+      "horasExtras": "0:41",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "8:41"
+    },
+    {
+      "employeeId": "90519",
+      "obraId": "3",
+      "horasExtras": "1:05",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "9:05"
+    },
+    {
+      "employeeId": "90519",
+      "obraId": "3",
+      "horasExtras": "1:16",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "9:16"
+    },
+    {
+      "employeeId": "90534",
+      "obraId": "3",
+      "horasExtras": "1:09",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "9:09"
+    },
+    {
+      "employeeId": "90534",
+      "obraId": "3",
+      "horasExtras": "1:04",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "9:04"
+    },
+    {
+      "employeeId": "90534",
+      "obraId": "3",
+      "horasExtras": "1:09",
+      "horasNoturnas": "0:00",
+      "horasTrabalhadas": "9:09"
+    }
+  ],
+  "messages": [],
+  "stdout": "employeeId\tobraId\thorasExtras\thorasNoturnas\thorasTrabalhadas\n90519\t3\t0:59\t0:00\t8:59\n90519\t3\t0:59\t0:00\t8:59\n90519\t3\t0:06\t0:00\t8:06\n90519\t3\t1:01\t0:00\t9:01\n90519\t3\t0:41\t0:00\t8:41\n90519\t3\t1:05\t0:00\t9:05\n90519\t3\t1:16\t0:00\t9:16\n90534\t3\t1:09\t0:00\t9:09\n90534\t3\t1:04\t0:00\t9:04\n90534\t3\t1:09\t0:00\t9:09\n",
+  "stderr": "",
+  "execution_time_ms": 73
+}

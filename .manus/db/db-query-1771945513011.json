@@ -1,0 +1,107 @@
+{
+  "query": "SELECT id, nomeCompleto, status FROM employees WHERE deletedAt IS NULL ORDER BY nomeCompleto ASC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, status FROM employees WHERE deletedAt IS NULL ORDER BY nomeCompleto ASC LIMIT 20;",
+  "rows": [
+    {
+      "id": "420070",
+      "nomeCompleto": "ACACIO LESCURA DE CAMARGO",
+      "status": "Ativo"
+    },
+    {
+      "id": "420165",
+      "nomeCompleto": "ADRIANO PAZ FERREIRA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420076",
+      "nomeCompleto": "AGOSTINHO DIJALMA FERREIRA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420122",
+      "nomeCompleto": "ALEX ALESSANDRO MONTEIRO DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420121",
+      "nomeCompleto": "ALEX DA SILVA DOMINGOS",
+      "status": "Ativo"
+    },
+    {
+      "id": "420128",
+      "nomeCompleto": "ALEX PAULO RODRIGUES",
+      "status": "Ativo"
+    },
+    {
+      "id": "420194",
+      "nomeCompleto": "ALEX ROBSON CARNEIRO PINTO",
+      "status": "Desligado"
+    },
+    {
+      "id": "420082",
+      "nomeCompleto": "ALEXANDRO GONCALVES DO NASCIMENTO",
+      "status": "Ativo"
+    },
+    {
+      "id": "420071",
+      "nomeCompleto": "ALEXSANDRO DE LIMA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420069",
+      "nomeCompleto": "ANDERSON BRAGA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420056",
+      "nomeCompleto": "ANDERSON DOS ANJOS ALKMIN JUNIOR",
+      "status": "Ativo"
+    },
+    {
+      "id": "420153",
+      "nomeCompleto": "ANDRE LUIZ BARLETTA DAS CHAGAS",
+      "status": "Ativo"
+    },
+    {
+      "id": "420060",
+      "nomeCompleto": "ANDREI DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420073",
+      "nomeCompleto": "ANTONIO CARLOS SANTOS",
+      "status": "Ativo"
+    },
+    {
+      "id": "420143",
+      "nomeCompleto": "ANTONIO RENATO DE SANTANA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420115",
+      "nomeCompleto": "ANTONIO WAGNER BARBOSA DE SOUSA",
+      "status": "Ativo"
+    },
+    {
+      "id": "420206",
+      "nomeCompleto": "ARIEL DA SILVA",
+      "status": "Desligado"
+    },
+    {
+      "id": "420180",
+      "nomeCompleto": "BRUNO LUIS FARIA MACHADO",
+      "status": "Ativo"
+    },
+    {
+      "id": "420149",
+      "nomeCompleto": "BRUNO RAFAEL BATISTA DA SILVA",
+      "status": "Ativo"
+    }
+  ],
+  "messages": [
+    "450001\t\tMATHEUS DONIZETTI ALVES RODRIGUES\tAtivo"
+  ],
+  "stdout": "id\tnomeCompleto\tstatus\n450001\t\tMATHEUS DONIZETTI ALVES RODRIGUES\tAtivo\n420070\tACACIO LESCURA DE CAMARGO\tAtivo\n420165\tADRIANO PAZ FERREIRA\tAtivo\n420076\tAGOSTINHO DIJALMA FERREIRA\tAtivo\n420122\tALEX ALESSANDRO MONTEIRO DA SILVA\tAtivo\n420121\tALEX DA SILVA DOMINGOS\tAtivo\n420128\tALEX PAULO RODRIGUES\tAtivo\n420194\tALEX ROBSON CARNEIRO PINTO\tDesligado\n420082\tALEXANDRO GONCALVES DO NASCIMENTO\tAtivo\n420071\tALEXSANDRO DE LIMA\tAtivo\n420069\tANDERSON BRAGA SILVA\tAtivo\n420056\tANDERSON DOS ANJOS ALKMIN JUNIOR\tAtivo\n420153\tANDRE LUIZ BARLETTA DAS CHAGAS\tAtivo\n420060\tANDREI DA SILVA\tAtivo\n420073\tANTONIO CARLOS SANTOS\tAtivo\n420143\tANTONIO RENATO DE SANTANA\tAtivo\n420115\tANTONIO WAGNER BARBOSA DE SOUSA\tAtivo\n420206\tARIEL DA SILVA\tDesligado\n420180\tBRUNO LUIS FARIA MACHADO\tAtivo\n420149\tBRUNO RAFAEL BATISTA DA SILVA\tAtivo\n",
+  "stderr": "",
+  "execution_time_ms": 166
+}

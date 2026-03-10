@@ -1,0 +1,25 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%sal%' OR TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%company%' OR TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%valor%' OR TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%hora%' ORDER BY ORDINAL_POSITION",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%sal%' OR TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%company%' OR TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%valor%' OR TABLE_NAME = 'employees' AND COLUMN_NAME LIKE '%hora%' ORDER BY ORDINAL_POSITION",
+  "rows": [
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "salarioBase"
+    },
+    {
+      "COLUMN_NAME": "valorHora"
+    },
+    {
+      "COLUMN_NAME": "horasMensais"
+    },
+    {
+      "COLUMN_NAME": "valorComplemento"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\ncompanyId\nsalarioBase\nvalorHora\nhorasMensais\nvalorComplemento\n",
+  "stderr": "",
+  "execution_time_ms": 125
+}

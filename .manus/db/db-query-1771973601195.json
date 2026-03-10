@@ -1,0 +1,60 @@
+{
+  "query": "SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 10;",
+  "rows": [
+    {
+      "version": "74",
+      "titulo": "Rev. 74 — Mega Atualização: EPI Custos, Rankings, Contratos, Perfis",
+      "tipo": "feature"
+    },
+    {
+      "version": "73",
+      "titulo": "Contrato de Experiência CLT",
+      "tipo": "feature"
+    },
+    {
+      "version": "72",
+      "titulo": "Jornada 44h Semanais e Cálculo de HE Robusto",
+      "tipo": "feature"
+    },
+    {
+      "version": "71",
+      "titulo": "Memória DIXI, Simulador Horistas, Tipo Horista",
+      "tipo": "feature"
+    },
+    {
+      "version": "70",
+      "titulo": "Salário/Hora Bidirecional + Código Interno em Destaque",
+      "tipo": "melhoria"
+    },
+    {
+      "version": "69",
+      "titulo": "Funcionários Não Identificados como Inconsistência Tratável",
+      "tipo": "melhoria"
+    },
+    {
+      "version": "68",
+      "titulo": "Detecção Inteligente de Transferência de Obra nos Conflitos",
+      "tipo": "melhoria"
+    },
+    {
+      "version": "67",
+      "titulo": "Correção do fluxo de Advertência nas Inconsistências de Ponto",
+      "tipo": "bugfix"
+    },
+    {
+      "version": "66",
+      "titulo": "Navegação de ponto no Fechamento — clique no nome abre detalhe de ponto",
+      "tipo": "melhoria"
+    },
+    {
+      "version": "65",
+      "titulo": "Correção definitiva desconsolidação + Layout responsivo Revisões",
+      "tipo": "bugfix"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\n74\tRev. 74 — Mega Atualização: EPI Custos, Rankings, Contratos, Perfis\tfeature\n73\tContrato de Experiência CLT\tfeature\n72\tJornada 44h Semanais e Cálculo de HE Robusto\tfeature\n71\tMemória DIXI, Simulador Horistas, Tipo Horista\tfeature\n70\tSalário/Hora Bidirecional + Código Interno em Destaque\tmelhoria\n69\tFuncionários Não Identificados como Inconsistência Tratável\tmelhoria\n68\tDetecção Inteligente de Transferência de Obra nos Conflitos\tmelhoria\n67\tCorreção do fluxo de Advertência nas Inconsistências de Ponto\tbugfix\n66\tNavegação de ponto no Fechamento — clique no nome abre detalhe de ponto\tmelhoria\n65\tCorreção definitiva desconsolidação + Layout responsivo Revisões\tbugfix\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

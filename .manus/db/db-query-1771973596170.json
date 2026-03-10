@@ -1,0 +1,55 @@
+{
+  "query": "SELECT id, version, titulo, tipo, modulos, criadoPor, dataPublicacao FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, tipo, modulos, criadoPor, dataPublicacao FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "30001",
+      "version": "74",
+      "titulo": "Rev. 74 — Mega Atualização: EPI Custos, Rankings, Contratos, Perfis",
+      "tipo": "feature",
+      "modulos": "EPIs, Controle de Documentos, Fechamento de Ponto, Folha de Pagamento, Colaboradores, Usuários e Permissões",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 03:06:10"
+    },
+    {
+      "id": "21",
+      "version": "73",
+      "titulo": "Contrato de Experiência CLT",
+      "tipo": "feature",
+      "modulos": "[\"colaboradores\",\"home\"]",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 01:43:01"
+    },
+    {
+      "id": "20",
+      "version": "72",
+      "titulo": "Jornada 44h Semanais e Cálculo de HE Robusto",
+      "tipo": "feature",
+      "modulos": "Colaboradores, Fechamento de Ponto, Folha de Pagamento",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 01:26:23"
+    },
+    {
+      "id": "19",
+      "version": "71",
+      "titulo": "Memória DIXI, Simulador Horistas, Tipo Horista",
+      "tipo": "feature",
+      "modulos": "Fechamento de Ponto, Colaboradores",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 01:12:33"
+    },
+    {
+      "id": "18",
+      "version": "70",
+      "titulo": "Salário/Hora Bidirecional + Código Interno em Destaque",
+      "tipo": "melhoria",
+      "modulos": "Colaboradores",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-24 03:00:00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\ttipo\tmodulos\tcriadoPor\tdataPublicacao\n30001\t74\tRev. 74 — Mega Atualização: EPI Custos, Rankings, Contratos, Perfis\tfeature\tEPIs, Controle de Documentos, Fechamento de Ponto, Folha de Pagamento, Colaboradores, Usuários e Permissões\tSistema\t2026-02-24 03:06:10\n21\t73\tContrato de Experiência CLT\tfeature\t[\"colaboradores\",\"home\"]\tSistema\t2026-02-24 01:43:01\n20\t72\tJornada 44h Semanais e Cálculo de HE Robusto\tfeature\tColaboradores, Fechamento de Ponto, Folha de Pagamento\tSistema\t2026-02-24 01:26:23\n19\t71\tMemória DIXI, Simulador Horistas, Tipo Horista\tfeature\tFechamento de Ponto, Colaboradores\tSistema\t2026-02-24 01:12:33\n18\t70\tSalário/Hora Bidirecional + Código Interno em Destaque\tmelhoria\tColaboradores\tSistema\t2026-02-24 03:00:00\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}

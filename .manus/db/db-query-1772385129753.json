@@ -1,0 +1,100 @@
+{
+  "query": "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'portal_credentials' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'portal_credentials' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id",
+      "DATA_TYPE": "int",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "tipo_portal",
+      "DATA_TYPE": "enum",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "empresa_terceira_id",
+      "DATA_TYPE": "int",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "parceiro_conveniado_id",
+      "DATA_TYPE": "int",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "company_id",
+      "DATA_TYPE": "int",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "cnpj",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "senha_hash",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "primeiro_acesso",
+      "DATA_TYPE": "tinyint",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "1"
+    },
+    {
+      "COLUMN_NAME": "ativo",
+      "DATA_TYPE": "tinyint",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "1"
+    },
+    {
+      "COLUMN_NAME": "ultimo_acesso",
+      "DATA_TYPE": "timestamp",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "email_responsavel",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "nome_responsavel",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "nome_empresa",
+      "DATA_TYPE": "varchar",
+      "IS_NULLABLE": "YES",
+      "COLUMN_DEFAULT": "NULL"
+    },
+    {
+      "COLUMN_NAME": "created_at",
+      "DATA_TYPE": "timestamp",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "CURRENT_TIMESTAMP"
+    },
+    {
+      "COLUMN_NAME": "updated_at",
+      "DATA_TYPE": "timestamp",
+      "IS_NULLABLE": "NO",
+      "COLUMN_DEFAULT": "CURRENT_TIMESTAMP"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\tDATA_TYPE\tIS_NULLABLE\tCOLUMN_DEFAULT\nid\tint\tNO\tNULL\ntipo_portal\tenum\tNO\tNULL\nempresa_terceira_id\tint\tYES\tNULL\nparceiro_conveniado_id\tint\tYES\tNULL\ncompany_id\tint\tNO\tNULL\ncnpj\tvarchar\tNO\tNULL\nsenha_hash\tvarchar\tNO\tNULL\nprimeiro_acesso\ttinyint\tNO\t1\nativo\ttinyint\tNO\t1\nultimo_acesso\ttimestamp\tYES\tNULL\nemail_responsavel\tvarchar\tYES\tNULL\nnome_responsavel\tvarchar\tYES\tNULL\nnome_empresa\tvarchar\tYES\tNULL\ncreated_at\ttimestamp\tNO\tCURRENT_TIMESTAMP\nupdated_at\ttimestamp\tNO\tCURRENT_TIMESTAMP\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}

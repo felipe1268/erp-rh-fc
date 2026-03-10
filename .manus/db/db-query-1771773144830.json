@@ -1,0 +1,23 @@
+{
+  "query": "SELECT * FROM system_criteria WHERE chave = 'folha_bloquear_consolidacao_inconsistencias';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM system_criteria WHERE chave = 'folha_bloquear_consolidacao_inconsistencias';",
+  "rows": [
+    {
+      "id": "30001",
+      "companyId": "60002",
+      "categoria": "folha",
+      "chave": "folha_bloquear_consolidacao_inconsistencias",
+      "valor": "1",
+      "descricao": "Bloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)",
+      "valorPadraoClt": "1",
+      "unidade": "bool",
+      "atualizadoPor": "Sistema",
+      "createdAt": "2026-02-22 15:12:20",
+      "updatedAt": "2026-02-22 15:12:20"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcompanyId\tcategoria\tchave\tvalor\tdescricao\tvalorPadraoClt\tunidade\tatualizadoPor\tcreatedAt\tupdatedAt\n30001\t60002\tfolha\tfolha_bloquear_consolidacao_inconsistencias\t1\tBloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)\t1\tbool\tSistema\t2026-02-22 15:12:20\t2026-02-22 15:12:20\n",
+  "stderr": "",
+  "execution_time_ms": 360
+}

@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `obra_ponto_inconsistencies` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `companyId` int NOT NULL,\n  `employeeId` int NOT NULL,\n  `obraAlocadaId` int,\n  `obraPontoId` int NOT NULL,\n  `dataPonto` date NOT NULL,\n  `snRelogio` varchar(50),\n  `status` enum('pendente','esporadico','transferido','ignorado') NOT NULL DEFAULT 'pendente',\n  `resolvidoPor` varchar(255),\n  `resolvidoPorUserId` int,\n  `resolvidoEm` timestamp,\n  `observacoes` text,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  PRIMARY KEY (`id`),\n  INDEX `opi_company` (`companyId`),\n  INDEX `opi_employee` (`employeeId`),\n  INDEX `opi_status` (`status`),\n  INDEX `opi_data` (`dataPonto`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `obra_ponto_inconsistencies` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `companyId` int NOT NULL,\n  `employeeId` int NOT NULL,\n  `obraAlocadaId` int,\n  `obraPontoId` int NOT NULL,\n  `dataPonto` date NOT NULL,\n  `snRelogio` varchar(50),\n  `status` enum('pendente','esporadico','transferido','ignorado') NOT NULL DEFAULT 'pendente',\n  `resolvidoPor` varchar(255),\n  `resolvidoPorUserId` int,\n  `resolvidoEm` timestamp,\n  `observacoes` text,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  PRIMARY KEY (`id`),\n  INDEX `opi_company` (`companyId`),\n  INDEX `opi_employee` (`employeeId`),\n  INDEX `opi_status` (`status`),\n  INDEX `opi_data` (`dataPonto`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 170
+}

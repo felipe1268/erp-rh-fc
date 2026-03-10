@@ -1,0 +1,8 @@
+{
+  "query": "SELECT mbc.id, mbc.company_id, mbc.obra_id, mbc.nome, mbc.cafe_manha_dia, mbc.lanche_tarde_dia, mbc.vale_alimentacao_mes, mbc.janta_dia, mbc.total_va_ifood, mbc.dias_uteis_ref, mbc.cafe_ativo, mbc.lanche_ativo, mbc.janta_ativo FROM meal_benefit_configs mbc ORDER BY mbc.company_id, mbc.obra_id",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT mbc.id, mbc.company_id, mbc.obra_id, mbc.nome, mbc.cafe_manha_dia, mbc.lanche_tarde_dia, mbc.vale_alimentacao_mes, mbc.janta_dia, mbc.total_va_ifood, mbc.dias_uteis_ref, mbc.cafe_ativo, mbc.lanche_ativo, mbc.janta_ativo FROM meal_benefit_configs mbc ORDER BY mbc.company_id, mbc.obra_id",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'mbc.company_id' in 'order clause'"
+  ]
+}

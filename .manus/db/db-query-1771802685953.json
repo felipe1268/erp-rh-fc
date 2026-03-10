@@ -1,0 +1,70 @@
+{
+  "query": "SELECT id, nome, companyId, status FROM obras ORDER BY companyId, id",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nome, companyId, status FROM obras ORDER BY companyId, id",
+  "rows": [
+    {
+      "id": "60001",
+      "nome": "QIU 2 - FASE 4",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "60002",
+      "nome": "HOTEL DO PAPA - AMPLIAÇÃO - 5 PAV",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "60003",
+      "nome": "LUCIANA - FASE FINAL - BLOCO B",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "60004",
+      "nome": "UTC - UNIDADE DE COMPOSTAGEM",
+      "companyId": "60002",
+      "status": "Concluida"
+    },
+    {
+      "id": "60005",
+      "nome": "CARAMURU - HH",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90001",
+      "nome": "QIU 2 - FASE 4",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90002",
+      "nome": "LUCIANA - FINAL BLOCO B",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90003",
+      "nome": "CARAMURU - HH",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90004",
+      "nome": "HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    },
+    {
+      "id": "90005",
+      "nome": "ESCRITÓRIO CENTRAL",
+      "companyId": "60002",
+      "status": "Em_Andamento"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\tcompanyId\tstatus\n60001\tQIU 2 - FASE 4\t60002\tEm_Andamento\n60002\tHOTEL DO PAPA - AMPLIAÇÃO - 5 PAV\t60002\tEm_Andamento\n60003\tLUCIANA - FASE FINAL - BLOCO B\t60002\tEm_Andamento\n60004\tUTC - UNIDADE DE COMPOSTAGEM\t60002\tConcluida\n60005\tCARAMURU - HH\t60002\tEm_Andamento\n90001\tQIU 2 - FASE 4\t60002\tEm_Andamento\n90002\tLUCIANA - FINAL BLOCO B\t60002\tEm_Andamento\n90003\tCARAMURU - HH\t60002\tEm_Andamento\n90004\tHOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV\t60002\tEm_Andamento\n90005\tESCRITÓRIO CENTRAL\t60002\tEm_Andamento\n",
+  "stderr": "",
+  "execution_time_ms": 61
+}

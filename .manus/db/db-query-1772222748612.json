@@ -1,0 +1,379 @@
+{
+  "query": "SELECT id, employeeId, dataInicio, dataFim, diasAviso, \n  DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY) AS dataFimCorreta,\n  CASE WHEN dataFim = DATE_ADD(dataInicio, INTERVAL diasAviso DAY) THEN 'ERRADO (+1 dia)' \n       WHEN dataFim = DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY) THEN 'CORRETO'\n       ELSE 'DIFERENTE' END AS status_data\nFROM termination_notices \nWHERE deletedAt IS NULL AND dataInicio IS NOT NULL AND dataFim IS NOT NULL\nORDER BY id\nLIMIT 50",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, employeeId, dataInicio, dataFim, diasAviso, \n  DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY) AS dataFimCorreta,\n  CASE WHEN dataFim = DATE_ADD(dataInicio, INTERVAL diasAviso DAY) THEN 'ERRADO (+1 dia)' \n       WHEN dataFim = DATE_ADD(dataInicio, INTERVAL (diasAviso - 1) DAY) THEN 'CORRETO'\n       ELSE 'DIFERENTE' END AS status_data\nFROM termination_notices \nWHERE deletedAt IS NULL AND dataInicio IS NOT NULL AND dataFim IS NOT NULL\nORDER BY id\nLIMIT 50",
+  "rows": [
+    {
+      "id": "1",
+      "employeeId": "420026",
+      "dataInicio": "2026-02-02",
+      "dataFim": "2026-03-03",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-03",
+      "status_data": "CORRETO"
+    },
+    {
+      "id": "90001",
+      "employeeId": "420122",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90003",
+      "employeeId": "420170",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90004",
+      "employeeId": "420128",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90005",
+      "employeeId": "420143",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90006",
+      "employeeId": "420149",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90007",
+      "employeeId": "420137",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90008",
+      "employeeId": "420105",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-18",
+      "diasAviso": "33",
+      "dataFimCorreta": "2026-03-17",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90009",
+      "employeeId": "420171",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90010",
+      "employeeId": "420061",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-31",
+      "diasAviso": "45",
+      "dataFimCorreta": "2026-03-30",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90011",
+      "employeeId": "420154",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90012",
+      "employeeId": "420125",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90013",
+      "employeeId": "420138",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "90014",
+      "employeeId": "420189",
+      "dataInicio": "2026-01-20",
+      "dataFim": "2026-02-22",
+      "diasAviso": "33",
+      "dataFimCorreta": "2026-02-21",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120001",
+      "employeeId": "420133",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120002",
+      "employeeId": "420098",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120003",
+      "employeeId": "450001",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120004",
+      "employeeId": "420063",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120005",
+      "employeeId": "420111",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120006",
+      "employeeId": "420110",
+      "dataInicio": "2026-02-19",
+      "dataFim": "2026-03-21",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-20",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120008",
+      "employeeId": "420152",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120009",
+      "employeeId": "420124",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120010",
+      "employeeId": "420146",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120011",
+      "employeeId": "420134",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120012",
+      "employeeId": "420151",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "120013",
+      "employeeId": "420175",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "150001",
+      "employeeId": "420164",
+      "dataInicio": "2026-02-20",
+      "dataFim": "2026-03-23",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-21",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150002",
+      "employeeId": "420165",
+      "dataInicio": "2026-02-20",
+      "dataFim": "2026-03-23",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-21",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150003",
+      "employeeId": "420113",
+      "dataInicio": "2026-02-20",
+      "dataFim": "2026-03-23",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-21",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150004",
+      "employeeId": "420163",
+      "dataInicio": "2026-02-20",
+      "dataFim": "2026-03-23",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-21",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150005",
+      "employeeId": "420161",
+      "dataInicio": "2026-02-20",
+      "dataFim": "2026-03-23",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-21",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150006",
+      "employeeId": "420086",
+      "dataInicio": "2026-02-20",
+      "dataFim": "2026-03-23",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-21",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150007",
+      "employeeId": "420071",
+      "dataInicio": "2026-02-20",
+      "dataFim": "2026-03-23",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-21",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150008",
+      "employeeId": "420080",
+      "dataInicio": "2026-02-25",
+      "dataFim": "2026-03-28",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-26",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150009",
+      "employeeId": "420135",
+      "dataInicio": "2025-02-13",
+      "dataFim": "2025-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2025-03-14",
+      "status_data": "DIFERENTE"
+    },
+    {
+      "id": "150012",
+      "employeeId": "420168",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-16",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-15",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "150013",
+      "employeeId": "420089",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-14",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "150014",
+      "employeeId": "420148",
+      "dataInicio": "2026-02-17",
+      "dataFim": "2026-03-19",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-18",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "150015",
+      "employeeId": "420126",
+      "dataInicio": "2026-02-12",
+      "dataFim": "2026-03-14",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-13",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "150016",
+      "employeeId": "420167",
+      "dataInicio": "2026-02-28",
+      "dataFim": "2026-03-30",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-29",
+      "status_data": "ERRADO (+1 dia)"
+    },
+    {
+      "id": "150017",
+      "employeeId": "420130",
+      "dataInicio": "2026-02-15",
+      "dataFim": "2026-03-17",
+      "diasAviso": "30",
+      "dataFimCorreta": "2026-03-16",
+      "status_data": "ERRADO (+1 dia)"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temployeeId\tdataInicio\tdataFim\tdiasAviso\tdataFimCorreta\tstatus_data\n1\t420026\t2026-02-02\t2026-03-03\t30\t2026-03-03\tCORRETO\n90001\t420122\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n90003\t420170\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n90004\t420128\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n90005\t420143\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n90006\t420149\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n90007\t420137\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n90008\t420105\t2026-02-13\t2026-03-18\t33\t2026-03-17\tERRADO (+1 dia)\n90009\t420171\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n90010\t420061\t2026-02-14\t2026-03-31\t45\t2026-03-30\tERRADO (+1 dia)\n90011\t420154\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n90012\t420125\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n90013\t420138\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n90014\t420189\t2026-01-20\t2026-02-22\t33\t2026-02-21\tERRADO (+1 dia)\n120001\t420133\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n120002\t420098\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120003\t450001\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120004\t420063\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120005\t420111\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120006\t420110\t2026-02-19\t2026-03-21\t30\t2026-03-20\tERRADO (+1 dia)\n120008\t420152\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120009\t420124\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120010\t420146\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120011\t420134\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120012\t420151\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n120013\t420175\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n150001\t420164\t2026-02-20\t2026-03-23\t30\t2026-03-21\tDIFERENTE\n150002\t420165\t2026-02-20\t2026-03-23\t30\t2026-03-21\tDIFERENTE\n150003\t420113\t2026-02-20\t2026-03-23\t30\t2026-03-21\tDIFERENTE\n150004\t420163\t2026-02-20\t2026-03-23\t30\t2026-03-21\tDIFERENTE\n150005\t420161\t2026-02-20\t2026-03-23\t30\t2026-03-21\tDIFERENTE\n150006\t420086\t2026-02-20\t2026-03-23\t30\t2026-03-21\tDIFERENTE\n150007\t420071\t2026-02-20\t2026-03-23\t30\t2026-03-21\tDIFERENTE\n150008\t420080\t2026-02-25\t2026-03-28\t30\t2026-03-26\tDIFERENTE\n150009\t420135\t2025-02-13\t2025-03-16\t30\t2025-03-14\tDIFERENTE\n150012\t420168\t2026-02-14\t2026-03-16\t30\t2026-03-15\tERRADO (+1 dia)\n150013\t420089\t2026-02-13\t2026-03-15\t30\t2026-03-14\tERRADO (+1 dia)\n150014\t420148\t2026-02-17\t2026-03-19\t30\t2026-03-18\tERRADO (+1 dia)\n150015\t420126\t2026-02-12\t2026-03-14\t30\t2026-03-13\tERRADO (+1 dia)\n150016\t420167\t2026-02-28\t2026-03-30\t30\t2026-03-29\tERRADO (+1 dia)\n150017\t420130\t2026-02-15\t2026-03-17\t30\t2026-03-16\tERRADO (+1 dia)\n",
+  "stderr": "",
+  "execution_time_ms": 132
+}

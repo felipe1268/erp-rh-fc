@@ -1,0 +1,58 @@
+{
+  "query": "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'time_inconsistencies' AND table_schema = DATABASE() LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'time_inconsistencies' AND table_schema = DATABASE() LIMIT 20;",
+  "rows": [
+    {
+      "column_name": "id"
+    },
+    {
+      "column_name": "company_id"
+    },
+    {
+      "column_name": "employee_id"
+    },
+    {
+      "column_name": "obra_id"
+    },
+    {
+      "column_name": "time_record_id"
+    },
+    {
+      "column_name": "mes_referencia"
+    },
+    {
+      "column_name": "data"
+    },
+    {
+      "column_name": "tipo_inconsistencia"
+    },
+    {
+      "column_name": "descricao"
+    },
+    {
+      "column_name": "status"
+    },
+    {
+      "column_name": "justificativa"
+    },
+    {
+      "column_name": "resolvido_por"
+    },
+    {
+      "column_name": "resolvido_em"
+    },
+    {
+      "column_name": "warning_id"
+    },
+    {
+      "column_name": "created_at"
+    },
+    {
+      "column_name": "updated_at"
+    }
+  ],
+  "messages": [],
+  "stdout": "column_name\nid\ncompany_id\nemployee_id\nobra_id\ntime_record_id\nmes_referencia\ndata\ntipo_inconsistencia\ndescricao\nstatus\njustificativa\nresolvido_por\nresolvido_em\nwarning_id\ncreated_at\nupdated_at\n",
+  "stderr": "",
+  "execution_time_ms": 48
+}

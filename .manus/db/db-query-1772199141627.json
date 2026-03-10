@@ -1,0 +1,70 @@
+{
+  "query": "SELECT c.id, c.razaoSocial, (SELECT COUNT(*) FROM asos WHERE companyId = c.id) as asoCount, (SELECT COUNT(*) FROM trainings WHERE companyId = c.id) as trainCount FROM companies c LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT c.id, c.razaoSocial, (SELECT COUNT(*) FROM asos WHERE companyId = c.id) as asoCount, (SELECT COUNT(*) FROM trainings WHERE companyId = c.id) as trainCount FROM companies c LIMIT 10;",
+  "rows": [
+    {
+      "id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "60004",
+      "razaoSocial": "CF HOTELARIA LTDA",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "60005",
+      "razaoSocial": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "90001",
+      "razaoSocial": "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "450042",
+      "razaoSocial": "Empresa Teste CRUD",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "450043",
+      "razaoSocial": "Empresa Teste CRUD",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "450044",
+      "razaoSocial": "Empresa Teste CRUD",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "450045",
+      "razaoSocial": "Empresa Teste CRUD",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "450046",
+      "razaoSocial": "Empresa Teste CRUD",
+      "asoCount": "0",
+      "trainCount": "0"
+    },
+    {
+      "id": "450047",
+      "razaoSocial": "Empresa Teste CRUD",
+      "asoCount": "0",
+      "trainCount": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trazaoSocial\tasoCount\ttrainCount\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t0\t0\n60004\tCF HOTELARIA LTDA\t0\t0\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t0\t0\n90001\tLOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA\t0\t0\n450042\tEmpresa Teste CRUD\t0\t0\n450043\tEmpresa Teste CRUD\t0\t0\n450044\tEmpresa Teste CRUD\t0\t0\n450045\tEmpresa Teste CRUD\t0\t0\n450046\tEmpresa Teste CRUD\t0\t0\n450047\tEmpresa Teste CRUD\t0\t0\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

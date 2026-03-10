@@ -1,0 +1,106 @@
+{
+  "query": "SHOW COLUMNS FROM employees WHERE Field IN ('vtRecebe', 'vaRecebe', 'auxFarmacia', 'planoSaude', 'benefObs', 'vtNumeroCartao', 'vaValor', 'vaOperadora', 'vaNumeroCartao', 'auxFarmaciaValor', 'planoSaudeOperadora', 'planoSaudeValor');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW COLUMNS FROM employees WHERE Field IN ('vtRecebe', 'vaRecebe', 'auxFarmacia', 'planoSaude', 'benefObs', 'vtNumeroCartao', 'vaValor', 'vaOperadora', 'vaNumeroCartao', 'auxFarmaciaValor', 'planoSaudeOperadora', 'planoSaudeValor');",
+  "rows": [
+    {
+      "Field": "vtRecebe",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "vtNumeroCartao",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "vaRecebe",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "vaValor",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "vaOperadora",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "vaNumeroCartao",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "auxFarmacia",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "auxFarmaciaValor",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "planoSaude",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "planoSaudeOperadora",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "planoSaudeValor",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "benefObs",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nvtRecebe\tvarchar(20)\tYES\t\tNULL\t\nvtNumeroCartao\tvarchar(50)\tYES\t\tNULL\t\nvaRecebe\tvarchar(20)\tYES\t\tNULL\t\nvaValor\tvarchar(20)\tYES\t\tNULL\t\nvaOperadora\tvarchar(100)\tYES\t\tNULL\t\nvaNumeroCartao\tvarchar(50)\tYES\t\tNULL\t\nauxFarmacia\tvarchar(20)\tYES\t\tNULL\t\nauxFarmaciaValor\tvarchar(20)\tYES\t\tNULL\t\nplanoSaude\tvarchar(20)\tYES\t\tNULL\t\nplanoSaudeOperadora\tvarchar(100)\tYES\t\tNULL\t\nplanoSaudeValor\tvarchar(20)\tYES\t\tNULL\t\nbenefObs\ttext\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

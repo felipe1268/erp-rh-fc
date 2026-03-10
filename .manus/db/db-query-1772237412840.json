@@ -1,0 +1,31 @@
+{
+  "query": "SELECT version, titulo, tipo, criadoPor, createdAt FROM system_revisions ORDER BY version DESC LIMIT 3",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo, criadoPor, createdAt FROM system_revisions ORDER BY version DESC LIMIT 3",
+  "rows": [
+    {
+      "version": "104",
+      "titulo": "Paleta de cores harmoniosa, drill-down full screen, edição Aviso Prévio, timeline expandida",
+      "tipo": "melhoria",
+      "criadoPor": "system",
+      "createdAt": "2026-02-26 23:55:39"
+    },
+    {
+      "version": "103",
+      "titulo": "Confirmação de cores Admissões x Demissões + Registro de Revisões",
+      "tipo": "melhoria",
+      "criadoPor": "Sistema",
+      "createdAt": "2026-02-26 23:37:09"
+    },
+    {
+      "version": "102",
+      "titulo": "Componente DrillDownModal + DashChart com onClick",
+      "tipo": "feature",
+      "criadoPor": "Sistema",
+      "createdAt": "2026-02-26 23:37:09"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\tcriadoPor\tcreatedAt\n104\tPaleta de cores harmoniosa, drill-down full screen, edição Aviso Prévio, timeline expandida\tmelhoria\tsystem\t2026-02-26 23:55:39\n103\tConfirmação de cores Admissões x Demissões + Registro de Revisões\tmelhoria\tSistema\t2026-02-26 23:37:09\n102\tComponente DrillDownModal + DashChart com onClick\tfeature\tSistema\t2026-02-26 23:37:09\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

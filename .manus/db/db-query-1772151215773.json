@@ -1,0 +1,20 @@
+{
+  "query": "SELECT id, nomeCompleto, cpf, funcao, setor, status, companyId, dataAdmissao FROM employees WHERE nomeCompleto LIKE '%MARIANA%CASTILHO%' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nomeCompleto, cpf, funcao, setor, status, companyId, dataAdmissao FROM employees WHERE nomeCompleto LIKE '%MARIANA%CASTILHO%' LIMIT 5;",
+  "rows": [
+    {
+      "id": "420109",
+      "nomeCompleto": "MARIANA CASTILHO DE LIMA",
+      "cpf": "401.827.378-96",
+      "funcao": "COORDENADOR(A) DE PLANEJAMENTO",
+      "setor": "ESCRITORIO CENTRAL",
+      "status": "Ativo",
+      "companyId": "60002",
+      "dataAdmissao": "2024-05-07"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeCompleto\tcpf\tfuncao\tsetor\tstatus\tcompanyId\tdataAdmissao\n420109\tMARIANA CASTILHO DE LIMA\t401.827.378-96\tCOORDENADOR(A) DE PLANEJAMENTO\tESCRITORIO CENTRAL\tAtivo\t60002\t2024-05-07\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}

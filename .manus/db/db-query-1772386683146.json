@@ -1,0 +1,124 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'funcionarios_terceiros' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'funcionarios_terceiros' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "empresa_terceira_id"
+    },
+    {
+      "COLUMN_NAME": "company_id"
+    },
+    {
+      "COLUMN_NAME": "nome"
+    },
+    {
+      "COLUMN_NAME": "cpf"
+    },
+    {
+      "COLUMN_NAME": "rg"
+    },
+    {
+      "COLUMN_NAME": "data_nascimento"
+    },
+    {
+      "COLUMN_NAME": "foto_url"
+    },
+    {
+      "COLUMN_NAME": "funcao"
+    },
+    {
+      "COLUMN_NAME": "telefone"
+    },
+    {
+      "COLUMN_NAME": "email"
+    },
+    {
+      "COLUMN_NAME": "aso_url"
+    },
+    {
+      "COLUMN_NAME": "aso_validade"
+    },
+    {
+      "COLUMN_NAME": "treinamento_nr_url"
+    },
+    {
+      "COLUMN_NAME": "treinamento_nr_validade"
+    },
+    {
+      "COLUMN_NAME": "certificados_url"
+    },
+    {
+      "COLUMN_NAME": "obra_id"
+    },
+    {
+      "COLUMN_NAME": "obra_nome"
+    },
+    {
+      "COLUMN_NAME": "status_aptidao_terceiro"
+    },
+    {
+      "COLUMN_NAME": "motivo_inapto"
+    },
+    {
+      "COLUMN_NAME": "status_func_terceiro"
+    },
+    {
+      "COLUMN_NAME": "created_at"
+    },
+    {
+      "COLUMN_NAME": "updated_at"
+    },
+    {
+      "COLUMN_NAME": "deleted_at"
+    },
+    {
+      "COLUMN_NAME": "nome_completo"
+    },
+    {
+      "COLUMN_NAME": "observacao_aprovacao"
+    },
+    {
+      "COLUMN_NAME": "aprovado_por"
+    },
+    {
+      "COLUMN_NAME": "data_aprovacao"
+    },
+    {
+      "COLUMN_NAME": "cadastrado_por"
+    },
+    {
+      "COLUMN_NAME": "nr35_validade"
+    },
+    {
+      "COLUMN_NAME": "nr35_doc_url"
+    },
+    {
+      "COLUMN_NAME": "nr10_validade"
+    },
+    {
+      "COLUMN_NAME": "nr10_doc_url"
+    },
+    {
+      "COLUMN_NAME": "nr33_validade"
+    },
+    {
+      "COLUMN_NAME": "nr33_doc_url"
+    },
+    {
+      "COLUMN_NAME": "integracao_doc_url"
+    },
+    {
+      "COLUMN_NAME": "aso_doc_url"
+    },
+    {
+      "COLUMN_NAME": "data_admissao"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\nempresa_terceira_id\ncompany_id\nnome\ncpf\nrg\ndata_nascimento\nfoto_url\nfuncao\ntelefone\nemail\naso_url\naso_validade\ntreinamento_nr_url\ntreinamento_nr_validade\ncertificados_url\nobra_id\nobra_nome\nstatus_aptidao_terceiro\nmotivo_inapto\nstatus_func_terceiro\ncreated_at\nupdated_at\ndeleted_at\nnome_completo\nobservacao_aprovacao\naprovado_por\ndata_aprovacao\ncadastrado_por\nnr35_validade\nnr35_doc_url\nnr10_validade\nnr10_doc_url\nnr33_validade\nnr33_doc_url\nintegracao_doc_url\naso_doc_url\ndata_admissao\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

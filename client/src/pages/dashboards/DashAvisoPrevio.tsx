@@ -1,0 +1,646 @@
+import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
+import { useState, useMemo } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
+import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
+import PrintActions from "@/components/PrintActions";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { trpc } from "@/lib/trpc";
+import { useCompany } from "@/contexts/CompanyContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertTriangle, Clock, DollarSign, Users, CalendarDays,
+  TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
+  CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
+  Wallet, Receipt, BarChart3, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+/** Formata número para moeda brasileira: R$ 3.561,47 */
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Formata número curto para eixos dos gráficos: R$ 3,5 mil / R$ 1,2 mi */
+function fmtBRLShort(v: number) {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  return fmtBRL(v);
+}
+
+/** Formata valor de string do DB para exibição: "3561.47" -> "R$ 3.561,47" */
+function fmtValorStr(v: string | null | undefined) {
+  if (!v) return "-";
+  const n = parseFloat(v);
+  if (isNaN(n)) return "-";
+  return fmtBRL(n);
+}
+
+function fmtTipoLabel(tipo: string) {
+  const map: Record<string, string> = {
+    empregador_trabalhado: "Empregador (Trabalhado)",
+    empregador_indenizado: "Empregador (Indenizado)",
+    empregado_trabalhado: "Empregado (Trabalhado)",
+    empregado_indenizado: "Empregado (Indenizado)",
+  };
+  return map[tipo] || tipo;
+}
+
+function fmtReducaoLabel(r: string) {
+  const map: Record<string, string> = {
+    "2h_dia": "2h/dia",
+    "7_dias_corridos": "7 dias corridos",
+    nenhuma: "Nenhuma",
+  };
+  return map[r] || r;
+}
+
+function fmtStatus(s: string) {
+  const map: Record<string, string> = {
+    em_andamento: "Em Andamento",
+    concluido: "Concluído",
+    cancelado: "Cancelado",
+  };
+  return map[s] || s;
+}
+
+function statusColor(s: string) {
+  if (s === "em_andamento") return "bg-amber-100 text-amber-700";
+  if (s === "concluido") return "bg-green-100 text-green-700";
+  if (s === "cancelado") return "bg-red-100 text-red-700";
+  return "bg-gray-100 text-gray-700";
+}
+
+export default function DashAvisoPrevio() {
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const { data, isLoading } = trpc.dashboards.avisoPrevio.useQuery(
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+
+  const [drillDown, setDrillDown] = useState<{ type: string; label: string } | null>(null);
+  const [reducaoFilter, setReducaoFilter] = useState<string>("todos");
+
+  // Filtra avisos pelo drill-down selecionado
+  const drillDownAvisos = useMemo(() => {
+    if (!drillDown || !data) return [];
+    return data.avisos.filter((a: any) => {
+      if (drillDown.type === 'funcao') {
+        const funcao = a.funcao || a.nomeCompleto;
+        return funcao === drillDown.label || (funcao && funcao.startsWith(drillDown.label.replace('...', '')));
+      }
+      if (drillDown.type === 'setor') {
+        return (a.setor || 'Sem Setor') === drillDown.label || (a.setor || 'Não informado') === drillDown.label;
+      }
+      if (drillDown.type === 'status') {
+        return a.status === drillDown.label;
+      }
+      if (drillDown.type === 'tipo') {
+        return a.tipo === drillDown.label;
+      }
+      if (drillDown.type === 'dias') {
+        return String(a.diasAviso) === drillDown.label;
+      }
+      if (drillDown.type === 'anos') {
+        return String(a.anosServico || 0) === drillDown.label;
+      }
+      if (drillDown.type === 'custoSetor') {
+        return (a.setor || 'Não informado') === drillDown.label;
+      }
+      if (drillDown.type === 'finTotal') {
+        return true; // show all avisos
+      }
+      if (drillDown.type === 'finStatus') {
+        return a.status === drillDown.label;
+      }
+      if (drillDown.type === 'mes') {
+        const d = a.dataInicio ? new Date(a.dataInicio) : null;
+        if (!d) return false;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return key === drillDown.label;
+      }
+      if (drillDown.type === 'reducao') {
+        const r = a.reducaoJornada || 'nenhuma';
+        if (drillDown.label === '2h por dia') return r === '2h_dia';
+        if (drillDown.label === '7 dias corridos') return r === '7_dias_corridos';
+        if (drillDown.label === 'Nenhuma') return r === 'nenhuma' || !a.reducaoJornada;
+        return false;
+      }
+      return false;
+    });
+  }, [drillDown, data]);
+
+  if (isLoading) return (
+    <DashboardLayout>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    </DashboardLayout>
+  );
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Link href="/dashboards" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar aos Dashboards</Link>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard Aviso Prévio</h1>
+            <p className="text-muted-foreground text-sm mt-1">Análise completa de avisos prévios, custos e prazos</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-white border border-[#E2E8F0] rounded-lg px-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAno(a => a - 1)}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-semibold text-[#0F172A] min-w-[50px] text-center">{ano}</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAno(a => a + 1)}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+            <PrintActions title="Dashboard Aviso Prévio" />
+          </div>
+        </div>
+
+        {!data ? (
+          <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
+        ) : (
+          <>
+            {/* ===== SEÇÃO 1: RESUMO QUANTITATIVO ===== */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <DashKpi label="Total de Avisos" value={data.total} icon={AlertTriangle} color="blue" />
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'status', label: 'em_andamento' })}>
+                <DashKpi label="Em Andamento" value={data.emAndamento} icon={Clock} color="orange" />
+              </div>
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'status', label: 'concluido' })}>
+                <DashKpi label="Concluídos" value={data.concluidos} icon={CheckCircle2} color="green" />
+              </div>
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'status', label: 'cancelado' })}>
+                <DashKpi label="Cancelados" value={data.cancelados} icon={XCircle} color="red" />
+              </div>
+            </div>
+
+            {/* ===== SEÇÃO 2: PREVISÃO DE CUSTO (apenas em andamento) ===== */}
+            <Card>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Wallet className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm">Previsão de Custo</h3>
+                    <p className="text-[10px] text-muted-foreground">Custo estimado dos avisos em andamento (cancelados e concluídos não entram na previsão)</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Custo Total Em Andamento */}
+                  <div
+                    className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-4 sm:p-5 text-center cursor-pointer hover:border-orange-400 hover:shadow-md active:scale-[0.98] transition-all"
+                    onClick={() => setDrillDown({ type: 'finStatus', label: 'em_andamento' })}
+                    title="Clique para ver detalhes"
+                  >
+                    <DollarSign className="h-6 w-6 text-orange-500 mx-auto mb-2" />
+                    <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-700 tabular-nums">{fmtBRL(data.valorTotalEstimado)}</p>
+                    <p className="text-xs text-orange-600 font-medium mt-1">Custo Total Estimado (Em Andamento)</p>
+                    <p className="text-[10px] text-orange-400 mt-0.5">{data.emAndamento} aviso(s) ativo(s) · Clique para detalhes</p>
+                  </div>
+                  {/* Média por aviso */}
+                  <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-4 sm:p-5 text-center">
+                    <Receipt className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                    <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-700 tabular-nums">{data.emAndamento > 0 ? fmtBRL(data.valorTotalEstimado / data.emAndamento) : 'R$ 0,00'}</p>
+                    <p className="text-xs text-blue-600 font-medium mt-1">Média por Aviso</p>
+                    <p className="text-[10px] text-blue-400 mt-0.5">Custo médio de rescisão por funcionário</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ===== SEÇÃO 3: ALERTAS ===== */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <DashKpi label="Vencendo em 7 dias" value={data.vencendo7dias} icon={ShieldAlert} color="red" sub="Atenção imediata" />
+              <DashKpi label="Vencendo em 30 dias" value={data.vencendo30dias} icon={CalendarDays} color="yellow" sub="Planejamento" />
+            </div>
+
+            {/* ===== SEÇÃO 4: GRÁFICOS — Tipo + Redução ===== */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <DashChart
+                title="Distribuição por Tipo de Aviso"
+                type="doughnut"
+                labels={[
+                  "Empregador (Trabalhado)",
+                  "Empregador (Indenizado)",
+                  "Empregado (Trabalhado)",
+                  "Empregado (Indenizado)",
+                ]}
+                datasets={[{
+                  data: [
+                    data.empregadorTrabalhado,
+                    data.empregadorIndenizado,
+                    data.empregadoTrabalhado,
+                    data.empregadoIndenizado,
+                  ],
+                  backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[3]],
+                }]}
+                height={280}
+                onChartClick={(info) => {
+                  const tipoMap: Record<string, string> = {
+                    "Empregador (Trabalhado)": "empregador_trabalhado",
+                    "Empregador (Indenizado)": "empregador_indenizado",
+                    "Empregado (Trabalhado)": "empregado_trabalhado",
+                    "Empregado (Indenizado)": "empregado_indenizado",
+                  };
+                  setDrillDown({ type: 'tipo', label: tipoMap[info.label] || info.label });
+                }}
+              />
+              <DashChart
+                title="Redução de Jornada (Art. 488 CLT)"
+                type="doughnut"
+                labels={["2h por dia", "7 dias corridos", "Nenhuma"]}
+                datasets={[{
+                  data: [data.reducao2h, data.reducao7dias, data.semReducao],
+                  backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[2], SEMANTIC_COLORS.neutro],
+                }]}
+                height={280}
+                onChartClick={(info) => {
+                  setDrillDown({ type: 'reducao', label: info.label });
+                }}
+              />
+            </div>
+
+            {/* ===== SEÇÃO 5: Evolução Mensal ===== */}
+            {data.evolucaoMensal.length > 0 && (
+              <DashChart
+                title="Evolução Mensal de Avisos Prévios"
+                type="bar"
+                labels={data.evolucaoMensal.map((r: any) => {
+                  const [y, m] = r.mes.split("-");
+                  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+                  return `${meses[parseInt(m) - 1]}/${y.slice(2)}`;
+                })}
+                datasets={[
+                  {
+                    label: "Trabalhado",
+                    data: data.evolucaoMensal.map((r: any) => r.trabalhado),
+                    backgroundColor: CHART_PALETTE[0],
+                  },
+                  {
+                    label: "Indenizado",
+                    data: data.evolucaoMensal.map((r: any) => r.indenizado),
+                    backgroundColor: CHART_PALETTE[2],
+                  },
+                ]}
+                height={280}
+                onChartClick={(info) => {
+                  const mesData = data.evolucaoMensal[info.dataIndex];
+                  if (mesData) setDrillDown({ type: 'mes', label: mesData.mes });
+                }}
+              />
+            )}
+
+            {/* ===== SEÇÃO 6: Por Setor + Por Função ===== */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {data.setorDist.length > 0 && (
+                <DashChart
+                  title="Avisos por Setor"
+                  type="horizontalBar"
+                  labels={data.setorDist.map((s: any) => s.setor)}
+                  datasets={[{
+                    label: "Avisos",
+                    data: data.setorDist.map((s: any) => s.count),
+                    backgroundColor: CHART_PALETTE[0],
+                  }]}
+                  height={Math.max(200, data.setorDist.length * 40)}
+                  onChartClick={(info) => setDrillDown({ type: 'setor', label: info.label })}
+                />
+              )}
+              {data.funcaoDist.length > 0 && (
+                <DashChart
+                  title="Top 10 Funções com Avisos"
+                  type="horizontalBar"
+                  labels={data.funcaoDist.map((f: any) => f.funcao.length > 25 ? f.funcao.slice(0, 25) + "..." : f.funcao)}
+                  datasets={[{
+                    label: "Avisos",
+                    data: data.funcaoDist.map((f: any) => f.count),
+                    backgroundColor: CHART_PALETTE[3],
+                  }]}
+                  height={Math.max(200, data.funcaoDist.length * 40)}
+                  onChartClick={(info) => {
+                    const fullLabel = data.funcaoDist[info.dataIndex]?.funcao || info.label;
+                    setDrillDown({ type: 'funcao', label: fullLabel });
+                  }}
+                />
+              )}
+            </div>
+
+            {/* ===== SEÇÃO 7: Custo por Setor ===== */}
+            {data.custoPorSetor.length > 0 && (
+              <DashChart
+                title="Custo Estimado de Rescisão por Setor"
+                type="bar"
+                labels={data.custoPorSetor.map((s: any) => s.setor)}
+                datasets={[{
+                  label: "Valor (R$)",
+                  data: data.custoPorSetor.map((s: any) => s.valor),
+                  backgroundColor: data.custoPorSetor.map((_: any, i: number) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                }]}
+                height={280}
+                valueFormatter={fmtBRLShort}
+                onChartClick={(info) => {
+                  setDrillDown({ type: 'custoSetor', label: info.label });
+                }}
+              />
+            )}
+
+            {/* ===== SEÇÃO 8: Composição das Rescisões ===== */}
+            {data.breakdownRescisao.some((b: any) => b.valor > 0) && (
+              <DashChart
+                title="Composição Total das Rescisões"
+                type="bar"
+                labels={data.breakdownRescisao.map((b: any) => b.componente)}
+                datasets={[{
+                  label: "Valor Total (R$)",
+                  data: data.breakdownRescisao.map((b: any) => b.valor),
+                  backgroundColor: [
+                    CHART_PALETTE[0], CHART_PALETTE[1], CHART_PALETTE[2],
+                    CHART_PALETTE[4], SEMANTIC_COLORS.negativo, CHART_PALETTE[3],
+                  ],
+                }]}
+                height={280}
+                valueFormatter={fmtBRLShort}
+              />
+            )}
+
+            {/* ===== SEÇÃO 9: Dias de Aviso + Anos de Serviço ===== */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {data.diasAvisoDist.length > 0 && (
+                <DashChart
+                  title="Distribuição de Dias de Aviso (Lei 12.506/2011)"
+                  type="bar"
+                  labels={data.diasAvisoDist.map((d: any) => `${d.dias} dias`)}
+                  datasets={[{
+                    label: "Avisos",
+                    data: data.diasAvisoDist.map((d: any) => d.count),
+                    backgroundColor: CHART_PALETTE[4],
+                  }]}
+                  height={260}
+                  onChartClick={(info) => {
+                    const diasStr = info.label.replace(' dias', '');
+                    setDrillDown({ type: 'dias', label: diasStr });
+                  }}
+                />
+              )}
+              {data.anosServicoDist.length > 0 && (
+                <DashChart
+                  title="Distribuição por Anos de Serviço"
+                  type="bar"
+                  labels={data.anosServicoDist.map((a: any) => a.anos === 0 ? "< 1 ano" : `${a.anos} ano${a.anos > 1 ? "s" : ""}`)}
+                  datasets={[{
+                    label: "Avisos",
+                    data: data.anosServicoDist.map((a: any) => a.count),
+                    backgroundColor: CHART_PALETTE[1],
+                  }]}
+                  height={260}
+                  onChartClick={(info) => {
+                    const anosData = data.anosServicoDist[info.dataIndex];
+                    if (anosData) setDrillDown({ type: 'anos', label: String(anosData.anos) });
+                  }}
+                />
+              )}
+            </div>
+
+            {/* ===== SEÇÃO 10: Tabela Detalhada ===== */}
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Avisos Prévios Em Andamento ({(() => {
+                      const base = data.avisos.filter((a: any) => a.status === 'em_andamento');
+                      if (reducaoFilter === 'todos') return base.length;
+                      return base.filter((a: any) => {
+                        if (reducaoFilter === '7_dias_corridos') return a.reducaoJornada === '7_dias_corridos';
+                        if (reducaoFilter === '2h_dia') return a.reducaoJornada === '2h_dia';
+                        return true;
+                      }).length;
+                    })()})
+                  </CardTitle>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Redução:</span>
+                    {['todos', '7_dias_corridos', '2h_dia'].map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setReducaoFilter(f)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                          reducaoFilter === f
+                            ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                            : 'bg-white text-muted-foreground border-border hover:bg-muted/50'
+                        }`}
+                      >
+                        {f === 'todos' ? 'Todos' : f === '7_dias_corridos' ? '7 Dias' : '2h/Dia'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {data.avisos.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Nenhum aviso prévio registrado.</p>
+                ) : (() => {
+                  const baseAvisos = data.avisos.filter((a: any) => a.status === 'em_andamento');
+                  const filteredAvisos = reducaoFilter === 'todos' ? baseAvisos : baseAvisos.filter((a: any) => {
+                    if (reducaoFilter === '7_dias_corridos') return a.reducaoJornada === '7_dias_corridos';
+                    if (reducaoFilter === '2h_dia') return a.reducaoJornada === '2h_dia';
+                    return true;
+                  });
+                  return filteredAvisos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">Nenhum aviso com esta redução.</p>
+                  ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Funcionário</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Tipo</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Início</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Fim</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Dias</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Redução</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground min-w-[160px]">Evolução</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Dias Restantes</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground">Setor</th>
+                          <th className="py-2 pr-3 font-medium text-muted-foreground text-right">Valor Est.</th>
+                          <th className="py-2 font-medium text-muted-foreground">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAvisos.map((a: any) => {
+                          // Calcular progresso do aviso
+                          const hoje = new Date();
+                          const inicio = a.dataInicio ? new Date(a.dataInicio + 'T00:00:00') : null;
+                          const fim = a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
+                          let progresso = 0;
+                          let diasRestantes = 0;
+                          let barColor = 'bg-blue-500';
+                          if (a.status === 'concluido') {
+                            progresso = 100;
+                            barColor = 'bg-green-500';
+                          } else if (a.status === 'cancelado') {
+                            progresso = 100;
+                            barColor = 'bg-red-400';
+                          } else if (inicio && fim) {
+                            const totalDias = Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+                            const diasPassados = Math.ceil((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+                            diasRestantes = Math.max(0, Math.ceil((fim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)));
+                            progresso = Math.min(100, Math.max(0, Math.round((diasPassados / totalDias) * 100)));
+                            if (progresso >= 90) barColor = 'bg-red-500';
+                            else if (progresso >= 70) barColor = 'bg-amber-500';
+                            else if (progresso >= 40) barColor = 'bg-blue-500';
+                            else barColor = 'bg-emerald-500';
+                          }
+                          return (
+                          <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30">
+                            <td className="py-2 pr-3 font-medium truncate max-w-[180px]">{a.nomeCompleto}</td>
+                            <td className="py-2 pr-3 text-xs">{fmtTipoLabel(a.tipo)}</td>
+                            <td className="py-2 pr-3 text-xs">{a.dataInicio ? new Date(a.dataInicio + "T00:00:00").toLocaleDateString("pt-BR") : "-"}</td>
+                            <td className="py-2 pr-3 text-xs font-semibold">{a.dataFim ? new Date(a.dataFim + "T00:00:00").toLocaleDateString("pt-BR") : "-"}</td>
+                            <td className="py-2 pr-3 text-center font-mono">{a.diasAviso}</td>
+                            <td className="py-2 pr-3 text-xs">{fmtReducaoLabel(a.reducaoJornada || "nenhuma")}</td>
+                            <td className="py-2 pr-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden min-w-[80px]">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${barColor}`}
+                                    style={{ width: `${progresso}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap w-[52px] text-right">
+                                  {a.status === 'concluido' ? '100%' : a.status === 'cancelado' ? 'Canc.' : `${progresso}%`}
+                                </span>
+                              </div>
+                              {a.status === 'em_andamento' && diasRestantes > 0 && (
+                                <p className="text-[9px] text-muted-foreground mt-0.5">{diasRestantes}d restante{diasRestantes !== 1 ? 's' : ''}</p>
+                              )}
+                              {a.status === 'em_andamento' && diasRestantes === 0 && progresso >= 100 && (
+                                <p className="text-[9px] text-red-600 font-semibold mt-0.5">Vencido!</p>
+                              )}
+                            </td>
+                            <td className="py-2 pr-3 text-center">{(() => {
+                              const ultimoDia = a.reducaoJornada === '7_dias_corridos' && a.dataFim
+                                ? (() => { const dt = new Date(a.dataFim + 'T00:00:00'); dt.setDate(dt.getDate() - 7); return dt; })()
+                                : a.dataFim ? new Date(a.dataFim + 'T00:00:00') : null;
+                              if (!ultimoDia) return '-';
+                              const hj = new Date(); hj.setHours(0,0,0,0);
+                              const diff = Math.ceil((ultimoDia.getTime() - hj.getTime()) / (1000*60*60*24));
+                              if (diff < 0) return <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">Vencido!</span>;
+                              if (diff <= 7) return <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">{diff}d</span>;
+                              return <span className="text-xs font-medium text-blue-600">{diff}d</span>;
+                            })()}</td>
+                            <td className="py-2 pr-3 text-xs text-muted-foreground">{a.setor || "-"}</td>
+                            <td className="py-2 pr-3 text-xs font-semibold text-right tabular-nums">
+                              {fmtValorStr(a.valorEstimadoTotal)}
+                            </td>
+                            <td className="py-2">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${statusColor(a.status)}`}>
+                                {fmtStatus(a.status)}
+                              </span>
+                            </td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* ===== DRILL-DOWN DIALOG ===== */}
+            <Dialog open={!!drillDown} onOpenChange={(open) => !open && setDrillDown(null)}>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-lg">
+                    {drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-500" /> :
+                     drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-5 w-5 text-blue-500" /> :
+                     drillDown?.type === 'status' || drillDown?.type === 'finStatus' ? <BarChart3 className="h-5 w-5 text-blue-500" /> :
+                     drillDown?.type === 'finTotal' ? <DollarSign className="h-5 w-5 text-blue-500" /> :
+                     <AlertTriangle className="h-5 w-5 text-amber-500" />}
+                    {drillDown?.type === 'funcao' ? `Função: ${drillDown?.label}` :
+                     drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? `Setor: ${drillDown?.label}` :
+                     drillDown?.type === 'status' ? `Status: ${fmtStatus(drillDown?.label || '')}` :
+                     drillDown?.type === 'finTotal' ? 'Custo Total Estimado — Todos os Avisos' :
+                     drillDown?.type === 'finStatus' ? `Custo ${fmtStatus(drillDown?.label || '')}` :
+                     drillDown?.type === 'tipo' ? `Tipo: ${fmtTipoLabel(drillDown?.label || '')}` :
+                     drillDown?.type === 'dias' ? `Dias de Aviso: ${drillDown?.label}` :
+                     drillDown?.type === 'anos' ? `Anos de Serviço: ${drillDown?.label === '0' ? '< 1 ano' : drillDown?.label + ' ano(s)'}` :
+                     drillDown?.type === 'mes' ? `Mês: ${drillDown?.label}` :
+                     drillDown?.type === 'reducao' ? `Redução: ${drillDown?.label}` :
+                     drillDown?.label}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="mt-2">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {drillDownAvisos.length} aviso(s) prévio(s) encontrado(s)
+                    {drillDownAvisos.length > 0 && (
+                      <span className="ml-2 font-semibold text-red-600">
+                        Total: {fmtBRL(drillDownAvisos.reduce((sum: number, a: any) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0))}
+                      </span>
+                    )}
+                  </p>
+                  {drillDownAvisos.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground">Nenhum aviso encontrado para este filtro.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {drillDownAvisos.map((a: any) => (
+                        <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm truncate">{a.nomeCompleto}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtTipoLabel(a.tipo)} · {a.diasAviso} dias · {fmtReducaoLabel(a.reducaoJornada || 'nenhuma')}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {a.dataInicio ? new Date(a.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} → {a.dataFim ? new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                            </p>
+                          </div>
+                          <div className="text-right ml-3 shrink-0">
+                            <p className="font-bold text-sm text-red-600">{fmtValorStr(a.valorEstimadoTotal)}</p>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusColor(a.status)}`}>
+                              {fmtStatus(a.status)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* ===== INFORMAÇÃO LEGAL ===== */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <Briefcase className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p className="font-semibold text-foreground">Lei 12.506/2011 - Aviso Prévio Proporcional</p>
+                    <p>O aviso prévio é de 30 dias para empregados com até 1 ano de serviço, acrescido de 3 dias por ano adicional, até o máximo de 90 dias. A redução de jornada (Art. 488 CLT) permite ao empregado reduzir 2 horas diárias ou faltar 7 dias corridos durante o aviso trabalhado.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+          <PrintFooterLGPD />
+    </DashboardLayout>
+  );
+}

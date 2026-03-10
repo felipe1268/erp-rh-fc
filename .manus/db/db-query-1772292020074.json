@@ -1,0 +1,55 @@
+{
+  "query": "SELECT id, version, titulo, tipo, modulos, criadoPor, dataPublicacao FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, version, titulo, tipo, modulos, criadoPor, dataPublicacao FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "180003",
+      "version": "114",
+      "titulo": "Rev. 114 - IA Jurídica, Formatação e Interatividade",
+      "tipo": "feature",
+      "modulos": "[\"Jurídico\",\"EPIs\",\"Cartão de Ponto\",\"Férias\",\"Raio-X\"]",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-28 10:06:55"
+    },
+    {
+      "id": "180002",
+      "version": "113",
+      "titulo": "IA Jurídica + Assuntos DataJud",
+      "tipo": "feature",
+      "modulos": "[\"juridico\",\"dashboards\"]",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-28 09:54:08"
+    },
+    {
+      "id": "180001",
+      "version": "112",
+      "titulo": "DataJud + Dashboards + Responsividade",
+      "tipo": "melhoria",
+      "modulos": "Jurídico, Dashboards, Férias",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-28 09:22:34"
+    },
+    {
+      "id": "150008",
+      "version": "112",
+      "titulo": "Drill-down interativo nos gráficos de Aviso Prévio",
+      "tipo": "feature",
+      "modulos": "[\"Dashboard Aviso Prévio\",\"DashChart\"]",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-28 00:35:48"
+    },
+    {
+      "id": "150007",
+      "version": "111",
+      "titulo": "Redesign Medições PJ + Dashboard Jurídico responsivo + Breakpoint xs",
+      "tipo": "melhoria",
+      "modulos": "[\"Medições PJ\", \"Dashboard Jurídico\", \"Sistema\"]",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-28 00:11:11"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\ttipo\tmodulos\tcriadoPor\tdataPublicacao\n180003\t114\tRev. 114 - IA Jurídica, Formatação e Interatividade\tfeature\t[\"Jurídico\",\"EPIs\",\"Cartão de Ponto\",\"Férias\",\"Raio-X\"]\tSistema\t2026-02-28 10:06:55\n180002\t113\tIA Jurídica + Assuntos DataJud\tfeature\t[\"juridico\",\"dashboards\"]\tSistema\t2026-02-28 09:54:08\n180001\t112\tDataJud + Dashboards + Responsividade\tmelhoria\tJurídico, Dashboards, Férias\tSistema\t2026-02-28 09:22:34\n150008\t112\tDrill-down interativo nos gráficos de Aviso Prévio\tfeature\t[\"Dashboard Aviso Prévio\",\"DashChart\"]\tSistema\t2026-02-28 00:35:48\n150007\t111\tRedesign Medições PJ + Dashboard Jurídico responsivo + Breakpoint xs\tmelhoria\t[\"Medições PJ\", \"Dashboard Jurídico\", \"Sistema\"]\tSistema\t2026-02-28 00:11:11\n",
+  "stderr": "",
+  "execution_time_ms": 222
+}

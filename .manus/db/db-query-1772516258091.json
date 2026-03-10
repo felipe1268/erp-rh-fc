@@ -1,0 +1,178 @@
+{
+  "query": "DESCRIBE financial_events;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute DESCRIBE financial_events;",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "companyId",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "tipo",
+      "Type": "enum('saida_vale','saida_pagamento','saida_he','saida_vr','saida_vt','saida_encargos','entrada_desconto','ajuste')",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "categoria",
+      "Type": "varchar(50)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "folha_pagamento",
+      "Extra": ""
+    },
+    {
+      "Field": "subcategoria",
+      "Type": "varchar(100)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "mesCompetencia",
+      "Type": "varchar(7)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "dataPrevista",
+      "Type": "date",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "dataEfetiva",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "valor",
+      "Type": "varchar(20)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "enum('previsto','consolidado','pago','cancelado')",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "previsto",
+      "Extra": ""
+    },
+    {
+      "Field": "employeeId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "employeeName",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "obraId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "obraNome",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "descricao",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "origemTipo",
+      "Type": "varchar(50)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "origemId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "criadoPor",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "atualizadoPor",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "createdAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "updatedAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint\tNO\tPRI\tNULL\tauto_increment\ncompanyId\tint\tNO\tMUL\tNULL\t\ntipo\tenum('saida_vale','saida_pagamento','saida_he','saida_vr','saida_vt','saida_encargos','entrada_desconto','ajuste')\tNO\tMUL\tNULL\t\ncategoria\tvarchar(50)\tNO\t\tfolha_pagamento\t\nsubcategoria\tvarchar(100)\tYES\t\tNULL\t\nmesCompetencia\tvarchar(7)\tNO\t\tNULL\t\ndataPrevista\tdate\tNO\tMUL\tNULL\t\ndataEfetiva\tdate\tYES\t\tNULL\t\nvalor\tvarchar(20)\tNO\t\tNULL\t\nstatus\tenum('previsto','consolidado','pago','cancelado')\tNO\tMUL\tprevisto\t\nemployeeId\tint\tYES\tMUL\tNULL\t\nemployeeName\tvarchar(255)\tYES\t\tNULL\t\nobraId\tint\tYES\tMUL\tNULL\t\nobraNome\tvarchar(255)\tYES\t\tNULL\t\ndescricao\ttext\tYES\t\tNULL\t\norigemTipo\tvarchar(50)\tYES\t\tNULL\t\norigemId\tint\tYES\t\tNULL\t\ncriadoPor\tvarchar(255)\tYES\t\tNULL\t\natualizadoPor\tvarchar(255)\tYES\t\tNULL\t\ncreatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\nupdatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\tDEFAULT_GENERATED on update CURRENT_TIMESTAMP\n",
+  "stderr": "",
+  "execution_time_ms": 315
+}

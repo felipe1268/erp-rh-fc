@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO system_revisions (numero, titulo, descricao, data_revisao, created_at, updated_at) VALUES (82, 'Gap Analysis Completo + Fornecedor CNPJ + Dissídio', 'Implementação completa do Gap Analysis: Template Aviso Prévio PDF, Alerta 80 dias obras, Campos VT/Pensão/Licença Maternidade/Seguro/Sindicato/Dissídio, Tabela Feriados, PJ Medições, Upload Documentos S3, Comparativo Descontos Folha, Cruzamento HE sistema x contabilidade, Regra vale dia 10, Recontratação CPF, JF nos Processos, Sugestão advertências ponto. Módulo Dissídio separado por ano com aplicação em maio e critérios CLT/MTE. Campo Fornecedor com busca automática por CNPJ via BrasilAPI no cadastro de EPIs.', '2026-02-25', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (numero, titulo, descricao, data_revisao, created_at, updated_at) VALUES (82, 'Gap Analysis Completo + Fornecedor CNPJ + Dissídio', 'Implementação completa do Gap Analysis: Template Aviso Prévio PDF, Alerta 80 dias obras, Campos VT/Pensão/Licença Maternidade/Seguro/Sindicato/Dissídio, Tabela Feriados, PJ Medições, Upload Documentos S3, Comparativo Descontos Folha, Cruzamento HE sistema x contabilidade, Regra vale dia 10, Recontratação CPF, JF nos Processos, Sugestão advertências ponto. Módulo Dissídio separado por ano com aplicação em maio e critérios CLT/MTE. Campo Fornecedor com busca automática por CNPJ via BrasilAPI no cadastro de EPIs.', '2026-02-25', NOW(), NOW());",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'numero' in 'field list'"
+  ]
+}

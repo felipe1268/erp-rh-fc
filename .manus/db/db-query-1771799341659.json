@@ -1,0 +1,258 @@
+{
+  "query": "DESCRIBE vacation_periods;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute DESCRIBE vacation_periods;",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "company_id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "employee_id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "periodo_aquisitivo_inicio",
+      "Type": "date",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "periodo_aquisitivo_fim",
+      "Type": "date",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "periodo_concessivo_fim",
+      "Type": "date",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "data_inicio",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "data_fim",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "dias_gozo",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "30",
+      "Extra": ""
+    },
+    {
+      "Field": "fracionamento",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "1",
+      "Extra": ""
+    },
+    {
+      "Field": "periodo2_inicio",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "periodo2_fim",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "periodo3_inicio",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "periodo3_fim",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "abono_pecuniario",
+      "Type": "tinyint",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "valor_ferias",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "valor_terco_constitucional",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "valor_abono",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "valor_total",
+      "Type": "varchar(20)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "data_pagamento",
+      "Type": "date",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "status",
+      "Type": "enum('pendente','agendada','em_gozo','concluida','vencida','cancelada')",
+      "Null": "NO",
+      "Key": "MUL",
+      "Default": "pendente",
+      "Extra": ""
+    },
+    {
+      "Field": "vencida",
+      "Type": "tinyint",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "pagamento_em_dobro",
+      "Type": "tinyint",
+      "Null": "YES",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "observacoes",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "aprovado_por",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "aprovado_por_user_id",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "created_at",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "updated_at",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    },
+    {
+      "Field": "deleted_at",
+      "Type": "timestamp",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "deleted_by",
+      "Type": "varchar(255)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "deleted_by_user_id",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint\tNO\tPRI\tNULL\tauto_increment\ncompany_id\tint\tNO\tMUL\tNULL\t\nemployee_id\tint\tNO\tMUL\tNULL\t\nperiodo_aquisitivo_inicio\tdate\tNO\t\tNULL\t\nperiodo_aquisitivo_fim\tdate\tNO\t\tNULL\t\nperiodo_concessivo_fim\tdate\tNO\tMUL\tNULL\t\ndata_inicio\tdate\tYES\t\tNULL\t\ndata_fim\tdate\tYES\t\tNULL\t\ndias_gozo\tint\tYES\t\t30\t\nfracionamento\tint\tYES\t\t1\t\nperiodo2_inicio\tdate\tYES\t\tNULL\t\nperiodo2_fim\tdate\tYES\t\tNULL\t\nperiodo3_inicio\tdate\tYES\t\tNULL\t\nperiodo3_fim\tdate\tYES\t\tNULL\t\nabono_pecuniario\ttinyint\tYES\t\t0\t\nvalor_ferias\tvarchar(20)\tYES\t\tNULL\t\nvalor_terco_constitucional\tvarchar(20)\tYES\t\tNULL\t\nvalor_abono\tvarchar(20)\tYES\t\tNULL\t\nvalor_total\tvarchar(20)\tYES\t\tNULL\t\ndata_pagamento\tdate\tYES\t\tNULL\t\nstatus\tenum('pendente','agendada','em_gozo','concluida','vencida','cancelada')\tNO\tMUL\tpendente\t\nvencida\ttinyint\tYES\t\t0\t\npagamento_em_dobro\ttinyint\tYES\t\t0\t\nobservacoes\ttext\tYES\t\tNULL\t\naprovado_por\tvarchar(255)\tYES\t\tNULL\t\naprovado_por_user_id\tint\tYES\t\tNULL\t\ncreated_at\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\nupdated_at\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\tDEFAULT_GENERATED on update CURRENT_TIMESTAMP\ndeleted_at\ttimestamp\tYES\t\tNULL\t\ndeleted_by\tvarchar(255)\tYES\t\tNULL\t\ndeleted_by_user_id\tint\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 90
+}

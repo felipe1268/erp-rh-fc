@@ -1,0 +1,65 @@
+{
+  "query": "SELECT * FROM user_group_permissions LIMIT 5",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM user_group_permissions LIMIT 5",
+  "rows": [
+    {
+      "id": "7",
+      "group_id": "1",
+      "rota": "/painel/sst",
+      "can_view": "1",
+      "can_edit": "1",
+      "can_create": "0",
+      "can_delete": "0",
+      "ocultar_valores": "0",
+      "ocultar_documentos": "0"
+    },
+    {
+      "id": "8",
+      "group_id": "1",
+      "rota": "/epis",
+      "can_view": "1",
+      "can_edit": "1",
+      "can_create": "0",
+      "can_delete": "0",
+      "ocultar_valores": "0",
+      "ocultar_documentos": "0"
+    },
+    {
+      "id": "9",
+      "group_id": "1",
+      "rota": "/cipa",
+      "can_view": "1",
+      "can_edit": "1",
+      "can_create": "0",
+      "can_delete": "0",
+      "ocultar_valores": "0",
+      "ocultar_documentos": "0"
+    },
+    {
+      "id": "10",
+      "group_id": "1",
+      "rota": "/dashboards/epis",
+      "can_view": "1",
+      "can_edit": "1",
+      "can_create": "0",
+      "can_delete": "0",
+      "ocultar_valores": "0",
+      "ocultar_documentos": "0"
+    },
+    {
+      "id": "11",
+      "group_id": "1",
+      "rota": "/controle-documentos",
+      "can_view": "1",
+      "can_edit": "0",
+      "can_create": "0",
+      "can_delete": "0",
+      "ocultar_valores": "0",
+      "ocultar_documentos": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgroup_id\trota\tcan_view\tcan_edit\tcan_create\tcan_delete\tocultar_valores\tocultar_documentos\n7\t1\t/painel/sst\t1\t1\t0\t0\t0\t0\n8\t1\t/epis\t1\t1\t0\t0\t0\t0\n9\t1\t/cipa\t1\t1\t0\t0\t0\t0\n10\t1\t/dashboards/epis\t1\t1\t0\t0\t0\t0\n11\t1\t/controle-documentos\t1\t0\t0\t0\t0\t0\n",
+  "stderr": "",
+  "execution_time_ms": 362
+}

@@ -1,0 +1,100 @@
+{
+  "query": "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME = 'eval_avaliacoes' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME = 'eval_avaliacoes' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "employeeId"
+    },
+    {
+      "COLUMN_NAME": "evaluatorId"
+    },
+    {
+      "COLUMN_NAME": "comportamento"
+    },
+    {
+      "COLUMN_NAME": "pontualidade"
+    },
+    {
+      "COLUMN_NAME": "assiduidade"
+    },
+    {
+      "COLUMN_NAME": "segurancaEpis"
+    },
+    {
+      "COLUMN_NAME": "qualidadeAcabamento"
+    },
+    {
+      "COLUMN_NAME": "produtividadeRitmo"
+    },
+    {
+      "COLUMN_NAME": "cuidadoFerramentas"
+    },
+    {
+      "COLUMN_NAME": "economiaMateriais"
+    },
+    {
+      "COLUMN_NAME": "trabalhoEquipe"
+    },
+    {
+      "COLUMN_NAME": "iniciativaProatividade"
+    },
+    {
+      "COLUMN_NAME": "disponibilidadeFlexibilidade"
+    },
+    {
+      "COLUMN_NAME": "organizacaoLimpeza"
+    },
+    {
+      "COLUMN_NAME": "mediaPilar1"
+    },
+    {
+      "COLUMN_NAME": "mediaPilar2"
+    },
+    {
+      "COLUMN_NAME": "mediaPilar3"
+    },
+    {
+      "COLUMN_NAME": "mediaGeral"
+    },
+    {
+      "COLUMN_NAME": "recomendacao"
+    },
+    {
+      "COLUMN_NAME": "observacoes"
+    },
+    {
+      "COLUMN_NAME": "mesReferencia"
+    },
+    {
+      "COLUMN_NAME": "locked"
+    },
+    {
+      "COLUMN_NAME": "startedAt"
+    },
+    {
+      "COLUMN_NAME": "durationSeconds"
+    },
+    {
+      "COLUMN_NAME": "deviceType"
+    },
+    {
+      "COLUMN_NAME": "revisionId"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "updatedAt"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncompanyId\nemployeeId\nevaluatorId\ncomportamento\npontualidade\nassiduidade\nsegurancaEpis\nqualidadeAcabamento\nprodutividadeRitmo\ncuidadoFerramentas\neconomiaMateriais\ntrabalhoEquipe\niniciativaProatividade\ndisponibilidadeFlexibilidade\norganizacaoLimpeza\nmediaPilar1\nmediaPilar2\nmediaPilar3\nmediaGeral\nrecomendacao\nobservacoes\nmesReferencia\nlocked\nstartedAt\ndurationSeconds\ndeviceType\nrevisionId\ncreatedAt\nupdatedAt\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

@@ -1,0 +1,34 @@
+{
+  "query": "SELECT id, prefixoCodigo, nextCodigoInterno, razaoSocial FROM companies WHERE razaoSocial LIKE '%Teste%' OR prefixoCodigo = 'EMP'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, prefixoCodigo, nextCodigoInterno, razaoSocial FROM companies WHERE razaoSocial LIKE '%Teste%' OR prefixoCodigo = 'EMP'",
+  "rows": [
+    {
+      "id": "450014",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450015",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450016",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    },
+    {
+      "id": "450017",
+      "prefixoCodigo": "EMP",
+      "nextCodigoInterno": "3",
+      "razaoSocial": "Empresa Teste CRUD"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tprefixoCodigo\tnextCodigoInterno\trazaoSocial\n450014\tEMP\t3\tEmpresa Teste CRUD\n450015\tEMP\t3\tEmpresa Teste CRUD\n450016\tEMP\t3\tEmpresa Teste CRUD\n450017\tEMP\t3\tEmpresa Teste CRUD\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

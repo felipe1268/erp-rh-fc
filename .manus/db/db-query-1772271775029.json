@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `processo_documentos` (\n\t`id` int AUTO_INCREMENT NOT NULL PRIMARY KEY,\n\t`companyId` int NOT NULL,\n\t`processoId` int NOT NULL,\n\t`nome` varchar(255) NOT NULL,\n\t`tipo` enum('peticao_inicial','contestacao','sentenca','recurso','acordo','pericia','audiencia','despacho','mandado','outros') NOT NULL DEFAULT 'outros',\n\t`descricao` text,\n\t`fileKey` varchar(500) NOT NULL,\n\t`fileUrl` varchar(1000) NOT NULL,\n\t`mimeType` varchar(100),\n\t`tamanhoBytes` int,\n\t`criadoPor` varchar(255),\n\t`criadoPorUserId` int,\n\t`createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t`deletedAt` timestamp NULL,\n\tINDEX `pd_company` (`companyId`),\n\tINDEX `pd_processo` (`processoId`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `processo_documentos` (\n\t`id` int AUTO_INCREMENT NOT NULL PRIMARY KEY,\n\t`companyId` int NOT NULL,\n\t`processoId` int NOT NULL,\n\t`nome` varchar(255) NOT NULL,\n\t`tipo` enum('peticao_inicial','contestacao','sentenca','recurso','acordo','pericia','audiencia','despacho','mandado','outros') NOT NULL DEFAULT 'outros',\n\t`descricao` text,\n\t`fileKey` varchar(500) NOT NULL,\n\t`fileUrl` varchar(1000) NOT NULL,\n\t`mimeType` varchar(100),\n\t`tamanhoBytes` int,\n\t`criadoPor` varchar(255),\n\t`criadoPorUserId` int,\n\t`createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t`deletedAt` timestamp NULL,\n\tINDEX `pd_company` (`companyId`),\n\tINDEX `pd_processo` (`processoId`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 127
+}

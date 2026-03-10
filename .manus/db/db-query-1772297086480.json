@@ -1,0 +1,26 @@
+{
+  "query": "SELECT status, COUNT(*) as total FROM vacation_periods WHERE deletedAt IS NULL GROUP BY status;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT status, COUNT(*) as total FROM vacation_periods WHERE deletedAt IS NULL GROUP BY status;",
+  "rows": [
+    {
+      "status": "agendada",
+      "total": "2"
+    },
+    {
+      "status": "vencida",
+      "total": "109"
+    },
+    {
+      "status": "pendente",
+      "total": "74"
+    },
+    {
+      "status": "concluida",
+      "total": "2"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\ttotal\nagendada\t2\nvencida\t109\npendente\t74\nconcluida\t2\n",
+  "stderr": "",
+  "execution_time_ms": 49
+}

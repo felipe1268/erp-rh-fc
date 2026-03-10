@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE processos_trabalhistas ADD COLUMN IF NOT EXISTS clienteCnpj varchar(20) DEFAULT NULL, ADD COLUMN IF NOT EXISTS clienteRazaoSocial varchar(255) DEFAULT NULL, ADD COLUMN IF NOT EXISTS clienteNomeFantasia varchar(255) DEFAULT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE processos_trabalhistas ADD COLUMN IF NOT EXISTS clienteCnpj varchar(20) DEFAULT NULL, ADD COLUMN IF NOT EXISTS clienteRazaoSocial varchar(255) DEFAULT NULL, ADD COLUMN IF NOT EXISTS clienteNomeFantasia varchar(255) DEFAULT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 410
+}

@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO revisions (version, titulo, descricao, tipo, modulos, criado_por, created_at) VALUES (71, 'Memória DIXI, Simulador Horistas, Tipo Horista', 'Memória de vinculação DIXI: ao vincular um nome não identificado, o sistema memoriza e faz auto-match nos próximos uploads. Aba \"Memória DIXI\" com CRUD completo. Simulador de Folha para Horistas: calcula custo mensal com base em dias úteis e valor/hora. Novo tipo de contrato \"Horista\" com destaque visual do campo Valor da Hora.', 'feature', 'Fechamento de Ponto, Colaboradores', 'Sistema', NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO revisions (version, titulo, descricao, tipo, modulos, criado_por, created_at) VALUES (71, 'Memória DIXI, Simulador Horistas, Tipo Horista', 'Memória de vinculação DIXI: ao vincular um nome não identificado, o sistema memoriza e faz auto-match nos próximos uploads. Aba \"Memória DIXI\" com CRUD completo. Simulador de Folha para Horistas: calcula custo mensal com base em dias úteis e valor/hora. Novo tipo de contrato \"Horista\" com destaque visual do campo Valor da Hora.', 'feature', 'Fechamento de Ponto, Colaboradores', 'Sistema', NOW());",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'w4mm458skqyrwrggqrfw8a.revisions' doesn't exist"
+  ]
+}

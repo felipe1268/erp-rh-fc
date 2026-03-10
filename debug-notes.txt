@@ -1,0 +1,11 @@
+Current state analysis:
+- The screenshot shows the admin_master view (Felipe Alves), which shows all modules (correct)
+- Need to verify the Rodnei (TST) view to confirm filtering works
+- Rodnei is in TST group (group_id=1, user_id=2700796)
+- TST routes: /painel/sst, /epis, /cipa, /dashboards/epis, /controle-documentos, /solicitacao-he
+- TST has ocultar_valores=1 for /epis (just updated)
+- The ModuleHub filters modules by groupCanAccessRoute which checks if the group has at least one route matching the module's features
+- Juridico module has route /processos-trabalhistas which is NOT in TST routes - should be filtered out
+- The DashboardLayout sidebar filters in two passes: individual permissions then group permissions
+- The groupCanAccessRoute function returns false for routes not in the groupRouteMap when hasGroup is true
+- Key issue: The screenshot is from admin_master view, need to test as Rodnei

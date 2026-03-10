@@ -1,0 +1,9 @@
+{
+  "query": "\nINSERT INTO meal_benefit_configs (companyId, obraId, nome, cafeManhaDia, lancheTardeDia, valeAlimentacaoMes, jantaDia, totalVA_iFood, diasUteisRef, observacoes)\nVALUES \n(60002, NULL, 'Padrão FC Engenharia', '5,45', '4,55', '460,75', '25,00', '680,75', 22, 'Valores padrão - Café R$5,45/dia, Lanche R$4,55/dia, VA R$460,75/mês (iFood), Janta R$25,00/dia (se necessário)');\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \nINSERT INTO meal_benefit_configs (companyId, obraId, nome, cafeManhaDia, lancheTardeDia, valeAlimentacaoMes, jantaDia, totalVA_iFood, diasUteisRef, observacoes)\nVALUES \n(60002, NULL, 'Padrão FC Engenharia', '5,45', '4,55', '460,75', '25,00', '680,75', 22, 'Valores padrão - Café R$5,45/dia, Lanche R$4,55/dia, VA R$460,75/mês (iFood), Janta R$25,00/dia (se necessário)');\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 68
+}

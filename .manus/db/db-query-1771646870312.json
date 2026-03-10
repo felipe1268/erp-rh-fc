@@ -1,0 +1,40 @@
+{
+  "query": "SHOW CREATE TABLE time_records;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW CREATE TABLE time_records;",
+  "rows": [
+    {
+      "Table": "time_records",
+      "Create Table": "CREATE TABLE `time_records` ("
+    }
+  ],
+  "messages": [
+    "  `id` int NOT NULL AUTO_INCREMENT,",
+    "  `companyId` int NOT NULL,",
+    "  `employeeId` int NOT NULL,",
+    "  `data` date NOT NULL,",
+    "  `entrada1` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `saida1` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `entrada2` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `saida2` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `entrada3` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `saida3` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `horasTrabalhadas` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `horasExtras` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `horasNoturnas` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `faltas` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `atrasos` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `justificativa` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `fonte` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'manual',",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  `obra_id` int DEFAULT NULL,",
+    "  `mes_referencia` varchar(7) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `ajuste_manual` tinyint DEFAULT '0',",
+    "  `ajustado_por` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `batidas_brutas` json DEFAULT NULL,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=30001"
+  ],
+  "stdout": "Table\tCreate Table\ntime_records\tCREATE TABLE `time_records` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `companyId` int NOT NULL,\n  `employeeId` int NOT NULL,\n  `data` date NOT NULL,\n  `entrada1` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `saida1` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `entrada2` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `saida2` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `entrada3` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `saida3` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `horasTrabalhadas` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `horasExtras` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `horasNoturnas` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `faltas` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `atrasos` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `justificativa` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `fonte` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'manual',\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `obra_id` int DEFAULT NULL,\n  `mes_referencia` varchar(7) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `ajuste_manual` tinyint DEFAULT '0',\n  `ajustado_por` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `batidas_brutas` json DEFAULT NULL,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=30001\n",
+  "stderr": "",
+  "execution_time_ms": 51
+}

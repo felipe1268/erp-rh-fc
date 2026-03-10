@@ -1,0 +1,82 @@
+{
+  "query": "\nSELECT e.id, e.codigoInterno, e.nomeCompleto, c.nomeFantasia as empresa,\n  CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) as numPart,\n  SUBSTRING(e.codigoInterno, 1, 3) as prefixo\nFROM employees e \nJOIN companies c ON e.companyId = c.id\nWHERE CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) IN (13, 17, 22, 24, 69, 171, 666)\nORDER BY c.nomeFantasia, CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \nSELECT e.id, e.codigoInterno, e.nomeCompleto, c.nomeFantasia as empresa,\n  CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) as numPart,\n  SUBSTRING(e.codigoInterno, 1, 3) as prefixo\nFROM employees e \nJOIN companies c ON e.companyId = c.id\nWHERE CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED) IN (13, 17, 22, 24, 69, 171, 666)\nORDER BY c.nomeFantasia, CAST(REGEXP_REPLACE(e.codigoInterno, '[^0-9]', '') AS UNSIGNED);\n",
+  "rows": [
+    {
+      "id": "420065",
+      "codigoInterno": "JFC013",
+      "nomeCompleto": "MARCIO DE TOLEDO",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "13",
+      "prefixo": "JFC"
+    },
+    {
+      "id": "420069",
+      "codigoInterno": "JFC017",
+      "nomeCompleto": "ANDERSON BRAGA SILVA",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "17",
+      "prefixo": "JFC"
+    },
+    {
+      "id": "420074",
+      "codigoInterno": "JFC022",
+      "nomeCompleto": "CARLOS VITORIANO TOBIAS",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "22",
+      "prefixo": "JFC"
+    },
+    {
+      "id": "420076",
+      "codigoInterno": "JFC024",
+      "nomeCompleto": "AGOSTINHO DIJALMA FERREIRA",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "24",
+      "prefixo": "JFC"
+    },
+    {
+      "id": "420121",
+      "codigoInterno": "JFC069",
+      "nomeCompleto": "ALEX DA SILVA DOMINGOS",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "69",
+      "prefixo": "JFC"
+    },
+    {
+      "id": "1320015",
+      "codigoInterno": "JFC171",
+      "nomeCompleto": "THAIS NAMIE YOSHII",
+      "empresa": "FC ENGENHARIA PROJETOS E OBRAS",
+      "numPart": "171",
+      "prefixo": "JFC"
+    },
+    {
+      "id": "1200003",
+      "codigoInterno": "JFP017",
+      "nomeCompleto": "DANIEL CARNEIRO PEREIRA",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "numPart": "17",
+      "prefixo": "JFP"
+    },
+    {
+      "id": "1200008",
+      "codigoInterno": "JFP022",
+      "nomeCompleto": "HENRIQUE LOPES",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "numPart": "22",
+      "prefixo": "JFP"
+    },
+    {
+      "id": "1200010",
+      "codigoInterno": "JFP024",
+      "nomeCompleto": "JOSE BENEDITO MENDES",
+      "empresa": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "numPart": "24",
+      "prefixo": "JFP"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcodigoInterno\tnomeCompleto\tempresa\tnumPart\tprefixo\n420065\tJFC013\tMARCIO DE TOLEDO\tFC ENGENHARIA PROJETOS E OBRAS\t13\tJFC\n420069\tJFC017\tANDERSON BRAGA SILVA\tFC ENGENHARIA PROJETOS E OBRAS\t17\tJFC\n420074\tJFC022\tCARLOS VITORIANO TOBIAS\tFC ENGENHARIA PROJETOS E OBRAS\t22\tJFC\n420076\tJFC024\tAGOSTINHO DIJALMA FERREIRA\tFC ENGENHARIA PROJETOS E OBRAS\t24\tJFC\n420121\tJFC069\tALEX DA SILVA DOMINGOS\tFC ENGENHARIA PROJETOS E OBRAS\t69\tJFC\n1320015\tJFC171\tTHAIS NAMIE YOSHII\tFC ENGENHARIA PROJETOS E OBRAS\t171\tJFC\n1200003\tJFP017\tDANIEL CARNEIRO PEREIRA\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t17\tJFP\n1200008\tJFP022\tHENRIQUE LOPES\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t22\tJFP\n1200010\tJFP024\tJOSE BENEDITO MENDES\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t24\tJFP\n",
+  "stderr": "",
+  "execution_time_ms": 61
+}

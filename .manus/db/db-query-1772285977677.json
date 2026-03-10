@@ -1,0 +1,24 @@
+{
+  "query": "SELECT tn.id, tn.employeeId, tn.tipo, tn.dataInicio, tn.dataFim, tn.diasAviso, tn.anosServico, tn.salarioBase, tn.previsaoRescisao, e.nomeCompleto, e.dataAdmissao, e.salarioBase as empSalario FROM termination_notices tn LEFT JOIN employees e ON tn.employeeId = e.id WHERE e.nomeCompleto LIKE '%ANTONIO RENATO%' LIMIT 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT tn.id, tn.employeeId, tn.tipo, tn.dataInicio, tn.dataFim, tn.diasAviso, tn.anosServico, tn.salarioBase, tn.previsaoRescisao, e.nomeCompleto, e.dataAdmissao, e.salarioBase as empSalario FROM termination_notices tn LEFT JOIN employees e ON tn.employeeId = e.id WHERE e.nomeCompleto LIKE '%ANTONIO RENATO%' LIMIT 1",
+  "rows": [
+    {
+      "id": "90005",
+      "employeeId": "420143",
+      "tipo": "empregador_trabalhado",
+      "dataInicio": "2026-02-14",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30",
+      "anosServico": "0",
+      "salarioBase": "6199.60",
+      "previsaoRescisao": "{\"salarioBase\":\"6199.60\",\"salarioDia\":\"206.65\",\"anosServico\":0,\"diasAvisoTotal\":30,\"diasExtrasAviso\":0,\"diasTrabalhadosMes\":13,\"mesesFerias\":9,\"meses13o\":1,\"saldoSalario\":\"2686.49\",\"feriasProporcional\":\"4649.70\",\"tercoConstitucional\":\"1549.90\",\"totalFerias\":\"6199.60\",\"feriasVencidas\":\"0.00\",\"periodosVencidos\":0,\"decimoTerceiroProporcional\":\"516.63\",\"avisoPrevioIndenizado\":\"0.00\",\"vrProporcional\":\"0.00\",\"vrDiario\":\"0.00\",\"fgtsEstimado\":\"4463.71\",\"multaFGTS\":\"1785.48\",\"total\":\"9402.73\",\"dataLimitePagamento\":\"2026-02-23\"}",
+      "nomeCompleto": "ANTONIO RENATO DE SANTANA",
+      "dataAdmissao": "2025-05-12",
+      "empSalario": "6.199,60"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temployeeId\ttipo\tdataInicio\tdataFim\tdiasAviso\tanosServico\tsalarioBase\tprevisaoRescisao\tnomeCompleto\tdataAdmissao\tempSalario\n90005\t420143\tempregador_trabalhado\t2026-02-14\t2026-03-15\t30\t0\t6199.60\t{\"salarioBase\":\"6199.60\",\"salarioDia\":\"206.65\",\"anosServico\":0,\"diasAvisoTotal\":30,\"diasExtrasAviso\":0,\"diasTrabalhadosMes\":13,\"mesesFerias\":9,\"meses13o\":1,\"saldoSalario\":\"2686.49\",\"feriasProporcional\":\"4649.70\",\"tercoConstitucional\":\"1549.90\",\"totalFerias\":\"6199.60\",\"feriasVencidas\":\"0.00\",\"periodosVencidos\":0,\"decimoTerceiroProporcional\":\"516.63\",\"avisoPrevioIndenizado\":\"0.00\",\"vrProporcional\":\"0.00\",\"vrDiario\":\"0.00\",\"fgtsEstimado\":\"4463.71\",\"multaFGTS\":\"1785.48\",\"total\":\"9402.73\",\"dataLimitePagamento\":\"2026-02-23\"}\tANTONIO RENATO DE SANTANA\t2025-05-12\t6.199,60\n",
+  "stderr": "",
+  "execution_time_ms": 116
+}

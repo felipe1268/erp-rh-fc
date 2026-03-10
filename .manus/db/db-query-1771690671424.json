@@ -1,0 +1,130 @@
+{
+  "query": "SELECT c.id as company_id, c.razaoSocial, e.id as emp_id, e.nomeCompleto FROM companies c LEFT JOIN employees e ON e.companyId = c.id LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT c.id as company_id, c.razaoSocial, e.id as emp_id, e.nomeCompleto FROM companies c LEFT JOIN employees e ON e.companyId = c.id LIMIT 20;",
+  "rows": [
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90297",
+      "nomeCompleto": "Felipe Costa Alves"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90429",
+      "nomeCompleto": "ACACIO LESCURA DE CAMARGO"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90430",
+      "nomeCompleto": "ADRIANO PAZ FERREIRA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90431",
+      "nomeCompleto": "AGOSTINHO DIJALMA FERREIRA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90432",
+      "nomeCompleto": "ALEX ALESSANDRO MONTEIRO DA SILVA 1"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90433",
+      "nomeCompleto": "ALEX DA SILVA DOMINGOS"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90434",
+      "nomeCompleto": "ALEX PAULO RODRIGUES"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90435",
+      "nomeCompleto": "ALEXANDRO GONÇALVES DO NASCIMENTO"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90436",
+      "nomeCompleto": "ALEXSANDRO DE LIMA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90437",
+      "nomeCompleto": "ANDERSON BRAGA SILVA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90438",
+      "nomeCompleto": "ANDERSON DOS ANJOS ALKMIN JUNIOR"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90439",
+      "nomeCompleto": "ANDRÉ LUIZ BARLETTA DAS CHAGAS"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90440",
+      "nomeCompleto": "ANDREI DA SILVA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90441",
+      "nomeCompleto": "ANTONIO CARLOS SANTOS"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90442",
+      "nomeCompleto": "ANTONIO RENATO DE SANTANA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90443",
+      "nomeCompleto": "ANTONIO WAGNER BARBOSA DE SOUSA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90444",
+      "nomeCompleto": "BRUNO LUIS FARIA MACHADO"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90445",
+      "nomeCompleto": "BRUNO RAFAEL BATISTA DA SILVA"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90446",
+      "nomeCompleto": "CAIO AUGUSTO DA SILVA GARUFE"
+    },
+    {
+      "company_id": "60002",
+      "razaoSocial": "FC ENGENHARIA E CONSTRUCAO LTDA",
+      "emp_id": "90447",
+      "nomeCompleto": "CAIO MATHEUS PEREIRA ANTUNES"
+    }
+  ],
+  "messages": [],
+  "stdout": "company_id\trazaoSocial\temp_id\tnomeCompleto\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90297\tFelipe Costa Alves\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90429\tACACIO LESCURA DE CAMARGO\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90430\tADRIANO PAZ FERREIRA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90431\tAGOSTINHO DIJALMA FERREIRA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90432\tALEX ALESSANDRO MONTEIRO DA SILVA 1\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90433\tALEX DA SILVA DOMINGOS\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90434\tALEX PAULO RODRIGUES\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90435\tALEXANDRO GONÇALVES DO NASCIMENTO\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90436\tALEXSANDRO DE LIMA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90437\tANDERSON BRAGA SILVA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90438\tANDERSON DOS ANJOS ALKMIN JUNIOR\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90439\tANDRÉ LUIZ BARLETTA DAS CHAGAS\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90440\tANDREI DA SILVA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90441\tANTONIO CARLOS SANTOS\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90442\tANTONIO RENATO DE SANTANA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90443\tANTONIO WAGNER BARBOSA DE SOUSA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90444\tBRUNO LUIS FARIA MACHADO\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90445\tBRUNO RAFAEL BATISTA DA SILVA\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90446\tCAIO AUGUSTO DA SILVA GARUFE\n60002\tFC ENGENHARIA E CONSTRUCAO LTDA\t90447\tCAIO MATHEUS PEREIRA ANTUNES\n",
+  "stderr": "",
+  "execution_time_ms": 179
+}

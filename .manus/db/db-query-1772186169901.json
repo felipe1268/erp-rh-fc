@@ -1,0 +1,64 @@
+{
+  "query": "SHOW TABLES LIKE 'eval_%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW TABLES LIKE 'eval_%';",
+  "rows": [
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_audit_log"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_avaliacoes"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_avaliadores"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_climate_answers"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_climate_external_tokens"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_climate_questions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_climate_responses"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_climate_surveys"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_criteria"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_criteria_revisions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_external_participants"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_pillars"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_scores"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_survey_answers"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_survey_evaluators"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_survey_questions"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_survey_responses"
+    },
+    {
+      "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)": "eval_surveys"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_W4MM458SKqYRWRGGQrfw8A (eval_%)\neval_audit_log\neval_avaliacoes\neval_avaliadores\neval_climate_answers\neval_climate_external_tokens\neval_climate_questions\neval_climate_responses\neval_climate_surveys\neval_criteria\neval_criteria_revisions\neval_external_participants\neval_pillars\neval_scores\neval_survey_answers\neval_survey_evaluators\neval_survey_questions\neval_survey_responses\neval_surveys\n",
+  "stderr": "",
+  "execution_time_ms": 95
+}

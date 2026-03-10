@@ -1,0 +1,38 @@
+{
+  "query": "SELECT 'advances' as tabela, COUNT(*) as cnt FROM advances UNION ALL SELECT 'epi_discount_alerts', COUNT(*) FROM epi_discount_alerts UNION ALL SELECT 'ponto_descontos', COUNT(*) FROM ponto_descontos UNION ALL SELECT 'ponto_descontos_resumo', COUNT(*) FROM ponto_descontos_resumo UNION ALL SELECT 'extra_payments', COUNT(*) FROM extra_payments UNION ALL SELECT 'vr_benefits', COUNT(*) FROM vr_benefits UNION ALL SELECT 'meal_benefit_configs', COUNT(*) FROM meal_benefit_configs;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT 'advances' as tabela, COUNT(*) as cnt FROM advances UNION ALL SELECT 'epi_discount_alerts', COUNT(*) FROM epi_discount_alerts UNION ALL SELECT 'ponto_descontos', COUNT(*) FROM ponto_descontos UNION ALL SELECT 'ponto_descontos_resumo', COUNT(*) FROM ponto_descontos_resumo UNION ALL SELECT 'extra_payments', COUNT(*) FROM extra_payments UNION ALL SELECT 'vr_benefits', COUNT(*) FROM vr_benefits UNION ALL SELECT 'meal_benefit_configs', COUNT(*) FROM meal_benefit_configs;",
+  "rows": [
+    {
+      "tabela": "epi_discount_alerts",
+      "cnt": "2"
+    },
+    {
+      "tabela": "ponto_descontos_resumo",
+      "cnt": "129"
+    },
+    {
+      "tabela": "ponto_descontos",
+      "cnt": "0"
+    },
+    {
+      "tabela": "advances",
+      "cnt": "0"
+    },
+    {
+      "tabela": "extra_payments",
+      "cnt": "0"
+    },
+    {
+      "tabela": "meal_benefit_configs",
+      "cnt": "1"
+    },
+    {
+      "tabela": "vr_benefits",
+      "cnt": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "tabela\tcnt\nepi_discount_alerts\t2\nponto_descontos_resumo\t129\nponto_descontos\t0\nadvances\t0\nextra_payments\t0\nmeal_benefit_configs\t1\nvr_benefits\t0\n",
+  "stderr": "",
+  "execution_time_ms": 102
+}

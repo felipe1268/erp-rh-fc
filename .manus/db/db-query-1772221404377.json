@@ -1,0 +1,35 @@
+{
+  "query": "SELECT * FROM termination_notices LIMIT 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM termination_notices LIMIT 1",
+  "rows": [
+    {
+      "id": "1",
+      "companyId": "60002",
+      "employeeId": "420026",
+      "tipo": "empregado_trabalhado",
+      "dataInicio": "2026-02-02",
+      "dataFim": "2026-03-03",
+      "diasAviso": "30",
+      "anosServico": "1",
+      "reducaoJornada": "2h_dia",
+      "salarioBase": "2100.00",
+      "previsaoRescisao": "NULL",
+      "valorEstimadoTotal": "NULL",
+      "status": "em_andamento",
+      "dataConclusao": "NULL",
+      "motivoCancelamento": "NULL",
+      "observacoes": "Colaborador solicitou desligamento em 01/02/2026. Aviso prévio trabalhado de 30 dias com redução de 2h diárias conforme Art. 488 CLT. Último dia de trabalho: 02/03/2026.",
+      "criadoPor": "Ana Paula Rodrigues",
+      "criadoPorUserId": "NULL",
+      "createdAt": "2026-02-23 00:17:16",
+      "updatedAt": "2026-02-27 18:37:46",
+      "deletedAt": "NULL",
+      "deletedBy": "NULL",
+      "deletedByUserId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcompanyId\temployeeId\ttipo\tdataInicio\tdataFim\tdiasAviso\tanosServico\treducaoJornada\tsalarioBase\tprevisaoRescisao\tvalorEstimadoTotal\tstatus\tdataConclusao\tmotivoCancelamento\tobservacoes\tcriadoPor\tcriadoPorUserId\tcreatedAt\tupdatedAt\tdeletedAt\tdeletedBy\tdeletedByUserId\n1\t60002\t420026\tempregado_trabalhado\t2026-02-02\t2026-03-03\t30\t1\t2h_dia\t2100.00\tNULL\tNULL\tem_andamento\tNULL\tNULL\tColaborador solicitou desligamento em 01/02/2026. Aviso prévio trabalhado de 30 dias com redução de 2h diárias conforme Art. 488 CLT. Último dia de trabalho: 02/03/2026.\tAna Paula Rodrigues\tNULL\t2026-02-23 00:17:16\t2026-02-27 18:37:46\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

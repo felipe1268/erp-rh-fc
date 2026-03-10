@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, dataInicio, dataFim, diasAviso FROM termination_notices ORDER BY id LIMIT 5",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, dataInicio, dataFim, diasAviso FROM termination_notices ORDER BY id LIMIT 5",
+  "rows": [
+    {
+      "id": "1",
+      "dataInicio": "2026-02-02",
+      "dataFim": "2026-03-03",
+      "diasAviso": "30"
+    },
+    {
+      "id": "30001",
+      "dataInicio": "2026-02-24",
+      "dataFim": "2026-03-26",
+      "diasAviso": "30"
+    },
+    {
+      "id": "60001",
+      "dataInicio": "2026-02-27",
+      "dataFim": "2026-03-29",
+      "diasAviso": "30"
+    },
+    {
+      "id": "60002",
+      "dataInicio": "2026-02-28",
+      "dataFim": "2026-03-30",
+      "diasAviso": "30"
+    },
+    {
+      "id": "90001",
+      "dataInicio": "2026-02-13",
+      "dataFim": "2026-03-15",
+      "diasAviso": "30"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tdataInicio\tdataFim\tdiasAviso\n1\t2026-02-02\t2026-03-03\t30\n30001\t2026-02-24\t2026-03-26\t30\n60001\t2026-02-27\t2026-03-29\t30\n60002\t2026-02-28\t2026-03-30\t30\n90001\t2026-02-13\t2026-03-15\t30\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

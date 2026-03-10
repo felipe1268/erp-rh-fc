@@ -1,0 +1,8 @@
+{
+  "query": "SELECT ugm.user_id, u.name, ug.nome as grupo FROM user_group_members ugm JOIN user_groups ug ON ug.id = ugm.group_id JOIN user u ON u.id = ugm.user_id; SELECT ugp.rota, ugp.can_view, ugp.can_edit, ugp.ocultar_valores, ugp.ocultar_documentos FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.group_id WHERE ug.nome = 'TST'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT ugm.user_id, u.name, ug.nome as grupo FROM user_group_members ugm JOIN user_groups ug ON ug.id = ugm.group_id JOIN user u ON u.id = ugm.user_id; SELECT ugp.rota, ugp.can_view, ugp.can_edit, ugp.ocultar_valores, ugp.ocultar_documentos FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.group_id WHERE ug.nome = 'TST'",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'w4mm458skqyrwrggqrfw8a.user' doesn't exist"
+  ]
+}

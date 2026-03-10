@@ -1,0 +1,82 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'processos_trabalhistas' AND COLUMN_NAME LIKE 'datajud%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'processos_trabalhistas' AND COLUMN_NAME LIKE 'datajud%';",
+  "rows": [
+    {
+      "COLUMN_NAME": "datajud_id"
+    },
+    {
+      "COLUMN_NAME": "datajud_ultima_consulta"
+    },
+    {
+      "COLUMN_NAME": "datajud_ultima_atualizacao"
+    },
+    {
+      "COLUMN_NAME": "datajud_grau"
+    },
+    {
+      "COLUMN_NAME": "datajud_classe"
+    },
+    {
+      "COLUMN_NAME": "datajud_assuntos"
+    },
+    {
+      "COLUMN_NAME": "datajud_orgao_julgador"
+    },
+    {
+      "COLUMN_NAME": "datajud_sistema"
+    },
+    {
+      "COLUMN_NAME": "datajud_formato"
+    },
+    {
+      "COLUMN_NAME": "datajud_movimentos"
+    },
+    {
+      "COLUMN_NAME": "datajud_total_movimentos"
+    },
+    {
+      "COLUMN_NAME": "datajud_auto_detectado"
+    },
+    {
+      "COLUMN_NAME": "datajudId"
+    },
+    {
+      "COLUMN_NAME": "datajudUltimaConsulta"
+    },
+    {
+      "COLUMN_NAME": "datajudUltimaAtualizacao"
+    },
+    {
+      "COLUMN_NAME": "datajudGrau"
+    },
+    {
+      "COLUMN_NAME": "datajudClasse"
+    },
+    {
+      "COLUMN_NAME": "datajudAssuntos"
+    },
+    {
+      "COLUMN_NAME": "datajudOrgaoJulgador"
+    },
+    {
+      "COLUMN_NAME": "datajudSistema"
+    },
+    {
+      "COLUMN_NAME": "datajudFormato"
+    },
+    {
+      "COLUMN_NAME": "datajudMovimentos"
+    },
+    {
+      "COLUMN_NAME": "datajudTotalMovimentos"
+    },
+    {
+      "COLUMN_NAME": "datajudAutoDetectado"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\ndatajud_id\ndatajud_ultima_consulta\ndatajud_ultima_atualizacao\ndatajud_grau\ndatajud_classe\ndatajud_assuntos\ndatajud_orgao_julgador\ndatajud_sistema\ndatajud_formato\ndatajud_movimentos\ndatajud_total_movimentos\ndatajud_auto_detectado\ndatajudId\ndatajudUltimaConsulta\ndatajudUltimaAtualizacao\ndatajudGrau\ndatajudClasse\ndatajudAssuntos\ndatajudOrgaoJulgador\ndatajudSistema\ndatajudFormato\ndatajudMovimentos\ndatajudTotalMovimentos\ndatajudAutoDetectado\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

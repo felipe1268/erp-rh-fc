@@ -1,0 +1,29 @@
+{
+  "query": "SELECT * FROM meal_benefit_configs LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM meal_benefit_configs LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "companyId": "60002",
+      "obraId": "NULL",
+      "nome": "Padrão FC Engenharia",
+      "cafeManhaDia": "5,45",
+      "lancheTardeDia": "4,55",
+      "valeAlimentacaoMes": "460,75",
+      "jantaDia": "25,00",
+      "totalVA_iFood": "680,75",
+      "diasUteisRef": "22",
+      "observacoes": "Valores padrão - Café R$5,45/dia, Lanche R$4,55/dia, VA R$460,75/mês (iFood), Janta R$25,00/dia (se necessário)",
+      "ativo": "1",
+      "createdAt": "2026-02-26 21:09:58",
+      "updatedAt": "2026-02-26 21:09:58",
+      "cafeAtivo": "1",
+      "lancheAtivo": "1",
+      "jantaAtivo": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcompanyId\tobraId\tnome\tcafeManhaDia\tlancheTardeDia\tvaleAlimentacaoMes\tjantaDia\ttotalVA_iFood\tdiasUteisRef\tobservacoes\tativo\tcreatedAt\tupdatedAt\tcafeAtivo\tlancheAtivo\tjantaAtivo\n1\t60002\tNULL\tPadrão FC Engenharia\t5,45\t4,55\t460,75\t25,00\t680,75\t22\tValores padrão - Café R$5,45/dia, Lanche R$4,55/dia, VA R$460,75/mês (iFood), Janta R$25,00/dia (se necessário)\t1\t2026-02-26 21:09:58\t2026-02-26 21:09:58\t1\t1\t0\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

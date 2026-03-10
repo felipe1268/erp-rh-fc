@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE users SET password = '$2b$10$5vSvZM5FIjpkFnbiPnN9re0TmLDFyxYtMWZ1ucjvx4cP1GOHC/5se', mustChangePassword = 1 WHERE id = 601043;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute UPDATE users SET password = '$2b$10$5vSvZM5FIjpkFnbiPnN9re0TmLDFyxYtMWZ1ucjvx4cP1GOHC/5se', mustChangePassword = 1 WHERE id = 601043;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 83
+}

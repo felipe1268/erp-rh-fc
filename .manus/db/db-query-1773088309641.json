@@ -1,0 +1,380 @@
+{
+  "query": "\n-- Contar ativos por empresa (FC + JF = construtoras)\nSELECT c.id, c.nomeFantasia, \n  COUNT(e.id) as total_ativos\nFROM employees e\nJOIN companies c ON e.companyId = c.id\nWHERE e.deletedAt IS NULL \n  AND e.status NOT IN ('Desligado', 'Lista_Negra')\nGROUP BY c.id, c.nomeFantasia\nORDER BY c.nomeFantasia;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \n-- Contar ativos por empresa (FC + JF = construtoras)\nSELECT c.id, c.nomeFantasia, \n  COUNT(e.id) as total_ativos\nFROM employees e\nJOIN companies c ON e.companyId = c.id\nWHERE e.deletedAt IS NULL \n  AND e.status NOT IN ('Desligado', 'Lista_Negra')\nGROUP BY c.id, c.nomeFantasia\nORDER BY c.nomeFantasia;\n",
+  "rows": [
+    {
+      "id": "90001",
+      "nomeFantasia": "",
+      "total_ativos": "2"
+    },
+    {
+      "id": "60002",
+      "nomeFantasia": "FC ENGENHARIA PROJETOS E OBRAS",
+      "total_ativos": "137"
+    },
+    {
+      "id": "60004",
+      "nomeFantasia": "HOTEL CONSAGRADO",
+      "total_ativos": "9"
+    },
+    {
+      "id": "60005",
+      "nomeFantasia": "JULIO FERRAZ PROJETOS E OBRAS LTDA",
+      "total_ativos": "12"
+    },
+    {
+      "id": "960001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "600003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450043",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450046",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "480004",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "540001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "660001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "660007",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "900001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450047",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "480002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "660002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "660005",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "660006",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "690001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750006",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "720002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "960003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "780001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450050",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "720003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "810004",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "900004",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450045",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450044",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "960002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "810002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "840003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450048",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450042",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "480003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "900003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "1110004",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "1"
+    },
+    {
+      "id": "540002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "630002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "480006",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "630005",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750007",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "840002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "930001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "480001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "660003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "570001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "600001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750005",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "810001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "810003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "900002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "480005",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "480007",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750008",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "600002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "870002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "630004",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "660004",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "720001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "870001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "510003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "510002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "630003",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "750004",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450051",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "840001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "450049",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "510001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "570002",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    },
+    {
+      "id": "630001",
+      "nomeFantasia": "Teste CRUD Atualizado",
+      "total_ativos": "2"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnomeFantasia\ttotal_ativos\n90001\t\t2\n60002\tFC ENGENHARIA PROJETOS E OBRAS\t137\n60004\tHOTEL CONSAGRADO\t9\n60005\tJULIO FERRAZ PROJETOS E OBRAS LTDA\t12\n960001\tTeste CRUD Atualizado\t2\n600003\tTeste CRUD Atualizado\t2\n450043\tTeste CRUD Atualizado\t2\n450046\tTeste CRUD Atualizado\t2\n480004\tTeste CRUD Atualizado\t2\n540001\tTeste CRUD Atualizado\t2\n660001\tTeste CRUD Atualizado\t2\n660007\tTeste CRUD Atualizado\t2\n900001\tTeste CRUD Atualizado\t2\n450047\tTeste CRUD Atualizado\t2\n480002\tTeste CRUD Atualizado\t2\n660002\tTeste CRUD Atualizado\t2\n660005\tTeste CRUD Atualizado\t2\n660006\tTeste CRUD Atualizado\t2\n690001\tTeste CRUD Atualizado\t2\n750006\tTeste CRUD Atualizado\t2\n720002\tTeste CRUD Atualizado\t2\n960003\tTeste CRUD Atualizado\t2\n780001\tTeste CRUD Atualizado\t2\n450050\tTeste CRUD Atualizado\t2\n720003\tTeste CRUD Atualizado\t2\n810004\tTeste CRUD Atualizado\t2\n900004\tTeste CRUD Atualizado\t2\n450045\tTeste CRUD Atualizado\t2\n450044\tTeste CRUD Atualizado\t2\n960002\tTeste CRUD Atualizado\t2\n810002\tTeste CRUD Atualizado\t2\n840003\tTeste CRUD Atualizado\t2\n750001\tTeste CRUD Atualizado\t2\n750003\tTeste CRUD Atualizado\t2\n450048\tTeste CRUD Atualizado\t2\n750002\tTeste CRUD Atualizado\t2\n450042\tTeste CRUD Atualizado\t2\n480003\tTeste CRUD Atualizado\t2\n900003\tTeste CRUD Atualizado\t2\n1110004\tTeste CRUD Atualizado\t1\n540002\tTeste CRUD Atualizado\t2\n630002\tTeste CRUD Atualizado\t2\n480006\tTeste CRUD Atualizado\t2\n630005\tTeste CRUD Atualizado\t2\n750007\tTeste CRUD Atualizado\t2\n840002\tTeste CRUD Atualizado\t2\n930001\tTeste CRUD Atualizado\t2\n480001\tTeste CRUD Atualizado\t2\n660003\tTeste CRUD Atualizado\t2\n570001\tTeste CRUD Atualizado\t2\n600001\tTeste CRUD Atualizado\t2\n750005\tTeste CRUD Atualizado\t2\n810001\tTeste CRUD Atualizado\t2\n810003\tTeste CRUD Atualizado\t2\n900002\tTeste CRUD Atualizado\t2\n480005\tTeste CRUD Atualizado\t2\n480007\tTeste CRUD Atualizado\t2\n750008\tTeste CRUD Atualizado\t2\n600002\tTeste CRUD Atualizado\t2\n870002\tTeste CRUD Atualizado\t2\n630004\tTeste CRUD Atualizado\t2\n660004\tTeste CRUD Atualizado\t2\n720001\tTeste CRUD Atualizado\t2\n870001\tTeste CRUD Atualizado\t2\n510003\tTeste CRUD Atualizado\t2\n510002\tTeste CRUD Atualizado\t2\n630003\tTeste CRUD Atualizado\t2\n750004\tTeste CRUD Atualizado\t2\n450051\tTeste CRUD Atualizado\t2\n840001\tTeste CRUD Atualizado\t2\n450049\tTeste CRUD Atualizado\t2\n510001\tTeste CRUD Atualizado\t2\n570002\tTeste CRUD Atualizado\t2\n630001\tTeste CRUD Atualizado\t2\n",
+  "stderr": "",
+  "execution_time_ms": 75
+}

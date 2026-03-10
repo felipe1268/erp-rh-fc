@@ -1,0 +1,58 @@
+{
+  "query": "SELECT id, companyId, nome, isActive FROM job_functions ORDER BY companyId, nome;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, companyId, nome, isActive FROM job_functions ORDER BY companyId, nome;",
+  "rows": [
+    {
+      "id": "7",
+      "companyId": "60002",
+      "nome": "Almoxarife ",
+      "isActive": "1"
+    },
+    {
+      "id": "6",
+      "companyId": "60002",
+      "nome": "Armador",
+      "isActive": "1"
+    },
+    {
+      "id": "10",
+      "companyId": "60002",
+      "nome": "Arquiteto (a)",
+      "isActive": "1"
+    },
+    {
+      "id": "9",
+      "companyId": "60002",
+      "nome": "Engenheiro (a) Civil",
+      "isActive": "1"
+    },
+    {
+      "id": "8",
+      "companyId": "60002",
+      "nome": "Financeiro",
+      "isActive": "1"
+    },
+    {
+      "id": "3",
+      "companyId": "60002",
+      "nome": "Pedreiro",
+      "isActive": "1"
+    },
+    {
+      "id": "5",
+      "companyId": "60002",
+      "nome": "Pintor",
+      "isActive": "1"
+    },
+    {
+      "id": "4",
+      "companyId": "60002",
+      "nome": "Servente",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcompanyId\tnome\tisActive\n7\t60002\tAlmoxarife \t1\n6\t60002\tArmador\t1\n10\t60002\tArquiteto (a)\t1\n9\t60002\tEngenheiro (a) Civil\t1\n8\t60002\tFinanceiro\t1\n3\t60002\tPedreiro\t1\n5\t60002\tPintor\t1\n4\t60002\tServente\t1\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `obras` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `companyId` int NOT NULL,\n  `nome` varchar(255) NOT NULL,\n  `codigo` varchar(50),\n  `cliente` varchar(255),\n  `responsavel` varchar(255),\n  `endereco` text,\n  `cidade` varchar(100),\n  `estado` varchar(2),\n  `cep` varchar(10),\n  `dataInicio` date,\n  `dataPrevisaoFim` date,\n  `dataFimReal` date,\n  `status` enum('Planejamento','Em_Andamento','Paralisada','Concluida','Cancelada') NOT NULL DEFAULT 'Planejamento',\n  `valorContrato` varchar(20),\n  `observacoes` text,\n  `isActive` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `obras_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS `obras` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `companyId` int NOT NULL,\n  `nome` varchar(255) NOT NULL,\n  `codigo` varchar(50),\n  `cliente` varchar(255),\n  `responsavel` varchar(255),\n  `endereco` text,\n  `cidade` varchar(100),\n  `estado` varchar(2),\n  `cep` varchar(10),\n  `dataInicio` date,\n  `dataPrevisaoFim` date,\n  `dataFimReal` date,\n  `status` enum('Planejamento','Em_Andamento','Paralisada','Concluida','Cancelada') NOT NULL DEFAULT 'Planejamento',\n  `valorContrato` varchar(20),\n  `observacoes` text,\n  `isActive` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `obras_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 158
+}

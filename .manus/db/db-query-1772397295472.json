@@ -1,0 +1,118 @@
+{
+  "query": "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'obras' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'obras' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "companyId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "nome",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "codigo",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "cliente",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "responsavel",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "endereco",
+      "DATA_TYPE": "text"
+    },
+    {
+      "COLUMN_NAME": "cidade",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "estado",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "cep",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "dataInicio",
+      "DATA_TYPE": "date"
+    },
+    {
+      "COLUMN_NAME": "dataPrevisaoFim",
+      "DATA_TYPE": "date"
+    },
+    {
+      "COLUMN_NAME": "dataFimReal",
+      "DATA_TYPE": "date"
+    },
+    {
+      "COLUMN_NAME": "status",
+      "DATA_TYPE": "enum"
+    },
+    {
+      "COLUMN_NAME": "valorContrato",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "observacoes",
+      "DATA_TYPE": "text"
+    },
+    {
+      "COLUMN_NAME": "isActive",
+      "DATA_TYPE": "tinyint"
+    },
+    {
+      "COLUMN_NAME": "createdAt",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "updatedAt",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "numOrcamento",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "snRelogioPonto",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "deletedAt",
+      "DATA_TYPE": "timestamp"
+    },
+    {
+      "COLUMN_NAME": "deletedBy",
+      "DATA_TYPE": "varchar"
+    },
+    {
+      "COLUMN_NAME": "deletedByUserId",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "usar_convencao_matriz",
+      "DATA_TYPE": "tinyint"
+    },
+    {
+      "COLUMN_NAME": "convencao_id",
+      "DATA_TYPE": "int"
+    },
+    {
+      "COLUMN_NAME": "convencao_divergencias",
+      "DATA_TYPE": "text"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\tDATA_TYPE\nid\tint\ncompanyId\tint\nnome\tvarchar\ncodigo\tvarchar\ncliente\tvarchar\nresponsavel\tvarchar\nendereco\ttext\ncidade\tvarchar\nestado\tvarchar\ncep\tvarchar\ndataInicio\tdate\ndataPrevisaoFim\tdate\ndataFimReal\tdate\nstatus\tenum\nvalorContrato\tvarchar\nobservacoes\ttext\nisActive\ttinyint\ncreatedAt\ttimestamp\nupdatedAt\ttimestamp\nnumOrcamento\tvarchar\nsnRelogioPonto\tvarchar\ndeletedAt\ttimestamp\ndeletedBy\tvarchar\ndeletedByUserId\tint\nusar_convencao_matriz\ttinyint\nconvencao_id\tint\nconvencao_divergencias\ttext\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

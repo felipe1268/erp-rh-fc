@@ -1,0 +1,18 @@
+{
+  "query": "SELECT status, COUNT(*) as qtd FROM obras WHERE companyId=60002 GROUP BY status",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT status, COUNT(*) as qtd FROM obras WHERE companyId=60002 GROUP BY status",
+  "rows": [
+    {
+      "status": "Concluida",
+      "qtd": "2"
+    },
+    {
+      "status": "Em_Andamento",
+      "qtd": "13"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\tqtd\nConcluida\t2\nEm_Andamento\t13\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

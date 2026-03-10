@@ -1,0 +1,14 @@
+{
+  "query": "SELECT CONCAT('[', HEX(SUBSTRING(nomeCompleto, 1, 1)), ']') as first_hex, nomeCompleto FROM employees WHERE id = 450001;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT CONCAT('[', HEX(SUBSTRING(nomeCompleto, 1, 1)), ']') as first_hex, nomeCompleto FROM employees WHERE id = 450001;",
+  "rows": [
+    {
+      "first_hex": "[4D]",
+      "nomeCompleto": "MATHEUS DONIZETTI ALVES RODRIGUES"
+    }
+  ],
+  "messages": [],
+  "stdout": "first_hex\tnomeCompleto\n[4D]\tMATHEUS DONIZETTI ALVES RODRIGUES\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

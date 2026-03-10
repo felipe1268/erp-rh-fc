@@ -1,0 +1,61 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'epi_deliveries' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'epi_deliveries' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "epiId"
+    },
+    {
+      "COLUMN_NAME": "employeeId"
+    },
+    {
+      "COLUMN_NAME": "quantidade"
+    },
+    {
+      "COLUMN_NAME": "dataEntrega"
+    },
+    {
+      "COLUMN_NAME": "dataDevolucao"
+    },
+    {
+      "COLUMN_NAME": "motivo"
+    },
+    {
+      "COLUMN_NAME": "observacoes"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "deletedAt"
+    },
+    {
+      "COLUMN_NAME": "deletedBy"
+    },
+    {
+      "COLUMN_NAME": "deletedByUserId"
+    },
+    {
+      "COLUMN_NAME": "motivo_troca"
+    },
+    {
+      "COLUMN_NAME": "valor_cobrado"
+    },
+    {
+      "COLUMN_NAME": "ficha_url"
+    },
+    {
+      "COLUMN_NAME": "foto_estado_url"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncompanyId\nepiId\nemployeeId\nquantidade\ndataEntrega\ndataDevolucao\nmotivo\nobservacoes\ncreatedAt\ndeletedAt\ndeletedBy\ndeletedByUserId\nmotivo_troca\nvalor_cobrado\nficha_url\nfoto_estado_url\n",
+  "stderr": "",
+  "execution_time_ms": 62
+}

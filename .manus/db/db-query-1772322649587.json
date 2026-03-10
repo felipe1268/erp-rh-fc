@@ -1,0 +1,18 @@
+{
+  "query": "SELECT employeeId, dataValidade FROM asos WHERE companyId = 60002 AND deletedAt IS NULL LIMIT 2;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT employeeId, dataValidade FROM asos WHERE companyId = 60002 AND deletedAt IS NULL LIMIT 2;",
+  "rows": [
+    {
+      "employeeId": "420144",
+      "dataValidade": "2027-02-27"
+    },
+    {
+      "employeeId": "420082",
+      "dataValidade": "2026-10-15"
+    }
+  ],
+  "messages": [],
+  "stdout": "employeeId\tdataValidade\n420144\t2027-02-27\n420082\t2026-10-15\n",
+  "stderr": "",
+  "execution_time_ms": 345
+}

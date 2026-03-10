@@ -1,0 +1,22 @@
+{
+  "query": "SELECT 'time_records' as tbl, COUNT(*) as cnt FROM time_records UNION ALL SELECT 'allocs_active', COUNT(*) FROM obra_funcionarios WHERE isActive = 1 UNION ALL SELECT 'time_with_obra', COUNT(DISTINCT employeeId) FROM time_records WHERE obraId IS NOT NULL",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT 'time_records' as tbl, COUNT(*) as cnt FROM time_records UNION ALL SELECT 'allocs_active', COUNT(*) FROM obra_funcionarios WHERE isActive = 1 UNION ALL SELECT 'time_with_obra', COUNT(DISTINCT employeeId) FROM time_records WHERE obraId IS NOT NULL",
+  "rows": [
+    {
+      "tbl": "allocs_active",
+      "cnt": "66"
+    },
+    {
+      "tbl": "time_with_obra",
+      "cnt": "0"
+    },
+    {
+      "tbl": "time_records",
+      "cnt": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "tbl\tcnt\nallocs_active\t66\ntime_with_obra\t0\ntime_records\t0\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

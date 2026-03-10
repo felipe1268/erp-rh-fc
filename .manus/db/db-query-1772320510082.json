@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (133, 'Dashboard Efetivo por Obra - Status em Tempo Real', 'Detalhamento por Obra com colunas Aviso Prévio, Férias e Afastados em tempo real. Gráfico de distribuição por função com barras empilhadas por status (Ativo=verde, Aviso=vermelho, Férias=azul, Afastado=amarelo). Clique na barra filtra a tabela de funcionários. Botões Imprimir e PDF com layout A4 profissional, logo da empresa e rodapé LGPD. Auto-desalocação de funcionários desligados. Botão fechar no Assistente IA. Invalidação automática de dados ao criar/concluir aviso prévio ou férias.', 'feature', '[\"Dashboard Efetivo por Obra\",\"Aviso Prévio\",\"Férias\",\"Colaboradores\",\"Assistente IA\"]', 'Manus AI', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor, dataPublicacao, createdAt) VALUES (133, 'Dashboard Efetivo por Obra - Status em Tempo Real', 'Detalhamento por Obra com colunas Aviso Prévio, Férias e Afastados em tempo real. Gráfico de distribuição por função com barras empilhadas por status (Ativo=verde, Aviso=vermelho, Férias=azul, Afastado=amarelo). Clique na barra filtra a tabela de funcionários. Botões Imprimir e PDF com layout A4 profissional, logo da empresa e rodapé LGPD. Auto-desalocação de funcionários desligados. Botão fechar no Assistente IA. Invalidação automática de dados ao criar/concluir aviso prévio ou férias.', 'feature', '[\"Dashboard Efetivo por Obra\",\"Aviso Prévio\",\"Férias\",\"Colaboradores\",\"Assistente IA\"]', 'Manus AI', NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 60
+}

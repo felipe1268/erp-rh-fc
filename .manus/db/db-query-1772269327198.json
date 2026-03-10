@@ -1,0 +1,15 @@
+{
+  "query": "SELECT companyId, COUNT(*) as total, GROUP_CONCAT(DISTINCT reclamante) as reclamantes FROM processos_trabalhistas GROUP BY companyId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT companyId, COUNT(*) as total, GROUP_CONCAT(DISTINCT reclamante) as reclamantes FROM processos_trabalhistas GROUP BY companyId;",
+  "rows": [
+    {
+      "companyId": "60002",
+      "total": "7",
+      "reclamantes": "LEONARDO VITORINO DA SILVA,MARCILIO DIAS DOS SANTOS,GENESIO DA SILVA CARVALHO,ALBERTO FRANCISCO DA SILVA,IVANILSON DE OLIVEIRWA BARROS,ITALO CAUA PEDRO DA SILVA,JOSE BANDEIRA DOS SANTOS"
+    }
+  ],
+  "messages": [],
+  "stdout": "companyId\ttotal\treclamantes\n60002\t7\tLEONARDO VITORINO DA SILVA,MARCILIO DIAS DOS SANTOS,GENESIO DA SILVA CARVALHO,ALBERTO FRANCISCO DA SILVA,IVANILSON DE OLIVEIRWA BARROS,ITALO CAUA PEDRO DA SILVA,JOSE BANDEIRA DOS SANTOS\n",
+  "stderr": "",
+  "execution_time_ms": 103
+}

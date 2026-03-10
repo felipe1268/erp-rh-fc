@@ -1,0 +1,35 @@
+{
+  "query": "SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo FROM system_revisions ORDER BY version DESC LIMIT 5;",
+  "rows": [
+    {
+      "version": "83",
+      "titulo": "Fase 36: Frontend Completo + Dissídio por Ano",
+      "tipo": "feature"
+    },
+    {
+      "version": "82",
+      "titulo": "Gap Analysis Completo + Fornecedor CNPJ + Dissídio",
+      "tipo": "feature"
+    },
+    {
+      "version": "81",
+      "titulo": "Gap Analysis Completo - Reunião Gerencial RH",
+      "tipo": "feature"
+    },
+    {
+      "version": "80",
+      "titulo": "HE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen",
+      "tipo": "feature"
+    },
+    {
+      "version": "79",
+      "titulo": "Auditoria Completa de Campos + Persistência",
+      "tipo": "bugfix"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\n83\tFase 36: Frontend Completo + Dissídio por Ano\tfeature\n82\tGap Analysis Completo + Fornecedor CNPJ + Dissídio\tfeature\n81\tGap Analysis Completo - Reunião Gerencial RH\tfeature\n80\tHE Manual + Combobox Jornada + Critérios Globais + Central Fullscreen\tfeature\n79\tAuditoria Completa de Campos + Persistência\tbugfix\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

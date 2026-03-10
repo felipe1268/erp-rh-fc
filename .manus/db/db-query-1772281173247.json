@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE vr_benefits \nADD COLUMN IF NOT EXISTS valorCafe varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS valorLanche varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS valorJanta varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS valorVA varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS status enum('pendente','aprovado','pago','cancelado') DEFAULT 'pendente' NOT NULL,\nADD COLUMN IF NOT EXISTS motivoAlteracao text,\nADD COLUMN IF NOT EXISTS geradoPor varchar(255),\nADD COLUMN IF NOT EXISTS aprovadoPor varchar(255);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE vr_benefits \nADD COLUMN IF NOT EXISTS valorCafe varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS valorLanche varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS valorJanta varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS valorVA varchar(20) DEFAULT '0',\nADD COLUMN IF NOT EXISTS status enum('pendente','aprovado','pago','cancelado') DEFAULT 'pendente' NOT NULL,\nADD COLUMN IF NOT EXISTS motivoAlteracao text,\nADD COLUMN IF NOT EXISTS geradoPor varchar(255),\nADD COLUMN IF NOT EXISTS aprovadoPor varchar(255);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1128
+}

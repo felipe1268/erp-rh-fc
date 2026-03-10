@@ -1,0 +1,28 @@
+{
+  "query": "SELECT version, titulo, tipo, criadoPor FROM system_revisions WHERE version >= 140 ORDER BY version ASC",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT version, titulo, tipo, criadoPor FROM system_revisions WHERE version >= 140 ORDER BY version ASC",
+  "rows": [
+    {
+      "version": "140",
+      "titulo": "Excluir Solicitação HE + Fix Filtro Mês",
+      "tipo": "feature",
+      "criadoPor": "Manus AI"
+    },
+    {
+      "version": "141",
+      "titulo": "Bug Fix: Admin Master não consegue excluir HE",
+      "tipo": "bugfix",
+      "criadoPor": "Manus AI"
+    },
+    {
+      "version": "142",
+      "titulo": "Sprint 2 - Módulos Terceiros e Parceiros",
+      "tipo": "feature",
+      "criadoPor": "Sistema"
+    }
+  ],
+  "messages": [],
+  "stdout": "version\ttitulo\ttipo\tcriadoPor\n140\tExcluir Solicitação HE + Fix Filtro Mês\tfeature\tManus AI\n141\tBug Fix: Admin Master não consegue excluir HE\tbugfix\tManus AI\n142\tSprint 2 - Módulos Terceiros e Parceiros\tfeature\tSistema\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

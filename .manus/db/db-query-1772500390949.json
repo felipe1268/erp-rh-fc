@@ -1,0 +1,37 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'user_group_permissions' ORDER BY ORDINAL_POSITION",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'user_group_permissions' ORDER BY ORDINAL_POSITION",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "group_id"
+    },
+    {
+      "COLUMN_NAME": "rota"
+    },
+    {
+      "COLUMN_NAME": "can_view"
+    },
+    {
+      "COLUMN_NAME": "can_edit"
+    },
+    {
+      "COLUMN_NAME": "can_create"
+    },
+    {
+      "COLUMN_NAME": "can_delete"
+    },
+    {
+      "COLUMN_NAME": "ocultar_valores"
+    },
+    {
+      "COLUMN_NAME": "ocultar_documentos"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ngroup_id\nrota\ncan_view\ncan_edit\ncan_create\ncan_delete\nocultar_valores\nocultar_documentos\n",
+  "stderr": "",
+  "execution_time_ms": 364
+}

@@ -1,0 +1,34 @@
+{
+  "query": "SELECT ugp.rota, ugp.can_view FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.group_id WHERE ug.nome = 'TST' ORDER BY ugp.rota;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT ugp.rota, ugp.can_view FROM user_group_permissions ugp JOIN user_groups ug ON ug.id = ugp.group_id WHERE ug.nome = 'TST' ORDER BY ugp.rota;",
+  "rows": [
+    {
+      "rota": "/cipa",
+      "can_view": "1"
+    },
+    {
+      "rota": "/controle-documentos",
+      "can_view": "1"
+    },
+    {
+      "rota": "/dashboards/epis",
+      "can_view": "1"
+    },
+    {
+      "rota": "/epis",
+      "can_view": "1"
+    },
+    {
+      "rota": "/painel/sst",
+      "can_view": "1"
+    },
+    {
+      "rota": "/solicitacao-he",
+      "can_view": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "rota\tcan_view\n/cipa\t1\n/controle-documentos\t1\n/dashboards/epis\t1\n/epis\t1\n/painel/sst\t1\n/solicitacao-he\t1\n",
+  "stderr": "",
+  "execution_time_ms": 359
+}

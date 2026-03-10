@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, codigoInterno, nomeCompleto, cpf, companyId FROM employees WHERE codigoInterno = 'EMP001'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, codigoInterno, nomeCompleto, cpf, companyId FROM employees WHERE codigoInterno = 'EMP001'",
+  "rows": [
+    {
+      "id": "510015",
+      "codigoInterno": "EMP001",
+      "nomeCompleto": "João Carlos da Silva Teste",
+      "cpf": "123.456.789-09",
+      "companyId": "450018"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcodigoInterno\tnomeCompleto\tcpf\tcompanyId\n510015\tEMP001\tJoão Carlos da Silva Teste\t123.456.789-09\t450018\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

@@ -1,0 +1,21 @@
+{
+  "query": "SELECT * FROM system_revisions LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT * FROM system_revisions LIMIT 1;",
+  "rows": [
+    {
+      "id": "1",
+      "version": "1",
+      "titulo": "Estrutura Inicial do ERP",
+      "descricao": "Criação da estrutura base do sistema ERP RH & DP com autenticação OAuth, banco de dados, e layout do dashboard com sidebar.",
+      "tipo": "feature",
+      "modulos": "Sistema, Autenticação, Layout",
+      "criadoPor": "Sistema",
+      "dataPublicacao": "2026-02-10 13:00:00",
+      "createdAt": "2026-02-23 22:45:06"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tversion\ttitulo\tdescricao\ttipo\tmodulos\tcriadoPor\tdataPublicacao\tcreatedAt\n1\t1\tEstrutura Inicial do ERP\tCriação da estrutura base do sistema ERP RH & DP com autenticação OAuth, banco de dados, e layout do dashboard com sidebar.\tfeature\tSistema, Autenticação, Layout\tSistema\t2026-02-10 13:00:00\t2026-02-23 22:45:06\n",
+  "stderr": "",
+  "execution_time_ms": 371
+}

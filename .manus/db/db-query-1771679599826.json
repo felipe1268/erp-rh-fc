@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO obra_sns (companyId, obraId, sn, apelido, status, dataVinculo) SELECT companyId, id, snRelogioPonto, CONCAT('SN Obra ', nome), CASE WHEN status IN ('Concluida','Cancelada','Paralisada') THEN 'inativo' ELSE 'ativo' END, CURDATE() FROM obras WHERE snRelogioPonto IS NOT NULL AND snRelogioPonto != ''",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO obra_sns (companyId, obraId, sn, apelido, status, dataVinculo) SELECT companyId, id, snRelogioPonto, CONCAT('SN Obra ', nome), CASE WHEN status IN ('Concluida','Cancelada','Paralisada') THEN 'inativo' ELSE 'ativo' END, CURDATE() FROM obras WHERE snRelogioPonto IS NOT NULL AND snRelogioPonto != ''",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 66
+}

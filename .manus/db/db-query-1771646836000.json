@@ -1,0 +1,9 @@
+{
+  "query": "SELECT id, companyId, employeeId, mesReferencia FROM time_inconsistencies LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, companyId, employeeId, mesReferencia FROM time_inconsistencies LIMIT 1;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 52
+}

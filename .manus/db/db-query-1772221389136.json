@@ -1,0 +1,79 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'termination_notices' ORDER BY ORDINAL_POSITION",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'termination_notices' ORDER BY ORDINAL_POSITION",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "employeeId"
+    },
+    {
+      "COLUMN_NAME": "tipo"
+    },
+    {
+      "COLUMN_NAME": "dataInicio"
+    },
+    {
+      "COLUMN_NAME": "dataFim"
+    },
+    {
+      "COLUMN_NAME": "diasAviso"
+    },
+    {
+      "COLUMN_NAME": "anosServico"
+    },
+    {
+      "COLUMN_NAME": "reducaoJornada"
+    },
+    {
+      "COLUMN_NAME": "salarioBase"
+    },
+    {
+      "COLUMN_NAME": "previsaoRescisao"
+    },
+    {
+      "COLUMN_NAME": "valorEstimadoTotal"
+    },
+    {
+      "COLUMN_NAME": "status"
+    },
+    {
+      "COLUMN_NAME": "dataConclusao"
+    },
+    {
+      "COLUMN_NAME": "motivoCancelamento"
+    },
+    {
+      "COLUMN_NAME": "observacoes"
+    },
+    {
+      "COLUMN_NAME": "criadoPor"
+    },
+    {
+      "COLUMN_NAME": "criadoPorUserId"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "updatedAt"
+    },
+    {
+      "COLUMN_NAME": "deletedAt"
+    },
+    {
+      "COLUMN_NAME": "deletedBy"
+    },
+    {
+      "COLUMN_NAME": "deletedByUserId"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncompanyId\nemployeeId\ntipo\ndataInicio\ndataFim\ndiasAviso\nanosServico\nreducaoJornada\nsalarioBase\nprevisaoRescisao\nvalorEstimadoTotal\nstatus\ndataConclusao\nmotivoCancelamento\nobservacoes\ncriadoPor\ncriadoPorUserId\ncreatedAt\nupdatedAt\ndeletedAt\ndeletedBy\ndeletedByUserId\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

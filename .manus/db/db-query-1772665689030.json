@@ -1,0 +1,260 @@
+{
+  "query": "SELECT codigoInterno, nomeCompleto, status FROM employees WHERE codigoInterno IS NOT NULL AND codigoInterno != '' ORDER BY CAST(codigoInterno AS UNSIGNED) LIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT codigoInterno, nomeCompleto, status FROM employees WHERE codigoInterno IS NOT NULL AND codigoInterno != '' ORDER BY CAST(codigoInterno AS UNSIGNED) LIMIT 50;",
+  "rows": [
+    {
+      "codigoInterno": "JFC003",
+      "nomeCompleto": "PAULO VINICIUS SALES TEIXEIRA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC004",
+      "nomeCompleto": "ANDERSON DOS ANJOS ALKMIN JUNIOR",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC005",
+      "nomeCompleto": "RODRIGO DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC006",
+      "nomeCompleto": "ODAIR JOSE PEREIRA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC007",
+      "nomeCompleto": "ELIAS VIEIRA DO NASCIMENTO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC008",
+      "nomeCompleto": "ANDREI DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC009",
+      "nomeCompleto": "FRANCISCO EUDICE CARVALHO BIZERRA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC010",
+      "nomeCompleto": "WILLIAN GUSTAVO FARIA DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC011",
+      "nomeCompleto": "MAURICIO BENEDITO ELESBAO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC012",
+      "nomeCompleto": "REGINALDO VITORIANO LOURENCO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC013",
+      "nomeCompleto": "MARCIO DE TOLEDO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC014",
+      "nomeCompleto": "MATEUS OLIVEIRA BRITO PIRES",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC015",
+      "nomeCompleto": "FERNANDO RODRIGO DE CASTILHO PRADO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC016",
+      "nomeCompleto": "JOAO JOSE DE PAULA OLIVEIRA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC017",
+      "nomeCompleto": "ANDERSON BRAGA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC018",
+      "nomeCompleto": "ACACIO LESCURA DE CAMARGO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC019",
+      "nomeCompleto": "ALEXSANDRO DE LIMA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC020",
+      "nomeCompleto": "WELLINGTON VALERIANO BRAZ LEMES DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC021",
+      "nomeCompleto": "ANTONIO CARLOS SANTOS",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC022",
+      "nomeCompleto": "CARLOS VITORIANO TOBIAS",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC023",
+      "nomeCompleto": "JOAO ODAIR DOMINGOS",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC024",
+      "nomeCompleto": "AGOSTINHO DIJALMA FERREIRA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC025",
+      "nomeCompleto": "JERRYALITON AUGUSTO BEZERRA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC026",
+      "nomeCompleto": "MARCELO DE LIMA FELISBERTO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC027",
+      "nomeCompleto": "ERITON ANDRE SEVERINO DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC028",
+      "nomeCompleto": "PAULO HENRIQUE MONTEIRO XAVIER",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC029",
+      "nomeCompleto": "EDENILSON SOUZA LIMA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC030",
+      "nomeCompleto": "ALEXANDRO GONCALVES DO NASCIMENTO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC031",
+      "nomeCompleto": "LUIS CLAUDIO ANDRADE CARNEIRO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC032",
+      "nomeCompleto": "FRANCISCO DAS CHAGAS DIAS",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC033",
+      "nomeCompleto": "DIOGO SOARES DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC034",
+      "nomeCompleto": "GILMAR SANTOS DO NASCIMENTO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC035",
+      "nomeCompleto": "CAIO AUGUSTO DA SILVA GARUFE",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC036",
+      "nomeCompleto": "DOUGLAS DE SOUZA ROCHA",
+      "status": "Afastado"
+    },
+    {
+      "codigoInterno": "JFC037",
+      "nomeCompleto": "EDSON FERNANDO MACHADO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC038",
+      "nomeCompleto": "WALMIR JOSE DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC039",
+      "nomeCompleto": "RAFAELA ALBUQUERQUE DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC040",
+      "nomeCompleto": "WANDERSON ANTONIO DA COSTA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC041",
+      "nomeCompleto": "MANOEL WAGNER ROCHA GUIMARAES",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC042",
+      "nomeCompleto": "PAULO ROSA DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC043",
+      "nomeCompleto": "NELSON MOREIRA GOMES",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC044",
+      "nomeCompleto": "JOSUE DO NASCIMENTO ALVES",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC045",
+      "nomeCompleto": "GILMAR PEREIRA DE BRITO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC046",
+      "nomeCompleto": "LUIS CARLOS DA SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC047",
+      "nomeCompleto": "NAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC048",
+      "nomeCompleto": "KELLEN LARISSA LOURENCO CLARO",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC049",
+      "nomeCompleto": "CATARINE APARECIDA CORREA LIMA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC050",
+      "nomeCompleto": "IRAEL ALVES DE SOUZA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC051",
+      "nomeCompleto": "JEFTER EMANOEL CRISPINIANO DE MELO SILVA",
+      "status": "Ativo"
+    },
+    {
+      "codigoInterno": "JFC002",
+      "nomeCompleto": "MARCIO ELOY DOS SANTOS",
+      "status": "Ativo"
+    }
+  ],
+  "messages": [],
+  "stdout": "codigoInterno\tnomeCompleto\tstatus\nJFC003\tPAULO VINICIUS SALES TEIXEIRA\tAtivo\nJFC004\tANDERSON DOS ANJOS ALKMIN JUNIOR\tAtivo\nJFC005\tRODRIGO DA SILVA\tAtivo\nJFC006\tODAIR JOSE PEREIRA\tAtivo\nJFC007\tELIAS VIEIRA DO NASCIMENTO\tAtivo\nJFC008\tANDREI DA SILVA\tAtivo\nJFC009\tFRANCISCO EUDICE CARVALHO BIZERRA\tAtivo\nJFC010\tWILLIAN GUSTAVO FARIA DA SILVA\tAtivo\nJFC011\tMAURICIO BENEDITO ELESBAO\tAtivo\nJFC012\tREGINALDO VITORIANO LOURENCO\tAtivo\nJFC013\tMARCIO DE TOLEDO\tAtivo\nJFC014\tMATEUS OLIVEIRA BRITO PIRES\tAtivo\nJFC015\tFERNANDO RODRIGO DE CASTILHO PRADO\tAtivo\nJFC016\tJOAO JOSE DE PAULA OLIVEIRA\tAtivo\nJFC017\tANDERSON BRAGA SILVA\tAtivo\nJFC018\tACACIO LESCURA DE CAMARGO\tAtivo\nJFC019\tALEXSANDRO DE LIMA\tAtivo\nJFC020\tWELLINGTON VALERIANO BRAZ LEMES DA SILVA\tAtivo\nJFC021\tANTONIO CARLOS SANTOS\tAtivo\nJFC022\tCARLOS VITORIANO TOBIAS\tAtivo\nJFC023\tJOAO ODAIR DOMINGOS\tAtivo\nJFC024\tAGOSTINHO DIJALMA FERREIRA\tAtivo\nJFC025\tJERRYALITON AUGUSTO BEZERRA\tAtivo\nJFC026\tMARCELO DE LIMA FELISBERTO\tAtivo\nJFC027\tERITON ANDRE SEVERINO DA SILVA\tAtivo\nJFC028\tPAULO HENRIQUE MONTEIRO XAVIER\tAtivo\nJFC029\tEDENILSON SOUZA LIMA\tAtivo\nJFC030\tALEXANDRO GONCALVES DO NASCIMENTO\tAtivo\nJFC031\tLUIS CLAUDIO ANDRADE CARNEIRO\tAtivo\nJFC032\tFRANCISCO DAS CHAGAS DIAS\tAtivo\nJFC033\tDIOGO SOARES DA SILVA\tAtivo\nJFC034\tGILMAR SANTOS DO NASCIMENTO\tAtivo\nJFC035\tCAIO AUGUSTO DA SILVA GARUFE\tAtivo\nJFC036\tDOUGLAS DE SOUZA ROCHA\tAfastado\nJFC037\tEDSON FERNANDO MACHADO\tAtivo\nJFC038\tWALMIR JOSE DA SILVA\tAtivo\nJFC039\tRAFAELA ALBUQUERQUE DA SILVA\tAtivo\nJFC040\tWANDERSON ANTONIO DA COSTA\tAtivo\nJFC041\tMANOEL WAGNER ROCHA GUIMARAES\tAtivo\nJFC042\tPAULO ROSA DA SILVA\tAtivo\nJFC043\tNELSON MOREIRA GOMES\tAtivo\nJFC044\tJOSUE DO NASCIMENTO ALVES\tAtivo\nJFC045\tGILMAR PEREIRA DE BRITO\tAtivo\nJFC046\tLUIS CARLOS DA SILVA\tAtivo\nJFC047\tNAYARA APARECIDA DOS SANTOS RODRIGUES BASTOS\tAtivo\nJFC048\tKELLEN LARISSA LOURENCO CLARO\tAtivo\nJFC049\tCATARINE APARECIDA CORREA LIMA\tAtivo\nJFC050\tIRAEL ALVES DE SOUZA\tAtivo\nJFC051\tJEFTER EMANOEL CRISPINIANO DE MELO SILVA\tAtivo\nJFC002\tMARCIO ELOY DOS SANTOS\tAtivo\n",
+  "stderr": "",
+  "execution_time_ms": 65
+}

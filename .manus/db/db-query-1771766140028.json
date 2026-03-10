@@ -1,0 +1,9 @@
+{
+  "query": "\n-- Rev. 64: Corrigir status de todos os funcionários para Ativo\n-- Remover datas de demissão incorretas (todas em março/2026 são erro de importação)\nUPDATE employees SET status = 'Ativo', dataDemissao = NULL WHERE status = 'Desligado';\nUPDATE employees SET dataDemissao = NULL WHERE dataDemissao IS NOT NULL;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute \n-- Rev. 64: Corrigir status de todos os funcionários para Ativo\n-- Remover datas de demissão incorretas (todas em março/2026 são erro de importação)\nUPDATE employees SET status = 'Ativo', dataDemissao = NULL WHERE status = 'Desligado';\nUPDATE employees SET dataDemissao = NULL WHERE dataDemissao IS NOT NULL;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 481
+}

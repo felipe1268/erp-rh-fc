@@ -1,0 +1,19 @@
+{
+  "query": "SELECT COUNT(*) as total FROM time_records WHERE companyId = 2; SELECT COUNT(*) as total, SUM(CASE WHEN entrada1 IS NOT NULL THEN 1 ELSE 0 END) as with_entrada FROM timecard_daily WHERE companyId = 2 AND mesCompetencia = '2026-02'; SELECT id, companyId, employeeId, data, entrada1, saida1, entrada2, saida2, obraId, statusDia, isFalta FROM timecard_daily WHERE companyId = 2 AND mesCompetencia = '2026-02' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COUNT(*) as total FROM time_records WHERE companyId = 2; SELECT COUNT(*) as total, SUM(CASE WHEN entrada1 IS NOT NULL THEN 1 ELSE 0 END) as with_entrada FROM timecard_daily WHERE companyId = 2 AND mesCompetencia = '2026-02'; SELECT id, companyId, employeeId, data, entrada1, saida1, entrada2, saida2, obraId, statusDia, isFalta FROM timecard_daily WHERE companyId = 2 AND mesCompetencia = '2026-02' LIMIT 5;",
+  "rows": [
+    {
+      "total": "0"
+    },
+    {
+      "total": "total\twith_entrada"
+    },
+    {
+      "total": "0\tNULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\n0\ntotal\twith_entrada\n0\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 65
+}

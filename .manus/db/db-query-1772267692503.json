@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE processos_trabalhistas \n  ADD COLUMN datajud_id VARCHAR(255) NULL,\n  ADD COLUMN datajud_ultima_consulta TIMESTAMP NULL,\n  ADD COLUMN datajud_ultima_atualizacao VARCHAR(100) NULL,\n  ADD COLUMN datajud_grau VARCHAR(20) NULL,\n  ADD COLUMN datajud_classe VARCHAR(255) NULL,\n  ADD COLUMN datajud_assuntos JSON NULL,\n  ADD COLUMN datajud_orgao_julgador VARCHAR(255) NULL,\n  ADD COLUMN datajud_sistema VARCHAR(100) NULL,\n  ADD COLUMN datajud_formato VARCHAR(50) NULL,\n  ADD COLUMN datajud_movimentos JSON NULL,\n  ADD COLUMN datajud_total_movimentos INT NULL,\n  ADD COLUMN datajud_auto_detectado TINYINT NOT NULL DEFAULT 0;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute ALTER TABLE processos_trabalhistas \n  ADD COLUMN datajud_id VARCHAR(255) NULL,\n  ADD COLUMN datajud_ultima_consulta TIMESTAMP NULL,\n  ADD COLUMN datajud_ultima_atualizacao VARCHAR(100) NULL,\n  ADD COLUMN datajud_grau VARCHAR(20) NULL,\n  ADD COLUMN datajud_classe VARCHAR(255) NULL,\n  ADD COLUMN datajud_assuntos JSON NULL,\n  ADD COLUMN datajud_orgao_julgador VARCHAR(255) NULL,\n  ADD COLUMN datajud_sistema VARCHAR(100) NULL,\n  ADD COLUMN datajud_formato VARCHAR(50) NULL,\n  ADD COLUMN datajud_movimentos JSON NULL,\n  ADD COLUMN datajud_total_movimentos INT NULL,\n  ADD COLUMN datajud_auto_detectado TINYINT NOT NULL DEFAULT 0;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2230
+}

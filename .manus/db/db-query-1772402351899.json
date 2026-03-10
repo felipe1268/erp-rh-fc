@@ -1,0 +1,115 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'vacation_periods' ORDER BY ORDINAL_POSITION",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'vacation_periods' ORDER BY ORDINAL_POSITION",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "companyId"
+    },
+    {
+      "COLUMN_NAME": "employeeId"
+    },
+    {
+      "COLUMN_NAME": "periodoAquisitivoInicio"
+    },
+    {
+      "COLUMN_NAME": "periodoAquisitivoFim"
+    },
+    {
+      "COLUMN_NAME": "periodoConcessivoFim"
+    },
+    {
+      "COLUMN_NAME": "dataInicio"
+    },
+    {
+      "COLUMN_NAME": "dataFim"
+    },
+    {
+      "COLUMN_NAME": "diasGozo"
+    },
+    {
+      "COLUMN_NAME": "fracionamento"
+    },
+    {
+      "COLUMN_NAME": "periodo2Inicio"
+    },
+    {
+      "COLUMN_NAME": "periodo2Fim"
+    },
+    {
+      "COLUMN_NAME": "periodo3Inicio"
+    },
+    {
+      "COLUMN_NAME": "periodo3Fim"
+    },
+    {
+      "COLUMN_NAME": "abonoPecuniario"
+    },
+    {
+      "COLUMN_NAME": "valorFerias"
+    },
+    {
+      "COLUMN_NAME": "valorTercoConstitucional"
+    },
+    {
+      "COLUMN_NAME": "valorAbono"
+    },
+    {
+      "COLUMN_NAME": "valorTotal"
+    },
+    {
+      "COLUMN_NAME": "dataPagamento"
+    },
+    {
+      "COLUMN_NAME": "status"
+    },
+    {
+      "COLUMN_NAME": "vencida"
+    },
+    {
+      "COLUMN_NAME": "pagamentoEmDobro"
+    },
+    {
+      "COLUMN_NAME": "observacoes"
+    },
+    {
+      "COLUMN_NAME": "aprovadoPor"
+    },
+    {
+      "COLUMN_NAME": "aprovadoPorUserId"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "updatedAt"
+    },
+    {
+      "COLUMN_NAME": "deletedAt"
+    },
+    {
+      "COLUMN_NAME": "deletedBy"
+    },
+    {
+      "COLUMN_NAME": "deletedByUserId"
+    },
+    {
+      "COLUMN_NAME": "dataSugeridaInicio"
+    },
+    {
+      "COLUMN_NAME": "dataSugeridaFim"
+    },
+    {
+      "COLUMN_NAME": "dataAlteradaPeloRH"
+    },
+    {
+      "COLUMN_NAME": "numeroPeriodo"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncompanyId\nemployeeId\nperiodoAquisitivoInicio\nperiodoAquisitivoFim\nperiodoConcessivoFim\ndataInicio\ndataFim\ndiasGozo\nfracionamento\nperiodo2Inicio\nperiodo2Fim\nperiodo3Inicio\nperiodo3Fim\nabonoPecuniario\nvalorFerias\nvalorTercoConstitucional\nvalorAbono\nvalorTotal\ndataPagamento\nstatus\nvencida\npagamentoEmDobro\nobservacoes\naprovadoPor\naprovadoPorUserId\ncreatedAt\nupdatedAt\ndeletedAt\ndeletedBy\ndeletedByUserId\ndataSugeridaInicio\ndataSugeridaFim\ndataAlteradaPeloRH\nnumeroPeriodo\n",
+  "stderr": "",
+  "execution_time_ms": 373
+}

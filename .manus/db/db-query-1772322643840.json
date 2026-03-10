@@ -1,0 +1,13 @@
+{
+  "query": "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', ') as cols FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asos';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', ') as cols FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asos';",
+  "rows": [
+    {
+      "cols": "id, companyId, employeeId, tipo, dataExame, dataValidade, validadeDias, resultado, medico, crm, examesRealizados, jaAtualizou, clinica, observacoes, documentoUrl, createdAt, updatedAt, deletedAt, deletedBy, deletedByUserId"
+    }
+  ],
+  "messages": [],
+  "stdout": "cols\nid, companyId, employeeId, tipo, dataExame, dataValidade, validadeDias, resultado, medico, crm, examesRealizados, jaAtualizou, clinica, observacoes, documentoUrl, createdAt, updatedAt, deletedAt, deletedBy, deletedByUserId\n",
+  "stderr": "",
+  "execution_time_ms": 344
+}

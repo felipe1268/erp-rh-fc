@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, nome, cpf, codigoInterno, codigoContador, status, companyId FROM employees WHERE companyId IN (SELECT id FROM companies) ORDER BY companyId, nome LIMIT 200;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT id, nome, cpf, codigoInterno, codigoContador, status, companyId FROM employees WHERE companyId IN (SELECT id FROM companies) ORDER BY companyId, nome LIMIT 200;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'nome' in 'field list'"
+  ]
+}

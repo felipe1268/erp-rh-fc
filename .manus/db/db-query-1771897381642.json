@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor) VALUES (73, 'Contrato de Experiência CLT', 'Sistema completo de acompanhamento de contratos de experiência com alertas automáticos, ações na tela inicial (prorrogar/efetivar/desligar), cálculo automático de datas de vencimento e registro no histórico do colaborador', 'feature', '[\"colaboradores\",\"home\"]', 'Sistema');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_revisions (version, titulo, descricao, tipo, modulos, criadoPor) VALUES (73, 'Contrato de Experiência CLT', 'Sistema completo de acompanhamento de contratos de experiência com alertas automáticos, ações na tela inicial (prorrogar/efetivar/desligar), cálculo automático de datas de vencimento e registro no histórico do colaborador', 'feature', '[\"colaboradores\",\"home\"]', 'Sistema');",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 61
+}

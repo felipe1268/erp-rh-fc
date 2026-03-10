@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO system_criteria (companyId, categoria, chave, valor, descricao, valorPadraoClt, unidade, atualizadoPor) \nSELECT c.companyId, 'folha', 'folha_bloquear_consolidacao_inconsistencias', '1', 'Bloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)', '1', 'bool', 'Sistema'\nFROM (SELECT DISTINCT companyId FROM system_criteria) c\nWHERE NOT EXISTS (\n  SELECT 1 FROM system_criteria sc \n  WHERE sc.companyId = c.companyId \n  AND sc.chave = 'folha_bloquear_consolidacao_inconsistencias'\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute INSERT INTO system_criteria (companyId, categoria, chave, valor, descricao, valorPadraoClt, unidade, atualizadoPor) \nSELECT c.companyId, 'folha', 'folha_bloquear_consolidacao_inconsistencias', '1', 'Bloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)', '1', 'bool', 'Sistema'\nFROM (SELECT DISTINCT companyId FROM system_criteria) c\nWHERE NOT EXISTS (\n  SELECT 1 FROM system_criteria sc \n  WHERE sc.companyId = c.companyId \n  AND sc.chave = 'folha_bloquear_consolidacao_inconsistencias'\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 391
+}

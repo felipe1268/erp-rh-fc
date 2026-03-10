@@ -1,0 +1,4 @@
+Screenshot Rev40:
+- Menu lateral: Cadastro (Empresas, Colaboradores, Obras, Setores, Funções), Financeiro (Contas Bancárias), Operacional (Fechamento de Ponto, Folha de Pagamento, Controle de Documentos, Vale Alimentação, Relógios de Ponto), Jurídico (Processos Trabalhistas)
+- 0 TypeScript errors
+- Server running OK

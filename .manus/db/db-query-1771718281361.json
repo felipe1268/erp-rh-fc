@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME = 'advances' AND COLUMN_NAME LIKE 'desconto%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_NAME = 'advances' AND COLUMN_NAME LIKE 'desconto%';",
+  "rows": [
+    {
+      "COLUMN_NAME": "descontoIR"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\ndescontoIR\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

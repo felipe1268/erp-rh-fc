@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS menu_labels (\n    id int AUTO_INCREMENT PRIMARY KEY,\n    companyId int NOT NULL,\n    originalLabel varchar(255) NOT NULL,\n    customLabel varchar(255) NOT NULL,\n    updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n    UNIQUE KEY ml_company_label (companyId, originalLabel),\n    INDEX ml_company (companyId)\n  )",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute CREATE TABLE IF NOT EXISTS menu_labels (\n    id int AUTO_INCREMENT PRIMARY KEY,\n    companyId int NOT NULL,\n    originalLabel varchar(255) NOT NULL,\n    customLabel varchar(255) NOT NULL,\n    updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n    UNIQUE KEY ml_company_label (companyId, originalLabel),\n    INDEX ml_company (companyId)\n  )",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 423
+}

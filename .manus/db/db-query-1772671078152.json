@@ -1,0 +1,25 @@
+{
+  "query": "SELECT companyId, COUNT(*) as cnt, SUM(quantidadeEstoque) as estoque \nFROM epis \nGROUP BY companyId \nORDER BY cnt DESC",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SELECT companyId, COUNT(*) as cnt, SUM(quantidadeEstoque) as estoque \nFROM epis \nGROUP BY companyId \nORDER BY cnt DESC",
+  "rows": [
+    {
+      "companyId": "60002",
+      "cnt": "82",
+      "estoque": "1242"
+    },
+    {
+      "companyId": "90001",
+      "cnt": "8",
+      "estoque": "34"
+    },
+    {
+      "companyId": "60005",
+      "cnt": "4",
+      "estoque": "39"
+    }
+  ],
+  "messages": [],
+  "stdout": "companyId\tcnt\testoque\n60002\t82\t1242\n90001\t8\t34\n60005\t4\t39\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

@@ -1,0 +1,26 @@
+{
+  "query": "SHOW COLUMNS FROM employees LIKE '%jornada%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ssBFmViK3wawX7.5ba43d803806 --database W4MM458SKqYRWRGGQrfw8A --execute SHOW COLUMNS FROM employees LIKE '%jornada%';",
+  "rows": [
+    {
+      "Field": "jornadaTrabalho",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "heInterjornada",
+      "Type": "varchar(10)",
+      "Null": "YES",
+      "Key": "",
+      "Default": "50",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\njornadaTrabalho\ttext\tYES\t\tNULL\t\nheInterjornada\tvarchar(10)\tYES\t\t50\t\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}
