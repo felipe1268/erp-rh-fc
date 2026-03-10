@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb as _getDb } from "../db";
-import { skills, employeeSkills, employees } from "../../drizzle/schema";
+import { skills, employeeSkills, employees, obras, obraFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, inArray, isNull, desc, asc, count } from "drizzle-orm";
 import { companyFilter, resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -288,7 +288,7 @@ export const skillsRouter = router({
           COUNT(DISTINCT es.employeeId) as qtd
         FROM employee_skills es
         INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
-        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId AND of2.deletedAt IS NULL
+        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId 
         INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL
           AND e.status NOT IN ('Desligado', 'Lista_Negra')
         WHERE es.deleted_at IS NULL
@@ -316,7 +316,7 @@ export const skillsRouter = router({
         FROM employee_skills es
         INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
         INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId 
-          AND of2.deletedAt IS NULL AND of2.isActive = 1
+           AND of2.isActive = 1
         INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL
           AND e.status NOT IN ('Desligado', 'Lista_Negra')
         WHERE es.deleted_at IS NULL
@@ -325,6 +325,233 @@ export const skillsRouter = router({
         ORDER BY of2.obraId, qtd DESC
       `);
       return rows || [];
+    }),
+
+  // ─── Bulk Assignment ─────────────────────────────────────────────
+
+  // Assign a skill to multiple employees at once
+  assignBulk: protectedProcedure
+    .input(z.object({
+      skillId: z.number(),
+      employeeIds: z.array(z.number()).min(1),
+      companyId: z.number(),
+      nivel: z.enum(["Basico", "Intermediario", "Avancado"]).default("Basico"),
+      tempoExperiencia: z.string().optional(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      let assigned = 0;
+      let skipped = 0;
+      for (const empId of input.employeeIds) {
+        // Check if already assigned
+        const [existing] = await db
+          .select({ id: employeeSkills.id })
+          .from(employeeSkills)
+          .where(and(
+            eq(employeeSkills.employeeId, empId),
+            eq(employeeSkills.skillId, input.skillId),
+            isNull(employeeSkills.deletedAt),
+          ));
+        if (existing) {
+          skipped++;
+          continue;
+        }
+        await db.insert(employeeSkills).values({
+          employeeId: empId,
+          skillId: input.skillId,
+          companyId: input.companyId,
+          nivel: input.nivel,
+          tempoExperiencia: input.tempoExperiencia || null,
+          observacao: input.observacao || null,
+        });
+        assigned++;
+      }
+      return { assigned, skipped, total: input.employeeIds.length };
+    }),
+
+  // ─── Report: Skills by Obra ─────────────────────────────────────
+
+  // Detailed report of skills available per obra
+  reportByObra: protectedProcedure
+    .input(z.object({
+      ...companyInput.shape,
+      obraId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ids = resolveCompanyIds(input);
+
+      // Get all obras
+      const obraRows = await db
+        .select({
+          id: obras.id,
+          nome: obras.nome,
+          status: obras.status,
+          companyId: obras.companyId,
+        })
+        .from(obras)
+        .where(and(
+          inArray(obras.companyId, ids),
+          isNull(obras.deletedAt),
+          ...(input.obraId ? [eq(obras.id, input.obraId)] : []),
+        ))
+        .orderBy(asc(obras.nome));
+
+      // Get skills per obra with employee details
+      const [skillRows] = await db.execute(sql`
+        SELECT 
+          of2.obraId,
+          s.id as skillId,
+          s.nome as skillNome,
+          s.categoria as skillCategoria,
+          es.nivel,
+          es.tempoExperiencia,
+          e.id as employeeId,
+          e.nomeCompleto as empNome,
+          e.funcao as empFuncao
+        FROM employee_skills es
+        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
+        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId 
+           AND of2.isActive = 1
+        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL
+          AND e.status NOT IN ('Desligado', 'Lista_Negra')
+        WHERE es.deleted_at IS NULL
+          AND es.companyId IN (${sql.raw(ids.join(','))})
+          ${input.obraId ? sql`AND of2.obraId = ${input.obraId}` : sql``}
+        ORDER BY of2.obraId, s.categoria, s.nome, e.nomeCompleto
+      `);
+
+      // Get all available skills for gap analysis
+      const allSkills = await db
+        .select({
+          id: skills.id,
+          nome: skills.nome,
+          categoria: skills.categoria,
+        })
+        .from(skills)
+        .where(and(
+          inArray(skills.companyId, ids),
+          isNull(skills.deletedAt),
+        ));
+
+      // Get total employees per obra
+      const [empCountRows] = await db.execute(sql`
+        SELECT of2.obraId, COUNT(DISTINCT of2.employeeId) as total
+        FROM obra_funcionarios of2
+        INNER JOIN employees e ON e.id = of2.employeeId AND e.deletedAt IS NULL
+          AND e.status NOT IN ('Desligado', 'Lista_Negra')
+        WHERE of2.isActive = 1
+          AND of2.companyId IN (${sql.raw(ids.join(','))})
+        GROUP BY of2.obraId
+      `);
+
+      return {
+        obras: obraRows,
+        skillDetails: skillRows || [],
+        allSkills,
+        employeeCounts: empCountRows || [],
+      };
+    }),
+
+  // ─── Dashboard Data ─────────────────────────────────────────────
+
+  // Full dashboard data for skills/competencies
+  dashboardData: protectedProcedure
+    .input(companyInput)
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ids = resolveCompanyIds(input);
+
+      // KPIs
+      const [totalSkillsRows] = await db.execute(sql`
+        SELECT COUNT(*) as total FROM skills WHERE companyId IN (${sql.raw(ids.join(','))}) AND deleted_at IS NULL
+      `);
+      const [totalAssignmentsRows] = await db.execute(sql`
+        SELECT COUNT(*) as total FROM employee_skills es
+        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+      `);
+      const [totalEmployeesWithSkillRows] = await db.execute(sql`
+        SELECT COUNT(DISTINCT es.employeeId) as total FROM employee_skills es
+        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+      `);
+      const [totalActiveEmployeesRows] = await db.execute(sql`
+        SELECT COUNT(*) as total FROM employees WHERE companyId IN (${sql.raw(ids.join(','))}) AND deletedAt IS NULL AND status NOT IN ('Desligado','Lista_Negra')
+      `);
+
+      // Distribution by category
+      const [byCategory] = await db.execute(sql`
+        SELECT s.categoria, COUNT(DISTINCT es.employeeId) as qtd
+        FROM employee_skills es
+        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
+        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        GROUP BY s.categoria ORDER BY qtd DESC
+      `);
+
+      // Distribution by level
+      const [byLevel] = await db.execute(sql`
+        SELECT es.nivel, COUNT(*) as qtd
+        FROM employee_skills es
+        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        GROUP BY es.nivel ORDER BY FIELD(es.nivel, 'Basico','Intermediario','Avancado')
+      `);
+
+      // Top skills (most assigned)
+      const [topSkills] = await db.execute(sql`
+        SELECT s.id, s.nome, s.categoria, COUNT(DISTINCT es.employeeId) as qtd
+        FROM employee_skills es
+        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
+        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        GROUP BY s.id, s.nome, s.categoria ORDER BY qtd DESC LIMIT 15
+      `);
+
+      // Skills per obra
+      const [byObra] = await db.execute(sql`
+        SELECT o.id as obraId, o.nome as obraNome, COUNT(DISTINCT es.employeeId) as empComSkill,
+          COUNT(DISTINCT s.id) as skillsDistintas
+        FROM employee_skills es
+        INNER JOIN skills s ON s.id = es.skillId AND s.deleted_at IS NULL
+        INNER JOIN obra_funcionarios of2 ON of2.employeeId = es.employeeId  AND of2.isActive = 1
+        INNER JOIN obras o ON o.id = of2.obraId AND o.deletedAt IS NULL
+        INNER JOIN employees e ON e.id = es.employeeId AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        WHERE es.companyId IN (${sql.raw(ids.join(','))}) AND es.deleted_at IS NULL
+        GROUP BY o.id, o.nome ORDER BY empComSkill DESC
+      `);
+
+      // Employees without any skill
+      const [noSkillRows] = await db.execute(sql`
+        SELECT COUNT(*) as total FROM employees e
+        WHERE e.companyId IN (${sql.raw(ids.join(','))}) AND e.deletedAt IS NULL AND e.status NOT IN ('Desligado','Lista_Negra')
+        AND e.id NOT IN (
+          SELECT DISTINCT es.employeeId FROM employee_skills es WHERE es.deleted_at IS NULL
+        )
+      `);
+
+      const totalSkills = Number((totalSkillsRows as any)?.[0]?.total || 0);
+      const totalAssignments = Number((totalAssignmentsRows as any)?.[0]?.total || 0);
+      const totalWithSkill = Number((totalEmployeesWithSkillRows as any)?.[0]?.total || 0);
+      const totalActive = Number((totalActiveEmployeesRows as any)?.[0]?.total || 0);
+      const totalNoSkill = Number((noSkillRows as any)?.[0]?.total || 0);
+
+      return {
+        kpis: {
+          totalSkills,
+          totalAssignments,
+          totalWithSkill,
+          totalActive,
+          totalNoSkill,
+          coveragePercent: totalActive > 0 ? Math.round((totalWithSkill / totalActive) * 100) : 0,
+        },
+        byCategory: byCategory || [],
+        byLevel: byLevel || [],
+        topSkills: topSkills || [],
+        byObra: byObra || [],
+      };
     }),
 
   // Summary: count employees per skill globally (for dashboard)

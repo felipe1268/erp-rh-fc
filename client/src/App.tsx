@@ -87,6 +87,9 @@ const DashPerfilTempoCasa = lazy(() => import("./pages/dashboards/DashPerfilTemp
 const DashControleDocumentos = lazy(() => import("./pages/dashboards/DashControleDocumentos"));
 const DashCompetencias = lazy(() => import("./pages/dashboards/DashCompetencias"));
 const DashApontamentos = lazy(() => import("./pages/dashboards/DashApontamentos"));
+const DashHabilidades = lazy(() => import("./pages/dashboards/DashHabilidades"));
+const RelatorioHabilidadesObra = lazy(() => import("./pages/RelatorioHabilidadesObra"));
+const ImportacaoHabilidades = lazy(() => import("./pages/ImportacaoHabilidades"));
 
 // Terceiros
 const PainelTerceiros = lazy(() => import("./pages/terceiros/PainelTerceiros"));
@@ -182,6 +185,8 @@ function Router() {
         <Route path={"/dissidio"} component={Dissidio} />
         <Route path={"/pj-medicoes"} component={PJMedicoes} />
         <Route path="/habilidades" component={Habilidades} />
+        <Route path="/habilidades/importacao" component={ImportacaoHabilidades} />
+        <Route path="/relatorios/habilidades-obra" component={RelatorioHabilidadesObra} />
         {/* Avaliação de Desempenho */}
         <Route path={"/avaliacao-desempenho"} component={AvaliacaoDesempenho} />
         {/* Biblioteca de Conhecimento */}
@@ -208,6 +213,7 @@ function Router() {
         <Route path={"/dashboards/controle-documentos"} component={DashControleDocumentos} />
         <Route path={"/dashboards/competencias"} component={DashCompetencias} />
         <Route path={"/dashboards/apontamentos"} component={DashApontamentos} />
+        <Route path={"/dashboards/habilidades"} component={DashHabilidades} />
         {/* Terceiros */}
         <Route path="/terceiros" component={PainelTerceiros} />
         <Route path="/terceiros/empresas" component={EmpresasTerceiras} />

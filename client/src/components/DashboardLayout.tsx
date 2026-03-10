@@ -124,6 +124,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Wallet, label: "Relatório de Folha", path: "/relatorios/folha" },
       { icon: AlertTriangle, label: "Relatório de Divergências", path: "/relatorios/divergencias" },
       { icon: Construction, label: "Custo por Obra", path: "/relatorios/custo-obra" },
+      { icon: Wrench, label: "Habilidades por Obra", path: "/relatorios/habilidades-obra" },
     ],
   },
   {
@@ -140,6 +141,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: UserSearch, label: "Perfil por Tempo de Casa", path: "/dashboards/perfil-tempo-casa" },
       { icon: ShieldCheck, label: "Controle de Documentos", path: "/dashboards/controle-documentos" },
       { icon: ClipboardList, label: "Apontamentos de Campo", path: "/dashboards/apontamentos" },
+      { icon: Wrench, label: "Habilidades", path: "/dashboards/habilidades" },
     ],
   },
   {

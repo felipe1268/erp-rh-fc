@@ -5366,3 +5366,14 @@
 - [x] Filtro por habilidade na tela de Colaboradores
 - [x] Testes unitários para módulo de habilidades (9 testes passando)
 - [x] Adicionar menu "Habilidades" na sidebar (seção Cadastro)
+
+## Módulo de Habilidades - Fase 2
+- [x] Relatório de Habilidades por Obra (quais habilidades disponíveis e faltantes por obra)
+- [x] Importação em massa de habilidades (atribuir uma habilidade a múltiplos funcionários de uma vez)
+- [x] Dashboard de Competências (gráficos de distribuição por obra, categoria e nível)
+- [x] Endpoints backend para relatório por obra, atribuição em massa e dados do dashboard
+- [x] Tela frontend do Relatório de Habilidades por Obra
+- [x] Tela frontend de Importação em Massa
+- [x] Tela frontend do Dashboard de Competências
+- [x] Adicionar rotas e navegação no menu lateral
+- [x] Testes unitários para os novos endpoints (18 testes passando)

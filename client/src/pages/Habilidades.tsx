@@ -15,6 +15,8 @@ import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
+import { Link } from "wouter";
+import { BarChart3, FileText, UserPlus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -217,9 +219,26 @@ export default function Habilidades() {
               Gerencie as habilidades e competências dos colaboradores
             </p>
           </div>
-          <Button onClick={() => { setForm(emptySkillForm); setEditingId(null); setShowForm(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Nova Habilidade
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/habilidades/importacao">
+              <Button variant="outline" size="sm">
+                <UserPlus className="h-4 w-4 mr-1" /> Atribuição em Massa
+              </Button>
+            </Link>
+            <Link href="/relatorios/habilidades-obra">
+              <Button variant="outline" size="sm">
+                <FileText className="h-4 w-4 mr-1" /> Relatório por Obra
+              </Button>
+            </Link>
+            <Link href="/dashboards/habilidades">
+              <Button variant="outline" size="sm">
+                <BarChart3 className="h-4 w-4 mr-1" /> Dashboard
+              </Button>
+            </Link>
+            <Button onClick={() => { setForm(emptySkillForm); setEditingId(null); setShowForm(true); }}>
+              <Plus className="h-4 w-4 mr-2" /> Nova Habilidade
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
