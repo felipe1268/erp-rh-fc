@@ -5338,3 +5338,4 @@
 - [x] Frontend: manter dispensados na contagem contábil (folha, custos)
 - [x] Implementar filtro por status nos badges do Efetivo por Obra (clicar em Ativos, Aviso Prévio, etc. filtra as obras)
 - [x] Corrigir cores dos badges: AvisoDispensado com cor própria (laranja), Afastados com cor diferente (roxo), legenda incluir AvisoDispensado
+- [x] BUG: Painel RH mostra 6 Férias mas filtro Colaboradores mostra apenas 5 - corrigido: vacation_period de funcionário deletado (420026) era contada no feriasEmAndamento

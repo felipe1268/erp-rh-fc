@@ -239,8 +239,10 @@ export const homeDataRouter = router({
         .sort((a, b) => a.diasAteInicio - b.diasAteInicio);
 
       // Férias em andamento (funcionários de férias agora)
+      // Set de IDs de funcionários existentes para filtrar VPs de funcionários deletados
+      const allEmpIds = new Set(allEmps.map(e => e.id));
       const feriasEmAndamento = allVacations
-        .filter(v => v.status === 'em_gozo' || (v.dataInicio && v.dataFim && v.dataInicio <= hojeStr && v.dataFim >= hojeStr && v.status !== 'cancelada'))
+        .filter(v => allEmpIds.has(v.employeeId) && (v.status === 'em_gozo' || (v.dataInicio && v.dataFim && v.dataInicio <= hojeStr && v.dataFim >= hojeStr && v.status !== 'cancelada')))
         .map(v => {
           const emp = allEmps.find(e => e.id === v.employeeId);
           const diasRestantes = v.dataFim ? Math.ceil((new Date(v.dataFim + 'T12:00:00').getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : 0;
