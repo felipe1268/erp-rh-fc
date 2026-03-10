@@ -5387,3 +5387,4 @@
 - [x] BUG: Dashboard de Habilidades trava (loading infinito) no modo CONSTRUTORAS
 - [x] BUG: Dashboard de Habilidades mostra tudo zerado na FC Engenharia (dados não carregam)
 - [x] FEATURE: Adicionar aba de Habilidades no Raio-X do Colaborador
+- [x] BUG: Raio-X do Funcionário não carrega funcionários no modo CONSTRUTORAS (mostra 0 em todos os status)

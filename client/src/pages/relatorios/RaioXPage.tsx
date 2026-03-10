@@ -50,14 +50,14 @@ export default function RaioXPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
 
   const { data: allEmployees = [] } = trpc.employees.list.useQuery(
-    { companyId },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { companyId: isConstrutoras ? (companyIds[0] || 0) : companyId, companyIds: isConstrutoras ? companyIds : undefined },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   // Buscar avisos prévios em andamento para identificar quem está em aviso prévio
   const { data: avisosAtivos = [] } = trpc.avisoPrevio.avisoPrevio.list.useQuery(
-    { companyId },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { companyId: isConstrutoras ? (companyIds[0] || 0) : companyId },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
   // IDs de funcionários com aviso prévio em andamento
