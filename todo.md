@@ -5320,3 +5320,10 @@
 - [x] Adicionar alerta no Dashboard Folha de Pagamento (variant compact)
 - [x] Separar CLT sem folha (crítico) de PJ sem lançamento (informativo)
 - [x] Exibir tabela detalhada com código, nome, função e status de cada funcionário sem folha
+
+## Fase: Mostrar Férias no Efetivo da Obra
+- [ ] Incluir funcionários em férias na listagem de efetivo da obra
+- [ ] Exibir status "Férias" visível na coluna Info Status da equipe da obra
+- [ ] Investigar e corrigir por que funcionários de férias não aparecem no grupo Férias na equipe da obra
+- [ ] Adicionar badges de Férias/Afastado nos cards de cada obra na visão geral
+- [x] BUG: Painel RH mostra 3 Férias ao invés de 4 quando CONSTRUTORAS selecionado (FC+JF) - query não conta corretamente

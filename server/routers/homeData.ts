@@ -466,10 +466,22 @@ export const homeDataRouter = router({
       // ============================================================
       // 11. STATS CONSOLIDADOS
       // ============================================================
+      // Cross-reference: funcionários com férias em gozo na vacation_periods
+      // mas com status != 'Ferias' na tabela employees (inconsistência de sincronização)
+      const empIdsComFeriasStatus = new Set(allEmps.filter(e => e.status === 'Ferias').map(e => e.id));
+      const empIdsComFeriasVP = new Set(
+        feriasEmAndamento
+          .filter(f => !empIdsComFeriasStatus.has(f.employeeId))
+          .map(f => f.employeeId)
+      );
+      const totalFeriasReal = empIdsComFeriasStatus.size + empIdsComFeriasVP.size;
+      // Ativos reais = ativos da tabela - os que estão de férias mas com status Ativo
+      const ativosReais = ativos.filter(e => !empIdsComFeriasVP.has(e.id)).length;
+
       const statsConsolidados = {
         totalFuncionarios: allEmps.length,
-        ativos: ativos.length,
-        ferias: allEmps.filter(e => e.status === "Ferias").length,
+        ativos: ativosReais,
+        ferias: totalFeriasReal,
         afastados: allEmps.filter(e => e.status === "Afastado").length,
         licenca: allEmps.filter(e => e.status === "Licenca").length,
         desligados: allEmps.filter(e => e.status === "Desligado").length,

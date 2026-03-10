@@ -40,6 +40,35 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     count: sql<number>`count(*)`,
   }).from(employees).where(baseWhere).groupBy(employees.status);
 
+  // Cross-reference: buscar funcionários com férias em gozo na vacation_periods
+  // (para corrigir casos onde employees.status = 'Ativo' mas vacation_periods.status = 'em_gozo')
+  const today = new Date().toISOString().split('T')[0];
+  const ids = resolveIds(companyId, companyIds);
+  const feriasEmGozo = await db.select({
+    employeeId: vacationPeriods.employeeId,
+  }).from(vacationPeriods)
+    .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
+    .where(and(
+      companyWhere(vacationPeriods, companyId, companyIds),
+      isNull(vacationPeriods.deletedAt),
+      isNull(employees.deletedAt),
+      sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+      sql`${employees.status} != 'Ferias'`,
+      sql`(
+        ${vacationPeriods.status} = 'em_gozo'
+        OR (
+          ${vacationPeriods.status} = 'agendada'
+          AND ${vacationPeriods.dataInicio} IS NOT NULL
+          AND ${vacationPeriods.dataFim} IS NOT NULL
+          AND ${vacationPeriods.dataInicio} <= ${today}
+          AND ${vacationPeriods.dataFim} >= ${today}
+        )
+      )`,
+    ));
+  // Unique employee IDs that are on vacation but status != 'Ferias'
+  const feriasExtraIds = new Set(feriasEmGozo.map(f => f.employeeId));
+  const feriasExtraCount = feriasExtraIds.size;
+
   // Gênero (apenas ativos)
   const sexDist = await db.select({
     sexo: employees.sexo,
@@ -205,10 +234,16 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
   const totalGeral = statusDist.reduce((s, r) => s + Number(r.count), 0);
 
   // Mesclar Lista_Negra com Desligado para exibição nos dashboards
+  // E corrigir contagem de Férias com base na vacation_periods (cross-reference)
   const statusMergeObj: Record<string, number> = {};
   for (const r of statusDist) {
     const label = r.status === 'Lista_Negra' ? 'Desligado' : (r.status || 'Desconhecido');
     statusMergeObj[label] = (statusMergeObj[label] || 0) + Number(r.count);
+  }
+  // Ajustar: mover feriasExtraCount de 'Ativo' para 'Ferias'
+  if (feriasExtraCount > 0) {
+    statusMergeObj['Ferias'] = (statusMergeObj['Ferias'] || 0) + feriasExtraCount;
+    statusMergeObj['Ativo'] = (statusMergeObj['Ativo'] || 0) - feriasExtraCount;
   }
   const statusDistMerged = Object.entries(statusMergeObj).map(([label, value]) => ({ label, value }));
 
