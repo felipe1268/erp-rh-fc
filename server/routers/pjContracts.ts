@@ -335,7 +335,7 @@ export const pjContractsRouter = router({
           observacoes: input.observacoes || null,
         });
         
-        return { success: true, id: result.insertId, numeroContrato: numero };
+        return { success: true, id: result[0].id, numeroContrato: numero };
       }),
 
     update: protectedProcedure
@@ -428,7 +428,7 @@ export const pjContractsRouter = router({
           criadoPorUserId: ctx.user.id,
         });
         
-        return { success: true, novoContratoId: result.insertId, numero };
+        return { success: true, novoContratoId: result[0].id, numero };
       }),
 
     delete: protectedProcedure

@@ -74,7 +74,7 @@ export const parceirosRouter = router({
           ...input,
           createdBy: ctx.user?.name || "Sistema",
         } as any);
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     update: protectedProcedure
@@ -186,7 +186,7 @@ export const parceirosRouter = router({
           ...input,
           lancadoPor: ctx.user?.name || "Sistema",
         } as any);
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     aprovar: protectedProcedure
@@ -322,7 +322,7 @@ export const parceirosRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const [result] = await db.insert(pagamentosParceiros).values(input as any);
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     registrarPagamento: protectedProcedure

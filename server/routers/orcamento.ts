@@ -323,9 +323,9 @@ export const orcamentoRouter = router({
         status:          'rascunho',
         importadoPor:    input.userName,
         importadoEm:     new Date().toISOString(),
-      });
+      }).returning();
 
-      const orcamentoId = (res[0] as any).insertId;
+      const orcamentoId = res[0].id;
 
       // Inserir itens em lotes
       const BATCH = 200;

@@ -47,7 +47,7 @@ export const medicosClinicasRouter = router({
         crm: input.crm,
         especialidade: input.especialidade || null,
       });
-      return { id: result.insertId };
+      return { id: result[0].id };
     }),
 
   atualizarMedico: protectedProcedure
@@ -119,7 +119,7 @@ export const medicosClinicasRouter = router({
         endereco: input.endereco || null,
         telefone: input.telefone || null,
       });
-      return { id: result.insertId };
+      return { id: result[0].id };
     }),
 
   atualizarClinica: protectedProcedure

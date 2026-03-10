@@ -211,7 +211,7 @@ export const payrollEngineRouter = router({
         INSERT INTO payroll_periods (companyId, mesReferencia, pontoInicio, pontoFim, escuroInicio, escuroFim, status, totalFuncionarios)
         VALUES (${input.companyId}, ${input.mesReferencia}, ${pontoInicio}, ${pontoFim}, ${escuroInicio}, ${escuroFim}, 'aberta', ${totalFunc})
       `) as any[];
-      return { id: result.insertId, message: "Competência aberta com sucesso" };
+      return { id: result[0].id, message: "Competência aberta com sucesso" };
     }),
 
   // ============================================================

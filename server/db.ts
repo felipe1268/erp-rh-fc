@@ -1,5 +1,6 @@
 import { eq, and, like, or, desc, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import {
   users,
   companies,
@@ -36,7 +37,8 @@ let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -71,7 +73,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     else if (user.openId === ENV.ownerOpenId) { values.role = 'admin_master'; updateSet.role = 'admin_master'; }
     if (!values.lastSignedIn) values.lastSignedIn = new Date().toISOString();
     if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date().toISOString();
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+    await db.insert(users).values(values).onConflictDoUpdate({ target: users.openId, set: updateSet });
   } catch (error) { console.error("[Database] Failed to upsert user:", error); throw error; }
 }
 
@@ -95,8 +97,8 @@ export async function getAllUsers() {
 export async function createCompany(data: InsertCompany) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(companies).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(companies).values(data).returning();
+  return { id: result[0].id };
 }
 
 export async function updateCompany(id: number, data: Partial<InsertCompany>) {
@@ -229,8 +231,8 @@ export async function restoreCompany(id: number) {
 export async function createUserProfile(data: InsertUserProfile) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(userProfiles).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(userProfiles).values(data).returning();
+  return { id: result[0].id };
 }
 
 export async function getUserProfiles(userId: number) {
@@ -341,8 +343,8 @@ export async function createEmployee(data: InsertEmployee) {
   // Retry with incremented number if duplicate (handles stale nextCodigoInterno)
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      const result = await db.insert(employees).values({ ...data, codigoInterno });
-      return { id: result[0].insertId, codigoInterno };
+      const result = await db.insert(employees).values({ ...data, codigoInterno }).returning();
+      return { id: result[0].id, codigoInterno };
     } catch (err: any) {
       if (err?.errno === 1062 && err?.sqlMessage?.includes('idx_codigo_interno')) {
         // Increment and retry, pulando números proibidos
@@ -367,8 +369,8 @@ export async function createEmployee(data: InsertEmployee) {
     }
   }
   // Final attempt without retry
-  const result = await db.insert(employees).values({ ...data, codigoInterno });
-  return { id: result[0].insertId, codigoInterno };
+  const result = await db.insert(employees).values({ ...data, codigoInterno }).returning();
+  return { id: result[0].id, codigoInterno };
 }
 
 export async function updateEmployee(id: number, companyId: number, data: Partial<InsertEmployee>) {
@@ -697,8 +699,8 @@ import {
 
 export async function createAso(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(asos).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(asos).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getAsos(companyId: number, employeeId?: number) {
   const db = await getDb(); if (!db) return [];
@@ -720,8 +722,8 @@ export async function deleteAso(id: number) {
 // ============================================================
 export async function createTraining(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(trainings).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(trainings).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getTrainings(companyId: number, employeeId?: number) {
   const db = await getDb(); if (!db) return [];
@@ -743,8 +745,8 @@ export async function deleteTraining(id: number) {
 // ============================================================
 export async function createEpi(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(epis).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(epis).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getEpis(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -760,8 +762,8 @@ export async function deleteEpi(id: number) {
 }
 export async function createEpiDelivery(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(epiDeliveries).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(epiDeliveries).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getEpiDeliveries(companyId: number, employeeId?: number) {
   const db = await getDb(); if (!db) return [];
@@ -775,8 +777,8 @@ export async function getEpiDeliveries(companyId: number, employeeId?: number) {
 // ============================================================
 export async function createAccident(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(accidents).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(accidents).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getAccidents(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -796,8 +798,8 @@ export async function deleteAccident(id: number) {
 // ============================================================
 export async function createWarning(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(warnings).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(warnings).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getWarnings(companyId: number, employeeId?: number) {
   const db = await getDb(); if (!db) return [];
@@ -819,8 +821,8 @@ export async function deleteWarning(id: number) {
 // ============================================================
 export async function createRisk(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(risks).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(risks).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getRisks(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -840,8 +842,8 @@ export async function deleteRisk(id: number) {
 // ============================================================
 export async function createTimeRecord(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(timeRecords).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(timeRecords).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getTimeRecords(companyId: number, employeeId: number, month?: string) {
   const db = await getDb(); if (!db) return [];
@@ -856,8 +858,8 @@ export async function bulkCreateTimeRecords(records: any[]) {
 }
 export async function createPayroll(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(payroll).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(payroll).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getPayrolls(companyId: number, month?: string, employeeId?: number) {
   const db = await getDb(); if (!db) return [];
@@ -880,8 +882,8 @@ export async function deletePayroll(id: number) {
 // ============================================================
 export async function createVehicle(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(vehicles).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(vehicles).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getVehicles(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -901,8 +903,8 @@ export async function deleteVehicle(id: number) {
 // ============================================================
 export async function createEquipment(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(equipment).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(equipment).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getEquipments(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -922,8 +924,8 @@ export async function deleteEquipment(id: number) {
 // ============================================================
 export async function createExtinguisher(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(extinguishers).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(extinguishers).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getExtinguishers(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -943,8 +945,8 @@ export async function deleteExtinguisher(id: number) {
 // ============================================================
 export async function createHydrant(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(hydrants).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(hydrants).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getHydrants(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -964,8 +966,8 @@ export async function deleteHydrant(id: number) {
 // ============================================================
 export async function createAudit(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(audits).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(audits).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getAudits(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -983,8 +985,8 @@ export async function deleteAudit(id: number) {
 // DESVIOS
 export async function createDeviation(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(deviations).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(deviations).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getDeviations(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -1002,8 +1004,8 @@ export async function deleteDeviation(id: number) {
 // PLANOS DE AÇÃO 5W2H
 export async function createActionPlan(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(actionPlans).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(actionPlans).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getActionPlans(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -1021,8 +1023,8 @@ export async function deleteActionPlan(id: number) {
 // PRODUTOS QUÍMICOS
 export async function createChemical(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(chemicals).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(chemicals).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getChemicals(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -1040,8 +1042,8 @@ export async function deleteChemical(id: number) {
 // DDS
 export async function createDds(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(dds).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(dds).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getDdsList(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -1057,8 +1059,8 @@ export async function deleteDds(id: number) {
 // ============================================================
 export async function createCipaElection(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(cipaElections).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(cipaElections).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getCipaElections(companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -1075,8 +1077,8 @@ export async function deleteCipaElection(id: number) {
 }
 export async function createCipaMember(data: any) {
   const db = await getDb(); if (!db) throw new Error("DB not available");
-  const result = await db.insert(cipaMembers).values(data);
-  return { id: result[0].insertId };
+  const result = await db.insert(cipaMembers).values(data).returning();
+  return { id: result[0].id };
 }
 export async function getCipaMembers(electionId: number, companyId: number) {
   const db = await getDb(); if (!db) return [];
@@ -1135,7 +1137,7 @@ export async function getSSTStats(companyId: number) {
 export async function createTrainingDocument(data: any) {
   const db = await getDb();
   if (!db) return;
-  const result = await db.insert(trainingDocuments).values(data);
+  const result = await db.insert(trainingDocuments).values(data).returning();
   return result;
 }
 
@@ -1164,7 +1166,7 @@ export async function deleteTrainingDocument(id: number) {
 export async function createPayrollUpload(data: any) {
   const db = await getDb();
   if (!db) return;
-  const result = await db.insert(payrollUploads).values(data);
+  const result = await db.insert(payrollUploads).values(data).returning();
   return result;
 }
 
@@ -1298,7 +1300,7 @@ export async function createObra(data: InsertObra) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const [result] = await db.insert(obras).values(data);
-  return { id: result.insertId };
+  return { id: result[0].id };
 }
 
 export async function getObras(companyId: number) {
@@ -1513,7 +1515,7 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
     registradoPor: data.registradoPor || null,
     registradoPorUserId: data.registradoPorUserId || null,
   } as any);
-  return { id: result.insertId, isTransferencia, obraOrigemId };
+  return { id: result[0].id, isTransferencia, obraOrigemId };
 }
 
 export async function removeEmployeeFromObra(employeeId: number, motivo?: string, registradoPor?: string, registradoPorUserId?: number) {
@@ -1567,8 +1569,8 @@ export async function createSector(data: { companyId: number; nome: string; desc
     companyId: data.companyId,
     nome: data.nome,
     descricao: data.descricao || null,
-  });
-  return { id: result[0].insertId };
+  }).returning();
+  return { id: result[0].id };
 }
 
 export async function updateSector(id: number, companyId: number, data: { nome?: string; descricao?: string; isActive?: boolean }) {
@@ -1618,8 +1620,8 @@ export async function createJobFunction(data: { companyId: number; nome: string;
     descricao: data.descricao || null,
     ordemServico: data.ordemServico || null,
     cbo: data.cbo || null,
-  });
-  return { id: result[0].insertId };
+  }).returning();
+  return { id: result[0].id };
 }
 
 export async function updateJobFunction(id: number, companyId: number, data: { nome?: string; descricao?: string; ordemServico?: string; cbo?: string; isActive?: boolean }) {
@@ -1722,7 +1724,7 @@ export async function addSnToObra(data: { companyId: number; obraId?: number; sn
     status: "ativo",
     dataVinculo: new Date().toISOString().split("T")[0],
   });
-  return { id: result.insertId };
+  return { id: result[0].id };
 }
 
 export async function updateSnObra(id: number, data: { sn?: string; obraId?: number; status?: string; apelido?: string }) {
@@ -1812,8 +1814,8 @@ export async function createRevision(data: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(systemRevisions).values(data);
-  return { id: Number(result[0].insertId) };
+  const result = await db.insert(systemRevisions).values(data).returning();
+  return { id: Number(result[0].id) };
 }
 
 export async function deleteRevision(id: number) {
@@ -2153,7 +2155,7 @@ export async function detectarInconsistenciaPonto(data: {
     dataPonto: data.dataPonto,
     snRelogio: data.snRelogio || null,
   } as any);
-  return { id: result.insertId, isNew: true };
+  return { id: result[0].id, isNew: true };
 }
 
 /** Listar inconsistências pendentes */
@@ -2540,8 +2542,8 @@ export async function createUserGroup(data: { nome: string; descricao?: string; 
     icone: data.icone ?? 'Users',
     somenteVisualizacao: data.somenteVisualizacao ?? 1,
     ocultarDadosSensiveis: data.ocultarDadosSensiveis ?? 1,
-  });
-  return { id: Number(result[0].insertId) };
+  }).returning();
+  return { id: Number(result[0].id) };
 }
 
 export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; ativo?: number }) {

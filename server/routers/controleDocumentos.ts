@@ -262,8 +262,8 @@ export const controleDocumentosRouter = router({
           examesRealizados: input.examesRealizados || null,
           clinica: input.clinica || null,
           observacoes: input.observacoes || null,
-        });
-        return { success: true, id: Number(result.insertId) };
+        }).returning();
+        return { success: true, id: Number(result[0].id) };
       }),
 
     update: protectedProcedure
@@ -618,8 +618,8 @@ export const controleDocumentosRouter = router({
           entidade: input.entidade || null,
           statusTreinamento,
           observacoes: input.observacoes || null,
-        });
-        return { success: true, id: (insertResult as any).insertId };
+        }).returning();
+        return { success: true, id: insertResult.id };
       }),
 
     update: protectedProcedure
@@ -1332,8 +1332,8 @@ export const controleDocumentosRouter = router({
           titulo: input.titulo,
           conteudo: input.conteudo,
           criadoPor: input.userName || null,
-        });
-        return { success: true, id: Number(result[0].insertId) };
+        }).returning();
+        return { success: true, id: Number(result[0].id) };
       }),
 
     delete: protectedProcedure
@@ -1459,8 +1459,8 @@ export const controleDocumentosRouter = router({
           companyId: input.companyId,
           nome: input.nome.trim(),
           criadoPor: ctx.user.name ?? 'Sistema',
-        });
-        return { id: result.insertId, already: false };
+        }).returning();
+        return { id: result[0].id, already: false };
       }),
 
     remove: protectedProcedure

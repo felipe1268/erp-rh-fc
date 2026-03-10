@@ -95,7 +95,7 @@ export async function executarBackup(
     status: "em_andamento",
     iniciadoPor,
   });
-  const backupId = insertResult.insertId;
+  const backupId = insertResult[0].id;
 
   try {
     // 2. Exportar todas as tabelas

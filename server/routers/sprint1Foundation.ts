@@ -59,7 +59,7 @@ const companyDocumentsRouter = router({
       criadoPor: ctx.user.name || "Sistema",
       criadoPorUserId: ctx.user.id,
     });
-    const newId = Number(result.insertId);
+    const newId = Number(result[0].id);
 
     await createAuditLog({
       userId: ctx.user.id,
@@ -266,7 +266,7 @@ const convencaoRouter = router({
       criadoPor: ctx.user.name || "Sistema",
       criadoPorUserId: ctx.user.id,
     });
-    const newConvId = Number(result.insertId);
+    const newConvId = Number(result[0].id);
 
     await createAuditLog({
       userId: ctx.user.id,

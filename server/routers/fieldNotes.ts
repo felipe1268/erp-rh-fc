@@ -77,8 +77,8 @@ export const fieldNotesRouter = router({
         ...input,
         solicitanteNome,
         solicitanteId: ctx.user?.openId || ctx.user?.email || "",
-      });
-      const newId = (result as any).insertId;
+      }).returning();
+      const newId = result.id;
 
       // Buscar nome do funcionário para a notificação
       const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, input.employeeId));

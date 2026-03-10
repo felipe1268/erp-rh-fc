@@ -786,8 +786,8 @@ export const folhaPagamentoRouter = router({
           status: "importado",
           importadoPor: ctx.user?.name || "Sistema",
           importadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
-        });
-        lancamento = { id: Number((newLanc as any).insertId) };
+        }).returning();
+        lancamento = { id: Number(newLanc.id) };
       }
       const lancamentoId = lancamento.id;
 
@@ -839,8 +839,8 @@ export const folhaPagamentoRouter = router({
           fileSize: buffer.length,
           mimeType: arquivo.mimeType,
           uploadStatus: "processado",
-        });
-        const upId = Number((uploadRecord as any).insertId);
+        }).returning();
+        const upId = Number(uploadRecord.id);
         uploadIds.push(upId);
 
         if (finalTipo === "analitico") {
@@ -1037,9 +1037,9 @@ export const folhaPagamentoRouter = router({
         fileSize: buffer.length,
         mimeType: input.mimeType,
         uploadStatus: "processando",
-      });
+      }).returning();
 
-      const uploadId = Number((uploadRecord as any).insertId);
+      const uploadId = Number(uploadRecord.id);
 
       try {
         // Extract text using pdftotext (much better than pdf-parse)
@@ -1062,8 +1062,8 @@ export const folhaPagamentoRouter = router({
             status: "importado",
             importadoPor: ctx.user?.name || "Sistema",
             importadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
-          });
-          lancamento = { id: Number((newLanc as any).insertId) };
+          }).returning();
+          lancamento = { id: Number(newLanc.id) };
         }
 
         const lancamentoId = lancamento.id;
@@ -2281,8 +2281,8 @@ export const folhaPagamentoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      const result = await db.insert(companyBankAccounts).values(input);
-      return { id: result[0].insertId };
+      const result = await db.insert(companyBankAccounts).values(input).returning();
+      return { id: result[0].id };
     }),
 
   atualizarContaBancaria: protectedProcedure

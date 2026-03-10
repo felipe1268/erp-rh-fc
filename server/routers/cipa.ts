@@ -134,7 +134,7 @@ export const cipaRouter = router({
           dataPosse: input.dataPosse || null,
           observacoes: input.observacoes || null,
         });
-        return { success: true, id: result.insertId };
+        return { success: true, id: result[0].id };
       }),
 
     update: protectedProcedure

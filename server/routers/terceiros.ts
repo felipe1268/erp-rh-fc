@@ -74,7 +74,7 @@ export const terceirosRouter = router({
           ...input,
           createdBy: ctx.user?.name || "Sistema",
         });
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     update: protectedProcedure
@@ -206,7 +206,7 @@ export const terceirosRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const [result] = await db.insert(funcionariosTerceiros).values(input);
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     update: protectedProcedure
@@ -299,7 +299,7 @@ export const terceirosRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const [result] = await db.insert(obrigacoesMensaisTerceiros).values(input);
-        return { id: result.insertId };
+        return { id: result[0].id };
       }),
 
     updateDocStatus: protectedProcedure
@@ -385,7 +385,7 @@ export const terceirosRouter = router({
           titulo: input.titulo,
           descricao: input.descricao || "",
         });
-        return { success: true, id: result.insertId };
+        return { success: true, id: result[0].id };
       }),
   }),
   // ============================================================
