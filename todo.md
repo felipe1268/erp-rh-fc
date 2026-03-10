@@ -5307,3 +5307,4 @@
 - [x] Custo por Obra: ao clicar em cada obra, expandir e mostrar valores segregados por funcionário
 - [x] Incluir coluna de horas extras por funcionário na expansão detalhada do Custo por Obra
 - [x] BUG: Custo por Obra não mostra dados - query quebrada após alterações (coluna pp.diasTrabalhados/pp.faltas não existia)
+- [x] Adicionar coluna Total de Descontos na expansão detalhada do Custo por Obra

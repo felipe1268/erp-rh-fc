@@ -1819,6 +1819,7 @@ export const payrollEngineRouter = router({
           CAST(pp.salarioBrutoMes AS DECIMAL(15,2)) as salarioBruto,
           CAST(pp.salarioLiquido AS DECIMAL(15,2)) as salarioLiquido,
           CAST(pp.horasExtrasValor AS DECIMAL(15,2)) as horasExtrasValor,
+          CAST(pp.totalDescontos AS DECIMAL(15,2)) as totalDescontos,
           (pp.diasUteisNoMes - COALESCE(pp.descontoFaltasQtd, 0)) as diasTrabalhados,
           COALESCE(pp.descontoFaltasQtd, 0) as faltas
         FROM payroll_payments pp
