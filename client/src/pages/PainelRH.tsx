@@ -152,11 +152,11 @@ export default function PainelRH() {
               <div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quadro de Pessoal</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  <KpiCard title="Ativos" value={s?.ativos ?? 0} icon={UserCheck} color="green" onClick={() => navigate("/colaboradores")} />
-                  <KpiCard title="Férias" value={s?.ferias ?? 0} icon={Palmtree} color="cyan" onClick={() => navigate("/colaboradores")} />
-                  <KpiCard title="Afastados" value={s?.afastados ?? 0} icon={AlertTriangle} color="yellow" onClick={() => navigate("/colaboradores")} />
-                  <KpiCard title="Licença" value={s?.licenca ?? 0} icon={UserX} color="purple" onClick={() => navigate("/colaboradores")} />
-                  <KpiCard title="Desligados" value={s?.desligados ?? 0} icon={UserX} color="red" onClick={() => navigate("/colaboradores")} />
+                  <KpiCard title="Ativos" value={s?.ativos ?? 0} icon={UserCheck} color="green" onClick={() => navigate("/colaboradores?status=Ativo")} />
+                  <KpiCard title="Férias" value={s?.ferias ?? 0} icon={Palmtree} color="cyan" onClick={() => navigate("/colaboradores?status=Ferias")} />
+                  <KpiCard title="Afastados" value={s?.afastados ?? 0} icon={AlertTriangle} color="yellow" onClick={() => navigate("/colaboradores?status=Afastado")} />
+                  <KpiCard title="Licença" value={s?.licenca ?? 0} icon={UserX} color="purple" onClick={() => navigate("/colaboradores?status=Licenca")} />
+                  <KpiCard title="Desligados" value={s?.desligados ?? 0} icon={UserX} color="red" onClick={() => navigate("/colaboradores?status=Desligado")} />
                 </div>
               </div>
               )}

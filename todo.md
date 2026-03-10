@@ -5302,3 +5302,4 @@
 - [x] Adicionar "Afastado" como opção manual no dropdown de status do funcionário
 - [x] Job de sincronização NÃO deve reverter Afastado manual para Ativo
 - [x] Restaurar funcionários que estavam Afastado e foram revertidos indevidamente pelo job (6 restaurados)
+- [x] BUG: Filtros dos cards do Painel RH & DP não estão filtrando ao clicar (Ativos, Férias, Afastados, Licença, Desligados)

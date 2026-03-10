@@ -114,7 +114,10 @@ export default function Colaboradores() {
   const { user } = useAuth();
   const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Todos");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("status") || "Todos";
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
