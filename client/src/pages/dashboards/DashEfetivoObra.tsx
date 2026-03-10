@@ -485,7 +485,8 @@ export default function DashEfetivoObra() {
                     <th className="text-center p-3 font-medium">Efetivo Atual</th>
                     <th className="p-2 text-center text-xs font-semibold text-blue-700">Ativos</th>
                     <th className="p-2 text-center text-xs font-semibold text-red-400">Aviso</th>
-                    <th className="p-2 text-center text-xs font-semibold text-orange-600">Férias</th>
+                    <th className="p-2 text-center text-xs font-semibold text-orange-600">Disp.</th>
+                    <th className="p-2 text-center text-xs font-semibold text-amber-600">Férias</th>
                     <th className="p-2 text-center text-xs font-semibold text-yellow-600">Afast.</th>             <th className="text-center p-3 font-medium">% do Total</th>
                     <th className="text-right p-3 font-medium">Ações</th>
                   </tr>
@@ -509,7 +510,8 @@ export default function DashEfetivoObra() {
                         <td className="p-3 text-center font-bold text-lg">{obra.efetivo || 0}</td>
                         <td className="p-2 text-center text-sm text-blue-700 font-medium">{obra.qtdAtivo || 0}</td>
                         <td className="p-2 text-center text-sm text-red-400 font-medium">{obra.qtdAviso || 0}</td>
-                        <td className="p-2 text-center text-sm text-orange-600 font-medium">{obra.qtdFerias || 0}</td>
+                        <td className="p-2 text-center text-sm text-orange-600 font-medium">{obra.qtdAvisoDispensado || 0}</td>
+                        <td className="p-2 text-center text-sm text-amber-600 font-medium">{obra.qtdFerias || 0}</td>
                         <td className="p-2 text-center text-sm text-yellow-600 font-medium">{obra.qtdAfastado || 0}</td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -551,6 +553,7 @@ export default function DashEfetivoObra() {
                       <td className="p-2 text-center text-sm text-muted-foreground">—</td>
                       <td className="p-2 text-center text-sm text-muted-foreground">—</td>
                       <td className="p-2 text-center text-sm text-muted-foreground">—</td>
+                      <td className="p-2 text-center text-sm text-muted-foreground">—</td>
                       <td className="p-3 text-center text-xs text-amber-600">—</td>
                       <td className="p-3 text-right">
                         <Link href="/obras/efetivo">
@@ -569,7 +572,8 @@ export default function DashEfetivoObra() {
                     <td className="p-3 text-center font-bold text-lg text-slate-800">{totalFuncionariosAlocados + totalSemObra}</td>
                     <td className="p-2 text-center text-sm font-semibold text-blue-700">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAtivo || 0), 0)}</td>
                     <td className="p-2 text-center text-sm font-semibold text-red-400">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAviso || 0), 0)}</td>
-                    <td className="p-2 text-center text-sm font-semibold text-orange-600">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdFerias || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-orange-600">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAvisoDispensado || 0), 0)}</td>
+                    <td className="p-2 text-center text-sm font-semibold text-amber-600">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdFerias || 0), 0)}</td>
                     <td className="p-2 text-center text-sm font-semibold text-yellow-600">{obrasSorted.reduce((s: number, o: any) => s + (o.qtdAfastado || 0), 0)}</td>
                     <td className="p-3 text-center">
                       <span className="text-xs font-semibold text-slate-600">100%</span>

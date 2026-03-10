@@ -414,6 +414,31 @@ export default function ObraEfetivo() {
                         </div>
                         <ChevronRight className="h-5 w-5 text-muted-foreground" />
                       </div>
+                      {/* Status breakdown badges */}
+                      {((item as any).qtdAviso > 0 || (item as any).qtdAvisoDispensado > 0 || (item as any).qtdFerias > 0 || (item as any).qtdAfastado > 0) && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {(item as any).qtdAviso > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                              🟡 {(item as any).qtdAviso} Aviso
+                            </span>
+                          )}
+                          {(item as any).qtdAvisoDispensado > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800 border border-orange-200">
+                              🟠 {(item as any).qtdAvisoDispensado} Dispensado
+                            </span>
+                          )}
+                          {(item as any).qtdFerias > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                              🔵 {(item as any).qtdFerias} Férias
+                            </span>
+                          )}
+                          {(item as any).qtdAfastado > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                              🟣 {(item as any).qtdAfastado} Afastado
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -984,17 +1009,17 @@ export default function ObraEfetivo() {
                 desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
                 infoStatus: f.avisoDataFim ? `Fim: ${new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : f.feriasDataFim ? `Retorno: ${new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : '',
               }));
-              const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
+              const statusOrder = ["Ativo", "Aviso", "AvisoDispensado", "Ferias", "Afastado", "Licenca", "Recluso"];
               rows.sort((a: any, b: any) => {
                 const ia = statusOrder.indexOf(a.status); const ib = statusOrder.indexOf(b.status);
                 const sa = (ia === -1 ? 99 : ia); const sb = (ib === -1 ? 99 : ib);
                 if (sa !== sb) return sa - sb;
                 return a.nome.localeCompare(b.nome);
               });
-              const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
-              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
-              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
-              const rowBg: Record<string, string> = { Aviso: '#fffbeb', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
+              const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", AvisoDispensado: "Dispensado (7d)", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
+              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', AvisoDispensado: '#fed7aa', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
+              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', AvisoDispensado: '#9a3412', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
+              const rowBg: Record<string, string> = { Aviso: '#fffbeb', AvisoDispensado: '#fff7ed', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
               // Summary counts
               const statusCounts: Record<string, number> = {};
               rows.forEach((r: any) => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
@@ -1035,17 +1060,17 @@ export default function ObraEfetivo() {
                 desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
                 infoStatus: f.avisoDataFim ? `Fim: ${new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : f.feriasDataFim ? `Retorno: ${new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : '',
               }));
-              const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
+              const statusOrder = ["Ativo", "Aviso", "AvisoDispensado", "Ferias", "Afastado", "Licenca", "Recluso"];
               rows.sort((a: any, b: any) => {
                 const ia = statusOrder.indexOf(a.status); const ib = statusOrder.indexOf(b.status);
                 const sa = (ia === -1 ? 99 : ia); const sb = (ib === -1 ? 99 : ib);
                 if (sa !== sb) return sa - sb;
                 return a.nome.localeCompare(b.nome);
               });
-              const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
-              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
-              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
-              const rowBg: Record<string, string> = { Aviso: '#fffbeb', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
+              const statusLabels: Record<string, string> = { Ativo: "Ativo", Aviso: "Aviso Prévio", AvisoDispensado: "Dispensado (7d)", Ferias: "Férias", Afastado: "Afastado", Licenca: "Licença", Recluso: "Recluso" };
+              const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fff3cd', AvisoDispensado: '#fed7aa', Ferias: '#cce5ff', Afastado: '#e8d5f5', Licenca: '#d1ecf1', Recluso: '#f8d7da' };
+              const statusFg: Record<string, string> = { Ativo: '#155724', Aviso: '#856404', AvisoDispensado: '#9a3412', Ferias: '#004085', Afastado: '#6f42c1', Licenca: '#0c5460', Recluso: '#721c24' };
+              const rowBg: Record<string, string> = { Aviso: '#fffbeb', AvisoDispensado: '#fff7ed', Ferias: '#eff6ff', Afastado: '#faf5ff', Licenca: '#ecfeff', Recluso: '#fef2f2' };
               const statusCounts: Record<string, number> = {};
               rows.forEach((r: any) => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
               const summaryHtml = Object.entries(statusCounts).map(([s, c]) => `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:${statusBg[s] || '#f8f9fa'};color:${statusFg[s] || '#333'};border:1px solid ${statusBg[s] || '#dee2e6'};margin-right:8px;"><strong>${c}</strong> ${statusLabels[s] || s}</span>`).join('') + `<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#f8f9fa;color:#333;border:1px solid #dee2e6;"><strong>${rows.length}</strong> Total</span>`;
@@ -1105,6 +1130,7 @@ export default function ObraEfetivo() {
             const statusGroups: Record<string, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
               Ativo: { label: "Ativos", color: "text-green-700", bgColor: "bg-green-50", borderColor: "border-green-200", icon: "🟢" },
               Aviso: { label: "Aviso Prévio", color: "text-amber-700", bgColor: "bg-amber-50", borderColor: "border-amber-200", icon: "🟡" },
+              AvisoDispensado: { label: "Dispensado (7d)", color: "text-orange-700", bgColor: "bg-orange-50", borderColor: "border-orange-200", icon: "🟠" },
               Ferias: { label: "Férias", color: "text-blue-700", bgColor: "bg-blue-50", borderColor: "border-blue-200", icon: "🔵" },
               Afastado: { label: "Afastados", color: "text-purple-700", bgColor: "bg-purple-50", borderColor: "border-purple-200", icon: "🟣" },
               Recluso: { label: "Reclusos", color: "text-red-700", bgColor: "bg-red-50", borderColor: "border-red-200", icon: "🔴" },
@@ -1123,7 +1149,7 @@ export default function ObraEfetivo() {
               if (!grouped[st]) grouped[st] = [];
               grouped[st].push(f);
             });
-            const statusOrder = ["Ativo", "Aviso", "Ferias", "Afastado", "Licenca", "Recluso"];
+            const statusOrder = ["Ativo", "Aviso", "AvisoDispensado", "Ferias", "Afastado", "Licenca", "Recluso"];
             const sortedKeys = Object.keys(grouped).sort((a, b) => {
               const ia = statusOrder.indexOf(a); const ib = statusOrder.indexOf(b);
               return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
@@ -1182,13 +1208,14 @@ export default function ObraEfetivo() {
                             <tbody className="divide-y">
                               {items.map((f: any) => {
                                 const empStatus = f.employee?.status || st;
-                                const rowBg = empStatus === 'Aviso' ? 'bg-amber-50/60' : empStatus === 'Ferias' ? 'bg-blue-50/60' : empStatus === 'Afastado' ? 'bg-purple-50/60' : empStatus === 'Licenca' ? 'bg-cyan-50/60' : empStatus === 'Recluso' ? 'bg-red-50/60' : '';
+                                const rowBg = empStatus === 'Aviso' ? 'bg-amber-50/60' : empStatus === 'AvisoDispensado' ? 'bg-orange-50/60' : empStatus === 'Ferias' ? 'bg-blue-50/60' : empStatus === 'Afastado' ? 'bg-purple-50/60' : empStatus === 'Licenca' ? 'bg-cyan-50/60' : empStatus === 'Recluso' ? 'bg-red-50/60' : '';
                                 return (
                                 <tr key={f.id} className={`hover:bg-slate-50/50 ${rowBg}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                   <td className="px-4 py-2.5">
                                     <div className="flex items-center gap-3">
                                       <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
                                         empStatus === 'Aviso' ? 'bg-gradient-to-br from-amber-500 to-amber-600' :
+                                        empStatus === 'AvisoDispensado' ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
                                         empStatus === 'Ferias' ? 'bg-gradient-to-br from-blue-400 to-blue-500' :
                                         empStatus === 'Afastado' ? 'bg-gradient-to-br from-purple-500 to-purple-600' :
                                         empStatus === 'Licenca' ? 'bg-gradient-to-br from-cyan-500 to-cyan-600' :
@@ -1214,7 +1241,11 @@ export default function ObraEfetivo() {
                                     {f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
                                   </td>
                                   <td className="px-4 py-2.5 text-sm hidden md:table-cell">
-                                    {empStatus === 'Aviso' && f.avisoDataFim ? (
+                                    {empStatus === 'AvisoDispensado' && f.avisoDataFim ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800 border border-orange-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                        Dispensado - Fim: {new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                      </span>
+                                    ) : empStatus === 'Aviso' && f.avisoDataFim ? (
                                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                         Fim: {new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}
                                       </span>

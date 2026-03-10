@@ -5328,3 +5328,11 @@
 - [ ] Adicionar badges de Férias/Afastado nos cards de cada obra na visão geral
 - [x] BUG: Painel RH mostra 3 Férias ao invés de 4 quando CONSTRUTORAS selecionado (FC+JF) - query não conta corretamente
 - [x] BUG: ELIAS VIEIRA DO NASCIMENTO aparecendo como Aviso Prévio indevidamente - corrigido: queries em db.ts não filtravam deletedAt IS NULL para termination_notices
+
+## Fase: Aviso Prévio - Dispensado (7 dias corridos)
+- [x] Backend: calcular data de dispensa (dataFim - 7 dias) quando reducaoJornada = '7_dias_corridos'
+- [x] Backend: criar status operacional "Aviso - Dispensado" no efetivo por obra (getObraFuncionarios, getEfetivoPorObra)
+- [x] Backend: não contar dispensados como efetivo ativo na obra
+- [x] Frontend: exibir "Aviso - Dispensado" com cor diferenciada na equipe da obra
+- [x] Frontend: separar dispensados do efetivo ativo nos cards de obra
+- [x] Frontend: manter dispensados na contagem contábil (folha, custos)

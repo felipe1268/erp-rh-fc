@@ -1381,6 +1381,7 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
     employeeId: terminationNotices.employeeId,
     dataFim: terminationNotices.dataFim,
     tipo: terminationNotices.tipo,
+    reducaoJornada: terminationNotices.reducaoJornada,
   }).from(terminationNotices).where(and(
     inArray(terminationNotices.companyId, companyIdsArr),
     eq(terminationNotices.status, 'em_andamento'),
@@ -1389,8 +1390,19 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
     sql`${terminationNotices.dataFim} >= ${today}`,
     sql`${terminationNotices.employeeId} IN (${sql.raw(empIds.join(","))})`
   ));
-  const avisoMap = new Map<number, { dataFim: string | null; tipo: string | null }>();
-  for (const r of avisoRows) avisoMap.set(r.employeeId, { dataFim: r.dataFim, tipo: r.tipo });
+  const avisoMap = new Map<number, { dataFim: string | null; tipo: string | null; dispensado: boolean }>();
+  for (const r of avisoRows) {
+    // Se redução = 7 dias corridos, calcular se já está no período de dispensa
+    let dispensado = false;
+    if (r.reducaoJornada === '7_dias_corridos' && r.dataFim) {
+      const dataFimDate = new Date(r.dataFim + 'T00:00:00');
+      const dataDispensa = new Date(dataFimDate);
+      dataDispensa.setDate(dataDispensa.getDate() - 6); // 7 dias corridos antes do fim
+      const todayDate = new Date(today + 'T00:00:00');
+      if (todayDate >= dataDispensa) dispensado = true;
+    }
+    avisoMap.set(r.employeeId, { dataFim: r.dataFim, tipo: r.tipo, dispensado });
+  }
 
   // Cross-reference vacation_periods for Férias em gozo
   const feriasRows = await db.select({
@@ -1412,13 +1424,15 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
     const avisoInfo = avisoMap.get(a.employeeId);
     const feriasInfo = feriasMap.get(a.employeeId);
     let effectiveStatus: string = emp?.status || 'Ativo';
-    if (avisoInfo) effectiveStatus = 'Aviso';
-    else if (feriasInfo) effectiveStatus = 'Ferias';
+    if (avisoInfo) {
+      effectiveStatus = avisoInfo.dispensado ? 'AvisoDispensado' : 'Aviso';
+    } else if (feriasInfo) effectiveStatus = 'Ferias';
     return {
       ...a,
       employee: emp ? { ...emp, status: effectiveStatus as any } : null,
       avisoDataFim: avisoInfo?.dataFim || null,
       avisoTipo: avisoInfo?.tipo || null,
+      avisoDispensado: avisoInfo?.dispensado || false,
       feriasDataInicio: feriasInfo?.dataInicio || null,
       feriasDataFim: feriasInfo?.dataFim || null,
     };
@@ -1871,6 +1885,8 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
   // 2. Buscar funcionários com aviso prévio em andamento (tempo real)
   const avisosAtivos = await db.select({
     employeeId: terminationNotices.employeeId,
+    dataFim: terminationNotices.dataFim,
+    reducaoJornada: terminationNotices.reducaoJornada,
   }).from(terminationNotices)
     .where(and(
       inArray(terminationNotices.companyId, ids),
@@ -1878,6 +1894,17 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
       sql`${terminationNotices.deletedAt} IS NULL`,
     ));
   const empIdsEmAviso = new Set(avisosAtivos.map(a => a.employeeId));
+  // Identificar quem está no período de dispensa (7 dias corridos antes do fim)
+  const empIdsDispensados = new Set<number>();
+  for (const a of avisosAtivos) {
+    if (a.reducaoJornada === '7_dias_corridos' && a.dataFim) {
+      const dataFimDate = new Date(a.dataFim + 'T00:00:00');
+      const dataDispensa = new Date(dataFimDate);
+      dataDispensa.setDate(dataDispensa.getDate() - 6);
+      const todayDate = new Date(today + 'T00:00:00');
+      if (todayDate >= dataDispensa) empIdsDispensados.add(a.employeeId);
+    }
+  }
 
   // 3. Buscar funcionários em férias agora (em_gozo OU agendada com data atual dentro do período)
   const feriasAtivas = await db.select({
@@ -1904,7 +1931,7 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
   const isMultiCompany = ids.length > 1;
   const obraMap = new Map<string, {
     obraId: number; obraIds: number[]; obraNome: string; obraCodigo: string | null; obraStatus: string | null; obraCidade: string | null;
-    efetivo: number; qtdAtivo: number; qtdAviso: number; qtdFerias: number; qtdAfastado: number; qtdRecluso: number;
+    efetivo: number; qtdAtivo: number; qtdAviso: number; qtdAvisoDispensado: number; qtdFerias: number; qtdAfastado: number; qtdRecluso: number;
   }>();
 
   for (const a of alocacoes) {
@@ -1913,15 +1940,18 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
     if (!obraMap.has(key)) {
       obraMap.set(key, {
         obraId: a.obraId, obraIds: [a.obraId], obraNome: a.obraNome, obraCodigo: a.obraCodigo, obraStatus: a.obraStatus, obraCidade: a.obraCidade,
-        efetivo: 0, qtdAtivo: 0, qtdAviso: 0, qtdFerias: 0, qtdAfastado: 0, qtdRecluso: 0,
+        efetivo: 0, qtdAtivo: 0, qtdAviso: 0, qtdAvisoDispensado: 0, qtdFerias: 0, qtdAfastado: 0, qtdRecluso: 0,
       });
     }
     const o = obraMap.get(key)!;
     if (!o.obraIds.includes(a.obraId)) o.obraIds.push(a.obraId);
     o.efetivo++;
 
-    // Prioridade: Aviso Prévio > Férias > Status do employees
-    if (empIdsEmAviso.has(a.employeeId)) {
+    // Prioridade: Aviso Dispensado > Aviso Prévio > Férias > Status do employees
+    // Aviso Dispensado = últimos 7 dias corridos, funcionário não comparece à obra
+    if (empIdsEmAviso.has(a.employeeId) && empIdsDispensados.has(a.employeeId)) {
+      o.qtdAvisoDispensado++;
+    } else if (empIdsEmAviso.has(a.employeeId)) {
       o.qtdAviso++;
     } else if (empIdsEmFerias.has(a.employeeId) || a.empStatus === 'Ferias') {
       o.qtdFerias++;
@@ -2316,6 +2346,7 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     employeeId: terminationNotices.employeeId,
     dataFim: terminationNotices.dataFim,
     tipo: terminationNotices.tipo,
+    reducaoJornada: terminationNotices.reducaoJornada,
   }).from(terminationNotices).where(and(
     inArray(terminationNotices.companyId, idsCompany),
     eq(terminationNotices.status, 'em_andamento'),
@@ -2324,9 +2355,17 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     sql`${terminationNotices.dataFim} >= ${today}`,
     sql`${terminationNotices.employeeId} IN (${sql.raw(empIds.join(","))})`
   ));
-  const avisoMap = new Map<number, { dataFim: string | null; tipo: string | null }>();
+  const avisoMap = new Map<number, { dataFim: string | null; tipo: string | null; dispensado: boolean }>();
   for (const r of avisoRows) {
-    avisoMap.set(r.employeeId, { dataFim: r.dataFim, tipo: r.tipo });
+    let dispensado = false;
+    if (r.reducaoJornada === '7_dias_corridos' && r.dataFim) {
+      const dataFimDate = new Date(r.dataFim + 'T00:00:00');
+      const dataDispensa = new Date(dataFimDate);
+      dataDispensa.setDate(dataDispensa.getDate() - 6);
+      const todayDate = new Date(today + 'T00:00:00');
+      if (todayDate >= dataDispensa) dispensado = true;
+    }
+    avisoMap.set(r.employeeId, { dataFim: r.dataFim, tipo: r.tipo, dispensado });
   }
 
   // Cross-reference vacation_periods for Férias em gozo
@@ -2352,14 +2391,16 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     let effectiveStatus: string = e.status || 'Ativo';
     const avisoInfo = avisoMap.get(e.id);
     const feriasInfo = feriasMap.get(e.id);
-    if (avisoInfo) effectiveStatus = 'Aviso';
-    else if (feriasInfo) effectiveStatus = 'Ferias';
+    if (avisoInfo) {
+      effectiveStatus = avisoInfo.dispensado ? 'AvisoDispensado' : 'Aviso';
+    } else if (feriasInfo) effectiveStatus = 'Ferias';
     return {
       ...e,
       status: effectiveStatus,
       dataInicioObra: allocMap[e.id]?.dataInicio || null,
       avisoDataFim: avisoInfo?.dataFim || null,
       avisoTipo: avisoInfo?.tipo || null,
+      avisoDispensado: avisoInfo?.dispensado || false,
       feriasDataInicio: feriasInfo?.dataInicio || null,
       feriasDataFim: feriasInfo?.dataFim || null,
     };
