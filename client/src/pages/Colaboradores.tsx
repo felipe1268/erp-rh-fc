@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo } from "react";
@@ -114,6 +114,7 @@ export default function Colaboradores() {
   const { user } = useAuth();
   const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
+  const [skillFilter, setSkillFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("status") || "Todos";
@@ -171,6 +172,24 @@ export default function Colaboradores() {
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: statusFilter !== "Todos" ? statusFilter : undefined },
     { enabled: hasValidSelection }
   );
+
+  // Skill filter: get employee IDs that have the selected skill
+  const skillFilterId = skillFilter !== "all" ? Number(skillFilter) : null;
+  const employeesBySkillQ = trpc.skills.searchBySkill.useQuery(
+    { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, skillId: skillFilterId! },
+    { enabled: !!skillFilterId && hasValidSelection }
+  );
+  const skillEmployeeIds = useMemo(() => {
+    if (!skillFilterId) return null;
+    return new Set((employeesBySkillQ.data ?? []).map((r: any) => r.employeeId));
+  }, [skillFilterId, employeesBySkillQ.data]);
+
+  // Apply skill filter to employees
+  const displayEmployees = useMemo(() => {
+    if (!employees) return [];
+    if (!skillEmployeeIds) return employees;
+    return employees.filter(e => skillEmployeeIds.has(e.id));
+  }, [employees, skillEmployeeIds]);
 
   const createMut = trpc.employees.create.useMutation({
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); setDialogOpen(false); toast.success("Colaborador cadastrado!"); },
@@ -394,14 +413,14 @@ export default function Colaboradores() {
     });
   };
   const toggleSelectAll = () => {
-    if (!employees) return;
-    if (selectedIds.size === employees.length) {
+    if (!displayEmployees || displayEmployees.length === 0) return;
+    if (selectedIds.size === displayEmployees.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(employees.map(e => e.id)));
+      setSelectedIds(new Set(displayEmployees.map(e => e.id)));
     }
   };
-  const isAllSelected = employees && employees.length > 0 && selectedIds.size === employees.length;
+  const isAllSelected = displayEmployees && displayEmployees.length > 0 && selectedIds.size === displayEmployees.length;
   const hasSelection = selectedIds.size > 0;
 
   const handleBulkDelete = () => {
@@ -597,6 +616,7 @@ export default function Colaboradores() {
               ))}
             </SelectContent>
           </Select>
+          <SkillFilterDropdown value={skillFilter} onChange={setSkillFilter} companyId={queryCompanyId} companyIds={isConstrutoras ? queryCompanyIds : undefined} />
         </div>
 
         {/* Table */}
@@ -608,7 +628,7 @@ export default function Colaboradores() {
           </Card>
         ) : isLoading ? (
           <Card className="bg-card border-border animate-pulse"><CardContent className="h-64" /></Card>
-        ) : employees && employees.length > 0 ? (
+        ) : displayEmployees && displayEmployees.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead>
@@ -631,7 +651,7 @@ export default function Colaboradores() {
                 </tr>
               </thead>
               <tbody>
-                {[...employees].sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR')).map(emp => (
+                {[...displayEmployees].sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR')).map(emp => (
                   <tr key={emp.id} className={`border-t border-border hover:bg-secondary/30 transition-colors ${selectedIds.has(emp.id) ? "bg-primary/5" : ""}`}>
                     <td className="px-3 py-3">
                       <Checkbox
@@ -686,7 +706,7 @@ export default function Colaboradores() {
               <Users className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">Nenhum colaborador encontrado</h3>
               <p className="text-muted-foreground text-sm mb-4">
-                {search ? "Tente outra busca." : "Cadastre o primeiro colaborador."}
+                {search ? "Tente outra busca." : skillFilter !== "all" ? "Nenhum colaborador com esta habilidade." : "Cadastre o primeiro colaborador."}
               </p>
               {!search ? <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> Novo Colaborador</Button> : null}
             </CardContent>
@@ -2481,6 +2501,9 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                 </div>
               ) : null}
 
+              {/* HABILIDADES DO FUNCIONÁRIO */}
+              {viewingEmployee?.id && <EmployeeSkillsSection employeeId={viewingEmployee.id} />}
+
               {/* HISTÓRICOS */}
               {/* Seções SST removidas - módulos não fazem parte do escopo */}
             </div>
@@ -2710,3 +2733,84 @@ function DocumentUploadSection({ employeeId, companyId }: { employeeId: number; 
   );
 }
 // Seções SST removidas - módulos não fazem parte do escopo
+
+// ─── Employee Skills Section (inside Ficha do Colaborador) ──────────
+const nivelLabelsMap: Record<string, string> = {
+  Basico: "Básico",
+  Intermediario: "Intermediário",
+  Avancado: "Avançado",
+};
+const nivelColorsMap: Record<string, string> = {
+  Basico: "bg-blue-100 text-blue-800",
+  Intermediario: "bg-amber-100 text-amber-800",
+  Avancado: "bg-green-100 text-green-800",
+};
+
+function SkillFilterDropdown({ value, onChange, companyId, companyIds }: {
+  value: string;
+  onChange: (v: string) => void;
+  companyId: number;
+  companyIds?: number[];
+}) {
+  const skillsQ = trpc.skills.list.useQuery(
+    { companyId, companyIds },
+    { enabled: !!companyId || (companyIds && companyIds.length > 0) }
+  );
+  const skillsList = skillsQ.data ?? [];
+  if (skillsList.length === 0 && !skillsQ.isLoading) return null;
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-full sm:w-48 bg-card border-border">
+        <div className="flex items-center gap-1.5">
+          <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+          <SelectValue placeholder="Habilidade" />
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">Todas Habilidades</SelectItem>
+        {skillsList.map((s: any) => (
+          <SelectItem key={s.id} value={String(s.id)}>{s.nome}{s.categoria ? ` (${s.categoria})` : ''}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function EmployeeSkillsSection({ employeeId }: { employeeId: number }) {
+  const skillsQ = trpc.skills.employeeSkills.useQuery({ employeeId }, { enabled: !!employeeId });
+  const skills = skillsQ.data ?? [];
+
+  return (
+    <div>
+      <h3 className="text-base font-semibold text-primary mb-4 pb-2 border-b-2 border-primary/20 flex items-center gap-2">
+        <Wrench className="h-4 w-4" /> Habilidades e Competências
+      </h3>
+      {skillsQ.isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando...</p>
+      ) : skills.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic">Nenhuma habilidade cadastrada para este colaborador</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {skills.map((sk: any) => (
+            <div key={sk.id} className="flex items-start gap-3 p-3 border rounded-lg bg-muted/20">
+              <Award className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">{sk.skillNome}</div>
+                {sk.skillCategoria && <div className="text-xs text-muted-foreground">{sk.skillCategoria}</div>}
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge className={`text-xs ${nivelColorsMap[sk.nivel] || ""}`}>
+                    {nivelLabelsMap[sk.nivel] || sk.nivel}
+                  </Badge>
+                  {sk.tempoExperiencia && (
+                    <span className="text-xs text-muted-foreground">{sk.tempoExperiencia}</span>
+                  )}
+                </div>
+                {sk.observacao && <p className="text-xs text-muted-foreground mt-1">{sk.observacao}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

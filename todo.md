@@ -5339,3 +5339,30 @@
 - [x] Implementar filtro por status nos badges do Efetivo por Obra (clicar em Ativos, Aviso Prévio, etc. filtra as obras)
 - [x] Corrigir cores dos badges: AvisoDispensado com cor própria (laranja), Afastados com cor diferente (roxo), legenda incluir AvisoDispensado
 - [x] BUG: Painel RH mostra 6 Férias mas filtro Colaboradores mostra apenas 5 - corrigido: vacation_period de funcionário deletado (420026) era contada no feriasEmAndamento
+
+## Fase: Módulo de Habilidades
+- [ ] Schema: criar tabela skills (id, nome, categoria, descricao, companyId, createdAt)
+- [ ] Schema: criar tabela employee_skills (id, employeeId, skillId, nivel, tempoExperiencia, observacao, createdAt)
+- [ ] Migração: rodar pnpm db:push
+- [ ] Backend: CRUD de habilidades (listar, criar, editar, excluir)
+- [ ] Backend: atribuir/remover habilidade de funcionário
+- [ ] Backend: listar habilidades de um funcionário
+- [ ] Backend: buscar funcionários por habilidade
+- [ ] Backend: habilidades por obra (agregado)
+- [ ] Frontend: tela de Cadastro de Habilidades (nome, categoria, descrição)
+- [ ] Frontend: seção Habilidades na ficha do Colaborador (atribuir, nível, experiência, observação)
+- [ ] Frontend: habilidades no card da obra no Efetivo por Obra
+- [ ] Frontend: habilidades na equipe da obra (ao clicar no funcionário)
+- [ ] Frontend: filtro por habilidade na tela de Colaboradores
+
+## Módulo de Habilidades e Competências
+- [x] Criar tabelas skills e employee_skills no banco de dados
+- [x] Criar schema Drizzle para skills e employee_skills (com campo tempoExperiencia)
+- [x] Criar router tRPC completo: list, create, update, delete, assignSkill, removeSkill, employeeSkills, searchBySkill, skillSummaryByObra, skillsByAllObras, skillSummaryGlobal
+- [x] Criar tela de Cadastro de Habilidades com cards agrupados por categoria
+- [x] Implementar atribuição de habilidade a funcionário (com nível e tempo de experiência)
+- [x] Exibir habilidades no card da obra (ex: "3 Pintura, 2 Solda")
+- [x] Exibir habilidades na Ficha do Colaborador (seção Habilidades e Competências)
+- [x] Filtro por habilidade na tela de Colaboradores
+- [x] Testes unitários para módulo de habilidades (9 testes passando)
+- [x] Adicionar menu "Habilidades" na sidebar (seção Cadastro)

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
@@ -79,6 +79,22 @@ export default function Obras() {
   // Query SNs da obra sendo editada
   const obraSnQ = trpc.obras.listSns.useQuery({ obraId: editingId || 0 }, { enabled: !!editingId });
   const obraSns = obraSnQ.data ?? [];
+
+  // Skills summary per obra (for obra cards)
+  const skillsByObraQ = trpc.skills.skillsByAllObras.useQuery(
+    { companyId, companyIds: isConstrutoras ? companyIds : undefined },
+    { enabled: hasCompany }
+  );
+  const skillsByObraData = (skillsByObraQ.data ?? []) as any[];
+  const skillsByObraMap = useMemo(() => {
+    const map: Record<number, { skillNome: string; qtd: number }[]> = {};
+    for (const r of skillsByObraData) {
+      const oid = Number(r.obraId);
+      if (!map[oid]) map[oid] = [];
+      map[oid].push({ skillNome: r.skillNome, qtd: Number(r.qtd) });
+    }
+    return map;
+  }, [skillsByObraData]);
 
   // Mapa de SNs por obra para exibição nos cards
   const snsByObra = useMemo(() => {
@@ -275,6 +291,22 @@ export default function Obras() {
                     {obra.dataInicio && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                         <Calendar className="h-3.5 w-3.5" /> Início: {obra.dataInicio}
+                      </div>
+                    )}
+                    {/* Skills summary for this obra */}
+                    {(skillsByObraMap[obra.id] || []).length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {(skillsByObraMap[obra.id] || []).slice(0, 3).map((sk: any, i: number) => (
+                          <Badge key={i} variant="outline" className="text-[10px] gap-1 bg-indigo-50 text-indigo-700 border-indigo-200">
+                            <Wrench className="h-2.5 w-2.5" />
+                            {sk.qtd} {sk.skillNome}
+                          </Badge>
+                        ))}
+                        {(skillsByObraMap[obra.id] || []).length > 3 && (
+                          <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-600">
+                            +{(skillsByObraMap[obra.id] || []).length - 3} mais
+                          </Badge>
+                        )}
                       </div>
                     )}
                     <div className="flex items-center gap-2 mt-3 pt-3 border-t">

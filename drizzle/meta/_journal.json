@@ -218,6 +218,13 @@
       "when": 1773089776130,
       "tag": "0030_sloppy_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1773159284696,
+      "tag": "0031_zippy_scrambler",
+      "breakpoints": true
     }
   ]
 }

@@ -86,6 +86,7 @@ import { epiAvancadoRouter } from "./routers/epiAvancado";
 import { backupRouter } from "./routers/backup";
 import { migrationRouter } from "./routers/migration";
 import { contractsRouter } from "./routers/contracts";
+import { skillsRouter } from "./routers/skills";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -127,6 +128,7 @@ export const appRouter = router({
   backup: backupRouter,
   migration: migrationRouter,
   contracts: contractsRouter,
+  skills: skillsRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

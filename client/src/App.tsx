@@ -82,6 +82,7 @@ const DashAvisoPrevio = lazy(() => import("./pages/dashboards/DashAvisoPrevio"))
 const DashFerias = lazy(() => import("./pages/dashboards/DashFerias"));
 const VisaoPanoramica = lazy(() => import("./pages/dashboards/VisaoPanoramica"));
 const DashEfetivoObra = lazy(() => import("./pages/dashboards/DashEfetivoObra"));
+const Habilidades = lazy(() => import("./pages/Habilidades"));
 const DashPerfilTempoCasa = lazy(() => import("./pages/dashboards/DashPerfilTempoCasa"));
 const DashControleDocumentos = lazy(() => import("./pages/dashboards/DashControleDocumentos"));
 const DashCompetencias = lazy(() => import("./pages/dashboards/DashCompetencias"));
@@ -180,6 +181,7 @@ function Router() {
         <Route path={"/feriados"} component={Feriados} />
         <Route path={"/dissidio"} component={Dissidio} />
         <Route path={"/pj-medicoes"} component={PJMedicoes} />
+        <Route path="/habilidades" component={Habilidades} />
         {/* Avaliação de Desempenho */}
         <Route path={"/avaliacao-desempenho"} component={AvaliacaoDesempenho} />
         {/* Biblioteca de Conhecimento */}

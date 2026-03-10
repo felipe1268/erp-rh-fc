@@ -34,7 +34,7 @@ import {
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
-  Warehouse,
+  Warehouse, Wrench,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -84,6 +84,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Briefcase, label: "Funções", path: "/funcoes" },
       { icon: Wifi, label: "Relógios de Ponto", path: "/relogios-ponto" },
       { icon: Scale, label: "Convenções Coletivas", path: "/convencoes-coletivas" },
+      { icon: Wrench, label: "Habilidades", path: "/habilidades" },
     ],
   },
   {

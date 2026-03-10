@@ -3766,3 +3766,35 @@ export const employeeContracts = mysqlTable("employee_contracts", {
 	index("ec_data_inicio").on(table.dataInicio),
 	index("ec_data_fim").on(table.dataFim),
 ]);
+
+
+export const skills = mysqlTable("skills", {
+	id: int().autoincrement().notNull(),
+	companyId: int().notNull(),
+	nome: varchar({ length: 255 }).notNull(),
+	categoria: varchar({ length: 100 }),
+	descricao: text(),
+	deletedAt: timestamp("deleted_at", { mode: 'string' }),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("sk_company").on(table.companyId),
+	index("sk_categoria").on(table.categoria),
+]);
+
+export const employeeSkills = mysqlTable("employee_skills", {
+	id: int().autoincrement().notNull(),
+	employeeId: int().notNull(),
+	skillId: int().notNull(),
+	companyId: int().notNull(),
+	nivel: mysqlEnum(['Basico','Intermediario','Avancado']).default('Basico').notNull(),
+	tempoExperiencia: varchar({ length: 100 }),
+	observacao: text(),
+	deletedAt: timestamp("deleted_at", { mode: 'string' }),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+	index("es_employee").on(table.employeeId),
+	index("es_skill").on(table.skillId),
+	index("es_company").on(table.companyId),
+]);
