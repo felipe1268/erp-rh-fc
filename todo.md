@@ -5296,3 +5296,9 @@
 - [x] Lista_Negra deve aparecer como "Desligado" nos dashboards/relatórios (sub-classificação interna)
 - [x] Lista_Negra só visível como filtro na tela de Funcionários, não nos relatórios
 - [x] BUG: Erro 404 no domínio publicado fcerp-rh-w4mm458s.manus.space (resolvido - site está funcionando)
+- [x] Adicionar "Afastado" como opção manual no dropdown de status do funcionário
+- [x] Job de sincronização NÃO deve reverter Afastado manual para Ativo
+- [x] Restaurar funcionários que estavam Afastado e foram revertidos indevidamente pelo job (6 restaurados)
+- [x] Adicionar "Afastado" como opção manual no dropdown de status do funcionário
+- [x] Job de sincronização NÃO deve reverter Afastado manual para Ativo
+- [x] Restaurar funcionários que estavam Afastado e foram revertidos indevidamente pelo job (6 restaurados)

@@ -6,8 +6,9 @@
  * 2. Afastamento por atestado (atestados com dataRetorno >= hoje)
  * 3. Licença maternidade/paternidade (licencaMaternidade = 1 e data atual dentro do período)
  * 
- * Status manuais permitidos: Ativo, Recluso, Desligado, Lista_Negra
- * Status automáticos: Ferias, Afastado, Licenca
+ * Status manuais permitidos: Ativo, Afastado, Recluso, Desligado, Lista_Negra
+ * Status automáticos: Ferias, Licenca
+ * Afastado pode ser manual OU automático (não é revertido automaticamente)
  * 
  * Roda a cada 1 hora e na inicialização do servidor (com delay de 30s).
  */
@@ -17,10 +18,12 @@ import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 
 let statusSyncInterval: NodeJS.Timeout | null = null;
 
-// Status que são controlados automaticamente pelo sistema
-const AUTO_STATUS = ['Ferias', 'Afastado', 'Licenca'] as const;
+// Status que são controlados EXCLUSIVAMENTE pelo sistema (revertidos para Ativo quando não há justificativa)
+const AUTO_ONLY_STATUS = ['Ferias', 'Licenca'] as const;
+// Afastado pode ser definido manualmente OU automaticamente
+// Se definido manualmente, NÃO é revertido para Ativo pelo job
 // Status que são definidos manualmente pelo usuário (não devem ser alterados pelo job)
-const MANUAL_STATUS = ['Ativo', 'Recluso', 'Desligado', 'Lista_Negra'] as const;
+const MANUAL_STATUS = ['Ativo', 'Afastado', 'Recluso', 'Desligado', 'Lista_Negra'] as const;
 
 export async function syncEmployeeStatus(): Promise<{
   updated: number;
@@ -133,10 +136,11 @@ export async function syncEmployeeStatus(): Promise<{
         newStatus = 'Afastado';
         const atestado = atestadosAtivos.find(a => a.employeeId === emp.id);
         reason = `Atestado ativo (retorno: ${atestado?.dataRetorno})`;
-      } else if (AUTO_STATUS.includes(emp.status as any)) {
-        // Status era automático mas não tem mais justificativa → volta para Ativo
+      } else if (AUTO_ONLY_STATUS.includes(emp.status as any)) {
+        // Status era automático (Ferias/Licenca) mas não tem mais justificativa → volta para Ativo
+        // Nota: Afastado NÃO é revertido aqui pois pode ter sido definido manualmente
         newStatus = 'Ativo';
-        reason = 'Sem férias/afastamento/licença ativa - retornando para Ativo';
+        reason = 'Sem férias/licença ativa - retornando para Ativo';
       }
 
       // Só atualizar se o status mudou
