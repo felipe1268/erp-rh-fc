@@ -5275,3 +5275,5 @@
 - [x] Fix: Sem Obra Vinculada contagem errada - corrigido para usar query semObra em vez de allEmps.filter
 - [x] Fix: Férias no modo CONSTRUTORAS não carregava - corrigido para passar companyIds nas queries
 - [x] Fix: NaN companyId em 22+ páginas - script automatizado corrigiu parseInt/Number(selectedCompanyId) em todas
+
+- [x] BUG: Dropdown de obras duplica no modo CONSTRUTORAS - corrigido consolidação por nome em obras.list e obras.listActive

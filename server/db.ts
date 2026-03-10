@@ -1340,7 +1340,23 @@ export async function getObrasByCompanyActive(companyId: number, companyIds?: nu
   const db = await getDb();
   if (!db) return [];
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
-  return db.select().from(obras).where(and(inArray(obras.companyId, ids), eq(obras.isActive, 1), isNull(obras.deletedAt))).orderBy(obras.nome);
+  const rows = await db.select().from(obras).where(and(inArray(obras.companyId, ids), eq(obras.isActive, 1), isNull(obras.deletedAt))).orderBy(obras.nome);
+  // Consolidate by name when multiple companies (CONSTRUTORAS mode)
+  if (ids.length > 1) {
+    const seen = new Map<string, typeof rows[0] & { obraIds?: number[] }>();
+    for (const r of rows) {
+      const key = (r.nome || '').trim().toUpperCase();
+      if (seen.has(key)) {
+        const existing = seen.get(key)!;
+        if (!(existing as any).obraIds) (existing as any).obraIds = [existing.id];
+        (existing as any).obraIds.push(r.id);
+      } else {
+        seen.set(key, { ...r, obraIds: [r.id] } as any);
+      }
+    }
+    return Array.from(seen.values());
+  }
+  return rows;
 }
 
 // Funcionários alocados na obra

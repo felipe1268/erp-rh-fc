@@ -770,7 +770,23 @@ export const appRouter = router({
     list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input }) => {
       if (input.companyIds && input.companyIds.length > 0) {
         const results = await Promise.all(input.companyIds.map(id => getObras(id)));
-        return results.flat();
+        const allRows = results.flat();
+        // Consolidate by name when multiple companies (CONSTRUTORAS mode)
+        if (input.companyIds.length > 1) {
+          const seen = new Map<string, any>();
+          for (const r of allRows) {
+            const key = (r.nome || '').trim().toUpperCase();
+            if (seen.has(key)) {
+              const existing = seen.get(key)!;
+              if (!existing.obraIds) existing.obraIds = [existing.id];
+              existing.obraIds.push(r.id);
+            } else {
+              seen.set(key, { ...r, obraIds: [r.id] });
+            }
+          }
+          return Array.from(seen.values());
+        }
+        return allRows;
       }
       return getObras(input.companyId);
     }),
