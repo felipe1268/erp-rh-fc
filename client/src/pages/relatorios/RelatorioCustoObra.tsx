@@ -8,9 +8,30 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Construction, Users, DollarSign, TrendingUp, XCircle, Building2, ChevronDown, ChevronRight, User } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Construction, Users, DollarSign, TrendingUp, XCircle, Building2, ChevronDown, ChevronRight, User, Receipt } from "lucide-react";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+interface DescontoDetail {
+  label: string;
+  field: string;
+  color: string;
+}
+
+const DESCONTO_ITEMS: DescontoDetail[] = [
+  { label: "Adiantamento (Vale)", field: "descontoAdiantamento", color: "text-amber-700" },
+  { label: "INSS", field: "descontoInss", color: "text-blue-700" },
+  { label: "IRRF", field: "descontoIrrf", color: "text-indigo-700" },
+  { label: "FGTS", field: "descontoFgts", color: "text-cyan-700" },
+  { label: "Faltas", field: "descontoFaltas", color: "text-red-700" },
+  { label: "Atrasos", field: "descontoAtrasos", color: "text-orange-700" },
+  { label: "VR (Faltas)", field: "descontoVrFaltas", color: "text-pink-700" },
+  { label: "VT (Faltas)", field: "descontoVtFaltas", color: "text-rose-700" },
+  { label: "Pensão Alimentícia", field: "descontoPensao", color: "text-purple-700" },
+  { label: "EPI", field: "descontoEpi", color: "text-teal-700" },
+  { label: "Outros Descontos", field: "descontoOutros", color: "text-gray-700" },
+];
 
 export default function RelatorioCustoObra() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
@@ -21,6 +42,7 @@ export default function RelatorioCustoObra() {
   const [ano, setAno] = useState(now.getFullYear());
   const mesRef = `${ano}-${String(mes).padStart(2, "0")}`;
   const [expandedObras, setExpandedObras] = useState<Set<string>>(new Set());
+  const [descontoModal, setDescontoModal] = useState<any>(null);
 
   const custoObra = trpc.payrollEngine.custoPorObra.useQuery(
     { companyId, companyIds: isConstrutoras ? companyIds : undefined, mesReferencia: mesRef },
@@ -227,7 +249,13 @@ export default function RelatorioCustoObra() {
                             <div className="text-muted-foreground truncate text-xs">{func.funcao || func.cargo || "—"}</div>
                             <div className="text-right font-medium text-green-700">{formatBRL(parseFloat(func.salarioBruto || "0"))}</div>
                             <div className="text-right font-medium text-blue-700">{formatBRL(parseFloat(func.horasExtrasValor || "0"))}</div>
-                            <div className="text-right font-medium text-orange-600">{formatBRL(parseFloat(func.totalDescontos || "0"))}</div>
+                            <div
+                              className="text-right font-medium text-orange-600 cursor-pointer hover:underline hover:text-orange-800 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); setDescontoModal(func); }}
+                              title="Clique para ver detalhes dos descontos"
+                            >
+                              {formatBRL(parseFloat(func.totalDescontos || "0"))}
+                            </div>
                             <div className="text-right font-medium text-emerald-700">{formatBRL(parseFloat(func.salarioLiquido || "0"))}</div>
                             <div className="text-right">{func.diasTrabalhados ?? "—"}</div>
                             <div className="text-right text-red-600">{func.faltas || 0}</div>
@@ -284,6 +312,63 @@ export default function RelatorioCustoObra() {
 
         <PrintFooterLGPD />
       </div>
+
+      {/* Discount Detail Modal */}
+      <Dialog open={!!descontoModal} onOpenChange={(open) => { if (!open) setDescontoModal(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-orange-600" />
+              Detalhamento dos Descontos
+            </DialogTitle>
+          </DialogHeader>
+          {descontoModal && (
+            <div className="space-y-4">
+              {/* Employee info */}
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="font-semibold text-sm">{descontoModal.nomeCompleto}</div>
+                <div className="text-xs text-muted-foreground">{descontoModal.funcao || descontoModal.cargo || "—"}</div>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                  <span className="text-xs text-muted-foreground">Salário Bruto</span>
+                  <span className="text-sm font-bold text-green-700">{formatBRL(parseFloat(descontoModal.salarioBruto || "0"))}</span>
+                </div>
+              </div>
+
+              {/* Discount items */}
+              <div className="space-y-1">
+                {DESCONTO_ITEMS.map((item) => {
+                  const valor = parseFloat(descontoModal[item.field] || "0");
+                  if (valor === 0) return null;
+                  return (
+                    <div key={item.field} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">
+                      <span className="text-sm text-muted-foreground">{item.label}</span>
+                      <span className={`text-sm font-semibold ${item.color}`}>- {formatBRL(valor)}</span>
+                    </div>
+                  );
+                })}
+                {/* Show message if all discounts are zero */}
+                {DESCONTO_ITEMS.every((item) => parseFloat(descontoModal[item.field] || "0") === 0) && (
+                  <div className="text-center py-3 text-sm text-muted-foreground">
+                    Nenhum desconto individual registrado.
+                  </div>
+                )}
+              </div>
+
+              {/* Total */}
+              <div className="border-t pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-sm">Total de Descontos</span>
+                  <span className="font-bold text-orange-600">{formatBRL(parseFloat(descontoModal.totalDescontos || "0"))}</span>
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                  <span className="font-bold text-sm">Salário Líquido</span>
+                  <span className="font-bold text-emerald-700">{formatBRL(parseFloat(descontoModal.salarioLiquido || "0"))}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
