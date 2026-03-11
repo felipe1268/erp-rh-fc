@@ -144,7 +144,7 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
@@ -156,7 +156,7 @@ export default function Obras() {
       usarConvencaoMatriz: obra.usarConvencaoMatriz ?? 1,
       convencaoId: obra.convencaoId ?? null,
     });
-    setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false });
+    setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
     setDialogOpen(true);
   };
 
@@ -190,12 +190,22 @@ export default function Obras() {
     }
   };
 
+  const [nomeError, setNomeError] = useState(false);
+
   const handleSave = () => {
-    if (!form.nome.trim()) { toast.error("Nome da obra é obrigatório"); return; }
+    const nomeEfetivo = form.nome.trim() || form.numOrcamento.trim();
+    if (!nomeEfetivo) {
+      setNomeError(true);
+      toast.error("Informe o Nome da Obra ou o Nº do Orçamento");
+      document.getElementById("input-nome-obra")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById("input-nome-obra")?.focus();
+      return;
+    }
+    setNomeError(false);
     const cleanForm = Object.fromEntries(
       Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? undefined : v])
     ) as any;
-    cleanForm.nome = form.nome;
+    cleanForm.nome = nomeEfetivo;
     if (editingId) {
       updateMut.mutate({ id: editingId, ...cleanForm } as any);
     } else {
@@ -348,8 +358,15 @@ export default function Obras() {
         <div className="w-full">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <Label>Nome da Obra *</Label>
-              <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: Edifício Residencial Aurora" />
+              <Label>Nome da Obra <span className="text-muted-foreground text-xs">(ou preencha o Nº do Orçamento abaixo)</span></Label>
+              <Input
+                id="input-nome-obra"
+                value={form.nome}
+                onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); setNomeError(false); }}
+                placeholder="Ex: Hotel QIU 2 - 4ª Fase"
+                className={nomeError ? "border-red-500 focus-visible:ring-red-400" : ""}
+              />
+              {nomeError && <p className="text-xs text-red-500 mt-1">Informe o nome da obra ou o Nº do Orçamento.</p>}
             </div>
             <div>
               <Label>N° do Orçamento</Label>
