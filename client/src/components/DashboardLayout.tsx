@@ -34,7 +34,7 @@ import {
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
-  Warehouse, Wrench, Calculator, Upload, Target,
+  Warehouse, Wrench, Calculator, Target,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -307,7 +307,6 @@ const menuSectionsOrcamento: MenuSection[] = [
     items: [
       { icon: LayoutDashboard, label: "Painel Orçamento",  path: "/orcamento/painel"     },
       { icon: FolderOpen,      label: "Orçamentos",        path: "/orcamento/lista"      },
-      { icon: Upload,          label: "Importar Planilha", path: "/orcamento/importar"   },
       { icon: BookOpen,        label: "Biblioteca",        path: "/orcamento/biblioteca" },
     ],
   },
