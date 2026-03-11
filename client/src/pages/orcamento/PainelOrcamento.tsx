@@ -4,10 +4,9 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Calculator, FolderOpen, TrendingDown, DollarSign,
-  Target, ArrowRight, Clock, Plus, Building2,
+  Target, ArrowRight, Clock, Building2,
   TrendingUp, BarChart3,
 } from "lucide-react";
 
@@ -91,18 +90,11 @@ export default function PainelOrcamento() {
               Visão geral dos orçamentos da empresa
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/orcamento/lista">
-              <Button variant="outline" size="sm" className="gap-2">
-                <FolderOpen className="h-4 w-4" /> Ver Orçamentos
-              </Button>
-            </Link>
-            <Link href="/orcamento/importar">
-              <Button size="sm" className="gap-2 bg-[#1B2A4A] hover:bg-[#243660]">
-                <Plus className="h-4 w-4" /> Novo Orçamento
-              </Button>
-            </Link>
-          </div>
+          <Link href="/orcamento/lista">
+            <Button variant="outline" size="sm" className="gap-2">
+              <FolderOpen className="h-4 w-4" /> Ver Orçamentos
+            </Button>
+          </Link>
         </div>
 
         {/* KPIs */}
@@ -199,13 +191,8 @@ export default function PainelOrcamento() {
                 <Building2 className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">Nenhum orçamento cadastrado ainda.</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Crie um novo orçamento para começar.
+                  Acesse <strong>Orçamentos</strong> no menu para criar o primeiro.
                 </p>
-                <Link href="/orcamento/importar">
-                  <Button size="sm" variant="outline" className="mt-4 gap-2">
-                    <Plus className="h-3.5 w-3.5" /> Criar primeiro orçamento
-                  </Button>
-                </Link>
               </div>
             ) : (
               <div className="space-y-2">
