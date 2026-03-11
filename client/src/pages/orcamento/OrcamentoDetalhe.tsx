@@ -266,28 +266,17 @@ export default function OrcamentoDetalhe() {
     groupTotals[item.eapCodigo] = { mat, mdo, custo, venda };
   });
 
-  // ── Totais do cabeçalho: usa banco ou soma os grupos de nível 1 (com valores calculados) ──
-  const nivel1 = itens.filter((i: OrcItem) => i.nivel === 1);
-  const calcCusto = r2(nivel1.reduce((s, i) => {
-    const agg = groupTotals[i.eapCodigo];
-    return r2(s + (agg ? agg.custo : r2(n(i.custoTotal))));
-  }, 0));
-  const calcVenda = r2(nivel1.reduce((s, i) => {
-    const agg = groupTotals[i.eapCodigo];
-    return r2(s + (agg ? agg.venda : r2(n(i.vendaTotal))));
-  }, 0));
-  const calcMat = r2(nivel1.reduce((s, i) => {
-    const agg = groupTotals[i.eapCodigo];
-    return r2(s + (agg ? agg.mat : r2(n(i.custoTotalMat))));
-  }, 0));
-  const calcMdo = r2(nivel1.reduce((s, i) => {
-    const agg = groupTotals[i.eapCodigo];
-    return r2(s + (agg ? agg.mdo : r2(n(i.custoTotalMdo))));
-  }, 0));
+  // ── Totais: soma apenas itens FOLHA (sem filhos) — são eles que têm os valores reais da planilha ──
+  // Grupos intermediários têm valores calculados/agregados que podem divergir; folhas são a fonte de verdade.
+  const leafItems = itens.filter((i: OrcItem) => !childMap[i.eapCodigo]);
+  const calcMat   = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.custoTotalMat))), 0));
+  const calcMdo   = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.custoTotalMdo))), 0));
+  const calcCusto = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.custoTotal))),    0));
+  const calcVenda = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.vendaTotal))),    0));
 
-  const totalCusto = r2(n(orc.totalCusto) || calcCusto);
-  const totalVenda = r2(n(orc.totalVenda) || calcVenda);
-  const totalMeta  = r2(n(orc.totalMeta)  || r2(totalCusto * (1 - metaPct / 100)));
+  const totalCusto = r2(calcCusto || n(orc.totalCusto));
+  const totalVenda = r2(calcVenda || n(orc.totalVenda));
+  const totalMeta  = r2(n(orc.totalMeta) || r2(totalCusto * (1 - metaPct / 100)));
   const totalMat   = calcMat;
   const totalMdo   = calcMdo;
 
