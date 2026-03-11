@@ -70,6 +70,7 @@ export default function OrcamentoDetalhe() {
   const id = parseInt(params?.id ?? "0");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [activeTab, setActiveTab]   = useState<string>("eap");
   const [versao, setVersao]         = useState<Versao>("custo");
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
   const [localMetaPerc, setLocalMetaPerc] = useState(20);
@@ -259,6 +260,30 @@ export default function OrcamentoDetalhe() {
     <DashboardLayout>
       <div className="p-4">
 
+        {/* ── Navegação rápida de abas no topo ── */}
+        <div className="flex gap-1 mb-4">
+          <button
+            onClick={() => setActiveTab("eap")}
+            className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${
+              activeTab === "eap"
+                ? "bg-orange-500 text-white shadow"
+                : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
+            }`}
+          >
+            ORÇAMENTO
+          </button>
+          <button
+            onClick={() => setActiveTab("bdi")}
+            className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${
+              activeTab === "bdi"
+                ? "bg-orange-500 text-white shadow"
+                : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
+            }`}
+          >
+            BDI
+          </button>
+        </div>
+
         {/* ── Cabeçalho ── */}
         <div className="flex items-start justify-between mb-5">
           <div>
@@ -371,7 +396,7 @@ export default function OrcamentoDetalhe() {
 
         </div>
 
-        <Tabs defaultValue="eap">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="eap">EAP</TabsTrigger>
             <TabsTrigger value="insumos">
