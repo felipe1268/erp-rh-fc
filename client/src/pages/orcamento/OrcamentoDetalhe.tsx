@@ -81,6 +81,7 @@ export default function OrcamentoDetalhe() {
   const [metaInput, setMetaInput]   = useState("20");
   const [metaValInput, setMetaValInput] = useState(""); // input R$ — vazio = usa valor calculado
   const [savingMeta, setSavingMeta] = useState(false);
+  const [localMetaVal, setLocalMetaVal] = useState<number | null>(null); // R$ exato digitado
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
 
   const { data, isLoading, refetch } = trpc.orcamento.getById.useQuery(
@@ -264,10 +265,10 @@ export default function OrcamentoDetalhe() {
     itens.forEach(child => {
       if (!child.eapCodigo.startsWith(prefix)) return;
       if (childMap[child.eapCodigo]) return;        // ignora sub-grupos intermediários
-      mat   = r2(mat   + r2(n(child.custoTotalMat)));
-      mdo   = r2(mdo   + r2(n(child.custoTotalMdo)));
-      custo = r2(custo + r2(n(child.custoTotal)));
-      venda = r2(venda + r2(n(child.vendaTotal)));
+      mat   += n(child.custoTotalMat);
+      mdo   += n(child.custoTotalMdo);
+      custo += n(child.custoTotal);
+      venda += n(child.vendaTotal);
     });
     groupTotals[item.eapCodigo] = { mat, mdo, custo, venda };
   });
@@ -275,10 +276,10 @@ export default function OrcamentoDetalhe() {
   // ── Totais: soma apenas itens FOLHA (sem filhos) — são eles que têm os valores reais da planilha ──
   // Grupos intermediários têm valores calculados/agregados que podem divergir; folhas são a fonte de verdade.
   const leafItems = itens.filter((i: OrcItem) => !childMap[i.eapCodigo]);
-  const calcMat   = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.custoTotalMat))), 0));
-  const calcMdo   = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.custoTotalMdo))), 0));
-  const calcCusto = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.custoTotal))),    0));
-  const calcVenda = r2(leafItems.reduce((s, i) => r2(s + r2(n(i.vendaTotal))),    0));
+  const calcMat   = r2(leafItems.reduce((s, i) => s + n(i.custoTotalMat), 0));
+  const calcMdo   = r2(leafItems.reduce((s, i) => s + n(i.custoTotalMdo), 0));
+  const calcCusto = r2(leafItems.reduce((s, i) => s + n(i.custoTotal),    0));
+  const calcVenda = r2(leafItems.reduce((s, i) => s + n(i.vendaTotal),    0));
 
   const totalCusto = r2(calcCusto || n(orc.totalCusto));
   const totalVenda = r2(calcVenda || n(orc.totalVenda));
@@ -375,9 +376,9 @@ export default function OrcamentoDetalhe() {
                 {versao === "meta" && <CheckCircle2 className="h-3 w-3 ml-auto text-purple-600" />}
               </div>
               <p className={`text-base font-bold ${versao === "meta" ? "text-purple-700" : "text-foreground"}`}>
-                {formatBRL(totalCusto * (1 - localMetaPerc / 100))}
+                {formatBRL(localMetaVal !== null ? localMetaVal : r2(totalCusto * (1 - localMetaPerc / 100)))}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">−{localMetaPerc}% do custo</p>
+              <p className="text-xs text-muted-foreground mt-0.5">−{localMetaPerc.toFixed(2)}% do custo</p>
             </button>
             {/* Campos bidireccionais: % ↔ R$ */}
             <div className="px-3 pb-3 space-y-1.5">
@@ -390,7 +391,8 @@ export default function OrcamentoDetalhe() {
                   onChange={e => {
                     const str = e.target.value;
                     setMetaInput(str);
-                    setMetaValInput(""); // limpa R$ para mostrar valor calculado
+                    setMetaValInput("");
+                    setLocalMetaVal(null); // limpa R$ fixo — % passa a ser fonte de verdade
                     const v = parseFloat(str);
                     if (!isNaN(v) && v >= 0 && v < 100) setLocalMetaPerc(v);
                   }}
@@ -411,19 +413,22 @@ export default function OrcamentoDetalhe() {
                     setMetaValInput(str);
                     const val = parseFloat(str.replace(/\./g, "").replace(",", "."));
                     if (!isNaN(val) && val > 0 && totalCusto > 0) {
-                      const pct = r2((1 - val / totalCusto) * 100);
+                      setLocalMetaVal(val); // guarda o R$ exato digitado
+                      const pct = (1 - val / totalCusto) * 100; // sem r2 — preserva precisão total
                       if (pct >= 0 && pct < 100) {
                         setLocalMetaPerc(pct);
-                        setMetaInput(String(pct));
+                        setMetaInput(r2(pct).toFixed(2));
                       }
                     }
                   }}
                   onBlur={e => {
                     const val = parseFloat(e.target.value.replace(/\./g, "").replace(",", "."));
                     if (!isNaN(val) && val > 0) {
+                      setLocalMetaVal(val);
                       setMetaValInput(val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                     } else {
                       setMetaValInput("");
+                      setLocalMetaVal(null);
                     }
                   }}
                   className="h-7 text-sm text-right font-semibold text-purple-700"
