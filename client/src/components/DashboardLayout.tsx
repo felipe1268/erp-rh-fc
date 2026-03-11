@@ -305,9 +305,10 @@ const menuSectionsOrcamento: MenuSection[] = [
   {
     title: "Orçamento",
     items: [
-      { icon: LayoutDashboard, label: "Painel Orçamento",  path: "/orcamento/painel"   },
-      { icon: FolderOpen,      label: "Orçamentos",        path: "/orcamento/lista"    },
-      { icon: Upload,          label: "Importar Planilha", path: "/orcamento/importar" },
+      { icon: LayoutDashboard, label: "Painel Orçamento",  path: "/orcamento/painel"     },
+      { icon: FolderOpen,      label: "Orçamentos",        path: "/orcamento/lista"      },
+      { icon: Upload,          label: "Importar Planilha", path: "/orcamento/importar"   },
+      { icon: BookOpen,        label: "Biblioteca",        path: "/orcamento/biblioteca" },
     ],
   },
 ];
