@@ -70,7 +70,8 @@ async function analisarCusto(
   setProgress(5);
   const buffer = await readAsArrayBuffer(file, p => setProgress(5 + p * 40));
   setProgress(50);
-  const XLSX = (await import("xlsx")).default;
+  const xlsxMod = await import("xlsx");
+  const XLSX = xlsxMod.default ?? xlsxMod;
   setProgress(60);
   const wb = XLSX.read(buffer, { type: "array" });
   setProgress(70);
@@ -80,7 +81,7 @@ async function analisarCusto(
   const warnings: string[] = [];
   let rowCount = 0;
 
-  const orcTab = abas.find(n => {
+  const orcTab = abas.find((n: string) => {
     const l = n.toLowerCase();
     return l.includes("orçamento") || l.includes("orcamento") || l === "orc";
   });
@@ -121,7 +122,8 @@ async function analisarBdi(
   setProgress(5);
   const buffer = await readAsArrayBuffer(file, p => setProgress(5 + p * 40));
   setProgress(50);
-  const XLSX = (await import("xlsx")).default;
+  const xlsxMod2 = await import("xlsx");
+  const XLSX = xlsxMod2.default ?? xlsxMod2;
   setProgress(60);
   const wb = XLSX.read(buffer, { type: "array" });
   setProgress(70);
@@ -132,7 +134,7 @@ async function analisarBdi(
   let rowCount = 0;
   let foundB02 = false;
 
-  const bdiAbas = abas.filter(n => {
+  const bdiAbas = abas.filter((n: string) => {
     const l = n.toLowerCase();
     return !["orçamento", "orcamento", "orc", "abc insumos", "pln_imp"].includes(l);
   });
