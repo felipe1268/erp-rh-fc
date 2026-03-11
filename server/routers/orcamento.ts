@@ -543,8 +543,9 @@ export const orcamentoRouter = router({
   // ── Atualizar percentual Meta (admin_master) ──────────────
   updateMeta: protectedProcedure
     .input(z.object({
-      id:             z.number(),
-      metaPercentual: z.number().min(0).max(0.99),
+      id:              z.number(),
+      metaPercentual:  z.number().min(0).max(0.9999),
+      totalMetaExato:  z.number().optional(), // R$ exato digitado pelo usuário — prioridade sobre o % arredondado
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -555,7 +556,10 @@ export const orcamentoRouter = router({
       if (orc.status === 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser alterado.' });
 
       const totalCusto = parseFloat(orc.totalCusto || '0');
-      const totalMeta  = totalCusto * (1 - input.metaPercentual);
+      // Se o usuário digitou R$ exato, usa direto. Caso contrário, deriva do %.
+      const totalMeta  = input.totalMetaExato != null
+        ? input.totalMetaExato
+        : totalCusto * (1 - input.metaPercentual);
 
       await db.update(orcamentos).set({
         metaPercentual:    fix4(input.metaPercentual),
