@@ -215,16 +215,7 @@ export default function OrcamentoDetalhe() {
   const bdiPct  = n(orc.bdiPercentual)  * 100;
   const metaPct = n(orc.metaPercentual) * 100;
 
-  // Calcular totais a partir dos itens nível 1 como fallback
-  // (caso os campos armazenados estejam zerados por importação antiga)
-  const nivel1 = itens.filter((i: OrcItem) => i.nivel === 1);
-  const calcCusto = nivel1.reduce((s, i) => s + n(i.custoTotal), 0);
-  const calcVenda = nivel1.reduce((s, i) => s + n(i.vendaTotal), 0);
-
-  const totalCusto = n(orc.totalCusto) || calcCusto;
-  const totalVenda = n(orc.totalVenda) || calcVenda;
-  const totalMeta  = n(orc.totalMeta)  || totalCusto * (1 - metaPct / 100);
-
+  // ── Mapa de grupos (item tem filhos) ──
   const childMap: Record<string, boolean> = {};
   itens.forEach((item, idx) => {
     if (idx + 1 < itens.length && itens[idx + 1].nivel > item.nivel) {
@@ -250,6 +241,21 @@ export default function OrcamentoDetalhe() {
     });
     groupTotals[item.eapCodigo] = { mat, mdo, custo, venda };
   });
+
+  // ── Totais do cabeçalho: usa banco ou soma os grupos de nível 1 (com valores calculados) ──
+  const nivel1 = itens.filter((i: OrcItem) => i.nivel === 1);
+  const calcCusto = nivel1.reduce((s, i) => {
+    const agg = groupTotals[i.eapCodigo];
+    return s + (agg ? agg.custo : n(i.custoTotal));
+  }, 0);
+  const calcVenda = nivel1.reduce((s, i) => {
+    const agg = groupTotals[i.eapCodigo];
+    return s + (agg ? agg.venda : n(i.vendaTotal));
+  }, 0);
+
+  const totalCusto = n(orc.totalCusto) || calcCusto;
+  const totalVenda = n(orc.totalVenda) || calcVenda;
+  const totalMeta  = n(orc.totalMeta)  || totalCusto * (1 - metaPct / 100);
 
   const visibleItems = itens.filter(item => {
     if (item.nivel === 1) return true;
