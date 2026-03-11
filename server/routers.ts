@@ -202,14 +202,11 @@ export const appRouter = router({
       mimeType: z.string(),
       fileName: z.string(),
     })).mutation(async ({ input, ctx }) => {
-      const buffer = Buffer.from(input.base64, "base64");
-      const suffix = Math.random().toString(36).slice(2, 10);
-      const ext = input.fileName.split(".").pop() || "png";
-      const key = `company-logos/${input.companyId}-${suffix}.${ext}`;
-      const { url } = await storagePut(key, buffer, input.mimeType);
-      await updateCompany(input.companyId, { logoUrl: url } as any);
+      // Salva como data URL direto no banco — não requer storage externo
+      const dataUrl = `data:${input.mimeType};base64,${input.base64}`;
+      await updateCompany(input.companyId, { logoUrl: dataUrl } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "empresas", entityType: "company", entityId: input.companyId, details: `Logo da empresa atualizado` });
-      return { url };
+      return { url: dataUrl };
     }),
     // Numeração Interna - Configuração
     getNumbering: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), })).query(async ({ input }) => {
