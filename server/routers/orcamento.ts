@@ -7,8 +7,10 @@ import {
   orcamentoItens,
   orcamentoInsumos,
   orcamentoBdi,
+  orcamentoRevisoes,
   insumosCatalogo,
   composicoesCatalogo,
+  obras,
 } from "../../drizzle/schema";
 import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 
@@ -388,10 +390,18 @@ export const orcamentoRouter = router({
       if (!db) return null;
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) return null;
-      const itens    = await db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.id)).orderBy(orcamentoItens.ordem);
-      const insumos  = await db.select().from(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.id)).orderBy(orcamentoInsumos.percentualTotal);
-      const bdiLinhas = await db.select().from(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.id)).orderBy(orcamentoBdi.ordem);
-      return { ...orc, itens, insumos, bdiLinhas };
+      const [itens, insumos, bdiLinhas] = await Promise.all([
+        db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.id)).orderBy(orcamentoItens.ordem),
+        db.select().from(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.id)).orderBy(orcamentoInsumos.percentualTotal),
+        db.select().from(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.id)).orderBy(orcamentoBdi.ordem),
+      ]);
+      // Buscar dados da obra vinculada (se houver)
+      let obra: any = null;
+      if (orc.obraId) {
+        const [o] = await db.select().from(obras).where(eq(obras.id, orc.obraId));
+        obra = o ?? null;
+      }
+      return { ...orc, itens, insumos, bdiLinhas, obra };
     }),
 
   // ── Importar planilha Excel (base64) ──────────────────────
