@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Upload, FileSpreadsheet, X, AlertCircle,
-  CheckCircle, Loader2, Calculator,
+  CheckCircle, Loader2, Calculator, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,18 +32,82 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function DropZone({ file, onFile, accept = ".xlsx,.xls", inputId }: {
+  file: File | null;
+  onFile: (f: File) => void;
+  accept?: string;
+  inputId: string;
+}) {
+  const [dragging, setDragging] = useState(false);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped && (dropped.name.endsWith(".xlsx") || dropped.name.endsWith(".xls"))) {
+      onFile(dropped);
+    } else {
+      toast.error("Formato inválido. Envie um arquivo .xlsx ou .xls");
+    }
+  }, [onFile]);
+
+  if (file) {
+    return (
+      <div className="flex items-center gap-3 p-4 rounded-lg bg-muted border">
+        <FileSpreadsheet className="h-8 w-8 text-green-600 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{file.name}</p>
+          <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+        </div>
+        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => onFile(null as any)}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+      className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors
+        ${dragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}`}
+      onClick={() => document.getElementById(inputId)?.click()}
+    >
+      <FileSpreadsheet className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+      <p className="text-muted-foreground text-sm">
+        Arraste o arquivo aqui ou{" "}
+        <span className="text-primary underline cursor-pointer">clique para selecionar</span>
+      </p>
+      <p className="text-muted-foreground/60 text-xs mt-1">Formatos: .xlsx, .xls</p>
+      <input id={inputId} type="file" accept={accept} className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+    </div>
+  );
+}
+
 export default function OrcamentoImportar() {
   const { user } = useAuth();
   const { selectedCompanyId: selCompId } = useCompany();
   const companyId = selCompId ? parseInt(selCompId) : undefined;
   const [, navigate] = useLocation();
 
-  const [file, setFile] = useState<File | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [fileOrc, setFileOrc] = useState<File | null>(null);
+  const [fileBdi, setFileBdi] = useState<File | null>(null);
   const [metaPerc, setMetaPerc] = useState(20);
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingBdi, setIsUploadingBdi] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
+  const [resultadoBdi, setResultadoBdi] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [erroBdi, setErroBdi] = useState<string | null>(null);
+  const [orcamentoIdBdi, setOrcamentoIdBdi] = useState<string>("");
+
+  const { data: listaOrc = [] } = trpc.orcamento.list.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: !!companyId }
+  );
 
   const importarMutation = trpc.orcamento.importar.useMutation({
     onSuccess: (data) => {
@@ -57,33 +122,29 @@ export default function OrcamentoImportar() {
     },
   });
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped && (dropped.name.endsWith(".xlsx") || dropped.name.endsWith(".xls"))) {
-      setFile(dropped);
-      setErro(null);
-    } else {
-      toast.error("Formato inválido. Envie um arquivo .xlsx ou .xls");
-    }
-  }, []);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) { setFile(f); setErro(null); }
-  };
+  const importarBdiMutation = trpc.orcamento.importarBdi.useMutation({
+    onSuccess: (data) => {
+      setResultadoBdi(data);
+      setIsUploadingBdi(false);
+      toast.success("BDI importado com sucesso!");
+    },
+    onError: (e) => {
+      setErroBdi(e.message);
+      setIsUploadingBdi(false);
+      toast.error(e.message || "Erro na importação do BDI");
+    },
+  });
 
   const handleImportar = async () => {
-    if (!file || !companyId) return;
+    if (!fileOrc || !companyId) return;
     setIsUploading(true);
     setErro(null);
     try {
-      const base64 = await fileToBase64(file);
+      const base64 = await fileToBase64(fileOrc);
       await importarMutation.mutateAsync({
         companyId,
         fileBase64: base64,
-        fileName: file.name,
+        fileName: fileOrc.name,
         metaPercentual: metaPerc / 100,
         userName: (user as any)?.name || (user as any)?.email || "Sistema",
       });
@@ -92,47 +153,57 @@ export default function OrcamentoImportar() {
     }
   };
 
+  const handleImportarBdi = async () => {
+    if (!fileBdi || !companyId || !orcamentoIdBdi) return;
+    setIsUploadingBdi(true);
+    setErroBdi(null);
+    try {
+      const base64 = await fileToBase64(fileBdi);
+      await importarBdiMutation.mutateAsync({
+        companyId,
+        orcamentoId: parseInt(orcamentoIdBdi),
+        fileBase64: base64,
+        fileName: fileBdi.name,
+      });
+    } catch {
+      setIsUploadingBdi(false);
+    }
+  };
+
   if (resultado) {
     return (
       <DashboardLayout>
         <div className="max-w-xl mx-auto space-y-6 pt-6 p-4">
-          <Card className="border-emerald-700 bg-zinc-900">
+          <Card className="border-green-200">
             <CardContent className="pt-8 pb-8 text-center space-y-4">
               <div className="flex justify-center">
-                <div className="p-4 rounded-full bg-emerald-500/20">
-                  <CheckCircle className="h-10 w-10 text-emerald-400" />
+                <div className="p-4 rounded-full bg-green-50">
+                  <CheckCircle className="h-10 w-10 text-green-600" />
                 </div>
               </div>
-              <h2 className="text-xl font-bold text-white">Importação concluída!</h2>
-              <p className="text-zinc-400 text-sm">
-                <span className="text-white font-medium">{resultado.itemCount}</span> itens importados com sucesso.
+              <h2 className="text-xl font-bold">Importação concluída!</h2>
+              <p className="text-muted-foreground text-sm">
+                <span className="font-medium text-foreground">{resultado.itemCount}</span> itens importados com sucesso.
               </p>
               <div className="grid grid-cols-3 gap-3 mt-2">
-                <div className="rounded-lg bg-zinc-800 p-3">
-                  <p className="text-xs text-zinc-500">Venda</p>
-                  <p className="text-sm font-bold text-emerald-400">{formatBRL(resultado.totalVenda)}</p>
+                <div className="rounded-lg bg-muted p-3">
+                  <p className="text-xs text-muted-foreground">Venda</p>
+                  <p className="text-sm font-bold text-green-600">{formatBRL(resultado.totalVenda)}</p>
                 </div>
-                <div className="rounded-lg bg-zinc-800 p-3">
-                  <p className="text-xs text-zinc-500">Custo</p>
-                  <p className="text-sm font-bold text-amber-400">{formatBRL(resultado.totalCusto)}</p>
+                <div className="rounded-lg bg-muted p-3">
+                  <p className="text-xs text-muted-foreground">Custo</p>
+                  <p className="text-sm font-bold text-amber-600">{formatBRL(resultado.totalCusto)}</p>
                 </div>
-                <div className="rounded-lg bg-zinc-800 p-3">
-                  <p className="text-xs text-zinc-500">Meta</p>
-                  <p className="text-sm font-bold text-purple-400">{formatBRL(resultado.totalMeta)}</p>
+                <div className="rounded-lg bg-muted p-3">
+                  <p className="text-xs text-muted-foreground">Meta</p>
+                  <p className="text-sm font-bold text-purple-600">{formatBRL(resultado.totalMeta)}</p>
                 </div>
               </div>
               <div className="flex gap-2 justify-center mt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => { setResultado(null); setFile(null); }}
-                  className="border-zinc-700"
-                >
+                <Button variant="outline" onClick={() => { setResultado(null); setFileOrc(null); }}>
                   Importar outro
                 </Button>
-                <Button
-                  className="bg-cyan-600 hover:bg-cyan-700"
-                  onClick={() => navigate(`/orcamento/${resultado.id}`)}
-                >
+                <Button onClick={() => navigate(`/orcamento/${resultado.id}`)}>
                   Ver Orçamento <Calculator className="h-4 w-4 ml-2" />
                 </Button>
               </div>
@@ -148,139 +219,169 @@ export default function OrcamentoImportar() {
       <div className="max-w-2xl mx-auto space-y-6 pt-4 p-4">
 
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Upload className="h-6 w-6 text-cyan-400" />
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Upload className="h-6 w-6 text-blue-600" />
             Importar Planilha Excel
           </h1>
-          <p className="text-zinc-400 mt-1">
-            A planilha deve ter as abas <span className="text-cyan-300 font-mono">Orçamento</span> e{" "}
-            <span className="text-cyan-300 font-mono">BDI</span>.
+          <p className="text-muted-foreground text-sm mt-1">
+            Importe a planilha de orçamento e/ou o BDI separadamente
           </p>
         </div>
 
-        {/* Zona de Upload */}
-        <Card className="border-zinc-800 bg-zinc-900/60">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-zinc-300">Arquivo Excel</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!file ? (
-              <div
-                onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
-                className={`
-                  border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors
-                  ${dragging ? "border-cyan-500 bg-cyan-500/10" : "border-zinc-700 hover:border-zinc-500"}
-                `}
-                onClick={() => document.getElementById("file-input")?.click()}
-              >
-                <FileSpreadsheet className="h-10 w-10 text-zinc-600 mx-auto mb-3" />
-                <p className="text-zinc-400 text-sm">
-                  Arraste o arquivo aqui ou{" "}
-                  <span className="text-cyan-400 underline cursor-pointer">clique para selecionar</span>
-                </p>
-                <p className="text-zinc-600 text-xs mt-1">Formatos: .xlsx, .xls</p>
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-zinc-800 border border-zinc-700">
-                <FileSpreadsheet className="h-8 w-8 text-emerald-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{file.name}</p>
-                  <p className="text-xs text-zinc-500">{(file.size / 1024).toFixed(1)} KB</p>
+        <Tabs defaultValue="orcamento">
+          <TabsList className="w-full">
+            <TabsTrigger value="orcamento" className="flex-1 gap-2">
+              <FileSpreadsheet className="h-4 w-4" /> Planilha Orçamento
+            </TabsTrigger>
+            <TabsTrigger value="bdi" className="flex-1 gap-2">
+              <FileText className="h-4 w-4" /> Planilha BDI
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ABA ORÇAMENTO */}
+          <TabsContent value="orcamento" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Arquivo Excel — Orçamento</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DropZone file={fileOrc} onFile={f => { setFileOrc(f); setErro(null); }} inputId="file-input-orc" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  Percentual de Meta (desconto sobre custo)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Slider min={1} max={50} step={1} value={[metaPerc]}
+                      onValueChange={([v]) => setMetaPerc(v)} className="w-full" />
+                  </div>
+                  <div className="w-20 shrink-0">
+                    <Input type="number" min={1} max={50} value={metaPerc}
+                      onChange={e => setMetaPerc(Math.min(50, Math.max(1, Number(e.target.value))))}
+                      className="text-center font-bold" />
+                  </div>
+                  <span className="text-muted-foreground text-sm shrink-0">%</span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 w-8 p-0 text-zinc-500 hover:text-red-400"
-                  onClick={() => setFile(null)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Meta = Custo × (1 − {metaPerc}%). Padrão: 20%. Pode ser alterado depois por admin_master.
+                </p>
+              </CardContent>
+            </Card>
+
+            {erro && (
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{erro}</p>
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Meta % */}
-        <Card className="border-zinc-800 bg-zinc-900/60">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-zinc-300">
-              Percentual de Meta (desconto sobre custo)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <Slider
-                  min={1}
-                  max={50}
-                  step={1}
-                  value={[metaPerc]}
-                  onValueChange={([v]) => setMetaPerc(v)}
-                  className="w-full"
-                />
-              </div>
-              <div className="w-20 shrink-0">
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={metaPerc}
-                  onChange={e => setMetaPerc(Math.min(50, Math.max(1, Number(e.target.value))))}
-                  className="text-center bg-zinc-800 border-zinc-700 text-white font-bold"
-                />
-              </div>
-              <span className="text-zinc-400 text-sm shrink-0">%</span>
+            <div className="flex justify-end">
+              <Button onClick={handleImportar} disabled={!fileOrc || isUploading || !companyId} className="gap-2 min-w-[160px]">
+                {isUploading
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</>
+                  : <><Upload className="h-4 w-4" /> Importar Orçamento</>}
+              </Button>
             </div>
-            <p className="text-xs text-zinc-500">
-              O preço Meta = Custo × (1 − {metaPerc}%). Padrão: 20%. Pode ser alterado depois por admin_master.
-            </p>
-          </CardContent>
-        </Card>
 
-        {/* Erro */}
-        {erro && (
-          <div className="flex items-start gap-3 p-4 rounded-lg bg-red-950 border border-red-800">
-            <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-300">{erro}</p>
-          </div>
-        )}
+            <Card className="bg-muted/30">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Estrutura esperada</p>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  <li>• Aba <span className="font-medium text-foreground">Orçamento</span>: colunas 9=nível, 10=item EAP, 14=tipo, 15=descrição, 16=unidade, 17=qtd</li>
+                  <li>• Colunas de custo: 18=custo mat., 20=custo MO, 24=total venda, 30=total mat., 31=total MO, 32=total custo</li>
+                  <li>• Aba <span className="font-medium text-foreground">BDI</span> (opcional): linha B-02 = %BDI total</li>
+                  <li>• Aba <span className="font-medium text-foreground">Insumos</span> (opcional): gera curva ABC automaticamente</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Botão importar */}
-        <div className="flex justify-end">
-          <Button
-            onClick={handleImportar}
-            disabled={!file || isUploading || !companyId}
-            className="bg-cyan-600 hover:bg-cyan-700 gap-2 min-w-[160px]"
-          >
-            {isUploading ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</>
-            ) : (
-              <><Upload className="h-4 w-4" /> Importar Orçamento</>
+          {/* ABA BDI */}
+          <TabsContent value="bdi" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Selecionar Orçamento</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {listaOrc.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">
+                    Nenhum orçamento disponível. Importe um orçamento primeiro.
+                  </p>
+                ) : (
+                  <select
+                    value={orcamentoIdBdi}
+                    onChange={e => setOrcamentoIdBdi(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">— Selecione o orçamento —</option>
+                    {listaOrc.map((o: any) => (
+                      <option key={o.id} value={o.id}>
+                        {o.codigo} {o.revisao ? `· ${o.revisao}` : ""} {o.cliente ? `· ${o.cliente}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Arquivo Excel — BDI</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DropZone file={fileBdi} onFile={f => { setFileBdi(f); setErroBdi(null); }} inputId="file-input-bdi" />
+              </CardContent>
+            </Card>
+
+            {resultadoBdi && (
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-green-50 border border-green-200">
+                <CheckCircle className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-green-800">BDI importado com sucesso!</p>
+                  <p className="text-xs text-green-600 mt-0.5">
+                    {resultadoBdi.linhasCount} linhas · BDI total: {(resultadoBdi.bdiPercentual * 100).toFixed(2)}%
+                  </p>
+                </div>
+              </div>
             )}
-          </Button>
-        </div>
 
-        {/* Instruções */}
-        <Card className="border-zinc-800 bg-zinc-900/40">
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wide mb-2">Estrutura esperada da planilha</p>
-            <ul className="space-y-1 text-xs text-zinc-500">
-              <li>• Aba <span className="text-zinc-300">Orçamento</span>: colunas 9=nível, 10=item EAP, 14=tipo, 15=descrição, 16=unidade, 17=qtd</li>
-              <li>• Colunas de custo: 18=custo mat. unit., 20=custo MO unit., 24=total venda, 30=total mat., 31=total MO, 32=total custo</li>
-              <li>• Aba <span className="text-zinc-300">BDI</span>: linhas com código (col 2), descrição (col 3) e percentual (col 7) — linha B-02 = %BDI total</li>
-              <li>• Aba <span className="text-zinc-300">Insumos</span> (opcional): gera curva ABC automaticamente</li>
-            </ul>
-          </CardContent>
-        </Card>
+            {erroBdi && (
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{erroBdi}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleImportarBdi}
+                disabled={!fileBdi || isUploadingBdi || !companyId || !orcamentoIdBdi}
+                className="gap-2 min-w-[160px]"
+              >
+                {isUploadingBdi
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</>
+                  : <><Upload className="h-4 w-4" /> Importar BDI</>}
+              </Button>
+            </div>
+
+            <Card className="bg-muted/30">
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Estrutura esperada do BDI</p>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  <li>• Aba <span className="font-medium text-foreground">BDI</span>: linhas com código (col 2), descrição (col 3) e percentual (col 7)</li>
+                  <li>• Linha <span className="font-medium text-foreground">B-02</span> = %BDI total (obrigatório)</li>
+                  <li>• O BDI será vinculado ao orçamento selecionado acima</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
       </div>
     </DashboardLayout>
