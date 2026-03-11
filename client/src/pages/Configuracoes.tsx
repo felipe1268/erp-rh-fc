@@ -16,7 +16,7 @@ import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import MenuConfigPanel from "@/components/MenuConfigPanel";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, Info, LayoutDashboard, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -2038,6 +2038,7 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     avaliacao: { label: "Avaliação", subtitle: "Avaliação de Desempenho", icon: ClipboardList, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200", description: "Questionários personalizáveis, ciclos de avaliação, ranking de desempenho, pesquisas e clima organizacional." },
     terceiros: { label: "Terceiros", subtitle: "Gestão de Empresas Terceirizadas", icon: HardHat, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "Cadastro, documentação, obrigações mensais, aptidão, conformidade e portal externo para terceiros." },
     parceiros: { label: "Parceiros", subtitle: "Portal de Convênios", icon: Coffee, color: "text-purple-600", bgColor: "bg-purple-50", borderColor: "border-purple-200", description: "Farmácia, posto, restaurante e outros convênios com lançamentos, aprovações e guia de descontos." },
+    orcamento: { label: "Orçamento", subtitle: "Orçamento de Obras", icon: Calculator, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200", description: "Importação de planilhas Excel com BDI, 3 versões de orçamento (Venda, Custo, Meta) e curva ABC de insumos." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
