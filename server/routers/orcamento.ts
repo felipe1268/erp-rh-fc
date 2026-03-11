@@ -710,6 +710,58 @@ export const orcamentoRouter = router({
       };
     }),
 
+  // ── Atualizar percentual de linha BDI ─────────────────────
+  updateBdiLinha: protectedProcedure
+    .input(z.object({
+      id:         z.number(),
+      percentual: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      await db.update(orcamentoBdi)
+        .set({ percentual: fix6(input.percentual) })
+        .where(eq(orcamentoBdi.id, input.id));
+      return { success: true };
+    }),
+
+  // ── Aplicar BDI% a todos os itens do orçamento ────────────
+  aplicarBdi: protectedProcedure
+    .input(z.object({
+      orcamentoId:   z.number(),
+      bdiPercentual: z.number(),   // decimal fraction: 0.2456 = 24.56%
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+
+      const bdi   = input.bdiPercentual;
+      const itens = await db.select().from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+      const BATCH = 500;
+      for (let i = 0; i < itens.length; i += BATCH) {
+        for (const item of itens.slice(i, i + BATCH)) {
+          const custo     = parseFloat(item.custoTotal     || '0');
+          const custoUnit = parseFloat(item.custoUnitTotal || '0');
+          await db.update(orcamentoItens).set({
+            vendaTotal:     fix2(custo     * (1 + bdi)),
+            vendaUnitTotal: fix4(custoUnit * (1 + bdi)),
+          }).where(eq(orcamentoItens.id, item.id));
+        }
+      }
+
+      const nivel1     = itens.filter(i => i.nivel === 1);
+      const totalVenda = nivel1.reduce((s, i) => s + parseFloat(i.custoTotal || '0') * (1 + bdi), 0);
+
+      await db.update(orcamentos).set({
+        bdiPercentual: fix6(bdi),
+        totalVenda:    fix2(totalVenda),
+      }).where(eq(orcamentos.id, input.orcamentoId));
+
+      return { success: true, totalVenda, bdiPercentual: bdi };
+    }),
+
   // ── Deletar (soft delete) ─────────────────────────────────
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))

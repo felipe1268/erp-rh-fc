@@ -1,20 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Slider } from "@/components/ui/slider";
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
-  ArrowLeft, Settings, Loader2, Package, CheckCircle2, AlertCircle,
+  ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import OrcamentistaWidget from "./OrcamentistaWidget";
 
 function formatBRL(v: number) {
@@ -69,10 +66,11 @@ export default function OrcamentoDetalhe() {
   const { user } = useAuth();
   const id = parseInt(params?.id ?? "0");
 
-  const [versao, setVersao]           = useState<Versao>("custo");
-  const [collapsed, setCollapsed]     = useState<Set<string>>(new Set());
-  const [metaDialog, setMetaDialog]   = useState(false);
-  const [novaMetaPerc, setNovaMetaPerc] = useState(20);
+  const [versao, setVersao]         = useState<Versao>("custo");
+  const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
+  const [localMetaPerc, setLocalMetaPerc] = useState(20);
+  const [metaInput, setMetaInput]   = useState("20");
+  const [savingMeta, setSavingMeta] = useState(false);
 
   const { data, isLoading, refetch } = trpc.orcamento.getById.useQuery(
     { id },
@@ -81,12 +79,37 @@ export default function OrcamentoDetalhe() {
 
   const updateMetaMutation = trpc.orcamento.updateMeta.useMutation({
     onSuccess: () => {
-      toast.success("Meta atualizada com sucesso!");
-      setMetaDialog(false);
+      toast.success("Meta atualizada!");
+      setSavingMeta(false);
       refetch();
     },
-    onError: e => toast.error(e.message || "Erro ao atualizar meta"),
+    onError: e => { toast.error(e.message || "Erro ao salvar meta"); setSavingMeta(false); },
   });
+
+  // BDI edição local
+  const [bdiEdits, setBdiEdits]       = useState<Record<number, string>>({});
+  const [localBdiPct, setLocalBdiPct] = useState(0);   // decimal: 0.2456
+
+  const updateBdiMutation = trpc.orcamento.updateBdiLinha.useMutation({
+    onError: e => toast.error(e.message || "Erro ao salvar linha BDI"),
+  });
+
+  const aplicarBdiMutation = trpc.orcamento.aplicarBdi.useMutation({
+    onSuccess: (res) => {
+      toast.success(`BDI ${(res.bdiPercentual * 100).toFixed(2)}% aplicado ao orçamento!`);
+      refetch();
+    },
+    onError: e => toast.error(e.message || "Erro ao aplicar BDI"),
+  });
+
+  useEffect(() => {
+    if (data) {
+      const pct = Math.round(parseFloat((data as any).metaPercentual || "0") * 100);
+      setLocalMetaPerc(pct);
+      setMetaInput(String(pct));
+      setLocalBdiPct(parseFloat((data as any).bdiPercentual || "0"));
+    }
+  }, [data]);
 
   if (isLoading) {
     return (
@@ -152,7 +175,6 @@ export default function OrcamentoDetalhe() {
     });
   };
 
-  const isAdminMaster = (user as any)?.role === "admin_master";
   const cfg = VERSAO_CONFIG[versao];
 
   return (
@@ -175,38 +197,89 @@ export default function OrcamentoDetalhe() {
               <span className="text-purple-600 font-medium">Meta −{metaPct.toFixed(0)}% do custo</span>
             </div>
           </div>
-          {isAdminMaster && (
-            <Button size="sm" variant="outline" className="gap-2 shrink-0"
-              onClick={() => { setNovaMetaPerc(metaPct); setMetaDialog(true); }}>
-              <Settings className="h-4 w-4" /> Ajustar Meta
-            </Button>
-          )}
         </div>
 
-        {/* ── Cards de versão ── */}
+        {/* ── Cards de versão: Meta | Custo | Venda ── */}
         <div className="grid grid-cols-3 gap-3 mb-5">
-          {(["custo", "venda", "meta"] as Versao[]).map(v => {
-            const c = VERSAO_CONFIG[v];
-            const totais: Record<Versao, number> = { custo: totalCusto, venda: totalVenda, meta: totalMeta };
-            return (
-              <button key={v} onClick={() => setVersao(v)}
-                className={`text-left p-4 rounded-xl border-2 transition-all ${
-                  versao === v ? c.activeClass : "border-border bg-card hover:bg-muted/30"
-                }`}
+
+          {/* CARD META (esquerda) */}
+          <div className={`rounded-xl border-2 transition-all ${
+            versao === "meta" ? "border-purple-500 bg-purple-50" : "border-border bg-card"
+          }`}>
+            <button className="w-full text-left p-4 pb-2" onClick={() => setVersao("meta")}>
+              <div className="flex items-center gap-2 mb-1">
+                <Target className={`h-4 w-4 ${versao === "meta" ? "text-purple-600" : "text-muted-foreground"}`} />
+                <span className="text-xs text-muted-foreground font-medium uppercase">Meta</span>
+                {versao === "meta" && <CheckCircle2 className="h-3 w-3 ml-auto text-purple-600" />}
+              </div>
+              <p className={`text-base font-bold ${versao === "meta" ? "text-purple-700" : "text-foreground"}`}>
+                {formatBRL(totalCusto * (1 - localMetaPerc / 100))}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">−{localMetaPerc}% do custo</p>
+            </button>
+            {/* Campo inline de percentual */}
+            <div className="px-3 pb-3 flex items-center gap-2">
+              <Input
+                type="number" min={1} max={99}
+                value={metaInput}
+                onChange={e => {
+                  setMetaInput(e.target.value);
+                  const v = parseInt(e.target.value);
+                  if (!isNaN(v) && v >= 1 && v <= 99) setLocalMetaPerc(v);
+                }}
+                className="h-7 text-sm w-20 text-right font-semibold text-purple-700"
+              />
+              <span className="text-sm text-muted-foreground">%</span>
+              <Button size="sm" variant="ghost" className="h-7 px-2 ml-auto text-purple-600 hover:text-purple-800"
+                disabled={savingMeta || updateMetaMutation.isPending}
+                onClick={() => {
+                  setSavingMeta(true);
+                  updateMetaMutation.mutate({ id, metaPercentual: localMetaPerc / 100 });
+                }}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <c.icon className={`h-4 w-4 ${versao === v ? c.valueClass : "text-muted-foreground"}`} />
-                  <span className="text-xs text-muted-foreground font-medium uppercase">{c.label}</span>
-                  {versao === v && <CheckCircle2 className={`h-3 w-3 ml-auto ${c.valueClass}`} />}
-                </div>
-                <p className={`text-base font-bold ${versao === v ? c.valueClass : "text-foreground"}`}>
-                  {formatBRL(totais[v])}
-                </p>
-                {v === "meta"  && <p className="text-xs text-muted-foreground mt-0.5">−{metaPct.toFixed(0)}% do custo</p>}
-                {v === "venda" && bdiPct > 0 && <p className="text-xs text-muted-foreground mt-0.5">BDI {bdiPct.toFixed(2)}%</p>}
-              </button>
-            );
-          })}
+                {savingMeta
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Save className="h-3 w-3" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* CARD CUSTO (meio) */}
+          <button onClick={() => setVersao("custo")}
+            className={`text-left p-4 rounded-xl border-2 transition-all ${
+              versao === "custo" ? "border-amber-500 bg-amber-50" : "border-border bg-card hover:bg-muted/30"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingDown className={`h-4 w-4 ${versao === "custo" ? "text-amber-600" : "text-muted-foreground"}`} />
+              <span className="text-xs text-muted-foreground font-medium uppercase">Custo</span>
+              {versao === "custo" && <CheckCircle2 className="h-3 w-3 ml-auto text-amber-600" />}
+            </div>
+            <p className={`text-base font-bold ${versao === "custo" ? "text-amber-700" : "text-foreground"}`}>
+              {formatBRL(totalCusto)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Custo direto</p>
+          </button>
+
+          {/* CARD VENDA (direita) */}
+          <button onClick={() => setVersao("venda")}
+            className={`text-left p-4 rounded-xl border-2 transition-all ${
+              versao === "venda" ? "border-green-500 bg-green-50" : "border-border bg-card hover:bg-muted/30"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className={`h-4 w-4 ${versao === "venda" ? "text-green-600" : "text-muted-foreground"}`} />
+              <span className="text-xs text-muted-foreground font-medium uppercase">Venda</span>
+              {versao === "venda" && <CheckCircle2 className="h-3 w-3 ml-auto text-green-600" />}
+            </div>
+            <p className={`text-base font-bold ${versao === "venda" ? "text-green-700" : "text-foreground"}`}>
+              {formatBRL(totalVenda)}
+            </p>
+            {bdiPct > 0
+              ? <p className="text-xs text-muted-foreground mt-0.5">BDI {bdiPct.toFixed(2)}%</p>
+              : <p className="text-xs text-muted-foreground mt-0.5">BDI não importado</p>}
+          </button>
+
         </div>
 
         <Tabs defaultValue="eap">
@@ -221,59 +294,67 @@ export default function OrcamentoDetalhe() {
 
           {/* ═══ ABA EAP ═══════════════════════════════════════════════ */}
           <TabsContent value="eap" className="mt-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-muted-foreground">
-                {itens.length} itens · exibindo{" "}
-                <span className={`${cfg.valueClass} font-semibold`}>{cfg.label}</span>
-              </p>
-              <div className="flex gap-1">
-                <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground"
-                  onClick={() => setCollapsed(new Set(itens.filter(i => childMap[i.eapCodigo]).map(i => i.eapCodigo)))}>
-                  Recolher tudo
-                </Button>
-                <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground"
-                  onClick={() => setCollapsed(new Set())}>
-                  Expandir tudo
-                </Button>
-              </div>
-            </div>
+            {/* Barra de controle de níveis */}
+            {(() => {
+              const maxLvl = itens.filter(i => childMap[i.eapCodigo]).reduce((m, i) => Math.max(m, i.nivel), 1);
+              const expandToLevel = (lvl: number) =>
+                setCollapsed(new Set(itens.filter(i => childMap[i.eapCodigo] && i.nivel >= lvl).map(i => i.eapCodigo)));
+              return (
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {itens.length} itens · exibindo{" "}
+                    <span className={`${cfg.valueClass} font-semibold`}>{cfg.label}</span>
+                  </p>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[11px] text-muted-foreground mr-1">Nível:</span>
+                    {Array.from({ length: maxLvl }, (_, i) => i + 1).map(lvl => (
+                      <Button key={lvl} size="sm" variant="outline"
+                        className="text-[11px] h-6 w-7 px-0 font-mono"
+                        onClick={() => expandToLevel(lvl)}>
+                        {lvl}
+                      </Button>
+                    ))}
+                    <div className="w-px h-4 bg-border mx-1" />
+                    <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 text-muted-foreground"
+                      onClick={() => setCollapsed(new Set(itens.filter(i => childMap[i.eapCodigo]).map(i => i.eapCodigo)))}>
+                      Recolher
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-[11px] h-6 px-2 text-muted-foreground"
+                      onClick={() => setCollapsed(new Set())}>
+                      Expandir
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
 
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-xs min-w-[960px]">
+                <table className="w-full border-collapse text-xs min-w-[560px]">
                   <thead>
                     <tr className="bg-slate-700 text-white text-[11px] sticky top-0 z-20">
                       <th className="text-left px-3 py-2 w-36 sticky left-0 bg-slate-700">Item</th>
-                      <th className="text-left px-3 py-2 min-w-[200px]">Descrição</th>
+                      <th className="text-left px-3 py-2">Descrição</th>
                       <th className="text-center px-2 py-2 w-12">Un</th>
-                      <th className="text-right px-3 py-2 w-24">Quantidade</th>
-                      <th className="text-right px-3 py-2 w-28 text-blue-200">Pu. Material</th>
-                      <th className="text-right px-3 py-2 w-28 text-orange-200">Pu. MO</th>
-                      <th className="text-right px-3 py-2 w-28 text-blue-200">Pt. Material</th>
-                      <th className="text-right px-3 py-2 w-28 text-orange-200">Pt. MO</th>
-                      <th className={`text-right px-3 py-2 w-32 font-bold ${cfg.thClass}`}>
+                      <th className="text-right px-3 py-2 w-28">Quantidade</th>
+                      <th className={`text-right px-3 py-2 w-36 font-bold ${cfg.thClass}`}>
                         {cfg.label}
                       </th>
-                      <th className="text-right px-2 py-2 w-14">ABC</th>
+                      <th className="text-right px-2 py-2 w-14">ABC%</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visibleItems.map(item => {
-                      const isGroup  = !!childMap[item.eapCodigo];
-                      const isLeaf   = !isGroup;
-                      const indent   = Math.max(0, item.nivel - 1) * 14;
-                      const rowBg    = NIVEL_BG[item.nivel] ?? "bg-white";
-
-                      const puMat  = n(item.custoUnitMat);
-                      const puMdo  = n(item.custoUnitMdo);
-                      const ptMat  = n(item.custoTotalMat);
-                      const ptMdo  = n(item.custoTotalMdo);
-                      const qty    = n(item.quantidade);
+                      const isGroup = !!childMap[item.eapCodigo];
+                      const isLeaf  = !isGroup;
+                      const indent  = Math.max(0, item.nivel - 1) * 16;
+                      const rowBg   = NIVEL_BG[item.nivel] ?? "bg-white";
+                      const qty     = n(item.quantidade);
 
                       const totalVal = versao === "venda"
                         ? n(item.vendaTotal)
                         : versao === "meta"
-                          ? n(item.metaTotal)
+                          ? n(item.custoTotal) * (1 - localMetaPerc / 100)
                           : n(item.custoTotal);
 
                       return (
@@ -298,7 +379,7 @@ export default function OrcamentoDetalhe() {
 
                           {/* Descrição */}
                           <td className="px-3 py-1.5">
-                            <span className={item.nivel <= 2 ? "uppercase tracking-wide text-[11px]" : "text-[11px]"}>
+                            <span className={item.nivel <= 2 ? "uppercase tracking-wide text-[11px] font-semibold" : "text-[11px]"}>
                               {item.descricao}
                             </span>
                           </td>
@@ -315,29 +396,9 @@ export default function OrcamentoDetalhe() {
                               : ""}
                           </td>
 
-                          {/* Pu. Material */}
-                          <td className="px-3 py-1.5 text-right text-blue-600 tabular-nums">
-                            {isLeaf && puMat > 0 ? formatBRL(puMat) : ""}
-                          </td>
-
-                          {/* Pu. MO */}
-                          <td className="px-3 py-1.5 text-right text-orange-500 tabular-nums">
-                            {isLeaf && puMdo > 0 ? formatBRL(puMdo) : ""}
-                          </td>
-
-                          {/* Pt. Material */}
-                          <td className="px-3 py-1.5 text-right text-blue-600 font-medium tabular-nums">
-                            {ptMat > 0 ? formatBRL(ptMat) : <span className="text-slate-300">—</span>}
-                          </td>
-
-                          {/* Pt. MO */}
-                          <td className="px-3 py-1.5 text-right text-orange-500 font-medium tabular-nums">
-                            {ptMdo > 0 ? formatBRL(ptMdo) : <span className="text-slate-300">—</span>}
-                          </td>
-
-                          {/* Total da versão selecionada */}
+                          {/* Valor da versão selecionada */}
                           <td className={`px-3 py-1.5 text-right font-semibold tabular-nums ${cfg.valueClass}`}>
-                            {formatBRL(totalVal)}
+                            {totalVal > 0 ? formatBRL(totalVal) : <span className="text-slate-300 font-normal">—</span>}
                           </td>
 
                           {/* ABC % */}
@@ -410,54 +471,122 @@ export default function OrcamentoDetalhe() {
           <TabsContent value="bdi" className="mt-3 space-y-4">
             {!orc.bdiLinhas?.length ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
-                Nenhuma linha de BDI extraída.
+                <p>Nenhum dado de BDI importado.</p>
+                <p className="text-xs mt-1">Use a aba Importar para carregar a planilha de BDI.</p>
               </div>
             ) : (() => {
+              // Agrupar por aba
               const grupos: Record<string, any[]> = {};
               for (const b of orc.bdiLinhas) {
                 const aba = b.nomeAba || "BDI";
                 if (!grupos[aba]) grupos[aba] = [];
                 grupos[aba].push(b);
               }
-              return Object.entries(grupos).map(([aba, linhas]) => (
-                <Card key={aba}>
-                  <CardHeader className="pb-2 pt-3">
-                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                      {aba}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="py-2 px-0 overflow-x-auto">
-                    <table className="w-full text-xs min-w-[500px]">
-                      <thead>
-                        <tr className="border-b bg-muted/30 text-muted-foreground">
-                          <th className="text-left pl-4 py-1.5 w-20">Código</th>
-                          <th className="text-left px-3 py-1.5">Descrição</th>
-                          <th className="text-right px-3 py-1.5 w-28">Valor (%)</th>
-                          <th className="text-right px-3 py-1.5 w-28">Encargos</th>
-                          <th className="text-right pr-4 py-1.5 w-28">BDI (%)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {linhas.map((b: any, i: number) => (
-                          <tr key={i} className="border-b hover:bg-muted/20">
-                            <td className="pl-4 py-1 font-mono text-muted-foreground">{b.codigo}</td>
-                            <td className="px-3 py-1 max-w-xs truncate">{b.descricao}</td>
-                            <td className="px-3 py-1 text-right tabular-nums">
-                              {n(b.valorPercentual) > 0 ? `${(n(b.valorPercentual) * 100).toFixed(4)}%` : "—"}
-                            </td>
-                            <td className="px-3 py-1 text-right text-muted-foreground tabular-nums">
-                              {n(b.encargos) > 0 ? `${(n(b.encargos) * 100).toFixed(4)}%` : "—"}
-                            </td>
-                            <td className={`pr-4 py-1 text-right font-semibold tabular-nums ${n(b.bdiPercentual) > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-                              {n(b.bdiPercentual) > 0 ? `${(n(b.bdiPercentual) * 100).toFixed(2)}%` : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </CardContent>
-                </Card>
-              ));
+
+              return (
+                <>
+                  {/* ── Card de controle do BDI total ── */}
+                  <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 flex flex-wrap items-center gap-4">
+                    <div className="flex-1 min-w-[200px]">
+                      <p className="text-xs text-muted-foreground uppercase font-medium mb-1">BDI Total (B-02)</p>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number" step="0.01" min={0} max={200}
+                          value={(localBdiPct * 100).toFixed(4)}
+                          onChange={e => {
+                            const v = parseFloat(e.target.value);
+                            if (!isNaN(v)) setLocalBdiPct(v / 100);
+                          }}
+                          className="h-9 w-36 text-right font-bold text-amber-700 text-base border-amber-300"
+                        />
+                        <span className="text-lg font-bold text-amber-700">%</span>
+                        <p className="text-xs text-muted-foreground ml-2">
+                          Venda = Custo × {(1 + localBdiPct).toFixed(4)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 items-end">
+                      <p className="text-xs text-muted-foreground">
+                        Total Venda estimado:{" "}
+                        <strong className="text-green-700">{formatBRL(totalCusto * (1 + localBdiPct))}</strong>
+                      </p>
+                      <Button
+                        className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+                        disabled={aplicarBdiMutation.isPending}
+                        onClick={() => aplicarBdiMutation.mutate({ orcamentoId: id, bdiPercentual: localBdiPct })}
+                      >
+                        {aplicarBdiMutation.isPending
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <Save className="h-4 w-4" />}
+                        Aplicar BDI ao Orçamento
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* ── Tabelas por aba ── */}
+                  {Object.entries(grupos).map(([aba, linhas]) => (
+                    <Card key={aba} className="overflow-hidden">
+                      <div className="px-4 py-2 bg-slate-700 text-white text-xs font-semibold uppercase tracking-wider">
+                        {aba}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs min-w-[500px]">
+                          <thead>
+                            <tr className="border-b bg-muted/40 text-muted-foreground">
+                              <th className="text-left pl-4 py-2 w-24">Código</th>
+                              <th className="text-left px-3 py-2">Descrição</th>
+                              <th className="text-right px-3 py-2 w-40">Percentual (%)</th>
+                              <th className="text-right pr-4 py-2 w-28">Valor Abs.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {linhas.map((b: any) => {
+                              const editKey      = b.id;
+                              const rawPct       = n(b.percentual);
+                              const displayVal   = bdiEdits[editKey] ?? (rawPct * 100).toFixed(4);
+                              const isB02        = /^b-?02$/i.test(b.codigo || "");
+
+                              return (
+                                <tr key={b.id}
+                                  className={`border-b hover:bg-muted/20 transition-colors ${isB02 ? "bg-amber-50 font-bold" : ""}`}>
+                                  <td className={`pl-4 py-1.5 font-mono ${isB02 ? "text-amber-700" : "text-muted-foreground"}`}>
+                                    {b.codigo}
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <span className={isB02 ? "text-amber-800" : ""}>{b.descricao}</span>
+                                  </td>
+                                  <td className="px-3 py-1.5 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Input
+                                        type="number" step="0.0001"
+                                        value={displayVal}
+                                        onChange={e => setBdiEdits(prev => ({ ...prev, [editKey]: e.target.value }))}
+                                        onBlur={e => {
+                                          const v = parseFloat(e.target.value);
+                                          if (!isNaN(v)) {
+                                            const dec = v / 100;
+                                            updateBdiMutation.mutate({ id: b.id, percentual: dec });
+                                            if (isB02) setLocalBdiPct(dec);
+                                          }
+                                        }}
+                                        className={`h-6 w-28 text-right text-xs ${isB02 ? "border-amber-400 font-bold text-amber-700" : ""}`}
+                                      />
+                                      <span className="text-muted-foreground text-[10px]">%</span>
+                                    </div>
+                                  </td>
+                                  <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
+                                    {n(b.valorAbsoluto) !== 0 ? formatBRL(n(b.valorAbsoluto)) : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+                  ))}
+                </>
+              );
             })()}
           </TabsContent>
 
@@ -525,41 +654,6 @@ export default function OrcamentoDetalhe() {
           )}
         </Tabs>
 
-        {/* ── Dialog ajustar meta ── */}
-        <Dialog open={metaDialog} onOpenChange={setMetaDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Ajustar Percentual de Meta</DialogTitle>
-            </DialogHeader>
-            <div className="py-4 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Meta calculada como: <strong>Custo × (1 − Meta%)</strong>.
-                Atual: <strong>{metaPct.toFixed(0)}%</strong>.
-              </p>
-              <div className="flex items-center gap-4">
-                <Slider min={0} max={50} step={1}
-                  value={[novaMetaPerc]}
-                  onValueChange={([v]) => setNovaMetaPerc(v)}
-                  className="flex-1"
-                />
-                <span className="text-lg font-bold w-16 text-right">{novaMetaPerc}%</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Nova meta: {formatBRL(totalCusto * (1 - novaMetaPerc / 100))}
-              </p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setMetaDialog(false)}>Cancelar</Button>
-              <Button
-                onClick={() => updateMetaMutation.mutate({ id, metaPercentual: novaMetaPerc / 100 })}
-                disabled={updateMetaMutation.isPending}
-              >
-                {updateMetaMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Salvar Meta
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
       </div>
 
