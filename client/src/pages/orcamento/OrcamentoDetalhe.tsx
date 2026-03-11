@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -81,6 +81,7 @@ export default function OrcamentoDetalhe() {
   const [metaInput, setMetaInput]   = useState("20");
   const [metaValInput, setMetaValInput] = useState(""); // input R$ — vazio = usa valor calculado
   const [savingMeta, setSavingMeta] = useState(false);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
 
   const { data, isLoading, refetch } = trpc.orcamento.getById.useQuery(
     { id },
@@ -907,35 +908,80 @@ export default function OrcamentoDetalhe() {
                 </div>
                 <Card>
                   <CardContent className="py-3 px-0 overflow-x-auto">
-                    <table className="w-full text-xs min-w-[400px]">
+                    <table className="w-full text-xs min-w-[500px]">
                       <thead>
                         <tr className="border-b bg-muted/50 text-muted-foreground">
                           <th className="text-left pl-4 py-2 w-8">Cl</th>
-                          <th className="text-left px-3 py-2">Categoria</th>
+                          <th className="text-left px-3 py-2">Categoria / Insumo</th>
                           <th className="text-right px-3 py-2 w-16">Qtd</th>
                           <th className="text-right px-3 py-2 w-32">Custo Total</th>
                           <th className="text-right pr-4 py-2 w-16">%</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {catComAbc.map(c => (
-                          <tr key={c.tipo} className="border-b hover:bg-muted/30">
-                            <td className="pl-4 py-1.5">
-                              <span className={`inline-block w-5 h-5 rounded text-center font-bold leading-5 text-white text-xs
-                                ${c.cls === "A" ? "bg-green-600" : c.cls === "B" ? "bg-amber-500" : "bg-zinc-400"}`}>
-                                {c.cls}
-                              </span>
-                            </td>
-                            <td className="px-3 py-1.5 font-medium">{c.tipo}</td>
-                            <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">{c.qtd}</td>
-                            <td className="px-3 py-1.5 text-right font-medium text-amber-600 tabular-nums">
-                              {formatBRL(c.custo)}
-                            </td>
-                            <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
-                              {(c.pct * 100).toFixed(2)}%
-                            </td>
-                          </tr>
-                        ))}
+                        {catComAbc.map(c => {
+                          const isOpen = expandedCats.has(c.tipo);
+                          const insDosCat = [...insumos]
+                            .filter((i: any) => (i.tipo || "Sem categoria") === c.tipo)
+                            .sort((a: any, b: any) => n(b.custoTotal) - n(a.custoTotal));
+                          return (
+                            <React.Fragment key={c.tipo}>
+                              <tr
+                                className="border-b hover:bg-muted/40 cursor-pointer select-none"
+                                onClick={() => setExpandedCats(prev => {
+                                  const next = new Set(prev);
+                                  isOpen ? next.delete(c.tipo) : next.add(c.tipo);
+                                  return next;
+                                })}
+                              >
+                                <td className="pl-4 py-2">
+                                  <span className={`inline-block w-5 h-5 rounded text-center font-bold leading-5 text-white text-xs
+                                    ${c.cls === "A" ? "bg-green-600" : c.cls === "B" ? "bg-amber-500" : "bg-zinc-400"}`}>
+                                    {c.cls}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 font-semibold">
+                                  <div className="flex items-center gap-1">
+                                    {isOpen
+                                      ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                                    {c.tipo}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">{c.qtd}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-amber-600 tabular-nums">
+                                  {formatBRL(c.custo)}
+                                </td>
+                                <td className="pr-4 py-2 text-right text-muted-foreground tabular-nums">
+                                  {(c.pct * 100).toFixed(2)}%
+                                </td>
+                              </tr>
+                              {isOpen && insDosCat.map((ins: any) => {
+                                const insPct = totalGeral > 0 ? (n(ins.custoTotal) / totalGeral) * 100 : 0;
+                                return (
+                                  <tr key={ins.id} className="border-b bg-muted/20 hover:bg-muted/40">
+                                    <td className="pl-4 py-1.5">
+                                      <span className={`inline-block w-4 h-4 rounded text-center font-bold leading-4 text-white text-[10px]
+                                        ${ins.curvaAbc === "A" ? "bg-green-500" : ins.curvaAbc === "B" ? "bg-amber-400" : "bg-zinc-300"}`}>
+                                        {ins.curvaAbc}
+                                      </span>
+                                    </td>
+                                    <td className="pl-8 pr-3 py-1.5 text-muted-foreground max-w-xs truncate">{ins.descricao}</td>
+                                    <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                                      {n(ins.quantidadeTotal).toFixed(2)} {ins.unidade}
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right text-amber-600 tabular-nums">
+                                      {formatBRL(n(ins.custoTotal))}
+                                    </td>
+                                    <td className="pr-4 py-1.5 text-right text-muted-foreground tabular-nums">
+                                      {insPct.toFixed(2)}%
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </CardContent>
