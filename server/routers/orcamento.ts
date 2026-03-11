@@ -11,6 +11,7 @@ import {
   insumosCatalogo,
   composicoesCatalogo,
   composicaoInsumos,
+  insumosGrupos,
   obras,
   companies,
 } from "../../drizzle/schema";
@@ -1275,6 +1276,55 @@ export const orcamentoRouter = router({
         .where(eq(insumosCatalogo.companyId, input.companyId))
         .orderBy(insumosCatalogo.tipo, insumosCatalogo.codigo)
         .limit(10000);
+    }),
+
+  // ── CRUD de grupos/categorias de insumos ─────────────────────
+  listarGruposInsumos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(insumosGrupos)
+        .where(eq(insumosGrupos.companyId, input.companyId))
+        .orderBy(insumosGrupos.nome);
+    }),
+
+  salvarGrupoInsumo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      id:   z.number().optional(),
+      nome: z.string().min(1).max(150),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const nome = input.nome.trim();
+      if (input.id) {
+        // Renomear também nos insumos existentes
+        await db.update(insumosCatalogo).set({ tipo: nome })
+          .where(and(
+            eq(insumosCatalogo.companyId, input.companyId),
+            eq(insumosCatalogo.tipo as any, (
+              await db.select({ nome: insumosGrupos.nome }).from(insumosGrupos)
+                .where(eq(insumosGrupos.id, input.id!)).limit(1)
+            )[0]?.nome ?? '')
+          ));
+        await db.update(insumosGrupos).set({ nome })
+          .where(and(eq(insumosGrupos.id, input.id), eq(insumosGrupos.companyId, input.companyId)));
+      } else {
+        await db.insert(insumosGrupos).values({ companyId: input.companyId, nome });
+      }
+      return { ok: true };
+    }),
+
+  excluirGrupoInsumo: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(insumosGrupos)
+        .where(and(eq(insumosGrupos.id, input.id), eq(insumosGrupos.companyId, input.companyId)));
+      return { ok: true };
     }),
 
   // ── Gerar próximo código único para insumo manual ────────────

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Wrench, Package, Search, Loader2, Upload, CheckCircle,
-  AlertCircle, Plus, Pencil, Trash2, X, Check,
+  AlertCircle, Plus, Pencil, Trash2, X, Check, Tag,
+  ChevronDown,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -19,10 +20,331 @@ function parseBRL(s: string) {
 }
 function n(v: any) { return parseFloat(v || "0"); }
 
-/* ── FORM INICIAL VAZIO ──────────────────────────────────────── */
 const EMPTY_FORM = { codigo: "", descricao: "", unidade: "", tipo: "", precoUnitario: "", precoMin: "" };
 
-/* ── COMPOSIÇÕES ─────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════
+   COMPONENTE: Dropdown searchable de grupo
+   ════════════════════════════════════════════════════════════════ */
+function GrupoDropdown({
+  value,
+  onChange,
+  grupos,
+  placeholder = "Selecionar grupo...",
+  className = "",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  grupos: { id: number; nome: string }[];
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Fecha ao clicar fora
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtrados = grupos.filter(g => !q || g.nome.toLowerCase().includes(q.toLowerCase()));
+
+  function select(nome: string) {
+    onChange(nome);
+    setOpen(false);
+    setQ("");
+  }
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <div
+        className="flex items-center gap-1 h-7 px-2 border rounded text-xs cursor-pointer bg-white hover:border-emerald-400 focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-200"
+        onClick={() => setOpen(o => !o)}
+      >
+        {open ? (
+          <input
+            autoFocus
+            className="flex-1 outline-none text-xs bg-transparent"
+            placeholder="Buscar grupo..."
+            value={q}
+            onChange={e => { setQ(e.target.value); }}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => {
+              if (e.key === "Escape") { setOpen(false); setQ(""); }
+              if (e.key === "Enter" && filtrados.length > 0) select(filtrados[0].nome);
+            }}
+          />
+        ) : (
+          <span className={`flex-1 truncate ${value ? "text-foreground" : "text-muted-foreground"}`}>
+            {value || placeholder}
+          </span>
+        )}
+        <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+      </div>
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-0.5 w-full min-w-[220px] bg-white border rounded-md shadow-lg max-h-52 overflow-y-auto">
+          <div
+            className="px-3 py-1.5 text-xs text-muted-foreground hover:bg-slate-50 cursor-pointer border-b"
+            onClick={() => select("")}
+          >
+            — Sem grupo —
+          </div>
+          {filtrados.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum grupo encontrado.</div>
+          ) : (
+            filtrados.map(g => (
+              <div
+                key={g.id}
+                onClick={() => select(g.nome)}
+                className={`px-3 py-1.5 text-xs cursor-pointer hover:bg-emerald-50 ${g.nome === value ? "bg-emerald-50 font-medium text-emerald-700" : ""}`}
+              >
+                {g.nome}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   COMPONENTE: Filtro de grupo (barra de busca + seletor)
+   ════════════════════════════════════════════════════════════════ */
+function GrupoFiltro({
+  value,
+  onChange,
+  grupos,
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  grupos: { id: number; nome: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQ(""); }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtrados = grupos.filter(g => !q || g.nome.toLowerCase().includes(q.toLowerCase()));
+
+  function select(nome: string | null) {
+    onChange(nome);
+    setOpen(false);
+    setQ("");
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Campo visual */}
+      <div
+        className={`flex items-center gap-2 h-9 px-3 border rounded-md text-sm cursor-pointer bg-white transition-colors
+          ${open ? "border-emerald-400 ring-1 ring-emerald-200" : "border-input hover:border-emerald-300"}
+          ${value ? "text-emerald-700 border-emerald-300 bg-emerald-50" : "text-muted-foreground"}`}
+        style={{ minWidth: 200 }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <Tag className="h-3.5 w-3.5 flex-shrink-0" />
+        {open ? (
+          <input
+            autoFocus
+            className="flex-1 outline-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground"
+            placeholder="Digite o grupo..."
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => {
+              if (e.key === "Escape") { setOpen(false); setQ(""); }
+              if (e.key === "Enter" && filtrados.length > 0) select(filtrados[0].nome);
+            }}
+          />
+        ) : (
+          <span className="flex-1 truncate text-sm">{value ?? "Filtrar por grupo"}</span>
+        )}
+        {value && !open && (
+          <button
+            onClick={e => { e.stopPropagation(); select(null); }}
+            className="ml-auto rounded-full hover:bg-emerald-200 p-0.5"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        {!value && <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 ml-auto" />}
+      </div>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-1 w-full min-w-[240px] bg-white border rounded-md shadow-lg max-h-64 overflow-y-auto">
+          <div
+            className="px-3 py-2 text-sm text-muted-foreground hover:bg-slate-50 cursor-pointer border-b"
+            onClick={() => select(null)}
+          >
+            Todos os grupos
+          </div>
+          {filtrados.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-muted-foreground text-center">Nenhum grupo encontrado.</div>
+          ) : (
+            filtrados.map(g => (
+              <div
+                key={g.id}
+                onClick={() => select(g.nome)}
+                className={`px-3 py-2 text-sm cursor-pointer hover:bg-emerald-50
+                  ${g.nome === value ? "bg-emerald-50 font-medium text-emerald-700" : ""}`}
+              >
+                {g.nome}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SUB-VIEW: Cadastro de Categorias
+   ════════════════════════════════════════════════════════════════ */
+function CategoriasView({ companyId }: { companyId: number }) {
+  const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const [editNome, setEditNome] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const utils = trpc.useUtils();
+  const { data: grupos = [], isLoading } =
+    trpc.orcamento.listarGruposInsumos.useQuery({ companyId }, { enabled: companyId > 0 });
+
+  const salvarMut = trpc.orcamento.salvarGrupoInsumo.useMutation({
+    onSuccess: () => {
+      utils.orcamento.listarGruposInsumos.invalidate({ companyId });
+      setEditingId(null); setSaveError(null);
+    },
+    onError: (err) => setSaveError(err.message),
+  });
+  const excluirMut = trpc.orcamento.excluirGrupoInsumo.useMutation({
+    onSuccess: () => utils.orcamento.listarGruposInsumos.invalidate({ companyId }),
+  });
+
+  function startEdit(g: any) { setEditingId(g.id); setEditNome(g.nome); setSaveError(null); }
+  function startNew() { setEditingId("new"); setEditNome(""); setSaveError(null); }
+  function cancel() { setEditingId(null); setSaveError(null); }
+  function save() {
+    if (!editNome.trim()) { setSaveError("Nome obrigatório."); return; }
+    salvarMut.mutate({
+      companyId,
+      id: editingId !== "new" ? (editingId as number) : undefined,
+      nome: editNome,
+    });
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="p-2 rounded-lg bg-violet-100">
+          <Tag className="h-5 w-5 text-violet-600" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold">Categorias de Insumos</h1>
+          <p className="text-sm text-muted-foreground">Grupos padronizados para classificar insumos</p>
+        </div>
+        <span className="ml-auto text-sm text-muted-foreground font-mono mr-2">{grupos.length} categorias</span>
+        <Button size="sm" className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+          onClick={startNew} disabled={editingId === "new"}>
+          <Plus className="h-4 w-4" /> Nova Categoria
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      ) : (
+        <Card className="max-w-xl">
+          <div className="divide-y">
+            {/* Linha de nova categoria */}
+            {editingId === "new" && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-violet-50">
+                <Input
+                  autoFocus
+                  className="h-7 text-sm flex-1"
+                  placeholder="Nome da categoria..."
+                  value={editNome}
+                  onChange={e => setEditNome(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+                />
+                {saveError && <span className="text-red-500 text-xs">{saveError}</span>}
+                <button onClick={save} disabled={salvarMut.isPending}
+                  className="p-1.5 rounded hover:bg-violet-200 text-violet-700" title="Salvar">
+                  {salvarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                </button>
+                <button onClick={cancel} className="p-1.5 rounded hover:bg-slate-200 text-slate-500" title="Cancelar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {grupos.length === 0 && editingId !== "new" ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <Tag className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">Nenhuma categoria cadastrada.</p>
+              </div>
+            ) : (
+              grupos.map(g => (
+                <div key={g.id} className="flex items-center gap-2 px-4 py-2.5 group hover:bg-slate-50">
+                  {editingId === g.id ? (
+                    <>
+                      <Input
+                        autoFocus
+                        className="h-7 text-sm flex-1"
+                        value={editNome}
+                        onChange={e => setEditNome(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+                      />
+                      {saveError && <span className="text-red-500 text-xs">{saveError}</span>}
+                      <button onClick={save} disabled={salvarMut.isPending}
+                        className="p-1.5 rounded hover:bg-emerald-100 text-emerald-700">
+                        {salvarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </button>
+                      <button onClick={cancel} className="p-1.5 rounded hover:bg-slate-200 text-slate-500">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm">{g.nome}</span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => startEdit(g)}
+                          className="p-1.5 rounded hover:bg-blue-100 text-blue-600">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => { if (confirm(`Excluir categoria "${g.nome}"?`)) excluirMut.mutate({ companyId, id: g.id }); }}
+                          className="p-1.5 rounded hover:bg-red-100 text-red-500">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SUB-VIEW: Composições
+   ════════════════════════════════════════════════════════════════ */
 function ComposicoesView({ companyId }: { companyId: number }) {
   const [search, setSearch] = useState("");
   const { data: composicoes = [], isLoading } =
@@ -57,8 +379,7 @@ function ComposicoesView({ companyId }: { companyId: number }) {
       ) : filt.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <Wrench className="h-10 w-10 mx-auto mb-3 opacity-20" />
-          <p className="text-sm">{search ? "Nenhuma composição encontrada para esta busca." : "Nenhuma composição cadastrada ainda."}</p>
-          <p className="text-xs mt-1">Acesse um orçamento e use o botão "Biblioteca" para enviar itens.</p>
+          <p className="text-sm">{search ? "Nenhuma composição encontrada." : "Nenhuma composição cadastrada ainda."}</p>
         </div>
       ) : (
         <Card>
@@ -81,9 +402,7 @@ function ComposicoesView({ companyId }: { companyId: number }) {
                   <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{c.codigo || "—"}</td>
                     <td className="px-3 py-2">{c.descricao}</td>
-                    <td className="px-3 py-2">
-                      {c.tipo && <Badge variant="outline" className="text-[10px]">{c.tipo}</Badge>}
-                    </td>
+                    <td className="px-3 py-2">{c.tipo && <Badge variant="outline" className="text-[10px]">{c.tipo}</Badge>}</td>
                     <td className="px-3 py-2 text-center text-muted-foreground">{c.unidade || "—"}</td>
                     <td className="px-3 py-2 text-right text-blue-600 tabular-nums">{formatBRL(n(c.custoUnitMat))}</td>
                     <td className="px-3 py-2 text-right text-orange-500 tabular-nums">{formatBRL(n(c.custoUnitMdo))}</td>
@@ -104,35 +423,36 @@ function ComposicoesView({ companyId }: { companyId: number }) {
   );
 }
 
-/* ── INSUMOS ─────────────────────────────────────────────────── */
-function InsumosView({ companyId }: { companyId: number }) {
-  const [search, setSearch]         = useState("");
-  const [catFilter, setCatFilter]   = useState<string | null>(null);
-  const [editingId, setEditingId]   = useState<number | "new" | null>(null);
-  const [editForm, setEditForm]     = useState(EMPTY_FORM);
-  const [saveError, setSaveError]   = useState<string | null>(null);
-  const [jobId, setJobId]           = useState<string | null>(null);
-  const [jobTotal, setJobTotal]     = useState(0);
+/* ════════════════════════════════════════════════════════════════
+   SUB-VIEW: Insumos
+   ════════════════════════════════════════════════════════════════ */
+function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; onGerenciarCategorias: () => void }) {
+  const [search, setSearch]        = useState("");
+  const [catFilter, setCatFilter]  = useState<string | null>(null);
+  const [editingId, setEditingId]  = useState<number | "new" | null>(null);
+  const [editForm, setEditForm]    = useState(EMPTY_FORM);
+  const [saveError, setSaveError]  = useState<string | null>(null);
+  const [jobId, setJobId]          = useState<string | null>(null);
+  const [jobTotal, setJobTotal]    = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
   const { data: insumos = [], isLoading } =
     trpc.orcamento.listarInsumosCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
+  const { data: grupos = [] } =
+    trpc.orcamento.listarGruposInsumos.useQuery({ companyId }, { enabled: companyId > 0 });
 
   const { data: novoCodigo } = trpc.orcamento.gerarCodigoInsumo.useQuery(
-    { companyId },
-    { enabled: companyId > 0 && editingId === "new" }
+    { companyId }, { enabled: companyId > 0 && editingId === "new" }
   );
-
-  // Preenche o código automático quando abre o form de novo insumo
   useEffect(() => {
     if (editingId === "new" && novoCodigo && !editForm.codigo) {
       setEditForm(f => ({ ...f, codigo: novoCodigo }));
     }
   }, [novoCodigo, editingId]);
 
-  /* ── Polling de importação ──────────────────────────────────── */
+  /* Polling de importação */
   const { data: progresso } = trpc.orcamento.progressoImportacao.useQuery(
     { jobId: jobId ?? "" },
     {
@@ -150,26 +470,21 @@ function InsumosView({ companyId }: { companyId: number }) {
     if (progresso.status === "error") setImportError(progresso.error ?? "Erro desconhecido.");
   }, [progresso?.status]);
 
-  /* ── Mutations ──────────────────────────────────────────────── */
   const importMut = trpc.orcamento.importarInsumosCatalogo.useMutation({
     onSuccess: (res) => { setJobId(res.jobId); setJobTotal(res.total); setImportError(null); },
     onError: (err) => setImportError(err.message),
   });
-
   const salvarMut = trpc.orcamento.salvarInsumo.useMutation({
     onSuccess: () => {
       utils.orcamento.listarInsumosCatalogo.invalidate({ companyId });
-      setEditingId(null);
-      setSaveError(null);
+      setEditingId(null); setSaveError(null);
     },
     onError: (err) => setSaveError(err.message),
   });
-
   const excluirMut = trpc.orcamento.excluirInsumo.useMutation({
     onSuccess: () => utils.orcamento.listarInsumosCatalogo.invalidate({ companyId }),
   });
 
-  /* ── Handlers ───────────────────────────────────────────────── */
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -185,8 +500,7 @@ function InsumosView({ companyId }: { companyId: number }) {
   }
 
   function startEdit(ins: any) {
-    setEditingId(ins.id);
-    setSaveError(null);
+    setEditingId(ins.id); setSaveError(null);
     setEditForm({
       codigo:        ins.codigo ?? "",
       descricao:     ins.descricao ?? "",
@@ -196,27 +510,18 @@ function InsumosView({ companyId }: { companyId: number }) {
       precoMin:      n(ins.precoMin).toFixed(4).replace(".", ","),
     });
   }
-
-  function startNew() {
-    setEditingId("new");
-    setSaveError(null);
-    setEditForm({ ...EMPTY_FORM, codigo: novoCodigo ?? "" });
-  }
-
+  function startNew() { setEditingId("new"); setSaveError(null); setEditForm({ ...EMPTY_FORM, codigo: novoCodigo ?? "" }); }
   function cancelEdit() { setEditingId(null); setSaveError(null); }
-
   function handleSave() {
     if (!editForm.descricao.trim()) { setSaveError("Descrição obrigatória."); return; }
     if (!editForm.codigo.trim())    { setSaveError("Código obrigatório."); return; }
     salvarMut.mutate({
       companyId,
-      id:            editingId !== "new" ? (editingId as number) : undefined,
-      codigo:        editForm.codigo,
-      descricao:     editForm.descricao,
-      unidade:       editForm.unidade,
-      tipo:          editForm.tipo,
+      id: editingId !== "new" ? (editingId as number) : undefined,
+      codigo: editForm.codigo, descricao: editForm.descricao,
+      unidade: editForm.unidade, tipo: editForm.tipo,
       precoUnitario: String(parseBRL(editForm.precoUnitario)),
-      precoMin:      String(parseBRL(editForm.precoMin)),
+      precoMin: String(parseBRL(editForm.precoMin)),
     });
   }
 
@@ -231,11 +536,6 @@ function InsumosView({ companyId }: { companyId: number }) {
     );
   }
 
-  /* ── Filtros ────────────────────────────────────────────────── */
-  const categorias = Array.from(new Set(
-    insumos.map((i: any) => i.tipo).filter(Boolean)
-  )).sort() as string[];
-
   const isImporting = importMut.isPending || (!!jobId && progresso?.status === "running");
   const pct   = progresso?.pct ?? 0;
   const done  = progresso?.done ?? 0;
@@ -247,18 +547,23 @@ function InsumosView({ companyId }: { companyId: number }) {
     (!q || i.descricao?.toLowerCase().includes(q) || i.codigo?.toLowerCase().includes(q) || i.tipo?.toLowerCase().includes(q))
   );
 
-  /* ── Render row helper ──────────────────────────────────────── */
   function renderRow(i: any) {
-    const isEditing = editingId === i.id;
-    if (isEditing) {
+    if (editingId === i.id) {
       return (
         <tr key={i.id} className="border-b bg-emerald-50">
           <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
           <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
-          <td className="px-2 py-1">{field("tipo", "w-36")}</td>
+          <td className="px-2 py-1">
+            <GrupoDropdown
+              value={editForm.tipo}
+              onChange={v => setEditForm(f => ({ ...f, tipo: v }))}
+              grupos={grupos as any[]}
+              className="w-40"
+            />
+          </td>
           <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
-          <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right tabular-nums")}</td>
-          <td className="px-2 py-1">{field("precoMin", "w-24 text-right tabular-nums")}</td>
+          <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
+          <td className="px-2 py-1">{field("precoMin", "w-24 text-right")}</td>
           <td className="px-2 py-1 text-center">
             <span className="inline-flex items-center justify-center w-7 h-5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
               {i.totalOrcamentos}
@@ -266,12 +571,12 @@ function InsumosView({ companyId }: { companyId: number }) {
           </td>
           <td className="px-2 py-1">
             <div className="flex items-center gap-1">
-              {saveError && <span className="text-red-500 text-[10px] mr-1">{saveError}</span>}
+              {saveError && <span className="text-red-500 text-[10px] max-w-[100px] truncate">{saveError}</span>}
               <button onClick={handleSave} disabled={salvarMut.isPending}
-                className="p-1 rounded hover:bg-emerald-200 text-emerald-700" title="Salvar">
+                className="p-1 rounded hover:bg-emerald-200 text-emerald-700">
                 {salvarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               </button>
-              <button onClick={cancelEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Cancelar">
+              <button onClick={cancelEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -284,13 +589,7 @@ function InsumosView({ companyId }: { companyId: number }) {
         <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{i.codigo || "—"}</td>
         <td className="px-3 py-2">{i.descricao}</td>
         <td className="px-3 py-2">
-          {i.tipo && (
-            <Badge
-              variant="outline"
-              className="text-[10px] cursor-pointer hover:bg-emerald-50"
-              onClick={() => setCatFilter(catFilter === i.tipo ? null : i.tipo)}
-            >{i.tipo}</Badge>
-          )}
+          {i.tipo && <Badge variant="outline" className="text-[10px]">{i.tipo}</Badge>}
         </td>
         <td className="px-3 py-2 text-center text-muted-foreground">{i.unidade || "—"}</td>
         <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatBRL(n(i.precoMedio))}</td>
@@ -302,13 +601,12 @@ function InsumosView({ companyId }: { companyId: number }) {
         </td>
         <td className="px-2 py-1">
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => startEdit(i)}
-              className="p-1 rounded hover:bg-blue-100 text-blue-600" title="Editar">
+            <button onClick={() => startEdit(i)} className="p-1 rounded hover:bg-blue-100 text-blue-600">
               <Pencil className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => { if (confirm("Excluir este insumo?")) excluirMut.mutate({ companyId, id: i.id }); }}
-              className="p-1 rounded hover:bg-red-100 text-red-500" title="Excluir">
+              className="p-1 rounded hover:bg-red-100 text-red-500">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -319,7 +617,7 @@ function InsumosView({ companyId }: { companyId: number }) {
 
   return (
     <>
-      {/* ── Cabeçalho ── */}
+      {/* Cabeçalho */}
       <div className="flex items-center gap-3 mb-5">
         <div className="p-2 rounded-lg bg-emerald-100">
           <Package className="h-5 w-5 text-emerald-600" />
@@ -331,37 +629,37 @@ function InsumosView({ companyId }: { companyId: number }) {
         <span className="ml-auto text-sm text-muted-foreground font-mono mr-2">
           {filt.length}/{insumos.length} registros
         </span>
+        <Button size="sm" variant="outline"
+          className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
+          onClick={onGerenciarCategorias}>
+          <Tag className="h-4 w-4" /> Categorias
+        </Button>
         <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" className="hidden" onChange={handleFileChange} />
         <Button size="sm" variant="outline"
           className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
           onClick={() => fileRef.current?.click()} disabled={isImporting}>
           {isImporting
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando...</>
-            : <><Upload className="h-4 w-4" /> Importar Planilha</>}
+            : <><Upload className="h-4 w-4" /> Importar</>}
         </Button>
-        <Button size="sm"
-          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+        <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
           onClick={startNew} disabled={editingId === "new"}>
           <Plus className="h-4 w-4" /> Novo Insumo
         </Button>
       </div>
 
-      {/* ── Barra de progresso ── */}
+      {/* Progresso de importação */}
       {jobId && progresso && progresso.status !== "done" && progresso.status !== "error" && (
         <div className="mb-4 p-4 rounded-lg bg-emerald-50 border border-emerald-200">
           <div className="flex items-center justify-between text-sm text-emerald-800 mb-2">
-            <span className="font-medium flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Importando insumos...
-            </span>
+            <span className="font-medium flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Importando insumos...</span>
             <span className="font-mono font-bold">{pct}%</span>
           </div>
           <div className="w-full bg-emerald-200 rounded-full h-3 overflow-hidden">
             <div className="bg-emerald-500 h-3 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
           </div>
           <p className="text-xs text-emerald-700 mt-1.5">
-            {done} de {total} insumos processados
-            {progresso.inseridos > 0 && ` · ${progresso.inseridos} inseridos`}
-            {progresso.atualizados > 0 && ` · ${progresso.atualizados} atualizados`}
+            {done} de {total} insumos · {progresso.inseridos ?? 0} inseridos · {progresso.atualizados ?? 0} atualizados
           </p>
         </div>
       )}
@@ -369,52 +667,28 @@ function InsumosView({ companyId }: { companyId: number }) {
         <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-800">
           <CheckCircle className="h-4 w-4 flex-shrink-0" />
           <span>Importação concluída: <strong>{progresso.total}</strong> insumos — <strong>{progresso.inseridos}</strong> inseridos, <strong>{progresso.atualizados}</strong> atualizados.</span>
-          <button onClick={() => setJobId(null)} className="ml-auto text-emerald-600 hover:text-emerald-800">✕</button>
+          <button onClick={() => setJobId(null)} className="ml-auto">✕</button>
         </div>
       )}
       {importError && (
         <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           <span>{importError}</span>
-          <button onClick={() => setImportError(null)} className="ml-auto text-red-600 hover:text-red-800">✕</button>
+          <button onClick={() => setImportError(null)} className="ml-auto">✕</button>
         </div>
       )}
 
-      {/* ── Busca + filtro categorias ── */}
-      <div className="flex gap-3 mb-3">
+      {/* Busca + Filtro de grupo */}
+      <div className="flex gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Buscar por descrição, código ou tipo..."
+          <Input className="pl-9" placeholder="Buscar por descrição, código ou grupo..."
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <GrupoFiltro value={catFilter} onChange={setCatFilter} grupos={grupos as any[]} />
       </div>
 
-      {/* Chips de categoria */}
-      {categorias.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          <button
-            onClick={() => setCatFilter(null)}
-            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
-              !catFilter ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:border-emerald-400"
-            }`}
-          >
-            Todos
-          </button>
-          {categorias.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCatFilter(catFilter === cat ? null : cat)}
-              className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
-                catFilter === cat ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:border-emerald-400"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* ── Tabela ── */}
+      {/* Tabela */}
       {isLoading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : (
@@ -439,19 +713,26 @@ function InsumosView({ companyId }: { companyId: number }) {
                   <tr className="border-b bg-blue-50">
                     <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
                     <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
-                    <td className="px-2 py-1">{field("tipo", "w-36")}</td>
+                    <td className="px-2 py-1">
+                      <GrupoDropdown
+                        value={editForm.tipo}
+                        onChange={v => setEditForm(f => ({ ...f, tipo: v }))}
+                        grupos={grupos as any[]}
+                        className="w-40"
+                      />
+                    </td>
                     <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
-                    <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right tabular-nums")}</td>
-                    <td className="px-2 py-1">{field("precoMin", "w-24 text-right tabular-nums")}</td>
+                    <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
+                    <td className="px-2 py-1">{field("precoMin", "w-24 text-right")}</td>
                     <td className="px-2 py-1" />
                     <td className="px-2 py-1">
                       <div className="flex items-center gap-1">
-                        {saveError && <span className="text-red-500 text-[10px] mr-1 max-w-[120px] truncate">{saveError}</span>}
+                        {saveError && <span className="text-red-500 text-[10px]">{saveError}</span>}
                         <button onClick={handleSave} disabled={salvarMut.isPending}
-                          className="p-1 rounded hover:bg-blue-200 text-blue-700" title="Salvar">
+                          className="p-1 rounded hover:bg-blue-200 text-blue-700">
                           {salvarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         </button>
-                        <button onClick={cancelEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500" title="Cancelar">
+                        <button onClick={cancelEdit} className="p-1 rounded hover:bg-slate-200 text-slate-500">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -464,14 +745,10 @@ function InsumosView({ companyId }: { companyId: number }) {
                     <td colSpan={8} className="py-16 text-center text-muted-foreground">
                       <Package className="h-8 w-8 mx-auto mb-2 opacity-20" />
                       <p className="text-sm">{search || catFilter ? "Nenhum insumo encontrado." : "Nenhum insumo cadastrado ainda."}</p>
-                      {!search && !catFilter && (
-                        <p className="text-xs mt-1">Use "Importar Planilha" ou clique em "Novo Insumo".</p>
-                      )}
+                      {!search && !catFilter && <p className="text-xs mt-1">Use "Importar" ou clique em "Novo Insumo".</p>}
                     </td>
                   </tr>
-                ) : (
-                  filt.map((i: any) => renderRow(i))
-                )}
+                ) : filt.map((i: any) => renderRow(i))}
               </tbody>
             </table>
           </div>
@@ -481,19 +758,33 @@ function InsumosView({ companyId }: { companyId: number }) {
   );
 }
 
-/* ── PÁGINA PRINCIPAL ────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════
+   PÁGINA PRINCIPAL
+   ════════════════════════════════════════════════════════════════ */
 export default function BibliotecaOrcamento() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
   const isInsumos = typeof window !== "undefined" && window.location.pathname.includes("insumos");
+  const [showCategorias, setShowCategorias] = useState(false);
 
   return (
     <DashboardLayout>
       <div className="p-6 max-w-screen-xl mx-auto">
-        {isInsumos
-          ? <InsumosView companyId={companyId} />
-          : <ComposicoesView companyId={companyId} />
-        }
+        {!isInsumos ? (
+          <ComposicoesView companyId={companyId} />
+        ) : showCategorias ? (
+          <div>
+            <button
+              onClick={() => setShowCategorias(false)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-5"
+            >
+              ← Voltar para Insumos
+            </button>
+            <CategoriasView companyId={companyId} />
+          </div>
+        ) : (
+          <InsumosView companyId={companyId} onGerenciarCategorias={() => setShowCategorias(true)} />
+        )}
       </div>
     </DashboardLayout>
   );

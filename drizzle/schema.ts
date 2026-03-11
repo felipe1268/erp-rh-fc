@@ -3979,6 +3979,15 @@ export const composicoesCatalogo = pgTable("composicoes_catalogo", {
   index("compc_chave").on(table.chaveNorm),
 ]);
 
+export const insumosGrupos = pgTable("insumos_grupos", {
+  id:        serial("id").notNull(),
+  companyId: integer("company_id").notNull(),
+  nome:      varchar("nome", { length: 150 }).notNull(),
+  criadoEm:  timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("ig_company").on(table.companyId),
+]);
+
 export const composicaoInsumos = pgTable("composicao_insumos", {
   id: serial().notNull(),
   companyId: integer("company_id").notNull(),
