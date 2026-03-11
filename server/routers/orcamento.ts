@@ -15,7 +15,7 @@ import {
   obras,
   companies,
 } from "../../drizzle/schema";
-import { eq, and, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, sql } from "drizzle-orm";
 
 // ============================================================
 // UTILITÁRIOS
@@ -1272,7 +1272,28 @@ export const orcamentoRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
-      return db.select().from(insumosCatalogo)
+      // Calcula totalOrcamentos dinamicamente via subquery
+      return db.select({
+        id:              insumosCatalogo.id,
+        companyId:       insumosCatalogo.companyId,
+        codigo:          insumosCatalogo.codigo,
+        descricao:       insumosCatalogo.descricao,
+        unidade:         insumosCatalogo.unidade,
+        tipo:            insumosCatalogo.tipo,
+        precoUnitario:   insumosCatalogo.precoUnitario,
+        precoMin:        insumosCatalogo.precoMin,
+        precoMax:        insumosCatalogo.precoMax,
+        precoMedio:      insumosCatalogo.precoMedio,
+        totalQuantidade: insumosCatalogo.totalQuantidade,
+        ultimaAtualizacao: insumosCatalogo.ultimaAtualizacao,
+        criadoEm:        insumosCatalogo.criadoEm,
+        totalOrcamentos: sql<number>`(
+          SELECT COUNT(DISTINCT oi."orcamentoId")
+          FROM orcamento_insumos oi
+          WHERE oi.codigo = ${insumosCatalogo.codigo}
+        )`.as('totalOrcamentos'),
+      })
+        .from(insumosCatalogo)
         .where(eq(insumosCatalogo.companyId, input.companyId))
         .orderBy(insumosCatalogo.tipo, insumosCatalogo.codigo)
         .limit(10000);
