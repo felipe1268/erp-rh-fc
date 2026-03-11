@@ -417,6 +417,54 @@ export const orcamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Importar BDI separadamente para um orçamento existente ──
+  importarBdi: protectedProcedure
+    .input(z.object({
+      companyId:   z.number(),
+      orcamentoId: z.number(),
+      fileBase64:  z.string(),
+      fileName:    z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+
+      const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      if (orc.companyId !== input.companyId) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+
+      const XLSX = await import('xlsx');
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+
+      const bdiTab = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('bdi'));
+      if (!bdiTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "BDI" não encontrada no arquivo.' });
+
+      const dataBdi = XLSX.utils.sheet_to_json(wb.Sheets[bdiTab], { header: 1, defval: '' }) as any[][];
+      const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
+
+      if (!bdiLinhas.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma linha de BDI encontrada.' });
+
+      await db.delete(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.orcamentoId));
+
+      const BATCH = 500;
+      for (let i = 0; i < bdiLinhas.length; i += BATCH) {
+        await db.insert(orcamentoBdi).values(
+          bdiLinhas.slice(i, i + BATCH).map(b => ({ ...b, orcamentoId: input.orcamentoId }))
+        );
+      }
+
+      if (bdiPercentual > 0) {
+        await db.update(orcamentos).set({ bdiPercentual: fix6(bdiPercentual) }).where(eq(orcamentos.id, input.orcamentoId));
+      }
+
+      return {
+        success: true,
+        linhasCount: bdiLinhas.length,
+        bdiPercentual,
+      };
+    }),
+
   // ── Deletar (soft delete) ─────────────────────────────────
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
