@@ -52,4 +52,4 @@ externalPort = 3001
 [deployment]
 deploymentTarget = "autoscale"
 run = ["node", "dist/index.js"]
-build = ["pnpm", "build"]
+build = ["pnpm", "run", "build"]
