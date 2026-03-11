@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calculator, Upload, Eye, Trash2, FolderOpen, RefreshCw, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -31,7 +31,6 @@ export default function OrcamentoLista() {
   const { selectedCompanyId: selCompId } = useCompany();
   const companyId = selCompId ? parseInt(selCompId) : undefined;
   const [, navigate] = useLocation();
-  const { toast } = useToast();
   const [busca, setBusca] = useState("");
 
   const { data: lista = [], isLoading, refetch } = trpc.orcamento.list.useQuery(
@@ -40,8 +39,8 @@ export default function OrcamentoLista() {
   );
 
   const deleteMutation = trpc.orcamento.delete.useMutation({
-    onSuccess: () => { toast({ title: "Orçamento excluído com sucesso." }); refetch(); },
-    onError: (e) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
+    onSuccess: () => { toast.success("Orçamento excluído com sucesso."); refetch(); },
+    onError: (e) => toast.error(e.message || "Erro ao excluir"),
   });
 
   const filtrado = lista.filter((o: any) => {
