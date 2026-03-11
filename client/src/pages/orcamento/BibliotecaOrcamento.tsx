@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useCompany } from "@/contexts/CompanyContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -112,20 +112,24 @@ function InsumosView({ companyId }: { companyId: number }) {
     { jobId: jobId ?? "" },
     {
       enabled: !!jobId,
-      refetchInterval: (data: any) => {
+      refetchInterval: (query: any) => {
+        const data = query?.state?.data;
         if (!data || data.status === 'running') return 600;
         return false;
       },
-      onSuccess: (data: any) => {
-        if (data?.status === 'done') {
-          utils.orcamento.listarInsumosCatalogo.invalidate({ companyId });
-        }
-        if (data?.status === 'error') {
-          setImportError(data.error ?? 'Erro desconhecido');
-        }
-      },
     }
   );
+
+  // Reage ao fim do job (useEffect pois onSuccess foi removido no React Query v5)
+  useEffect(() => {
+    if (!progresso) return;
+    if (progresso.status === 'done') {
+      utils.orcamento.listarInsumosCatalogo.invalidate({ companyId });
+    }
+    if (progresso.status === 'error') {
+      setImportError(progresso.error ?? 'Erro desconhecido durante a importação.');
+    }
+  }, [progresso?.status]);
 
   const importMut = trpc.orcamento.importarInsumosCatalogo.useMutation({
     onSuccess: (res) => {
@@ -299,8 +303,8 @@ function InsumosView({ companyId }: { companyId: number }) {
 
 /* ── PÁGINA PRINCIPAL ────────────────────────────────────────── */
 export default function BibliotecaOrcamento() {
-  const { user } = useAuth();
-  const companyId = (user as any)?.companyId ?? 0;
+  const { selectedCompanyId } = useCompany();
+  const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
   const isInsumos = typeof window !== "undefined" && window.location.pathname.includes("insumos");
 
   return (
