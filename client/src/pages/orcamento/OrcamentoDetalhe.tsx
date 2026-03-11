@@ -22,6 +22,10 @@ function formatBRL(v: number) {
 function n(v: string | null | undefined) {
   return parseFloat(v || "0");
 }
+/** Arredonda para 2 casas decimais (evita drift de ponto flutuante) */
+function r2(v: number) {
+  return Math.round(v * 100) / 100;
+}
 
 interface OrcItem {
   id: number;
@@ -224,7 +228,7 @@ export default function OrcamentoDetalhe() {
   });
 
   // ── Totais agregados para grupos com valores zerados no banco ──
-  // Para cada grupo, soma os valores de todos os itens folha descendentes.
+  // Cada parcela é arredondada a 2 casas antes de acumular (evita drift de float).
   const groupTotals: Record<string, { mat: number; mdo: number; custo: number; venda: number }> = {};
   itens.forEach(item => {
     if (!childMap[item.eapCodigo]) return;          // só grupos
@@ -234,28 +238,28 @@ export default function OrcamentoDetalhe() {
     itens.forEach(child => {
       if (!child.eapCodigo.startsWith(prefix)) return;
       if (childMap[child.eapCodigo]) return;        // ignora sub-grupos intermediários
-      mat   += n(child.custoTotalMat);
-      mdo   += n(child.custoTotalMdo);
-      custo += n(child.custoTotal);
-      venda += n(child.vendaTotal);
+      mat   = r2(mat   + r2(n(child.custoTotalMat)));
+      mdo   = r2(mdo   + r2(n(child.custoTotalMdo)));
+      custo = r2(custo + r2(n(child.custoTotal)));
+      venda = r2(venda + r2(n(child.vendaTotal)));
     });
     groupTotals[item.eapCodigo] = { mat, mdo, custo, venda };
   });
 
   // ── Totais do cabeçalho: usa banco ou soma os grupos de nível 1 (com valores calculados) ──
   const nivel1 = itens.filter((i: OrcItem) => i.nivel === 1);
-  const calcCusto = nivel1.reduce((s, i) => {
+  const calcCusto = r2(nivel1.reduce((s, i) => {
     const agg = groupTotals[i.eapCodigo];
-    return s + (agg ? agg.custo : n(i.custoTotal));
-  }, 0);
-  const calcVenda = nivel1.reduce((s, i) => {
+    return r2(s + (agg ? agg.custo : r2(n(i.custoTotal))));
+  }, 0));
+  const calcVenda = r2(nivel1.reduce((s, i) => {
     const agg = groupTotals[i.eapCodigo];
-    return s + (agg ? agg.venda : n(i.vendaTotal));
-  }, 0);
+    return r2(s + (agg ? agg.venda : r2(n(i.vendaTotal))));
+  }, 0));
 
-  const totalCusto = n(orc.totalCusto) || calcCusto;
-  const totalVenda = n(orc.totalVenda) || calcVenda;
-  const totalMeta  = n(orc.totalMeta)  || totalCusto * (1 - metaPct / 100);
+  const totalCusto = r2(n(orc.totalCusto) || calcCusto);
+  const totalVenda = r2(n(orc.totalVenda) || calcVenda);
+  const totalMeta  = r2(n(orc.totalMeta)  || r2(totalCusto * (1 - metaPct / 100)));
 
   const visibleItems = itens.filter(item => {
     if (item.nivel === 1) return true;
