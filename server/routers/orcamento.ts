@@ -41,6 +41,17 @@ function normalizarTexto(text: string): string {
     .substring(0, 490);
 }
 
+// ── Similaridade Jaccard (detecção de composições similares) ──
+const SIMILAR_THRESHOLD = 0.65;
+function jaccard(normA: string, normB: string): number {
+  const wa = normA.split(' ').filter(w => w.length > 2);
+  const wb = new Set(normB.split(' ').filter(w => w.length > 2));
+  if (wa.length === 0 || wb.size === 0) return 0;
+  const inter = wa.filter(w => wb.has(w)).length;
+  const union = new Set([...wa, ...wb]).size;
+  return union > 0 ? inter / union : 0;
+}
+
 // ── Atualizar catálogo de insumos e composições ────────────────
 // Chamado após cada importação. Faz upsert inteligente evitando duplicatas.
 async function atualizarCatalogo(
@@ -525,11 +536,7 @@ export const orcamentoRouter = router({
         }
       }
 
-      // Atualizar catálogo em background (sem bloquear a resposta)
-      atualizarCatalogo(db, input.companyId, itens.map(it => ({ ...it, orcamentoId })), insumosItens.map(it => ({ ...it, orcamentoId }))).catch(e =>
-        console.error('[catalogo] Erro ao atualizar catálogo:', e)
-      );
-
+      // Catálogo NÃO é atualizado automaticamente — usuário decide via "Enviar para Biblioteca"
       return { id: orcamentoId, codigo, totalVenda, totalCusto, totalMeta, itemCount: itens.length };
     }),
 
@@ -676,7 +683,7 @@ export const orcamentoRouter = router({
         updatedAt:      new Date().toISOString(),
       }).where(eq(orcamentos.id, input.orcamentoId));
 
-      atualizarCatalogo(db, input.companyId, itens.map(it => ({ ...it, orcamentoId: input.orcamentoId })), insumosItens.map(it => ({ ...it, orcamentoId: input.orcamentoId }))).catch(() => {});
+      // Catálogo NÃO é atualizado automaticamente — usuário decide via "Enviar para Biblioteca"
 
       return {
         success: true,
@@ -902,6 +909,136 @@ export const orcamentoRouter = router({
       if (orc.status === 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser excluído.' });
       await db.update(orcamentos).set({ deletedAt: new Date().toISOString() }).where(eq(orcamentos.id, input.id));
       return { success: true };
+    }),
+
+  // ── Preview: o que será enviado à biblioteca ────────────────
+  previewBiblioteca: protectedProcedure
+    .input(z.object({ orcamentoId: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+
+      const todosItens = await db.select().from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
+        .orderBy(orcamentoItens.ordem);
+
+      const isGroup = new Set<string>();
+      todosItens.forEach((item, idx) => {
+        if (idx + 1 < todosItens.length && (todosItens[idx + 1].nivel ?? 0) > (item.nivel ?? 0))
+          isGroup.add(item.eapCodigo ?? '');
+      });
+      const folhas = todosItens.filter(i => (i.nivel ?? 0) >= 2 && !isGroup.has(i.eapCodigo ?? '') && i.descricao?.trim());
+
+      const catalogComp = await db.select().from(composicoesCatalogo)
+        .where(eq(composicoesCatalogo.companyId, input.companyId));
+      const catalogIns  = await db.select().from(insumosCatalogo)
+        .where(eq(insumosCatalogo.companyId, input.companyId));
+
+      const compCodigoMap = new Map(catalogComp.filter(c => c.codigo).map(c => [c.codigo!, c]));
+      const compChaveMap  = new Map(catalogComp.map(c => [c.chaveNorm, c]));
+      const insCodigoMap  = new Map(catalogIns.filter(i => i.codigo).map(i => [i.codigo!, i]));
+      const insChaveMap   = new Map(catalogIns.map(i => [i.chaveNorm, i]));
+
+      const composicoes: any[] = folhas.map(item => {
+        const chave  = normalizarTexto(item.descricao ?? '');
+        const byCod  = (item as any).servicoCodigo?.trim() ? compCodigoMap.get((item as any).servicoCodigo.trim()) : null;
+        const byChave = compChaveMap.get(chave);
+        if (byCod || byChave) return { ...item, status: 'atualizado', similar: null };
+        let maxSim = 0, simEntry: any = null;
+        for (const c of catalogComp) {
+          const s = jaccard(chave, c.chaveNorm);
+          if (s > maxSim) { maxSim = s; simEntry = c; }
+        }
+        if (maxSim >= SIMILAR_THRESHOLD) return { ...item, status: 'similar', similar: { ...simEntry, similaridade: maxSim } };
+        return { ...item, status: 'novo', similar: null };
+      });
+
+      const orcIns = await db.select().from(orcamentoInsumos)
+        .where(eq(orcamentoInsumos.orcamentoId, input.orcamentoId));
+
+      const insumosRes: any[] = orcIns.map(ins => {
+        const chave  = normalizarTexto(ins.descricao ?? '');
+        const byCod  = ins.codigo?.trim() ? insCodigoMap.get(ins.codigo.trim()) : null;
+        const byChave = insChaveMap.get(chave);
+        if (byCod || byChave) return { ...ins, status: 'atualizado', similar: null };
+        let maxSim = 0, simEntry: any = null;
+        for (const c of catalogIns) {
+          const s = jaccard(chave, c.chaveNorm);
+          if (s > maxSim) { maxSim = s; simEntry = c; }
+        }
+        if (maxSim >= SIMILAR_THRESHOLD) return { ...ins, status: 'similar', similar: { ...simEntry, similaridade: maxSim } };
+        return { ...ins, status: 'novo', similar: null };
+      });
+
+      const cnt = (arr: any[], st: string) => arr.filter(x => x.status === st).length;
+      return {
+        composicoes,
+        insumos: insumosRes,
+        totais: {
+          comp: { novo: cnt(composicoes,'novo'), atualizado: cnt(composicoes,'atualizado'), similar: cnt(composicoes,'similar') },
+          ins:  { novo: cnt(insumosRes,'novo'), atualizado: cnt(insumosRes,'atualizado'), similar: cnt(insumosRes,'similar') },
+        },
+      };
+    }),
+
+  // ── Enviar à biblioteca (usuário confirma) ───────────────────
+  enviarParaBiblioteca: protectedProcedure
+    .input(z.object({ orcamentoId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+
+      const todosItens = await db.select().from(orcamentoItens)
+        .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
+        .orderBy(orcamentoItens.ordem);
+
+      const isGroup = new Set<string>();
+      todosItens.forEach((item, idx) => {
+        if (idx + 1 < todosItens.length && (todosItens[idx + 1].nivel ?? 0) > (item.nivel ?? 0))
+          isGroup.add(item.eapCodigo ?? '');
+      });
+      const folhas = todosItens.filter(i => (i.nivel ?? 0) >= 2 && !isGroup.has(i.eapCodigo ?? ''));
+      const orcIns = await db.select().from(orcamentoInsumos)
+        .where(eq(orcamentoInsumos.orcamentoId, input.orcamentoId));
+
+      await atualizarCatalogo(db, input.companyId,
+        folhas.map(i => ({
+          nivel: i.nivel, descricao: i.descricao ?? '', unidade: i.unidade ?? '',
+          tipo: i.tipo ?? '', servicoCodigo: (i as any).servicoCodigo ?? '',
+          custoUnitMat: i.custoUnitMat ?? '0', custoUnitMdo: i.custoUnitMdo ?? '0',
+          custoUnitTotal: i.custoUnitTotal ?? '0',
+        })),
+        orcIns.map(i => ({
+          codigo: i.codigo ?? '', descricao: i.descricao ?? '', unidade: i.unidade ?? '',
+          tipo: i.tipo ?? '', precoUnitComEncargos: i.precoUnitComEncargos ?? '0',
+          precoUnitBase: i.precoUnitBase ?? '0', quantidadeTotal: i.quantidadeTotal ?? '0',
+        })),
+      );
+
+      return { success: true, composicoes: folhas.length, insumos: orcIns.length };
+    }),
+
+  // ── Biblioteca: listar catálogos ─────────────────────────────
+  listarInsumosCatalogo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(insumosCatalogo)
+        .where(eq(insumosCatalogo.companyId, input.companyId))
+        .orderBy(desc(insumosCatalogo.ultimaAtualizacao))
+        .limit(1000);
+    }),
+
+  listarComposicoesCatalogo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(composicoesCatalogo)
+        .where(eq(composicoesCatalogo.companyId, input.companyId))
+        .orderBy(desc(composicoesCatalogo.ultimaAtualizacao))
+        .limit(1000);
     }),
 
   // ── Resumo para o painel ──────────────────────────────────

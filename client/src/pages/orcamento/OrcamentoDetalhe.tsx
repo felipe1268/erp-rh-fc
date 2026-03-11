@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
   ArrowLeft, Loader2, Package, CheckCircle2, AlertCircle, Save,
-  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer,
+  UploadCloud, RefreshCw, FileSpreadsheet, X, Printer, BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -162,6 +162,26 @@ export default function OrcamentoDetalhe() {
     };
     reader.readAsDataURL(reuploadFile);
   };
+
+  // ── Biblioteca: enviar composições/insumos do orçamento ao catálogo central ──
+  const [bibOpen, setBibOpen]       = useState(false);
+  const [bibLoaded, setBibLoaded]   = useState(false);   // dispara query só ao abrir
+
+  const bibCompanyId = Number((user as any)?.companyId ?? 0);
+
+  const previewQuery = trpc.orcamento.previewBiblioteca.useQuery(
+    { orcamentoId: id, companyId: bibCompanyId },
+    { enabled: bibLoaded && id > 0 && bibCompanyId > 0, staleTime: 0 }
+  );
+
+  const enviarMutation = trpc.orcamento.enviarParaBiblioteca.useMutation({
+    onSuccess: res => {
+      toast.success(`Biblioteca atualizada! ${res.composicoes} composições e ${res.insumos} insumos enviados.`);
+      setBibOpen(false);
+      setBibLoaded(false);
+    },
+    onError: e => toast.error(e.message || "Erro ao enviar para biblioteca"),
+  });
 
   // BDI edição local
   const [bdiEdits, setBdiEdits]       = useState<Record<number, string>>({});
@@ -348,6 +368,10 @@ export default function OrcamentoDetalhe() {
             <Button size="sm" variant="outline" className="gap-2"
               onClick={() => { setReuploadOpen(true); setReuploadFile(null); setReuploadAnalise(null); }}>
               <RefreshCw className="h-4 w-4" /> Atualizar Planilha
+            </Button>
+            <Button size="sm" variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+              onClick={() => { setBibOpen(true); setBibLoaded(true); }}>
+              <BookOpen className="h-4 w-4" /> Biblioteca
             </Button>
           </div>
         </div>
@@ -982,6 +1006,128 @@ export default function OrcamentoDetalhe() {
               {reimportarMutation.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Atualizando...</>
                 : <><RefreshCw className="h-4 w-4" /> Confirmar Atualização</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog Enviar para Biblioteca ── */}
+      <Dialog open={bibOpen} onOpenChange={open => { if (!enviarMutation.isPending) { setBibOpen(open); if (!open) setBibLoaded(false); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-amber-600" />
+              Enviar para Biblioteca
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {previewQuery.isLoading && (
+              <div className="flex items-center justify-center py-12 gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" /> Analisando itens do orçamento...
+              </div>
+            )}
+
+            {previewQuery.isError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {previewQuery.error.message}
+              </div>
+            )}
+
+            {previewQuery.data && (() => {
+              const { composicoes, insumos } = previewQuery.data as any;
+              const novas   = (composicoes || []).filter((c: any) => c.status === "novo");
+              const atualizadas = (composicoes || []).filter((c: any) => c.status === "atualizado");
+              const similares   = (composicoes || []).filter((c: any) => c.status === "similar");
+              const insNovos    = (insumos || []).filter((i: any) => i.status === "novo");
+              const insAtualizados = (insumos || []).filter((i: any) => i.status === "atualizado");
+              return (
+                <div className="space-y-4">
+                  {/* Resumo */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-green-50 border border-green-200 p-2">
+                      <p className="text-lg font-bold text-green-700">{novas.length + insNovos.length}</p>
+                      <p className="text-xs text-green-600">Novos</p>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-2">
+                      <p className="text-lg font-bold text-blue-700">{atualizadas.length + insAtualizados.length}</p>
+                      <p className="text-xs text-blue-600">Atualizados</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 border border-amber-200 p-2">
+                      <p className="text-lg font-bold text-amber-700">{similares.length}</p>
+                      <p className="text-xs text-amber-600">Similares (não enviados)</p>
+                    </div>
+                  </div>
+
+                  {/* Composições */}
+                  {(composicoes || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                        Composições ({(composicoes || []).length})
+                      </p>
+                      <div className="divide-y rounded-lg border text-sm overflow-hidden">
+                        {(composicoes as any[]).map((c: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/40">
+                            <span className="truncate max-w-[380px]">{c.codigo} — {c.descricao}</span>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ml-2 ${
+                              c.status === "novo"        ? "bg-green-100 text-green-700" :
+                              c.status === "atualizado"  ? "bg-blue-100 text-blue-700"  :
+                              "bg-amber-100 text-amber-700"
+                            }`}>{c.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Insumos */}
+                  {(insumos || []).filter((i: any) => i.status !== "similar").length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                        Insumos ({(insumos as any[]).filter((i: any) => i.status !== "similar").length})
+                      </p>
+                      <div className="divide-y rounded-lg border text-sm overflow-hidden">
+                        {(insumos as any[]).filter((i: any) => i.status !== "similar").map((ins: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/40">
+                            <span className="truncate max-w-[380px]">{ins.codigo} — {ins.descricao}</span>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ml-2 ${
+                              ins.status === "novo" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                            }`}>{ins.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(composicoes || []).length === 0 && (insumos || []).length === 0 && (
+                    <div className="text-center py-8 text-sm text-muted-foreground">
+                      Nenhum item novo ou atualizado para enviar.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBibOpen(false); setBibLoaded(false); }}
+              disabled={enviarMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={
+                previewQuery.isLoading ||
+                !previewQuery.data ||
+                enviarMutation.isPending ||
+                ((previewQuery.data as any)?.composicoes?.filter((c: any) => c.status !== "similar").length === 0 &&
+                 (previewQuery.data as any)?.insumos?.filter((i: any) => i.status !== "similar").length === 0)
+              }
+              onClick={() => enviarMutation.mutate({ orcamentoId: id, companyId: bibCompanyId })}
+              className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {enviarMutation.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
+                : <><BookOpen className="h-4 w-4" /> Confirmar Envio</>}
             </Button>
           </DialogFooter>
         </DialogContent>
