@@ -559,6 +559,114 @@ export const orcamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Re-importar planilha ORC (atualizar itens mantendo o orçamento) ──
+  reimportar: protectedProcedure
+    .input(z.object({
+      orcamentoId:    z.number(),
+      companyId:      z.number(),
+      fileBase64:     z.string().min(10),
+      fileName:       z.string(),
+      userName:       z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+
+      const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      if (orc.companyId !== input.companyId) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+
+      const XLSX = await import('xlsx');
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+
+      // Localizar aba de orçamento
+      const orcTab = wb.SheetNames.find(n =>
+        n.toLowerCase().replace(/[^a-z]/g, '').startsWith('or') ||
+        n.toLowerCase().includes('orcamento') ||
+        n.toLowerCase().includes('orçamento')
+      );
+      const bdiTab = wb.SheetNames.find(n => n.toLowerCase() === 'bdi');
+
+      if (!orcTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "Orçamento" não encontrada na planilha.' });
+
+      const dataOrc = XLSX.utils.sheet_to_json(wb.Sheets[orcTab], { header: 1, defval: '' }) as any[][];
+      const dataBdi = bdiTab ? (XLSX.utils.sheet_to_json(wb.Sheets[bdiTab], { header: 1, defval: '' }) as any[][]) : [];
+
+      // BDI e itens
+      const metaPerc = parseFloat(orc.metaPercentual || '0.2');
+      const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
+      const bdiFinal = bdiPercentual > 0 ? bdiPercentual : parseFloat(orc.bdiPercentual || '0');
+
+      const itens = parsearAbaCorcamento(dataOrc, metaPerc, bdiFinal);
+      if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
+
+      // Insumos opcionais
+      const insumosTab = wb.SheetNames.find(n => n.toLowerCase() === 'insumos');
+      const insumosItens = insumosTab
+        ? parsearAbaInsumos(XLSX.utils.sheet_to_json(wb.Sheets[insumosTab], { header: 1, defval: '' }) as any[][], input.companyId)
+        : [];
+
+      // Totais
+      const nivel1        = itens.filter(i => i.nivel === 1);
+      const totalCusto    = nivel1.reduce((s, i) => s + parseFloat(i.custoTotal),    0);
+      const totalVenda    = nivel1.reduce((s, i) => s + parseFloat(i.vendaTotal),    0);
+      const totalMeta     = totalCusto * (1 - metaPerc);
+      const totalMateriais = nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMat), 0);
+      const totalMdo      = nivel1.reduce((s, i) => s + parseFloat(i.custoTotalMdo),  0);
+
+      // Apagar dados antigos
+      await db.delete(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+      await db.delete(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.orcamentoId));
+      if (bdiLinhas.length > 0) {
+        await db.delete(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.orcamentoId));
+      }
+
+      // Inserir novos dados em lotes
+      const BATCH = 200;
+      for (let i = 0; i < itens.length; i += BATCH) {
+        await db.insert(orcamentoItens).values(
+          itens.slice(i, i + BATCH).map(it => ({ ...it, orcamentoId: input.orcamentoId, companyId: input.companyId }))
+        );
+      }
+      for (let i = 0; i < insumosItens.length; i += BATCH) {
+        await db.insert(orcamentoInsumos).values(
+          insumosItens.slice(i, i + BATCH).map(it => ({ ...it, orcamentoId: input.orcamentoId }))
+        );
+      }
+      if (bdiLinhas.length > 0) {
+        for (let i = 0; i < bdiLinhas.length; i += BATCH) {
+          await db.insert(orcamentoBdi).values(
+            bdiLinhas.slice(i, i + BATCH).map(b => ({ ...b, orcamentoId: input.orcamentoId }))
+          );
+        }
+      }
+
+      // Atualizar totais do orçamento (mantendo codigo/metadados existentes)
+      await db.update(orcamentos).set({
+        bdiPercentual:  fix4(bdiFinal),
+        totalVenda:     fix2(totalVenda),
+        totalCusto:     fix2(totalCusto),
+        totalMeta:      fix2(totalMeta),
+        totalMateriais: fix2(totalMateriais),
+        totalMdo:       fix2(totalMdo),
+        importadoPor:   input.userName,
+        importadoEm:    new Date().toISOString(),
+        updatedAt:      new Date().toISOString(),
+      }).where(eq(orcamentos.id, input.orcamentoId));
+
+      atualizarCatalogo(db, input.companyId, itens.map(it => ({ ...it, orcamentoId: input.orcamentoId })), insumosItens.map(it => ({ ...it, orcamentoId: input.orcamentoId }))).catch(() => {});
+
+      return {
+        success: true,
+        itemCount:    itens.length,
+        insumosCount: insumosItens.length,
+        totalCusto,
+        totalVenda,
+        bdiPercentual: bdiFinal,
+      };
+    }),
+
   // ── Editar metadados ──────────────────────────────────────
   update: protectedProcedure
     .input(z.object({
