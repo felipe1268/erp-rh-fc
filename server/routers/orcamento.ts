@@ -545,10 +545,8 @@ export const orcamentoRouter = router({
     .input(z.object({
       id:             z.number(),
       metaPercentual: z.number().min(0).max(0.99),
-      userName:       z.string(),
-      userId:         z.number(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
 
@@ -562,9 +560,9 @@ export const orcamentoRouter = router({
       await db.update(orcamentos).set({
         metaPercentual:    fix4(input.metaPercentual),
         totalMeta:         fix2(totalMeta),
-        metaAprovadaPor:   input.userName,
+        metaAprovadaPor:   ctx.user?.username ?? null,
         metaAprovadaEm:    new Date().toISOString(),
-        metaAprovadaUserId: input.userId,
+        metaAprovadaUserId: ctx.user?.id ?? null,
         status:            'aprovado',
       }).where(eq(orcamentos.id, input.id));
 
