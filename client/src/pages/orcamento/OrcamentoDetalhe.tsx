@@ -473,29 +473,29 @@ export default function OrcamentoDetalhe() {
 
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-xs min-w-[1100px]">
+                <table className="w-full border-collapse text-xs min-w-[960px]">
                   <thead>
                     <tr className="bg-slate-700 text-white text-[11px] sticky top-0 z-20">
-                      <th className="text-left px-3 py-2 w-36 sticky left-0 bg-slate-700">Item</th>
-                      <th className="text-left px-3 py-2 min-w-[200px]">Descrição</th>
-                      <th className="text-center px-2 py-2 w-16">Unidade</th>
-                      <th className="text-right px-3 py-2 w-24">Quantidade</th>
-                      <th className="text-right px-3 py-2 w-28 text-blue-200">
-                        Preço Unit.<br/>Material
+                      <th className="text-left px-2 py-2 w-[84px] sticky left-0 bg-slate-700">Item</th>
+                      <th className="text-left px-2 py-2 min-w-[220px]">Descrição</th>
+                      <th className="text-center px-1 py-2 w-[42px]">Un</th>
+                      <th className="text-right px-2 py-2 w-[68px]">Qtd</th>
+                      <th className="text-right px-2 py-2 w-[84px] text-blue-200">
+                        P.Unit.<br/>Mat
                       </th>
-                      <th className="text-right px-3 py-2 w-28 text-orange-200">
-                        Preço Unit.<br/>MO
+                      <th className="text-right px-2 py-2 w-[84px] text-orange-200">
+                        P.Unit.<br/>MO
                       </th>
-                      <th className="text-right px-3 py-2 w-28 text-blue-200">
-                        Preço Total<br/>Material
+                      <th className="text-right px-2 py-2 w-[84px] text-blue-200">
+                        P.Total<br/>Mat
                       </th>
-                      <th className="text-right px-3 py-2 w-28 text-orange-200">
-                        Preço total<br/>MO
+                      <th className="text-right px-2 py-2 w-[84px] text-orange-200">
+                        P.Total<br/>MO
                       </th>
-                      <th className={`text-right px-3 py-2 w-32 font-bold ${cfg.thClass}`}>
+                      <th className={`text-right px-2 py-2 w-[92px] font-bold ${cfg.thClass}`}>
                         {cfg.label}
                       </th>
-                      <th className="text-right px-2 py-2 w-16">ABC Serv</th>
+                      <th className="text-right px-2 py-2 w-[48px]">ABC</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -542,46 +542,46 @@ export default function OrcamentoDetalhe() {
                           </td>
 
                           {/* Descrição */}
-                          <td className="px-3 py-1.5">
+                          <td className="px-2 py-1.5">
                             <span className={item.nivel <= 2 ? "uppercase tracking-wide text-[11px] font-semibold" : "text-[11px]"}>
                               {item.descricao}
                             </span>
                           </td>
 
                           {/* Unidade */}
-                          <td className="px-2 py-1.5 text-center text-muted-foreground">
+                          <td className="px-1 py-1.5 text-center text-muted-foreground text-[10px]">
                             {isLeaf ? item.unidade : ""}
                           </td>
 
                           {/* Quantidade */}
-                          <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                          <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums text-[10px]">
                             {isLeaf && qty > 0
                               ? qty.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                               : ""}
                           </td>
 
                           {/* Preço Unit. Material */}
-                          <td className="px-3 py-1.5 text-right text-blue-600 tabular-nums">
+                          <td className="px-2 py-1.5 text-right text-blue-600 tabular-nums text-[10px]">
                             {isLeaf && puMat > 0 ? formatBRL(puMat) : <span className="text-slate-300">—</span>}
                           </td>
 
                           {/* Preço Unit. MO */}
-                          <td className="px-3 py-1.5 text-right text-orange-500 tabular-nums">
+                          <td className="px-2 py-1.5 text-right text-orange-500 tabular-nums text-[10px]">
                             {isLeaf && puMdo > 0 ? formatBRL(puMdo) : <span className="text-slate-300">—</span>}
                           </td>
 
                           {/* Preço Total Material */}
-                          <td className="px-3 py-1.5 text-right text-blue-600 font-medium tabular-nums">
+                          <td className="px-2 py-1.5 text-right text-blue-600 font-medium tabular-nums text-[10px]">
                             {ptMat > 0 ? formatBRL(ptMat) : <span className="text-slate-300">—</span>}
                           </td>
 
                           {/* Preço Total MO */}
-                          <td className="px-3 py-1.5 text-right text-orange-500 font-medium tabular-nums">
+                          <td className="px-2 py-1.5 text-right text-orange-500 font-medium tabular-nums text-[10px]">
                             {ptMdo > 0 ? formatBRL(ptMdo) : <span className="text-slate-300">—</span>}
                           </td>
 
                           {/* Custo / Venda / Meta */}
-                          <td className={`px-3 py-1.5 text-right font-semibold tabular-nums ${cfg.valueClass}`}>
+                          <td className={`px-2 py-1.5 text-right font-semibold tabular-nums text-[10px] ${cfg.valueClass}`}>
                             {totalVal > 0 ? formatBRL(totalVal) : <span className="text-slate-300 font-normal">—</span>}
                           </td>
 
