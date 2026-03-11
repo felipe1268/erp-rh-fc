@@ -12,7 +12,7 @@ import {
   ChevronDown, ChevronRight, DollarSign, TrendingDown, Target,
   ArrowLeft, Settings, Loader2, Package, CheckCircle2, AlertCircle,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -96,7 +96,6 @@ export default function OrcamentoDetalhe() {
   const [, params] = useRoute("/orcamento/:id");
   const [, navigate] = useLocation();
   const { user } = useAuth();
-  const { toast } = useToast();
   const id = parseInt(params?.id ?? "0");
 
   const [versao, setVersao] = useState<Versao>("venda");
@@ -111,11 +110,11 @@ export default function OrcamentoDetalhe() {
 
   const updateMetaMutation = trpc.orcamento.updateMeta.useMutation({
     onSuccess: () => {
-      toast({ title: "Meta atualizada com sucesso!" });
+      toast.success("Meta atualizada com sucesso!");
       setMetaDialog(false);
       refetch();
     },
-    onError: e => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+    onError: e => toast.error(e.message || "Erro ao atualizar meta"),
   });
 
   if (isLoading) {

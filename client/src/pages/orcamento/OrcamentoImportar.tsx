@@ -12,7 +12,7 @@ import {
   Upload, FileSpreadsheet, X, AlertCircle,
   CheckCircle, Loader2, Calculator,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -36,7 +36,6 @@ export default function OrcamentoImportar() {
   const { selectedCompanyId: selCompId } = useCompany();
   const companyId = selCompId ? parseInt(selCompId) : undefined;
   const [, navigate] = useLocation();
-  const { toast } = useToast();
 
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -49,12 +48,12 @@ export default function OrcamentoImportar() {
     onSuccess: (data) => {
       setResultado(data);
       setIsUploading(false);
-      toast({ title: "Planilha importada com sucesso!" });
+      toast.success("Planilha importada com sucesso!");
     },
     onError: (e) => {
       setErro(e.message);
       setIsUploading(false);
-      toast({ title: "Erro na importação", description: e.message, variant: "destructive" });
+      toast.error(e.message || "Erro na importação");
     },
   });
 
@@ -66,9 +65,9 @@ export default function OrcamentoImportar() {
       setFile(dropped);
       setErro(null);
     } else {
-      toast({ title: "Formato inválido", description: "Envie um arquivo .xlsx ou .xls", variant: "destructive" });
+      toast.error("Formato inválido. Envie um arquivo .xlsx ou .xls");
     }
-  }, [toast]);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
