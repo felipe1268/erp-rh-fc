@@ -32,7 +32,14 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function DropZone({ file, onFile, accept = ".xlsx,.xls", inputId }: {
+const EXCEL_EXTS = [".xlsx", ".xls", ".xlsm", ".xlsb"];
+const EXCEL_ACCEPT = EXCEL_EXTS.join(",");
+
+function isExcelFile(name: string) {
+  return EXCEL_EXTS.some(ext => name.toLowerCase().endsWith(ext));
+}
+
+function DropZone({ file, onFile, accept = EXCEL_ACCEPT, inputId }: {
   file: File | null;
   onFile: (f: File) => void;
   accept?: string;
@@ -44,10 +51,10 @@ function DropZone({ file, onFile, accept = ".xlsx,.xls", inputId }: {
     e.preventDefault();
     setDragging(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped && (dropped.name.endsWith(".xlsx") || dropped.name.endsWith(".xls"))) {
+    if (dropped && isExcelFile(dropped.name)) {
       onFile(dropped);
     } else {
-      toast.error("Formato inválido. Envie um arquivo .xlsx ou .xls");
+      toast.error("Formato inválido. Envie um arquivo Excel (.xlsx, .xls, .xlsm, .xlsb)");
     }
   }, [onFile]);
 
@@ -80,7 +87,7 @@ function DropZone({ file, onFile, accept = ".xlsx,.xls", inputId }: {
         Arraste o arquivo aqui ou{" "}
         <span className="text-primary underline cursor-pointer">clique para selecionar</span>
       </p>
-      <p className="text-muted-foreground/60 text-xs mt-1">Formatos: .xlsx, .xls</p>
+      <p className="text-muted-foreground/60 text-xs mt-1">Formatos: .xlsx, .xls, .xlsm, .xlsb</p>
       <input id={inputId} type="file" accept={accept} className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
     </div>
