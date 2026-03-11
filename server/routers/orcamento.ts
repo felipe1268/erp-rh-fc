@@ -11,6 +11,7 @@ import {
   insumosCatalogo,
   composicoesCatalogo,
   obras,
+  companies,
 } from "../../drizzle/schema";
 import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 
@@ -395,13 +396,23 @@ export const orcamentoRouter = router({
         db.select().from(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.id)).orderBy(orcamentoInsumos.percentualTotal),
         db.select().from(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.id)).orderBy(orcamentoBdi.ordem),
       ]);
-      // Buscar dados da obra vinculada (se houver)
-      let obra: any = null;
-      if (orc.obraId) {
-        const [o] = await db.select().from(obras).where(eq(obras.id, orc.obraId));
-        obra = o ?? null;
-      }
-      return { ...orc, itens, insumos, bdiLinhas, obra };
+      // Buscar obra e empresa em paralelo
+      const [obraRes, empresaRes] = await Promise.all([
+        orc.obraId
+          ? db.select().from(obras).where(eq(obras.id, orc.obraId)).then(r => r[0] ?? null)
+          : Promise.resolve(null),
+        db.select({
+          id:          companies.id,
+          razaoSocial: companies.razaoSocial,
+          nomeFantasia: companies.nomeFantasia,
+          cnpj:        companies.cnpj,
+          cidade:      companies.cidade,
+          estado:      companies.estado,
+          telefone:    companies.telefone,
+          logoUrl:     companies.logoUrl,
+        }).from(companies).where(eq(companies.id, orc.companyId)).then(r => r[0] ?? null),
+      ]);
+      return { ...orc, itens, insumos, bdiLinhas, obra: obraRes, empresa: empresaRes };
     }),
 
   // ── Importar planilha Excel (base64) ──────────────────────
