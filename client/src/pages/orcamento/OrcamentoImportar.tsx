@@ -390,6 +390,7 @@ export default function OrcamentoImportar() {
         fileBase64:      base64,
         fileName:        fileCusto.name,
         metaPercentual:  metaPerc / 100,
+        userName:        (user as any)?.username || (user as any)?.name || "sistema",
       });
       clearInterval(interval);
       setImportProgCusto(100);
