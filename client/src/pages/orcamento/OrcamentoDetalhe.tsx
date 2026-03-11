@@ -79,6 +79,7 @@ export default function OrcamentoDetalhe() {
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set());
   const [localMetaPerc, setLocalMetaPerc] = useState(20);
   const [metaInput, setMetaInput]   = useState("20");
+  const [metaValInput, setMetaValInput] = useState(""); // input R$ — vazio = usa valor calculado
   const [savingMeta, setSavingMeta] = useState(false);
 
   const { data, isLoading, refetch } = trpc.orcamento.getById.useQuery(
@@ -387,30 +388,60 @@ export default function OrcamentoDetalhe() {
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">−{localMetaPerc}% do custo</p>
             </button>
-            {/* Campo inline de percentual */}
-            <div className="px-3 pb-3 flex items-center gap-2">
-              <Input
-                type="number" min={1} max={99}
-                value={metaInput}
-                onChange={e => {
-                  setMetaInput(e.target.value);
-                  const v = parseInt(e.target.value);
-                  if (!isNaN(v) && v >= 1 && v <= 99) setLocalMetaPerc(v);
-                }}
-                className="h-7 text-sm w-20 text-right font-semibold text-purple-700"
-              />
-              <span className="text-sm text-muted-foreground">%</span>
-              <Button size="sm" variant="ghost" className="h-7 px-2 ml-auto text-purple-600 hover:text-purple-800"
-                disabled={savingMeta || updateMetaMutation.isPending}
-                onClick={() => {
-                  setSavingMeta(true);
-                  updateMetaMutation.mutate({ id, metaPercentual: localMetaPerc / 100 });
-                }}
-              >
-                {savingMeta
-                  ? <Loader2 className="h-3 w-3 animate-spin" />
-                  : <Save className="h-3 w-3" />}
-              </Button>
+            {/* Campos bidireccionais: % ↔ R$ */}
+            <div className="px-3 pb-3 space-y-1.5">
+              {/* Linha %  */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground w-4 shrink-0">%</span>
+                <Input
+                  type="number" min={0} max={99} step={0.01}
+                  value={metaInput}
+                  onChange={e => {
+                    const str = e.target.value;
+                    setMetaInput(str);
+                    setMetaValInput(""); // limpa R$ para mostrar valor calculado
+                    const v = parseFloat(str);
+                    if (!isNaN(v) && v >= 0 && v < 100) setLocalMetaPerc(v);
+                  }}
+                  className="h-7 text-sm text-right font-semibold text-purple-700"
+                />
+              </div>
+              {/* Linha R$ */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground w-4 shrink-0">R$</span>
+                <Input
+                  type="number" min={0} step={0.01}
+                  value={metaValInput !== "" ? metaValInput : r2(totalCusto * (1 - localMetaPerc / 100))}
+                  onChange={e => {
+                    const str = e.target.value;
+                    setMetaValInput(str);
+                    const val = parseFloat(str);
+                    if (!isNaN(val) && val > 0 && totalCusto > 0) {
+                      const pct = r2((1 - val / totalCusto) * 100);
+                      if (pct >= 0 && pct < 100) {
+                        setLocalMetaPerc(pct);
+                        setMetaInput(String(pct));
+                      }
+                    }
+                  }}
+                  className="h-7 text-sm text-right font-semibold text-purple-700"
+                />
+              </div>
+              {/* Salvar */}
+              <div className="flex justify-end pt-0.5">
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-purple-600 hover:text-purple-800 text-xs gap-1"
+                  disabled={savingMeta || updateMetaMutation.isPending}
+                  onClick={() => {
+                    setSavingMeta(true);
+                    updateMetaMutation.mutate({ id, metaPercentual: localMetaPerc / 100 });
+                  }}
+                >
+                  {savingMeta
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Save className="h-3 w-3" />}
+                  Salvar
+                </Button>
+              </div>
             </div>
           </div>
 
