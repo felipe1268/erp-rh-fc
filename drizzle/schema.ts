@@ -3978,3 +3978,22 @@ export const composicoesCatalogo = pgTable("composicoes_catalogo", {
   index("compc_codigo").on(table.codigo),
   index("compc_chave").on(table.chaveNorm),
 ]);
+
+export const composicaoInsumos = pgTable("composicao_insumos", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  composicaoCodigo: varchar("composicao_codigo", { length: 100 }).notNull(),
+  insumoCodigo: varchar("insumo_codigo", { length: 100 }),
+  insumoDescricao: varchar("insumo_descricao", { length: 1000 }),
+  unidade: varchar({ length: 30 }),
+  quantidade: numeric({ precision: 18, scale: 6 }).default('0'),
+  precoUnitario: numeric("preco_unitario", { precision: 18, scale: 4 }).default('0'),
+  alocacaoMat: numeric("alocacao_mat", { precision: 18, scale: 6 }).default('0'),
+  alocacaoMdo: numeric("alocacao_mdo", { precision: 18, scale: 6 }).default('0'),
+  custoUnitTotal: numeric("custo_unit_total", { precision: 18, scale: 6 }).default('0'),
+  criadoEm: timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  index("ci_company").on(table.companyId),
+  index("ci_comp").on(table.composicaoCodigo),
+  index("ci_insumo").on(table.insumoCodigo),
+]);
