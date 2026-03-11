@@ -277,19 +277,23 @@ export default function OrcamentoDetalhe() {
   // ── Totais: soma apenas itens FOLHA (sem filhos) — são eles que têm os valores reais da planilha ──
   // Grupos intermediários têm valores calculados/agregados que podem divergir; folhas são a fonte de verdade.
   const leafItems = itens.filter((i: OrcItem) => !childMap[i.eapCodigo]);
-  const calcMat   = r2(leafItems.reduce((s, i) => s + n(i.custoTotalMat), 0));
-  const calcMdo   = r2(leafItems.reduce((s, i) => s + n(i.custoTotalMdo), 0));
-  const calcCusto = r2(leafItems.reduce((s, i) => s + n(i.custoTotal),    0));
-  const calcVenda = r2(leafItems.reduce((s, i) => s + n(i.vendaTotal),    0));
+  // Totais autoritativos: importados diretamente da planilha (soma dos itens nível 1 lidos do Excel).
+  // São mais precisos que o cálculo bottom-up das folhas, que pode acumular divergência por arredondamento.
+  // Fallback para o cálculo das folhas só se o campo não existir no banco.
+  const calcMat   = r2(leafItems.reduce((s, i) => r2(s) + r2(n(i.custoTotalMat)), 0));
+  const calcMdo   = r2(leafItems.reduce((s, i) => r2(s) + r2(n(i.custoTotalMdo)), 0));
+  const calcCusto = r2(leafItems.reduce((s, i) => r2(s) + r2(n(i.custoTotal)),    0));
+  const calcVenda = r2(leafItems.reduce((s, i) => r2(s) + r2(n(i.vendaTotal)),    0));
 
-  const totalCusto = r2(calcCusto || n(orc.totalCusto));
-  const totalVenda = r2(calcVenda || n(orc.totalVenda));
+  // Preferir valor armazenado (importado do Excel) — só cair no calc se estiver zerado/ausente
+  const totalCusto = r2(n(orc.totalCusto) || calcCusto);
+  const totalVenda = r2(n(orc.totalVenda) || calcVenda);
+  const totalMat   = r2(n((orc as any).totalMateriais) || calcMat);
+  const totalMdo   = r2(n((orc as any).totalMdo) || calcMdo);
   // totalMeta sempre derivado do estado local (localMetaVal ou localMetaPerc) para evitar divergência com o banco
   const totalMeta  = localMetaVal !== null
     ? r2(localMetaVal)
     : r2(totalCusto * (1 - localMetaPerc / 100));
-  const totalMat   = calcMat;
-  const totalMdo   = calcMdo;
 
   const visibleItems = itens.filter(item => {
     if (item.nivel === 1) return true;
