@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import OrcamentistaWidget from "./OrcamentistaWidget";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -472,6 +473,57 @@ export default function OrcamentoDetalhe() {
         </Dialog>
 
       </div>
+
+      {/* ── ORCAMENTISTA PHD — Assistente de IA flutuante ── */}
+      <OrcamentistaWidget
+        contexto={{
+          codigo:            orc.codigo,
+          descricao:         orc.descricao,
+          cliente:           orc.cliente,
+          local:             orc.local,
+          revisao:           orc.revisao,
+          status:            orc.status,
+          bdiPercentual:     parseFloat(orc.bdiPercentual  || "0"),
+          metaPercentual:    parseFloat(orc.metaPercentual || "0"),
+          totalVenda:        parseFloat(orc.totalVenda        || "0"),
+          totalCusto:        parseFloat(orc.totalCusto        || "0"),
+          totalMeta:         parseFloat(orc.totalMeta         || "0"),
+          totalMateriais:    parseFloat(orc.totalMateriais    || "0"),
+          totalMdo:          parseFloat(orc.totalMdo          || "0"),
+          totalEquipamentos: parseFloat(orc.totalEquipamentos || "0"),
+          itemCount:         itens.length,
+          topItens: itens
+            .filter(i => i.nivel >= 3)
+            .sort((a, b) => parseFloat(b.custoTotal || "0") - parseFloat(a.custoTotal || "0"))
+            .slice(0, 20)
+            .map((i, idx, arr) => {
+              const totalCusto = arr.reduce((s, x) => s + parseFloat(x.custoTotal || "0"), 0);
+              const custo = parseFloat(i.custoTotal || "0");
+              return {
+                eapCodigo:       i.eapCodigo,
+                descricao:       i.descricao,
+                unidade:         i.unidade,
+                quantidade:      parseFloat(i.quantidade    || "0"),
+                custoTotal:      custo,
+                vendaTotal:      parseFloat(i.vendaTotal    || "0"),
+                custoTotalMat:   parseFloat(i.custoTotalMat || "0"),
+                custoTotalMdo:   parseFloat(i.custoTotalMdo || "0"),
+                percentualCusto: totalCusto > 0 ? custo / totalCusto * 100 : 0,
+              };
+            }),
+          topInsumos: insumos.slice(0, 30).map(i => ({
+            descricao:            i.descricao,
+            tipo:                 i.tipo,
+            unidade:              i.unidade,
+            custoTotal:           parseFloat(i.custoTotal              || "0"),
+            quantidadeTotal:      parseFloat(i.quantidadeTotal         || "0"),
+            precoUnitComEncargos: parseFloat(i.precoUnitComEncargos    || "0"),
+            curvaAbc:             i.curvaAbc,
+            percentualTotal:      parseFloat(i.percentualTotal         || "0"),
+          })),
+        }}
+      />
+
     </DashboardLayout>
   );
 }

@@ -13,11 +13,18 @@ A full-stack HR/ERP system built for FC Engenharia. It handles employees, payrol
 
 ## Orçamento Module
 - Routes: `/orcamento/painel`, `/orcamento/lista`, `/orcamento/importar`, `/orcamento/:id`
-- Backend: `server/routers/orcamento.ts`
-- Schema tables: `orcamentos`, `orcamento_itens`, `orcamento_insumos`, `orcamento_bdi`
-- Excel import: reads "Orçamento" tab (cols 9–32) + "BDI" tab + optional "Insumos" tab
+- Backend: `server/routers/orcamento.ts`, `server/routers/orcamentista.ts`
+- Schema tables: `orcamentos`, `orcamento_itens`, `orcamento_insumos`, `orcamento_bdi`, `insumos_catalogo`, `composicoes_catalogo`
+- Excel import: reads ALL sheets from BDI file; "Orçamento" tab (cols 9–32) + optional "Insumos" tab
 - 3 versions: Venda (BDI applied), Custo (direct cost), Meta (cost × (1-metaPerc), default 20%)
 - Meta % adjustable by admin_master role, recalculates all items
+- BDI: stored with `nomeAba` per sheet, displayed grouped by sheet, 2 decimal places
+- EAP: shows Mat/MO separately for leaf items, quantity 2 decimal places
+- Catalog: auto-populated on each import; intelligent dedup by code + normalized description
+- **ORCAMENTISTA PHD**: AI assistant widget (OrcamentistaWidget.tsx) floating in OrcamentoDetalhe
+  - 6 quick insights: Resumo Executivo, Reduzir Custo, Maximizar Margem, Análise BDI, Curva ABC, Riscos
+  - Full chat interface with orçamento context (totals, Mat/MO, top items, ABC insumos)
+  - Uses invokeLLM (Gemini) via existing infrastructure
 
 ## Architecture
 - **Frontend**: React 19 + Tailwind CSS 4 + shadcn/ui + Wouter (routing)
