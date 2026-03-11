@@ -19,6 +19,10 @@ export default function BibliotecaOrcamento() {
   const companyId = (user as any)?.companyId ?? 0;
   const [search, setSearch] = useState("");
 
+  const defaultTab = typeof window !== "undefined" && window.location.pathname.includes("insumos")
+    ? "insumos"
+    : "composicoes";
+
   const { data: composicoes = [], isLoading: loadComp } =
     trpc.orcamento.listarComposicoesCatalogo.useQuery({ companyId }, { enabled: companyId > 0 });
 
@@ -88,7 +92,7 @@ export default function BibliotecaOrcamento() {
           />
         </div>
 
-        <Tabs defaultValue="composicoes">
+        <Tabs defaultValue={defaultTab}>
           <TabsList>
             <TabsTrigger value="composicoes">
               Composições {composicoes.length > 0 && <Badge variant="secondary" className="ml-1">{filtComp.length}</Badge>}
