@@ -1446,6 +1446,28 @@ export const orcamentoRouter = router({
       return { ok: true };
     }),
 
+  // ── Excluir vários insumos por lista de IDs ──────────────────
+  excluirInsumosBulk: protectedProcedure
+    .input(z.object({ companyId: z.number(), ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      await db.delete(insumosCatalogo)
+        .where(and(eq(insumosCatalogo.companyId, input.companyId), inArray(insumosCatalogo.id, input.ids)));
+      return { ok: true, deletados: input.ids.length };
+    }),
+
+  // ── Excluir todos os insumos da empresa ──────────────────────
+  excluirTodosInsumos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB indisponível' });
+      const result = await db.delete(insumosCatalogo)
+        .where(eq(insumosCatalogo.companyId, input.companyId));
+      return { ok: true };
+    }),
+
   // ── Importar insumos: inicia o job em background e retorna jobId ──
   importarInsumosCatalogo: protectedProcedure
     .input(z.object({
