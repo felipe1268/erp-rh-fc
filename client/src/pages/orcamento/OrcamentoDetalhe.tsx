@@ -149,7 +149,7 @@ export default function OrcamentoDetalhe() {
       const b64 = (e.target?.result as string).split(",")[1];
       reimportarMutation.mutate({
         orcamentoId: id,
-        companyId:   (company as any)?.id ?? 0,
+        companyId:   Number(orc?.companyId ?? 0),
         fileBase64:  b64,
         fileName:    reuploadFile.name,
         userName:    (user as any)?.username || (user as any)?.name || "sistema",

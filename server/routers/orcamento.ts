@@ -574,7 +574,7 @@ export const orcamentoRouter = router({
 
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
-      if (orc.companyId !== input.companyId) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+      if (Number(orc.companyId) !== Number(input.companyId)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
 
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
@@ -730,7 +730,7 @@ export const orcamentoRouter = router({
 
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
-      if (orc.companyId !== input.companyId) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+      if (Number(orc.companyId) !== Number(input.companyId)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
 
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
