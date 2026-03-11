@@ -53,6 +53,9 @@ shared/         # Shared types and constants
 - `VITE_APP_ID` — OAuth App ID (optional)
 - `OWNER_OPEN_ID` — Owner user OpenID (optional)
 
+## User Preferences
+- After every completed adjustment, always remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
+
 ## Notes
 - The app runs without a database (gracefully returns empty data)
 - MySQL is required for full functionality; Replit provides PostgreSQL (incompatible)
