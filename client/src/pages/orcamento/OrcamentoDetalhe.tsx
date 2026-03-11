@@ -802,7 +802,7 @@ export default function OrcamentoDetalhe() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx,.xls,.xlsm,.xlsb,.xltx,.xltm"
                 className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleReuploadFile(f); }}
               />
@@ -827,7 +827,7 @@ export default function OrcamentoDetalhe() {
                 <div className="flex flex-col items-center gap-2">
                   <UploadCloud className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm font-medium">Clique ou arraste a planilha aqui</p>
-                  <p className="text-xs text-muted-foreground">.xlsx ou .xls com aba "Orçamento"</p>
+                  <p className="text-xs text-muted-foreground">.xlsx, .xls ou .xlsm com aba "Orçamento"</p>
                 </div>
               )}
             </div>
