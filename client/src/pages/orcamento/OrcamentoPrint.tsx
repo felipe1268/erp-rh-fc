@@ -44,9 +44,16 @@ export default function OrcamentoPrint() {
   const empresa = orc.empresa as any | null;
   const itens   = (orc.itens ?? []) as any[];
 
-  const totalCusto = n(orc.totalCusto);
-  const totalVenda = n(orc.totalVenda);
-  const bdiPct     = n(orc.bdiPercentual) * 100;
+  const bdiPct  = n(orc.bdiPercentual) * 100;
+  const metaPct = n(orc.metaPercentual) * 100;
+
+  // Fallback: calcular dos itens nível 1 caso campos armazenados sejam 0
+  const nivel1     = itens.filter((i: any) => i.nivel === 1);
+  const calcCusto  = nivel1.reduce((s: number, i: any) => s + n(i.custoTotal), 0);
+  const calcVenda  = nivel1.reduce((s: number, i: any) => s + n(i.vendaTotal), 0);
+  const totalCusto = n(orc.totalCusto) || calcCusto;
+  const totalVenda = n(orc.totalVenda) || calcVenda;
+  const totalMeta  = n(orc.totalMeta)  || totalCusto * (1 - metaPct / 100);
 
   const today = new Date().toLocaleDateString("pt-BR");
 

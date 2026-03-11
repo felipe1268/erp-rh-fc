@@ -214,9 +214,15 @@ export default function OrcamentoDetalhe() {
   const bdiPct  = n(orc.bdiPercentual)  * 100;
   const metaPct = n(orc.metaPercentual) * 100;
 
-  const totalVenda = n(orc.totalVenda);
-  const totalCusto = n(orc.totalCusto);
-  const totalMeta  = n(orc.totalMeta);
+  // Calcular totais a partir dos itens nível 1 como fallback
+  // (caso os campos armazenados estejam zerados por importação antiga)
+  const nivel1 = itens.filter((i: OrcItem) => i.nivel === 1);
+  const calcCusto = nivel1.reduce((s, i) => s + n(i.custoTotal), 0);
+  const calcVenda = nivel1.reduce((s, i) => s + n(i.vendaTotal), 0);
+
+  const totalCusto = n(orc.totalCusto) || calcCusto;
+  const totalVenda = n(orc.totalVenda) || calcVenda;
+  const totalMeta  = n(orc.totalMeta)  || totalCusto * (1 - metaPct / 100);
 
   const childMap: Record<string, boolean> = {};
   itens.forEach((item, idx) => {
