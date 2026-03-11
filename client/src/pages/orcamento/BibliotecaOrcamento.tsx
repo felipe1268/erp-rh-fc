@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Wrench, Package, Search, Loader2, Upload, CheckCircle,
   AlertCircle, Plus, Pencil, Trash2, X, Check, Tag,
-  ChevronDown,
+  ChevronDown, Square, CheckSquare, MinusSquare,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -435,6 +435,7 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
   const [jobId, setJobId]          = useState<string | null>(null);
   const [jobTotal, setJobTotal]    = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
+  const [selected, setSelected]    = useState<Set<number>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
@@ -470,19 +471,24 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
     if (progresso.status === "error") setImportError(progresso.error ?? "Erro desconhecido.");
   }, [progresso?.status]);
 
+  const invalidate = useCallback(() => utils.orcamento.listarInsumosCatalogo.invalidate({ companyId }), [companyId]);
+
   const importMut = trpc.orcamento.importarInsumosCatalogo.useMutation({
     onSuccess: (res) => { setJobId(res.jobId); setJobTotal(res.total); setImportError(null); },
     onError: (err) => setImportError(err.message),
   });
   const salvarMut = trpc.orcamento.salvarInsumo.useMutation({
-    onSuccess: () => {
-      utils.orcamento.listarInsumosCatalogo.invalidate({ companyId });
-      setEditingId(null); setSaveError(null);
-    },
+    onSuccess: () => { invalidate(); setEditingId(null); setSaveError(null); },
     onError: (err) => setSaveError(err.message),
   });
   const excluirMut = trpc.orcamento.excluirInsumo.useMutation({
-    onSuccess: () => utils.orcamento.listarInsumosCatalogo.invalidate({ companyId }),
+    onSuccess: () => invalidate(),
+  });
+  const excluirBulkMut = trpc.orcamento.excluirInsumosBulk.useMutation({
+    onSuccess: () => { invalidate(); setSelected(new Set()); },
+  });
+  const excluirTodosMut = trpc.orcamento.excluirTodosInsumos.useMutation({
+    onSuccess: () => { invalidate(); setSelected(new Set()); },
   });
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -536,6 +542,7 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
     );
   }
 
+  /* ── Seleção ── */
   const isImporting = importMut.isPending || (!!jobId && progresso?.status === "running");
   const pct   = progresso?.pct ?? 0;
   const done  = progresso?.done ?? 0;
@@ -547,19 +554,50 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
     (!q || i.descricao?.toLowerCase().includes(q) || i.codigo?.toLowerCase().includes(q) || i.tipo?.toLowerCase().includes(q))
   );
 
+  const filtIds = filt.map((i: any) => i.id as number);
+  const allFiltSelected = filtIds.length > 0 && filtIds.every(id => selected.has(id));
+  const someFiltSelected = filtIds.some(id => selected.has(id)) && !allFiltSelected;
+
+  function toggleRow(id: number) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    if (allFiltSelected) {
+      setSelected(prev => { const next = new Set(prev); filtIds.forEach(id => next.delete(id)); return next; });
+    } else {
+      setSelected(prev => { const next = new Set(prev); filtIds.forEach(id => next.add(id)); return next; });
+    }
+  }
+  function clearSelection() { setSelected(new Set()); }
+
+  function handleExcluirSelecionados() {
+    const ids = [...selected];
+    if (!confirm(`Excluir ${ids.length} insumo(s) selecionado(s)?`)) return;
+    excluirBulkMut.mutate({ companyId, ids });
+  }
+  function handleExcluirTodos() {
+    if (!confirm(`Tem certeza que deseja apagar TODOS os ${insumos.length} insumos do catálogo? Esta ação não pode ser desfeita.`)) return;
+    excluirTodosMut.mutate({ companyId });
+  }
+
+  const isBulkLoading = excluirBulkMut.isPending || excluirTodosMut.isPending;
+
+  /* ── Render row ── */
   function renderRow(i: any) {
+    const isSel = selected.has(i.id);
     if (editingId === i.id) {
       return (
         <tr key={i.id} className="border-b bg-emerald-50">
+          <td className="px-3 py-1" />
           <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
           <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
           <td className="px-2 py-1">
-            <GrupoDropdown
-              value={editForm.tipo}
-              onChange={v => setEditForm(f => ({ ...f, tipo: v }))}
-              grupos={grupos as any[]}
-              className="w-40"
-            />
+            <GrupoDropdown value={editForm.tipo} onChange={v => setEditForm(f => ({ ...f, tipo: v }))}
+              grupos={grupos as any[]} className="w-40" />
           </td>
           <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
           <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
@@ -571,7 +609,7 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
           </td>
           <td className="px-2 py-1">
             <div className="flex items-center gap-1">
-              {saveError && <span className="text-red-500 text-[10px] max-w-[100px] truncate">{saveError}</span>}
+              {saveError && <span className="text-red-500 text-[10px] max-w-[80px] truncate">{saveError}</span>}
               <button onClick={handleSave} disabled={salvarMut.isPending}
                 className="p-1 rounded hover:bg-emerald-200 text-emerald-700">
                 {salvarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
@@ -585,7 +623,15 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
       );
     }
     return (
-      <tr key={i.id} className="border-b hover:bg-muted/30 transition-colors group">
+      <tr key={i.id}
+        className={`border-b transition-colors group ${isSel ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-muted/30"}`}>
+        {/* Checkbox */}
+        <td className="px-3 py-2">
+          <button onClick={() => toggleRow(i.id)}
+            className={`text-slate-400 hover:text-blue-600 transition-colors ${isSel ? "text-blue-600" : ""}`}>
+            {isSel ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+          </button>
+        </td>
         <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{i.codigo || "—"}</td>
         <td className="px-3 py-2">{i.descricao}</td>
         <td className="px-3 py-2">
@@ -697,6 +743,18 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-slate-50 text-muted-foreground">
+                  {/* Checkbox "selecionar todos" */}
+                  <th className="px-3 py-2 w-8">
+                    <button onClick={toggleAll} title={allFiltSelected ? "Desselecionar todos" : "Selecionar todos visíveis"}
+                      className="text-slate-400 hover:text-blue-600 transition-colors">
+                      {allFiltSelected
+                        ? <CheckSquare className="h-4 w-4 text-blue-600" />
+                        : someFiltSelected
+                          ? <MinusSquare className="h-4 w-4 text-blue-400" />
+                          : <Square className="h-4 w-4" />
+                      }
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-2 w-24">Código</th>
                   <th className="text-left px-3 py-2 min-w-[260px]">Descrição</th>
                   <th className="text-left px-3 py-2 w-36">Grupo</th>
@@ -711,15 +769,12 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
                 {/* Linha de novo insumo */}
                 {editingId === "new" && (
                   <tr className="border-b bg-blue-50">
+                    <td className="px-3 py-1" />
                     <td className="px-2 py-1">{field("codigo", "font-mono w-24")}</td>
                     <td className="px-2 py-1">{field("descricao", "min-w-[260px]")}</td>
                     <td className="px-2 py-1">
-                      <GrupoDropdown
-                        value={editForm.tipo}
-                        onChange={v => setEditForm(f => ({ ...f, tipo: v }))}
-                        grupos={grupos as any[]}
-                        className="w-40"
-                      />
+                      <GrupoDropdown value={editForm.tipo} onChange={v => setEditForm(f => ({ ...f, tipo: v }))}
+                        grupos={grupos as any[]} className="w-40" />
                     </td>
                     <td className="px-2 py-1">{field("unidade", "w-12 text-center")}</td>
                     <td className="px-2 py-1">{field("precoUnitario", "w-24 text-right")}</td>
@@ -742,7 +797,7 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
 
                 {filt.length === 0 && editingId !== "new" ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-muted-foreground">
+                    <td colSpan={9} className="py-16 text-center text-muted-foreground">
                       <Package className="h-8 w-8 mx-auto mb-2 opacity-20" />
                       <p className="text-sm">{search || catFilter ? "Nenhum insumo encontrado." : "Nenhum insumo cadastrado ainda."}</p>
                       {!search && !catFilter && <p className="text-xs mt-1">Use "Importar" ou clique em "Novo Insumo".</p>}
@@ -753,6 +808,44 @@ function InsumosView({ companyId, onGerenciarCategorias }: { companyId: number; 
             </table>
           </div>
         </Card>
+      )}
+
+      {/* ── Barra flutuante de ações em massa ── */}
+      {(selected.size > 0 || true) && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-200
+          ${selected.size > 0
+            ? "opacity-100 translate-y-0 pointer-events-auto"
+            : "opacity-0 translate-y-4 pointer-events-none"}`}>
+          <div className="flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl text-sm">
+            <span className="font-medium">
+              <span className="text-blue-300 font-bold">{selected.size}</span> selecionado{selected.size !== 1 ? "s" : ""}
+            </span>
+            <button onClick={clearSelection}
+              className="text-slate-400 hover:text-white text-xs underline underline-offset-2">
+              Limpar
+            </button>
+            <div className="w-px h-4 bg-slate-600" />
+            <button
+              onClick={handleExcluirSelecionados}
+              disabled={isBulkLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
+              {excluirBulkMut.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Trash2 className="h-3.5 w-3.5" />}
+              Excluir selecionados
+            </button>
+            <div className="w-px h-4 bg-slate-600" />
+            <button
+              onClick={handleExcluirTodos}
+              disabled={isBulkLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-red-900 border border-red-800 rounded-lg text-xs font-medium text-red-300 hover:text-red-200 transition-colors disabled:opacity-50">
+              {excluirTodosMut.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Trash2 className="h-3.5 w-3.5" />}
+              Apagar todos ({insumos.length})
+            </button>
+          </div>
+        </div>
       )}
     </>
   );
