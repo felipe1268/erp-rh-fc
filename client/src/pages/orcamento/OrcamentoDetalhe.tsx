@@ -240,10 +240,14 @@ export default function OrcamentoDetalhe() {
   const metaPct = n(orc.metaPercentual) * 100;
 
   // ── Mapa de grupos (item tem filhos) ──
+  // Constrói de baixo pra cima: cada item com "." no código marca seu pai como grupo.
+  // Isso é O(n) e funciona independente de ordenação — muito mais robusto que "próximo item".
   const childMap: Record<string, boolean> = {};
-  itens.forEach((item, idx) => {
-    if (idx + 1 < itens.length && itens[idx + 1].nivel > item.nivel) {
-      childMap[item.eapCodigo] = true;
+  itens.forEach(item => {
+    const dot = item.eapCodigo.lastIndexOf(".");
+    if (dot > 0) {
+      const parentCode = item.eapCodigo.slice(0, dot);
+      childMap[parentCode] = true;
     }
   });
 
