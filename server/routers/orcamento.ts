@@ -1273,8 +1273,8 @@ export const orcamentoRouter = router({
       if (!db) return [];
       return db.select().from(insumosCatalogo)
         .where(eq(insumosCatalogo.companyId, input.companyId))
-        .orderBy(desc(insumosCatalogo.ultimaAtualizacao))
-        .limit(1000);
+        .orderBy(insumosCatalogo.tipo, insumosCatalogo.codigo)
+        .limit(10000);
     }),
 
   // ── Importar insumos: inicia o job em background e retorna jobId ──
