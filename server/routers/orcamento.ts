@@ -7,6 +7,8 @@ import {
   orcamentoItens,
   orcamentoInsumos,
   orcamentoBdi,
+  insumosCatalogo,
+  composicoesCatalogo,
 } from "../../drizzle/schema";
 import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 
@@ -22,6 +24,145 @@ function toNum(v: unknown): number {
 function fix2(v: number): string { return v.toFixed(2); }
 function fix4(v: number): string { return v.toFixed(4); }
 function fix6(v: number): string { return v.toFixed(6); }
+
+// ── Normalização para dedup do catálogo ───────────────────────
+// Remove acentos, pontuação, espaços duplos e converte para minúsculas.
+// Palavras funcionais curtas são preservadas para manter semântica.
+function normalizarTexto(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 490);
+}
+
+// ── Atualizar catálogo de insumos e composições ────────────────
+// Chamado após cada importação. Faz upsert inteligente evitando duplicatas.
+async function atualizarCatalogo(
+  db: Awaited<ReturnType<typeof getDb>>,
+  companyId: number,
+  itens: any[],
+  insumos: any[],
+) {
+  if (!db) return;
+
+  // ── INSUMOS ──────────────────────────────────────────────────
+  for (const ins of insumos) {
+    if (!ins.descricao?.trim()) continue;
+    const chave = normalizarTexto(ins.descricao);
+    const preco = parseFloat(ins.precoUnitComEncargos || ins.precoUnitBase || '0');
+    const qtd   = parseFloat(ins.quantidadeTotal || '0');
+
+    // 1) Tenta match por código (se existir)
+    let existente: any = null;
+    if (ins.codigo?.trim()) {
+      const rows = await db.select().from(insumosCatalogo)
+        .where(and(
+          eq(insumosCatalogo.companyId, companyId),
+          eq(insumosCatalogo.codigo, ins.codigo.trim()),
+        )).limit(1);
+      existente = rows[0];
+    }
+    // 2) Tenta match por chave normalizada
+    if (!existente) {
+      const rows = await db.select().from(insumosCatalogo)
+        .where(and(
+          eq(insumosCatalogo.companyId, companyId),
+          eq(insumosCatalogo.chaveNorm, chave),
+        )).limit(1);
+      existente = rows[0];
+    }
+
+    if (existente) {
+      const oldCount = existente.totalOrcamentos || 0;
+      const oldAvg   = parseFloat(existente.precoMedio || '0');
+      const oldMin   = parseFloat(existente.precoMin   || '0');
+      const oldMax   = parseFloat(existente.precoMax   || '0');
+      const newAvg   = oldCount > 0 ? (oldAvg * oldCount + preco) / (oldCount + 1) : preco;
+      await db.update(insumosCatalogo).set({
+        precoUnitario:    fix4(preco),
+        precoMedio:       fix4(newAvg),
+        precoMin:         fix4(preco > 0 ? Math.min(oldMin > 0 ? oldMin : preco, preco) : oldMin),
+        precoMax:         fix4(Math.max(oldMax, preco)),
+        totalOrcamentos:  oldCount + 1,
+        totalQuantidade:  fix4(parseFloat(existente.totalQuantidade || '0') + qtd),
+        ultimaAtualizacao: new Date().toISOString(),
+      }).where(eq(insumosCatalogo.id, existente.id));
+    } else {
+      await db.insert(insumosCatalogo).values({
+        companyId,
+        codigo:           ins.codigo?.trim().substring(0, 100) || null,
+        descricao:        ins.descricao.trim().substring(0, 1000),
+        unidade:          ins.unidade?.trim().substring(0, 30) || null,
+        tipo:             ins.tipo?.trim().substring(0, 100) || null,
+        precoUnitario:    fix4(preco),
+        precoMin:         fix4(preco),
+        precoMax:         fix4(preco),
+        precoMedio:       fix4(preco),
+        totalOrcamentos:  1,
+        totalQuantidade:  fix4(qtd),
+        chaveNorm:        chave,
+        ultimaAtualizacao: new Date().toISOString(),
+        criadoEm:         new Date().toISOString(),
+      });
+    }
+  }
+
+  // ── COMPOSIÇÕES (itens folha: nivel >= 3) ─────────────────────
+  const folhas = itens.filter(i => i.nivel >= 3 && i.descricao?.trim());
+  for (const item of folhas) {
+    const chave    = normalizarTexto(item.descricao);
+    const custoMat = parseFloat(item.custoUnitMat  || '0');
+    const custoMdo = parseFloat(item.custoUnitMdo  || '0');
+    const custoTot = parseFloat(item.custoUnitTotal || '0');
+
+    let existente: any = null;
+    if (item.servicoCodigo?.trim()) {
+      const rows = await db.select().from(composicoesCatalogo)
+        .where(and(
+          eq(composicoesCatalogo.companyId, companyId),
+          eq(composicoesCatalogo.codigo, item.servicoCodigo.trim()),
+        )).limit(1);
+      existente = rows[0];
+    }
+    if (!existente) {
+      const rows = await db.select().from(composicoesCatalogo)
+        .where(and(
+          eq(composicoesCatalogo.companyId, companyId),
+          eq(composicoesCatalogo.chaveNorm, chave),
+        )).limit(1);
+      existente = rows[0];
+    }
+
+    if (existente) {
+      const oldCount = existente.totalOrcamentos || 0;
+      await db.update(composicoesCatalogo).set({
+        custoUnitMat:     fix4(custoMat),
+        custoUnitMdo:     fix4(custoMdo),
+        custoUnitTotal:   fix4(custoTot),
+        totalOrcamentos:  oldCount + 1,
+        ultimaAtualizacao: new Date().toISOString(),
+      }).where(eq(composicoesCatalogo.id, existente.id));
+    } else {
+      await db.insert(composicoesCatalogo).values({
+        companyId,
+        codigo:           item.servicoCodigo?.trim().substring(0, 100) || null,
+        descricao:        item.descricao.trim().substring(0, 1000),
+        unidade:          item.unidade?.trim().substring(0, 30) || null,
+        tipo:             item.tipo?.trim().substring(0, 100) || null,
+        custoUnitMat:     fix4(custoMat),
+        custoUnitMdo:     fix4(custoMdo),
+        custoUnitTotal:   fix4(custoTot),
+        totalOrcamentos:  1,
+        chaveNorm:        chave,
+        ultimaAtualizacao: new Date().toISOString(),
+        criadoEm:         new Date().toISOString(),
+      });
+    }
+  }
+}
 
 // Extrai metadados das primeiras linhas da aba Orçamento
 function extrairMetadados(rows: any[][]): {
@@ -67,7 +208,9 @@ function extrairMetadados(rows: any[][]): {
 }
 
 // Parseia a aba Orçamento e retorna array de itens
-function parsearAbaCorcamento(rows: any[][], metaPerc: number) {
+// bdiPercentual: decimal fraction (ex: 0.2456 = 24.56%)
+// Venda = Custo × (1 + BDI%)   |   Meta = Custo × (1 − Meta%)
+function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: number = 0) {
   // Detectar linha de cabeçalho: coluna 10 = "Item"
   let headerIdx = -1;
   for (let i = 0; i < Math.min(25, rows.length); i++) {
@@ -95,13 +238,16 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number) {
     const custoUnitMat   = toNum(row[18]);
     const custoUnitMdo   = toNum(row[20]);
     const custoUnitTotal = custoUnitMat + custoUnitMdo;
-    const vendaTotal     = toNum(row[24]);
     const custoTotalMat  = toNum(row[30]);
     const custoTotalMdo  = toNum(row[31]);
     const custoTotal     = toNum(row[32]);
+
+    // Venda calculada a partir do custo + BDI (NÃO lemos da coluna 24)
+    const vendaTotal     = custoTotal * (1 + bdiPercentual);
+    const vendaUnitTotal = custoUnitTotal * (1 + bdiPercentual);
+
     const metaTotal      = custoTotal * (1 - metaPerc);
-    const vendaUnitTotal = quantidade > 0 ? vendaTotal / quantidade : 0;
-    const metaUnitTotal  = quantidade > 0 ? metaTotal / quantidade : 0;
+    const metaUnitTotal  = custoUnitTotal * (1 - metaPerc);
     const abcServico     = String(row[25] || '').trim().substring(0, 5);
 
     ordem++;
@@ -132,30 +278,37 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number) {
 }
 
 // Parseia aba BDI
-function parsearAbaBdi(rows: any[][], companyId: number) {
+// nomeAba: nome da aba de origem para exibição multi-aba
+function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
   let bdiPercentual = 0;
   const linhas: any[] = [];
   let ordem = 0;
 
   for (const row of rows) {
-    const col1 = String(row[1] || '').trim();
-    const col2 = String(row[2] || '').trim();
+    const col1    = String(row[1] || '').trim();
+    const col2    = String(row[2] || '').trim();
     const descCol = String(row[3] || '').trim();
 
+    // Extrai o BDI total do item B-02 (percentual sobre custo direto)
     if ((col2 === 'B-02' || col1 === 'B-02') && !bdiPercentual) {
       bdiPercentual = toNum(row[7]) || toNum(row[6]);
     }
 
+    // Inclui apenas linhas com código + descrição válidos
+    // e percentual razoável (< 10 = < 1000% como decimal) para ignorar bugs de parsing
     if (col2 && descCol && descCol.length > 2) {
       const pct = toNum(row[7]);
       const val = toNum(row[9]);
+      // Ignora linhas com percentual absurdo (ex: linha ARQUIVO, valores de célula errados)
+      if (Math.abs(pct) > 10) continue;
       linhas.push({
         companyId,
-        codigo:       col2.substring(0, 30),
-        descricao:    descCol.substring(0, 255),
-        percentual:   fix6(pct),
+        nomeAba,
+        codigo:        col2.substring(0, 30),
+        descricao:     descCol.substring(0, 255),
+        percentual:    fix6(pct),
         valorAbsoluto: fix2(val),
-        ordem: ordem++,
+        ordem:         ordem++,
       });
     }
   }
@@ -274,12 +427,12 @@ export const orcamentoRouter = router({
       // Metadados
       const meta = extrairMetadados(dataOrc);
 
-      // Itens da EAP
-      const itens = parsearAbaCorcamento(dataOrc, input.metaPercentual);
-      if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
-
-      // BDI
+      // BDI primeiro — necessário para calcular venda dos itens
       const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
+
+      // Itens da EAP — venda calculada via Custo × (1 + BDI%)
+      const itens = parsearAbaCorcamento(dataOrc, input.metaPercentual, bdiPercentual);
+      if (itens.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhum item encontrado na planilha.' });
 
       // Insumos (aba "Insumos" se existir)
       const insumosTab = wb.SheetNames.find(n => n.toLowerCase() === 'insumos');
@@ -351,6 +504,11 @@ export const orcamentoRouter = router({
         }
       }
 
+      // Atualizar catálogo em background (sem bloquear a resposta)
+      atualizarCatalogo(db, input.companyId, itens.map(it => ({ ...it, orcamentoId })), insumosItens.map(it => ({ ...it, orcamentoId }))).catch(e =>
+        console.error('[catalogo] Erro ao atualizar catálogo:', e)
+      );
+
       return { id: orcamentoId, codigo, totalVenda, totalCusto, totalMeta, itemCount: itens.length };
     }),
 
@@ -401,6 +559,39 @@ export const orcamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Editar metadados ──────────────────────────────────────
+  update: protectedProcedure
+    .input(z.object({
+      id:            z.number(),
+      codigo:        z.string().min(1).max(100),
+      descricao:     z.string().max(500).optional(),
+      cliente:       z.string().max(255).optional(),
+      local:         z.string().max(255).optional(),
+      revisao:       z.string().max(20).optional(),
+      dataBase:      z.string().max(20).optional(),
+      obraId:        z.number().nullable().optional(),
+      tempoObraMeses: z.number().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      if (orc.status === 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser alterado.' });
+      await db.update(orcamentos).set({
+        codigo:        input.codigo,
+        descricao:     input.descricao ?? orc.descricao,
+        cliente:       input.cliente ?? orc.cliente,
+        local:         input.local ?? orc.local,
+        revisao:       input.revisao ?? orc.revisao,
+        dataBase:      input.dataBase ?? orc.dataBase,
+        obraId:        input.obraId !== undefined ? input.obraId : orc.obraId,
+        tempoObraMeses: input.tempoObraMeses !== undefined ? input.tempoObraMeses : orc.tempoObraMeses,
+        updatedAt:     new Date().toISOString(),
+      }).where(eq(orcamentos.id, input.id));
+      return { success: true };
+    }),
+
   // ── Alterar status ────────────────────────────────────────
   updateStatus: protectedProcedure
     .input(z.object({
@@ -437,31 +628,85 @@ export const orcamentoRouter = router({
       const buffer = Buffer.from(input.fileBase64, 'base64');
       const wb = XLSX.read(buffer, { type: 'buffer' });
 
-      const bdiTab = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('bdi'));
-      if (!bdiTab) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Aba "BDI" não encontrada no arquivo.' });
+      // ── Processar TODAS as abas da planilha BDI ─────────────────
+      // A aba principal de BDI é identificada pelo nome que contém "bdi".
+      // As demais abas (Resumo, Composição, Lucratividade, etc.) são
+      // importadas com o mesmo parser e armazenadas com o nomeAba original.
+      const todasLinhas: any[] = [];
+      let bdiPercentual = 0;
+      const abas = wb.SheetNames;
 
-      const dataBdi = XLSX.utils.sheet_to_json(wb.Sheets[bdiTab], { header: 1, defval: '' }) as any[][];
-      const { bdiPercentual, linhas: bdiLinhas } = parsearAbaBdi(dataBdi, input.companyId);
+      // Abas que não são EAP nem insumos — ignorar apenas aba de orçamento principal
+      const abasIgnorar = ['orçamento', 'orcamento', 'orc', 'insumos', 'abc', 'resumo geral'];
 
-      if (!bdiLinhas.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma linha de BDI encontrada.' });
+      for (const aba of abas) {
+        const nomeLower = aba.toLowerCase();
+        if (abasIgnorar.some(k => nomeLower === k)) continue;
 
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[aba], { header: 1, defval: '' }) as any[][];
+        const { bdiPercentual: bdiAba, linhas } = parsearAbaBdi(rows, input.companyId, aba);
+
+        if (linhas.length > 0) {
+          todasLinhas.push(...linhas);
+          // O BDI total é extraído preferencialmente da aba que contém "bdi" no nome
+          if (!bdiPercentual && bdiAba > 0 && nomeLower.includes('bdi')) {
+            bdiPercentual = bdiAba;
+          }
+          if (!bdiPercentual && bdiAba > 0) {
+            bdiPercentual = bdiAba;
+          }
+        }
+      }
+
+      if (!todasLinhas.length) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nenhuma linha encontrada nas abas da planilha.' });
+      }
+
+      // Limpar BDI anterior e inserir tudo novo
       await db.delete(orcamentoBdi).where(eq(orcamentoBdi.orcamentoId, input.orcamentoId));
 
       const BATCH = 500;
-      for (let i = 0; i < bdiLinhas.length; i += BATCH) {
+      for (let i = 0; i < todasLinhas.length; i += BATCH) {
         await db.insert(orcamentoBdi).values(
-          bdiLinhas.slice(i, i + BATCH).map(b => ({ ...b, orcamentoId: input.orcamentoId }))
+          todasLinhas.slice(i, i + BATCH).map(b => ({ ...b, orcamentoId: input.orcamentoId }))
         );
       }
 
+      // Recalcular Venda de todos os itens: Venda = Custo × (1 + BDI%)
       if (bdiPercentual > 0) {
-        await db.update(orcamentos).set({ bdiPercentual: fix6(bdiPercentual) }).where(eq(orcamentos.id, input.orcamentoId));
+        const itens = await db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
+
+        for (let i = 0; i < itens.length; i += BATCH) {
+          const batch = itens.slice(i, i + BATCH);
+          for (const item of batch) {
+            const custo     = parseFloat(item.custoTotal     || '0');
+            const custoUnit = parseFloat(item.custoUnitTotal || '0');
+            const venda     = custo     * (1 + bdiPercentual);
+            const vendaUnit = custoUnit * (1 + bdiPercentual);
+            await db.update(orcamentoItens).set({
+              vendaTotal:     fix2(venda),
+              vendaUnitTotal: fix4(vendaUnit),
+            }).where(eq(orcamentoItens.id, item.id));
+          }
+        }
+
+        // Atualizar totais do orçamento
+        const nivel1     = itens.filter(i => i.nivel === 1);
+        const totalVenda = nivel1.reduce((s, i) => s + parseFloat(i.custoTotal || '0') * (1 + bdiPercentual), 0);
+
+        await db.update(orcamentos).set({
+          bdiPercentual: fix6(bdiPercentual),
+          totalVenda:    fix2(totalVenda),
+        }).where(eq(orcamentos.id, input.orcamentoId));
       }
+
+      const abasImportadas = [...new Set(todasLinhas.map(l => l.nomeAba))];
 
       return {
         success: true,
-        linhasCount: bdiLinhas.length,
+        linhasCount:    todasLinhas.length,
         bdiPercentual,
+        abasImportadas,
       };
     }),
 
